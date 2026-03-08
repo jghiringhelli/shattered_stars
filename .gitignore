@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Test results
+test-results/
+coverage/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+
+# Temporary
+*.tmp
+nul
+
+# Python (for SD scripts)
+__pycache__/
+*.pyc
+venv/
+
+# Temporary sprite files (not yet finalized)
+assets/sprites/ships/*.png
+public/assets/ships/*.png
+
+# Stable Diffusion models (large files)
+data/
+*.safetensors
+*.ckpt

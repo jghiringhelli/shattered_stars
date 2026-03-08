@@ -1,0 +1,719 @@
+/**
+ * Squad Builder Scene
+ *
+ * Allows players to:
+ * - Select number of factions (2-6)
+ * - Assign player/AI control to each faction
+ * - Build squads manually or auto-fill
+ * - Choose squad archetypes (swarm, elite, balanced, etc.)
+ * - Set point limits
+ * - Start the battle
+ */
+
+import Phaser from 'phaser';
+import type { FactionId } from '../config';
+import { FACTION_COLORS } from '../config';
+import { SHIP_DEFINITIONS, getShipsByFaction } from '../data/ShipDefinitions';
+import {
+  type AIDifficultyLevel,
+  DIFFICULTY_NAMES,
+  DIFFICULTY_DESCRIPTIONS,
+} from '../ai/AIDifficulty';
+
+interface FactionSlot {
+  factionId: FactionId | null;
+  controller: 'player' | 'ai';
+  squadStyle: SquadStyle;
+  ships: string[]; // Ship definition IDs
+  pointsUsed: number;
+}
+
+type SquadStyle = 'balanced' | 'swarm' | 'elite' | 'bomber' | 'interceptor' | 'custom';
+
+interface SquadTemplate {
+  name: string;
+  description: string;
+  shipRoles: string[];
+}
+
+const SQUAD_TEMPLATES: Record<SquadStyle, SquadTemplate> = {
+  balanced: {
+    name: 'Balanced',
+    description: '2 fighters, 1 interceptor, 1 support',
+    shipRoles: ['heavy_fighter', 'heavy_fighter', 'interceptor', 'support'],
+  },
+  swarm: {
+    name: 'Swarm',
+    description: 'Many cheap light fighters',
+    shipRoles: ['light_fighter', 'light_fighter', 'light_fighter', 'light_fighter', 'light_fighter'],
+  },
+  elite: {
+    name: 'Elite',
+    description: 'Few expensive heavy hitters',
+    shipRoles: ['gunship', 'heavy_fighter', 'interceptor'],
+  },
+  bomber: {
+    name: 'Bomber Wing',
+    description: 'Bombers with fighter escort',
+    shipRoles: ['bomber', 'bomber', 'heavy_fighter', 'interceptor'],
+  },
+  interceptor: {
+    name: 'Fast Attack',
+    description: 'All interceptors and light fighters',
+    shipRoles: ['interceptor', 'interceptor', 'interceptor', 'light_fighter'],
+  },
+  custom: {
+    name: 'Custom',
+    description: 'Build your own squad',
+    shipRoles: [],
+  },
+};
+
+const ALL_FACTIONS: FactionId[] = [
+  'terran_hegemony',
+  'free_confederation',
+  'synthetic_collective',
+  'void_corsairs',
+  'ascendant_empire',
+];
+
+const FACTION_NAMES: Record<FactionId, string> = {
+  terran_hegemony: 'Terran Hegemony',
+  free_confederation: 'Free Confederation',
+  synthetic_collective: 'Synthetic Collective',
+  void_corsairs: 'Void Corsairs',
+  ascendant_empire: 'Ascendant Empire',
+};
+
+export class SquadBuilderScene extends Phaser.Scene {
+  private factionSlots: FactionSlot[] = [];
+  private numFactions = 2;
+  private pointLimit = 200;
+  private gameMode: 'turn_based' | 'continuous' = 'continuous';
+  private aiDifficulty: AIDifficultyLevel = 'normal';
+
+  private slotContainers: Phaser.GameObjects.Container[] = [];
+  private selectedSlotIndex = 0;
+
+  // UI elements
+  private headerText!: Phaser.GameObjects.Text;
+  private instructionText!: Phaser.GameObjects.Text;
+  private startButton!: Phaser.GameObjects.Container;
+
+  constructor() {
+    super({ key: 'SquadBuilderScene' });
+  }
+
+  create(): void {
+    this.cameras.main.setBackgroundColor(0x0a0a1a);
+
+    this.initializeFactionSlots();
+    this.createHeader();
+    this.createFactionSlots();
+    this.createControls();
+    this.createStartButton();
+    this.setupInput();
+
+    this.updateDisplay();
+  }
+
+  private initializeFactionSlots(): void {
+    // Initialize with 2 factions by default
+    this.factionSlots = [
+      {
+        factionId: 'free_confederation',
+        controller: 'player',
+        squadStyle: 'balanced',
+        ships: [],
+        pointsUsed: 0,
+      },
+      {
+        factionId: 'terran_hegemony',
+        controller: 'ai',
+        squadStyle: 'balanced',
+        ships: [],
+        pointsUsed: 0,
+      },
+    ];
+
+    // Auto-fill initial squads
+    this.factionSlots.forEach((slot) => this.autoFillSquad(slot));
+  }
+
+  private createHeader(): void {
+    const centerX = this.scale.width / 2;
+
+    this.add
+      .text(centerX, 30, 'SQUAD BUILDER', {
+        font: 'bold 36px Arial',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5);
+
+    // Faction count selector
+    this.add
+      .text(100, 80, 'Factions:', {
+        font: '18px Arial',
+        color: '#888888',
+      })
+      .setOrigin(0, 0.5);
+
+    for (let i = 2; i <= 6; i++) {
+      const btn = this.createSmallButton(180 + (i - 2) * 50, 80, `${i}`, () => {
+        this.setNumFactions(i);
+      });
+      btn.setData('factionCount', i);
+    }
+
+    // Point limit
+    this.add
+      .text(500, 80, 'Points:', {
+        font: '18px Arial',
+        color: '#888888',
+      })
+      .setOrigin(0, 0.5);
+
+    [100, 150, 200, 300].forEach((pts, i) => {
+      const btn = this.createSmallButton(580 + i * 60, 80, `${pts}`, () => {
+        this.pointLimit = pts;
+        this.factionSlots.forEach((slot) => this.autoFillSquad(slot));
+        this.updateDisplay();
+      });
+      btn.setData('pointLimit', pts);
+    });
+
+    // Game mode selector
+    this.add
+      .text(900, 80, 'Mode:', {
+        font: '18px Arial',
+        color: '#888888',
+      })
+      .setOrigin(0, 0.5);
+
+    this.createSmallButton(970, 80, 'Continuous', () => {
+      this.gameMode = 'continuous';
+      this.updateDisplay();
+    }).setData('mode', 'continuous');
+
+    this.createSmallButton(1100, 80, 'Turn-Based', () => {
+      this.gameMode = 'turn_based';
+      this.updateDisplay();
+    }).setData('mode', 'turn_based');
+
+    // AI Difficulty selector (second row)
+    this.add
+      .text(100, 115, 'AI Difficulty:', {
+        font: '18px Arial',
+        color: '#888888',
+      })
+      .setOrigin(0, 0.5);
+
+    const difficulties: AIDifficultyLevel[] = ['easy', 'normal', 'hard', 'brutal'];
+    difficulties.forEach((diff, i) => {
+      const btn = this.createSmallButton(220 + i * 80, 115, DIFFICULTY_NAMES[diff], () => {
+        this.aiDifficulty = diff;
+        this.updateDisplay();
+      });
+      btn.setData('difficulty', diff);
+    });
+
+    // Difficulty description text
+    this.add
+      .text(560, 115, DIFFICULTY_DESCRIPTIONS[this.aiDifficulty], {
+        font: '14px Arial',
+        color: '#666666',
+      })
+      .setOrigin(0, 0.5)
+      .setName('difficultyDesc');
+
+    this.instructionText = this.add
+      .text(centerX, this.scale.height - 30, 'Click slots to configure | Auto-Fill generates squads automatically', {
+        font: '14px Arial',
+        color: '#666666',
+      })
+      .setOrigin(0.5);
+  }
+
+  private createSmallButton(x: number, y: number, label: string, onClick: () => void): Phaser.GameObjects.Container {
+    const container = this.add.container(x, y);
+
+    const bg = this.add.graphics();
+    bg.fillStyle(0x333344, 1);
+    bg.fillRoundedRect(-25, -15, 50, 30, 4);
+    container.add(bg);
+
+    const text = this.add
+      .text(0, 0, label, {
+        font: '14px Arial',
+        color: '#aaaaaa',
+      })
+      .setOrigin(0.5);
+    container.add(text);
+
+    container.setData('bg', bg);
+    container.setData('text', text);
+
+    container.setInteractive(new Phaser.Geom.Rectangle(-25, -15, 50, 30), Phaser.Geom.Rectangle.Contains);
+
+    container.on('pointerover', () => {
+      bg.clear();
+      bg.fillStyle(0x444466, 1);
+      bg.fillRoundedRect(-25, -15, 50, 30, 4);
+    });
+
+    container.on('pointerout', () => {
+      bg.clear();
+      bg.fillStyle(0x333344, 1);
+      bg.fillRoundedRect(-25, -15, 50, 30, 4);
+    });
+
+    container.on('pointerdown', onClick);
+
+    return container;
+  }
+
+  private createFactionSlots(): void {
+    // Will be recreated when faction count changes
+    this.redrawFactionSlots();
+  }
+
+  private redrawFactionSlots(): void {
+    // Clear existing
+    this.slotContainers.forEach((c) => c.destroy());
+    this.slotContainers = [];
+
+    const startY = 130;
+    const slotHeight = 85;
+    const maxSlotsPerColumn = 4;
+    const columnWidth = 600;
+
+    for (let i = 0; i < this.numFactions; i++) {
+      const column = Math.floor(i / maxSlotsPerColumn);
+      const row = i % maxSlotsPerColumn;
+
+      const x = 50 + column * columnWidth + columnWidth / 2;
+      const y = startY + row * slotHeight;
+
+      const container = this.createFactionSlotUI(x, y, i);
+      this.slotContainers.push(container);
+    }
+  }
+
+  private createFactionSlotUI(x: number, y: number, index: number): Phaser.GameObjects.Container {
+    const slot = this.factionSlots[index];
+    if (!slot) return this.add.container(x, y);
+
+    const container = this.add.container(x, y);
+    const width = 550;
+    const height = 75;
+
+    // Background
+    const bg = this.add.graphics();
+    const factionColor = slot.factionId ? FACTION_COLORS[slot.factionId] : 0x333333;
+    bg.fillStyle(0x1a1a2a, 0.9);
+    bg.fillRoundedRect(-width / 2, -height / 2, width, height, 8);
+    bg.lineStyle(3, factionColor, 0.8);
+    bg.strokeRoundedRect(-width / 2, -height / 2, width, height, 8);
+    container.add(bg);
+
+    // Slot number
+    this.add
+      .text(-width / 2 + 20, -height / 2 + 10, `#${index + 1}`, {
+        font: 'bold 16px Arial',
+        color: '#666666',
+      })
+      .setOrigin(0, 0);
+    container.add(container.last as Phaser.GameObjects.Text);
+
+    // Faction name & selector
+    const factionName = slot.factionId ? FACTION_NAMES[slot.factionId] : 'Select Faction';
+    const factionText = this.add
+      .text(-width / 2 + 20, 0, factionName, {
+        font: 'bold 20px Arial',
+        color: `#${factionColor.toString(16).padStart(6, '0')}`,
+      })
+      .setOrigin(0, 0.5);
+    container.add(factionText);
+
+    // Controller (Player/AI)
+    const controllerText = this.add
+      .text(-width / 2 + 200, -15, slot.controller.toUpperCase(), {
+        font: 'bold 14px Arial',
+        color: slot.controller === 'player' ? '#44ff44' : '#ff8844',
+      })
+      .setOrigin(0, 0.5);
+    container.add(controllerText);
+
+    // Squad style
+    const styleText = this.add
+      .text(-width / 2 + 200, 10, SQUAD_TEMPLATES[slot.squadStyle].name, {
+        font: '14px Arial',
+        color: '#aaaaaa',
+      })
+      .setOrigin(0, 0.5);
+    container.add(styleText);
+
+    // Points used
+    const pointsText = this.add
+      .text(width / 2 - 20, -15, `${slot.pointsUsed}/${this.pointLimit} pts`, {
+        font: 'bold 16px Arial',
+        color: slot.pointsUsed <= this.pointLimit ? '#44ff44' : '#ff4444',
+      })
+      .setOrigin(1, 0.5);
+    container.add(pointsText);
+
+    // Ship count
+    const shipCountText = this.add
+      .text(width / 2 - 20, 10, `${slot.ships.length} ships`, {
+        font: '14px Arial',
+        color: '#888888',
+      })
+      .setOrigin(1, 0.5);
+    container.add(shipCountText);
+
+    // Action buttons
+    const btnY = 0;
+
+    // Change faction button
+    this.createSlotButton(container, -50, btnY, 'Faction', () => {
+      this.cycleFaction(index);
+    });
+
+    // Toggle controller
+    this.createSlotButton(container, 30, btnY, slot.controller === 'player' ? 'AI' : 'Player', () => {
+      this.toggleController(index);
+    });
+
+    // Cycle squad style
+    this.createSlotButton(container, 110, btnY, 'Style', () => {
+      this.cycleSquadStyle(index);
+    });
+
+    // Auto-fill
+    this.createSlotButton(container, 190, btnY, 'Auto', () => {
+      this.autoFillSquad(slot);
+      this.updateDisplay();
+    });
+
+    return container;
+  }
+
+  private createSlotButton(
+    parent: Phaser.GameObjects.Container,
+    x: number,
+    y: number,
+    label: string,
+    onClick: () => void
+  ): void {
+    const btn = this.add.container(x, y);
+
+    const bg = this.add.graphics();
+    bg.fillStyle(0x2a2a3a, 1);
+    bg.fillRoundedRect(-30, -12, 60, 24, 4);
+    btn.add(bg);
+
+    const text = this.add
+      .text(0, 0, label, {
+        font: '12px Arial',
+        color: '#aaaaaa',
+      })
+      .setOrigin(0.5);
+    btn.add(text);
+
+    btn.setInteractive(new Phaser.Geom.Rectangle(-30, -12, 60, 24), Phaser.Geom.Rectangle.Contains);
+
+    btn.on('pointerover', () => {
+      bg.clear();
+      bg.fillStyle(0x3a3a5a, 1);
+      bg.fillRoundedRect(-30, -12, 60, 24, 4);
+      text.setColor('#ffffff');
+    });
+
+    btn.on('pointerout', () => {
+      bg.clear();
+      bg.fillStyle(0x2a2a3a, 1);
+      bg.fillRoundedRect(-30, -12, 60, 24, 4);
+      text.setColor('#aaaaaa');
+    });
+
+    btn.on('pointerdown', onClick);
+
+    parent.add(btn);
+  }
+
+  private createControls(): void {
+    // Auto-fill all button
+    const autoAllBtn = this.add.container(this.scale.width / 2 - 150, this.scale.height - 80);
+
+    const autoAllBg = this.add.graphics();
+    autoAllBg.fillStyle(0x336633, 1);
+    autoAllBg.fillRoundedRect(-80, -20, 160, 40, 8);
+    autoAllBtn.add(autoAllBg);
+
+    const autoAllText = this.add
+      .text(0, 0, 'AUTO-FILL ALL', {
+        font: 'bold 18px Arial',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5);
+    autoAllBtn.add(autoAllText);
+
+    autoAllBtn.setInteractive(new Phaser.Geom.Rectangle(-80, -20, 160, 40), Phaser.Geom.Rectangle.Contains);
+
+    autoAllBtn.on('pointerover', () => {
+      autoAllBg.clear();
+      autoAllBg.fillStyle(0x44aa44, 1);
+      autoAllBg.fillRoundedRect(-80, -20, 160, 40, 8);
+    });
+
+    autoAllBtn.on('pointerout', () => {
+      autoAllBg.clear();
+      autoAllBg.fillStyle(0x336633, 1);
+      autoAllBg.fillRoundedRect(-80, -20, 160, 40, 8);
+    });
+
+    autoAllBtn.on('pointerdown', () => {
+      this.autoFillAllSquads();
+    });
+
+    // Randomize factions button
+    const randomBtn = this.add.container(this.scale.width / 2, this.scale.height - 80);
+
+    const randomBg = this.add.graphics();
+    randomBg.fillStyle(0x663366, 1);
+    randomBg.fillRoundedRect(-80, -20, 160, 40, 8);
+    randomBtn.add(randomBg);
+
+    const randomText = this.add
+      .text(0, 0, 'RANDOMIZE', {
+        font: 'bold 18px Arial',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5);
+    randomBtn.add(randomText);
+
+    randomBtn.setInteractive(new Phaser.Geom.Rectangle(-80, -20, 160, 40), Phaser.Geom.Rectangle.Contains);
+
+    randomBtn.on('pointerover', () => {
+      randomBg.clear();
+      randomBg.fillStyle(0x8844aa, 1);
+      randomBg.fillRoundedRect(-80, -20, 160, 40, 8);
+    });
+
+    randomBtn.on('pointerout', () => {
+      randomBg.clear();
+      randomBg.fillStyle(0x663366, 1);
+      randomBg.fillRoundedRect(-80, -20, 160, 40, 8);
+    });
+
+    randomBtn.on('pointerdown', () => {
+      this.randomizeAll();
+    });
+  }
+
+  private createStartButton(): void {
+    this.startButton = this.add.container(this.scale.width / 2 + 150, this.scale.height - 80);
+
+    const bg = this.add.graphics();
+    bg.fillStyle(0x227722, 1);
+    bg.fillRoundedRect(-80, -20, 160, 40, 8);
+    this.startButton.add(bg);
+
+    const text = this.add
+      .text(0, 0, 'START BATTLE', {
+        font: 'bold 18px Arial',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5);
+    this.startButton.add(text);
+
+    this.startButton.setInteractive(
+      new Phaser.Geom.Rectangle(-80, -20, 160, 40),
+      Phaser.Geom.Rectangle.Contains
+    );
+
+    this.startButton.on('pointerover', () => {
+      bg.clear();
+      bg.fillStyle(0x33aa33, 1);
+      bg.fillRoundedRect(-80, -20, 160, 40, 8);
+    });
+
+    this.startButton.on('pointerout', () => {
+      bg.clear();
+      bg.fillStyle(0x227722, 1);
+      bg.fillRoundedRect(-80, -20, 160, 40, 8);
+    });
+
+    this.startButton.on('pointerdown', () => {
+      this.startBattle();
+    });
+  }
+
+  private setupInput(): void {
+    this.input.keyboard!.on('keydown-ESC', () => {
+      this.scene.start('MainMenuScene');
+    });
+  }
+
+  // ==========================================
+  // SQUAD MANAGEMENT
+  // ==========================================
+
+  private setNumFactions(count: number): void {
+    this.numFactions = count;
+
+    // Ensure we have enough slots
+    while (this.factionSlots.length < count) {
+      // Find an unused faction
+      const usedFactions = this.factionSlots.map((s) => s.factionId);
+      const availableFaction = ALL_FACTIONS.find((f) => !usedFactions.includes(f)) ?? ALL_FACTIONS[0];
+
+      const newSlot: FactionSlot = {
+        factionId: availableFaction as FactionId,
+        controller: 'ai',
+        squadStyle: 'balanced',
+        ships: [],
+        pointsUsed: 0,
+      };
+      this.autoFillSquad(newSlot);
+      this.factionSlots.push(newSlot);
+    }
+
+    // Trim excess slots
+    this.factionSlots = this.factionSlots.slice(0, count);
+
+    this.updateDisplay();
+  }
+
+  private cycleFaction(slotIndex: number): void {
+    const slot = this.factionSlots[slotIndex];
+    if (!slot) return;
+
+    const currentIndex = slot.factionId ? ALL_FACTIONS.indexOf(slot.factionId) : -1;
+    const nextIndex = (currentIndex + 1) % ALL_FACTIONS.length;
+    slot.factionId = ALL_FACTIONS[nextIndex] as FactionId;
+
+    this.autoFillSquad(slot);
+    this.updateDisplay();
+  }
+
+  private toggleController(slotIndex: number): void {
+    const slot = this.factionSlots[slotIndex];
+    if (!slot) return;
+
+    slot.controller = slot.controller === 'player' ? 'ai' : 'player';
+    this.updateDisplay();
+  }
+
+  private cycleSquadStyle(slotIndex: number): void {
+    const slot = this.factionSlots[slotIndex];
+    if (!slot) return;
+
+    const styles: SquadStyle[] = ['balanced', 'swarm', 'elite', 'bomber', 'interceptor'];
+    const currentIndex = styles.indexOf(slot.squadStyle);
+    const nextIndex = (currentIndex + 1) % styles.length;
+    slot.squadStyle = styles[nextIndex] as SquadStyle;
+
+    this.autoFillSquad(slot);
+    this.updateDisplay();
+  }
+
+  private autoFillSquad(slot: FactionSlot): void {
+    if (!slot.factionId) return;
+
+    const template = SQUAD_TEMPLATES[slot.squadStyle];
+    const factionShips = getShipsByFaction(slot.factionId);
+
+    slot.ships = [];
+    slot.pointsUsed = 0;
+
+    // Fill based on template roles
+    for (const role of template.shipRoles) {
+      // Find a ship of this role in the faction
+      let ship = factionShips.find((s) => s.role === role);
+
+      // Fallback to any ship if role not found
+      if (!ship) {
+        ship = factionShips.find((s) => !slot.ships.includes(s.id));
+      }
+
+      if (ship && slot.pointsUsed + ship.baseStats.pointCost <= this.pointLimit) {
+        slot.ships.push(ship.id);
+        slot.pointsUsed += ship.baseStats.pointCost;
+      }
+    }
+
+    // If we still have points, add more ships
+    while (slot.pointsUsed < this.pointLimit) {
+      const cheapest = factionShips
+        .filter((s) => s.baseStats.pointCost + slot.pointsUsed <= this.pointLimit)
+        .sort((a, b) => a.baseStats.pointCost - b.baseStats.pointCost)[0];
+
+      if (!cheapest) break;
+
+      slot.ships.push(cheapest.id);
+      slot.pointsUsed += cheapest.baseStats.pointCost;
+    }
+  }
+
+  private autoFillAllSquads(): void {
+    this.factionSlots.forEach((slot) => this.autoFillSquad(slot));
+    this.updateDisplay();
+  }
+
+  private randomizeAll(): void {
+    // Shuffle factions
+    const shuffled = [...ALL_FACTIONS].sort(() => Math.random() - 0.5);
+    const styles: SquadStyle[] = ['balanced', 'swarm', 'elite', 'bomber', 'interceptor'];
+
+    this.factionSlots.forEach((slot, i) => {
+      slot.factionId = shuffled[i % shuffled.length] as FactionId;
+      slot.squadStyle = styles[Math.floor(Math.random() * styles.length)] as SquadStyle;
+      this.autoFillSquad(slot);
+    });
+
+    this.updateDisplay();
+  }
+
+  private updateDisplay(): void {
+    this.redrawFactionSlots();
+
+    // Update difficulty description
+    const diffDesc = this.children.getByName('difficultyDesc') as Phaser.GameObjects.Text;
+    if (diffDesc) {
+      diffDesc.setText(DIFFICULTY_DESCRIPTIONS[this.aiDifficulty]);
+    }
+  }
+
+  // ==========================================
+  // START BATTLE
+  // ==========================================
+
+  private startBattle(): void {
+    // Validate all slots have factions
+    if (this.factionSlots.some((s) => !s.factionId || s.ships.length === 0)) {
+      this.instructionText.setText('All factions must have ships!');
+      this.instructionText.setColor('#ff4444');
+      return;
+    }
+
+    // Store battle config in registry for the battle scene to use
+    this.registry.set('battleConfig', {
+      factions: this.factionSlots.map((slot) => ({
+        factionId: slot.factionId,
+        controller: slot.controller,
+        ships: slot.ships,
+      })),
+      gameMode: this.gameMode,
+      pointLimit: this.pointLimit,
+      aiDifficulty: this.aiDifficulty,
+    });
+
+    // Start appropriate battle scene
+    if (this.gameMode === 'turn_based') {
+      this.scene.start('TurnBasedBattleScene');
+    } else {
+      this.scene.start('ContinuousTacticalScene');
+    }
+  }
+}

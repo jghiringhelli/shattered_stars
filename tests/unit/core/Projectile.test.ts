@@ -1,0 +1,173 @@
+/**
+ * Projectile System Tests
+ */
+
+import { describe, it, expect } from 'vitest';
+import {
+  createProjectile,
+  updateProjectile,
+  isProjectileAlive,
+  checkProjectileHit,
+  type Projectile,
+} from '../../../src/core/Projectile';
+
+describe('Projectile', () => {
+  describe('createProjectile', () => {
+    it('should create projectile with given position and angle', () => {
+      const proj = createProjectile(100, 200, 45, 'ship-1', 'terran_hegemony');
+
+      expect(proj.x).toBe(100);
+      expect(proj.y).toBe(200);
+      expect(proj.angle).toBe(45);
+      expect(proj.ownerId).toBe('ship-1');
+      expect(proj.ownerFaction).toBe('terran_hegemony');
+    });
+
+    it('should set default damage and lifetime', () => {
+      const proj = createProjectile(0, 0, 0, 'ship-1', 'terran_hegemony');
+
+      expect(proj.damage).toBe(1);
+      expect(proj.lifetime).toBe(2000); // Starts at max (remaining time)
+      expect(proj.maxLifetime).toBe(2000);
+    });
+
+    it('should allow custom damage', () => {
+      const proj = createProjectile(0, 0, 0, 'ship-1', 'terran_hegemony', 3);
+
+      expect(proj.damage).toBe(3);
+    });
+
+    it('should generate unique IDs', () => {
+      const proj1 = createProjectile(0, 0, 0, 'ship-1', 'terran_hegemony');
+      const proj2 = createProjectile(0, 0, 0, 'ship-1', 'terran_hegemony');
+
+      expect(proj1.id).not.toBe(proj2.id);
+    });
+  });
+
+  describe('updateProjectile', () => {
+    it('should move projectile forward based on angle', () => {
+      const proj = createProjectile(100, 100, 0, 'ship-1', 'terran_hegemony');
+
+      const updated = updateProjectile(proj, 100);
+
+      expect(updated.y).toBeLessThan(100); // Moving up (negative y)
+      expect(Math.abs(updated.x - 100)).toBeLessThan(1); // Almost no x change
+    });
+
+    it('should move right when angle is 90', () => {
+      const proj = createProjectile(100, 100, 90, 'ship-1', 'terran_hegemony');
+
+      const updated = updateProjectile(proj, 100);
+
+      expect(updated.x).toBeGreaterThan(100); // Moving right
+    });
+
+    it('should decrease lifetime (remaining time)', () => {
+      const proj = createProjectile(0, 0, 0, 'ship-1', 'terran_hegemony');
+
+      const updated = updateProjectile(proj, 100);
+
+      expect(updated.lifetime).toBe(1900); // 2000 - 100
+    });
+
+    it('should decrease lifetime over multiple updates', () => {
+      let proj = createProjectile(0, 0, 0, 'ship-1', 'terran_hegemony');
+
+      proj = updateProjectile(proj, 100);
+      proj = updateProjectile(proj, 100);
+      proj = updateProjectile(proj, 100);
+
+      expect(proj.lifetime).toBe(1700); // 2000 - 300
+    });
+
+    it('should move faster projectiles further', () => {
+      const slowProj: Projectile = { ...createProjectile(0, 0, 0, 'ship-1', 'terran_hegemony'), speed: 100 };
+      const fastProj: Projectile = { ...createProjectile(0, 0, 0, 'ship-1', 'terran_hegemony'), speed: 500 };
+
+      const slowUpdated = updateProjectile(slowProj, 100);
+      const fastUpdated = updateProjectile(fastProj, 100);
+
+      expect(Math.abs(fastUpdated.y)).toBeGreaterThan(Math.abs(slowUpdated.y));
+    });
+  });
+
+  describe('isProjectileAlive', () => {
+    it('should return true when lifetime remaining is positive', () => {
+      const proj: Projectile = {
+        ...createProjectile(0, 0, 0, 'ship-1', 'terran_hegemony'),
+        lifetime: 100, // 100ms remaining
+      };
+
+      expect(isProjectileAlive(proj)).toBe(true);
+    });
+
+    it('should return false when lifetime is exhausted', () => {
+      const proj: Projectile = {
+        ...createProjectile(0, 0, 0, 'ship-1', 'terran_hegemony'),
+        lifetime: -100, // Expired
+      };
+
+      expect(isProjectileAlive(proj)).toBe(false);
+    });
+
+    it('should return false when lifetime is exactly 0', () => {
+      const proj: Projectile = {
+        ...createProjectile(0, 0, 0, 'ship-1', 'terran_hegemony'),
+        lifetime: 0,
+      };
+
+      expect(isProjectileAlive(proj)).toBe(false);
+    });
+  });
+
+  describe('checkProjectileHit', () => {
+    it('should return true when projectile overlaps target', () => {
+      const proj = createProjectile(100, 100, 0, 'ship-1', 'terran_hegemony');
+
+      const hit = checkProjectileHit(proj, 105, 105, 20, 'free_confederation');
+
+      expect(hit).toBe(true);
+    });
+
+    it('should return false when projectile is far from target', () => {
+      const proj = createProjectile(100, 100, 0, 'ship-1', 'terran_hegemony');
+
+      const hit = checkProjectileHit(proj, 500, 500, 20, 'free_confederation');
+
+      expect(hit).toBe(false);
+    });
+
+    it('should return false when target is same faction', () => {
+      const proj = createProjectile(100, 100, 0, 'ship-1', 'terran_hegemony');
+
+      const hit = checkProjectileHit(proj, 105, 105, 20, 'terran_hegemony');
+
+      expect(hit).toBe(false);
+    });
+
+    it('should detect edge hits based on radius', () => {
+      const proj = createProjectile(100, 100, 0, 'ship-1', 'terran_hegemony');
+
+      // Just within range (distance ~14, radius 20)
+      const nearHit = checkProjectileHit(proj, 110, 110, 20, 'free_confederation');
+      expect(nearHit).toBe(true);
+
+      // Just outside range (distance ~28, radius 20)
+      const nearMiss = checkProjectileHit(proj, 120, 120, 20, 'free_confederation');
+      expect(nearMiss).toBe(false);
+    });
+
+    it('should respect different radius sizes', () => {
+      const proj = createProjectile(100, 100, 0, 'ship-1', 'terran_hegemony');
+
+      // Small radius - miss
+      const smallHit = checkProjectileHit(proj, 115, 100, 10, 'free_confederation');
+      expect(smallHit).toBe(false);
+
+      // Large radius - hit
+      const largeHit = checkProjectileHit(proj, 115, 100, 30, 'free_confederation');
+      expect(largeHit).toBe(true);
+    });
+  });
+});

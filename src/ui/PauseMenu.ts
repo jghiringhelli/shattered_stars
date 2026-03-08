@@ -1,0 +1,166 @@
+/**
+ * Pause Menu Component
+ *
+ * Overlay menu that appears when game is paused.
+ * Can be added to any battle scene.
+ */
+
+import Phaser from 'phaser';
+
+export interface PauseMenuConfig {
+  scene: Phaser.Scene;
+  onResume: () => void;
+  onRestart: () => void;
+  onQuit: () => void;
+}
+
+export class PauseMenu extends Phaser.GameObjects.Container {
+  private background: Phaser.GameObjects.Graphics;
+  private panel: Phaser.GameObjects.Container;
+  private onResume: () => void;
+  private onRestart: () => void;
+  private onQuit: () => void;
+
+  constructor(config: PauseMenuConfig) {
+    super(config.scene, 0, 0);
+
+    this.onResume = config.onResume;
+    this.onRestart = config.onRestart;
+    this.onQuit = config.onQuit;
+
+    const width = config.scene.scale.width;
+    const height = config.scene.scale.height;
+
+    // Semi-transparent background
+    this.background = config.scene.add.graphics();
+    this.background.fillStyle(0x000000, 0.7);
+    this.background.fillRect(0, 0, width, height);
+    this.add(this.background);
+
+    // Panel
+    this.panel = config.scene.add.container(width / 2, height / 2);
+    this.add(this.panel);
+
+    // Panel background
+    const panelBg = config.scene.add.graphics();
+    panelBg.fillStyle(0x1a1a2a, 0.95);
+    panelBg.fillRoundedRect(-200, -180, 400, 360, 16);
+    panelBg.lineStyle(3, 0x4488ff, 1);
+    panelBg.strokeRoundedRect(-200, -180, 400, 360, 16);
+    this.panel.add(panelBg);
+
+    // Title
+    const title = config.scene.add
+      .text(0, -140, 'PAUSED', {
+        font: 'bold 48px Arial',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5);
+    this.panel.add(title);
+
+    // Menu items
+    this.createButton(config.scene, 0, -40, 'RESUME', 0x227722, () => {
+      this.hide();
+      this.onResume();
+    });
+
+    this.createButton(config.scene, 0, 40, 'RESTART', 0x666622, () => {
+      this.onRestart();
+    });
+
+    this.createButton(config.scene, 0, 120, 'QUIT TO MENU', 0x662222, () => {
+      this.onQuit();
+    });
+
+    // Set depth and scroll factor
+    this.setDepth(2000);
+    this.setScrollFactor(0);
+
+    // Add to scene
+    config.scene.add.existing(this);
+
+    // Start hidden
+    this.setVisible(false);
+  }
+
+  private createButton(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    label: string,
+    color: number,
+    onClick: () => void
+  ): void {
+    const container = scene.add.container(x, y);
+
+    const bg = scene.add.graphics();
+    bg.fillStyle(color, 1);
+    bg.fillRoundedRect(-120, -25, 240, 50, 8);
+    container.add(bg);
+
+    const text = scene.add
+      .text(0, 0, label, {
+        font: 'bold 24px Arial',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5);
+    container.add(text);
+
+    container.setInteractive(
+      new Phaser.Geom.Rectangle(-120, -25, 240, 50),
+      Phaser.Geom.Rectangle.Contains
+    );
+
+    container.on('pointerover', () => {
+      bg.clear();
+      bg.fillStyle(Phaser.Display.Color.ValueToColor(color).lighten(20).color, 1);
+      bg.fillRoundedRect(-120, -25, 240, 50, 8);
+      text.setScale(1.05);
+    });
+
+    container.on('pointerout', () => {
+      bg.clear();
+      bg.fillStyle(color, 1);
+      bg.fillRoundedRect(-120, -25, 240, 50, 8);
+      text.setScale(1);
+    });
+
+    container.on('pointerdown', onClick);
+
+    this.panel.add(container);
+  }
+
+  show(): void {
+    this.setVisible(true);
+
+    // Animate in
+    this.panel.setScale(0.8);
+    this.panel.setAlpha(0);
+    this.background.setAlpha(0);
+
+    this.scene.tweens.add({
+      targets: this.background,
+      alpha: 1,
+      duration: 200,
+    });
+
+    this.scene.tweens.add({
+      targets: this.panel,
+      scale: 1,
+      alpha: 1,
+      duration: 300,
+      ease: 'Back.out',
+    });
+  }
+
+  hide(): void {
+    this.scene.tweens.add({
+      targets: [this.background, this.panel],
+      alpha: 0,
+      duration: 200,
+      onComplete: () => {
+        this.setVisible(false);
+      },
+    });
+  }
+}
