@@ -284,14 +284,43 @@ export class CampaignScene extends Phaser.Scene {
     }).setOrigin(0.5);
     this.missionMapContainer.add(actLabel);
 
-    // Mission buttons
+    // Mission list — group by missionNumber to detect SC2-style branch pairs
+    const completedMissions = this.saveData!.completedMissions;
+    const missionsByNumber = new Map<number, CampaignMission[]>();
+    for (const m of actMissions) {
+      const group = missionsByNumber.get(m.missionNumber) ?? [];
+      group.push(m);
+      missionsByNumber.set(m.missionNumber, group);
+    }
+
     const startY = 210;
     const spacing = 65;
+    let yPos = startY;
+    const colorHex = '#' + color.toString(16).padStart(6, '0');
 
-    actMissions.forEach((mission, index) => {
-      const y = startY + index * spacing;
-      this.createMissionButton(centerX, y, mission, currentMission);
-    });
+    for (const [, missions] of [...missionsByNumber.entries()].sort(([a], [b]) => a - b)) {
+      if (missions.length === 1) {
+        this.createMissionButton(centerX, yPos, missions[0]!, currentMission, completedMissions);
+        yPos += spacing;
+      } else {
+        // Branch pair — show "CHOOSE YOUR PATH" header
+        const chooseLabel = this.add.text(centerX, yPos - 4, '⬡  CHOOSE YOUR PATH  ⬡', {
+          font: 'bold 13px Arial',
+          color: colorHex,
+        }).setOrigin(0.5);
+        this.missionMapContainer.add(chooseLabel);
+
+        const vsLabel = this.add.text(centerX, yPos + 32, 'OR', {
+          font: 'bold 14px Arial',
+          color: '#555566',
+        }).setOrigin(0.5);
+        this.missionMapContainer.add(vsLabel);
+
+        this.createMissionButton(centerX - 165, yPos + 32, missions[0]!, currentMission, completedMissions, true);
+        this.createMissionButton(centerX + 165, yPos + 32, missions[1]!, currentMission, completedMissions, true);
+        yPos += spacing + 30;
+      }
+    }
 
     // Back button
     const backBtn = this.add.text(50, 50, '< FACTIONS', {
@@ -312,19 +341,35 @@ export class CampaignScene extends Phaser.Scene {
     this.createStatsPanel();
   }
 
-  private createMissionButton(x: number, y: number, mission: CampaignMission, currentMission: number): void {
+  private createMissionButton(
+    x: number,
+    y: number,
+    mission: CampaignMission,
+    currentMission: number,
+    completedMissions: string[],
+    compact = false
+  ): void {
     const container = this.add.container(x, y);
     const color = FACTION_COLORS[this.selectedFaction!];
 
-    const isCompleted = mission.missionNumber < currentMission;
+    const isCompleted = completedMissions.includes(mission.id);
+    const isNotTaken = !isCompleted && mission.missionNumber < currentMission;
     const isAvailable = mission.missionNumber === currentMission;
     const isLocked = mission.missionNumber > currentMission;
+
+    // Layout dimensions: compact (branch card ~280px) or full width (600px)
+    const halfW = compact ? 140 : 300;
+    const cardW = halfW * 2;
+    const cardH = compact ? 60 : 50;
 
     // Background
     const bg = this.add.graphics();
     if (isCompleted) {
       bg.fillStyle(0x113311, 0.9);
       bg.lineStyle(2, 0x44aa44, 0.8);
+    } else if (isNotTaken) {
+      bg.fillStyle(0x111111, 0.5);
+      bg.lineStyle(1, 0x333355, 0.6);
     } else if (isAvailable) {
       bg.fillStyle(0x112233, 0.95);
       bg.lineStyle(2, color, 1);
@@ -332,68 +377,84 @@ export class CampaignScene extends Phaser.Scene {
       bg.fillStyle(0x111111, 0.7);
       bg.lineStyle(1, 0x333333, 0.5);
     }
-    bg.fillRoundedRect(-300, -25, 600, 50, 8);
-    bg.strokeRoundedRect(-300, -25, 600, 50, 8);
+    bg.fillRoundedRect(-halfW, -cardH / 2, cardW, cardH, 8);
+    bg.strokeRoundedRect(-halfW, -cardH / 2, cardW, cardH, 8);
     container.add(bg);
 
-    // Mission number
+    // Branch tag (for compact mode)
+    if (compact && mission.branchTag) {
+      const tagColor = isCompleted ? '#44aa44' : isAvailable ? '#ffcc44' : '#445566';
+      const tag = this.add.text(0, -cardH / 2 + 4, mission.branchTag, {
+        font: 'bold 10px Arial',
+        color: tagColor,
+      }).setOrigin(0.5, 0);
+      container.add(tag);
+    }
+
+    // Mission number circle
+    const circleX = -halfW + (compact ? 26 : 40);
     const numBg = this.add.graphics();
-    numBg.fillStyle(isCompleted ? 0x44aa44 : (isAvailable ? color : 0x333333), 1);
-    numBg.fillCircle(-260, 0, 18);
+    numBg.fillStyle(isCompleted ? 0x44aa44 : isNotTaken ? 0x333355 : (isAvailable ? color : 0x333333), 1);
+    numBg.fillCircle(circleX, 0, 16);
     container.add(numBg);
 
-    const numText = this.add.text(-260, 0, `${mission.missionNumber}`, {
-      font: 'bold 16px Arial',
+    const numText = this.add.text(circleX, 0, `${mission.missionNumber}`, {
+      font: 'bold 14px Arial',
       color: '#ffffff',
     }).setOrigin(0.5);
     container.add(numText);
 
     // Mission title
-    const titleText = this.add.text(-220, -5, mission.title, {
-      font: isAvailable ? 'bold 18px Arial' : '18px Arial',
-      color: isLocked ? '#666666' : '#ffffff',
+    const titleX = circleX + 24;
+    const titleText = this.add.text(titleX, compact ? -8 : -5, mission.title, {
+      font: isAvailable ? `bold ${compact ? 14 : 18}px Arial` : `${compact ? 13 : 18}px Arial`,
+      color: isLocked || isNotTaken ? '#666666' : '#ffffff',
+      ...(compact ? { wordWrap: { width: cardW - 60 } } : {}),
     }).setOrigin(0, 0.5);
     container.add(titleText);
 
-    // Status indicator
+    // Status indicator (right edge, skip for compact if not enough space)
     let statusText: string;
     let statusColor: string;
     if (isCompleted) {
-      statusText = '✓ COMPLETE';
+      statusText = '✓';
       statusColor = '#44aa44';
+    } else if (isNotTaken) {
+      statusText = compact ? '–' : 'NOT TAKEN';
+      statusColor = '#445566';
     } else if (isAvailable) {
-      statusText = 'AVAILABLE';
+      statusText = compact ? '▶' : 'AVAILABLE';
       statusColor = '#44aaff';
     } else {
-      statusText = 'LOCKED';
+      statusText = compact ? '🔒' : 'LOCKED';
       statusColor = '#666666';
     }
 
-    const status = this.add.text(260, 0, statusText, {
-      font: '14px Arial',
+    const status = this.add.text(halfW - 8, 0, statusText, {
+      font: `${compact ? 13 : 14}px Arial`,
       color: statusColor,
     }).setOrigin(1, 0.5);
     container.add(status);
 
     // Make available missions clickable
     if (isAvailable) {
-      const hitArea = this.add.rectangle(0, 0, 600, 50).setInteractive({ useHandCursor: true });
+      const hitArea = this.add.rectangle(0, 0, cardW, cardH).setInteractive({ useHandCursor: true });
       container.add(hitArea);
 
       hitArea.on('pointerover', () => {
         bg.clear();
         bg.fillStyle(0x223344, 1);
         bg.lineStyle(3, color, 1);
-        bg.fillRoundedRect(-300, -25, 600, 50, 8);
-        bg.strokeRoundedRect(-300, -25, 600, 50, 8);
+        bg.fillRoundedRect(-halfW, -cardH / 2, cardW, cardH, 8);
+        bg.strokeRoundedRect(-halfW, -cardH / 2, cardW, cardH, 8);
       });
 
       hitArea.on('pointerout', () => {
         bg.clear();
         bg.fillStyle(0x112233, 0.95);
         bg.lineStyle(2, color, 1);
-        bg.fillRoundedRect(-300, -25, 600, 50, 8);
-        bg.strokeRoundedRect(-300, -25, 600, 50, 8);
+        bg.fillRoundedRect(-halfW, -cardH / 2, cardW, cardH, 8);
+        bg.strokeRoundedRect(-halfW, -cardH / 2, cardW, cardH, 8);
       });
 
       hitArea.on('pointerdown', () => {

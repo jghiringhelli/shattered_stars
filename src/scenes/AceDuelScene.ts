@@ -725,7 +725,7 @@ export class AceDuelScene extends Phaser.Scene {
     side2Indicator.setScrollFactor(0).setDepth(1000);
 
     this.add
-      .text(this.scale.width / 2, this.scale.height - 25, 'Arrow keys: Move | ESC: Pause', {
+      .text(this.scale.width / 2, this.scale.height - 25, 'Scroll: Zoom | ESC: Pause', {
         font: '14px monospace',
         color: '#666666',
       })

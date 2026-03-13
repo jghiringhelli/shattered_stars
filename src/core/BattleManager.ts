@@ -38,6 +38,11 @@ export interface BattleConfig {
   readonly playerShips: string[]; // Ship definition IDs
   readonly enemyShips: string[]; // Ship definition IDs
   readonly seed?: number;
+  /** Cumulative stat bonuses from pilot evolution applied to all player ships */
+  readonly playerStatBonuses?: {
+    hull?: number;
+    shields?: number;
+  };
 }
 
 export interface BattleState {
@@ -80,6 +85,8 @@ export class BattleManager {
       const def = getShipDefinition(defId);
       if (!def) continue;
 
+      const hullBonus = config.playerStatBonuses?.hull ?? 0;
+      const shieldBonus = config.playerStatBonuses?.shields ?? 0;
       const ship: ShipState = {
         id: `player_${shipIndex++}`,
         definitionId: defId,
@@ -88,10 +95,10 @@ export class BattleManager {
         x: playerStartX + i * playerSpacing,
         y: playerStartY,
         angle: 0, // Facing up
-        hull: def.baseStats.hull,
-        maxHull: def.baseStats.hull,
-        shields: def.baseStats.shields,
-        maxShields: def.baseStats.shields,
+        hull: def.baseStats.hull + hullBonus,
+        maxHull: def.baseStats.hull + hullBonus,
+        shields: def.baseStats.shields + shieldBonus,
+        maxShields: def.baseStats.shields + shieldBonus,
         isStressed: false,
         hasFocus: false,
         hasEvade: false,

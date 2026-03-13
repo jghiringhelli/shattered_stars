@@ -144,6 +144,13 @@ export class CampaignBattleScene extends Phaser.Scene {
     // Determine enemy faction from first enemy
     const enemyFaction = immediateEnemies[0]?.faction ?? 'terran_hegemony';
 
+    // Collect protagonist stat bonuses from pilot evolutions
+    const protagonist = this.saveData.campaignPilots.find(p => {
+      const def = CAMPAIGN_PILOTS[this.factionId]?.find(d => d.id === p.pilotId);
+      return def?.role === 'protagonist';
+    });
+    const statBonuses = protagonist?.statBonuses;
+
     // Start battle
     const config: BattleConfig = {
       playerFaction: this.factionId,
@@ -151,6 +158,9 @@ export class CampaignBattleScene extends Phaser.Scene {
       playerShips: this.selectedShips,
       enemyShips,
       seed: Date.now(),
+      ...(statBonuses !== undefined && {
+        playerStatBonuses: { hull: statBonuses.hull, shields: statBonuses.shields },
+      }),
     };
 
     this.battleManager = new BattleManager(config);

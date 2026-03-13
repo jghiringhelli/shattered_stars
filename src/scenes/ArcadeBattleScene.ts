@@ -77,6 +77,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   private score = 0;
   private lastTime = 0;
+  private gameEnded = false;
+  private isPaused = false;
+  private pauseOverlay: Phaser.GameObjects.Container | null = null;
 
   constructor() {
     super({ key: 'ArcadeBattleScene' });
@@ -142,7 +145,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const deltaMs = time - this.lastTime;
     this.lastTime = time;
 
-    if (deltaMs <= 0 || deltaMs > 100) return; // Skip bad frames
+    if (deltaMs <= 0 || deltaMs > 100) return;
+    if (this.isPaused || this.gameEnded) return;
 
     this.handleInput();
     this.updateShips(deltaMs);
@@ -191,6 +195,58 @@ export class ArcadeBattleScene extends Phaser.Scene {
       shift: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
       ctrl: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL),
     };
+
+    this.input.keyboard!.on('keydown-ESC', () => {
+      if (this.gameEnded) return;
+      if (this.isPaused) {
+        this.isPaused = false;
+        this.pauseOverlay?.destroy();
+        this.pauseOverlay = null;
+      } else {
+        this.isPaused = true;
+        this.showPauseOverlay();
+      }
+    });
+  }
+
+  private showPauseOverlay(): void {
+    const cx = this.scale.width / 2;
+    const cy = this.scale.height / 2;
+    this.pauseOverlay = this.add.container(0, 0).setDepth(3000).setScrollFactor(0);
+
+    const dim = this.add.graphics();
+    dim.fillStyle(0x000000, 0.65);
+    dim.fillRect(0, 0, this.scale.width, this.scale.height);
+    this.pauseOverlay.add(dim);
+
+    const panel = this.add.graphics();
+    panel.fillStyle(0x0a1a2e, 0.98);
+    panel.lineStyle(2, 0x2244aa, 1);
+    panel.fillRoundedRect(cx - 150, cy - 90, 300, 180, 12);
+    panel.strokeRoundedRect(cx - 150, cy - 90, 300, 180, 12);
+    this.pauseOverlay.add(panel);
+
+    this.pauseOverlay.add(this.add.text(cx, cy - 55, 'PAUSED', {
+      font: 'bold 32px Arial', color: '#ffffff',
+    }).setOrigin(0.5));
+
+    const resumeBtn = this.add.text(cx, cy + 5, 'RESUME', {
+      font: 'bold 22px Arial', color: '#44ff88',
+      backgroundColor: '#224422', padding: { x: 24, y: 10 },
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    resumeBtn.on('pointerdown', () => {
+      this.isPaused = false;
+      this.pauseOverlay?.destroy();
+      this.pauseOverlay = null;
+    });
+    this.pauseOverlay.add(resumeBtn);
+
+    const quitBtn = this.add.text(cx, cy + 55, 'QUIT TO MENU', {
+      font: 'bold 18px Arial', color: '#ff4444',
+      backgroundColor: '#331111', padding: { x: 20, y: 8 },
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    quitBtn.on('pointerdown', () => this.scene.start('MainMenuScene'));
+    this.pauseOverlay.add(quitBtn);
   }
 
   private handleInput(): void {
@@ -723,6 +779,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   private checkVictory(): void {
+    if (this.gameEnded) return;
+
     const enemies = Array.from(this.ships.values()).filter(
       (s) => s.faction !== 'free_confederation' && s.hull > 0
     );
@@ -731,23 +789,57 @@ export class ArcadeBattleScene extends Phaser.Scene {
     );
 
     if (enemies.length === 0) {
-      this.add.text(
-        this.scale.width / 2,
-        this.scale.height / 2,
-        'VICTORY!',
-        { font: 'bold 48px Arial', color: '#44ff44' }
-      ).setOrigin(0.5).setScrollFactor(0).setDepth(2000);
-      this.scene.pause();
+      this.gameEnded = true;
+      this.showEndScreen(true);
+    } else if (allies.length === 0) {
+      this.gameEnded = true;
+      this.showEndScreen(false);
     }
+  }
 
-    if (allies.length === 0) {
-      this.add.text(
-        this.scale.width / 2,
-        this.scale.height / 2,
-        'DEFEATED',
-        { font: 'bold 48px Arial', color: '#ff4444' }
-      ).setOrigin(0.5).setScrollFactor(0).setDepth(2000);
-      this.scene.pause();
-    }
+  private showEndScreen(victory: boolean): void {
+    const cx = this.scale.width / 2;
+    const cy = this.scale.height / 2;
+
+    const overlay = this.add.graphics();
+    overlay.fillStyle(0x000000, 0.75);
+    overlay.fillRect(0, 0, this.scale.width, this.scale.height);
+    overlay.setScrollFactor(0).setDepth(2000);
+
+    const title = victory ? 'VICTORY!' : 'DEFEATED';
+    const titleColor = victory ? '#44ff44' : '#ff4444';
+    this.add.text(cx, cy - 70, title, {
+      font: 'bold 56px Arial',
+      color: titleColor,
+      stroke: '#000000',
+      strokeThickness: 4,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
+
+    this.add.text(cx, cy - 15, `Score: ${this.score}`, {
+      font: '26px Arial',
+      color: '#ffffff',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
+
+    // RETRY button
+    const retryBtn = this.add.text(cx - 100, cy + 50, 'RETRY', {
+      font: 'bold 24px Arial',
+      color: '#44ff88',
+      backgroundColor: '#224422',
+      padding: { x: 20, y: 10 },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001).setInteractive({ useHandCursor: true });
+    retryBtn.on('pointerover', () => retryBtn.setStyle({ color: '#ffffff' }));
+    retryBtn.on('pointerout', () => retryBtn.setStyle({ color: '#44ff88' }));
+    retryBtn.on('pointerdown', () => this.scene.restart());
+
+    // MENU button
+    const menuBtn = this.add.text(cx + 100, cy + 50, 'MENU', {
+      font: 'bold 24px Arial',
+      color: '#aaaaaa',
+      backgroundColor: '#333333',
+      padding: { x: 20, y: 10 },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001).setInteractive({ useHandCursor: true });
+    menuBtn.on('pointerover', () => menuBtn.setStyle({ color: '#ffffff' }));
+    menuBtn.on('pointerout', () => menuBtn.setStyle({ color: '#aaaaaa' }));
+    menuBtn.on('pointerdown', () => this.scene.start('MainMenuScene'));
   }
 }

@@ -73,6 +73,10 @@ export interface CampaignMission {
   isUnlocked?: boolean;
   debrief?: readonly DebriefLine[];
   evolutionChoice?: EvolutionChoiceData;
+  /** If true, this mission is one option in a branch pair sharing the same missionNumber */
+  isBranch?: boolean;
+  /** Short tag shown on the branch choice card (e.g. "AGGRESSIVE" | "COVERT") */
+  branchTag?: string;
 }
 
 export interface FactionCampaign {
@@ -143,6 +147,8 @@ const TERRAN_HEGEMONY_MISSIONS: CampaignMission[] = [
     id: 'heg_1_3',
     act: 1,
     missionNumber: 3,
+    isBranch: true,
+    branchTag: 'TEAMWORK',
     title: 'Wing Formation',
     briefing: 'You have been assigned a wingman. Learn to fly in formation and coordinate attacks. The Hegemony\'s strength lies in disciplined teamwork.',
     objectives: [
@@ -152,7 +158,7 @@ const TERRAN_HEGEMONY_MISSIONS: CampaignMission[] = [
     playerShips: ['terran_viper', 'terran_raptor'],
     maxSquadSize: 2,
     enemies: [{ shipId: 'corsair_blade', count: 3, faction: 'void_corsairs' }],
-    rewards: { xp: 200, credits: 100 },
+    rewards: { xp: 200, credits: 100, unlocks: ['terran_centurion'] },
     newMechanic: 'Formation Tactics',
     debrief: [
       { speaker: 'WHISPER', portraitKey: 'portrait_whisper', text: 'Striker — your formation position. You were fifty meters out of bounds during the engagement.', mood: 'neutral' },
@@ -163,6 +169,36 @@ const TERRAN_HEGEMONY_MISSIONS: CampaignMission[] = [
       { speaker: 'ADMIRAL CHEN', portraitKey: 'portrait_admiral_chen', text: 'You\'re saying someone predicted our tactics?', mood: 'neutral' },
       { speaker: 'WHISPER', portraitKey: 'portrait_whisper', text: 'I\'m saying this wasn\'t random piracy. There\'s a pattern I can\'t explain yet.', mood: 'solemn' },
       { speaker: 'STRIKER', portraitKey: 'portrait_striker', text: 'Alright... I may have been reckless. Won\'t happen again, Commander.', mood: 'solemn' },
+    ],
+  },
+  {
+    id: 'heg_1_3b',
+    act: 1,
+    missionNumber: 3,
+    isBranch: true,
+    branchTag: 'COVERT',
+    title: 'Shadow Strike',
+    briefing: 'Command has a different assignment for you — solo covert reconnaissance. Track the Corsair coordination pattern before they go dark. No wingman, no backup.',
+    objectives: [
+      { id: 'kill', type: 'eliminate', description: 'Eliminate Corsair scout ships', count: 3 },
+      { id: 'survive', type: 'survive', description: 'Return without triggering an alarm', optional: true, xpBonus: 75 },
+    ],
+    playerShips: ['terran_viper'],
+    maxSquadSize: 1,
+    enemies: [
+      { shipId: 'corsair_fang', count: 2, faction: 'void_corsairs' },
+      { shipId: 'corsair_marauder', count: 1, faction: 'void_corsairs' },
+    ],
+    rewards: { xp: 250, credits: 150, unlocks: ['terran_raptor'] },
+    newMechanic: 'Solo Operations',
+    debrief: [
+      { speaker: 'ADMIRAL CHEN', portraitKey: 'portrait_admiral_chen', text: 'Mission complete. Solo. Clean run. That\'s some serious flying.', mood: 'proud' },
+      { speaker: 'WHISPER', portraitKey: 'portrait_whisper', text: 'The recon data you pulled — this isn\'t a raiding party. The Corsairs have a timetable.', mood: 'urgent' },
+      { speaker: 'ADMIRAL CHEN', portraitKey: 'portrait_admiral_chen', text: 'A timetable for what?', mood: 'neutral' },
+      { speaker: 'WHISPER', portraitKey: 'portrait_whisper', text: 'I don\'t know yet. But it\'s coordinated with someone inside. Someone with fleet-level intel.', mood: 'solemn' },
+      { speaker: 'ADMIRAL CHEN', portraitKey: 'portrait_admiral_chen', text: 'You\'re saying we have a leak.', mood: 'grim' },
+      { speaker: 'WHISPER', portraitKey: 'portrait_whisper', text: 'I\'m saying you need to act like we do. Quietly. For now.', mood: 'solemn' },
+      { speaker: 'ADMIRAL CHEN', portraitKey: 'portrait_admiral_chen', text: 'Good work. You just gave us a head start. Let\'s make it count.', mood: 'neutral' },
     ],
   },
   {
@@ -307,6 +343,8 @@ const TERRAN_HEGEMONY_MISSIONS: CampaignMission[] = [
     id: 'heg_2_3',
     act: 2,
     missionNumber: 8,
+    isBranch: true,
+    branchTag: 'ELIMINATE',
     title: 'Ace Hunt',
     briefing: 'Intelligence has located a notorious Confederation ace pilot. Eliminate this high-value target to cripple enemy morale.',
     objectives: [
@@ -329,6 +367,37 @@ const TERRAN_HEGEMONY_MISSIONS: CampaignMission[] = [
       { speaker: 'ADMIRAL CHEN', portraitKey: 'portrait_admiral_chen', text: 'She flew into three of us knowing she\'d lose. That\'s not a diversion. That\'s a warning.', mood: 'solemn' },
       { speaker: 'WHISPER', portraitKey: 'portrait_whisper', text: 'I believe her, Commander.', mood: 'solemn' },
       { speaker: 'ADMIRAL CHEN', portraitKey: 'portrait_admiral_chen', text: '...So do I. Whisper — I want everything you have on the supply chain. All of it. Tonight.', mood: 'urgent' },
+    ],
+  },
+  {
+    id: 'heg_2_3b',
+    act: 2,
+    missionNumber: 8,
+    isBranch: true,
+    branchTag: 'DEFECTION',
+    title: 'The Defection',
+    briefing: 'Phoenix is requesting a covert rendezvous. She says she has proof of a conspiracy inside the Hegemony. This could be a trap — or the break we\'ve been looking for.',
+    objectives: [
+      { id: 'escort', type: 'escort', description: 'Escort Phoenix to safety', target: 'confed_hawk' },
+      { id: 'kill', type: 'eliminate', description: 'Destroy pursuing Hegemony loyalists', count: 4 },
+    ],
+    playerShips: ['terran_raptor', 'terran_centurion'],
+    maxSquadSize: 3,
+    enemies: [
+      { shipId: 'terran_viper', count: 3, faction: 'terran_hegemony' },
+      { shipId: 'terran_centurion', count: 1, faction: 'terran_hegemony', isAce: true },
+    ],
+    rewards: { xp: 480, credits: 380, unlocks: ['confed_hawk'] },
+    debrief: [
+      { speaker: 'ADMIRAL CHEN', portraitKey: 'portrait_admiral_chen', text: 'Phoenix. You risked your ship. Your career. Why?', mood: 'solemn' },
+      { speaker: 'STRIKER', portraitKey: 'portrait_striker', text: 'She risked a lot more than that. Those were Hegemony loyalists! Someone ordered them to silence her.', mood: 'urgent' },
+      { speaker: 'WHISPER', portraitKey: 'portrait_whisper', text: 'The data she brought — supply manifests, encrypted orders. There\'s a name at the top of every document.', mood: 'grim' },
+      { speaker: 'ADMIRAL CHEN', portraitKey: 'portrait_admiral_chen', text: 'Vance.', mood: 'grim' },
+      { speaker: 'WHISPER', portraitKey: 'portrait_whisper', text: 'Admiral Vance. He\'s been using Iron Fist as his personal hammer. Every mission we flew — staged intelligence.', mood: 'grim' },
+      { speaker: 'STRIKER', portraitKey: 'portrait_striker', text: 'We were killing people for a conspiracy and didn\'t even know it.', mood: 'solemn' },
+      { speaker: 'ADMIRAL CHEN', portraitKey: 'portrait_admiral_chen', text: 'Phoenix — you could have stayed quiet. Why come to us?', mood: 'solemn' },
+      { speaker: 'WHISPER', portraitKey: 'portrait_whisper', text: 'Because we were the only ones left who weren\'t already his.', mood: 'grim' },
+      { speaker: 'ADMIRAL CHEN', portraitKey: 'portrait_admiral_chen', text: 'Then we end this. All of us. Together.', mood: 'proud' },
     ],
   },
   {
@@ -477,6 +546,8 @@ const TERRAN_HEGEMONY_MISSIONS: CampaignMission[] = [
     id: 'heg_3_3',
     act: 3,
     missionNumber: 13,
+    isBranch: true,
+    branchTag: 'REACTIVE',
     title: 'Alliance Betrayal',
     briefing: 'The Empire has broken our alliance. Defend against their surprise attack.',
     objectives: [
@@ -500,6 +571,37 @@ const TERRAN_HEGEMONY_MISSIONS: CampaignMission[] = [
       { speaker: 'WHISPER', portraitKey: 'portrait_whisper', text: 'Commander. The Ascendant commander sent us a private channel message after the engagement.', mood: 'neutral' },
       { speaker: 'ADMIRAL CHEN', portraitKey: 'portrait_admiral_chen', text: 'What does it say?', mood: 'neutral' },
       { speaker: 'WHISPER', portraitKey: 'portrait_whisper', text: '"Iron Fist — we see the truth now. One chance. Take it."', mood: 'urgent' },
+    ],
+  },
+  {
+    id: 'heg_3_3b',
+    act: 3,
+    missionNumber: 13,
+    isBranch: true,
+    branchTag: 'PREEMPTIVE',
+    title: 'Iron Preemption',
+    briefing: 'Whisper has cracked Vance\'s timeline. We have hours before he triggers the Ascendant betrayal. Hit his loyalist fleet now — before the trap snaps shut.',
+    objectives: [
+      { id: 'kill', type: 'eliminate', description: 'Destroy Vance\'s loyalist fleet', count: 8 },
+      { id: 'assassinate', type: 'assassinate', description: 'Eliminate Vance\'s fleet commander', target: 'terran_vindicator', optional: true, xpBonus: 150 },
+    ],
+    playerShips: ['terran_viper', 'terran_raptor', 'terran_centurion', 'terran_thunderbolt'],
+    maxSquadSize: 5,
+    enemies: [
+      { shipId: 'terran_viper', count: 4, faction: 'terran_hegemony' },
+      { shipId: 'terran_centurion', count: 3, faction: 'terran_hegemony' },
+      { shipId: 'terran_vindicator', count: 1, faction: 'terran_hegemony', isAce: true, isBoss: true },
+    ],
+    rewards: { xp: 800, credits: 700, unlocks: ['terran_vindicator'] },
+    debrief: [
+      { speaker: 'ADMIRAL CHEN', portraitKey: 'portrait_admiral_chen', text: 'Vance\'s fleet commander is down. His timetable is broken. The Ascendant betrayal never fires.', mood: 'proud' },
+      { speaker: 'STRIKER', portraitKey: 'portrait_striker', text: 'We hit them before they could move. They didn\'t see us coming.', mood: 'proud' },
+      { speaker: 'WHISPER', portraitKey: 'portrait_whisper', text: 'The Ascendant commander is on our channel. They received Vance\'s false orders — and they rejected them.', mood: 'neutral' },
+      { speaker: 'ADMIRAL CHEN', portraitKey: 'portrait_admiral_chen', text: 'They chose not to fire.', mood: 'solemn' },
+      { speaker: 'WHISPER', portraitKey: 'portrait_whisper', text: 'They knew it was wrong. We just gave them the time to realize it.', mood: 'neutral' },
+      { speaker: 'STRIKER', portraitKey: 'portrait_striker', text: 'Eight ships saved. Two factions not at war. I\'ll take that outcome.', mood: 'proud' },
+      { speaker: 'ADMIRAL CHEN', portraitKey: 'portrait_admiral_chen', text: 'Vance is going to run. One last push — we end this before he can disappear.', mood: 'urgent' },
+      { speaker: 'WHISPER', portraitKey: 'portrait_whisper', text: 'I\'ve locked his coordinates. He has nowhere left to hide.', mood: 'grim' },
     ],
   },
   {

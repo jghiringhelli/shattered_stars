@@ -461,7 +461,7 @@ export class EpicBattleScene extends Phaser.Scene {
     this.updateBossHealthBar();
 
     this.add
-      .text(this.scale.width / 2, this.scale.height - 30, 'Arrow keys: Move | ESC: Pause', {
+      .text(this.scale.width / 2, this.scale.height - 30, 'Scroll: Zoom | ESC: Pause', {
         font: '14px monospace',
         color: '#666666',
       })
