@@ -62,7 +62,9 @@ export class DebriefScene extends Phaser.Scene {
   private lines: DebriefLine[] = [];
   private lineIndex: number = 0;
   private charIndex: number = 0;
-  private typewriterTimer?: Phaser.Time.TimerEvent;
+  private typewriterTimer: Phaser.Time.TimerEvent | undefined = undefined;
+  private talkTimer: Phaser.Time.TimerEvent | undefined = undefined;
+  private currentPortraitTex: string = 'portrait_command';
 
   // UI objects
   private bg!: Phaser.GameObjects.Graphics;
@@ -298,6 +300,7 @@ export class DebriefScene extends Phaser.Scene {
     const tex = this.textures.exists(textureKey) ? textureKey : 'portrait_command';
     const prevTex = this.portraitImage.texture.key;
     this.portraitImage.setTexture(tex);
+    this.currentPortraitTex = tex;
 
     if (tex !== prevTex) {
       // Speaker changed — brief white flash
@@ -308,6 +311,23 @@ export class DebriefScene extends Phaser.Scene {
         alpha: 0,
         duration: 280,
         ease: 'Cubic.easeOut',
+      });
+    }
+
+    // Talking animation: alternate base ↔ _talk texture while typewriter is active
+    if (this.talkTimer) {
+      this.talkTimer.remove();
+      this.talkTimer = undefined;
+    }
+    const talkKey = tex + '_talk';
+    if (this.textures.exists(talkKey)) {
+      this.talkTimer = this.time.addEvent({
+        delay: 120,
+        loop: true,
+        callback: () => {
+          const onTalk = this.portraitImage.texture.key !== talkKey;
+          this.portraitImage.setTexture(onTalk ? talkKey : tex);
+        },
       });
     }
 
@@ -337,6 +357,7 @@ export class DebriefScene extends Phaser.Scene {
         this.charIndex++;
         this.dialogueText.setText(line.text.slice(0, this.charIndex));
         if (this.charIndex >= line.text.length) {
+          this.stopTalkAnimation();
           this.state = 'dialogue_waiting';
           this.promptText.setAlpha(1);
           this.blinkPrompt();
@@ -353,8 +374,17 @@ export class DebriefScene extends Phaser.Scene {
     if (line) {
       this.dialogueText.setText(line.text);
     }
+    this.stopTalkAnimation();
     this.state = 'dialogue_waiting';
     this.promptText.setAlpha(1);
+  }
+
+  private stopTalkAnimation(): void {
+    if (this.talkTimer) {
+      this.talkTimer.remove();
+      this.talkTimer = undefined;
+    }
+    this.portraitImage.setTexture(this.currentPortraitTex);
   }
 
   private advanceLine(): void {
@@ -380,6 +410,10 @@ export class DebriefScene extends Phaser.Scene {
     this.portraitScanlines.setVisible(false);
     this.portraitFlash.setVisible(false);
     this.tweens.killTweensOf(this.portraitScanlines);
+    if (this.talkTimer) {
+      this.talkTimer.remove();
+      this.talkTimer = undefined;
+    }
     this.speakerText.setVisible(false);
     this.dialogueBox.setVisible(false);
     this.dialogueText.setVisible(false);

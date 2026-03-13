@@ -194,10 +194,13 @@ export class BootScene extends Phaser.Scene {
     // COMMAND speaker portrait — real PNG preferred, fallback generated after complete
     this.load.image('portrait_command', 'assets/portraits/portrait_command.png');
 
-    // Terran Hegemony
-    this.load.image('portrait_admiral_chen', 'assets/portraits/terran_hegemony/admiral_chen.png');
-    this.load.image('portrait_striker',      'assets/portraits/terran_hegemony/striker.png');
-    this.load.image('portrait_whisper',      'assets/portraits/terran_hegemony/whisper.png');
+    // Terran Hegemony — base + talking variants
+    this.load.image('portrait_admiral_chen',      'assets/portraits/terran_hegemony/admiral_chen.png');
+    this.load.image('portrait_admiral_chen_talk', 'assets/portraits/terran_hegemony/admiral_chen_talk.png');
+    this.load.image('portrait_striker',           'assets/portraits/terran_hegemony/striker.png');
+    this.load.image('portrait_striker_talk',      'assets/portraits/terran_hegemony/striker_talk.png');
+    this.load.image('portrait_whisper',           'assets/portraits/terran_hegemony/whisper.png');
+    this.load.image('portrait_whisper_talk',      'assets/portraits/terran_hegemony/whisper_talk.png');
 
     // Free Confederation
     this.load.image('portrait_commander_santos', 'assets/portraits/free_confederation/commander_santos.png');
