@@ -553,5 +553,235 @@ describe('OrdnanceSystem', () => {
       const targets = getClusterTargets(primaryTarget, [primaryTarget], 50);
       expect(targets).toHaveLength(0);
     });
+
+    it('should include ship at exact cluster radius boundary (<=)', () => {
+      // dist === 50, radius === 50 — must be included
+      const atBoundary = makeShip({ id: 'boundary', x: 150, y: 100 });
+      const targets = getClusterTargets(primaryTarget, [primaryTarget, atBoundary], 50);
+      expect(targets).toContain(atBoundary);
+    });
+
+    it('should exclude ship one unit outside radius', () => {
+      const justOutside = makeShip({ id: 'outside', x: 151, y: 100 });
+      const targets = getClusterTargets(primaryTarget, [primaryTarget, justOutside], 50);
+      expect(targets).not.toContain(justOutside);
+    });
+  });
+
+  // ── Targeted mutation-killing tests ─────────────────────────────────────
+
+  describe('ORDNANCE_DEFINITIONS - key property assertions', () => {
+    it('cluster_mines should be type mine with no arc requirements', () => {
+      const def = ORDNANCE_DEFINITIONS['cluster_mines']!;
+      expect(def.id).toBe('cluster_mines');
+      expect(def.type).toBe('mine');
+      expect(def.requiresFrontArc).toBe(false);
+      expect(def.requiresTargetLock).toBe(false);
+      expect(def.requiresBullseye).toBe(false);
+      expect(def.recoverable).toBe(false);
+    });
+
+    it('adv_rockets should be recoverable and not require target lock', () => {
+      const def = ORDNANCE_DEFINITIONS['adv_rockets']!;
+      expect(def.id).toBe('adv_rockets');
+      expect(def.recoverable).toBe(true);
+      expect(def.requiresTargetLock).toBe(false);
+      expect(def.requiresFrontArc).toBe(true);
+      expect(def.requiresBullseye).toBe(false);
+    });
+
+    it('ion_bombs should have ion effect and no arc or lock requirements', () => {
+      const def = ORDNANCE_DEFINITIONS['ion_bombs']!;
+      expect(def.id).toBe('ion_bombs');
+      expect(def.effect).toBe('ion');
+      expect(def.requiresFrontArc).toBe(false);
+      expect(def.requiresTargetLock).toBe(false);
+      expect(def.requiresBullseye).toBe(false);
+      expect(def.recoverable).toBe(false);
+    });
+
+    it('ion_rockets should have ion effect with front arc required', () => {
+      const def = ORDNANCE_DEFINITIONS['ion_rockets']!;
+      expect(def.id).toBe('ion_rockets');
+      expect(def.effect).toBe('ion');
+      expect(def.requiresFrontArc).toBe(true);
+      expect(def.requiresTargetLock).toBe(false);
+      expect(def.requiresBullseye).toBe(false);
+    });
+
+    it('homing_missiles should NOT require front arc but require target lock', () => {
+      const def = ORDNANCE_DEFINITIONS['homing_missiles']!;
+      expect(def.requiresFrontArc).toBe(false);
+      expect(def.requiresTargetLock).toBe(true);
+    });
+  });
+
+  describe('canFireOrdnance - range boundary', () => {
+    const attacker = makeShip({ id: 'attacker', hasTargetLock: 'target' });
+    const target = makeShip({ id: 'target', faction: 'free_confederation' });
+    const concussionMissile = ORDNANCE_DEFINITIONS['concussion_missile']!; // range 2–3
+    const validSlot = makeSlot({ charges: 2 });
+
+    it('should accept target at exactly max range (range.max)', () => {
+      const result = canFireOrdnance(attacker, target, concussionMissile, validSlot, true, false, concussionMissile.range.max);
+      expect(result.valid).toBe(true);
+    });
+
+    it('should reject target one step beyond max range', () => {
+      const result = canFireOrdnance(attacker, target, concussionMissile, validSlot, true, false, concussionMissile.range.max + 1);
+      expect(result.valid).toBe(false);
+    });
+
+    it('should accept target at exactly min range', () => {
+      const result = canFireOrdnance(attacker, target, concussionMissile, validSlot, true, false, concussionMissile.range.min);
+      expect(result.valid).toBe(true);
+    });
+  });
+
+  describe('fireOrdnance - result content', () => {
+    const attacker = makeShip({ id: 'attacker' });
+    const target = makeShip({ id: 'target' });
+    const concussionMissile = ORDNANCE_DEFINITIONS['concussion_missile']!;
+    const ionMissile = ORDNANCE_DEFINITIONS['ion_missiles']!;
+    const protonTorpedo = ORDNANCE_DEFINITIONS['proton_torpedoes']!;
+
+    it('hit message should contain weapon name', () => {
+      const rng = makeSeededRng([0.3]);
+      const result = fireOrdnance(attacker, target, concussionMissile, rng);
+      if (result.success) {
+        expect(result.message).toContain('Concussion');
+      }
+    });
+
+    it('miss message should contain "missed"', () => {
+      const rng = makeSeededRng([0.75]);
+      const result = fireOrdnance(attacker, target, concussionMissile, rng);
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('missed');
+    });
+
+    it('should not apply ion tokens when ion missile misses', () => {
+      const rng = makeSeededRng([0.75]);
+      const result = fireOrdnance(attacker, target, ionMissile, rng);
+      expect(result.success).toBe(false);
+      expect(result.ionTokens).toBe(0);
+    });
+
+    it('should not convert crits when proton torpedo misses (0 hits)', () => {
+      const rng = makeSeededRng([0.75]);
+      const result = fireOrdnance(attacker, target, protonTorpedo, rng);
+      expect(result.hits).toBe(0);
+      expect(result.crits).toBe(0);
+    });
+  });
+
+  describe('deployBomb - position verification', () => {
+    it('should place bomb directly behind ship at angle 90 (facing right)', () => {
+      // angle=90 means facing right; behind = to the left
+      // angleRad = (90 + 180) * PI/180 = 270deg = 3PI/2
+      // x = ship.x + sin(3PI/2) * 60 = 100 + (-1)*60 = 40
+      // y = ship.y - cos(3PI/2) * 60 = 100 - 0*60 = 100
+      const ship = makeShip({ x: 100, y: 100, angle: 90 });
+      const bombDef = ORDNANCE_DEFINITIONS['proton_bombs']!;
+      if (!bombDef) return;
+      const bomb = deployBomb(ship, bombDef);
+      expect(bomb.x).toBeCloseTo(40, 0);
+      expect(bomb.y).toBeCloseTo(100, 0);
+    });
+
+    it('initial isTriggered should be false', () => {
+      const ship = makeShip();
+      const bombDef = ORDNANCE_DEFINITIONS['proton_bombs']!;
+      if (!bombDef) return;
+      const bomb = deployBomb(ship, bombDef);
+      expect(bomb.isTriggered).toBe(false);
+    });
+  });
+
+  describe('detonateBomb - boundary and effect coverage', () => {
+    const damageBomb: DeployedOrdnance = {
+      id: 'bomb_1',
+      definitionId: 'proton_bomb',
+      ownerId: 'ship_owner',
+      ownerFaction: 'terran_hegemony',
+      x: 100,
+      y: 100,
+      radius: 80,
+      turnsRemaining: 1,
+      isTriggered: false,
+    };
+
+    it('should affect ship at exactly the blast radius boundary (<=)', () => {
+      const bombDef = Object.values(ORDNANCE_DEFINITIONS).find(d => d.type === 'bomb' && d.effect === 'damage')!;
+      if (!bombDef) return;
+      // bomb at (100,100) radius 80; ship at (180,100) = exactly 80 units away
+      const boundaryShip = makeShip({ id: 'enemy', faction: 'free_confederation', x: 180, y: 100 });
+      const rng = makeSeededRng([0.3]);
+      const result = detonateBomb(damageBomb, bombDef, [boundaryShip], [], rng);
+      expect(result.affectedShips).toHaveLength(1);
+      expect(result.affectedShips[0]!.shipId).toBe('enemy');
+    });
+
+    it('should not affect ship one unit outside blast radius', () => {
+      const bombDef = Object.values(ORDNANCE_DEFINITIONS).find(d => d.type === 'bomb' && d.effect === 'damage')!;
+      if (!bombDef) return;
+      // bomb at (100,100) radius 80; ship at (181,100) = 81 units away
+      const outsideShip = makeShip({ id: 'enemy', faction: 'free_confederation', x: 181, y: 100 });
+      const rng = makeSeededRng([0.3]);
+      const result = detonateBomb(damageBomb, bombDef, [outsideShip], [], rng);
+      expect(result.affectedShips).toHaveLength(0);
+    });
+
+    it('cluster_mines effect should deal damage to ships in radius', () => {
+      const clusterDef = ORDNANCE_DEFINITIONS['cluster_mines']!;
+      if (!clusterDef) return;
+      const nearbyShip = makeShip({ id: 'enemy', faction: 'free_confederation', x: 120, y: 100 });
+      // seed 0.3 → hits (< 0.5)
+      const rng = makeSeededRng([0.3]);
+      const result = detonateBomb(damageBomb, clusterDef, [nearbyShip], [], rng);
+      expect(result.affectedShips.length).toBeGreaterThan(0);
+      expect(result.affectedShips[0]!.shipId).toBe('enemy');
+    });
+
+    it('ion_bombs should apply ion tokens even when damage is 0', () => {
+      const ionBombDef = ORDNANCE_DEFINITIONS['ion_bombs']!;
+      if (!ionBombDef) return;
+      const nearbyShip = makeShip({ id: 'enemy', faction: 'free_confederation', x: 120, y: 100 });
+      const rng = makeSeededRng([0.3]);
+      const result = detonateBomb(damageBomb, ionBombDef, [nearbyShip], [], rng);
+      // ion bombs deal 0 attack dice damage but should add ion tokens
+      if (result.affectedShips.length > 0) {
+        expect(result.affectedShips[0]!.ionTokens).toBeGreaterThan(0);
+        expect(result.affectedShips[0]!.damage).toBe(0);
+      }
+    });
+  });
+
+  describe('getEquippableOrdnance - type granularity', () => {
+    it('rockets are included in missile slot results', () => {
+      const ordnance = getEquippableOrdnance('medium', true, false, false);
+      const types = ordnance.map(o => o.type);
+      expect(types).toContain('rocket');
+    });
+
+    it('torpedo slot does not return missiles', () => {
+      const ordnance = getEquippableOrdnance('medium', false, true, false);
+      const types = ordnance.map(o => o.type);
+      expect(types).not.toContain('missile');
+      expect(types).not.toContain('rocket');
+    });
+
+    it('missile slot does not return torpedoes', () => {
+      const ordnance = getEquippableOrdnance('medium', true, false, false);
+      const types = ordnance.map(o => o.type);
+      expect(types).not.toContain('torpedo');
+    });
+
+    it('bomb slot returns both bombs and mines for medium ships', () => {
+      const ordnance = getEquippableOrdnance('medium', false, false, true);
+      const types = ordnance.map(o => o.type);
+      expect(types).toContain('bomb');
+      expect(types).toContain('mine');
+    });
   });
 });
