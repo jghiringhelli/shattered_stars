@@ -8,6 +8,7 @@
  */
 
 import Phaser from 'phaser';
+import { audioManager } from '../audio/AudioManager';
 
 interface GameSettings {
   masterVolume: number;
@@ -71,18 +72,21 @@ export class SettingsScene extends Phaser.Scene {
 
     this.createSlider(centerX, y, 'Master Volume', this.settings.masterVolume, (val) => {
       this.settings.masterVolume = val;
+      audioManager.setMasterVolume(val);
       this.saveSettings();
     });
     y += spacing;
 
     this.createSlider(centerX, y, 'Music Volume', this.settings.musicVolume, (val) => {
       this.settings.musicVolume = val;
+      audioManager.setMusicVolume(val);
       this.saveSettings();
     });
     y += spacing;
 
     this.createSlider(centerX, y, 'SFX Volume', this.settings.sfxVolume, (val) => {
       this.settings.sfxVolume = val;
+      audioManager.setSfxVolume(val);
       this.saveSettings();
     });
     y += spacing + 20;
@@ -278,6 +282,10 @@ export class SettingsScene extends Phaser.Scene {
     if (saved) {
       try {
         this.settings = { ...this.settings, ...JSON.parse(saved) };
+        // Apply loaded volumes to the audio system immediately
+        audioManager.setMasterVolume(this.settings.masterVolume);
+        audioManager.setMusicVolume(this.settings.musicVolume);
+        audioManager.setSfxVolume(this.settings.sfxVolume);
       } catch {
         // Use defaults
       }

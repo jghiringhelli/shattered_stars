@@ -64,6 +64,8 @@ export class CampaignBattleScene extends Phaser.Scene {
   private pendingEnemySpawns: { enemy: MissionEnemy; spawnAt: number }[] = [];
   private missionComplete = false;
   private missionFailed = false;
+  private isPaused = false;
+  private pauseOverlay: Phaser.GameObjects.Container | null = null;
 
   // UI Elements
   private phaseText!: Phaser.GameObjects.Text;
@@ -176,7 +178,7 @@ export class CampaignBattleScene extends Phaser.Scene {
   }
 
   update(_time: number): void {
-    if (this.missionComplete || this.missionFailed) return;
+    if (this.missionComplete || this.missionFailed || this.isPaused) return;
 
     this.handleInput();
     this.updateShipSprites();
@@ -756,8 +758,70 @@ export class CampaignBattleScene extends Phaser.Scene {
   }
 
   private showPauseMenu(): void {
-    // Simple pause - just go back to campaign
-    this.scene.start('CampaignScene', { factionId: this.factionId });
+    if (this.isPaused) {
+      // Resume
+      this.isPaused = false;
+      this.pauseOverlay?.destroy();
+      this.pauseOverlay = null;
+      return;
+    }
+
+    this.isPaused = true;
+    const cx = this.scale.width / 2;
+    const cy = this.scale.height / 2;
+
+    this.pauseOverlay = this.add.container(0, 0).setDepth(3000).setScrollFactor(0);
+
+    const dimBg = this.add.graphics();
+    dimBg.fillStyle(0x000000, 0.65);
+    dimBg.fillRect(0, 0, this.scale.width, this.scale.height);
+    this.pauseOverlay.add(dimBg);
+
+    const panel = this.add.graphics();
+    panel.fillStyle(0x0a1a2e, 0.98);
+    panel.lineStyle(2, 0x2244aa, 1);
+    panel.fillRoundedRect(cx - 180, cy - 100, 360, 200, 12);
+    panel.strokeRoundedRect(cx - 180, cy - 100, 360, 200, 12);
+    this.pauseOverlay.add(panel);
+
+    const title = this.add.text(cx, cy - 60, 'PAUSED', {
+      font: 'bold 36px Arial', color: '#ffffff',
+    }).setOrigin(0.5);
+    this.pauseOverlay.add(title);
+
+    // Resume button
+    const resumeBtn = this.add.container(cx, cy + 10);
+    const resumeBg = this.add.graphics();
+    resumeBg.fillStyle(0x224422, 1);
+    resumeBg.fillRoundedRect(-100, -22, 200, 44, 8);
+    resumeBtn.add(resumeBg);
+    resumeBtn.add(this.add.text(0, 0, 'RESUME', {
+      font: 'bold 22px Arial', color: '#44ff88',
+    }).setOrigin(0.5));
+    const resumeHit = this.add.rectangle(0, 0, 200, 44, 0, 0).setInteractive({ useHandCursor: true });
+    resumeHit.on('pointerdown', () => {
+      this.isPaused = false;
+      this.pauseOverlay?.destroy();
+      this.pauseOverlay = null;
+    });
+    resumeBtn.add(resumeHit);
+    this.pauseOverlay.add(resumeBtn);
+
+    // Quit button
+    const quitBtn = this.add.container(cx, cy + 65);
+    const quitBg = this.add.graphics();
+    quitBg.fillStyle(0x331111, 1);
+    quitBg.fillRoundedRect(-100, -22, 200, 44, 8);
+    quitBtn.add(quitBg);
+    quitBtn.add(this.add.text(0, 0, 'QUIT MISSION', {
+      font: 'bold 22px Arial', color: '#ff4444',
+    }).setOrigin(0.5));
+    const quitHit = this.add.rectangle(0, 0, 200, 44, 0, 0).setInteractive({ useHandCursor: true });
+    quitHit.on('pointerdown', () => {
+      this.scene.start('CampaignScene', { factionId: this.factionId });
+    });
+    quitBtn.add(quitHit);
+    this.pauseOverlay.add(quitBtn);
   }
 
   private handleInput(): void {

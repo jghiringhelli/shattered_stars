@@ -91,7 +91,7 @@ Run tests before committing:
 npm test -- --run
 ```
 
-All tests must pass. Current: 1155 tests (80%+ line coverage).
+All tests must pass. Current: 1450 tests (82%+ line coverage).
 
 ## Development Workflow
 
@@ -151,12 +151,13 @@ Use `submit_and_start_worker(jobs)` from other scripts.
 
 ## Known Issues
 
-- Vite build has HTML proxy issue (TypeScript compiles fine)
 - Some faction balance needs tuning (see balance tests)
+- SurvivalScene starting ship is hardcoded to confed_falcon
+- ArcadeBattleScene ship roster is hardcoded (no faction select yet)
 
 ## Next Steps
 
-- Ship loadout system with pre-configured upgrade builds
+- Ship faction/loadout select screen for ArcadeBattleScene
 - Pilot cards for all 18 ships
 - Epic ship support (huge size)
 - Multiplayer networking

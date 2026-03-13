@@ -280,7 +280,7 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private startDogfight(): void {
-    this.scene.start('DogfightScene');
+    this.scene.start('ArcadeBattleScene');
   }
 
   private startAceDuel(): void {

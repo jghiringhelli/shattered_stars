@@ -74,7 +74,7 @@ const ACE_MATCHUPS: AceMatchup[] = [
     side1: {
       name: 'Admiral Kronos',
       faction: 'terran_hegemony',
-      ships: ['heg_raptor'],
+      ships: ['terran_raptor'],
     },
     side2: {
       name: 'Phoenix Commander',
@@ -90,12 +90,12 @@ const ACE_MATCHUPS: AceMatchup[] = [
     side1: {
       name: 'Raptor Squadron Leader',
       faction: 'terran_hegemony',
-      ships: ['heg_viper'],
+      ships: ['terran_viper'],
     },
     side2: {
       name: 'Vortex Ace',
       faction: 'void_corsairs',
-      ships: ['corsair_razor'],
+      ships: ['corsair_fang'],
     },
   },
   {
@@ -111,7 +111,7 @@ const ACE_MATCHUPS: AceMatchup[] = [
     side2: {
       name: 'Confederation Freighter Captain',
       faction: 'free_confederation',
-      ships: ['confed_meteor'],
+      ships: ['confed_hawk'],
     },
   },
   {
@@ -122,12 +122,12 @@ const ACE_MATCHUPS: AceMatchup[] = [
     side1: {
       name: 'Collective Prime Node',
       faction: 'synthetic_collective',
-      ships: ['synth_titan'],
+      ships: ['synth_devastator'],
     },
     side2: {
       name: 'Empire Archon',
       faction: 'ascendant_empire',
-      ships: ['ascend_leviathan'],
+      ships: ['ascendant_bastion'],
     },
   },
   {
@@ -138,12 +138,12 @@ const ACE_MATCHUPS: AceMatchup[] = [
     side1: {
       name: 'Hegemony Bomber Wing',
       faction: 'terran_hegemony',
-      ships: ['heg_devastator', 'heg_devastator'],
+      ships: ['terran_thunderbolt', 'terran_thunderbolt'],
     },
     side2: {
       name: 'Confederation Strike Team',
       faction: 'free_confederation',
-      ships: ['confed_meteor', 'confed_meteor'],
+      ships: ['confed_condor', 'confed_condor'],
     },
   },
   {
@@ -154,12 +154,12 @@ const ACE_MATCHUPS: AceMatchup[] = [
     side1: {
       name: 'Corsair Bounty Hunter',
       faction: 'void_corsairs',
-      ships: ['corsair_razor'],
+      ships: ['corsair_talon'],
     },
     side2: {
       name: 'Collective Assassin Drone',
       faction: 'synthetic_collective',
-      ships: ['synth_interceptor'],
+      ships: ['synth_interceptor_drone'],
     },
   },
 ];
@@ -218,11 +218,31 @@ export class AceDuelScene extends Phaser.Scene {
     this.background = new ParallaxBackground(this, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
     this.background.startShootingStars();
 
+    this.loadCompletedMatchups();
     this.resetMatchState();
     this.showSetupScreen();
 
     this.cameras.main.centerOn(BATTLEFIELD_SIZE / 2, BATTLEFIELD_SIZE / 2);
     this.cameras.main.setZoom(1.0);
+  }
+
+  private loadCompletedMatchups(): void {
+    try {
+      const saved = localStorage.getItem('shattered_stars_ace_duel');
+      if (saved) {
+        const ids: string[] = JSON.parse(saved);
+        this.completedMatchups = new Set(ids);
+      }
+    } catch {
+      // Use empty set on parse error
+    }
+  }
+
+  private saveCompletedMatchups(): void {
+    localStorage.setItem(
+      'shattered_stars_ace_duel',
+      JSON.stringify(Array.from(this.completedMatchups))
+    );
   }
 
   private resetMatchState(): void {
@@ -1065,6 +1085,7 @@ export class AceDuelScene extends Phaser.Scene {
     // Mark matchup as completed
     if (playerWon) {
       this.completedMatchups.add(this.selectedMatchup.id);
+      this.saveCompletedMatchups();
     }
 
     const centerX = this.scale.width / 2;
