@@ -70,6 +70,8 @@ export class DebriefScene extends Phaser.Scene {
   private topBarText!: Phaser.GameObjects.Text;
   private portraitBorder!: Phaser.GameObjects.Graphics;
   private portraitImage!: Phaser.GameObjects.Image;
+  private portraitScanlines!: Phaser.GameObjects.Graphics;
+  private portraitFlash!: Phaser.GameObjects.Graphics;
   private speakerText!: Phaser.GameObjects.Text;
   private dialogueBox!: Phaser.GameObjects.Graphics;
   private dialogueText!: Phaser.GameObjects.Text;
@@ -188,8 +190,9 @@ export class DebriefScene extends Phaser.Scene {
   private createDialogueArea(factionColor: number): void {
     const portraitX = 40;
     const portraitY = 90;
-    const portraitSize = 128;
-    const textBoxX = portraitX + portraitSize + 18;
+    const portraitW = 85;  // 2:3 ratio to match 512×768 source images
+    const portraitH = 128;
+    const textBoxX = portraitX + portraitW + 18;
     const textBoxY = portraitY - 8;
     const textBoxW = 1280 - textBoxX - 30;
     const textBoxH = 155;
@@ -197,11 +200,39 @@ export class DebriefScene extends Phaser.Scene {
     // Portrait border
     this.portraitBorder = this.add.graphics();
     this.portraitBorder.lineStyle(3, factionColor, 1);
-    this.portraitBorder.strokeRect(portraitX - 3, portraitY - 3, portraitSize + 6, portraitSize + 6);
+    this.portraitBorder.strokeRect(portraitX - 3, portraitY - 3, portraitW + 6, portraitH + 6);
 
     // Portrait image (will update per line)
-    this.portraitImage = this.add.image(portraitX + portraitSize / 2, portraitY + portraitSize / 2, 'portrait_command');
-    this.portraitImage.setDisplaySize(portraitSize, portraitSize);
+    this.portraitImage = this.add.image(portraitX + portraitW / 2, portraitY + portraitH / 2, 'portrait_command');
+    this.portraitImage.setDisplaySize(portraitW, portraitH);
+
+    // CRT scanline overlay — clipped to portrait bounds, scrolls downward
+    const maskShape = this.add.graphics();
+    maskShape.fillStyle(0xffffff);
+    maskShape.fillRect(portraitX, portraitY, portraitW, portraitH);
+    const scanMask = maskShape.createGeometryMask();
+
+    this.portraitScanlines = this.add.graphics();
+    this.portraitScanlines.setMask(scanMask);
+    const scanSpacing = 4;
+    for (let sy = -scanSpacing; sy < portraitH + scanSpacing * 2; sy += scanSpacing) {
+      this.portraitScanlines.fillStyle(0x000000, 0.20);
+      this.portraitScanlines.fillRect(portraitX, portraitY + sy, portraitW, 1);
+    }
+    this.tweens.add({
+      targets: this.portraitScanlines,
+      y: scanSpacing,
+      duration: 200,
+      repeat: -1,
+      ease: 'Linear',
+      onRepeat: () => { this.portraitScanlines.y = 0; },
+    });
+
+    // Flash overlay for speaker-change transition
+    this.portraitFlash = this.add.graphics();
+    this.portraitFlash.fillStyle(0xffffff, 1);
+    this.portraitFlash.fillRect(portraitX, portraitY, portraitW, portraitH);
+    this.portraitFlash.setAlpha(0);
 
     // Speaker name label
     this.speakerText = this.add.text(
@@ -262,10 +293,23 @@ export class DebriefScene extends Phaser.Scene {
     this.charIndex = 0;
     this.state = 'dialogue_typing';
 
-    // Update portrait
+    // Update portrait with flash if speaker changed
     const textureKey = line.portraitKey;
     const tex = this.textures.exists(textureKey) ? textureKey : 'portrait_command';
+    const prevTex = this.portraitImage.texture.key;
     this.portraitImage.setTexture(tex);
+
+    if (tex !== prevTex) {
+      // Speaker changed — brief white flash
+      this.tweens.killTweensOf(this.portraitFlash);
+      this.portraitFlash.setAlpha(0.55);
+      this.tweens.add({
+        targets: this.portraitFlash,
+        alpha: 0,
+        duration: 280,
+        ease: 'Cubic.easeOut',
+      });
+    }
 
     // Update speaker name
     this.speakerText.setText(line.speaker);
@@ -274,7 +318,7 @@ export class DebriefScene extends Phaser.Scene {
     const moodColor = MOOD_COLORS[line.mood ?? 'neutral'] ?? MOOD_COLORS['neutral']!;
     this.portraitBorder.clear();
     this.portraitBorder.lineStyle(3, moodColor, 1);
-    this.portraitBorder.strokeRect(37, 87, 134, 134);
+    this.portraitBorder.strokeRect(37, 87, 91, 134);  // 85+6 wide, 128+6 tall
 
     // Update line counter
     this.lineCounterText.setText(`[${index + 1}/${this.lines.length}]`);
@@ -333,6 +377,9 @@ export class DebriefScene extends Phaser.Scene {
   private hideDialogueUI(): void {
     this.portraitBorder.setVisible(false);
     this.portraitImage.setVisible(false);
+    this.portraitScanlines.setVisible(false);
+    this.portraitFlash.setVisible(false);
+    this.tweens.killTweensOf(this.portraitScanlines);
     this.speakerText.setVisible(false);
     this.dialogueBox.setVisible(false);
     this.dialogueText.setVisible(false);
