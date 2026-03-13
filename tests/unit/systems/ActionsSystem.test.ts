@@ -98,6 +98,27 @@ describe('ActionsSystem', () => {
       expect(ACTION_DEFINITIONS.reload.isRed).toBe(true);
       expect(ACTION_DEFINITIONS.reload.allowedWhenStressed).toBe(false);
     });
+
+    it('standard actions should not cause stress and be allowed when stressed', () => {
+      const standardActions: ActionType[] = [
+        'focus', 'evade', 'target_lock', 'barrel_roll', 'boost',
+        'coordinate', 'jam', 'cloak', 'slam', 'calculate', 'reinforce', 'rotate_arc',
+      ];
+      for (const action of standardActions) {
+        const def = ACTION_DEFINITIONS[action];
+        expect(def.causesStress).toBe(false);
+        expect(def.isRed).toBe(false);
+        expect(def.allowedWhenStressed).toBe(true);
+      }
+    });
+
+    it('all action definitions should have non-empty name and description', () => {
+      const actions = Object.values(ACTION_DEFINITIONS);
+      for (const def of actions) {
+        expect(def.name.length).toBeGreaterThan(0);
+        expect(def.description.length).toBeGreaterThan(0);
+      }
+    });
   });
 
   describe('canPerformAction', () => {
@@ -664,6 +685,137 @@ describe('ActionsSystem', () => {
       const ship = createTestShip('slam_ship_77');
       const result = executeSLAM(ship, forwardManeuver);
       expect(result.message).toContain('slam_ship_77');
+    });
+  });
+
+  describe('canPerformAction cloaked ship', () => {
+    const fullBar: ActionType[] = ['focus', 'evade', 'barrel_roll', 'target_lock', 'boost', 'coordinate'];
+
+    it('should allow focus when cloaked', () => {
+      const ship = createTestShip('a', { isCloaked: true });
+      expect(canPerformAction(ship, 'focus', fullBar).valid).toBe(true);
+    });
+
+    it('should allow evade when cloaked', () => {
+      const ship = createTestShip('a', { isCloaked: true });
+      expect(canPerformAction(ship, 'evade', fullBar).valid).toBe(true);
+    });
+
+    it('should allow barrel_roll when cloaked', () => {
+      const ship = createTestShip('a', { isCloaked: true });
+      expect(canPerformAction(ship, 'barrel_roll', fullBar).valid).toBe(true);
+    });
+
+    it('should block target_lock when cloaked', () => {
+      const ship = createTestShip('a', { isCloaked: true });
+      const result = canPerformAction(ship, 'target_lock', fullBar);
+      expect(result.valid).toBe(false);
+      expect(result.reason).toContain('cloaked');
+    });
+
+    it('should block boost when cloaked', () => {
+      const ship = createTestShip('a', { isCloaked: true });
+      const result = canPerformAction(ship, 'boost', fullBar);
+      expect(result.valid).toBe(false);
+    });
+
+    it('should block coordinate when cloaked', () => {
+      const ship = createTestShip('a', { isCloaked: true });
+      const result = canPerformAction(ship, 'coordinate', fullBar);
+      expect(result.valid).toBe(false);
+    });
+  });
+
+  describe('canCoordinate exact range boundary', () => {
+    it('should allow coordination at exactly the range boundary', () => {
+      const coordinator = createTestShip('a', { x: 0, y: 0, faction: 'terran_hegemony' });
+      const target = createTestShip('b', { x: 200, y: 0, faction: 'terran_hegemony' });
+      // distance === 200 === coordinateRange
+      expect(canCoordinate(coordinator, target, 200)).toBe(true);
+    });
+
+    it('should deny coordination one unit beyond the range boundary', () => {
+      const coordinator = createTestShip('a', { x: 0, y: 0, faction: 'terran_hegemony' });
+      const target = createTestShip('b', { x: 201, y: 0, faction: 'terran_hegemony' });
+      // distance === 201 > 200
+      expect(canCoordinate(coordinator, target, 200)).toBe(false);
+    });
+  });
+
+  describe('canJam exact range boundary', () => {
+    it('should allow jamming at exactly the range boundary', () => {
+      const jammer = createTestShip('a', { x: 0, y: 0, faction: 'terran_hegemony' });
+      const target = createTestShip('b', { x: 150, y: 0, faction: 'free_confederation' });
+      // distance === 150 === jamRange
+      expect(canJam(jammer, target, 150)).toBe(true);
+    });
+
+    it('should deny jamming one unit beyond the range boundary', () => {
+      const jammer = createTestShip('a', { x: 0, y: 0, faction: 'terran_hegemony' });
+      const target = createTestShip('b', { x: 151, y: 0, faction: 'free_confederation' });
+      // distance === 151 > 150
+      expect(canJam(jammer, target, 150)).toBe(false);
+    });
+  });
+
+  describe('action message content', () => {
+    it('executeFocus message contains ship id', () => {
+      const ship = createTestShip('focus_ship_42');
+      expect(executeFocus(ship).message).toContain('focus_ship_42');
+    });
+
+    it('executeEvade message contains ship id', () => {
+      const ship = createTestShip('evade_ship_7');
+      expect(executeEvade(ship).message).toContain('evade_ship_7');
+    });
+
+    it('executeTargetLock message contains both ship id and target id', () => {
+      const ship = createTestShip('attacker_9');
+      const result = executeTargetLock(ship, 'enemy_77');
+      expect(result.message).toContain('attacker_9');
+      expect(result.message).toContain('enemy_77');
+    });
+
+    it('executeBarrelRoll message contains ship id and direction', () => {
+      const ship = createTestShip('roller_1');
+      const result = executeBarrelRoll(ship, 'left');
+      expect(result.message).toContain('roller_1');
+      expect(result.message).toContain('left');
+    });
+
+    it('executeBoost message contains ship id and boost type', () => {
+      const ship = createTestShip('booster_5');
+      const result = executeBoost(ship, 'straight');
+      expect(result.message).toContain('booster_5');
+      expect(result.message).toContain('straight');
+    });
+
+    it('executeCloak message contains ship id', () => {
+      const ship = createTestShip('cloaker_3');
+      expect(executeCloak(ship).message).toContain('cloaker_3');
+    });
+
+    it('executeDecloak message contains ship id', () => {
+      const ship = createTestShip('decloaker_3', { isCloaked: true });
+      expect(executeDecloak(ship).message).toContain('decloaker_3');
+    });
+
+    it('applyManeuverStress red message contains ship id', () => {
+      const ship = createTestShip('stressed_ship_8');
+      const result = applyManeuverStress(ship, 'red');
+      expect(result.message).toContain('stressed_ship_8');
+    });
+
+    it('applyManeuverStress green message contains ship id when stressed', () => {
+      const ship = createTestShip('stress_removed_6', { isStressed: true });
+      const result = applyManeuverStress(ship, 'green');
+      expect(result.message).toContain('stress_removed_6');
+    });
+
+    it('applyManeuverStress white message is empty string', () => {
+      const ship = createTestShip('white_ship');
+      const result = applyManeuverStress(ship, 'white');
+      expect(result.message).toBe('');
     });
   });
 });

@@ -19,6 +19,27 @@ import {
 } from '../../../src/systems/CombatSystem';
 import { createSeededRng, type RandomGenerator } from '../../../src/utils/random';
 
+// Helper that returns predetermined values in sequence (wraps on exhaustion)
+function makeRngFromValues(values: number[]): RandomGenerator {
+  let index = 0;
+  const next = (): number => {
+    const val = values[index % values.length] ?? 0;
+    index++;
+    return val;
+  };
+  return {
+    next,
+    nextInt(min: number, max: number) { return Math.floor(next() * (max - min + 1)) + min; },
+    pick<T>(array: readonly T[]): T | undefined {
+      if (array.length === 0) return undefined;
+      return array[Math.floor(next() * array.length)];
+    },
+    shuffle<T>(arr: T[]): T[] { return arr; },
+    chance(p: number): boolean { return next() < p; },
+    getSeed(): number { return 0; },
+  };
+}
+
 describe('CombatSystem', () => {
   let rng: RandomGenerator;
 
@@ -349,6 +370,136 @@ describe('CombatSystem', () => {
       expect(result1.attackRoll).toEqual(result2.attackRoll);
       expect(result1.defenseRoll).toEqual(result2.defenseRoll);
       expect(result1.totalDamage).toBe(result2.totalDamage);
+    });
+  });
+
+  describe('resolveAttack with controlled RNG', () => {
+    const baseNoDefense: AttackContext = {
+      attackDice: 3,
+      attackerHasFocus: false,
+      attackerHasTargetLock: false,
+      defenseDice: 0,
+      defenderHasFocus: false,
+      defenderHasEvadeToken: false,
+      defenderShields: 0,
+      defenderHull: 5,
+      range: 2,
+    };
+
+    it('all hits with no defense should deal exact hull damage equal to attack dice', () => {
+      // 0.0 * 8 = index 0 → 'hit' for each attack die; 0 defense dice
+      const controlledRng = makeRngFromValues([0.0, 0.0, 0.0]);
+      const result = resolveAttack(baseNoDefense, controlledRng);
+
+      expect(result.hitsLanded).toBe(3);
+      expect(result.critsLanded).toBe(0);
+      expect(result.hullDamage).toBe(3);
+      expect(result.shieldDamage).toBe(0);
+      expect(result.totalDamage).toBe(3);
+    });
+
+    it('3 hits vs 2 evades should leave 1 hit landed', () => {
+      // 3 attack → hit (0.0), 2 defense → evade (0.0)
+      const controlledRng = makeRngFromValues([0.0, 0.0, 0.0, 0.0, 0.0]);
+      const result = resolveAttack(
+        { ...baseNoDefense, defenseDice: 2, defenderHull: 5 },
+        controlledRng
+      );
+
+      expect(result.hitsLanded).toBe(1);
+      expect(result.totalDamage).toBe(1);
+    });
+
+    it('1 hit on 1-hull ship with no shields should destroy the ship', () => {
+      // 0.0 → 'hit'; 0 defense; 1 hull
+      const controlledRng = makeRngFromValues([0.0]);
+      const result = resolveAttack(
+        { ...baseNoDefense, attackDice: 1, defenderHull: 1 },
+        controlledRng
+      );
+
+      expect(result.hullDamage).toBe(1);
+      expect(result.shipDestroyed).toBe(true);
+    });
+
+    it('1 hit on 2-hull ship should NOT destroy the ship', () => {
+      const controlledRng = makeRngFromValues([0.0]);
+      const result = resolveAttack(
+        { ...baseNoDefense, attackDice: 1, defenderHull: 2 },
+        controlledRng
+      );
+
+      expect(result.shipDestroyed).toBe(false);
+    });
+
+    it('hits should damage shields before hull', () => {
+      // 3 hits, 2 shields → shieldDamage=2, hullDamage=1
+      const controlledRng = makeRngFromValues([0.0, 0.0, 0.0]);
+      const result = resolveAttack(
+        { ...baseNoDefense, defenderShields: 2, defenderHull: 5 },
+        controlledRng
+      );
+
+      expect(result.shieldDamage).toBe(2);
+      expect(result.hullDamage).toBe(1);
+    });
+
+    it('attackerHasTargetLock: blanks rerolled to hits should increase damage', () => {
+      // First 3 picks → blank (0.875 * 8 = 7 → blank); reroll picks → hit (0.0 * 8 = 0 → hit)
+      const lockRng = makeRngFromValues([0.875, 0.875, 0.875, 0.0, 0.0, 0.0]);
+      const result = resolveAttack(
+        { ...baseNoDefense, attackerHasTargetLock: true },
+        lockRng
+      );
+
+      expect(result.hitsLanded).toBe(3);
+    });
+
+    it('without attackerHasTargetLock blanks remain and deal no damage', () => {
+      // All blanks, no reroll
+      const noLockRng = makeRngFromValues([0.875, 0.875, 0.875]);
+      const result = resolveAttack(
+        { ...baseNoDefense, attackerHasTargetLock: false },
+        noLockRng
+      );
+
+      expect(result.hitsLanded).toBe(0);
+      expect(result.totalDamage).toBe(0);
+    });
+
+    it('defenderHasFocus converts defense focus results to evades', () => {
+      // 3 attack hits, 2 defense focus (index 3 = focus); focus converted to evades → 2 evades cancel 2 hits
+      // DEFENSE_DICE_FACES index 3 = 'focus': 0.375 * 8 = 3 → index 3
+      const controlledRng = makeRngFromValues([0.0, 0.0, 0.0, 0.375, 0.375]);
+      const result = resolveAttack(
+        { ...baseNoDefense, defenseDice: 2, defenderHasFocus: true, defenderHull: 5 },
+        controlledRng
+      );
+
+      // 3 hits, 2 focus→evades cancels 2 → 1 hit remaining
+      expect(result.hitsLanded).toBe(1);
+    });
+  });
+
+  describe('calculateExpectedDamage exact values', () => {
+    it('should return exactly 1.0 for 2 attack, 0 defense dice', () => {
+      // 2 * 0.5 - 0 * 0.375 = 1.0
+      expect(calculateExpectedDamage(2, 0)).toBe(1.0);
+    });
+
+    it('should return exactly 2.0 for 4 attack, 0 defense dice', () => {
+      // 4 * 0.5 - 0 = 2.0
+      expect(calculateExpectedDamage(4, 0)).toBe(2.0);
+    });
+
+    it('should return exactly 0.5 for 1 attack, 0 defense dice', () => {
+      // 1 * 0.5 = 0.5
+      expect(calculateExpectedDamage(1, 0)).toBe(0.5);
+    });
+
+    it('should return exactly 0 when evades exceed expected hits', () => {
+      // 0 attack, 4 defense: Math.max(0, 0 - 1.5) = 0
+      expect(calculateExpectedDamage(0, 4)).toBe(0);
     });
   });
 });
