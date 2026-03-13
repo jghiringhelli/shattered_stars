@@ -14,6 +14,7 @@ import { DogfightScene } from './scenes/DogfightScene';
 import { AceDuelScene } from './scenes/AceDuelScene';
 import { CampaignScene } from './scenes/CampaignScene';
 import { CampaignBattleScene } from './scenes/CampaignBattleScene';
+import { DebriefScene } from './scenes/DebriefScene';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO, // AUTO will try WebGL first, then Canvas
@@ -37,6 +38,7 @@ const config: Phaser.Types.Core.GameConfig = {
     AceDuelScene,
     CampaignScene,
     CampaignBattleScene,
+    DebriefScene,
   ],
   physics: {
     // We don't use physics - movement is chart-based

@@ -422,6 +422,413 @@ export const PILOT_ABILITIES: Record<string, PilotAbility> = {
     requiredFaction: 'ascendant_empire',
     effects: {},
   },
+
+  // ============================================
+  // ADDITIONAL OFFENSIVE ABILITIES
+  // ============================================
+
+  fearless: {
+    id: 'fearless',
+    name: 'Fearless',
+    category: 'offensive',
+    trigger: 'on_attack',
+    description: 'When attacking while stressed, roll 1 additional attack die',
+    pointCost: 3,
+    xpCost: 100,
+    effects: {
+      attackDiceBonus: 1,
+      condition: { type: 'stressed' },
+    },
+  },
+
+  dead_eye: {
+    id: 'dead_eye',
+    name: 'Dead Eye',
+    category: 'offensive',
+    trigger: 'on_attack',
+    description: 'When attacking a target in your bullseye arc, you may spend a target lock to convert all focuses to crits',
+    pointCost: 4,
+    xpCost: 150,
+    effects: {
+      bonusDamageOnCrit: 1,
+      condition: { type: 'bullseye' },
+    },
+  },
+
+  heavy_gunner: {
+    id: 'heavy_gunner',
+    name: 'Heavy Gunner',
+    category: 'offensive',
+    trigger: 'on_attack',
+    description: 'When attacking at range 1, roll 1 additional attack die',
+    pointCost: 3,
+    xpCost: 100,
+    effects: {
+      attackDiceBonus: 1,
+      condition: { type: 'range', value: 1 },
+    },
+  },
+
+  marksman: {
+    id: 'marksman',
+    name: 'Marksman',
+    category: 'offensive',
+    trigger: 'on_attack',
+    description: 'When attacking, convert 1 focus result to a hit',
+    pointCost: 2,
+    xpCost: 75,
+    effects: {
+      convertFocusToHit: 1,
+    },
+  },
+
+  bombardier: {
+    id: 'bombardier',
+    name: 'Bombardier',
+    category: 'offensive',
+    trigger: 'on_action',
+    description: 'When dropping a bomb, you may also drop a second bomb without spending an additional action',
+    pointCost: 4,
+    xpCost: 150,
+    requiredShipRole: 'bomber',
+    effects: {
+      freeActionOnActivate: 'evade', // Placeholder: represented as "extra ordnance action"
+    },
+  },
+
+  // ============================================
+  // ADDITIONAL DEFENSIVE ABILITIES
+  // ============================================
+
+  stalwart: {
+    id: 'stalwart',
+    name: 'Stalwart',
+    category: 'defensive',
+    trigger: 'on_defend',
+    description: 'Once per round when defending, you may reroll all of your defense dice',
+    minPilotSkill: 3,
+    pointCost: 5,
+    xpCost: 200,
+    requiredFaction: 'ascendant_empire',
+    effects: {
+      rerollDefenseDice: 3,
+    },
+  },
+
+  // ============================================
+  // ADDITIONAL MOVEMENT ABILITIES
+  // ============================================
+
+  phantom_strike: {
+    id: 'phantom_strike',
+    name: 'Phantom Strike',
+    category: 'movement',
+    trigger: 'on_maneuver',
+    description: 'After executing a maneuver that ends in an enemy\'s rear arc, gain +1 attack die on your next attack',
+    minPilotSkill: 3,
+    pointCost: 4,
+    xpCost: 150,
+    requiredFaction: 'void_corsairs',
+    effects: {
+      attackDiceBonus: 1,
+      condition: { type: 'behind_target' },
+    },
+  },
+
+  prescience: {
+    id: 'prescience',
+    name: 'Prescience',
+    category: 'movement',
+    trigger: 'start_of_round',
+    description: 'At the start of the Planning Phase, you may look at 1 enemy ship\'s chosen maneuver',
+    minPilotSkill: 4,
+    pointCost: 6,
+    xpCost: 250,
+    requiredFaction: 'ascendant_empire',
+    effects: {},
+  },
+
+  // ============================================
+  // ADDITIONAL SUPPORT ABILITIES
+  // ============================================
+
+  coordinated_assault: {
+    id: 'coordinated_assault',
+    name: 'Coordinated Assault',
+    category: 'support',
+    trigger: 'activated',
+    description: 'Action: Choose a friendly ship at range 1-2. It may perform a free Focus or Target Lock action',
+    minPilotSkill: 4,
+    pointCost: 5,
+    xpCost: 200,
+    effects: {
+      freeActionOnActivate: 'focus',
+    },
+  },
+
+  inspiring_presence: {
+    id: 'inspiring_presence',
+    name: 'Inspiring Presence',
+    category: 'support',
+    trigger: 'start_of_round',
+    description: 'At the start of each round, remove 1 stress token from each friendly ship at range 1-2',
+    minPilotSkill: 4,
+    pointCost: 6,
+    xpCost: 250,
+    effects: {
+      condition: { type: 'near_ally', distance: 200 },
+    },
+  },
+
+  shield_transfer: {
+    id: 'shield_transfer',
+    name: 'Shield Transfer',
+    category: 'support',
+    trigger: 'activated',
+    description: 'Action: Lose 1 shield to restore 1 shield on a friendly ship at range 1',
+    pointCost: 4,
+    xpCost: 150,
+    effects: {
+      shieldRegen: 1,
+      condition: { type: 'near_ally', distance: 100 },
+    },
+  },
+
+  healing_aura: {
+    id: 'healing_aura',
+    name: 'Healing Aura',
+    category: 'support',
+    trigger: 'start_of_round',
+    description: 'At the start of each round, friendly ships at range 0-1 recover 1 shield',
+    minPilotSkill: 3,
+    pointCost: 6,
+    xpCost: 250,
+    requiredFaction: 'ascendant_empire',
+    effects: {
+      shieldRegen: 1,
+      condition: { type: 'near_ally', distance: 100 },
+    },
+  },
+
+  force_heal: {
+    id: 'force_heal',
+    name: 'Force Heal',
+    category: 'support',
+    trigger: 'activated',
+    description: 'Action: Spend 1 Force charge to restore 2 shields on yourself or a friendly at range 1',
+    minPilotSkill: 3,
+    pointCost: 5,
+    xpCost: 200,
+    requiredFaction: 'ascendant_empire',
+    effects: {
+      shieldRegen: 2,
+    },
+  },
+
+  force_guidance: {
+    id: 'force_guidance',
+    name: 'Force Guidance',
+    category: 'support',
+    trigger: 'activated',
+    description: 'Spend 1 Force charge to give a friendly ship at range 1-3 a free Focus action',
+    minPilotSkill: 3,
+    pointCost: 5,
+    xpCost: 200,
+    requiredFaction: 'ascendant_empire',
+    effects: {
+      freeActionOnActivate: 'focus',
+    },
+  },
+
+  networked_aim: {
+    id: 'networked_aim',
+    name: 'Networked Aim',
+    category: 'support',
+    trigger: 'start_of_round',
+    description: 'Friendly ships at range 0-2 may use your target lock for their attacks',
+    minPilotSkill: 3,
+    pointCost: 5,
+    xpCost: 200,
+    requiredFaction: 'synthetic_collective',
+    effects: {},
+  },
+
+  informant: {
+    id: 'informant',
+    name: 'Informant',
+    category: 'support',
+    trigger: 'start_of_round',
+    description: 'At the start of each round, reveal 1 enemy ship\'s planned maneuver to all friendlies',
+    pointCost: 3,
+    xpCost: 100,
+    effects: {},
+  },
+
+  // ============================================
+  // ADDITIONAL SPECIAL ABILITIES
+  // ============================================
+
+  hive_mind: {
+    id: 'hive_mind',
+    name: 'Hive Mind',
+    category: 'special',
+    trigger: 'start_of_round',
+    description: 'For each friendly ship at range 0-1 (max 2), gain +1 attack die during combat',
+    minPilotSkill: 4,
+    pointCost: 6,
+    xpCost: 250,
+    requiredFaction: 'synthetic_collective',
+    effects: {
+      attackDiceBonus: 2,
+      condition: { type: 'near_ally', distance: 100 },
+    },
+  },
+
+  force_push: {
+    id: 'force_push',
+    name: 'Force Push',
+    category: 'special',
+    trigger: 'activated',
+    description: 'Action: Spend 1 Force charge. An enemy ship at range 1-2 gains 1 stress token',
+    minPilotSkill: 4,
+    pointCost: 5,
+    xpCost: 200,
+    requiredFaction: 'ascendant_empire',
+    effects: {},
+  },
+
+  // ============================================
+  // CAMPAIGN PROGRESSION ABILITIES
+  // ============================================
+
+  focus_mastery: {
+    id: 'focus_mastery',
+    name: 'Focus Mastery',
+    category: 'special',
+    trigger: 'on_action',
+    description: 'When you perform a Focus action, gain 2 focus tokens instead of 1',
+    pointCost: 4,
+    xpCost: 150,
+    effects: {
+      doubleTokens: 'focus',
+    },
+  },
+
+  target_lock_mastery: {
+    id: 'target_lock_mastery',
+    name: 'Target Lock Mastery',
+    category: 'offensive',
+    trigger: 'on_action',
+    description: 'When you perform a Target Lock action, you may lock two ships simultaneously',
+    pointCost: 4,
+    xpCost: 150,
+    effects: {},
+  },
+
+  barrel_roll_efficiency: {
+    id: 'barrel_roll_efficiency',
+    name: 'Barrel Roll Efficiency',
+    category: 'movement',
+    trigger: 'on_action',
+    description: 'When you perform a Barrel Roll, you do not gain a stress token',
+    pointCost: 3,
+    xpCost: 100,
+    effects: {
+      stressImmunity: true,
+    },
+  },
+
+  boost_expertise: {
+    id: 'boost_expertise',
+    name: 'Boost Expertise',
+    category: 'movement',
+    trigger: 'on_action',
+    description: 'After performing a Boost action, you may rotate your arc indicator for free',
+    pointCost: 3,
+    xpCost: 100,
+    effects: {
+      freeBoostAfterManeuver: true,
+    },
+  },
+
+  evade_mastery: {
+    id: 'evade_mastery',
+    name: 'Evade Mastery',
+    category: 'defensive',
+    trigger: 'on_defend',
+    description: 'When you spend an evade token, cancel 2 hits instead of 1',
+    pointCost: 5,
+    xpCost: 200,
+    effects: {
+      damageReduction: 1,
+    },
+  },
+
+  stress_recovery: {
+    id: 'stress_recovery',
+    name: 'Stress Recovery',
+    category: 'movement',
+    trigger: 'end_of_round',
+    description: 'At the end of each round, remove 1 stress token from yourself',
+    pointCost: 3,
+    xpCost: 100,
+    effects: {},
+  },
+
+  wingman: {
+    id: 'wingman',
+    name: 'Wingman',
+    category: 'support',
+    trigger: 'on_defend',
+    description: 'When a friendly ship at range 0-1 defends, you may spend your evade token to cancel 1 additional hit against them',
+    pointCost: 4,
+    xpCost: 150,
+    effects: {
+      condition: { type: 'near_ally', distance: 100 },
+    },
+  },
+
+  predatory_instinct: {
+    id: 'predatory_instinct',
+    name: 'Predatory Instinct',
+    category: 'offensive',
+    trigger: 'on_attack',
+    description: 'When attacking a damaged ship, roll 1 additional attack die',
+    pointCost: 3,
+    xpCost: 100,
+    effects: {
+      attackDiceBonus: 1,
+      condition: { type: 'damaged', threshold: 1 },
+    },
+  },
+
+  defensive_flying: {
+    id: 'defensive_flying',
+    name: 'Defensive Flying',
+    category: 'defensive',
+    trigger: 'on_action',
+    description: 'After performing a Barrel Roll or Boost action, gain 1 evade token',
+    pointCost: 4,
+    xpCost: 150,
+    effects: {
+      freeActionOnActivate: 'evade',
+    },
+  },
+
+  tenacity: {
+    id: 'tenacity',
+    name: 'Tenacity',
+    category: 'special',
+    trigger: 'passive',
+    description: 'While your hull is below 50%, roll 1 additional attack die and 1 additional defense die',
+    pointCost: 5,
+    xpCost: 200,
+    effects: {
+      attackDiceBonus: 1,
+      defenseDiceBonus: 1,
+      condition: { type: 'damaged', threshold: 1 },
+    },
+  },
 };
 
 // ============================================

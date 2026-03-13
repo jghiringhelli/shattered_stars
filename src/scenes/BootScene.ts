@@ -44,6 +44,9 @@ export class BootScene extends Phaser.Scene {
 
     // Generate placeholder ship textures programmatically
     this.generatePlaceholderTextures();
+
+    // Load pilot portrait images for campaign debrief
+    this.loadPortraitImages();
   }
 
   create(): void {
@@ -158,5 +161,56 @@ export class BootScene extends Phaser.Scene {
     graphics.lineStyle(2, 0x00ff00, 1);
     graphics.strokeCircle(20, 20, 18);
     graphics.generateTexture('selection_indicator', 40, 40);
+
+    // Portrait placeholder for COMMAND (dark blue rect with star)
+    graphics.clear();
+    graphics.fillStyle(0x0a1a3a, 1);
+    graphics.fillRect(0, 0, 128, 128);
+    graphics.fillStyle(0x4488cc, 1);
+    graphics.lineStyle(2, 0x4488cc, 1);
+    // Draw a simple 5-pointed star shape using fillTriangle
+    const cx = 64;
+    const cy = 56;
+    const r = 28;
+    for (let i = 0; i < 5; i++) {
+      const angle = (i * 72 - 90) * (Math.PI / 180);
+      const innerAngle = ((i * 72 + 36) - 90) * (Math.PI / 180);
+      graphics.fillTriangle(
+        cx + Math.cos(angle) * r, cy + Math.sin(angle) * r,
+        cx + Math.cos(innerAngle) * (r * 0.4), cy + Math.sin(innerAngle) * (r * 0.4),
+        cx, cy + r * 0.15
+      );
+    }
+    graphics.generateTexture('portrait_command', 128, 128);
+  }
+
+  /**
+   * Load pilot portrait PNG images for campaign debrief scenes
+   */
+  private loadPortraitImages(): void {
+    // Terran Hegemony
+    this.load.image('portrait_admiral_chen', 'assets/portraits/terran_hegemony/admiral_chen.png');
+    this.load.image('portrait_striker',      'assets/portraits/terran_hegemony/striker.png');
+    this.load.image('portrait_whisper',      'assets/portraits/terran_hegemony/whisper.png');
+
+    // Free Confederation
+    this.load.image('portrait_commander_santos', 'assets/portraits/free_confederation/commander_santos.png');
+    this.load.image('portrait_phoenix_one',      'assets/portraits/free_confederation/phoenix_one.png');
+    this.load.image('portrait_doc_vasquez',      'assets/portraits/free_confederation/doc_vasquez.png');
+
+    // Synthetic Collective
+    this.load.image('portrait_omega_7',           'assets/portraits/synthetic_collective/omega_7.png');
+    this.load.image('portrait_prime_collective',  'assets/portraits/synthetic_collective/prime_collective.png');
+    this.load.image('portrait_unit_zero',         'assets/portraits/synthetic_collective/unit_zero.png');
+
+    // Void Corsairs
+    this.load.image('portrait_captain_kira', 'assets/portraits/void_corsairs/captain_kira.png');
+    this.load.image('portrait_the_admiral',  'assets/portraits/void_corsairs/the_admiral.png');
+    this.load.image('portrait_bloodfang',    'assets/portraits/void_corsairs/bloodfang.png');
+
+    // Ascendant Empire
+    this.load.image('portrait_the_dreamer',      'assets/portraits/ascendant_empire/the_dreamer.png');
+    this.load.image('portrait_archon_zaelthar',  'assets/portraits/ascendant_empire/archon_zaelthar.png');
+    this.load.image('portrait_herald',           'assets/portraits/ascendant_empire/herald.png');
   }
 }

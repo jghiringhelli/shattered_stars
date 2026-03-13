@@ -7,6 +7,17 @@
 
 import type { FactionId } from '../config';
 
+export interface CampaignPilotState {
+  pilotId: string;
+  currentShipId: string;
+  pilotSkill: number;          // 1-6, derived from xp
+  xp: number;
+  unlockedAbilityIds: string[];
+  equippedAbilityIds: string[];
+  statBonuses: { hull: number; shields: number; attack: number; agility: number };
+  evolutionChoiceIds: string[];
+}
+
 export interface CampaignSaveData {
   version: number;
   factionId: FactionId;
@@ -18,16 +29,18 @@ export interface CampaignSaveData {
   shipsLost: number;
   unlockedShips: string[];
   lastPlayed: number;
+  campaignPilots: CampaignPilotState[];
+  pendingEvolution: boolean;
 }
 
-const SAVE_VERSION = 1;
+const SAVE_VERSION = 2;
 const SAVE_KEY_PREFIX = 'shattered_stars_campaign_';
 
 export const CampaignSaveManager = {
   /**
    * Create new campaign save data
    */
-  createNew(factionId: FactionId): CampaignSaveData {
+  createNew(factionId: FactionId, initialPilots: CampaignPilotState[] = []): CampaignSaveData {
     return {
       version: SAVE_VERSION,
       factionId,
@@ -39,6 +52,8 @@ export const CampaignSaveManager = {
       shipsLost: 0,
       unlockedShips: [],
       lastPlayed: Date.now(),
+      campaignPilots: initialPilots,
+      pendingEvolution: false,
     };
   },
 
@@ -125,7 +140,9 @@ export const CampaignSaveManager = {
     creditsEarned: number,
     kills: number,
     shipsLost: number,
-    newUnlocks: string[]
+    newUnlocks: string[],
+    pilotUpdates?: CampaignPilotState[],
+    pendingEvolution?: boolean
   ): CampaignSaveData {
     const updated = { ...data };
 
@@ -145,6 +162,30 @@ export const CampaignSaveManager = {
       }
     }
 
+    if (pilotUpdates !== undefined) {
+      updated.campaignPilots = pilotUpdates;
+    }
+
+    if (pendingEvolution !== undefined) {
+      updated.pendingEvolution = pendingEvolution;
+    }
+
+    this.save(updated);
+    return updated;
+  },
+
+  /**
+   * Apply a pilot's evolution choice and save
+   */
+  applyEvolutionChoice(
+    data: CampaignSaveData,
+    updatedPilots: CampaignPilotState[]
+  ): CampaignSaveData {
+    const updated = {
+      ...data,
+      campaignPilots: updatedPilots,
+      pendingEvolution: false,
+    };
     this.save(updated);
     return updated;
   },
@@ -153,11 +194,15 @@ export const CampaignSaveManager = {
    * Migrate old save to new version
    */
   migrate(oldData: CampaignSaveData): CampaignSaveData {
-    // Currently only version 1, no migration needed
-    // Future versions would add migration logic here
-    return {
-      ...oldData,
-      version: SAVE_VERSION,
-    };
+    // v1 → v2: add pilot state fields
+    if (oldData.version < 2) {
+      return {
+        ...oldData,
+        version: SAVE_VERSION,
+        campaignPilots: [],
+        pendingEvolution: false,
+      };
+    }
+    return { ...oldData, version: SAVE_VERSION };
   },
 };

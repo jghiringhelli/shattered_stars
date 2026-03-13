@@ -22,6 +22,8 @@ import { getShipDefinition } from '../data/ShipDefinitions';
 import type { CampaignMission, MissionObjective, MissionEnemy } from '../data/CampaignData';
 import type { CampaignSaveData } from '../systems/CampaignSaveManager';
 import { CampaignSaveManager } from '../systems/CampaignSaveManager';
+import { distributeMissionXp } from '../systems/CampaignPilotManager';
+import { CAMPAIGN_PILOTS } from '../data/PilotData';
 import { audioManager } from '../audio/AudioManager';
 
 interface ShipSprite extends Phaser.GameObjects.Container {
@@ -371,7 +373,20 @@ export class CampaignBattleScene extends Phaser.Scene {
     const totalXp = this.mission.rewards.xp + bonusXp;
     const totalCredits = this.mission.rewards.credits;
 
-    // Update save data
+    // Distribute XP to pilots
+    const pilotDefs = CAMPAIGN_PILOTS[this.factionId] ?? [];
+    const { updatedPilots, levelUpEvents } = distributeMissionXp(
+      this.saveData.campaignPilots,
+      pilotDefs,
+      this.mission.rewards.xp,
+      bonusXp
+    );
+
+    // Set pendingEvolution if this mission has an evolution choice
+    const pendingEvolution = !!this.mission.evolutionChoice;
+
+    // Update save data with pilot progression
+    const preMissionSave = this.saveData;
     const updatedSave = CampaignSaveManager.completeMission(
       this.saveData,
       this.mission.id,
@@ -379,11 +394,58 @@ export class CampaignBattleScene extends Phaser.Scene {
       totalCredits,
       this.totalKills,
       this.playerShipsLost,
-      this.mission.rewards.unlocks ?? []
+      this.mission.rewards.unlocks ?? [],
+      updatedPilots,
+      pendingEvolution
     );
 
-    // Show victory screen
-    this.showResultScreen(true, totalXp, totalCredits, updatedSave);
+    // Brief flash then transition to DebriefScene
+    this.showMissionCompleteFlash(() => {
+      this.scene.start('DebriefScene', {
+        factionId: this.factionId,
+        mission: this.mission,
+        preMissionSave,
+        updatedSave,
+        xpEarned: totalXp,
+        creditsEarned: totalCredits,
+        kills: this.totalKills,
+        shipsLost: this.playerShipsLost,
+        protagonistBonusXp: bonusXp,
+        levelUpEvents,
+      });
+    });
+  }
+
+  private showMissionCompleteFlash(onComplete: () => void): void {
+    const overlay = this.add.graphics();
+    overlay.fillStyle(0x000000, 0.5);
+    overlay.fillRect(0, 0, this.scale.width, this.scale.height);
+    overlay.setScrollFactor(0);
+    overlay.setDepth(2000);
+
+    const centerX = this.scale.width / 2;
+    const centerY = this.scale.height / 2;
+
+    const flashText = this.add.text(centerX, centerY, 'MISSION COMPLETE', {
+      font: 'bold 48px Arial',
+      color: '#44ff66',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001).setAlpha(0);
+
+    this.tweens.add({
+      targets: flashText,
+      alpha: 1,
+      duration: 400,
+      ease: 'Linear',
+      onComplete: () => {
+        this.time.delayedCall(1600, () => {
+          this.cameras.main.fade(400, 0, 0, 0, false, (_cam: Phaser.Cameras.Scene2D.Camera, progress: number) => {
+            if (progress === 1) {
+              onComplete();
+            }
+          });
+        });
+      },
+    });
   }
 
   private triggerMissionFailed(reason: string): void {
