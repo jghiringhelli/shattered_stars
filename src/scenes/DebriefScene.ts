@@ -498,14 +498,25 @@ export class DebriefScene extends Phaser.Scene {
         fontSize: '15px', fontFamily: 'monospace', color: '#ddeeff', fontStyle: 'bold',
       });
 
-      const skillText = this.add.text(1225, py, `SKILL ${pilot.pilotSkill}`,{
+      const skillText = this.add.text(1225, py, `SKILL ${pilot.pilotSkill}`, {
         fontSize: '14px', fontFamily: 'monospace', color: '#aabbcc',
       }).setOrigin(1, 0);
 
-      // XP bar background
+      // Ship thumbnail (44×44) — right side of row
+      const shipKey = `ship_${pilot.currentShipId}`;
+      const shipThumb = this.textures.exists(shipKey)
+        ? this.add.image(1192, py + 8, shipKey).setDisplaySize(44, 44)
+        : null;
+      const shipBorder = this.add.graphics();
+      if (shipThumb) {
+        shipBorder.lineStyle(1, 0x1a3a5a, 1);
+        shipBorder.strokeRect(1170, py + 2, 44, 44);
+      }
+
+      // XP bar background (460px wide — leaves room for ship thumbnail)
       const barBgG = this.add.graphics();
       barBgG.fillStyle(0x111e33, 1);
-      barBgG.fillRoundedRect(700, py + 24, 510, 14, 4);
+      barBgG.fillRoundedRect(700, py + 24, 460, 14, 4);
 
       // XP bar fill — calculate from pre-mission XP
       const prePilot = preMissionSave.campaignPilots.find((p) => p.pilotId === pilot.pilotId);
@@ -521,13 +532,15 @@ export class DebriefScene extends Phaser.Scene {
 
       const barFillG = this.add.graphics();
       barFillG.fillStyle(0x2266aa, 1);
-      barFillG.fillRoundedRect(700, py + 24, 510 * preRatio, 14, 4);
+      barFillG.fillRoundedRect(700, py + 24, 460 * preRatio, 14, 4);
 
       const xpText = this.add.text(700, py + 44, `${preXp} XP`, {
         fontSize: '12px', fontFamily: 'monospace', color: '#445566',
       });
 
-      pilotTexts.push(nameText, skillText, barBgG, barFillG, xpText);
+      const extras: Phaser.GameObjects.GameObject[] = [shipBorder];
+      if (shipThumb) extras.push(shipThumb);
+      pilotTexts.push(nameText, skillText, barBgG, barFillG, xpText, ...extras);
 
       // Animate bar fill to post-XP position
       this.tweens.add({
@@ -541,7 +554,7 @@ export class DebriefScene extends Phaser.Scene {
           const ratio = tween.getValue() ?? 0;
           barFillG.clear();
           barFillG.fillStyle(0x2266aa, 1);
-          barFillG.fillRoundedRect(700, py + 24, 510 * ratio, 14, 4);
+          barFillG.fillRoundedRect(700, py + 24, 460 * ratio, 14, 4);
           xpText.setText(`${Math.floor(preXp + (postXp - preXp) * (tween.progress))} XP`);
         },
         onComplete: () => {

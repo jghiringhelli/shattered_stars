@@ -37,7 +37,7 @@ venv/
 assets/sprites/ships/*.png
 public/assets/ships/*.png
 
-# Stable Diffusion models (large files)
-data/
+# Stable Diffusion models (large files) — /data/ only, not src/data/
+/data/
 *.safetensors
 *.ckpt

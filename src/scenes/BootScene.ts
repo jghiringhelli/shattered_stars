@@ -48,6 +48,9 @@ export class BootScene extends Phaser.Scene {
     // Load pilot portrait images for campaign debrief
     this.loadPortraitImages();
 
+    // Load ship thumbnail images for campaign debrief stats
+    this.loadCampaignShipThumbnails();
+
     // Fallback: if portrait_command.png fails to load, generate programmatic placeholder
     this.load.once(Phaser.Loader.Events.COMPLETE, () => {
       if (!this.textures.exists('portrait_command')) {
@@ -202,24 +205,80 @@ export class BootScene extends Phaser.Scene {
     this.load.image('portrait_whisper',           'assets/portraits/terran_hegemony/whisper.png');
     this.load.image('portrait_whisper_talk',      'assets/portraits/terran_hegemony/whisper_talk.png');
 
-    // Free Confederation
-    this.load.image('portrait_commander_santos', 'assets/portraits/free_confederation/commander_santos.png');
-    this.load.image('portrait_phoenix_one',      'assets/portraits/free_confederation/phoenix_one.png');
-    this.load.image('portrait_doc_vasquez',      'assets/portraits/free_confederation/doc_vasquez.png');
+    // Free Confederation — base + talking variants
+    this.load.image('portrait_commander_santos',      'assets/portraits/free_confederation/commander_santos.png');
+    this.load.image('portrait_commander_santos_talk', 'assets/portraits/free_confederation/commander_santos_talk.png');
+    this.load.image('portrait_phoenix_one',           'assets/portraits/free_confederation/phoenix_one.png');
+    this.load.image('portrait_phoenix_one_talk',      'assets/portraits/free_confederation/phoenix_one_talk.png');
+    this.load.image('portrait_doc_vasquez',           'assets/portraits/free_confederation/doc_vasquez.png');
+    this.load.image('portrait_doc_vasquez_talk',      'assets/portraits/free_confederation/doc_vasquez_talk.png');
 
-    // Synthetic Collective
-    this.load.image('portrait_omega_7',           'assets/portraits/synthetic_collective/omega_7.png');
-    this.load.image('portrait_prime_collective',  'assets/portraits/synthetic_collective/prime_collective.png');
-    this.load.image('portrait_unit_zero',         'assets/portraits/synthetic_collective/unit_zero.png');
+    // Synthetic Collective — base + talking variants
+    this.load.image('portrait_omega_7',                'assets/portraits/synthetic_collective/omega_7.png');
+    this.load.image('portrait_omega_7_talk',           'assets/portraits/synthetic_collective/omega_7_talk.png');
+    this.load.image('portrait_prime_collective',       'assets/portraits/synthetic_collective/prime_collective.png');
+    this.load.image('portrait_prime_collective_talk',  'assets/portraits/synthetic_collective/prime_collective_talk.png');
+    this.load.image('portrait_unit_zero',              'assets/portraits/synthetic_collective/unit_zero.png');
+    this.load.image('portrait_unit_zero_talk',         'assets/portraits/synthetic_collective/unit_zero_talk.png');
 
-    // Void Corsairs
-    this.load.image('portrait_captain_kira', 'assets/portraits/void_corsairs/captain_kira.png');
-    this.load.image('portrait_the_admiral',  'assets/portraits/void_corsairs/the_admiral.png');
-    this.load.image('portrait_bloodfang',    'assets/portraits/void_corsairs/bloodfang.png');
+    // Void Corsairs — base + talking variants
+    this.load.image('portrait_captain_kira',       'assets/portraits/void_corsairs/captain_kira.png');
+    this.load.image('portrait_captain_kira_talk',  'assets/portraits/void_corsairs/captain_kira_talk.png');
+    this.load.image('portrait_the_admiral',        'assets/portraits/void_corsairs/the_admiral.png');
+    this.load.image('portrait_the_admiral_talk',   'assets/portraits/void_corsairs/the_admiral_talk.png');
+    this.load.image('portrait_bloodfang',          'assets/portraits/void_corsairs/bloodfang.png');
+    this.load.image('portrait_bloodfang_talk',     'assets/portraits/void_corsairs/bloodfang_talk.png');
 
-    // Ascendant Empire
-    this.load.image('portrait_the_dreamer',      'assets/portraits/ascendant_empire/the_dreamer.png');
-    this.load.image('portrait_archon_zaelthar',  'assets/portraits/ascendant_empire/archon_zaelthar.png');
-    this.load.image('portrait_herald',           'assets/portraits/ascendant_empire/herald.png');
+    // Ascendant Empire — base + talking variants
+    this.load.image('portrait_the_dreamer',             'assets/portraits/ascendant_empire/the_dreamer.png');
+    this.load.image('portrait_the_dreamer_talk',        'assets/portraits/ascendant_empire/the_dreamer_talk.png');
+    this.load.image('portrait_archon_zaelthar',         'assets/portraits/ascendant_empire/archon_zaelthar.png');
+    this.load.image('portrait_archon_zaelthar_talk',    'assets/portraits/ascendant_empire/archon_zaelthar_talk.png');
+    this.load.image('portrait_herald',                  'assets/portraits/ascendant_empire/herald.png');
+    this.load.image('portrait_herald_talk',             'assets/portraits/ascendant_empire/herald_talk.png');
+  }
+
+  /**
+   * Load ship sprite images used as thumbnails in campaign debrief and briefing.
+   * Texture keys: ship_<shipId>, e.g. ship_terran_raptor
+   * Missing files fail silently — Phaser skips them without error.
+   */
+  private loadCampaignShipThumbnails(): void {
+    // Terran Hegemony — pilot ships + evolution ships
+    const th = 'assets/ships/terran_hegemony';
+    this.load.image('ship_terran_raptor',     `${th}/terran_raptor.png`);
+    this.load.image('ship_terran_viper',      `${th}/terran_viper.png`);
+    this.load.image('ship_terran_gladius',    `${th}/terran_gladius.png`);
+    this.load.image('ship_terran_hawk',       `${th}/terran_hawk.png`);
+    this.load.image('ship_terran_sentinel',   `${th}/terran_sentinel.png`);
+    this.load.image('ship_terran_aegis',      `${th}/terran_aegis.png`);
+    this.load.image('ship_terran_devastator', `${th}/terran_devastator.png`);
+    this.load.image('ship_terran_phantom',    `${th}/terran_phantom.png`);
+    this.load.image('ship_terran_reaper',     `${th}/terran_reaper.png`);
+
+    // Free Confederation pilot ships
+    const confed = 'assets/ships/free_confederation';
+    this.load.image('ship_confed_aurora',   `${confed}/confed_aurora.png`);
+    this.load.image('ship_confed_nova',     `${confed}/confed_nova.png`);
+    this.load.image('ship_confed_meteor',   `${confed}/confed_meteor.png`);
+    this.load.image('ship_confed_phoenix',  `${confed}/confed_phoenix.png`);
+
+    // Synthetic Collective pilot ships
+    const synth = 'assets/ships/synthetic_collective';
+    this.load.image('ship_synth_interceptor', `${synth}/synth_interceptor.png`);
+    this.load.image('ship_synth_scout',       `${synth}/synth_scout.png`);
+    this.load.image('ship_synth_nexus',       `${synth}/synth_nexus.png`);
+
+    // Void Corsairs pilot ships
+    const corsair = 'assets/ships/void_corsairs';
+    this.load.image('ship_corsair_dart',     `${corsair}/corsair_dart.png`);
+    this.load.image('ship_corsair_razor',    `${corsair}/corsair_razor.png`);
+    this.load.image('ship_corsair_phantom',  `${corsair}/corsair_phantom.png`);
+
+    // Ascendant Empire pilot ships
+    const ascend = 'assets/ships/ascendant_empire';
+    this.load.image('ship_ascendant_virus',    `${ascend}/ascendant_virus.png`);
+    this.load.image('ship_ascendant_symbiont', `${ascend}/ascendant_symbiont.png`);
+    this.load.image('ship_ascendant_spore',    `${ascend}/ascendant_spore.png`);
   }
 }

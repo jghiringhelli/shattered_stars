@@ -15,6 +15,8 @@ import { FACTION_COLORS } from '../config';
 import { FACTION_CAMPAIGNS, type FactionCampaign, type CampaignMission } from '../data/CampaignData';
 import { audioManager } from '../audio/AudioManager';
 import { CampaignSaveManager, type CampaignSaveData } from '../systems/CampaignSaveManager';
+import { CAMPAIGN_PILOTS } from '../data/PilotData';
+import { getPilotDefinition } from '../systems/CampaignPilotManager';
 
 type CampaignPhase = 'faction_select' | 'mission_map' | 'briefing';
 
@@ -403,48 +405,96 @@ export class CampaignScene extends Phaser.Scene {
   }
 
   private createStatsPanel(): void {
-    const x = this.scale.width - 180;
-    const y = 200;
+    const panelX = this.scale.width - 220;
+    const panelY = 170;
+    const panelW = 200;
+    const color  = FACTION_COLORS[this.selectedFaction!];
 
-    const container = this.add.container(x, y);
+    const container = this.add.container(panelX, panelY);
 
-    // Background
-    const bg = this.add.graphics();
-    bg.fillStyle(0x111122, 0.9);
-    bg.fillRoundedRect(-120, -30, 240, 200, 10);
-    bg.lineStyle(1, 0x333344, 1);
-    bg.strokeRoundedRect(-120, -30, 240, 200, 10);
-    container.add(bg);
+    // ── Campaign stats ──────────────────────────────────────────────────────
+    const statsH = 120;
+    const statsBg = this.add.graphics();
+    statsBg.fillStyle(0x111122, 0.9);
+    statsBg.fillRoundedRect(0, 0, panelW, statsH, 8);
+    statsBg.lineStyle(1, 0x333344, 1);
+    statsBg.strokeRoundedRect(0, 0, panelW, statsH, 8);
+    container.add(statsBg);
 
-    // Title
-    const title = this.add.text(0, -15, 'CAMPAIGN STATS', {
-      font: 'bold 14px Arial',
-      color: '#888888',
-    }).setOrigin(0.5);
-    container.add(title);
+    const statsTitle = this.add.text(panelW / 2, 12, 'STATS', {
+      fontSize: '13px', fontFamily: 'monospace', color: '#556677', fontStyle: 'bold',
+    }).setOrigin(0.5, 0);
+    container.add(statsTitle);
 
-    // Stats
-    const stats = [
-      { label: 'XP Earned', value: this.saveData!.totalXp.toString() },
+    const statRows = [
+      { label: 'XP',      value: this.saveData!.totalXp.toString() },
       { label: 'Credits', value: this.saveData!.credits.toString() },
-      { label: 'Kills', value: this.saveData!.totalKills.toString() },
-      { label: 'Ships Lost', value: this.saveData!.shipsLost.toString() },
+      { label: 'Kills',   value: this.saveData!.totalKills.toString() },
     ];
-
-    stats.forEach((stat, i) => {
-      const statY = 20 + i * 35;
-      const labelText = this.add.text(-100, statY, stat.label, {
-        font: '14px Arial',
-        color: '#666666',
-      }).setOrigin(0, 0.5);
-      container.add(labelText);
-
-      const valueText = this.add.text(100, statY, stat.value, {
-        font: 'bold 16px Arial',
-        color: '#ffffff',
-      }).setOrigin(1, 0.5);
-      container.add(valueText);
+    statRows.forEach((row, i) => {
+      const y = 30 + i * 26;
+      container.add(this.add.text(10, y, row.label,  { fontSize: '12px', fontFamily: 'monospace', color: '#556677' }));
+      container.add(this.add.text(panelW - 10, y, row.value, { fontSize: '13px', fontFamily: 'monospace', color: '#ffffff' }).setOrigin(1, 0));
     });
+
+    // ── Pilot squad ─────────────────────────────────────────────────────────
+    const pilots = this.saveData!.campaignPilots;
+    if (pilots.length > 0) {
+      const squadY = statsH + 14;
+      const squadH = 20 + pilots.length * 62;
+
+      const squadBg = this.add.graphics();
+      squadBg.fillStyle(0x111122, 0.9);
+      squadBg.fillRoundedRect(0, squadY, panelW, squadH, 8);
+      squadBg.lineStyle(1, 0x333344, 1);
+      squadBg.strokeRoundedRect(0, squadY, panelW, squadH, 8);
+      container.add(squadBg);
+
+      const squadTitle = this.add.text(panelW / 2, squadY + 8, 'SQUADRON', {
+        fontSize: '13px', fontFamily: 'monospace', color: '#556677', fontStyle: 'bold',
+      }).setOrigin(0.5, 0);
+      container.add(squadTitle);
+
+      pilots.forEach((pilot, i) => {
+        const def = getPilotDefinition(this.selectedFaction!, pilot.pilotId);
+        const portraitKey = def?.portraitKey ?? 'portrait_command';
+        const callsign    = def?.callsign ?? pilot.pilotId.toUpperCase();
+        const py = squadY + 28 + i * 62;
+
+        // Portrait thumbnail (38×57, 2:3 ratio)
+        const thumbW = 38;
+        const thumbH = 57;
+        if (this.textures.exists(portraitKey)) {
+          const thumb = this.add.image(thumbW / 2 + 6, py + thumbH / 2, portraitKey);
+          thumb.setDisplaySize(thumbW, thumbH);
+          container.add(thumb);
+        }
+
+        // Faction-color border around portrait
+        const thumbBorder = this.add.graphics();
+        thumbBorder.lineStyle(1, color, 0.8);
+        thumbBorder.strokeRect(5, py, thumbW + 2, thumbH + 2);
+        container.add(thumbBorder);
+
+        // Callsign
+        container.add(this.add.text(thumbW + 14, py + 2, callsign, {
+          fontSize: '12px', fontFamily: 'monospace', color: '#ddeeff', fontStyle: 'bold',
+        }));
+
+        // Skill level
+        const skillColor = pilot.pilotSkill >= 5 ? '#ffcc00' : pilot.pilotSkill >= 3 ? '#44aaff' : '#aabbcc';
+        container.add(this.add.text(thumbW + 14, py + 18, `SKILL ${pilot.pilotSkill}`, {
+          fontSize: '11px', fontFamily: 'monospace', color: skillColor,
+        }));
+
+        // Ship name
+        const shipName = pilot.currentShipId.replace(/_/g, ' ').toUpperCase();
+        container.add(this.add.text(thumbW + 14, py + 33, shipName, {
+          fontSize: '10px', fontFamily: 'monospace', color: '#445566',
+          wordWrap: { width: panelW - thumbW - 22 },
+        }));
+      });
+    }
 
     this.missionMapContainer.add(container);
   }
@@ -471,6 +521,21 @@ export class CampaignScene extends Phaser.Scene {
     const centerX = this.scale.width / 2;
     const color = FACTION_COLORS[this.selectedFaction!];
     const mission = this.selectedMission!;
+
+    // Protagonist portrait (left side of header)
+    const pilots = CAMPAIGN_PILOTS[this.selectedFaction!];
+    const protagonist = pilots.find((p) => p.role === 'protagonist') ?? pilots[0];
+    if (protagonist) {
+      const portraitKey = this.textures.exists(protagonist.portraitKey)
+        ? protagonist.portraitKey
+        : 'portrait_command';
+      const pImg = this.add.image(68, 84, portraitKey);
+      pImg.setDisplaySize(85, 128);
+      const pBorder = this.add.graphics();
+      pBorder.lineStyle(2, color, 0.9);
+      pBorder.strokeRect(25, 20, 87, 130);
+      this.briefingContainer.add([pBorder, pImg]);
+    }
 
     // Title
     const missionLabel = this.add.text(centerX, 40, `MISSION ${mission.missionNumber}`, {

@@ -91,7 +91,7 @@ Run tests before committing:
 npm test -- --run
 ```
 
-All tests must pass. Current: 403 tests.
+All tests must pass. Current: 1155 tests (80%+ line coverage).
 
 ## Development Workflow
 
@@ -104,12 +104,50 @@ All tests must pass. Current: 403 tests.
 
 ## Art Generation
 
-See `specs/sd/SD_Claude_Code_Setup_Guide.md` for Stable Diffusion setup.
+All Stable Diffusion generation **must** go through the shared queue server. Do NOT call Forge directly.
 
-Output directories:
-- `public/sprites/ships/` - Ship sprites by faction
-- `public/sprites/effects/` - Weapon effects, explosions
-- `public/sprites/ui/` - Interface elements
+### SD Queue Server (port 8010)
+
+**Endpoint**: `http://127.0.0.1:8010`
+
+Submit a job:
+```
+POST /jobs
+{
+  "project":  "shattered-stars",
+  "endpoint": "/sdapi/v1/txt2img",
+  "priority": 5,
+  "payload":  { ...Forge txt2img payload... }
+}
+→ { "job_id": "abc123" }
+```
+
+Poll for completion:
+```
+GET /jobs/{job_id}
+→ { "status": "pending|running|succeeded|failed",
+    "result": { "images": ["base64..."], "info": "..." } }
+```
+
+When `status == "succeeded"`, consume `result.images[0]` (base64 PNG).
+When `status == "failed"`, read `result.error`.
+
+**Script**: `scripts/sd_queue.py` wraps this API with a local file-based job
+tracker so multiple scripts can batch-submit without stepping on each other.
+Use `submit_and_start_worker(jobs)` from other scripts.
+
+### Model / LoRA
+
+- Checkpoint: `dreamshaper_8.safetensors` (default; loaded at session start)
+- Portrait LoRA: `concept_art` @ 0.60
+- Pass checkpoint overrides in `payload.override_settings.sd_model_checkpoint`
+
+### Output directories
+
+- `public/assets/portraits/<faction>/` — pilot portrait PNGs (512×768)
+- `public/assets/ships/<faction>/` — ship sprite PNGs
+- `public/sprites/effects/` — weapon effects, explosions
+- `public/sprites/ui/` — interface elements
 
 ## Known Issues
 

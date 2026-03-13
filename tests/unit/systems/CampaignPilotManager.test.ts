@@ -20,6 +20,7 @@ import {
 import type { CampaignPilotState } from '../../../src/systems/CampaignSaveManager';
 import { CAMPAIGN_PILOTS } from '../../../src/data/PilotData';
 import type { EvolutionOption } from '../../../src/data/CampaignData';
+import type { FactionId } from '../../../src/config';
 
 // ============================================
 // XP_THRESHOLDS / getPilotSkill
@@ -209,9 +210,12 @@ describe('initializePilots', () => {
     }
   });
 
-  it('should return empty array for factions with no pilots', () => {
-    const pilots = initializePilots('free_confederation');
-    expect(pilots).toEqual([]);
+  it('should return 3 pilots for all factions', () => {
+    const factions: FactionId[] = ['free_confederation', 'synthetic_collective', 'void_corsairs', 'ascendant_empire'];
+    for (const faction of factions) {
+      const pilots = initializePilots(faction);
+      expect(pilots).toHaveLength(3);
+    }
   });
 
   it('stat bonuses should all start at 0', () => {
@@ -462,9 +466,13 @@ describe('getProtagonist', () => {
     expect(protagonist!.role).toBe('protagonist');
   });
 
-  it('should return undefined for factions with no pilots', () => {
-    const protagonist = getProtagonist('free_confederation');
-    expect(protagonist).toBeUndefined();
+  it('should return the protagonist for all factions', () => {
+    const factions: FactionId[] = ['free_confederation', 'synthetic_collective', 'void_corsairs', 'ascendant_empire'];
+    for (const faction of factions) {
+      const protagonist = getProtagonist(faction);
+      expect(protagonist).not.toBeUndefined();
+      expect(protagonist!.role).toBe('protagonist');
+    }
   });
 });
 
