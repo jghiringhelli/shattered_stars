@@ -1,0 +1,62 @@
+[
+  {
+    "id": "terran_battlecruiser_boss",
+    "name": "Hegemony Battlecruiser",
+    "faction": "terran_hegemony",
+    "size": "titan",
+    "size_px": 256,
+    "prompt": "imperial battleship, angular military design, multiple gun batteries, bridge tower, blue engine glow, armor plating, terran warship, capital ship, massive spacecraft, sci-fi, dark space background, top-down view, game sprite, detailed, epic scale",
+    "negative_prompt": "blurry, low quality, text, watermark, signature, small ship, fighter",
+    "recommended_steps": 40,
+    "recommended_cfg": 7.0,
+    "recommended_size": 512
+  },
+  {
+    "id": "confed_freedom_boss",
+    "name": "Freedom Corvette",
+    "faction": "free_confederation",
+    "size": "colossal",
+    "size_px": 160,
+    "prompt": "converted cargo ship, improvised armor, rebel markings, orange accents, asymmetric design, freedom fighter vessel, makeshift warship, capital ship, massive spacecraft, sci-fi, dark space background, top-down view, game sprite, detailed, epic scale",
+    "negative_prompt": "blurry, low quality, text, watermark, signature, small ship, fighter",
+    "recommended_steps": 40,
+    "recommended_cfg": 7.0,
+    "recommended_size": 512
+  },
+  {
+    "id": "synth_mothership_boss",
+    "name": "Collective Mothership",
+    "faction": "synthetic_collective",
+    "size": "titan",
+    "size_px": 256,
+    "prompt": "geometric perfect sphere, hexagonal panels, blue circuit patterns, antenna arrays, drone bays, AI mothership, machine hive, capital ship, massive spacecraft, sci-fi, dark space background, top-down view, game sprite, detailed, epic scale",
+    "negative_prompt": "blurry, low quality, text, watermark, signature, small ship, fighter",
+    "recommended_steps": 40,
+    "recommended_cfg": 7.0,
+    "recommended_size": 512
+  },
+  {
+    "id": "corsair_mothership_boss",
+    "name": "Pirate Mothership",
+    "faction": "void_corsairs",
+    "size": "colossal",
+    "size_px": 160,
+    "prompt": "cobbled together ship, skull markings, purple glow, weapon pods, salvage construction, pirate capital ship, void raider, capital ship, massive spacecraft, sci-fi, dark space background, top-down view, game sprite, detailed, epic scale",
+    "negative_prompt": "blurry, low quality, text, watermark, signature, small ship, fighter",
+    "recommended_steps": 40,
+    "recommended_cfg": 7.0,
+    "recommended_size": 512
+  },
+  {
+    "id": "ascendant_dreadnought_boss",
+    "name": "Ascendant Dreadnought",
+    "faction": "ascendant_empire",
+    "size": "titan",
+    "size_px": 256,
+    "prompt": "organic living ship, bio-armor plating, psionic tendrils, green bioluminescence, evolved warship, organic dreadnought, hive flagship, capital ship, massive spacecraft, sci-fi, dark space background, top-down view, game sprite, detailed, epic scale",
+    "negative_prompt": "blurry, low quality, text, watermark, signature, small ship, fighter",
+    "recommended_steps": 40,
+    "recommended_cfg": 7.0,
+    "recommended_size": 512
+  }
+]
