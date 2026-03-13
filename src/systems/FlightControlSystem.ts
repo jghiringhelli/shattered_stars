@@ -182,6 +182,69 @@ export function getHandlingProfile(size: ShipSize, role: ShipRole): HandlingProf
 }
 
 // ============================================
+// Pilot Skill Handling Modifiers
+// ============================================
+
+/**
+ * Per-stat multipliers that degrade from skill 6 (1.0 = baseline) down to skill 1.
+ *
+ * Design intent:
+ *   - Skill 6 (ace):    crisp, immediate response — this is the "feel good" baseline
+ *   - Skill 1 (rookie): significantly more cumbersome but never unplayable
+ *
+ * Max speed is intentionally untouched — rookies can still go fast,
+ * they're just shakier getting there and harder to aim.
+ */
+export interface SkillModifiers {
+  readonly turnRate: number;            // 0.65 → 1.00
+  readonly acceleration: number;        // 0.72 → 1.00
+  readonly deceleration: number;        // 0.72 → 1.00
+  readonly inertia: number;             // 1.60 → 1.00  (multiplier, higher = more sluggish)
+  readonly afterburnerDuration: number; // 0.75 → 1.00
+  readonly afterburnerCooldown: number; // 1.30 → 1.00  (multiplier, higher = longer wait)
+}
+
+/**
+ * Returns handling multipliers for a given pilot skill (1–6).
+ * Skill 6 returns all-1.0 multipliers; skill 1 returns the most-degraded values.
+ * Input is clamped to [1, 6].
+ */
+export function getSkillModifiers(pilotSkill: number): SkillModifiers {
+  const skill = Math.max(1, Math.min(6, pilotSkill));
+  const t = (skill - 1) / 5; // 0.0 at skill 1, 1.0 at skill 6
+
+  return {
+    turnRate: 0.65 + 0.35 * t,
+    acceleration: 0.72 + 0.28 * t,
+    deceleration: 0.72 + 0.28 * t,
+    inertia: 1.60 - 0.60 * t,
+    afterburnerDuration: 0.75 + 0.25 * t,
+    afterburnerCooldown: 1.30 - 0.30 * t,
+  };
+}
+
+/**
+ * Applies pilot skill to a base handling profile, returning a new profile.
+ * The base profile (from getHandlingProfile) is assumed to be tuned for skill 6.
+ */
+export function applySkillToHandling(
+  profile: HandlingProfile,
+  pilotSkill: number
+): HandlingProfile {
+  const mods = getSkillModifiers(pilotSkill);
+  return {
+    acceleration: profile.acceleration * mods.acceleration,
+    deceleration: profile.deceleration * mods.deceleration,
+    maxSpeed: profile.maxSpeed,
+    turnRate: profile.turnRate * mods.turnRate,
+    driftCapability: profile.driftCapability,
+    afterburnerDuration: profile.afterburnerDuration * mods.afterburnerDuration,
+    afterburnerCooldown: profile.afterburnerCooldown * mods.afterburnerCooldown,
+    inertia: profile.inertia * mods.inertia,
+  };
+}
+
+// ============================================
 // Flight State
 // ============================================
 
@@ -236,13 +299,16 @@ export interface FlightInput {
 // ============================================
 
 /**
- * Create initial flight state for a ship
+ * Create initial flight state for a ship.
+ * @param pilotSkill 1–6; defaults to 6 (ace baseline). Lower values degrade
+ *        responsiveness and increase inertia to simulate less-experienced pilots.
  */
 export function createFlightState(
   shipId: string,
   size: ShipSize,
   role: ShipRole,
-  initialAngle: number = 0
+  initialAngle: number = 0,
+  pilotSkill: number = 6
 ): FlightState {
   return {
     shipId,
@@ -260,7 +326,7 @@ export function createFlightState(
     driftAngle: 0,
     isStalled: false,
     stallRecoveryTime: 0,
-    handling: getHandlingProfile(size, role),
+    handling: applySkillToHandling(getHandlingProfile(size, role), pilotSkill),
   };
 }
 

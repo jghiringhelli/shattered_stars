@@ -239,12 +239,12 @@ export class BattleSimulator {
     const team2X = (this.config.battlefieldSize + spawnGap) / 2;
 
     // Spawn team 1 on the left
-    // Angle convention in maneuver system: 0=left, 90=up, 180=right, 270=down
+    // Angle convention: 0=up, 90=right, 180=down, 270=left (Phaser standard)
     team1Ships.forEach((defId, i) => {
       const ship = this.createShip(defId, 'team1', i);
       ship.x = team1X;
       ship.y = centerY + (i - team1Ships.length / 2) * spacing;
-      ship.angle = 180; // Facing right (toward enemy)
+      ship.angle = 90; // Facing right (toward enemy)
 
       this.ships.set(ship.id, ship);
       this.team1ShipIds.push(ship.id);
@@ -256,7 +256,7 @@ export class BattleSimulator {
       const ship = this.createShip(defId, 'team2', i);
       ship.x = team2X;
       ship.y = centerY + (i - team2Ships.length / 2) * spacing;
-      ship.angle = 0; // Facing left (toward enemy)
+      ship.angle = 270; // Facing left (toward enemy)
 
       this.ships.set(ship.id, ship);
       this.team2ShipIds.push(ship.id);
@@ -373,12 +373,11 @@ export class BattleSimulator {
   }
 
   private chooseManeuver(ship: SimShip, target: SimShip): { direction: ManeuverDirection; speed: number } {
-    // Calculate angle to target using maneuver system convention
-    // Maneuver angles: 0=left, 90=up, 180=right, 270=down
-    // atan2 gives: 0=right, 90=down, 180=left, -90=up
-    // Conversion: maneuverAngle = atan2Angle + 180
+    // Calculate angle to target using Phaser convention: 0=up, 90=right, 180=down, 270=left
+    // atan2 gives: 0=right, 90=down, 180=left, -90=up (screen space)
+    // Conversion: phaserAngle = atan2Angle + 90
     const atan2Angle = Math.atan2(target.y - ship.y, target.x - ship.x) * (180 / Math.PI);
-    const angleToTarget = ((atan2Angle + 180) % 360 + 360) % 360;
+    const angleToTarget = ((atan2Angle + 90) % 360 + 360) % 360;
 
     let angleDiff = angleToTarget - ship.angle;
 
@@ -438,10 +437,9 @@ export class BattleSimulator {
       const dist = this.distance(attacker, enemy);
       if (dist > maxRange) continue;
 
-      // Check firing arc using maneuver system angle convention
-      // Maneuver angles: 0=left, 90=up, 180=right, 270=down
+      // Check firing arc using Phaser angle convention: 0=up, 90=right, 180=down, 270=left
       const atan2Angle = Math.atan2(enemy.y - attacker.y, enemy.x - attacker.x) * (180 / Math.PI);
-      const angleToTarget = ((atan2Angle + 180) % 360 + 360) % 360;
+      const angleToTarget = ((atan2Angle + 90) % 360 + 360) % 360;
 
       // Calculate angle difference between ship facing and target direction
       let angleDiff = angleToTarget - attacker.angle;

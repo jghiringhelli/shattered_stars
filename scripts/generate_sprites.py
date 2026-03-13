@@ -30,42 +30,192 @@ except ImportError:
 FORGE_API_URL = "http://127.0.0.1:7860"
 OUTPUT_DIR = Path("public/assets/ships")
 PORTRAITS_DIR = Path("public/assets/portraits")
+SYMBOLS_DIR = Path("public/assets/symbols")
 
 # Ships to preserve (already good quality) - skip during regeneration
-# These passed stricter validation: symmetry >= 0.85, tilt <= 15°, clean background
+# User-reviewed and approved sprites from manual inspection session
 PRESERVE_SHIPS = {
-    "terran_hegemony": ["terran_gladius", "terran_phantom", "terran_harbinger"],
-    "free_confederation": ["confed_nova", "confed_tornado"],
-    "synthetic_collective": ["synth_guardian", "synth_fortress", "synth_arc"],
-    "void_corsairs": ["corsair_dart", "corsair_marauder", "corsair_phantom", "corsair_wraith", "corsair_bloodfang"],
-    "ascendant_empire": ["ascendant_virus", "ascendant_cerebral", "ascendant_mind"],
+    "terran_hegemony": [
+        "terran_aegis", "terran_battlecruiser", "terran_devastator", "terran_harbinger",
+        "terran_phantom", "terran_raptor", "terran_reaper", "terran_sentinel",
+        "terran_storm", "terran_talon", "terran_viper", "terran_warden"
+    ],
+    "free_confederation": [
+        "confed_atlas", "confed_comet", "confed_defiance", "confed_meteor",
+        "confed_nova", "confed_phoenix", "confed_sparrow", "confed_stinger", "confed_tornado"
+    ],
+    "synthetic_collective": [
+        "synth_arc", "synth_coordinator", "synth_fortress", "synth_hunter",
+        "synth_probe", "synth_relay", "synth_wraith"
+    ],
+    "void_corsairs": [
+        "corsair_bloodfang", "corsair_corsair", "corsair_marauder", "corsair_mothership",
+        "corsair_phantom", "corsair_reaver", "corsair_scythe", "corsair_shadow",
+        "corsair_specter", "corsair_venom"
+    ],
+    "ascendant_empire": [
+        "ascendant_adaptation", "ascendant_bastion", "ascendant_bio_cruiser", "ascendant_cerebral",
+        "ascendant_cherub", "ascendant_evolved", "ascendant_metamorph", "ascendant_mind",
+        "ascendant_organism", "ascendant_seraph", "ascendant_symbiont", "ascendant_thought", "ascendant_virus"
+    ],
 }
 
+# Sprites needing post-processing (based on user review)
+# These are acceptable but have removable elements
+NEEDS_BACKGROUND_REMOVAL = {
+    "ascendant_empire": ["ascendant_leviathan"],  # Round white background
+    "free_confederation": ["confed_constellation", "confed_millennium", "confed_striker"],  # Background issues
+}
+
+NEEDS_FRAME_REMOVAL = {
+    "ascendant_empire": ["ascendant_archon", "ascendant_dreadnought", "ascendant_mutation", "ascendant_spore"],  # Frame/corners (could be shields)
+    "free_confederation": ["confed_defiant", "confed_thunderbolt", "confed_ranger"],  # Frame issues
+    "synthetic_collective": [
+        "synth_devastator", "synth_fortress", "synth_guardian", "synth_hunter",
+        "synth_interceptor", "synth_mothership", "synth_prime", "synth_siege"
+    ],  # Massive frames
+    "void_corsairs": ["corsair_predator", "corsair_tender"],  # Frame issues
+}
+
+# Synthetic Collective circles are acceptable per faction aesthetic
+SYNTH_CIRCLES_OK = [
+    "synth_conduit", "synth_guardian", "synth_gunboat", "synth_mothership",
+    "synth_swarm", "synth_titan"
+]
+
+NEEDS_ROTATION = {
+    "void_corsairs": ["corsair_razor", "corsair_reaver"],  # Pointing wrong direction
+}
+
+NEEDS_HANGAR_REMOVAL = {
+    "free_confederation": ["confed_freedom", "confed_liberty", "confed_vortex"],  # Landing platform/base
+    "terran_hegemony": ["terran_command", "terran_gladius", "terran_hawk", "terran_vanguard"],  # Hangars
+    "void_corsairs": ["corsair_dart", "corsair_fang", "corsair_havoc", "corsair_wraith"],  # Hangars
+}
+
+NEEDS_REGENERATION = {
+    "ascendant_empire": ["ascendant_plague"],  # Isometric
+    "free_confederation": ["confed_aurora", "confed_wasp"],  # Circle+background+slanted, medal-like
+    "synthetic_collective": ["synth_scout"],  # Slightly slanted
+    "terran_hegemony": ["terran_tempest"],  # Isometric
+    "void_corsairs": ["corsair_ghost", "corsair_pillager"],  # Cargo box with skull, slanted/hangared
+}
+
+# =============================================================================
+# FACTION SYMBOLS - Star Wars/StarCraft style emblems
+# =============================================================================
+
+# Symbol base style - clean, iconic, bold
+SYMBOL_BASE_STYLE = """
+faction emblem, military insignia, logo design, vector art style,
+bold clean lines, symmetric design, iconic symbol,
+solid black background, centered composition,
+Star Wars faction logo style, StarCraft race emblem style,
+high contrast, flat design, heraldic, game UI icon,
+professional logo, minimalist, no text, no letters
+"""
+
+SYMBOL_NEGATIVE = """
+photorealistic, 3D render, CGI, photograph,
+text, letters, words, typography, font,
+busy background, complex scene, landscape,
+person, face, character, creature, spaceship, vehicle,
+low quality, blurry, watermark, frame, border,
+gradient background, multiple colors background
+"""
+
+# Faction symbol definitions - each has multiple design elements
+FACTION_SYMBOLS = {
+    "terran_hegemony": {
+        "name": "Terran Hegemony",
+        "prompt": """
+imperial eagle emblem, military star insignia, angular geometric logo,
+iron fist symbol, authoritarian regime logo, empire faction symbol,
+steel blue and silver metallic colors, imperial crest,
+sharp pointed star, sword and shield motif, crown element,
+fascist aesthetic logo, military dictatorship emblem, galactic empire style
+""",
+        "colors": "steel blue, silver, white, gunmetal gray"
+    },
+    "free_confederation": {
+        "name": "Free Confederation",
+        "prompt": """
+rebel alliance symbol, freedom fighter emblem, phoenix rising logo,
+broken chains motif, liberty torch symbol, revolutionary star,
+orange and gold warm colors, rebel faction insignia,
+uprising emblem, resistance movement logo, hope symbol,
+rebel starbird style, independence movement crest, freedom fighters badge
+""",
+        "colors": "orange, gold, warm red, forest green"
+    },
+    "synthetic_collective": {
+        "name": "Synthetic Collective",
+        "prompt": """
+AI hivemind symbol, machine consciousness logo, circuit board emblem,
+geometric hexagon design, digital eye motif, network node symbol,
+cyan and chrome colors, synthetic being insignia,
+binary code pattern, machine uprising emblem, robot faction logo,
+Skynet style symbol, cybernetic collective crest, artificial intelligence badge
+""",
+        "colors": "cyan, electric blue, chrome silver, white glow"
+    },
+    "void_corsairs": {
+        "name": "Void Corsairs",
+        "prompt": """
+space pirate skull logo, raider faction emblem, crossed swords insignia,
+jolly roger style symbol, marauder crest, outlaw badge,
+deep purple and crimson colors, pirate fleet logo,
+skull and bones motif, corsair flag symbol, renegade emblem,
+dark menacing insignia, predator faction crest, bandit gang logo
+""",
+        "colors": "deep purple, crimson red, black, tarnished gold"
+    },
+    "ascendant_empire": {
+        "name": "Ascendant Empire",
+        "prompt": """
+alien hive symbol, bio-organic emblem, living organism logo,
+spiral helix motif, tentacle pattern insignia, organic growth crest,
+emerald green and bioluminescent glow colors, alien faction symbol,
+zerg swarm style logo, tyranid hive fleet emblem, organic horror badge,
+psionic eye symbol, mind collective crest, evolution emblem
+""",
+        "colors": "emerald green, purple, gold accents, bioluminescent cyan"
+    }
+}
+
+# Multiple symbol variations per faction
+SYMBOL_VARIATIONS = ["primary", "alternate", "minimal"]
+
 # Base style prompt for Chris Metzen aesthetic - VERY explicit top-down
+# Key insight: SD models respond better to "bird's eye view" and "flat lay" than "top-down"
 BASE_STYLE = """
-PERFECT TOP-DOWN ORTHOGRAPHIC VIEW, looking straight down from above,
-2D game sprite asset, vertically symmetric spacecraft,
-Chris Metzen art style, chunky mechanical design, bold silhouette,
-rich saturated colors, StarCraft aesthetic, pixel art inspired,
-high contrast, game sprite quality, detailed but readable at small scale,
-single spaceship centered on pure black background,
-spacecraft blueprint view from directly above, flat 2D sprite,
-mirror symmetry along vertical axis, black void background
+bird's eye view, aerial view from directly above, flat lay photograph style,
+2D game sprite, vertically symmetric spaceship icon,
+nose pointing UP toward top of image, engines at bottom,
+perfectly centered on solid black background,
+Chris Metzen StarCraft art style, chunky bold design,
+high contrast colors, clean silhouette, game asset,
+mirror symmetry left-right, flat 2D artwork, no depth, no shadows,
+spacecraft icon viewed from orbit looking straight down
 """
 
 # Universal negative prompt applied to ALL generations
+# Heavily reinforced anti-isometric and anti-perspective terms
 UNIVERSAL_NEGATIVE = """
-isometric, isometric view, isometric perspective, isometric angle,
-3/4 view, three quarter view, angled view, diagonal view,
-side view, side angle, profile view, lateral view,
-front view, low angle, looking up, perspective, vanishing point,
-tilted, rotated, angled camera, dynamic angle,
-robot, humanoid robot, mech, android, bipedal, standing figure, walking,
-multiple ships, fleet, swarm, cluster, formation, group of ships,
-tank, ground vehicle, car, truck, portrait, face, human, person,
-background, landscape, planet, stars, nebula, space scene, environment,
-3D render, photorealistic, photograph, low quality, blurry, watermark, text,
-asymmetric, uneven, lopsided
+isometric, isometric view, isometric perspective, isometric projection,
+3/4 view, three quarter view, three-quarter angle,
+oblique view, oblique angle, oblique projection,
+side view, profile view, lateral view, side angle,
+front view, rear view, cockpit view,
+angled, tilted, rotated, diagonal, slanted, skewed,
+perspective, vanishing point, depth, foreshortening,
+3D render, 3D model, CGI, photorealistic,
+dynamic angle, action pose, flying, in motion,
+robot, mech, humanoid, bipedal, standing, walking, person, face,
+multiple ships, fleet, formation, swarm, group,
+background, environment, planet, stars, nebula, space scene,
+horizon, ground, landscape, atmosphere,
+low quality, blurry, watermark, text, logo, frame, border
 """
 
 # Image validation settings
@@ -88,36 +238,36 @@ VALIDATION_CONFIG = {
 FACTION_STYLES = {
     "terran_hegemony": {
         "colors": "imperial blue, silver, white, steel gray",
-        "aesthetic": "military spaceship hull, angular wedge shape, weapon turrets on deck, engine thrusters at rear, bridge tower, spacecraft viewed from above",
-        "negative": "mech suit, standing robot, legs, arms, bipedal, ground vehicle, tank treads",
+        "aesthetic": "military warship icon, angular wedge silhouette, symmetrical design, weapon hardpoints visible, engine glow at bottom",
+        "negative": "mech suit, standing robot, legs, arms, bipedal, ground vehicle, tank treads, cockpit glass",
         "lora": "scifi_style",  # or None if not available
         "lora_weight": 0.6
     },
     "free_confederation": {
         "colors": "freedom orange, forest green, gold accents, warm tones",
-        "aesthetic": "rebel starfighter hull, asymmetric modifications, exposed engines, cockpit canopy visible from above, practical spacecraft design",
-        "negative": "mech suit, standing robot, legs, arms, bipedal, dark oppressive, evil",
+        "aesthetic": "rebel fighter icon, practical rugged design, symmetrical wings, visible modifications, battle-worn appearance",
+        "negative": "mech suit, standing robot, legs, arms, bipedal, dark oppressive, evil, cockpit glass",
         "lora": "scifi_style",  # Same base style, colors differentiate
         "lora_weight": 0.5
     },
     "synthetic_collective": {
         "colors": "gunmetal gray, electric blue glow, chrome silver, cyan accents",
-        "aesthetic": "AI drone spacecraft, sleek geometric hull, glowing circuit patterns on surface, smooth curved panels, digital precision spacecraft",
-        "negative": "humanoid robot, standing mech, bipedal android, legs, rusty, organic",
+        "aesthetic": "AI drone icon, geometric symmetrical shape, glowing circuit lines, smooth chrome surface, digital precision",
+        "negative": "humanoid robot, standing mech, bipedal android, legs, rusty, organic, cockpit",
         "lora": "scifi_style",
         "lora_weight": 0.6
     },
     "void_corsairs": {
         "colors": "deep purple, crimson red, tarnished brass, dark metal",
-        "aesthetic": "pirate raider spacecraft, aggressive angular hull, weapon spikes, salvaged armor plates, intimidating spacecraft silhouette from above",
-        "negative": "humanoid, standing figure, mech suit, clean pristine, military uniform",
+        "aesthetic": "pirate raider icon, aggressive angular shape, skull markings, spiked armor, intimidating silhouette",
+        "negative": "humanoid, standing figure, mech suit, clean pristine, military uniform, cockpit glass",
         "lora": "scifi_style",
         "lora_weight": 0.6
     },
     "ascendant_empire": {
-        "colors": "emerald green, dark gold, deep purple, bioluminescent",
-        "aesthetic": "organic alien spacecraft hull, bio-mechanical curves, living ship carapace, tentacle-like protrusions, psionic energy glow, alien vessel viewed from above",
-        "negative": "humanoid robot, android face, mechanical legs, standing figure, purely mechanical, industrial",
+        "colors": "emerald green, dark gold, deep purple, bioluminescent glow",
+        "aesthetic": "alien bio-ship icon, organic symmetrical carapace, living tissue texture, bioluminescent veins, curved organic shape",
+        "negative": "humanoid robot, android face, mechanical legs, standing figure, purely mechanical, industrial, cockpit",
         "lora": "alien_species",  # Bio/alien LoRA if available, else scifi_style
         "lora_weight": 0.7
     }
@@ -369,12 +519,16 @@ HERO_CHARACTERS = {
 
 @dataclass
 class GenerationConfig:
-    """Configuration for image generation"""
-    width: int = 512
+    """Configuration for image generation
+
+    For SD 1.5 models: use 512x512, 20-30 steps, CFG 7
+    For SDXL models: use 1024x1024, 20-30 steps (or 6-10 for Lightning)
+    """
+    width: int = 512  # SD 1.5 native resolution
     height: int = 512
-    steps: int = 30
-    cfg_scale: float = 7.0
-    sampler_name: str = "DPM++ 2M Karras"
+    steps: int = 30  # Standard for SD 1.5
+    cfg_scale: float = 7.0  # Standard CFG for SD 1.5
+    sampler_name: str = "DPM++ 2M Karras"  # Good general-purpose sampler
     seed: int = -1
     batch_size: int = 1
     n_iter: int = 1
@@ -405,12 +559,22 @@ def validate_sprite(image_bytes: bytes) -> Tuple[bool, dict]:
         details = {}
         is_valid = True
 
-        # Check 1: Vertical symmetry
+        # Check 1: Vertical symmetry (full image)
         symmetry_score = check_symmetry(arr)
         details["symmetry_score"] = round(symmetry_score, 3)
+
+        # Check 1b: Center-strip symmetry (middle 50% - detects isometric core)
+        center_symmetry = check_symmetry(arr, center_strip_ratio=0.5)
+        details["center_symmetry"] = round(center_symmetry, 3)
+
+        # Only fail on symmetry if BOTH full and center are low
+        # This allows asymmetric designs that are still properly oriented
         if symmetry_score < VALIDATION_CONFIG["min_symmetry_score"]:
-            details["symmetry_fail"] = True
-            is_valid = False
+            # If center symmetry is also low, it's likely isometric/skewed
+            if center_symmetry < 0.90:  # Higher threshold for center
+                details["symmetry_fail"] = True
+                is_valid = False
+            # else: asymmetric design but properly oriented - OK
 
         # Check 2: Black background at borders
         bg_ratio = check_background(arr)
@@ -420,11 +584,34 @@ def validate_sprite(image_bytes: bytes) -> Tuple[bool, dict]:
             is_valid = False
 
         # Check 3: Vertical orientation (detects isometric/tilted perspectives)
-        tilt_angle = check_vertical_orientation(arr)
+        # If ship is wider than tall, high tilt angle (near 90°) is expected and OK
+        tilt_angle, aspect_ratio = check_vertical_orientation(arr)
         details["tilt_angle"] = round(tilt_angle, 1)
-        if tilt_angle > VALIDATION_CONFIG["max_tilt_angle"]:
-            details["tilt_fail"] = True
-            is_valid = False
+        details["aspect_ratio"] = round(aspect_ratio, 2)
+
+        # Conditional tilt check:
+        # - If aspect_ratio > 1.2 (wider than tall), tilt near 90° is expected
+        # - If aspect_ratio < 0.8 (taller than wide), tilt near 0° is expected
+        # - Only flag as tilted if the angle doesn't match the aspect ratio
+        is_wide = aspect_ratio > 1.2
+        is_tall = aspect_ratio < 0.8
+
+        if is_wide:
+            # Wide ships should have tilt near 90° (horizontal principal axis)
+            # Flag if tilt is in the "diagonal" range (15° to 75°) - indicates isometric
+            if 15 < tilt_angle < 75:
+                details["tilt_fail"] = True
+                is_valid = False
+        elif is_tall:
+            # Tall ships should have tilt near 0° (vertical principal axis)
+            if tilt_angle > VALIDATION_CONFIG["max_tilt_angle"]:
+                details["tilt_fail"] = True
+                is_valid = False
+        else:
+            # Square-ish ships - only flag extreme diagonal (30-60°)
+            if 30 < tilt_angle < 60:
+                details["tilt_fail"] = True
+                is_valid = False
 
         # Check 4: Centered mass (informational only)
         center_offset = check_centering(arr)
@@ -436,12 +623,24 @@ def validate_sprite(image_bytes: bytes) -> Tuple[bool, dict]:
         return True, {"error": str(e)}
 
 
-def check_symmetry(arr: np.ndarray) -> float:
+def check_symmetry(arr: np.ndarray, center_strip_ratio: float = 0.0) -> float:
     """
     Check vertical symmetry by comparing left and right halves.
     Returns 0-1 score where 1 is perfectly symmetric.
+
+    If center_strip_ratio > 0, only checks the center vertical strip
+    (e.g., 0.5 = middle 50% of width). This detects isometric views
+    where even the ship's core is skewed.
     """
     h, w, c = arr.shape
+
+    if center_strip_ratio > 0:
+        # Only check center strip
+        strip_width = int(w * center_strip_ratio)
+        margin = (w - strip_width) // 2
+        arr = arr[:, margin:margin + strip_width, :]
+        w = strip_width
+
     mid = w // 2
 
     # Get left and right halves
@@ -518,14 +717,17 @@ def check_centering(arr: np.ndarray) -> float:
     return (offset_x + offset_y) / 2
 
 
-def check_vertical_orientation(arr: np.ndarray) -> float:
+def check_vertical_orientation(arr: np.ndarray) -> Tuple[float, float]:
     """
     Check if the ship's principal axis is aligned vertically.
     Uses principal component analysis on the ship's pixel positions.
-    Returns the angle in degrees from vertical (0 = perfectly vertical, 45 = isometric).
+    Returns (angle_deg, aspect_ratio) where:
+      - angle_deg: degrees from vertical (0 = vertical, 90 = horizontal)
+      - aspect_ratio: width/height of ship bounding box (>1 = wider than tall)
 
     A top-down ship should have its main axis vertical (nose-to-tail).
-    Isometric/tilted ships will have their main axis at an angle.
+    However, if a ship is wider than tall (aspect_ratio > 1), a high tilt
+    angle (near 90°) is expected and valid - it just means horizontal orientation.
     """
     h, w, c = arr.shape
     threshold = VALIDATION_CONFIG["black_threshold"]
@@ -534,13 +736,18 @@ def check_vertical_orientation(arr: np.ndarray) -> float:
     mask = np.any(arr > threshold, axis=2)
 
     if not np.any(mask):
-        return 0.0
+        return 0.0, 1.0
 
     # Get coordinates of all ship pixels
     y_coords, x_coords = np.where(mask)
 
     if len(y_coords) < 10:  # Too few pixels to analyze
-        return 0.0
+        return 0.0, 1.0
+
+    # Calculate aspect ratio from bounding box
+    ship_width = x_coords.max() - x_coords.min() + 1
+    ship_height = y_coords.max() - y_coords.min() + 1
+    aspect_ratio = ship_width / max(ship_height, 1)
 
     # Center the coordinates
     x_centered = x_coords - np.mean(x_coords)
@@ -563,7 +770,7 @@ def check_vertical_orientation(arr: np.ndarray) -> float:
     angle_rad = np.arctan2(abs(principal_vector[0]), abs(principal_vector[1]))
     angle_deg = np.degrees(angle_rad)
 
-    return angle_deg
+    return angle_deg, aspect_ratio
 
 
 def process_sprite_background(image_bytes: bytes) -> bytes:
@@ -595,6 +802,204 @@ def process_sprite_background(image_bytes: bytes) -> bytes:
 
     except Exception:
         return image_bytes
+
+
+def remove_non_black_background(image_path: Path, threshold: int = 60) -> bool:
+    """
+    Remove non-black backgrounds from sprites.
+    Converts any pixel that's not part of the ship to black.
+    Uses flood fill from corners to detect background.
+    Returns True if processing succeeded.
+    """
+    if not HAS_IMAGE_ANALYSIS:
+        return False
+
+    try:
+        img = Image.open(image_path).convert('RGBA')
+        arr = np.array(img)
+        height, width = arr.shape[:2]
+
+        # Calculate brightness for each pixel
+        rgb = arr[:, :, :3].astype(float)
+        brightness = np.mean(rgb, axis=2)
+
+        # Create mask of likely background (bright pixels)
+        background_mask = brightness > threshold
+
+        # Flood fill from corners to find connected background
+        from scipy import ndimage
+
+        # Label connected regions
+        labeled, num_features = ndimage.label(background_mask)
+
+        # Get labels at corners
+        corner_labels = set()
+        corners = [(0, 0), (0, width-1), (height-1, 0), (height-1, width-1)]
+        for y, x in corners:
+            if labeled[y, x] > 0:
+                corner_labels.add(labeled[y, x])
+
+        # Create final background mask from corner-connected regions
+        final_bg_mask = np.isin(labeled, list(corner_labels))
+
+        # Set background to black
+        arr[final_bg_mask] = [0, 0, 0, 255]
+
+        # Save result
+        result = Image.fromarray(arr)
+        result.save(image_path, format='PNG')
+        return True
+
+    except ImportError:
+        print("  Warning: scipy not available for flood fill background removal")
+        return False
+    except Exception as e:
+        print(f"  Error removing background: {e}")
+        return False
+
+
+def remove_frame(image_path: Path, border_size: int = 20) -> bool:
+    """
+    Remove frame/border elements from sprites.
+    Clears pixels in the outer border region to black.
+    Returns True if processing succeeded.
+    """
+    if not HAS_IMAGE_ANALYSIS:
+        return False
+
+    try:
+        img = Image.open(image_path).convert('RGBA')
+        arr = np.array(img)
+        height, width = arr.shape[:2]
+
+        # Create border mask
+        border_mask = np.zeros((height, width), dtype=bool)
+        border_mask[:border_size, :] = True  # Top
+        border_mask[-border_size:, :] = True  # Bottom
+        border_mask[:, :border_size] = True  # Left
+        border_mask[:, -border_size:] = True  # Right
+
+        # Set border to black
+        arr[border_mask] = [0, 0, 0, 255]
+
+        # Save result
+        result = Image.fromarray(arr)
+        result.save(image_path, format='PNG')
+        return True
+
+    except Exception as e:
+        print(f"  Error removing frame: {e}")
+        return False
+
+
+def rotate_sprite(image_path: Path, angle: float = 180) -> bool:
+    """
+    Rotate sprite by specified angle (default 180 degrees).
+    Useful for ships pointing in wrong direction.
+    Returns True if processing succeeded.
+    """
+    if not HAS_IMAGE_ANALYSIS:
+        return False
+
+    try:
+        img = Image.open(image_path).convert('RGBA')
+
+        # Rotate with expand to maintain full image
+        rotated = img.rotate(angle, expand=False, fillcolor=(0, 0, 0, 255))
+
+        # Save result
+        rotated.save(image_path, format='PNG')
+        return True
+
+    except Exception as e:
+        print(f"  Error rotating sprite: {e}")
+        return False
+
+
+def post_process_sprites(dry_run: bool = True):
+    """
+    Apply post-processing to sprites based on categorized lists.
+    Set dry_run=False to actually modify files.
+    """
+    print("\n" + "=" * 60)
+    print("POST-PROCESSING SPRITES")
+    print("=" * 60)
+
+    if dry_run:
+        print("DRY RUN - no files will be modified")
+        print("Run with --apply to actually process files\n")
+
+    processed = {"background": 0, "frame": 0, "rotation": 0}
+
+    # Background removal
+    print("\n--- Background Removal ---")
+    for faction, ships in NEEDS_BACKGROUND_REMOVAL.items():
+        for ship in ships:
+            path = OUTPUT_DIR / faction / f"{ship}.png"
+            if path.exists():
+                print(f"  {ship}: ", end="")
+                if dry_run:
+                    print("would remove background")
+                else:
+                    if remove_non_black_background(path):
+                        print("background removed")
+                        processed["background"] += 1
+                    else:
+                        print("FAILED")
+            else:
+                print(f"  {ship}: file not found")
+
+    # Frame removal
+    print("\n--- Frame Removal ---")
+    for faction, ships in NEEDS_FRAME_REMOVAL.items():
+        for ship in ships:
+            path = OUTPUT_DIR / faction / f"{ship}.png"
+            if path.exists():
+                print(f"  {ship}: ", end="")
+                if dry_run:
+                    print("would remove frame")
+                else:
+                    if remove_frame(path):
+                        print("frame removed")
+                        processed["frame"] += 1
+                    else:
+                        print("FAILED")
+            else:
+                print(f"  {ship}: file not found")
+
+    # Rotation
+    print("\n--- Rotation (180°) ---")
+    for faction, ships in NEEDS_ROTATION.items():
+        for ship in ships:
+            path = OUTPUT_DIR / faction / f"{ship}.png"
+            if path.exists():
+                print(f"  {ship}: ", end="")
+                if dry_run:
+                    print("would rotate 180°")
+                else:
+                    if rotate_sprite(path, 180):
+                        print("rotated")
+                        processed["rotation"] += 1
+                    else:
+                        print("FAILED")
+            else:
+                print(f"  {ship}: file not found")
+
+    # Summary
+    print("\n--- Summary ---")
+    if dry_run:
+        bg_count = sum(len(ships) for ships in NEEDS_BACKGROUND_REMOVAL.values())
+        frame_count = sum(len(ships) for ships in NEEDS_FRAME_REMOVAL.values())
+        rot_count = sum(len(ships) for ships in NEEDS_ROTATION.values())
+        print(f"Would process: {bg_count} backgrounds, {frame_count} frames, {rot_count} rotations")
+    else:
+        print(f"Processed: {processed['background']} backgrounds, {processed['frame']} frames, {processed['rotation']} rotations")
+
+    # List sprites needing regeneration
+    print("\n--- Needs Regeneration (manual review) ---")
+    for faction, ships in NEEDS_REGENERATION.items():
+        for ship in ships:
+            print(f"  {faction}/{ship}")
 
 
 def check_forge_api() -> bool:
@@ -676,19 +1081,27 @@ def generate_image(
 
 
 def build_ship_prompt(faction: str, ship_id: str, ship_desc: str) -> tuple[str, str]:
-    """Build full prompt for a ship sprite"""
+    """Build full prompt for a ship sprite
+
+    Prompt order matters in SD - most important terms first:
+    1. View/perspective (bird's eye, aerial)
+    2. Base style (symmetry, centering, background)
+    3. Subject description
+    4. Faction aesthetics/colors
+    """
     faction_style = FACTION_STYLES[faction]
 
+    # Put perspective and critical style terms FIRST
     prompt = f"""
-    {ship_desc}, {faction_style['colors']}, {faction_style['aesthetic']},
     {BASE_STYLE},
-    spaceship hull design, spacecraft top-down sprite
+    {ship_desc}, {faction_style['colors']}, {faction_style['aesthetic']},
+    spaceship game icon, 2D sprite asset
     """
 
     negative_prompt = f"""
     {UNIVERSAL_NEGATIVE},
     {faction_style['negative']},
-    frame, border, UI elements, text overlay
+    frame, border, UI elements, text overlay, HUD
     """
 
     return prompt.strip(), negative_prompt.strip()
@@ -927,6 +1340,107 @@ def generate_all_portraits(
     print(f"\nGenerated {generated}/{total_chars} character portraits")
 
 
+def build_symbol_prompt(faction: str, variation: str) -> tuple:
+    """Build prompt for faction symbol generation"""
+    symbol_info = FACTION_SYMBOLS[faction]
+
+    # Adjust prompt based on variation
+    if variation == "minimal":
+        variation_mod = "ultra minimalist, simple shapes only, single iconic element, extremely clean"
+    elif variation == "alternate":
+        variation_mod = "alternate design, secondary motif, supporting elements"
+    else:  # primary
+        variation_mod = "main faction logo, primary insignia, most recognizable design"
+
+    prompt = f"""
+{SYMBOL_BASE_STYLE}
+{symbol_info['prompt']}
+{variation_mod}
+faction colors: {symbol_info['colors']}
+"""
+
+    negative = SYMBOL_NEGATIVE
+
+    return prompt.strip(), negative.strip()
+
+
+def generate_faction_symbols(
+    factions: Optional[list] = None,
+    dry_run: bool = False,
+    all_variations: bool = False
+):
+    """Generate faction symbols/emblems for all factions
+
+    Args:
+        factions: List of factions to generate (None = all)
+        dry_run: If True, only show what would be generated
+        all_variations: If True, generate all variations (primary, alternate, minimal)
+    """
+
+    if not check_forge_api():
+        print("ERROR: Forge WebUI API not available at", FORGE_API_URL)
+        print("Please ensure Forge WebUI is running with API enabled.")
+        return
+
+    factions_to_generate = factions or list(FACTION_SYMBOLS.keys())
+    config = GenerationConfig(width=512, height=512, cfg_scale=8.0, steps=35)
+
+    variations = SYMBOL_VARIATIONS if all_variations else ["primary"]
+    total_symbols = len(factions_to_generate) * len(variations)
+    generated = 0
+
+    print(f"Generating faction symbols...")
+    print(f"  Factions: {len(factions_to_generate)}")
+    print(f"  Variations: {variations}")
+    print(f"  Total: {total_symbols} symbols\n")
+
+    # Create symbols directory
+    SYMBOLS_DIR.mkdir(parents=True, exist_ok=True)
+
+    for faction in factions_to_generate:
+        symbol_info = FACTION_SYMBOLS[faction]
+        print(f"\n=== {symbol_info['name'].upper()} ===")
+
+        for variation in variations:
+            if all_variations:
+                output_path = SYMBOLS_DIR / f"{faction}_{variation}.png"
+            else:
+                output_path = SYMBOLS_DIR / f"{faction}.png"
+
+            if output_path.exists() and not dry_run:
+                print(f"  [SKIP] {variation} (exists)")
+                generated += 1
+                continue
+
+            prompt, negative = build_symbol_prompt(faction, variation)
+
+            if dry_run:
+                print(f"  [DRY] {variation}")
+                print(f"        Prompt: {prompt[:100]}...")
+                generated += 1
+                continue
+
+            print(f"  [GEN] {variation}...", end=" ", flush=True)
+
+            image_data = generate_image(prompt, negative, config, lora_name=None)
+
+            if image_data:
+                # Process background for clean black
+                if HAS_IMAGE_ANALYSIS:
+                    image_data = process_sprite_background(image_data)
+                with open(output_path, "wb") as f:
+                    f.write(image_data)
+                print("OK")
+                generated += 1
+            else:
+                print("FAILED")
+
+            time.sleep(1)
+
+    print(f"\nGenerated {generated}/{total_symbols} faction symbols")
+    print(f"Output directory: {SYMBOLS_DIR}")
+
+
 def list_resources():
     """List available models and LoRAs"""
     print("Checking Forge WebUI resources...\n")
@@ -1022,21 +1536,23 @@ def validate_existing_sprites(faction_filter: Optional[str] = None):
             is_valid, details = validate_sprite(image_data)
 
             sym = details.get("symmetry_score", "?")
+            csym = details.get("center_symmetry", "?")
             bg = details.get("background_ratio", "?")
             tilt = details.get("tilt_angle", "?")
+            ar = details.get("aspect_ratio", "?")
 
             if is_valid:
-                print(f"  [OK]   {ship_id} (sym:{sym}, bg:{bg}, tilt:{tilt}°)")
+                print(f"  [OK]   {ship_id} (sym:{sym}/{csym}, bg:{bg}, tilt:{tilt}°)")
                 results["valid"].append(ship_id)
             else:
                 reasons = []
                 if details.get("symmetry_fail"):
-                    reasons.append("LOW_SYMMETRY")
+                    reasons.append(f"SKEWED(c:{csym})")
                 if details.get("background_fail"):
                     reasons.append("NOISY_BG")
                 if details.get("tilt_fail"):
-                    reasons.append(f"TILTED({tilt}°)")
-                print(f"  [FAIL] {ship_id} (sym:{sym}, bg:{bg}, tilt:{tilt}°) - {', '.join(reasons)}")
+                    reasons.append(f"DIAGONAL({tilt}°)")
+                print(f"  [FAIL] {ship_id} (sym:{sym}/{csym}, bg:{bg}, tilt:{tilt}°) - {', '.join(reasons)}")
                 results["invalid"].append(ship_id)
 
     print(f"\n=== Summary ===")
@@ -1055,6 +1571,9 @@ def main():
     parser = argparse.ArgumentParser(description="Generate Shattered Stars sprites")
     parser.add_argument("--ships", action="store_true", help="Generate ship sprites")
     parser.add_argument("--portraits", action="store_true", help="Generate character portraits")
+    parser.add_argument("--symbols", action="store_true", help="Generate faction symbols/emblems")
+    parser.add_argument("--all-symbol-variations", action="store_true",
+                       help="Generate all symbol variations (primary, alternate, minimal)")
     parser.add_argument("--all", action="store_true", help="Generate everything")
     parser.add_argument("--faction", type=str, help="Only generate for specific faction")
     parser.add_argument("--lora", type=str, help="Override LoRA model for all factions")
@@ -1079,6 +1598,10 @@ def main():
                        help="Clean up existing sprite backgrounds (darken near-black pixels)")
     parser.add_argument("--clean-threshold", type=int, default=40,
                        help="Threshold for background cleaning (default: 40)")
+    parser.add_argument("--post-process", action="store_true",
+                       help="Post-process sprites (remove backgrounds, frames, rotate) - DRY RUN")
+    parser.add_argument("--apply", action="store_true",
+                       help="Actually apply post-processing changes (use with --post-process)")
 
     args = parser.parse_args()
 
@@ -1119,6 +1642,10 @@ def main():
         clean_sprite_backgrounds(args.faction, args.clean_threshold)
         return
 
+    if args.post_process:
+        post_process_sprites(dry_run=not args.apply)
+        return
+
     factions = [args.faction] if args.faction else None
     use_faction_loras = not args.no_faction_loras
 
@@ -1137,7 +1664,10 @@ def main():
     if args.all or args.portraits:
         generate_all_portraits(factions, args.lora, args.dry_run)
 
-    if not any([args.ships, args.portraits, args.all, args.list, args.check, args.validate_existing]):
+    if args.all or args.symbols:
+        generate_faction_symbols(factions, args.dry_run, args.all_symbol_variations)
+
+    if not any([args.ships, args.portraits, args.symbols, args.all, args.list, args.check, args.validate_existing]):
         parser.print_help()
 
 

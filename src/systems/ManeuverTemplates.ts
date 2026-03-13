@@ -135,7 +135,7 @@ export function applyManeuver(
   template: ManeuverTemplate
 ): { x: number; y: number; angle: number } {
   // Convert ship's facing angle to radians
-  const angleRad = (startAngle - 90) * (Math.PI / 180);
+  const angleRad = startAngle * (Math.PI / 180);
 
   // Rotate the template deltas by the ship's current facing
   const cos = Math.cos(angleRad);

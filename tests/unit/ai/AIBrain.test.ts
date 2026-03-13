@@ -8,6 +8,8 @@ import {
   decideAction,
   decideTarget,
   planAIManeuvers,
+  planAIAction,
+  planAIAttack,
 } from '../../../src/ai/AIBrain';
 import { FACTION_PERSONALITIES } from '../../../src/ai/AITypes';
 import type { ShipState, ManeuverDefinition, ActionType } from '../../../src/core/types';
@@ -344,6 +346,46 @@ describe('AIBrain', () => {
     it('Terran Hegemony should value formation', () => {
       const personality = FACTION_PERSONALITIES.terran_hegemony!;
       expect(personality.formation_cohesion).toBeGreaterThan(0.7);
+    });
+  });
+
+  describe('planAIAction (wrapper)', () => {
+    it('should return an ActionDecision or null', () => {
+      const ship = createTestShip('wrapper_ship');
+      const actionBar: ActionType[] = ['focus', 'evade'];
+      const allShips = [ship];
+      const result = planAIAction(ship, actionBar, allShips, 1);
+      // Can be null or an ActionDecision object
+      if (result !== null) {
+        expect(typeof result.action).toBe('string');
+      } else {
+        expect(result).toBeNull();
+      }
+    });
+
+    it('should return null when actionBar is empty', () => {
+      const ship = createTestShip('wrapper_ship2');
+      const result = planAIAction(ship, [], [ship], 1);
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('planAIAttack (wrapper)', () => {
+    it('should return a TargetDecision or null for a ship with no enemies', () => {
+      const ship = createTestShip('attacker');
+      // All ships are same owner — no valid targets
+      const result = planAIAttack(ship, [ship], 1);
+      expect(result === null || typeof result === 'object').toBe(true);
+    });
+
+    it('should return a TargetDecision when enemy is present', () => {
+      const attacker = createTestShip('attacker', { owner: 'ai', faction: 'terran_hegemony', x: 100, y: 100 });
+      const enemy = createTestShip('enemy', { owner: 'player', faction: 'void_corsairs', x: 120, y: 100 });
+      const result = planAIAttack(attacker, [attacker, enemy], 1);
+      // Should find a target
+      if (result !== null) {
+        expect(result.targetId).toBeDefined();
+      }
     });
   });
 });

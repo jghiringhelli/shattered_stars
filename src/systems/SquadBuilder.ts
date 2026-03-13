@@ -20,6 +20,7 @@ import {
   calculateUpgradesCost,
 } from './UpgradeSystem';
 import { PILOT_ABILITIES, type PilotAbility } from './PilotAbilities';
+import { SHIP_DEFINITIONS } from '../data/ShipDefinitions';
 
 // ============================================
 // Squad Building Constants
@@ -100,7 +101,7 @@ export interface SquadValidation {
 }
 
 export interface SquadError {
-  readonly type: 'over_points' | 'duplicate_unique' | 'invalid_faction' | 'invalid_upgrade' | 'missing_required';
+  readonly type: 'over_points' | 'duplicate_unique' | 'invalid_faction' | 'invalid_upgrade' | 'missing_required' | 'invalid_format';
   readonly message: string;
   readonly unitId?: string;
   readonly upgradeId?: string;
@@ -2857,6 +2858,18 @@ export function addUnitToSquad(
     }
   }
 
+  // Capital / huge ships are only allowed in epic format
+  const shipDef = SHIP_DEFINITIONS[pilot.shipId];
+  if (shipDef) {
+    const isHugeShip =
+      shipDef.baseStats.size === 'huge' || shipDef.role === 'capital';
+    if (isHugeShip && squad.format !== 'epic') {
+      return {
+        error: `${pilot.name} pilots a capital ship and requires epic format (current: ${squad.format})`,
+      };
+    }
+  }
+
   const newUnit: SquadUnit = {
     id: `unit_${nextUnitId++}`,
     pilotId,
@@ -3088,6 +3101,20 @@ export function validateSquad(squad: Squad): SquadValidation {
         message: `Pilot ${pilot.name} is not from faction ${squad.faction}`,
         unitId: unit.id,
       });
+    }
+
+    // Capital / huge ships only in epic format
+    const shipDef = SHIP_DEFINITIONS[pilot.shipId];
+    if (shipDef) {
+      const isHugeShip =
+        shipDef.baseStats.size === 'huge' || shipDef.role === 'capital';
+      if (isHugeShip && squad.format !== 'epic') {
+        errors.push({
+          type: 'invalid_format',
+          message: `${pilot.name} pilots a capital ship and requires epic format`,
+          unitId: unit.id,
+        });
+      }
     }
   }
 
@@ -3736,4 +3763,83 @@ export function getPresetSquads(faction: FactionId): Squad[] {
   }
 
   return presets;
+}
+
+// ============================================
+// Scene Integration Bridge
+// ============================================
+
+/**
+ * Configuration for a single ship as needed by battle scenes.
+ * Derives pilotSkill from the PILOT_CARDS initiative value so scenes
+ * don't need to import or inspect PILOT_CARDS directly.
+ */
+export interface SceneShipConfig {
+  readonly unitId: string;
+  readonly shipId: string;
+  readonly pilotId: string;
+  readonly pilotName: string;
+  readonly pilotSkill: number;       // 1–6 from PilotCard.initiative
+  readonly faction: FactionId;
+  readonly isUnique: boolean;
+  readonly equippedUpgrades: string[];
+  readonly pointCost: number;
+}
+
+/**
+ * Converts a Squad into an ordered list of SceneShipConfig objects ready
+ * to be handed to a battle scene. Ships are sorted by descending pilot skill
+ * (highest initiative first, matching how aces are typically deployed).
+ *
+ * Returns an empty array if the squad has no units.
+ */
+export function getSquadForScene(squad: Squad): SceneShipConfig[] {
+  const configs: SceneShipConfig[] = squad.units.map((unit) => {
+    const pilot = PILOT_CARDS[unit.pilotId];
+    return {
+      unitId: unit.id,
+      shipId: unit.shipId,
+      pilotId: unit.pilotId,
+      pilotName: pilot?.name ?? 'Unknown Pilot',
+      pilotSkill: pilot?.initiative ?? 1,
+      faction: squad.faction,
+      isUnique: pilot?.isUnique ?? false,
+      equippedUpgrades: [...unit.equippedUpgrades],
+      pointCost: calculateUnitCost(unit),
+    };
+  });
+
+  // Highest-skill pilots first (aces lead the charge)
+  return configs.sort((a, b) => b.pilotSkill - a.pilotSkill);
+}
+
+/**
+ * Look up a single pilot's scene config by pilot ID.
+ * Useful when building ships one-at-a-time rather than from a full squad.
+ */
+export function getPilotSceneConfig(
+  pilotId: string,
+  equippedUpgrades: string[] = []
+): SceneShipConfig | null {
+  const pilot = PILOT_CARDS[pilotId];
+  if (!pilot) return null;
+
+  const mockUnit: SquadUnit = {
+    id: pilotId,
+    pilotId,
+    shipId: pilot.shipId,
+    equippedUpgrades,
+  };
+
+  return {
+    unitId: pilotId,
+    shipId: pilot.shipId,
+    pilotId,
+    pilotName: pilot.name,
+    pilotSkill: pilot.initiative,
+    faction: pilot.faction,
+    isUnique: pilot.isUnique,
+    equippedUpgrades,
+    pointCost: calculateUnitCost(mockUnit),
+  };
 }

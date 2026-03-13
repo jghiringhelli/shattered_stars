@@ -30,8 +30,12 @@ import {
   executeReload,
   canReload,
   getArcRotationOptions,
+  executeCalculate,
+  executeReinforce,
+  executeSLAM,
+  type ReinforceDirection,
 } from '../../../src/systems/ActionsSystem';
-import type { ShipState, ActionType } from '../../../src/core/types';
+import type { ShipState, ActionType, ManeuverDefinition } from '../../../src/core/types';
 
 // Helper to create a minimal ship state for testing
 function createTestShip(
@@ -577,6 +581,89 @@ describe('ActionsSystem', () => {
     it('should deny reload when both stressed and at max', () => {
       const ship = createTestShip('a', { isStressed: true, charges: 3, maxCharges: 3 });
       expect(canReload(ship)).toBe(false);
+    });
+  });
+
+  describe('executeCalculate', () => {
+    it('should return success', () => {
+      const ship = createTestShip('calc_ship');
+      const result = executeCalculate(ship);
+      expect(result.success).toBe(true);
+      expect(result.action).toBe('calculate');
+    });
+
+    it('should set hasFocus in stateChanges', () => {
+      const ship = createTestShip('calc_ship');
+      const result = executeCalculate(ship);
+      expect(result.stateChanges.hasFocus).toBe(true);
+    });
+
+    it('message should reference ship id', () => {
+      const ship = createTestShip('calc_ship_99');
+      const result = executeCalculate(ship);
+      expect(result.message).toContain('calc_ship_99');
+    });
+  });
+
+  describe('executeReinforce', () => {
+    it('should return success for fore direction', () => {
+      const ship = createTestShip('reinforce_ship');
+      const result = executeReinforce(ship, 'fore');
+      expect(result.success).toBe(true);
+      expect(result.action).toBe('reinforce');
+    });
+
+    it('should return success for aft direction', () => {
+      const ship = createTestShip('reinforce_ship');
+      const result = executeReinforce(ship, 'aft');
+      expect(result.success).toBe(true);
+    });
+
+    it('message should reference ship id', () => {
+      const ship = createTestShip('r_ship_42');
+      const result = executeReinforce(ship, 'fore');
+      expect(result.message).toContain('r_ship_42');
+    });
+
+    it('should set hasEvade in stateChanges', () => {
+      const ship = createTestShip('r_ship');
+      const result = executeReinforce(ship, 'aft');
+      expect(result.stateChanges.hasEvade).toBe(true);
+    });
+  });
+
+  describe('executeSLAM', () => {
+    const forwardManeuver: ManeuverDefinition = {
+      direction: 'straight',
+      speed: 2,
+      difficulty: 'white',
+    };
+
+    it('should return success', () => {
+      const ship = createTestShip('slam_ship');
+      const result = executeSLAM(ship, forwardManeuver);
+      expect(result.success).toBe(true);
+      expect(result.action).toBe('slam');
+    });
+
+    it('should update ship position in stateChanges', () => {
+      const ship = createTestShip('slam_ship', { x: 0, y: 0, angle: 0 });
+      const result = executeSLAM(ship, forwardManeuver);
+      // Moving forward at speed 2 should change Y position
+      expect(typeof result.stateChanges.x).toBe('number');
+      expect(typeof result.stateChanges.y).toBe('number');
+    });
+
+    it('should update angle in stateChanges', () => {
+      const ship = createTestShip('slam_ship', { x: 0, y: 0, angle: 0 });
+      const result = executeSLAM(ship, forwardManeuver);
+      expect(typeof result.stateChanges.angle).toBe('number');
+    });
+
+    it('message should reference ship id', () => {
+      const ship = createTestShip('slam_ship_77');
+      const result = executeSLAM(ship, forwardManeuver);
+      expect(result.message).toContain('slam_ship_77');
     });
   });
 });
