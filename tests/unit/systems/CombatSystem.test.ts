@@ -280,6 +280,20 @@ describe('CombatSystem', () => {
       expect(modifiedEvades).toBeGreaterThanOrEqual(rolledEvades);
     });
 
+    it('should apply reinforce token as extra evade result', () => {
+      const contextWithReinforce: AttackContext = {
+        ...baseContext,
+        defenderIsReinforced: true,
+      };
+
+      const result = resolveAttack(contextWithReinforce, rng);
+
+      // Modified defense should have one more evade than rolled (from reinforce)
+      const rolledEvades = result.defenseRoll.filter((f) => f === 'evade').length;
+      const modifiedEvades = result.modifiedDefense.filter((f) => f === 'evade').length;
+      expect(modifiedEvades).toBeGreaterThanOrEqual(rolledEvades + 1);
+    });
+
     it('should convert focus results when attacker has focus', () => {
       const contextWithFocus: AttackContext = {
         ...baseContext,

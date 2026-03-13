@@ -315,7 +315,39 @@ describe('TurretSystem', () => {
       const rotated = autoRotateTurretToTarget(ship, target, turret, singleDef);
       expect(rotated.facing).toBe(180);
     });
-  });
+
+    it('single-arc turret should face non-cardinal target angle without snapping', () => {
+      // Target at 45° (northeast diagonal) — old code snapped to 0°, new code sets 45°
+      const ship = makeShip({ x: 0, y: 0, angle: 0 });
+      const target = makeShip({ id: 'target', x: 100, y: -100 }); // NE diagonal
+      const turret = makeTurret({ facing: 0 });
+
+      const rotated = autoRotateTurretToTarget(ship, target, turret, singleDef);
+      // Angle from ship to NE target in Phaser convention: atan2(100, -(-100)) = atan2(100,100) = 45°
+      expect(rotated.facing).toBeCloseTo(45, 0);
+    });
+
+    it('single-arc turret should face 135° target without snapping', () => {
+      const ship = makeShip({ x: 0, y: 0, angle: 0 });
+      const target = makeShip({ id: 'target', x: 100, y: 100 }); // SE diagonal
+      const turret = makeTurret({ facing: 0 });
+
+      const rotated = autoRotateTurretToTarget(ship, target, turret, singleDef);
+      expect(rotated.facing).toBeCloseTo(135, 0);
+    });
+
+    it('double-arc turret should still snap to 90° increments', () => {
+      const doubleDef = TURRET_DEFINITIONS['dorsal_turret']!;
+      const ship = makeShip({ x: 0, y: 0, angle: 0 });
+      const target = makeShip({ id: 'target', x: 100, y: -100 }); // NE, exact 45°
+      const turret = makeTurret({ definitionId: 'dorsal_turret', facing: 0 });
+
+      const rotated = autoRotateTurretToTarget(ship, target, turret, doubleDef);
+      // 45° snaps to nearest 90° increment (either 0 or 90)
+      expect([0, 90]).toContain(rotated.facing % 360);
+    });
+
+  }); // end describe('autoRotateTurretToTarget')
 
   describe('getTurretRotationOptions', () => {
     const singleDef = TURRET_DEFINITIONS['light_turret']!;

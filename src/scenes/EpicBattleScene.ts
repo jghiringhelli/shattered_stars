@@ -768,7 +768,8 @@ export class EpicBattleScene extends Phaser.Scene {
     container.shipId = ship.id;
 
     const color = FACTION_COLORS[ship.faction] ?? 0xffffff;
-    const size = SHIP_SIZES.small;
+    const shipDef = getShipDefinition(ship.definitionId);
+    const size = SHIP_SIZES[shipDef?.baseStats.size ?? 'small'];
 
     const body = this.add.graphics();
     body.fillStyle(color, 1);

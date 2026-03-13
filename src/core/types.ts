@@ -134,6 +134,7 @@ export interface ShipState {
   hasEvade: boolean;
   hasTargetLock: string | null; // ID of locked ship
   isCloaked: boolean;
+  isReinforced?: boolean; // Reinforce action token
 
   // Current maneuver (if executing)
   currentManeuver: ManeuverDefinition | null;

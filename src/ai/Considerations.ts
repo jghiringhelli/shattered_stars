@@ -80,7 +80,6 @@ export function createThreatAssessmentConsideration(
     name: 'threat_assessment',
     weight: 1.0,
     evaluate(context: AIContext): number {
-      const dist = distance(context.self.x, context.self.y, enemy.x, enemy.y);
       const range = calculateRangeBand(context.self.x, context.self.y, enemy.x, enemy.y);
 
       // Closer = more threatening

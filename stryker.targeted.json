@@ -1,0 +1,36 @@
+{
+  "$schema": "https://stryker-mutator.io/schemas/stryker-schema.json#",
+  "testRunner": "vitest",
+  "checkers": ["typescript"],
+  "tsconfigFile": "tsconfig.json",
+  "mutate": [
+    "src/systems/PilotAbilities.ts",
+    "src/systems/TurretSystem.ts",
+    "src/ai/AIBrain.ts",
+    "src/systems/CampaignSaveManager.ts",
+    "src/systems/OrdnanceSystem.ts",
+    "src/systems/UpgradeSystem.ts",
+    "src/ai/AIShipFactory.ts"
+  ],
+  "testFiles": [
+    "tests/unit/systems/PilotAbilities.test.ts",
+    "tests/unit/systems/TurretSystem.test.ts",
+    "tests/unit/ai/AIBrain.test.ts",
+    "tests/unit/systems/CampaignSaveManager.test.ts",
+    "tests/unit/systems/OrdnanceSystem.test.ts",
+    "tests/unit/systems/UpgradeSystem.test.ts",
+    "tests/unit/ai/AIShipFactory.test.ts",
+    "tests/unit/EdgeCases.test.ts"
+  ],
+  "tempDirName": "stryker-tmp",
+  "concurrency": 2,
+  "timeoutMS": 30000,
+  "timeoutFactor": 2,
+  "reporters": ["progress", "clear-text"],
+  "ignorePatterns": ["node_modules", "dist", "stryker-tmp"],
+  "coverageAnalysis": "perTest",
+  "plugins": [
+    "@stryker-mutator/vitest-runner",
+    "@stryker-mutator/typescript-checker"
+  ]
+}

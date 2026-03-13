@@ -257,6 +257,16 @@ describe('OrdnanceSystem', () => {
       }
     });
 
+    it('convertHitToCrit converts exactly 1 hit into a crit from all-hit rolls', () => {
+      // proton_torpedoes has 4 attackDice; roll 0.3 = hit (0.125 <= x < 0.5, no natural crits)
+      // After convertHitToCrit: attackDice-1 hits, 1 crit
+      const protonTorpedo = ORDNANCE_DEFINITIONS['proton_torpedoes']!;
+      const rng = makeSeededRng([0.3]);
+      const result = fireOrdnance(attacker, target, protonTorpedo, rng);
+      expect(result.hits).toBe(protonTorpedo.attackDice - 1); // 3
+      expect(result.crits).toBe(1);
+    });
+
     it('should include message in result', () => {
       const rng = makeSeededRng([0.3]);
       const result = fireOrdnance(attacker, target, concussionMissile, rng);
@@ -613,6 +623,19 @@ describe('OrdnanceSystem', () => {
       const def = ORDNANCE_DEFINITIONS['homing_missiles']!;
       expect(def.requiresFrontArc).toBe(false);
       expect(def.requiresTargetLock).toBe(true);
+    });
+
+    it('proton_torpedoes should have convertHitToCrit: true', () => {
+      const def = ORDNANCE_DEFINITIONS['proton_torpedoes']!;
+      expect(def.id).toBe('proton_torpedoes');
+      expect(def.convertHitToCrit).toBe(true);
+      expect(def.requiresTargetLock).toBe(true);
+      expect(def.type).toBe('torpedo');
+    });
+
+    it('concussion_missile should NOT have convertHitToCrit', () => {
+      const def = ORDNANCE_DEFINITIONS['concussion_missile']!;
+      expect(def.convertHitToCrit).toBeFalsy();
     });
   });
 

@@ -631,13 +631,11 @@ export function executeReinforce(
   ship: ShipState,
   _direction: ReinforceDirection
 ): ActionResult {
-  // In a full implementation, this would track the reinforce direction
-  // For now, we'll just indicate the ship is reinforced
   return {
     success: true,
     action: 'reinforce',
     message: `${ship.id} reinforced`,
-    stateChanges: { hasEvade: true }, // Simplified - reuse evade for now
+    stateChanges: { isReinforced: true },
   };
 }
 

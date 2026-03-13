@@ -581,7 +581,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
     container.shipId = ship.id;
 
     const color = FACTION_COLORS[ship.faction as FactionId] ?? 0xffffff;
-    const size = ship.owner === 'player' ? SHIP_SIZES.small * 1.2 : SHIP_SIZES.small;
+    const shipDef = getShipDefinition(ship.definitionId);
+    const baseSize = SHIP_SIZES[shipDef?.baseStats.size ?? 'small'];
+    const size = ship.owner === 'player' ? baseSize * 1.2 : baseSize;
 
     // Thruster glow
     const thruster = this.add.graphics();

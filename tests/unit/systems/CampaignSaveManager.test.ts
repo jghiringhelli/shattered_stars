@@ -104,6 +104,17 @@ describe('CampaignSaveManager', () => {
       // Should not throw
       expect(() => CampaignSaveManager.save(save)).not.toThrow();
     });
+
+    it('should not mutate the input data object when saving', () => {
+      const save = CampaignSaveManager.createNew('terran_hegemony');
+      // Force lastPlayed to a known past value
+      save.lastPlayed = 12345;
+
+      CampaignSaveManager.save(save);
+
+      // The original object's lastPlayed should be unchanged
+      expect(save.lastPlayed).toBe(12345);
+    });
   });
 
   describe('load', () => {

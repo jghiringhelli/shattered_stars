@@ -271,10 +271,50 @@ describe('PilotAbilities', () => {
       )).toBe(false);
     });
 
-    it('behind_target condition: should return false (simplified)', () => {
+    it('behind_target condition: should return false when no defender provided', () => {
       expect(isAbilityConditionMet(
         { type: 'behind_target' },
         { attacker }
+      )).toBe(false);
+    });
+
+    it('behind_target condition: true when attacker is directly behind defender', () => {
+      // Defender at (0,0) facing up (angle=0). "Behind" = south (y>0)
+      const defender = makeShip({ x: 0, y: 0, angle: 0 });
+      const behind = makeShip({ x: 0, y: 100 }); // behind in Phaser coords
+      expect(isAbilityConditionMet(
+        { type: 'behind_target' },
+        { attacker: behind, defender }
+      )).toBe(true);
+    });
+
+    it('behind_target condition: false when attacker is directly in front of defender', () => {
+      const defender = makeShip({ x: 0, y: 0, angle: 0 });
+      const front = makeShip({ x: 0, y: -100 }); // in front (north)
+      expect(isAbilityConditionMet(
+        { type: 'behind_target' },
+        { attacker: front, defender }
+      )).toBe(false);
+    });
+
+    it('behind_target condition: true when attacker is within 45° of rear arc', () => {
+      // Defender facing up. Rear is south (180°). Attacker at 44° off rear = within arc
+      const defender = makeShip({ x: 0, y: 0, angle: 0 });
+      // Angle from defender to attacker = 180 + 44 = 224°. sin(224°)*100 ≈ -69, cos(224°)*100 ≈ -72
+      const nearRear = makeShip({ x: -69, y: 72 }); // ~224° from defender
+      expect(isAbilityConditionMet(
+        { type: 'behind_target' },
+        { attacker: nearRear, defender }
+      )).toBe(true);
+    });
+
+    it('behind_target condition: false when attacker is beyond 45° of rear arc', () => {
+      // Defender facing up. Rear is south (180°). Attacker at 91° off rear = outside arc
+      const defender = makeShip({ x: 0, y: 0, angle: 0 });
+      const side = makeShip({ x: 100, y: 0 }); // angle 90° from defender → 90° off rear (180°) = outside ±45°
+      expect(isAbilityConditionMet(
+        { type: 'behind_target' },
+        { attacker: side, defender }
       )).toBe(false);
     });
 

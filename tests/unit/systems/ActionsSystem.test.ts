@@ -646,10 +646,10 @@ describe('ActionsSystem', () => {
       expect(result.message).toContain('r_ship_42');
     });
 
-    it('should set hasEvade in stateChanges', () => {
+    it('should set isReinforced in stateChanges', () => {
       const ship = createTestShip('r_ship');
       const result = executeReinforce(ship, 'aft');
-      expect(result.stateChanges.hasEvade).toBe(true);
+      expect(result.stateChanges.isReinforced).toBe(true);
     });
   });
 

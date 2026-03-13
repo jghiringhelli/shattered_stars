@@ -7,6 +7,7 @@
 
 import type { ShipState, ActionType } from '../core/types';
 import type { FactionId } from '../config';
+import { angleToTarget, isInArc } from './MovementSystem';
 
 // ============================================
 // Ability Categories
@@ -951,9 +952,15 @@ export function isAbilityConditionMet(
     case 'bullseye':
       return context.inBullseye === true;
 
-    case 'behind_target':
-      // Would need arc checking - simplified
-      return false;
+    case 'behind_target': {
+      if (!context.defender) return false;
+      // Attacker is "behind target" when in the defender's rear arc (±45° of defender's reverse facing)
+      const angleFromDefenderToAttacker = angleToTarget(
+        context.defender.x, context.defender.y,
+        context.attacker.x, context.attacker.y
+      );
+      return isInArc(context.defender.angle + 180, angleFromDefenderToAttacker, 90);
+    }
 
     case 'stressed':
       return context.attacker.isStressed;

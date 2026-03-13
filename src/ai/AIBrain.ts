@@ -26,9 +26,13 @@ import {
   createEvadeValueConsideration,
   createTargetLockValueConsideration,
 } from './Considerations';
-import { getValidManeuvers } from '../systems/MovementSystem';
+import { getValidManeuvers, angleToTarget } from '../systems/MovementSystem';
 import { getAvailableActions } from '../systems/ActionsSystem';
 import { getValidTargets } from '../systems/TargetingSystem';
+import {
+  type AIDifficultyLevel,
+  DIFFICULTY_SETTINGS,
+} from './AIDifficulty';
 
 // ============================================
 // Utility Calculation
@@ -68,7 +72,8 @@ export function decideManeuver(
   ship: ShipState,
   availableManeuvers: readonly ManeuverDefinition[],
   allShips: readonly ShipState[],
-  turnNumber: number
+  turnNumber: number,
+  difficulty: AIDifficultyLevel = 'normal'
 ): ManeuverDecision {
   const personality = getPersonality(ship.faction);
   const context = createContext(ship, allShips, turnNumber, personality);
@@ -83,6 +88,21 @@ export function decideManeuver(
       maneuver: { direction: 'straight', speed: 2, difficulty: 'white' },
       score: 0,
       reasoning: 'No valid maneuvers, using fallback',
+    };
+  }
+
+  const mods = DIFFICULTY_SETTINGS[difficulty];
+
+  // On lower difficulties, randomly pick a maneuver instead of the optimal one
+  if (Math.random() >= mods.maneuverQuality) {
+    const randomIndex = Math.floor(Math.random() * validManeuvers.length);
+    const randomManeuver = validManeuvers[randomIndex]!;
+    return {
+      type: 'maneuver',
+      shipId: ship.id,
+      maneuver: randomManeuver,
+      score: 0,
+      reasoning: `Random maneuver (difficulty: ${difficulty})`,
     };
   }
 
@@ -132,7 +152,8 @@ export function decideAction(
   ship: ShipState,
   actionBar: readonly ActionType[],
   allShips: readonly ShipState[],
-  turnNumber: number
+  turnNumber: number,
+  difficulty: AIDifficultyLevel = 'normal'
 ): ActionDecision | null {
   const personality = getPersonality(ship.faction);
   const context = createContext(ship, allShips, turnNumber, personality);
@@ -141,6 +162,32 @@ export function decideAction(
 
   if (availableActions.length === 0) {
     return null;
+  }
+
+  const mods = DIFFICULTY_SETTINGS[difficulty];
+
+  // On lower difficulties, randomly pick an action
+  if (Math.random() >= mods.decisionQuality) {
+    const randomIndex = Math.floor(Math.random() * availableActions.length);
+    const randomAction = availableActions[randomIndex]!;
+    const result: ActionDecision = {
+      type: 'action',
+      shipId: ship.id,
+      action: randomAction,
+      score: 0,
+      reasoning: `Random action (difficulty: ${difficulty})`,
+    };
+    // target_lock requires a valid target even in random mode
+    if (randomAction === 'target_lock') {
+      const targets = getValidTargets(ship, context.enemies, false);
+      if (targets.length > 0) {
+        const randomTarget = targets[Math.floor(Math.random() * targets.length)]!;
+        return { ...result, targetId: randomTarget.targetId };
+      }
+      // No valid targets — fall through to optimal path
+    } else {
+      return result;
+    }
   }
 
   const scored: Array<{ action: ActionType; score: number; targetId?: string }> = [];
@@ -177,10 +224,10 @@ export function decideAction(
 
       case 'barrel_roll':
       case 'boost': {
-        // Repositioning actions - value based on positioning needs
+        // Repositioning actions - value based on positioning needs (using correct angle convention)
         const needsReposition =
           context.enemies.some((e) => {
-            const angle = Math.atan2(e.y - ship.y, e.x - ship.x) * 180 / Math.PI;
+            const angle = angleToTarget(ship.x, ship.y, e.x, e.y);
             return Math.abs(angle - ship.angle) > 60;
           });
         scored.push({ action, score: needsReposition ? 0.5 : 0.2 });
@@ -221,7 +268,8 @@ export function decideAction(
 export function decideTarget(
   ship: ShipState,
   allShips: readonly ShipState[],
-  turnNumber: number
+  turnNumber: number,
+  difficulty: AIDifficultyLevel = 'normal'
 ): TargetDecision | null {
   const personality = getPersonality(ship.faction);
   const context = createContext(ship, allShips, turnNumber, personality);
@@ -230,6 +278,21 @@ export function decideTarget(
 
   if (validTargets.length === 0) {
     return null;
+  }
+
+  const mods = DIFFICULTY_SETTINGS[difficulty];
+
+  // On lower difficulties, randomly pick a target
+  if (Math.random() >= mods.targetSelectionQuality) {
+    const randomIndex = Math.floor(Math.random() * validTargets.length);
+    const randomTarget = validTargets[randomIndex]!;
+    return {
+      type: 'target',
+      shipId: ship.id,
+      targetId: randomTarget.targetId,
+      score: 0,
+      reasoning: `Random target (difficulty: ${difficulty})`,
+    };
   }
 
   // Score each target

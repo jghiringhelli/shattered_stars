@@ -62,9 +62,9 @@ export const CampaignSaveManager = {
    */
   save(data: CampaignSaveData): void {
     try {
-      data.lastPlayed = Date.now();
-      const key = SAVE_KEY_PREFIX + data.factionId;
-      localStorage.setItem(key, JSON.stringify(data));
+      const toSave = { ...data, lastPlayed: Date.now() };
+      const key = SAVE_KEY_PREFIX + toSave.factionId;
+      localStorage.setItem(key, JSON.stringify(toSave));
     } catch (e) {
       console.error('Failed to save campaign:', e);
     }

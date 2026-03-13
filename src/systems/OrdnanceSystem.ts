@@ -46,6 +46,7 @@ export interface OrdnanceDefinition {
   readonly bonusDamage?: number; // Extra damage on hit
   readonly ionTokens?: number; // Ion tokens applied
   readonly tractorValue?: number; // Tractor beam strength
+  readonly convertHitToCrit?: boolean; // Change 1 hit to a crit on hit
 
   // Point cost for squad building
   readonly pointCost: number;
@@ -141,6 +142,7 @@ export const ORDNANCE_DEFINITIONS: Record<string, OrdnanceDefinition> = {
     requiresFrontArc: true,
     requiresBullseye: false,
     bonusDamage: 1,
+    convertHitToCrit: true,
     pointCost: 9,
     description: 'Change 1 hit to a crit. Deal 1 bonus damage',
   },
@@ -411,8 +413,8 @@ export function fireOrdnance(
     // else focus (2/8) or blank (2/8)
   }
 
-  // Proton torpedoes: convert 1 hit to crit
-  if (ordnance.id === 'proton_torpedoes' && hits > 0) {
+  // If ordnance converts hits to crits, change 1 hit to a crit
+  if (ordnance.convertHitToCrit && hits > 0) {
     hits--;
     crits++;
   }

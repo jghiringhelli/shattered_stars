@@ -326,9 +326,8 @@ export function autoRotateTurretToTarget(
     // Snap to nearest 90° increment
     snappedFacing = Math.round(relativeFacing / 90) * 90;
   } else {
-    // Single turrets can face any direction
-    // Snap to nearest 90° for simplicity
-    snappedFacing = Math.round(relativeFacing / 90) * 90;
+    // Single turrets can face any direction - no snapping needed
+    snappedFacing = relativeFacing;
   }
 
   return rotateTurret(turret, snappedFacing);

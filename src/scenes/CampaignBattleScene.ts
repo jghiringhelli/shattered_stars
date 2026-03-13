@@ -61,6 +61,8 @@ export class CampaignBattleScene extends Phaser.Scene {
   private missionStartTime = 0;
   private totalKills = 0;
   private playerShipsLost = 0;
+  private previousEnemyCount = 0;
+  private previousPlayerCount = 0;
   private pendingEnemySpawns: { enemy: MissionEnemy; spawnAt: number }[] = [];
   private missionComplete = false;
   private missionFailed = false;
@@ -99,6 +101,8 @@ export class CampaignBattleScene extends Phaser.Scene {
     // Reset mission stats
     this.totalKills = 0;
     this.playerShipsLost = 0;
+    this.previousEnemyCount = 0;
+    this.previousPlayerCount = 0;
     this.missionComplete = false;
     this.missionFailed = false;
     this.pendingEnemySpawns = [];
@@ -173,6 +177,14 @@ export class CampaignBattleScene extends Phaser.Scene {
       this.createShipSprite(ship);
     }
 
+    // Seed previous counts so first onBattleStateChange doesn't falsely count kills
+    for (const ship of state.ships.values()) {
+      if (ship.hull > 0) {
+        if (ship.owner === 'ai') this.previousEnemyCount++;
+        else this.previousPlayerCount++;
+      }
+    }
+
     // Center camera
     this.cameras.main.centerOn(500, 500);
     this.cameras.main.setZoom(0.9);
@@ -219,7 +231,6 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.addLogMessage(`Enemy reinforcements incoming!`);
 
     // Create new enemy ships through battle manager
-    const state = this.battleManager.getState();
 
     for (let i = 0; i < enemy.count; i++) {
       const shipId = `reinforcement_${Date.now()}_${i}`;
@@ -277,7 +288,7 @@ export class CampaignBattleScene extends Phaser.Scene {
         maneuverProgress: 0,
       };
 
-      state.ships.set(shipId, newShip);
+      this.battleManager.addShip(newShip);
       this.createShipSprite(newShip);
     }
   }
@@ -878,22 +889,25 @@ export class CampaignBattleScene extends Phaser.Scene {
   }
 
   private onBattleStateChange(state: BattleState): void {
-    // Track kills
+    // Track kills by comparing live ship counts to previous values
     let currentEnemyCount = 0;
     let currentPlayerCount = 0;
 
     for (const ship of state.ships.values()) {
       if (ship.hull > 0) {
-        if (ship.owner === 'ai') {
-          currentEnemyCount++;
-        } else {
-          currentPlayerCount++;
-        }
+        if (ship.owner === 'ai') currentEnemyCount++;
+        else currentPlayerCount++;
       }
     }
 
-    // Calculate kills from ship count changes
-    // (This is simplified - in real implementation track destroyed events)
+    if (this.previousEnemyCount > 0) {
+      this.totalKills += Math.max(0, this.previousEnemyCount - currentEnemyCount);
+    }
+    if (this.previousPlayerCount > 0) {
+      this.playerShipsLost += Math.max(0, this.previousPlayerCount - currentPlayerCount);
+    }
+    this.previousEnemyCount = currentEnemyCount;
+    this.previousPlayerCount = currentPlayerCount;
 
     // Update turn/phase display
     this.turnText.setText(`Turn ${state.turnState.turnNumber}`);
@@ -934,14 +948,6 @@ export class CampaignBattleScene extends Phaser.Scene {
     const lines = this.logText.text.split('\n').slice(-5);
     lines.push(msg);
     this.logText.setText(lines.join('\n'));
-
-    // Track kill messages
-    if (msg.toLowerCase().includes('destroyed') && msg.toLowerCase().includes('enemy')) {
-      this.totalKills++;
-    }
-    if (msg.toLowerCase().includes('destroyed') && msg.toLowerCase().includes('player')) {
-      this.playerShipsLost++;
-    }
   }
 
   private showManeuverUI(): void {
@@ -1115,7 +1121,8 @@ export class CampaignBattleScene extends Phaser.Scene {
     // Ship body (triangle)
     const body = this.add.graphics();
     const color = FACTION_COLORS[ship.faction as FactionId] ?? 0xffffff;
-    const size = SHIP_SIZES.small;
+    const shipDef = getShipDefinition(ship.definitionId);
+    const size = SHIP_SIZES[shipDef?.baseStats.size ?? 'small'];
 
     body.fillStyle(color, 1);
     body.beginPath();

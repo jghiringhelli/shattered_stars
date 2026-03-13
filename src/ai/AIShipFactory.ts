@@ -42,6 +42,13 @@ export interface AISquadConfig {
 let nextShipId = 1000; // Start AI ships at 1000 to avoid player ID conflicts
 
 /**
+ * Reset the ship ID counter — call at the start of each new battle to prevent ID drift
+ */
+export function resetShipIdCounter(startFrom: number = 1000): void {
+  nextShipId = startFrom;
+}
+
+/**
  * Create a single AI ship with loadout
  */
 export function createAIShip(

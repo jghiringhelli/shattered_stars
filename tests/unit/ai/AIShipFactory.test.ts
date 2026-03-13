@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   createAIShip,
   createAISquad,
   createMissionWaves,
   spawnWave,
+  resetShipIdCounter,
   type AIShipConfig,
   type AISquadConfig,
 } from '../../../src/ai/AIShipFactory';
@@ -225,6 +226,49 @@ describe('AIShipFactory', () => {
         if (aiShip) {
           expect(aiShip.faction).toBe(id);
         }
+      }
+    });
+  });
+
+  describe('resetShipIdCounter', () => {
+    beforeEach(() => {
+      // Restore a known state before each test in this block
+      resetShipIdCounter(1000);
+    });
+
+    it('should reset the counter so new ships get IDs from the reset point', () => {
+      resetShipIdCounter(5000);
+      const config: AIShipConfig = { shipId: 'terran_viper' };
+      const ship1 = createAIShip(config, 'terran_hegemony', 'normal');
+      const ship2 = createAIShip(config, 'terran_hegemony', 'normal');
+
+      expect(ship1).not.toBeNull();
+      expect(ship2).not.toBeNull();
+      if (ship1 && ship2) {
+        expect(ship1.id).toBe('ai_ship_5000');
+        expect(ship2.id).toBe('ai_ship_5001');
+      }
+    });
+
+    it('should default to 1000 when no argument provided', () => {
+      resetShipIdCounter();
+      const config: AIShipConfig = { shipId: 'terran_viper' };
+      const ship = createAIShip(config, 'terran_hegemony', 'normal');
+
+      expect(ship).not.toBeNull();
+      if (ship) {
+        expect(ship.id).toBe('ai_ship_1000');
+      }
+    });
+
+    it('should allow setting any positive starting value', () => {
+      resetShipIdCounter(42);
+      const config: AIShipConfig = { shipId: 'terran_viper' };
+      const ship = createAIShip(config, 'terran_hegemony', 'normal');
+
+      expect(ship).not.toBeNull();
+      if (ship) {
+        expect(ship.id).toBe('ai_ship_42');
       }
     });
   });

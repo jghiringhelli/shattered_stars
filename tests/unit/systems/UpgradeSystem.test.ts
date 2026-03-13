@@ -157,6 +157,18 @@ describe('getDefaultUpgradeSlots', () => {
       expect(slots).toContain('missile');
     });
 
+    it('medium non-bomber should NOT get torpedo or bomb slots', () => {
+      const slots = getDefaultUpgradeSlots('medium', 'heavy_fighter');
+      expect(slots).not.toContain('torpedo');
+      expect(slots).not.toContain('bomb');
+    });
+
+    it('medium non-gunship/fighter should NOT get cannon or turret', () => {
+      const slots = getDefaultUpgradeSlots('medium', 'bomber');
+      expect(slots).not.toContain('cannon');
+      expect(slots).not.toContain('turret');
+    });
+
     it('medium support does not get cannon', () => {
       const slots = getDefaultUpgradeSlots('medium', 'support');
       expect(slots).not.toContain('cannon');
@@ -195,16 +207,48 @@ describe('getDefaultUpgradeSlots', () => {
   });
 
   describe('edge cases', () => {
-    it('tiny ship (unrecognized size) returns modification and talent', () => {
-      const slots = getDefaultUpgradeSlots('tiny' as 'small', 'light_fighter');
+    it('tiny ship returns modification and talent base slots', () => {
+      const slots = getDefaultUpgradeSlots('tiny', 'heavy_fighter');
       expect(slots).toContain('modification');
       expect(slots).toContain('talent');
     });
 
-    it('huge ship (unrecognized size) returns modification and talent', () => {
-      const slots = getDefaultUpgradeSlots('huge' as 'small', 'capital');
-      expect(slots).toContain('modification');
-      expect(slots).toContain('talent');
+    it('tiny interceptor gets missile slot', () => {
+      const slots = getDefaultUpgradeSlots('tiny', 'interceptor');
+      expect(slots).toContain('missile');
+    });
+
+    it('tiny light_fighter gets missile slot', () => {
+      const slots = getDefaultUpgradeSlots('tiny', 'light_fighter');
+      expect(slots).toContain('missile');
+    });
+
+    it('tiny heavy_fighter does not get missile slot', () => {
+      const slots = getDefaultUpgradeSlots('tiny', 'heavy_fighter');
+      expect(slots).not.toContain('missile');
+    });
+
+    it('huge capital gets full slot set with configuration', () => {
+      const slots = getDefaultUpgradeSlots('huge', 'capital');
+      expect(slots).toContain('sensor');
+      expect(slots).toContain('crew');
+      expect(slots).toContain('gunner');
+      expect(slots).toContain('tech');
+      expect(slots).toContain('cannon');
+      expect(slots).toContain('turret');
+      expect(slots).toContain('torpedo');
+      expect(slots).toContain('bomb');
+      expect(slots).toContain('configuration');
+      // Should have multiple crew, gunner, etc.
+      expect(slots.filter(s => s === 'crew').length).toBe(3);
+      expect(slots.filter(s => s === 'cannon').length).toBe(2);
+      expect(slots.filter(s => s === 'configuration').length).toBe(2);
+    });
+
+    it('huge non-capital does not get configuration slot', () => {
+      const slots = getDefaultUpgradeSlots('huge', 'gunship');
+      expect(slots).not.toContain('configuration');
+      expect(slots).toContain('cannon'); // Still has weapons
     });
   });
 });
@@ -324,6 +368,14 @@ describe('purchaseUpgrade', () => {
     expect(result).toBeNull();
   });
 
+  it('should allow purchase when credits exactly equal upgrade cost', () => {
+    // hull_upgrade costs 150 — exactly matching credits should succeed
+    const state = makeShop(150);
+    const result = purchaseUpgrade(state, 'hull_upgrade');
+    expect(result).not.toBeNull();
+    expect(result!.playerCredits).toBe(0); // spent all credits
+  });
+
   it('should return null when upgrade already owned', () => {
     const state = makeShop(500, ['hull_upgrade']);
     const result = purchaseUpgrade(state, 'hull_upgrade');
@@ -426,6 +478,7 @@ describe('canEquipUpgrade', () => {
     );
     expect(result.valid).toBe(false);
     expect(result.reason).toContain('medium');
+    expect(result.reason).toContain(' or '); // Checks join separator, not just value
   });
 
   it('should allow array required size when ship size is in array', () => {

@@ -8,6 +8,7 @@ import Phaser from 'phaser';
 
 export class CreditsScene extends Phaser.Scene {
   private creditsContainer!: Phaser.GameObjects.Container;
+  private creditsTotalHeight = 0;
   private scrollSpeed = 0.5;
 
   constructor() {
@@ -28,7 +29,7 @@ export class CreditsScene extends Phaser.Scene {
     this.creditsContainer.y -= this.scrollSpeed;
 
     // Reset when fully scrolled
-    if (this.creditsContainer.y < -this.creditsContainer.height) {
+    if (this.creditsContainer.y < -this.creditsTotalHeight) {
       this.creditsContainer.y = this.scale.height;
     }
   }
@@ -180,7 +181,7 @@ export class CreditsScene extends Phaser.Scene {
       this.creditsContainer.add(text);
     });
 
-    this.creditsContainer.height = y;
+    this.creditsTotalHeight = y;
   }
 
   private createBackButton(): void {

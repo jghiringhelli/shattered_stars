@@ -174,6 +174,7 @@ export interface AttackContext {
   readonly defenseDice: number;
   readonly defenderHasFocus: boolean;
   readonly defenderHasEvadeToken: boolean;
+  readonly defenderIsReinforced?: boolean;
   readonly defenderShields: number;
   readonly defenderHull: number;
 
@@ -247,6 +248,11 @@ export function resolveAttack(
 
   // Evade token adds one evade result
   if (context.defenderHasEvadeToken) {
+    modifiedDefense.push('evade');
+  }
+
+  // Reinforce token adds one evade result (bonus defense die)
+  if (context.defenderIsReinforced) {
     modifiedDefense.push('evade');
   }
 

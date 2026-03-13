@@ -2,7 +2,7 @@
  * Tests for AI Brain
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   decideManeuver,
   decideAction,
@@ -120,7 +120,7 @@ describe('AIBrain', () => {
         y: 300, // Far ahead
       });
 
-      const decision = decideManeuver(ship, STANDARD_DIAL, [ship, enemy], 1);
+      const decision = decideManeuver(ship, STANDARD_DIAL, [ship, enemy], 1, 'brutal');
 
       // Should choose a forward maneuver
       expect(['straight', 'bank_left', 'bank_right']).toContain(
@@ -136,7 +136,7 @@ describe('AIBrain', () => {
         y: 450, // Close and ahead
       });
 
-      const decision = decideManeuver(ship, STANDARD_DIAL, [ship, enemy], 1);
+      const decision = decideManeuver(ship, STANDARD_DIAL, [ship, enemy], 1, 'brutal');
 
       // Should avoid red maneuvers even when not stressed
       // (Ascendant Empire has low stress tolerance)
@@ -258,7 +258,8 @@ describe('AIBrain', () => {
       const decision = decideTarget(
         ship,
         [ship, healthyEnemy, damagedEnemy],
-        1
+        1,
+        'brutal'
       );
 
       expect(decision).not.toBeNull();
@@ -279,7 +280,7 @@ describe('AIBrain', () => {
         y: 300, // Range 2
       });
 
-      const decision = decideTarget(ship, [ship, closeEnemy, farEnemy], 1);
+      const decision = decideTarget(ship, [ship, closeEnemy, farEnemy], 1, 'brutal');
 
       expect(decision).not.toBeNull();
       expect(decision!.targetId).toBe('close');
@@ -387,5 +388,95 @@ describe('AIBrain', () => {
         expect(result.targetId).toBeDefined();
       }
     });
+  });
+});
+
+describe('AIBrain difficulty integration', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('brutal difficulty always uses optimal reasoning for maneuver', () => {
+    const ship = createTestShip('ai1');
+    const enemy = createTestShip('e1', { faction: 'free_confederation', x: 500, y: 300 });
+
+    // Force random to high value (would trigger random path for normal/easy)
+    vi.spyOn(Math, 'random').mockReturnValue(0.99);
+
+    const decision = decideManeuver(ship, STANDARD_DIAL, [ship, enemy], 1, 'brutal');
+    expect(decision.reasoning).toMatch(/^Best maneuver:/);
+  });
+
+  it('easy difficulty uses random reasoning when Math.random is high', () => {
+    const ship = createTestShip('ai2');
+    const enemy = createTestShip('e2', { faction: 'free_confederation', x: 500, y: 300 });
+
+    // Force random to high value → will always trigger random path (0.99 >= 0.4 for easy)
+    vi.spyOn(Math, 'random').mockReturnValue(0.99);
+
+    const decision = decideManeuver(ship, STANDARD_DIAL, [ship, enemy], 1, 'easy');
+    expect(decision.reasoning).toContain('Random maneuver');
+  });
+
+  it('easy difficulty uses optimal reasoning when Math.random is low', () => {
+    const ship = createTestShip('ai3');
+    const enemy = createTestShip('e3', { faction: 'free_confederation', x: 500, y: 300 });
+
+    // Force random to low value → will NOT trigger random path (0.01 >= 0.4 is false)
+    vi.spyOn(Math, 'random').mockReturnValue(0.01);
+
+    const decision = decideManeuver(ship, STANDARD_DIAL, [ship, enemy], 1, 'easy');
+    expect(decision.reasoning).toMatch(/^Best maneuver:/);
+  });
+
+  it('brutal difficulty always uses optimal reasoning for action', () => {
+    const ship = createTestShip('ai4');
+    const enemy = createTestShip('e4', { faction: 'free_confederation', x: 500, y: 420 });
+
+    vi.spyOn(Math, 'random').mockReturnValue(0.99);
+
+    const decision = decideAction(ship, STANDARD_ACTIONS, [ship, enemy], 1, 'brutal');
+    expect(decision?.reasoning).toMatch(/^Best action:/);
+  });
+
+  it('easy difficulty uses random reasoning for action when Math.random is high', () => {
+    const ship = createTestShip('ai5');
+    const enemy = createTestShip('e5', { faction: 'free_confederation', x: 500, y: 420 });
+
+    vi.spyOn(Math, 'random').mockReturnValue(0.99);
+
+    const decision = decideAction(ship, STANDARD_ACTIONS, [ship, enemy], 1, 'easy');
+    expect(decision?.reasoning).toContain('Random action');
+  });
+
+  it('brutal difficulty always uses optimal reasoning for target', () => {
+    const ship = createTestShip('ai6');
+    const enemy = createTestShip('e6', { faction: 'free_confederation', x: 500, y: 420 });
+
+    vi.spyOn(Math, 'random').mockReturnValue(0.99);
+
+    const decision = decideTarget(ship, [ship, enemy], 1, 'brutal');
+    expect(decision?.reasoning).toMatch(/^Best target:/);
+  });
+
+  it('easy difficulty uses random reasoning for target when Math.random is high', () => {
+    const ship = createTestShip('ai7');
+    const enemy = createTestShip('e7', { faction: 'free_confederation', x: 500, y: 420 });
+
+    vi.spyOn(Math, 'random').mockReturnValue(0.99);
+
+    const decision = decideTarget(ship, [ship, enemy], 1, 'easy');
+    expect(decision?.reasoning).toContain('Random target');
+  });
+
+  it('decideManeuver returns a valid maneuver even on easy difficulty', () => {
+    const ship = createTestShip('ai8');
+    const enemy = createTestShip('e8', { faction: 'free_confederation', x: 500, y: 300 });
+
+    vi.spyOn(Math, 'random').mockReturnValue(0.99);
+
+    const decision = decideManeuver(ship, STANDARD_DIAL, [ship, enemy], 1, 'easy');
+    expect(decision.maneuver).toBeDefined();
+    expect(STANDARD_DIAL.map(m => m.direction)).toContain(decision.maneuver.direction);
   });
 });

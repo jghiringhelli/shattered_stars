@@ -618,6 +618,12 @@ export function getDefaultUpgradeSlots(
 
   // Size-based slots
   switch (size) {
+    case 'tiny':
+      if (role === 'interceptor' || role === 'light_fighter') {
+        slots.push('missile');
+      }
+      break;
+
     case 'small':
       slots.push('sensor');
       if (role === 'interceptor' || role === 'light_fighter') {
@@ -643,6 +649,14 @@ export function getDefaultUpgradeSlots(
       slots.push('cannon', 'turret', 'missile', 'torpedo');
       if (role === 'capital') {
         slots.push('bomb', 'configuration');
+      }
+      break;
+
+    case 'huge':
+      slots.push('sensor', 'crew', 'crew', 'crew', 'gunner', 'gunner', 'tech', 'tech');
+      slots.push('cannon', 'cannon', 'turret', 'turret', 'missile', 'torpedo', 'bomb');
+      if (role === 'capital') {
+        slots.push('configuration', 'configuration');
       }
       break;
   }

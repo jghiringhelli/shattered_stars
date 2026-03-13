@@ -182,6 +182,12 @@ export class BattleManager {
     this.onLog = callback;
   }
 
+  addShip(ship: ShipState): void {
+    const ships = new Map(this.state.ships);
+    ships.set(ship.id, ship);
+    this.updateState({ ships });
+  }
+
   private updateState(updates: Partial<BattleState>): void {
     this.state = { ...this.state, ...updates };
     this.onStateChange?.(this.state);
