@@ -114,6 +114,8 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private createMenuItems(): void {
+    this.menuItems = [];  // reset on every create() to avoid stale refs after scene restart
+    this.selectedIndex = 0;
     const centerX = this.scale.width / 2;
     const startY = 250;
     const spacing = 55;

@@ -2,16 +2,18 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
+  globalSetup: './tests/e2e/global-setup.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.CI ? 1 : 4, // limit to 4 to avoid overwhelming dev server
   reporter: 'list',
   use: {
     baseURL: 'http://localhost:3003',
     trace: 'on-first-retry',
     screenshot: 'on',
   },
+  timeout: 90_000, // per-test timeout (cold Vite boot + 4 parallel workers can take ~50s)
   projects: [
     {
       name: 'chromium',
@@ -22,6 +24,6 @@ export default defineConfig({
     command: 'npm run dev -- --port 3003',
     url: 'http://localhost:3003',
     reuseExistingServer: true,
-    timeout: 30000,
+    timeout: 120_000, // Vite cold TypeScript compilation can take > 30s
   },
 });
