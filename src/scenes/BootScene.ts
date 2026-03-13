@@ -47,6 +47,28 @@ export class BootScene extends Phaser.Scene {
 
     // Load pilot portrait images for campaign debrief
     this.loadPortraitImages();
+
+    // Fallback: if portrait_command.png fails to load, generate programmatic placeholder
+    this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+      if (!this.textures.exists('portrait_command')) {
+        const g = this.make.graphics({ x: 0, y: 0 });
+        g.fillStyle(0x0a1a3a, 1);
+        g.fillRect(0, 0, 128, 128);
+        g.fillStyle(0x4488cc, 1);
+        const cx = 64, cy = 56, r = 28;
+        for (let i = 0; i < 5; i++) {
+          const a  = (i * 72 - 90) * (Math.PI / 180);
+          const ia = ((i * 72 + 36) - 90) * (Math.PI / 180);
+          g.fillTriangle(
+            cx + Math.cos(a) * r,           cy + Math.sin(a) * r,
+            cx + Math.cos(ia) * (r * 0.4),  cy + Math.sin(ia) * (r * 0.4),
+            cx,                              cy + r * 0.15
+          );
+        }
+        g.generateTexture('portrait_command', 128, 128);
+        g.destroy();
+      }
+    });
   }
 
   create(): void {
@@ -161,33 +183,17 @@ export class BootScene extends Phaser.Scene {
     graphics.lineStyle(2, 0x00ff00, 1);
     graphics.strokeCircle(20, 20, 18);
     graphics.generateTexture('selection_indicator', 40, 40);
-
-    // Portrait placeholder for COMMAND (dark blue rect with star)
-    graphics.clear();
-    graphics.fillStyle(0x0a1a3a, 1);
-    graphics.fillRect(0, 0, 128, 128);
-    graphics.fillStyle(0x4488cc, 1);
-    graphics.lineStyle(2, 0x4488cc, 1);
-    // Draw a simple 5-pointed star shape using fillTriangle
-    const cx = 64;
-    const cy = 56;
-    const r = 28;
-    for (let i = 0; i < 5; i++) {
-      const angle = (i * 72 - 90) * (Math.PI / 180);
-      const innerAngle = ((i * 72 + 36) - 90) * (Math.PI / 180);
-      graphics.fillTriangle(
-        cx + Math.cos(angle) * r, cy + Math.sin(angle) * r,
-        cx + Math.cos(innerAngle) * (r * 0.4), cy + Math.sin(innerAngle) * (r * 0.4),
-        cx, cy + r * 0.15
-      );
-    }
-    graphics.generateTexture('portrait_command', 128, 128);
+    // portrait_command is handled in loadPortraitImages() — PNG file preferred,
+    // programmatic fallback generated in the load.once('complete') handler.
   }
 
   /**
    * Load pilot portrait PNG images for campaign debrief scenes
    */
   private loadPortraitImages(): void {
+    // COMMAND speaker portrait — real PNG preferred, fallback generated after complete
+    this.load.image('portrait_command', 'assets/portraits/portrait_command.png');
+
     // Terran Hegemony
     this.load.image('portrait_admiral_chen', 'assets/portraits/terran_hegemony/admiral_chen.png');
     this.load.image('portrait_striker',      'assets/portraits/terran_hegemony/striker.png');
