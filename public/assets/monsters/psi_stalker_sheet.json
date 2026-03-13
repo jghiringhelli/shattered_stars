@@ -1,0 +1,27 @@
+{
+  "monster_id": "psi_stalker",
+  "frame_width": 48,
+  "frame_height": 48,
+  "states": {
+    "idle": {
+      "row": 0,
+      "frames": 2,
+      "y": 0
+    },
+    "attack": {
+      "row": 1,
+      "frames": 4,
+      "y": 48
+    },
+    "damaged": {
+      "row": 2,
+      "frames": 2,
+      "y": 96
+    },
+    "death": {
+      "row": 3,
+      "frames": 4,
+      "y": 144
+    }
+  }
+}

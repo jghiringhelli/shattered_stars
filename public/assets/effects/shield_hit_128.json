@@ -1,0 +1,8 @@
+{
+  "effect": "shield_hit",
+  "size": 128,
+  "frames": 6,
+  "frame_width": 128,
+  "frame_height": 128,
+  "loop": false
+}

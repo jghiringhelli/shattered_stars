@@ -1,0 +1,147 @@
+{
+  "faction": "synthetic_collective",
+  "width": 2048,
+  "height": 128,
+  "sprites": [
+    {
+      "id": "synth_arc",
+      "x": 0,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "synth_assault",
+      "x": 64,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "synth_conduit",
+      "x": 128,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "synth_coordinator",
+      "x": 192,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "synth_devastator",
+      "x": 256,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "synth_fortress",
+      "x": 320,
+      "y": 0,
+      "w": 128,
+      "h": 128
+    },
+    {
+      "id": "synth_guardian",
+      "x": 448,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "synth_gunboat",
+      "x": 512,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "synth_hunter",
+      "x": 576,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "synth_interceptor",
+      "x": 640,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "synth_mothership",
+      "x": 704,
+      "y": 0,
+      "w": 128,
+      "h": 128
+    },
+    {
+      "id": "synth_nexus",
+      "x": 832,
+      "y": 0,
+      "w": 128,
+      "h": 128
+    },
+    {
+      "id": "synth_prime",
+      "x": 960,
+      "y": 0,
+      "w": 128,
+      "h": 128
+    },
+    {
+      "id": "synth_probe",
+      "x": 1088,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "synth_relay",
+      "x": 1152,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "synth_scout",
+      "x": 1216,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "synth_siege",
+      "x": 1280,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "synth_swarm",
+      "x": 1344,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "synth_titan",
+      "x": 1408,
+      "y": 0,
+      "w": 128,
+      "h": 128
+    },
+    {
+      "id": "synth_wraith",
+      "x": 1536,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    }
+  ]
+}

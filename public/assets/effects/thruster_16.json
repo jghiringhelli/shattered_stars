@@ -1,0 +1,8 @@
+{
+  "effect": "thruster",
+  "size": 16,
+  "frames": 8,
+  "frame_width": 16,
+  "frame_height": 16,
+  "loop": true
+}

@@ -1,0 +1,147 @@
+{
+  "faction": "void_corsairs",
+  "width": 2048,
+  "height": 128,
+  "sprites": [
+    {
+      "id": "corsair_bloodfang",
+      "x": 0,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "corsair_corsair",
+      "x": 64,
+      "y": 0,
+      "w": 128,
+      "h": 128
+    },
+    {
+      "id": "corsair_dart",
+      "x": 192,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "corsair_fang",
+      "x": 256,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "corsair_ghost",
+      "x": 320,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "corsair_havoc",
+      "x": 384,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "corsair_marauder",
+      "x": 448,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "corsair_mothership",
+      "x": 512,
+      "y": 0,
+      "w": 128,
+      "h": 128
+    },
+    {
+      "id": "corsair_phantom",
+      "x": 640,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "corsair_pillager",
+      "x": 704,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "corsair_predator",
+      "x": 768,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "corsair_razor",
+      "x": 832,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "corsair_reaver",
+      "x": 896,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "corsair_saboteur",
+      "x": 960,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "corsair_scythe",
+      "x": 1024,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "corsair_shadow",
+      "x": 1088,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "corsair_specter",
+      "x": 1152,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "corsair_tender",
+      "x": 1216,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "corsair_venom",
+      "x": 1280,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "corsair_wraith",
+      "x": 1344,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    }
+  ]
+}

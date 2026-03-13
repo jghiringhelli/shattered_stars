@@ -1,0 +1,27 @@
+{
+  "monster_id": "null_herald",
+  "frame_width": 96,
+  "frame_height": 96,
+  "states": {
+    "idle": {
+      "row": 0,
+      "frames": 2,
+      "y": 0
+    },
+    "attack": {
+      "row": 1,
+      "frames": 4,
+      "y": 96
+    },
+    "damaged": {
+      "row": 2,
+      "frames": 2,
+      "y": 192
+    },
+    "death": {
+      "row": 3,
+      "frames": 4,
+      "y": 288
+    }
+  }
+}

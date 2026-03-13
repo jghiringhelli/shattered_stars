@@ -1,0 +1,27 @@
+{
+  "monster_id": "star_serpent",
+  "frame_width": 256,
+  "frame_height": 256,
+  "states": {
+    "idle": {
+      "row": 0,
+      "frames": 2,
+      "y": 0
+    },
+    "attack": {
+      "row": 1,
+      "frames": 4,
+      "y": 256
+    },
+    "damaged": {
+      "row": 2,
+      "frames": 2,
+      "y": 512
+    },
+    "death": {
+      "row": 3,
+      "frames": 4,
+      "y": 768
+    }
+  }
+}

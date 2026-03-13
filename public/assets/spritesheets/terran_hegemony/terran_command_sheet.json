@@ -1,0 +1,27 @@
+{
+  "ship_id": "terran_command",
+  "frame_width": 64,
+  "frame_height": 64,
+  "states": {
+    "idle": {
+      "row": 0,
+      "frames": 2,
+      "y": 0
+    },
+    "thrust": {
+      "row": 1,
+      "frames": 4,
+      "y": 64
+    },
+    "damaged": {
+      "row": 2,
+      "frames": 2,
+      "y": 128
+    },
+    "shields": {
+      "row": 3,
+      "frames": 4,
+      "y": 192
+    }
+  }
+}

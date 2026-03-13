@@ -1,0 +1,2712 @@
+{
+  "terran_hegemony": {
+    "terran_aegis": {
+      "ship_id": "terran_aegis",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "terran_bastion": {
+      "ship_id": "terran_bastion",
+      "frame_width": 128,
+      "frame_height": 128,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 128
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 256
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 384
+        }
+      }
+    },
+    "terran_battlecruiser": {
+      "ship_id": "terran_battlecruiser",
+      "frame_width": 128,
+      "frame_height": 128,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 128
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 256
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 384
+        }
+      }
+    },
+    "terran_command": {
+      "ship_id": "terran_command",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "terran_devastator": {
+      "ship_id": "terran_devastator",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "terran_dreadnought": {
+      "ship_id": "terran_dreadnought",
+      "frame_width": 128,
+      "frame_height": 128,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 128
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 256
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 384
+        }
+      }
+    },
+    "terran_gladius": {
+      "ship_id": "terran_gladius",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "terran_harbinger": {
+      "ship_id": "terran_harbinger",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "terran_hawk": {
+      "ship_id": "terran_hawk",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "terran_phantom": {
+      "ship_id": "terran_phantom",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "terran_raptor": {
+      "ship_id": "terran_raptor",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "terran_reaper": {
+      "ship_id": "terran_reaper",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "terran_sentinel": {
+      "ship_id": "terran_sentinel",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "terran_siege": {
+      "ship_id": "terran_siege",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "terran_storm": {
+      "ship_id": "terran_storm",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "terran_talon": {
+      "ship_id": "terran_talon",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "terran_tempest": {
+      "ship_id": "terran_tempest",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "terran_vanguard": {
+      "ship_id": "terran_vanguard",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "terran_viper": {
+      "ship_id": "terran_viper",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "terran_warden": {
+      "ship_id": "terran_warden",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    }
+  },
+  "free_confederation": {
+    "confed_atlas": {
+      "ship_id": "confed_atlas",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "confed_aurora": {
+      "ship_id": "confed_aurora",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "confed_comet": {
+      "ship_id": "confed_comet",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "confed_constellation": {
+      "ship_id": "confed_constellation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "confed_defiance": {
+      "ship_id": "confed_defiance",
+      "frame_width": 128,
+      "frame_height": 128,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 128
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 256
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 384
+        }
+      }
+    },
+    "confed_defiant": {
+      "ship_id": "confed_defiant",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "confed_freedom": {
+      "ship_id": "confed_freedom",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "confed_liberty": {
+      "ship_id": "confed_liberty",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "confed_meteor": {
+      "ship_id": "confed_meteor",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "confed_millennium": {
+      "ship_id": "confed_millennium",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "confed_nova": {
+      "ship_id": "confed_nova",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "confed_phoenix": {
+      "ship_id": "confed_phoenix",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "confed_ranger": {
+      "ship_id": "confed_ranger",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "confed_sparrow": {
+      "ship_id": "confed_sparrow",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "confed_stinger": {
+      "ship_id": "confed_stinger",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "confed_striker": {
+      "ship_id": "confed_striker",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "confed_thunderbolt": {
+      "ship_id": "confed_thunderbolt",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "confed_tornado": {
+      "ship_id": "confed_tornado",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "confed_vortex": {
+      "ship_id": "confed_vortex",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "confed_wasp": {
+      "ship_id": "confed_wasp",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    }
+  },
+  "synthetic_collective": {
+    "synth_arc": {
+      "ship_id": "synth_arc",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "synth_assault": {
+      "ship_id": "synth_assault",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "synth_conduit": {
+      "ship_id": "synth_conduit",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "synth_coordinator": {
+      "ship_id": "synth_coordinator",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "synth_devastator": {
+      "ship_id": "synth_devastator",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "synth_fortress": {
+      "ship_id": "synth_fortress",
+      "frame_width": 128,
+      "frame_height": 128,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 128
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 256
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 384
+        }
+      }
+    },
+    "synth_guardian": {
+      "ship_id": "synth_guardian",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "synth_gunboat": {
+      "ship_id": "synth_gunboat",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "synth_hunter": {
+      "ship_id": "synth_hunter",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "synth_interceptor": {
+      "ship_id": "synth_interceptor",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "synth_mothership": {
+      "ship_id": "synth_mothership",
+      "frame_width": 128,
+      "frame_height": 128,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 128
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 256
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 384
+        }
+      }
+    },
+    "synth_nexus": {
+      "ship_id": "synth_nexus",
+      "frame_width": 128,
+      "frame_height": 128,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 128
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 256
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 384
+        }
+      }
+    },
+    "synth_prime": {
+      "ship_id": "synth_prime",
+      "frame_width": 128,
+      "frame_height": 128,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 128
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 256
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 384
+        }
+      }
+    },
+    "synth_probe": {
+      "ship_id": "synth_probe",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "synth_relay": {
+      "ship_id": "synth_relay",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "synth_scout": {
+      "ship_id": "synth_scout",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "synth_siege": {
+      "ship_id": "synth_siege",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "synth_swarm": {
+      "ship_id": "synth_swarm",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "synth_titan": {
+      "ship_id": "synth_titan",
+      "frame_width": 128,
+      "frame_height": 128,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 128
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 256
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 384
+        }
+      }
+    },
+    "synth_wraith": {
+      "ship_id": "synth_wraith",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    }
+  },
+  "void_corsairs": {
+    "corsair_bloodfang": {
+      "ship_id": "corsair_bloodfang",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "corsair_corsair": {
+      "ship_id": "corsair_corsair",
+      "frame_width": 128,
+      "frame_height": 128,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 128
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 256
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 384
+        }
+      }
+    },
+    "corsair_dart": {
+      "ship_id": "corsair_dart",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "corsair_fang": {
+      "ship_id": "corsair_fang",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "corsair_ghost": {
+      "ship_id": "corsair_ghost",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "corsair_havoc": {
+      "ship_id": "corsair_havoc",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "corsair_marauder": {
+      "ship_id": "corsair_marauder",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "corsair_mothership": {
+      "ship_id": "corsair_mothership",
+      "frame_width": 128,
+      "frame_height": 128,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 128
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 256
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 384
+        }
+      }
+    },
+    "corsair_phantom": {
+      "ship_id": "corsair_phantom",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "corsair_pillager": {
+      "ship_id": "corsair_pillager",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "corsair_predator": {
+      "ship_id": "corsair_predator",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "corsair_razor": {
+      "ship_id": "corsair_razor",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "corsair_reaver": {
+      "ship_id": "corsair_reaver",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "corsair_saboteur": {
+      "ship_id": "corsair_saboteur",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "corsair_scythe": {
+      "ship_id": "corsair_scythe",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "corsair_shadow": {
+      "ship_id": "corsair_shadow",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "corsair_specter": {
+      "ship_id": "corsair_specter",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "corsair_tender": {
+      "ship_id": "corsair_tender",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "corsair_venom": {
+      "ship_id": "corsair_venom",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "corsair_wraith": {
+      "ship_id": "corsair_wraith",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    }
+  },
+  "ascendant_empire": {
+    "ascendant_adaptation": {
+      "ship_id": "ascendant_adaptation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "ascendant_archon": {
+      "ship_id": "ascendant_archon",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "ascendant_bastion": {
+      "ship_id": "ascendant_bastion",
+      "frame_width": 128,
+      "frame_height": 128,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 128
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 256
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 384
+        }
+      }
+    },
+    "ascendant_bio_cruiser": {
+      "ship_id": "ascendant_bio_cruiser",
+      "frame_width": 128,
+      "frame_height": 128,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 128
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 256
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 384
+        }
+      }
+    },
+    "ascendant_cerebral": {
+      "ship_id": "ascendant_cerebral",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "ascendant_cherub": {
+      "ship_id": "ascendant_cherub",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "ascendant_dreadnought": {
+      "ship_id": "ascendant_dreadnought",
+      "frame_width": 128,
+      "frame_height": 128,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 128
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 256
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 384
+        }
+      }
+    },
+    "ascendant_evolved": {
+      "ship_id": "ascendant_evolved",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "ascendant_hybrid": {
+      "ship_id": "ascendant_hybrid",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "ascendant_leviathan": {
+      "ship_id": "ascendant_leviathan",
+      "frame_width": 128,
+      "frame_height": 128,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 128
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 256
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 384
+        }
+      }
+    },
+    "ascendant_metamorph": {
+      "ship_id": "ascendant_metamorph",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "ascendant_mind": {
+      "ship_id": "ascendant_mind",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "ascendant_mutation": {
+      "ship_id": "ascendant_mutation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "ascendant_organism": {
+      "ship_id": "ascendant_organism",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "ascendant_plague": {
+      "ship_id": "ascendant_plague",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "ascendant_seraph": {
+      "ship_id": "ascendant_seraph",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "ascendant_spore": {
+      "ship_id": "ascendant_spore",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "ascendant_symbiont": {
+      "ship_id": "ascendant_symbiont",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "ascendant_thought": {
+      "ship_id": "ascendant_thought",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    },
+    "ascendant_virus": {
+      "ship_id": "ascendant_virus",
+      "frame_width": 64,
+      "frame_height": 64,
+      "states": {
+        "idle": {
+          "row": 0,
+          "frames": 2,
+          "y": 0
+        },
+        "thrust": {
+          "row": 1,
+          "frames": 4,
+          "y": 64
+        },
+        "damaged": {
+          "row": 2,
+          "frames": 2,
+          "y": 128
+        },
+        "shields": {
+          "row": 3,
+          "frames": 4,
+          "y": 192
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "ship_id": "terran_battlecruiser",
+  "type": "rotation",
+  "frame_width": 128,
+  "frame_height": 128,
+  "directions": 16,
+  "angle_per_frame": 22.5,
+  "frames": [
+    {
+      "index": 0,
+      "angle": 0.0
+    },
+    {
+      "index": 1,
+      "angle": 22.5
+    },
+    {
+      "index": 2,
+      "angle": 45.0
+    },
+    {
+      "index": 3,
+      "angle": 67.5
+    },
+    {
+      "index": 4,
+      "angle": 90.0
+    },
+    {
+      "index": 5,
+      "angle": 112.5
+    },
+    {
+      "index": 6,
+      "angle": 135.0
+    },
+    {
+      "index": 7,
+      "angle": 157.5
+    },
+    {
+      "index": 8,
+      "angle": 180.0
+    },
+    {
+      "index": 9,
+      "angle": 202.5
+    },
+    {
+      "index": 10,
+      "angle": 225.0
+    },
+    {
+      "index": 11,
+      "angle": 247.5
+    },
+    {
+      "index": 12,
+      "angle": 270.0
+    },
+    {
+      "index": 13,
+      "angle": 292.5
+    },
+    {
+      "index": 14,
+      "angle": 315.0
+    },
+    {
+      "index": 15,
+      "angle": 337.5
+    }
+  ]
+}

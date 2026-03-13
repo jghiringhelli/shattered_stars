@@ -1,0 +1,27 @@
+{
+  "monster_id": "entropy_maw",
+  "frame_width": 72,
+  "frame_height": 72,
+  "states": {
+    "idle": {
+      "row": 0,
+      "frames": 2,
+      "y": 0
+    },
+    "attack": {
+      "row": 1,
+      "frames": 4,
+      "y": 72
+    },
+    "damaged": {
+      "row": 2,
+      "frames": 2,
+      "y": 144
+    },
+    "death": {
+      "row": 3,
+      "frames": 4,
+      "y": 216
+    }
+  }
+}

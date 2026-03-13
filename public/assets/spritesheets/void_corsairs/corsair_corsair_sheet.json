@@ -1,0 +1,27 @@
+{
+  "ship_id": "corsair_corsair",
+  "frame_width": 128,
+  "frame_height": 128,
+  "states": {
+    "idle": {
+      "row": 0,
+      "frames": 2,
+      "y": 0
+    },
+    "thrust": {
+      "row": 1,
+      "frames": 4,
+      "y": 128
+    },
+    "damaged": {
+      "row": 2,
+      "frames": 2,
+      "y": 256
+    },
+    "shields": {
+      "row": 3,
+      "frames": 4,
+      "y": 384
+    }
+  }
+}

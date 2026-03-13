@@ -1,0 +1,147 @@
+{
+  "faction": "terran_hegemony",
+  "width": 2048,
+  "height": 128,
+  "sprites": [
+    {
+      "id": "terran_aegis",
+      "x": 0,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "terran_bastion",
+      "x": 64,
+      "y": 0,
+      "w": 128,
+      "h": 128
+    },
+    {
+      "id": "terran_battlecruiser",
+      "x": 192,
+      "y": 0,
+      "w": 128,
+      "h": 128
+    },
+    {
+      "id": "terran_command",
+      "x": 320,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "terran_devastator",
+      "x": 384,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "terran_dreadnought",
+      "x": 448,
+      "y": 0,
+      "w": 128,
+      "h": 128
+    },
+    {
+      "id": "terran_gladius",
+      "x": 576,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "terran_harbinger",
+      "x": 640,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "terran_hawk",
+      "x": 704,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "terran_phantom",
+      "x": 768,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "terran_raptor",
+      "x": 832,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "terran_reaper",
+      "x": 896,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "terran_sentinel",
+      "x": 960,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "terran_siege",
+      "x": 1024,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "terran_storm",
+      "x": 1088,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "terran_talon",
+      "x": 1152,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "terran_tempest",
+      "x": 1216,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "terran_vanguard",
+      "x": 1280,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "terran_viper",
+      "x": 1344,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    },
+    {
+      "id": "terran_warden",
+      "x": 1408,
+      "y": 0,
+      "w": 64,
+      "h": 64
+    }
+  ]
+}

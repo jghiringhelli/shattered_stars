@@ -1,0 +1,8 @@
+{
+  "ship_id": "terran_warden",
+  "type": "explosion",
+  "frame_width": 64,
+  "frame_height": 64,
+  "frames": 12,
+  "loop": false
+}

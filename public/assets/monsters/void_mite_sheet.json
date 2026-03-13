@@ -1,0 +1,27 @@
+{
+  "monster_id": "void_mite",
+  "frame_width": 16,
+  "frame_height": 16,
+  "states": {
+    "idle": {
+      "row": 0,
+      "frames": 2,
+      "y": 0
+    },
+    "attack": {
+      "row": 1,
+      "frames": 4,
+      "y": 16
+    },
+    "damaged": {
+      "row": 2,
+      "frames": 2,
+      "y": 32
+    },
+    "death": {
+      "row": 3,
+      "frames": 4,
+      "y": 48
+    }
+  }
+}

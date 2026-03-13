@@ -1,0 +1,7412 @@
+{
+  "terran_hegemony": {
+    "terran_aegis": {
+      "ship_id": "terran_aegis",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_bastion": {
+      "ship_id": "terran_bastion",
+      "type": "rotation",
+      "frame_width": 128,
+      "frame_height": 128,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_battlecruiser": {
+      "ship_id": "terran_battlecruiser",
+      "type": "rotation",
+      "frame_width": 128,
+      "frame_height": 128,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_command": {
+      "ship_id": "terran_command",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_devastator": {
+      "ship_id": "terran_devastator",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_dreadnought": {
+      "ship_id": "terran_dreadnought",
+      "type": "rotation",
+      "frame_width": 128,
+      "frame_height": 128,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_gladius": {
+      "ship_id": "terran_gladius",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_harbinger": {
+      "ship_id": "terran_harbinger",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_hawk": {
+      "ship_id": "terran_hawk",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_phantom": {
+      "ship_id": "terran_phantom",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_raptor": {
+      "ship_id": "terran_raptor",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_reaper": {
+      "ship_id": "terran_reaper",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_sentinel": {
+      "ship_id": "terran_sentinel",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_siege": {
+      "ship_id": "terran_siege",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_storm": {
+      "ship_id": "terran_storm",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_talon": {
+      "ship_id": "terran_talon",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_tempest": {
+      "ship_id": "terran_tempest",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_vanguard": {
+      "ship_id": "terran_vanguard",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_viper": {
+      "ship_id": "terran_viper",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "terran_warden": {
+      "ship_id": "terran_warden",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    }
+  },
+  "free_confederation": {
+    "confed_atlas": {
+      "ship_id": "confed_atlas",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_aurora": {
+      "ship_id": "confed_aurora",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_comet": {
+      "ship_id": "confed_comet",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_constellation": {
+      "ship_id": "confed_constellation",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_defiance": {
+      "ship_id": "confed_defiance",
+      "type": "rotation",
+      "frame_width": 128,
+      "frame_height": 128,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_defiant": {
+      "ship_id": "confed_defiant",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_freedom": {
+      "ship_id": "confed_freedom",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_liberty": {
+      "ship_id": "confed_liberty",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_meteor": {
+      "ship_id": "confed_meteor",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_millennium": {
+      "ship_id": "confed_millennium",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_nova": {
+      "ship_id": "confed_nova",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_phoenix": {
+      "ship_id": "confed_phoenix",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_ranger": {
+      "ship_id": "confed_ranger",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_sparrow": {
+      "ship_id": "confed_sparrow",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_stinger": {
+      "ship_id": "confed_stinger",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_striker": {
+      "ship_id": "confed_striker",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_thunderbolt": {
+      "ship_id": "confed_thunderbolt",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_tornado": {
+      "ship_id": "confed_tornado",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_vortex": {
+      "ship_id": "confed_vortex",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "confed_wasp": {
+      "ship_id": "confed_wasp",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    }
+  },
+  "synthetic_collective": {
+    "synth_arc": {
+      "ship_id": "synth_arc",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_assault": {
+      "ship_id": "synth_assault",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_conduit": {
+      "ship_id": "synth_conduit",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_coordinator": {
+      "ship_id": "synth_coordinator",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_devastator": {
+      "ship_id": "synth_devastator",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_fortress": {
+      "ship_id": "synth_fortress",
+      "type": "rotation",
+      "frame_width": 128,
+      "frame_height": 128,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_guardian": {
+      "ship_id": "synth_guardian",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_gunboat": {
+      "ship_id": "synth_gunboat",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_hunter": {
+      "ship_id": "synth_hunter",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_interceptor": {
+      "ship_id": "synth_interceptor",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_mothership": {
+      "ship_id": "synth_mothership",
+      "type": "rotation",
+      "frame_width": 128,
+      "frame_height": 128,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_nexus": {
+      "ship_id": "synth_nexus",
+      "type": "rotation",
+      "frame_width": 128,
+      "frame_height": 128,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_prime": {
+      "ship_id": "synth_prime",
+      "type": "rotation",
+      "frame_width": 128,
+      "frame_height": 128,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_probe": {
+      "ship_id": "synth_probe",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_relay": {
+      "ship_id": "synth_relay",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_scout": {
+      "ship_id": "synth_scout",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_siege": {
+      "ship_id": "synth_siege",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_swarm": {
+      "ship_id": "synth_swarm",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_titan": {
+      "ship_id": "synth_titan",
+      "type": "rotation",
+      "frame_width": 128,
+      "frame_height": 128,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "synth_wraith": {
+      "ship_id": "synth_wraith",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    }
+  },
+  "void_corsairs": {
+    "corsair_bloodfang": {
+      "ship_id": "corsair_bloodfang",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_corsair": {
+      "ship_id": "corsair_corsair",
+      "type": "rotation",
+      "frame_width": 128,
+      "frame_height": 128,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_dart": {
+      "ship_id": "corsair_dart",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_fang": {
+      "ship_id": "corsair_fang",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_ghost": {
+      "ship_id": "corsair_ghost",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_havoc": {
+      "ship_id": "corsair_havoc",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_marauder": {
+      "ship_id": "corsair_marauder",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_mothership": {
+      "ship_id": "corsair_mothership",
+      "type": "rotation",
+      "frame_width": 128,
+      "frame_height": 128,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_phantom": {
+      "ship_id": "corsair_phantom",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_pillager": {
+      "ship_id": "corsair_pillager",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_predator": {
+      "ship_id": "corsair_predator",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_razor": {
+      "ship_id": "corsair_razor",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_reaver": {
+      "ship_id": "corsair_reaver",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_saboteur": {
+      "ship_id": "corsair_saboteur",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_scythe": {
+      "ship_id": "corsair_scythe",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_shadow": {
+      "ship_id": "corsair_shadow",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_specter": {
+      "ship_id": "corsair_specter",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_tender": {
+      "ship_id": "corsair_tender",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_venom": {
+      "ship_id": "corsair_venom",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "corsair_wraith": {
+      "ship_id": "corsair_wraith",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    }
+  },
+  "ascendant_empire": {
+    "ascendant_adaptation": {
+      "ship_id": "ascendant_adaptation",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_archon": {
+      "ship_id": "ascendant_archon",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_bastion": {
+      "ship_id": "ascendant_bastion",
+      "type": "rotation",
+      "frame_width": 128,
+      "frame_height": 128,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_bio_cruiser": {
+      "ship_id": "ascendant_bio_cruiser",
+      "type": "rotation",
+      "frame_width": 128,
+      "frame_height": 128,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_cerebral": {
+      "ship_id": "ascendant_cerebral",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_cherub": {
+      "ship_id": "ascendant_cherub",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_dreadnought": {
+      "ship_id": "ascendant_dreadnought",
+      "type": "rotation",
+      "frame_width": 128,
+      "frame_height": 128,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_evolved": {
+      "ship_id": "ascendant_evolved",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_hybrid": {
+      "ship_id": "ascendant_hybrid",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_leviathan": {
+      "ship_id": "ascendant_leviathan",
+      "type": "rotation",
+      "frame_width": 128,
+      "frame_height": 128,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_metamorph": {
+      "ship_id": "ascendant_metamorph",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_mind": {
+      "ship_id": "ascendant_mind",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_mutation": {
+      "ship_id": "ascendant_mutation",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_organism": {
+      "ship_id": "ascendant_organism",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_plague": {
+      "ship_id": "ascendant_plague",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_seraph": {
+      "ship_id": "ascendant_seraph",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_spore": {
+      "ship_id": "ascendant_spore",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_symbiont": {
+      "ship_id": "ascendant_symbiont",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_thought": {
+      "ship_id": "ascendant_thought",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    },
+    "ascendant_virus": {
+      "ship_id": "ascendant_virus",
+      "type": "rotation",
+      "frame_width": 64,
+      "frame_height": 64,
+      "directions": 16,
+      "angle_per_frame": 22.5,
+      "frames": [
+        {
+          "index": 0,
+          "angle": 0.0
+        },
+        {
+          "index": 1,
+          "angle": 22.5
+        },
+        {
+          "index": 2,
+          "angle": 45.0
+        },
+        {
+          "index": 3,
+          "angle": 67.5
+        },
+        {
+          "index": 4,
+          "angle": 90.0
+        },
+        {
+          "index": 5,
+          "angle": 112.5
+        },
+        {
+          "index": 6,
+          "angle": 135.0
+        },
+        {
+          "index": 7,
+          "angle": 157.5
+        },
+        {
+          "index": 8,
+          "angle": 180.0
+        },
+        {
+          "index": 9,
+          "angle": 202.5
+        },
+        {
+          "index": 10,
+          "angle": 225.0
+        },
+        {
+          "index": 11,
+          "angle": 247.5
+        },
+        {
+          "index": 12,
+          "angle": 270.0
+        },
+        {
+          "index": 13,
+          "angle": 292.5
+        },
+        {
+          "index": 14,
+          "angle": 315.0
+        },
+        {
+          "index": 15,
+          "angle": 337.5
+        }
+      ]
+    }
+  }
+}

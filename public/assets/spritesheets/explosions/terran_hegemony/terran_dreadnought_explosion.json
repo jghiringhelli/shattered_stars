@@ -1,0 +1,8 @@
+{
+  "ship_id": "terran_dreadnought",
+  "type": "explosion",
+  "frame_width": 128,
+  "frame_height": 128,
+  "frames": 12,
+  "loop": false
+}
