@@ -89,7 +89,7 @@ export class SquadBuilderScene extends Phaser.Scene {
   private factionSlots: FactionSlot[] = [];
   private numFactions = 2;
   private pointLimit = 200;
-  private gameMode: 'turn_based' | 'continuous' = 'continuous';
+  private gameMode: 'turn_based' | 'continuous' | 'arcade' = 'arcade';
   private aiDifficulty: AIDifficultyLevel = 'normal';
 
   private slotContainers: Phaser.GameObjects.Container[] = [];
@@ -102,6 +102,13 @@ export class SquadBuilderScene extends Phaser.Scene {
 
   constructor() {
     super({ key: 'SquadBuilderScene' });
+  }
+
+  init(data: Record<string, unknown>): void {
+    // Allow caller to preset initial mode (e.g., SKIRMISH → 'arcade')
+    if (data?.initialMode === 'arcade' || data?.initialMode === 'turn_based' || data?.initialMode === 'continuous') {
+      this.gameMode = data.initialMode as 'arcade' | 'turn_based' | 'continuous';
+    }
   }
 
   create(): void {
@@ -184,18 +191,23 @@ export class SquadBuilderScene extends Phaser.Scene {
 
     // Game mode selector
     this.add
-      .text(900, 80, 'Mode:', {
+      .text(780, 80, 'Mode:', {
         font: '18px Arial',
         color: '#888888',
       })
       .setOrigin(0, 0.5);
 
-    this.createSmallButton(970, 80, 'Continuous', () => {
+    this.createSmallButton(845, 80, 'Arcade', () => {
+      this.gameMode = 'arcade';
+      this.updateDisplay();
+    }).setData('mode', 'arcade');
+
+    this.createSmallButton(955, 80, 'Continuous', () => {
       this.gameMode = 'continuous';
       this.updateDisplay();
     }).setData('mode', 'continuous');
 
-    this.createSmallButton(1100, 80, 'Turn-Based', () => {
+    this.createSmallButton(1085, 80, 'Turn-Based', () => {
       this.gameMode = 'turn_based';
       this.updateDisplay();
     }).setData('mode', 'turn_based');
@@ -712,6 +724,8 @@ export class SquadBuilderScene extends Phaser.Scene {
     // Start appropriate battle scene
     if (this.gameMode === 'turn_based') {
       this.scene.start('TurnBasedBattleScene');
+    } else if (this.gameMode === 'arcade') {
+      this.scene.start('ArcadeBattleScene');
     } else {
       this.scene.start('ContinuousTacticalScene');
     }

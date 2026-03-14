@@ -270,7 +270,7 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private startSkirmish(): void {
-    this.scene.start('SquadBuilderScene');
+    this.scene.start('SquadBuilderScene', { initialMode: 'arcade' });
   }
 
   private startSurvival(): void {

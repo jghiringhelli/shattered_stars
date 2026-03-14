@@ -81,8 +81,26 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private isPaused = false;
   private pauseOverlay: Phaser.GameObjects.Container | null = null;
 
+  // Smooth turning state
+  private playerAngularVelocity = 0;
+  private framesAlive = 0;
+
   constructor() {
     super({ key: 'ArcadeBattleScene' });
+  }
+
+  preload(): void {
+    // Load ship sprites for arcade battle (BootScene may not have these)
+    const loadIfMissing = (id: string, faction: string, file: string): void => {
+      const key = `ship_${id}`;
+      if (!this.textures.exists(key)) {
+        this.load.image(key, `assets/ships/${faction}/${file}.png`);
+      }
+    };
+    loadIfMissing('confed_sparrow', 'free_confederation', 'confed_sparrow');
+    loadIfMissing('confed_wasp',    'free_confederation', 'confed_wasp');
+    loadIfMissing('terran_gladius', 'terran_hegemony',    'terran_gladius');
+    loadIfMissing('terran_viper',   'terran_hegemony',    'terran_viper');
   }
 
   create(): void {
@@ -148,7 +166,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
     if (deltaMs <= 0 || deltaMs > 100) return;
     if (this.isPaused || this.gameEnded) return;
 
-    this.handleInput();
+    this.framesAlive++;
+    this.handleInput(deltaMs);
     this.updateShips(deltaMs);
     this.updateProjectiles(deltaMs);
     this.updateAI(deltaMs);
@@ -249,11 +268,11 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.pauseOverlay.add(quitBtn);
   }
 
-  private handleInput(): void {
+  private handleInput(deltaMs: number): void {
     const ship = this.ships.get(this.playerShipId!);
     if (!ship || ship.hull <= 0) return;
 
-    // Speed control
+    // Speed control (discrete steps, X-Wing style)
     if (Phaser.Input.Keyboard.JustDown(this.keys.up)) {
       ship.control = processCommand(ship, ship.control, 'thrust_increase');
     }
@@ -261,29 +280,33 @@ export class ArcadeBattleScene extends Phaser.Scene {
       ship.control = processCommand(ship, ship.control, 'thrust_decrease');
     }
 
-    // Turning (hold for bank, tap for turn)
-    if (Phaser.Input.Keyboard.JustDown(this.keys.left)) {
-      if (this.keys.shift.isDown) {
-        ship.control = processCommand(ship, ship.control, 'bank_left');
+    // Smooth turning with angular acceleration/deceleration
+    const MAX_ANG_VEL = 160; // degrees per second at full deflection
+    const ACCEL      = 480; // degrees per second squared
+    const dt = deltaMs / 1000;
+
+    if (this.keys.left.isDown) {
+      this.playerAngularVelocity = Math.max(-MAX_ANG_VEL, this.playerAngularVelocity - ACCEL * dt);
+    } else if (this.keys.right.isDown) {
+      this.playerAngularVelocity = Math.min(MAX_ANG_VEL, this.playerAngularVelocity + ACCEL * dt);
+    } else {
+      const decel = ACCEL * 2 * dt;
+      if (Math.abs(this.playerAngularVelocity) <= decel) {
+        this.playerAngularVelocity = 0;
       } else {
-        ship.control = processCommand(ship, ship.control, 'turn_left');
+        this.playerAngularVelocity -= Math.sign(this.playerAngularVelocity) * decel;
       }
     }
-    if (Phaser.Input.Keyboard.JustDown(this.keys.right)) {
-      if (this.keys.shift.isDown) {
-        ship.control = processCommand(ship, ship.control, 'bank_right');
-      } else {
-        ship.control = processCommand(ship, ship.control, 'turn_right');
-      }
-    }
+
+    ship.angle = ((ship.angle + this.playerAngularVelocity * dt) % 360 + 360) % 360;
 
     // K-turn (180 flip)
     if (Phaser.Input.Keyboard.JustDown(this.keys.z)) {
       ship.control = processCommand(ship, ship.control, 'kturn');
     }
 
-    // Fire
-    if (this.keys.space.isDown && canFire(ship.control)) {
+    // Fire — skip first few frames to prevent key-bleed from menu navigation
+    if (this.framesAlive > 5 && this.keys.space.isDown && canFire(ship.control)) {
       ship.control = processCommand(ship, ship.control, 'fire');
       this.fireWeapon(ship);
     }
@@ -363,54 +386,22 @@ export class ArcadeBattleScene extends Phaser.Scene {
       const dy = nearestEnemy.y - ship.y;
       const targetAngle = (Math.atan2(dy, dx) * 180 / Math.PI + 90 + 360) % 360;
 
-      // Calculate angle difference
+      // Smooth AI turning — directly apply angular velocity toward target
       let angleDiff = targetAngle - ship.angle;
       if (angleDiff > 180) angleDiff -= 360;
       if (angleDiff < -180) angleDiff += 360;
 
-      // Turn towards target
-      if (ship.control.currentManeuver === null) {
-        if (Math.abs(angleDiff) > 60) {
-          // Need a hard turn
-          if (angleDiff > 0) {
-            ship.control = processCommand(ship, ship.control, 'turn_right');
-          } else {
-            ship.control = processCommand(ship, ship.control, 'turn_left');
-          }
-        } else if (Math.abs(angleDiff) > 20) {
-          // Gentle bank
-          if (angleDiff > 0) {
-            ship.control = processCommand(ship, ship.control, 'bank_right');
-          } else {
-            ship.control = processCommand(ship, ship.control, 'bank_left');
-          }
-        }
-      }
+      const AI_TURN_RATE = 120; // degrees per second
+      const maxTurn = AI_TURN_RATE * (deltaMs / 1000);
+      const turn = Math.max(-maxTurn, Math.min(maxTurn, angleDiff));
+      ship.angle = ((ship.angle + turn) % 360 + 360) % 360;
 
-      // Fire if facing target and in range
+      // Fire if roughly facing target and in range
       if (Math.abs(angleDiff) < 30 && nearestDist < 400 && canFire(ship.control)) {
         ship.control = processCommand(ship, ship.control, 'fire');
         this.fireWeapon(ship);
       }
-
-      // Update cooldowns and movement
-      ship.control = updateCooldowns(ship.control, deltaMs);
-      const { control, position } = updateManeuver(ship.control, deltaMs);
-      ship.control = control;
-
-      if (position) {
-        ship.x = position.x;
-        ship.y = position.y;
-        ship.angle = position.angle;
-      } else {
-        const move = getContinuousMovement(ship, ship.control, deltaMs);
-        ship.x = move.x;
-        ship.y = move.y;
-      }
-
-      // Wrap
-      ship.x = ((ship.x % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
-      ship.y = ((ship.y % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
+      // Note: movement/cooldowns already applied in updateShips()
     }
   }
 
@@ -488,7 +479,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     // Player ship
     const playerShip = this.createShip(
       'player_0',
-      'confed_falcon',
+      'confed_sparrow',
       'free_confederation',
       'player',
       BATTLEFIELD_SIZE / 2,
@@ -498,15 +489,20 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.ships.set(playerShip.id, playerShip);
     this.playerShipId = playerShip.id;
 
-    // Allied ships
-    for (let i = 0; i < 2; i++) {
+    // Allied ships — wing formation: flanking behind the player
+    const wingOffsets: Array<{ x: number; y: number }> = [
+      { x: -150, y: 350 },
+      { x:  150, y: 350 },
+    ];
+    for (let i = 0; i < wingOffsets.length; i++) {
+      const offset = wingOffsets[i] ?? { x: 0, y: 300 };
       const ally = this.createShip(
         `ally_${i}`,
-        'confed_sparrow',
+        'confed_wasp',
         'free_confederation',
         'ai',
-        BATTLEFIELD_SIZE / 2 + (i - 0.5) * 100,
-        BATTLEFIELD_SIZE / 2 + 250,
+        BATTLEFIELD_SIZE / 2 + offset.x,
+        BATTLEFIELD_SIZE / 2 + offset.y,
         0
       );
       this.ships.set(ally.id, ally);
@@ -592,28 +588,37 @@ export class ArcadeBattleScene extends Phaser.Scene {
     container.add(thruster);
     container.thruster = thruster;
 
-    // Ship body
-    const body = this.add.graphics();
-    body.fillStyle(color, 1);
-    body.beginPath();
-    body.moveTo(0, -size / 2);
-    body.lineTo(-size / 3, size / 2);
-    body.lineTo(0, size / 3);
-    body.lineTo(size / 3, size / 2);
-    body.closePath();
-    body.fillPath();
+    // Ship body — use PNG sprite if loaded, else draw faction-colored triangle
+    const spriteKey = `ship_${ship.definitionId}`;
+    let body: Phaser.GameObjects.Graphics;
+    if (this.textures.exists(spriteKey)) {
+      const img = this.add.image(0, 0, spriteKey);
+      img.setDisplaySize(size * 1.5, size * 1.5);
+      container.add(img);
+      // Placeholder for hull ref (required by ShipSprite interface)
+      body = this.add.graphics();
+    } else {
+      body = this.add.graphics();
+      body.fillStyle(color, 1);
+      body.beginPath();
+      body.moveTo(0, -size / 2);
+      body.lineTo(-size / 3, size / 2);
+      body.lineTo(0, size / 3);
+      body.lineTo(size / 3, size / 2);
+      body.closePath();
+      body.fillPath();
 
-    body.lineStyle(2, 0xffffff, 0.8);
-    body.strokePath();
+      body.lineStyle(2, 0xffffff, 0.8);
+      body.strokePath();
 
-    if (ship.owner === 'player') {
-      body.lineStyle(2, 0xffff00, 1);
-      body.strokeCircle(0, 0, size * 0.7);
+      if (ship.owner === 'player') {
+        body.lineStyle(2, 0xffff00, 1);
+        body.strokeCircle(0, 0, size * 0.7);
+      }
+      container.add(body);
     }
 
-    container.add(body);
     container.hull = body;
-
     container.setAngle(ship.angle);
     container.setDepth(10);
 
