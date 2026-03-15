@@ -33,7 +33,6 @@ import {
 } from '../config';
 import { HealthBar } from '../ui/HealthBar';
 import { Minimap, type MinimapShip } from '../ui/Minimap';
-import { HUD } from '../ui/HUD';
 
 interface ArcadeShip extends ShipState {
   control: ShipControlState;
@@ -53,7 +52,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private projectileSprites: Map<string, Phaser.GameObjects.Graphics> = new Map();
   private healthBars: Map<string, HealthBar> = new Map();
   private minimap!: Minimap;
-  private hud!: HUD;
 
   private playerShipId: string | null = null;
   private keys!: {
@@ -113,13 +111,11 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.spawnShips();
     this.createHealthBars();
     this.createMinimap();
-    this.createBattleHUD();
 
     // Follow player
     const playerSprite = this.shipSprites.get(this.playerShipId!);
     if (playerSprite) {
       this.cameras.main.startFollow(playerSprite, true, 0.1, 0.1);
-      this.cameras.main.setZoom(1.2);
     }
 
     this.lastTime = this.time.now;
@@ -148,14 +144,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
       y: this.scale.height - 160,
       width: 150,
       height: 150,
-    });
-  }
-
-  private createBattleHUD(): void {
-    this.hud = new HUD({
-      scene: this,
-      playerFaction: 'free_confederation',
-      enemyFaction: 'terran_hegemony',
     });
   }
 
@@ -450,13 +438,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
           }
 
           // Show floating damage number
-          this.hud.showDamage(ship.x, ship.y - 20, proj.damage);
+          this.showFloatingText(ship.x, ship.y - 20, `-${proj.damage}`, '#ff4444');
 
           // Score and kill notification for player kills
           if (proj.ownerFaction === 'free_confederation' && ship.hull <= 0 && wasAlive) {
             this.score += 100;
-            this.hud.showKill(ship.x, ship.y);
-            this.hud.setScore(this.score);
+            this.showFloatingText(ship.x, ship.y - 40, 'KILL!', '#ffff00');
+            this.scoreText.setText(`SCORE: ${this.score}`);
           }
 
           // Visual feedback
@@ -486,6 +474,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
       BATTLEFIELD_SIZE / 2 + 200,
       0
     );
+    // Boost player survivability — starts with more cushion to learn controls
+    playerShip.hull = playerShip.maxHull = 8;
+    playerShip.shields = playerShip.maxShields = 4;
     this.ships.set(playerShip.id, playerShip);
     this.playerShipId = playerShip.id;
 
@@ -505,21 +496,23 @@ export class ArcadeBattleScene extends Phaser.Scene {
         BATTLEFIELD_SIZE / 2 + offset.y,
         0
       );
+      ally.hull = ally.maxHull = 5;
+      ally.shields = ally.maxShields = 3;
       this.ships.set(ally.id, ally);
     }
 
-    // Enemy ships
-    for (let i = 0; i < 4; i++) {
-      const angle = (i / 4) * Math.PI * 2;
-      const radius = 300;
+    // Enemy ships — 3 enemies, spawned far away so the player has time to react
+    for (let i = 0; i < 3; i++) {
+      const angle = (i / 3) * Math.PI * 2;
+      const radius = 550;
       const enemy = this.createShip(
         `enemy_${i}`,
-        i < 2 ? 'terran_gladius' : 'terran_viper',
+        i === 0 ? 'terran_gladius' : 'terran_viper',
         'terran_hegemony',
         'ai',
         BATTLEFIELD_SIZE / 2 + Math.cos(angle) * radius,
-        BATTLEFIELD_SIZE / 2 + Math.sin(angle) * radius - 200,
-        180
+        BATTLEFIELD_SIZE / 2 + Math.sin(angle) * radius - 350,
+        0
       );
       this.ships.set(enemy.id, enemy);
     }
@@ -593,10 +586,22 @@ export class ArcadeBattleScene extends Phaser.Scene {
     let body: Phaser.GameObjects.Graphics;
     if (this.textures.exists(spriteKey)) {
       const img = this.add.image(0, 0, spriteKey);
-      img.setDisplaySize(size * 1.5, size * 1.5);
+      img.setDisplaySize(size * 1.8, size * 1.8);
+      // ADD blend mode renders dark backgrounds as transparent
+      img.setBlendMode(Phaser.BlendModes.ADD);
       container.add(img);
-      // Placeholder for hull ref (required by ShipSprite interface)
-      body = this.add.graphics();
+
+      // Player indicator ring (drawn on top of the sprite)
+      if (ship.owner === 'player') {
+        const ring = this.add.graphics();
+        ring.lineStyle(2, 0xffff00, 0.9);
+        ring.strokeCircle(0, 0, size * 1.02);
+        ring.lineStyle(1, 0xffff00, 0.4);
+        ring.strokeCircle(0, 0, size * 1.2);
+        container.add(ring);
+      }
+
+      body = this.add.graphics(); // invisible placeholder for hull ref
     } else {
       body = this.add.graphics();
       body.fillStyle(color, 1);
@@ -613,7 +618,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
       if (ship.owner === 'player') {
         body.lineStyle(2, 0xffff00, 1);
-        body.strokeCircle(0, 0, size * 0.7);
+        body.strokeCircle(0, 0, size * 0.84);
       }
       container.add(body);
     }
@@ -738,6 +743,24 @@ export class ArcadeBattleScene extends Phaser.Scene {
     // Hull color
     const hullPct = ship.hull / ship.maxHull;
     this.hullText.setColor(hullPct > 0.5 ? '#44ff44' : hullPct > 0.25 ? '#ffff44' : '#ff4444');
+  }
+
+  private showFloatingText(x: number, y: number, text: string, color: string): void {
+    const t = this.add.text(x, y, text, {
+      font: 'bold 18px Arial',
+      color,
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(50);
+
+    this.tweens.add({
+      targets: t,
+      y: y - 60,
+      alpha: 0,
+      duration: 900,
+      ease: 'Power2',
+      onComplete: () => t.destroy(),
+    });
   }
 
   private createExplosion(x: number, y: number): void {
