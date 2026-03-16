@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "aseprite": {
+      "command": "node",
+      "args": ["C:/Users/eu01244715/workspace/mcp-servers/aseprite-mcp/dist/index.js"],
+      "env": {
+        "ASEPRITE_PATH": "C:/tools/aseprite/build/bin/aseprite.exe"
+      }
+    },
+    "forgecraft": {
+      "command": "npx",
+      "args": ["-y", "forgecraft-mcp@0.5.1"]
+    }
+  }
+}
