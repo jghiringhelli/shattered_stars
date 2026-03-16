@@ -36,6 +36,10 @@ import { Minimap, type MinimapShip } from '../ui/Minimap';
 
 interface ArcadeShip extends ShipState {
   control: ShipControlState;
+  /** ID of the ship this AI has locked as its current target. */
+  targetId: string | null;
+  /** Milliseconds remaining before the AI re-evaluates its target. */
+  aiDecisionTimer: number;
 }
 
 interface ShipSprite extends Phaser.GameObjects.Container {
@@ -353,28 +357,38 @@ export class ArcadeBattleScene extends Phaser.Scene {
     for (const ship of this.ships.values()) {
       if (ship.owner === 'player' || ship.hull <= 0) continue;
 
-      // Simple AI: find nearest enemy and pursue
-      let nearestEnemy: ArcadeShip | null = null;
-      let nearestDist = Infinity;
+      // Tick the decision timer down
+      ship.aiDecisionTimer -= deltaMs;
 
-      for (const other of this.ships.values()) {
-        if (other.faction === ship.faction || other.hull <= 0) continue;
+      // Re-evaluate target only when the timer expires or the current target
+      // is dead/missing — each ship commits to its target in between decisions.
+      const currentTarget = ship.targetId ? this.ships.get(ship.targetId) : null;
+      if (!currentTarget || currentTarget.hull <= 0 || ship.aiDecisionTimer <= 0) {
+        let nearestEnemy: ArcadeShip | null = null;
+        let nearestDist = Infinity;
 
-        const dist = distance(ship.x, ship.y, other.x, other.y);
-        if (dist < nearestDist) {
-          nearestDist = dist;
-          nearestEnemy = other;
+        for (const other of this.ships.values()) {
+          if (other.faction === ship.faction || other.hull <= 0) continue;
+          const dist = distance(ship.x, ship.y, other.x, other.y);
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            nearestEnemy = other;
+          }
         }
+
+        ship.targetId = nearestEnemy?.id ?? null;
+        // Stagger next decision: 300–500 ms so ships don't all re-evaluate in sync
+        ship.aiDecisionTimer = 300 + Math.random() * 200;
       }
 
-      if (!nearestEnemy) continue;
+      // Pursue the locked target every frame (smooth turning, no jitter)
+      const target = ship.targetId ? this.ships.get(ship.targetId) : null;
+      if (!target) continue;
 
-      // Calculate angle to target
-      const dx = nearestEnemy.x - ship.x;
-      const dy = nearestEnemy.y - ship.y;
+      const dx = target.x - ship.x;
+      const dy = target.y - ship.y;
       const targetAngle = (Math.atan2(dy, dx) * 180 / Math.PI + 90 + 360) % 360;
 
-      // Smooth AI turning — directly apply angular velocity toward target
       let angleDiff = targetAngle - ship.angle;
       if (angleDiff > 180) angleDiff -= 360;
       if (angleDiff < -180) angleDiff += 360;
@@ -384,12 +398,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
       const turn = Math.max(-maxTurn, Math.min(maxTurn, angleDiff));
       ship.angle = ((ship.angle + turn) % 360 + 360) % 360;
 
-      // Fire if roughly facing target and in range
-      if (Math.abs(angleDiff) < 30 && nearestDist < 400 && canFire(ship.control)) {
+      // Fire when roughly facing the target and in range
+      const dist = distance(ship.x, ship.y, target.x, target.y);
+      if (Math.abs(angleDiff) < 30 && dist < 400 && canFire(ship.control)) {
         ship.control = processCommand(ship, ship.control, 'fire');
         this.fireWeapon(ship);
       }
-      // Note: movement/cooldowns already applied in updateShips()
+      // Movement and cooldowns are already applied each frame by updateShips()
     }
   }
 
@@ -560,6 +575,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const ship: ArcadeShip = {
       ...baseShip,
       control: createControlState(baseShip),
+      targetId: null,
+      aiDecisionTimer: 0, // fire immediately on first update
     };
 
     return ship;
