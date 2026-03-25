@@ -6,29 +6,16 @@
  * - See connected players
  * - Configure game settings
  * - Ready up and start match
+ *
+ * Networking: driven by NetworkService events (local simulation mode by default;
+ * pass a WebSocket URL to connect to a real server in step 2).
  */
 
 import Phaser from 'phaser';
 import { createHoverButton } from '../ui/ButtonFactory';
 import type { FactionId } from '../config';
 import { FACTION_COLORS } from '../config';
-
-interface Player {
-  id: string;
-  name: string;
-  factionId: FactionId | null;
-  isReady: boolean;
-  isHost: boolean;
-}
-
-interface Room {
-  id: string;
-  name: string;
-  hostName: string;
-  playerCount: number;
-  maxPlayers: number;
-  gameMode: 'turn_based' | 'continuous';
-}
+import { networkService, type RoomInfo, type PlayerInfo } from '../services/NetworkService';
 
 const FACTION_NAMES: Record<FactionId, string> = {
   terran_hegemony: 'Terran Hegemony',
@@ -50,13 +37,12 @@ export class LobbyScene extends Phaser.Scene {
   private currentView: 'browser' | 'room' = 'browser';
 
   // Room browser state
-  private rooms: Room[] = [];
+  private rooms: RoomInfo[] = [];
   private roomListContainer!: Phaser.GameObjects.Container;
 
   // Current room state
-  private currentRoom: Room | null = null;
-  private players: Player[] = [];
-  private localPlayerId: string = '';
+  private currentRoom: RoomInfo | null = null;
+  private players: PlayerInfo[] = [];
   private playerListContainer!: Phaser.GameObjects.Container;
 
   // UI
@@ -69,21 +55,91 @@ export class LobbyScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor(0x0a0a1a);
-
-    // Generate a random player ID for now (would come from auth in real implementation)
-    this.localPlayerId = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
     this.createHeader();
     this.createRoomBrowser();
     this.createRoomView();
     this.setupInput();
 
-    // Start in browser view
-    this.showBrowserView();
+    // Register NetworkService event handlers
+    networkService.on('connected',     this.onConnected,     this);
+    networkService.on('room_created',  this.onRoomCreated,   this);
+    networkService.on('room_joined',   this.onRoomJoined,    this);
+    networkService.on('room_left',     this.onRoomLeft,      this);
+    networkService.on('room_update',   this.onRoomUpdate,    this);
+    networkService.on('player_joined', this.onPlayerJoined,  this);
+    networkService.on('error',         this.onNetworkError,  this);
 
-    // Simulate some test rooms
-    this.simulateTestRooms();
+    // Connect in local simulation mode (no URL = no server required)
+    networkService.connect();
+
+    this.showBrowserView();
   }
+
+  shutdown(): void {
+    networkService.off('connected',     this.onConnected,     this);
+    networkService.off('room_created',  this.onRoomCreated,   this);
+    networkService.off('room_joined',   this.onRoomJoined,    this);
+    networkService.off('room_left',     this.onRoomLeft,      this);
+    networkService.off('room_update',   this.onRoomUpdate,    this);
+    networkService.off('player_joined', this.onPlayerJoined,  this);
+    networkService.off('error',         this.onNetworkError,  this);
+    if (this.currentRoom) networkService.leaveRoom();
+  }
+
+  // ==========================================
+  // NETWORK EVENT HANDLERS
+  // ==========================================
+
+  private onConnected(data: unknown): void {
+    const { local } = data as { local: boolean };
+    const label = local ? 'Local Simulation Mode' : 'Connected to Server';
+    this.statusText.setText(label);
+    this.statusText.setColor('#44ff44');
+    this.loadRooms();
+  }
+
+  private onRoomCreated(data: unknown): void {
+    const { room } = data as { room: RoomInfo };
+    this.currentRoom = room;
+    this.showRoomView();
+    this.statusText.setText('Room created — waiting for players…');
+  }
+
+  private onRoomJoined(data: unknown): void {
+    const { room } = data as { room: RoomInfo };
+    this.currentRoom = room;
+    this.showRoomView();
+    this.statusText.setText(`Joined ${room.name}`);
+  }
+
+  private onRoomLeft(_data: unknown): void {
+    this.currentRoom = null;
+    this.players = [];
+    this.showBrowserView();
+    this.statusText.setText('Left room');
+  }
+
+  private onRoomUpdate(data: unknown): void {
+    const { room, players } = data as { room: RoomInfo; players: PlayerInfo[] };
+    this.currentRoom = room;
+    this.players = players;
+    this.updateRoomView();
+  }
+
+  private onPlayerJoined(data: unknown): void {
+    const { player } = data as { player: PlayerInfo };
+    this.statusText.setText(`${player.name} joined!`);
+  }
+
+  private onNetworkError(data: unknown): void {
+    const { message } = data as { message: string };
+    this.statusText.setText(`Error: ${message}`);
+    this.statusText.setColor('#ff4444');
+  }
+
+  // ==========================================
+  // ROOM BROWSER VIEW
+  // ==========================================
 
   private createHeader(): void {
     const centerX = this.scale.width / 2;
@@ -95,10 +151,9 @@ export class LobbyScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // Back button
     const backBtn = this.createButton(100, 30, 'BACK', () => {
       if (this.currentView === 'room') {
-        this.leaveRoom();
+        networkService.leaveRoom();
       } else {
         this.scene.start('MainMenuScene');
       }
@@ -106,27 +161,16 @@ export class LobbyScene extends Phaser.Scene {
     backBtn.setScrollFactor(0);
 
     this.statusText = this.add
-      .text(centerX, this.scale.height - 30, 'Connecting to server...', {
+      .text(centerX, this.scale.height - 30, 'Connecting…', {
         font: '16px Arial',
         color: '#888888',
       })
       .setOrigin(0.5);
-
-    // Simulate connection
-    this.time.delayedCall(1000, () => {
-      this.statusText.setText('Connected | Players online: 42');
-      this.statusText.setColor('#44ff44');
-    });
   }
-
-  // ==========================================
-  // ROOM BROWSER VIEW
-  // ==========================================
 
   private createRoomBrowser(): void {
     this.roomListContainer = this.add.container(0, 0);
 
-    // Title
     this.roomListContainer.add(
       this.add
         .text(this.scale.width / 2, 80, 'Available Games', {
@@ -136,19 +180,16 @@ export class LobbyScene extends Phaser.Scene {
         .setOrigin(0.5)
     );
 
-    // Create room button
     const createBtn = this.createButton(this.scale.width / 2, 120, 'CREATE GAME', () => {
       this.createRoom();
     });
     this.roomListContainer.add(createBtn);
 
-    // Refresh button
     const refreshBtn = this.createButton(this.scale.width / 2 + 200, 120, 'REFRESH', () => {
       this.refreshRoomList();
     });
     this.roomListContainer.add(refreshBtn);
 
-    // Room list area
     const listBg = this.add.graphics();
     listBg.fillStyle(0x1a1a2a, 0.8);
     listBg.fillRoundedRect(100, 160, this.scale.width - 200, 450, 10);
@@ -156,149 +197,81 @@ export class LobbyScene extends Phaser.Scene {
     listBg.strokeRoundedRect(100, 160, this.scale.width - 200, 450, 10);
     this.roomListContainer.add(listBg);
 
-    // Column headers
     const headerY = 175;
-    this.roomListContainer.add(
-      this.add.text(130, headerY, 'Room Name', { font: 'bold 16px Arial', color: '#666666' })
-    );
-    this.roomListContainer.add(
-      this.add.text(450, headerY, 'Host', { font: 'bold 16px Arial', color: '#666666' })
-    );
-    this.roomListContainer.add(
-      this.add.text(700, headerY, 'Players', { font: 'bold 16px Arial', color: '#666666' })
-    );
-    this.roomListContainer.add(
-      this.add.text(850, headerY, 'Mode', { font: 'bold 16px Arial', color: '#666666' })
-    );
-    this.roomListContainer.add(
-      this.add.text(1000, headerY, 'Action', { font: 'bold 16px Arial', color: '#666666' })
-    );
+    [
+      [130, 'Room Name'], [450, 'Host'], [700, 'Players'], [850, 'Mode'], [1000, 'Action'],
+    ].forEach(([x, label]) => {
+      this.roomListContainer.add(
+        this.add.text(x as number, headerY, label as string, { font: 'bold 16px Arial', color: '#666666' })
+      );
+    });
+  }
+
+  private loadRooms(): void {
+    this.rooms = networkService.getRooms();
+    this.updateRoomList();
+  }
+
+  private refreshRoomList(): void {
+    this.statusText.setText('Refreshing…');
+    this.statusText.setColor('#ffff44');
+    this.rooms = networkService.getRooms();
+    this.updateRoomList();
+    this.statusText.setText('Room list updated');
+    this.statusText.setColor('#44ff44');
   }
 
   private updateRoomList(): void {
-    // Remove old room entries (keep headers and background)
     const toRemove: Phaser.GameObjects.GameObject[] = [];
     this.roomListContainer.each((child: Phaser.GameObjects.GameObject) => {
-      if (child.getData('isRoomEntry')) {
-        toRemove.push(child);
-      }
+      if (child.getData('isRoomEntry')) toRemove.push(child);
     });
     toRemove.forEach((child) => child.destroy());
 
-    // Add room entries
-    const startY = 210;
-    const rowHeight = 50;
-
     if (this.rooms.length === 0) {
-      const noRoomsText = this.add
-        .text(this.scale.width / 2, 350, 'No games available. Create one!', {
-          font: '20px Arial',
-          color: '#666666',
-        })
-        .setOrigin(0.5)
-        .setData('isRoomEntry', true);
-      this.roomListContainer.add(noRoomsText);
+      this.roomListContainer.add(
+        this.add
+          .text(this.scale.width / 2, 350, 'No games available. Create one!', {
+            font: '20px Arial',
+            color: '#666666',
+          })
+          .setOrigin(0.5)
+          .setData('isRoomEntry', true)
+      );
       return;
     }
+
+    const startY = 210;
+    const rowHeight = 50;
 
     this.rooms.forEach((room, index) => {
       const y = startY + index * rowHeight;
 
-      // Row background
       const rowBg = this.add.graphics();
       rowBg.fillStyle(index % 2 === 0 ? 0x222233 : 0x1a1a2a, 0.8);
       rowBg.fillRect(110, y - 15, this.scale.width - 220, rowHeight - 5);
       rowBg.setData('isRoomEntry', true);
       this.roomListContainer.add(rowBg);
 
-      // Room name
-      const nameText = this.add
-        .text(130, y, room.name, {
-          font: '18px Arial',
-          color: '#ffffff',
-        })
-        .setData('isRoomEntry', true);
-      this.roomListContainer.add(nameText);
+      const roomAlpha = room.isStarted ? 0.4 : 1;
+      const addRoomText = (x: number, text: string, color: string) =>
+        this.roomListContainer.add(
+          this.add.text(x, y, text, { font: '16px Arial', color }).setData('isRoomEntry', true).setAlpha(roomAlpha)
+        );
 
-      // Host name
-      const hostText = this.add
-        .text(450, y, room.hostName, {
-          font: '16px Arial',
-          color: '#aaaaaa',
-        })
-        .setData('isRoomEntry', true);
-      this.roomListContainer.add(hostText);
-
-      // Player count
+      addRoomText(130, room.name, '#ffffff');
+      addRoomText(450, room.hostName, '#aaaaaa');
       const countColor = room.playerCount >= room.maxPlayers ? '#ff4444' : '#44ff44';
-      const countText = this.add
-        .text(700, y, `${room.playerCount}/${room.maxPlayers}`, {
-          font: 'bold 18px Arial',
-          color: countColor,
-        })
-        .setData('isRoomEntry', true);
-      this.roomListContainer.add(countText);
+      addRoomText(700, `${room.playerCount}/${room.maxPlayers}`, countColor);
+      addRoomText(850, room.gameMode === 'continuous' ? 'Continuous' : 'Turn-Based', '#888888');
 
-      // Game mode
-      const modeText = this.add
-        .text(850, y, room.gameMode === 'continuous' ? 'Continuous' : 'Turn-Based', {
-          font: '16px Arial',
-          color: '#888888',
-        })
-        .setData('isRoomEntry', true);
-      this.roomListContainer.add(modeText);
-
-      // Join button
-      if (room.playerCount < room.maxPlayers) {
+      if (!room.isStarted && room.playerCount < room.maxPlayers) {
         const joinBtn = this.createSmallButton(1050, y, 'JOIN', () => {
-          this.joinRoom(room.id);
+          networkService.joinRoom(room.id);
         });
         joinBtn.setData('isRoomEntry', true);
         this.roomListContainer.add(joinBtn);
       }
-    });
-  }
-
-  private simulateTestRooms(): void {
-    this.rooms = [
-      {
-        id: 'room_1',
-        name: 'Casual Game',
-        hostName: 'SpacePilot42',
-        playerCount: 1,
-        maxPlayers: 4,
-        gameMode: 'continuous',
-      },
-      {
-        id: 'room_2',
-        name: 'Ranked Match',
-        hostName: 'CommanderX',
-        playerCount: 3,
-        maxPlayers: 4,
-        gameMode: 'turn_based',
-      },
-      {
-        id: 'room_3',
-        name: 'Beginners Welcome',
-        hostName: 'NewbHelper',
-        playerCount: 2,
-        maxPlayers: 6,
-        gameMode: 'continuous',
-      },
-    ];
-
-    this.updateRoomList();
-  }
-
-  private refreshRoomList(): void {
-    this.statusText.setText('Refreshing room list...');
-    this.statusText.setColor('#ffff44');
-
-    // Simulate refresh
-    this.time.delayedCall(500, () => {
-      this.simulateTestRooms();
-      this.statusText.setText('Room list updated');
-      this.statusText.setColor('#44ff44');
     });
   }
 
@@ -312,24 +285,17 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   private updateRoomView(): void {
-    // Clear existing
     this.playerListContainer.removeAll(true);
-
     if (!this.currentRoom) return;
 
     const centerX = this.scale.width / 2;
 
-    // Room title
     this.playerListContainer.add(
       this.add
-        .text(centerX, 80, this.currentRoom.name, {
-          font: 'bold 28px Arial',
-          color: '#ffffff',
-        })
+        .text(centerX, 80, this.currentRoom.name, { font: 'bold 28px Arial', color: '#ffffff' })
         .setOrigin(0.5)
     );
 
-    // Game mode
     this.playerListContainer.add(
       this.add
         .text(centerX, 115, `Mode: ${this.currentRoom.gameMode === 'continuous' ? 'Continuous' : 'Turn-Based'}`, {
@@ -339,7 +305,6 @@ export class LobbyScene extends Phaser.Scene {
         .setOrigin(0.5)
     );
 
-    // Player list area
     const listBg = this.add.graphics();
     listBg.fillStyle(0x1a1a2a, 0.8);
     listBg.fillRoundedRect(200, 150, this.scale.width - 400, 350, 10);
@@ -347,65 +312,49 @@ export class LobbyScene extends Phaser.Scene {
     listBg.strokeRoundedRect(200, 150, this.scale.width - 400, 350, 10);
     this.playerListContainer.add(listBg);
 
-    // Player slots
     const startY = 180;
     const slotHeight = 70;
-
     for (let i = 0; i < (this.currentRoom.maxPlayers || 4); i++) {
-      const y = startY + i * slotHeight;
-      const player = this.players[i];
-
-      this.createPlayerSlot(centerX, y, i, player);
+      this.createPlayerSlot(centerX, startY + i * slotHeight, i, this.players[i]);
     }
 
-    // Ready button (only for non-hosts)
-    const localPlayer = this.players.find((p) => p.id === this.localPlayerId);
+    const localId = networkService.getPlayerId();
+    const localPlayer = this.players.find((p) => p.id === localId);
+
     if (localPlayer && !localPlayer.isHost) {
-      const readyBtn = this.createButton(centerX - 100, 550, localPlayer.isReady ? 'NOT READY' : 'READY', () => {
-        this.toggleReady();
-      });
-      this.playerListContainer.add(readyBtn);
+      this.playerListContainer.add(
+        this.createButton(centerX - 100, 550, localPlayer.isReady ? 'NOT READY' : 'READY', () => {
+          networkService.setReady(!localPlayer.isReady);
+        })
+      );
     }
 
-    // Start button (only for host when all ready)
     if (localPlayer?.isHost) {
       const allReady = this.players.length >= 2 && this.players.every((p) => p.isReady || p.isHost);
       const startBtn = this.createButton(centerX + 100, 550, 'START GAME', () => {
-        if (allReady) {
-          this.startMultiplayerGame();
-        }
+        if (allReady) this.startMultiplayerGame();
       });
-
-      if (!allReady) {
-        // Dim the button if not all ready
-        startBtn.setAlpha(0.5);
-      }
-
+      if (!allReady) startBtn.setAlpha(0.5);
       this.playerListContainer.add(startBtn);
     }
 
-    // Chat area placeholder
     this.playerListContainer.add(
       this.add
-        .text(centerX, 630, 'Chat coming soon...', {
-          font: '14px Arial',
-          color: '#444444',
-        })
+        .text(centerX, 630, 'Chat coming soon…', { font: '14px Arial', color: '#444444' })
         .setOrigin(0.5)
     );
   }
 
-  private createPlayerSlot(x: number, y: number, index: number, player?: Player): void {
+  private createPlayerSlot(x: number, y: number, index: number, player?: PlayerInfo): void {
     const slotWidth = this.scale.width - 440;
     const slotX = x - slotWidth / 2;
 
-    // Slot background
     const slotBg = this.add.graphics();
     if (player) {
-      const factionColor = player.factionId ? FACTION_COLORS[player.factionId] : 0x333333;
+      const borderColor = player.factionId ? FACTION_COLORS[player.factionId as FactionId] : 0x333333;
       slotBg.fillStyle(0x222233, 0.9);
       slotBg.fillRoundedRect(slotX, y, slotWidth, 55, 8);
-      slotBg.lineStyle(2, factionColor, 0.8);
+      slotBg.lineStyle(2, borderColor, 0.8);
       slotBg.strokeRoundedRect(slotX, y, slotWidth, 55, 8);
     } else {
       slotBg.fillStyle(0x111122, 0.5);
@@ -414,69 +363,51 @@ export class LobbyScene extends Phaser.Scene {
       slotBg.strokeRoundedRect(slotX, y, slotWidth, 55, 8);
     }
     this.playerListContainer.add(slotBg);
+    this.playerListContainer.add(
+      this.add.text(slotX + 20, y + 27, `${index + 1}`, { font: 'bold 20px Arial', color: '#444444' }).setOrigin(0, 0.5)
+    );
 
-    // Slot number
+    if (!player) {
+      this.playerListContainer.add(
+        this.add
+          .text(slotX + slotWidth / 2, y + 27, 'Waiting for player…', { font: '16px Arial', color: '#444444' })
+          .setOrigin(0.5)
+      );
+      return;
+    }
+
+    const localId = networkService.getPlayerId();
+    const nameColor = player.id === localId ? '#44ffaa' : '#ffffff';
+    const displayName = player.name + (player.isHost ? ' (Host)' : '') + (player.latency > 0 ? ` ${player.latency}ms` : '');
+    this.playerListContainer.add(
+      this.add.text(slotX + 60, y + 15, displayName, { font: 'bold 18px Arial', color: nameColor }).setOrigin(0, 0.5)
+    );
+
+    const factionId = player.factionId as FactionId | null;
+    const factionName = factionId ? FACTION_NAMES[factionId] : 'No faction';
+    const factionColor = factionId ? FACTION_COLORS[factionId] : 0x666666;
     this.playerListContainer.add(
       this.add
-        .text(slotX + 20, y + 27, `${index + 1}`, {
-          font: 'bold 20px Arial',
-          color: '#444444',
+        .text(slotX + 60, y + 40, factionName, {
+          font: '14px Arial',
+          color: `#${factionColor.toString(16).padStart(6, '0')}`,
         })
         .setOrigin(0, 0.5)
     );
 
-    if (player) {
-      // Player name
-      const nameColor = player.id === this.localPlayerId ? '#44ffaa' : '#ffffff';
-      this.playerListContainer.add(
-        this.add
-          .text(slotX + 60, y + 15, player.name + (player.isHost ? ' (Host)' : ''), {
-            font: 'bold 18px Arial',
-            color: nameColor,
-          })
-          .setOrigin(0, 0.5)
-      );
+    const readyLabel = player.isHost ? 'HOST' : player.isReady ? 'READY' : 'NOT READY';
+    const readyColor = player.isHost ? '#ffaa44' : player.isReady ? '#44ff44' : '#ff4444';
+    this.playerListContainer.add(
+      this.add
+        .text(slotX + slotWidth - 30, y + 27, readyLabel, { font: 'bold 16px Arial', color: readyColor })
+        .setOrigin(1, 0.5)
+    );
 
-      // Faction
-      const factionName = player.factionId ? FACTION_NAMES[player.factionId] : 'No faction';
-      const factionColor = player.factionId ? FACTION_COLORS[player.factionId] : 0x666666;
+    if (player.id === localId) {
       this.playerListContainer.add(
-        this.add
-          .text(slotX + 60, y + 40, factionName, {
-            font: '14px Arial',
-            color: `#${factionColor.toString(16).padStart(6, '0')}`,
-          })
-          .setOrigin(0, 0.5)
-      );
-
-      // Ready status
-      const readyText = player.isHost ? 'HOST' : player.isReady ? 'READY' : 'NOT READY';
-      const readyColor = player.isHost ? '#ffaa44' : player.isReady ? '#44ff44' : '#ff4444';
-      this.playerListContainer.add(
-        this.add
-          .text(slotX + slotWidth - 30, y + 27, readyText, {
-            font: 'bold 16px Arial',
-            color: readyColor,
-          })
-          .setOrigin(1, 0.5)
-      );
-
-      // Faction change button (only for local player)
-      if (player.id === this.localPlayerId) {
-        const factionBtn = this.createSmallButton(slotX + 350, y + 27, 'Change', () => {
+        this.createSmallButton(slotX + 350, y + 27, 'Change Faction', () => {
           this.cycleFaction();
-        });
-        this.playerListContainer.add(factionBtn);
-      }
-    } else {
-      // Empty slot
-      this.playerListContainer.add(
-        this.add
-          .text(slotX + slotWidth / 2, y + 27, 'Waiting for player...', {
-            font: '16px Arial',
-            color: '#444444',
-          })
-          .setOrigin(0.5)
+        })
       );
     }
   }
@@ -486,126 +417,24 @@ export class LobbyScene extends Phaser.Scene {
   // ==========================================
 
   private createRoom(): void {
-    // Create a new room with local player as host
-    this.currentRoom = {
-      id: `room_${Date.now()}`,
-      name: `Game ${Math.floor(Math.random() * 1000)}`,
-      hostName: 'You',
-      playerCount: 1,
-      maxPlayers: 4,
-      gameMode: 'continuous',
-    };
-
-    this.players = [
-      {
-        id: this.localPlayerId,
-        name: 'You',
-        factionId: 'free_confederation',
-        isReady: false,
-        isHost: true,
-      },
-    ];
-
-    this.showRoomView();
-    this.statusText.setText('Room created. Waiting for players...');
-
-    // Simulate other players joining
-    this.time.delayedCall(2000, () => {
-      if (this.currentRoom) {
-        this.players.push({
-          id: 'ai_1',
-          name: 'AIPlayer1',
-          factionId: 'terran_hegemony',
-          isReady: false,
-          isHost: false,
-        });
-        this.updateRoomView();
-        this.statusText.setText('A player joined!');
-      }
-    });
-
-    this.time.delayedCall(4000, () => {
-      if (this.currentRoom) {
-        const aiPlayer = this.players.find((p) => p.id === 'ai_1');
-        if (aiPlayer) {
-          aiPlayer.isReady = true;
-          this.updateRoomView();
-          this.statusText.setText('AIPlayer1 is ready!');
-        }
-      }
-    });
-  }
-
-  private joinRoom(roomId: string): void {
-    const room = this.rooms.find((r) => r.id === roomId);
-    if (!room) return;
-
-    this.currentRoom = room;
-
-    // Simulate existing players
-    this.players = [
-      {
-        id: 'host_player',
-        name: room.hostName,
-        factionId: 'terran_hegemony',
-        isReady: false,
-        isHost: true,
-      },
-      {
-        id: this.localPlayerId,
-        name: 'You',
-        factionId: 'free_confederation',
-        isReady: false,
-        isHost: false,
-      },
-    ];
-
-    // Add other existing players
-    for (let i = 1; i < room.playerCount - 1; i++) {
-      this.players.push({
-        id: `other_${i}`,
-        name: `Player${i}`,
-        factionId: ALL_FACTIONS[i % ALL_FACTIONS.length] as FactionId,
-        isReady: true,
-        isHost: false,
-      });
-    }
-
-    this.showRoomView();
-    this.statusText.setText(`Joined ${room.name}`);
-  }
-
-  private leaveRoom(): void {
-    this.currentRoom = null;
-    this.players = [];
-    this.showBrowserView();
-    this.statusText.setText('Left room');
-  }
-
-  private toggleReady(): void {
-    const player = this.players.find((p) => p.id === this.localPlayerId);
-    if (player) {
-      player.isReady = !player.isReady;
-      this.updateRoomView();
-      this.statusText.setText(player.isReady ? 'You are ready!' : 'You are not ready');
-    }
+    const name = `Game ${Math.floor(Math.random() * 1000)}`;
+    networkService.createRoom(name, 4, 'continuous');
   }
 
   private cycleFaction(): void {
-    const player = this.players.find((p) => p.id === this.localPlayerId);
+    const localId = networkService.getPlayerId();
+    const player = this.players.find((p) => p.id === localId);
     if (!player) return;
 
-    const currentIndex = player.factionId ? ALL_FACTIONS.indexOf(player.factionId) : -1;
-    const nextIndex = (currentIndex + 1) % ALL_FACTIONS.length;
-    player.factionId = ALL_FACTIONS[nextIndex] as FactionId;
-
-    this.updateRoomView();
+    const currentIndex = player.factionId ? ALL_FACTIONS.indexOf(player.factionId as FactionId) : -1;
+    const nextFaction = ALL_FACTIONS[(currentIndex + 1) % ALL_FACTIONS.length] as FactionId;
+    networkService.selectFaction(nextFaction);
   }
 
   private startMultiplayerGame(): void {
     if (!this.currentRoom) return;
 
-    // Store multiplayer config
+    const localId = networkService.getPlayerId();
     this.registry.set('multiplayerConfig', {
       roomId: this.currentRoom.id,
       gameMode: this.currentRoom.gameMode,
@@ -614,23 +443,20 @@ export class LobbyScene extends Phaser.Scene {
         name: p.name,
         factionId: p.factionId,
         isHost: p.isHost,
-        isLocal: p.id === this.localPlayerId,
+        isLocal: p.id === localId,
       })),
     });
 
-    // For now, start a local battle with the configured players
-    // In real implementation, this would start networked game
     this.registry.set('battleConfig', {
       factions: this.players.map((p) => ({
         factionId: p.factionId,
-        controller: p.id === this.localPlayerId ? 'player' : 'ai',
-        ships: this.getDefaultShipsForFaction(p.factionId),
+        controller: p.id === localId ? 'player' : 'ai',
+        ships: this.getDefaultShipsForFaction(p.factionId as FactionId | null),
       })),
       gameMode: this.currentRoom.gameMode,
       pointLimit: 200,
     });
 
-    // Start appropriate battle scene
     if (this.currentRoom.gameMode === 'turn_based') {
       this.scene.start('TurnBasedBattleScene');
     } else {
@@ -640,17 +466,14 @@ export class LobbyScene extends Phaser.Scene {
 
   private getDefaultShipsForFaction(factionId: FactionId | null): string[] {
     if (!factionId) return [];
-
-    // Return default ship loadout per faction
-    const defaultShips: Record<FactionId, string[]> = {
-      terran_hegemony: ['terran_gladius', 'terran_viper', 'terran_viper'],
-      free_confederation: ['confed_falcon', 'confed_sparrow', 'confed_sparrow'],
+    const defaults: Record<FactionId, string[]> = {
+      terran_hegemony:      ['terran_gladius', 'terran_viper', 'terran_viper'],
+      free_confederation:   ['confed_falcon', 'confed_sparrow', 'confed_sparrow'],
       synthetic_collective: ['synth_drone', 'synth_drone', 'synth_drone', 'synth_drone'],
-      void_corsairs: ['corsair_raider', 'corsair_raider', 'corsair_cutlass'],
-      ascendant_empire: ['ascendant_seraph', 'ascendant_seraph'],
+      void_corsairs:        ['corsair_raider', 'corsair_raider', 'corsair_cutlass'],
+      ascendant_empire:     ['ascendant_seraph', 'ascendant_seraph'],
     };
-
-    return defaultShips[factionId] || [];
+    return defaults[factionId] ?? [];
   }
 
   // ==========================================
@@ -662,7 +485,7 @@ export class LobbyScene extends Phaser.Scene {
     this.headerText.setText('MULTIPLAYER LOBBY');
     this.roomListContainer.setVisible(true);
     this.playerListContainer.setVisible(false);
-    this.updateRoomList();
+    this.loadRooms();
   }
 
   private showRoomView(): void {
@@ -686,45 +509,33 @@ export class LobbyScene extends Phaser.Scene {
 
   private createSmallButton(x: number, y: number, label: string, onClick: () => void): Phaser.GameObjects.Container {
     const container = this.add.container(x, y);
-
     const bg = this.add.graphics();
     bg.fillStyle(0x2a2a3a, 1);
-    bg.fillRoundedRect(-35, -12, 70, 24, 4);
+    bg.fillRoundedRect(-45, -12, 90, 24, 4);
     container.add(bg);
-
-    const text = this.add
-      .text(0, 0, label, {
-        font: '12px Arial',
-        color: '#aaaaaa',
-      })
-      .setOrigin(0.5);
+    const text = this.add.text(0, 0, label, { font: '12px Arial', color: '#aaaaaa' }).setOrigin(0.5);
     container.add(text);
-
-    container.setInteractive(new Phaser.Geom.Rectangle(-35, -12, 70, 24), Phaser.Geom.Rectangle.Contains);
-
+    container.setInteractive(new Phaser.Geom.Rectangle(-45, -12, 90, 24), Phaser.Geom.Rectangle.Contains);
     container.on('pointerover', () => {
       bg.clear();
       bg.fillStyle(0x3a3a5a, 1);
-      bg.fillRoundedRect(-35, -12, 70, 24, 4);
+      bg.fillRoundedRect(-45, -12, 90, 24, 4);
       text.setColor('#ffffff');
     });
-
     container.on('pointerout', () => {
       bg.clear();
       bg.fillStyle(0x2a2a3a, 1);
-      bg.fillRoundedRect(-35, -12, 70, 24, 4);
+      bg.fillRoundedRect(-45, -12, 90, 24, 4);
       text.setColor('#aaaaaa');
     });
-
     container.on('pointerdown', onClick);
-
     return container;
   }
 
   private setupInput(): void {
     this.input.keyboard!.on('keydown-ESC', () => {
       if (this.currentView === 'room') {
-        this.leaveRoom();
+        networkService.leaveRoom();
       } else {
         this.scene.start('MainMenuScene');
       }
