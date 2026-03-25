@@ -98,7 +98,7 @@ export class MainMenuScene extends Phaser.Scene {
 
     const items = [
       { label: 'SKIRMISH',     action: () => this.scene.start('SquadBuilderScene', { initialMode: 'arcade' }) },
-      { label: 'SURVIVAL',     action: () => this.scene.start('SurvivalScene') },
+      { label: 'SURVIVAL',     action: () => this.scene.start('SquadBuilderScene', { initialMode: 'survival' }) },
       { label: 'EPIC BATTLE',  action: () => this.scene.start('EpicBattleScene') },
       { label: 'DOGFIGHT',     action: () => this.scene.start('DogfightScene') },
       { label: 'ACE DUEL',     action: () => this.scene.start('AceDuelScene') },

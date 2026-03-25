@@ -81,6 +81,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private instructionsText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
 
+  private playerFaction: FactionId = 'free_confederation';
   private score = 0;
   private lastTime = 0;
   private gameEnded = false;
@@ -96,17 +97,27 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Load ship sprites for arcade battle (BootScene may not have these)
-    const loadIfMissing = (id: string, faction: string, file: string): void => {
+    const battleConfig = this.registry.get('battleConfig') as {
+      factions: Array<{ factionId: FactionId; controller: 'player' | 'ai'; ships: string[] }>;
+    } | undefined;
+
+    const loadIfMissing = (id: string): void => {
       const key = `ship_${id}`;
-      if (!this.textures.exists(key)) {
-        this.load.image(key, `assets/ships/${faction}/${file}.png`);
-      }
+      if (this.textures.exists(key)) return;
+      const def = getShipDefinition(id);
+      if (def) this.load.image(key, `assets/ships/${def.faction}/${id}.png`);
     };
-    loadIfMissing('confed_sparrow', 'free_confederation', 'confed_sparrow');
-    loadIfMissing('confed_wasp',    'free_confederation', 'confed_wasp');
-    loadIfMissing('terran_gladius', 'terran_hegemony',    'terran_gladius');
-    loadIfMissing('terran_viper',   'terran_hegemony',    'terran_viper');
+
+    if (battleConfig?.factions?.length) {
+      for (const slot of battleConfig.factions) {
+        for (const shipId of slot.ships) loadIfMissing(shipId);
+      }
+    } else {
+      loadIfMissing('confed_sparrow');
+      loadIfMissing('confed_wasp');
+      loadIfMissing('terran_gladius');
+      loadIfMissing('terran_viper');
+    }
   }
 
   create(): void {
@@ -413,7 +424,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
     // Create sprite
     const sprite = this.add.graphics();
-    sprite.fillStyle(ship.faction === 'free_confederation' ? 0xff8800 : 0x00ff00, 1);
+    sprite.fillStyle(ship.faction === this.playerFaction ? 0xff8800 : 0x00ff00, 1);
     sprite.fillCircle(0, 0, 3);
     sprite.setPosition(proj.x, proj.y);
     sprite.setDepth(5);
@@ -447,7 +458,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
           }
 
           // Score and kill notification for player kills
-          if (proj.ownerFaction === 'free_confederation' && ship.hull <= 0 && wasAlive) {
+          if (proj.ownerFaction === this.playerFaction && ship.hull <= 0 && wasAlive) {
             this.score += 100;
             this.showFloatingText(ship.x, ship.y - 40, 'KILL!', '#ffff00');
             this.scoreText.setText(`SCORE: ${this.score}`);
@@ -470,62 +481,99 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   private spawnShips(): void {
-    // Player ship
+    const battleConfig = this.registry.get('battleConfig') as {
+      factions: Array<{ factionId: FactionId; controller: 'player' | 'ai'; ships: string[] }>;
+    } | undefined;
+
+    if (battleConfig?.factions?.length) {
+      this.spawnFromConfig(battleConfig.factions);
+    } else {
+      this.spawnDefaultShips();
+    }
+
+    for (const ship of this.ships.values()) {
+      this.createShipSprite(ship);
+    }
+  }
+
+  private spawnFromConfig(
+    factions: Array<{ factionId: FactionId; controller: 'player' | 'ai'; ships: string[] }>
+  ): void {
+    const playerSlot = factions.find((f) => f.controller === 'player') ?? factions[0]!;
+    const enemySlots = factions.filter((f) => f !== playerSlot);
+    this.playerFaction = playerSlot.factionId;
+
+    // Spawn player-controlled ship (first in player slot)
+    const playerShipId = playerSlot.ships[0] ?? 'confed_sparrow';
     const playerShip = this.createShip(
-      'player_0',
-      'confed_sparrow',
-      'free_confederation',
-      'player',
-      BATTLEFIELD_SIZE / 2,
-      BATTLEFIELD_SIZE / 2 + 200,
-      0
+      'player_0', playerShipId, playerSlot.factionId, 'player',
+      BATTLEFIELD_SIZE / 2, BATTLEFIELD_SIZE / 2 + 200, 0
     );
-    // Boost player survivability — starts with more cushion to learn controls
+    playerShip.hull = playerShip.maxHull = Math.max(6, playerShip.maxHull);
+    playerShip.shields = playerShip.maxShields = Math.max(3, playerShip.maxShields);
+    this.ships.set(playerShip.id, playerShip);
+    this.playerShipId = playerShip.id;
+
+    // Remaining player-slot ships are AI allies in wing formation
+    const wingOffsets = [{ x: -150, y: 350 }, { x: 150, y: 350 }, { x: 0, y: 450 }];
+    playerSlot.ships.slice(1).forEach((shipId, i) => {
+      const offset = wingOffsets[i] ?? { x: (i - 1) * 160, y: 400 };
+      const ally = this.createShip(
+        `ally_${i}`, shipId, playerSlot.factionId, 'ai',
+        BATTLEFIELD_SIZE / 2 + offset.x, BATTLEFIELD_SIZE / 2 + offset.y, 0
+      );
+      this.ships.set(ally.id, ally);
+    });
+
+    // All enemy slots spawn spread around the far side
+    const totalEnemies = enemySlots.reduce((sum, s) => sum + s.ships.length, 0);
+    let enemyIndex = 0;
+    for (const slot of enemySlots) {
+      for (const shipId of slot.ships) {
+        const angle = (enemyIndex / Math.max(totalEnemies, 1)) * Math.PI * 2;
+        const radius = 550;
+        const enemy = this.createShip(
+          `enemy_${enemyIndex}`, shipId, slot.factionId, 'ai',
+          BATTLEFIELD_SIZE / 2 + Math.cos(angle) * radius,
+          BATTLEFIELD_SIZE / 2 + Math.sin(angle) * radius - 350, 0
+        );
+        this.ships.set(enemy.id, enemy);
+        enemyIndex++;
+      }
+    }
+  }
+
+  private spawnDefaultShips(): void {
+    const playerShip = this.createShip(
+      'player_0', 'confed_sparrow', 'free_confederation', 'player',
+      BATTLEFIELD_SIZE / 2, BATTLEFIELD_SIZE / 2 + 200, 0
+    );
     playerShip.hull = playerShip.maxHull = 8;
     playerShip.shields = playerShip.maxShields = 4;
     this.ships.set(playerShip.id, playerShip);
     this.playerShipId = playerShip.id;
 
-    // Allied ships — wing formation: flanking behind the player
-    const wingOffsets: Array<{ x: number; y: number }> = [
-      { x: -150, y: 350 },
-      { x:  150, y: 350 },
-    ];
+    const wingOffsets = [{ x: -150, y: 350 }, { x: 150, y: 350 }];
     for (let i = 0; i < wingOffsets.length; i++) {
-      const offset = wingOffsets[i] ?? { x: 0, y: 300 };
+      const offset = wingOffsets[i]!;
       const ally = this.createShip(
-        `ally_${i}`,
-        'confed_wasp',
-        'free_confederation',
-        'ai',
-        BATTLEFIELD_SIZE / 2 + offset.x,
-        BATTLEFIELD_SIZE / 2 + offset.y,
-        0
+        `ally_${i}`, 'confed_wasp', 'free_confederation', 'ai',
+        BATTLEFIELD_SIZE / 2 + offset.x, BATTLEFIELD_SIZE / 2 + offset.y, 0
       );
       ally.hull = ally.maxHull = 5;
       ally.shields = ally.maxShields = 3;
       this.ships.set(ally.id, ally);
     }
 
-    // Enemy ships — 3 enemies, spawned far away so the player has time to react
     for (let i = 0; i < 3; i++) {
       const angle = (i / 3) * Math.PI * 2;
       const radius = 550;
       const enemy = this.createShip(
-        `enemy_${i}`,
-        i === 0 ? 'terran_gladius' : 'terran_viper',
-        'terran_hegemony',
-        'ai',
+        `enemy_${i}`, i === 0 ? 'terran_gladius' : 'terran_viper', 'terran_hegemony', 'ai',
         BATTLEFIELD_SIZE / 2 + Math.cos(angle) * radius,
-        BATTLEFIELD_SIZE / 2 + Math.sin(angle) * radius - 350,
-        0
+        BATTLEFIELD_SIZE / 2 + Math.sin(angle) * radius - 350, 0
       );
       this.ships.set(enemy.id, enemy);
-    }
-
-    // Create sprites for all ships
-    for (const ship of this.ships.values()) {
-      this.createShipSprite(ship);
     }
   }
 
@@ -823,10 +871,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
     if (this.gameEnded) return;
 
     const enemies = Array.from(this.ships.values()).filter(
-      (s) => s.faction !== 'free_confederation' && s.hull > 0
+      (s) => s.faction !== this.playerFaction && s.hull > 0
     );
     const allies = Array.from(this.ships.values()).filter(
-      (s) => s.faction === 'free_confederation' && s.hull > 0
+      (s) => s.faction === this.playerFaction && s.hull > 0
     );
 
     if (enemies.length === 0) {

@@ -602,14 +602,11 @@ Use `submit_and_start_worker(jobs)` from other scripts.
 
 ## Known Issues
 
-- Some faction balance needs tuning (see balance tests)
-- SurvivalScene starting ship is hardcoded to confed_falcon
-- ArcadeBattleScene ship roster is hardcoded (no faction select yet)
+- Epic ship format (huge size) not yet implemented as a battle mode
 
 
 ## Next Steps
 
-- Ship faction/loadout select screen for ArcadeBattleScene
-- Pilot cards for all 18 ships
-- Epic ship support (huge size)
-- Multiplayer networking
+- Epic ship support (huge ship format battle mode — EpicBattleScene uses boss encounters, not X-Wing epic format)
+- Multiplayer networking (Step 2: real WebSocket server; Step 1 local sim done)
+- Balance tuning: VC/AE loadout bonuses added, re-run headless sim matrix to verify improvement

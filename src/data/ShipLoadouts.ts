@@ -1053,7 +1053,7 @@ export const SHIP_LOADOUTS: Record<string, ShipLoadout[]> = {
   ],
 
   corsair_fang: [
-    { id: 'fang_raider', name: 'Fang Raider', shipId: 'corsair_fang', upgrades: ['daredevil', 'engine_upgrade'], pointCost: 42, description: 'Fast raider', role: 'offense' },
+    { id: 'fang_raider', name: 'Fang Raider', shipId: 'corsair_fang', upgrades: ['daredevil', 'hull_upgrade'], pointCost: 42, description: 'Fast raider with reinforced hull', role: 'offense' },
     { id: 'fang_swarm', name: 'Fang Swarm', shipId: 'corsair_fang', upgrades: [], pointCost: 32, description: 'Swarm interceptor', role: 'swarm' },
   ],
   corsair_talon: [
@@ -1061,7 +1061,7 @@ export const SHIP_LOADOUTS: Record<string, ShipLoadout[]> = {
     { id: 'talon_ace', name: 'Talon Ace', shipId: 'corsair_talon', upgrades: ['elusive', 'engine_upgrade'], pointCost: 48, description: 'Ace pilot build', role: 'defense' },
   ],
   corsair_venom: [
-    { id: 'venom_assassin', name: 'Venom Assassin', shipId: 'corsair_venom', upgrades: ['elusive'], pointCost: 35, description: 'Nimble assassin', role: 'offense' },
+    { id: 'venom_assassin', name: 'Venom Assassin', shipId: 'corsair_venom', upgrades: ['elusive', 'hull_upgrade'], pointCost: 35, description: 'Nimble assassin with reinforced hull', role: 'offense' },
     { id: 'venom_swarm', name: 'Venom Swarm', shipId: 'corsair_venom', upgrades: [], pointCost: 28, description: 'Cheap swarm', role: 'swarm' },
   ],
   corsair_cutlass: [
@@ -1135,10 +1135,10 @@ export const SHIP_LOADOUTS: Record<string, ShipLoadout[]> = {
       id: 'seraph_warden',
       name: 'Seraph Warden',
       shipId: 'ascendant_seraph',
-      upgrades: ['elusive', 'predator', 'engine_upgrade'],
+      upgrades: ['elusive', 'shield_upgrade', 'hull_upgrade'],
       pointCost: 68,
-      description: 'Offensive ace with pursuit capability',
-      role: 'offense',
+      description: 'Resilient warden with enhanced defenses',
+      role: 'defense',
     },
   ],
 
@@ -1206,11 +1206,11 @@ export const SHIP_LOADOUTS: Record<string, ShipLoadout[]> = {
   ],
 
   ascendant_cherub: [
-    { id: 'cherub_ace', name: 'Cherub Ace', shipId: 'ascendant_cherub', upgrades: ['elusive'], pointCost: 32, description: 'Nimble ace', role: 'defense' },
+    { id: 'cherub_ace', name: 'Cherub Ace', shipId: 'ascendant_cherub', upgrades: ['elusive', 'hull_upgrade'], pointCost: 32, description: 'Nimble ace with reinforced hull', role: 'defense' },
     { id: 'cherub_swarm', name: 'Cherub Swarm', shipId: 'ascendant_cherub', upgrades: [], pointCost: 25, description: 'Swarm interceptor', role: 'swarm' },
   ],
   ascendant_herald: [
-    { id: 'herald_striker', name: 'Herald Striker', shipId: 'ascendant_herald', upgrades: ['predator', 'advanced_sensors'], pointCost: 48, description: 'Strike interceptor', role: 'offense' },
+    { id: 'herald_striker', name: 'Herald Striker', shipId: 'ascendant_herald', upgrades: ['predator', 'shield_upgrade'], pointCost: 48, description: 'Strike interceptor with shielding', role: 'offense' },
     { id: 'herald_scout', name: 'Herald Scout', shipId: 'ascendant_herald', upgrades: ['advanced_sensors', 'engine_upgrade'], pointCost: 42, description: 'Scout build', role: 'support' },
   ],
   ascendant_virtue: [

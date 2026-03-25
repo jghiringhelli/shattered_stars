@@ -30,6 +30,15 @@ import {
 } from '../systems/PerformanceSystem';
 import type { ManeuverDirection } from '../core/types';
 
+/** Default starting ship for each faction in Survival mode. */
+const FACTION_STARTER_SHIPS: Record<FactionId, string> = {
+  terran_hegemony:      'terran_stiletto',
+  free_confederation:   'confed_sparrow',
+  synthetic_collective: 'synth_scout_drone',
+  void_corsairs:        'corsair_fang',
+  ascendant_empire:     'ascendant_herald',
+};
+
 interface SurvivalShip {
   id: string;
   definitionId: string;
@@ -107,6 +116,10 @@ export class SurvivalScene extends Phaser.Scene {
     super({ key: 'SurvivalScene' });
   }
 
+  init(data: { factionId?: FactionId }): void {
+    if (data?.factionId) this.playerFaction = data.factionId;
+  }
+
   create(): void {
     this.cameras.main.setBounds(0, 0, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
     this.cameras.main.setBackgroundColor(0x050510);
@@ -159,8 +172,8 @@ export class SurvivalScene extends Phaser.Scene {
     this.playerShipIds = [];
     this.enemyShipIds = [];
 
-    // Spawn initial player ship
-    this.spawnPlayerShip('confed_falcon', BATTLEFIELD_SIZE / 2, BATTLEFIELD_SIZE / 2 + 100);
+    // Spawn initial player ship based on chosen faction
+    this.spawnPlayerShip(FACTION_STARTER_SHIPS[this.playerFaction], BATTLEFIELD_SIZE / 2, BATTLEFIELD_SIZE / 2 + 100);
   }
 
   update(time: number, delta: number): void {
