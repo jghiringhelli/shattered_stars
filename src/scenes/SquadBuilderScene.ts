@@ -11,6 +11,7 @@
  */
 
 import Phaser from 'phaser';
+import { createHoverButton } from '../ui/ButtonFactory';
 import type { FactionId } from '../config';
 import { FACTION_COLORS } from '../config';
 import { SHIP_DEFINITIONS, getShipsByFaction } from '../data/ShipDefinitions';
@@ -19,6 +20,7 @@ import {
   DIFFICULTY_NAMES,
   DIFFICULTY_DESCRIPTIONS,
 } from '../ai/AIDifficulty';
+import { getQuickBuild, toSimSpecs } from '../data/SquadronPresets';
 
 interface FactionSlot {
   factionId: FactionId | null;
@@ -28,7 +30,7 @@ interface FactionSlot {
   pointsUsed: number;
 }
 
-type SquadStyle = 'balanced' | 'swarm' | 'elite' | 'bomber' | 'interceptor' | 'custom';
+type SquadStyle = 'balanced' | 'swarm' | 'elite' | 'bomber' | 'interceptor' | 'custom' | 'quick';
 
 interface SquadTemplate {
   name: string;
@@ -65,6 +67,11 @@ const SQUAD_TEMPLATES: Record<SquadStyle, SquadTemplate> = {
   custom: {
     name: 'Custom',
     description: 'Build your own squad',
+    shipRoles: [],
+  },
+  quick: {
+    name: 'Quick Build',
+    description: 'Curated preset squad for this faction and budget',
     shipRoles: [],
   },
 };
@@ -122,6 +129,17 @@ export class SquadBuilderScene extends Phaser.Scene {
     this.setupInput();
 
     this.updateDisplay();
+
+    // Listen for ship selection results from ShipPickerScene
+    this.game.events.on('shipsPicked', (data: { slotIndex: number; ships: string[] }) => {
+      const slot = this.factionSlots[data.slotIndex];
+      if (!slot) return;
+      slot.ships = data.ships;
+      slot.pointsUsed = data.ships.reduce(
+        (sum, id) => sum + (SHIP_DEFINITIONS[id]?.baseStats.pointCost ?? 0), 0,
+      );
+      this.updateDisplay();
+    });
   }
 
   private initializeFactionSlots(): void {
@@ -247,41 +265,11 @@ export class SquadBuilderScene extends Phaser.Scene {
   }
 
   private createSmallButton(x: number, y: number, label: string, onClick: () => void): Phaser.GameObjects.Container {
-    const container = this.add.container(x, y);
-
-    const bg = this.add.graphics();
-    bg.fillStyle(0x333344, 1);
-    bg.fillRoundedRect(-25, -15, 50, 30, 4);
-    container.add(bg);
-
-    const text = this.add
-      .text(0, 0, label, {
-        font: '14px Arial',
-        color: '#aaaaaa',
-      })
-      .setOrigin(0.5);
-    container.add(text);
-
-    container.setData('bg', bg);
-    container.setData('text', text);
-
-    container.setInteractive(new Phaser.Geom.Rectangle(-25, -15, 50, 30), Phaser.Geom.Rectangle.Contains);
-
-    container.on('pointerover', () => {
-      bg.clear();
-      bg.fillStyle(0x444466, 1);
-      bg.fillRoundedRect(-25, -15, 50, 30, 4);
-    });
-
-    container.on('pointerout', () => {
-      bg.clear();
-      bg.fillStyle(0x333344, 1);
-      bg.fillRoundedRect(-25, -15, 50, 30, 4);
-    });
-
-    container.on('pointerdown', onClick);
-
-    return container;
+    return createHoverButton(this, x, y, {
+      width: 50, height: 30, radius: 4,
+      color: 0x333344, hoverColor: 0x444466,
+      label, font: '14px Arial', textColor: '#aaaaaa',
+    }, onClick);
   }
 
   private createFactionSlots(): void {
@@ -374,13 +362,19 @@ export class SquadBuilderScene extends Phaser.Scene {
       .setOrigin(1, 0.5);
     container.add(pointsText);
 
-    // Ship count
+    // Ship count — clickable to open ship picker
     const shipCountText = this.add
-      .text(width / 2 - 20, 10, `${slot.ships.length} ships`, {
+      .text(width / 2 - 20, 10, `${slot.ships.length} ships ✎`, {
         font: '14px Arial',
-        color: '#888888',
+        color: '#6688aa',
       })
-      .setOrigin(1, 0.5);
+      .setOrigin(1, 0.5)
+      .setInteractive({ useHandCursor: true });
+    shipCountText.on('pointerover', () => shipCountText.setColor('#88bbdd'));
+    shipCountText.on('pointerout', () => shipCountText.setColor('#6688aa'));
+    shipCountText.on('pointerdown', () => {
+      if (slot.factionId) this.openShipPicker(index);
+    });
     container.add(shipCountText);
 
     // Action buttons
@@ -454,111 +448,18 @@ export class SquadBuilderScene extends Phaser.Scene {
   }
 
   private createControls(): void {
-    // Auto-fill all button
-    const autoAllBtn = this.add.container(this.scale.width / 2 - 150, this.scale.height - 80);
-
-    const autoAllBg = this.add.graphics();
-    autoAllBg.fillStyle(0x336633, 1);
-    autoAllBg.fillRoundedRect(-80, -20, 160, 40, 8);
-    autoAllBtn.add(autoAllBg);
-
-    const autoAllText = this.add
-      .text(0, 0, 'AUTO-FILL ALL', {
-        font: 'bold 18px Arial',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5);
-    autoAllBtn.add(autoAllText);
-
-    autoAllBtn.setInteractive(new Phaser.Geom.Rectangle(-80, -20, 160, 40), Phaser.Geom.Rectangle.Contains);
-
-    autoAllBtn.on('pointerover', () => {
-      autoAllBg.clear();
-      autoAllBg.fillStyle(0x44aa44, 1);
-      autoAllBg.fillRoundedRect(-80, -20, 160, 40, 8);
-    });
-
-    autoAllBtn.on('pointerout', () => {
-      autoAllBg.clear();
-      autoAllBg.fillStyle(0x336633, 1);
-      autoAllBg.fillRoundedRect(-80, -20, 160, 40, 8);
-    });
-
-    autoAllBtn.on('pointerdown', () => {
-      this.autoFillAllSquads();
-    });
-
-    // Randomize factions button
-    const randomBtn = this.add.container(this.scale.width / 2, this.scale.height - 80);
-
-    const randomBg = this.add.graphics();
-    randomBg.fillStyle(0x663366, 1);
-    randomBg.fillRoundedRect(-80, -20, 160, 40, 8);
-    randomBtn.add(randomBg);
-
-    const randomText = this.add
-      .text(0, 0, 'RANDOMIZE', {
-        font: 'bold 18px Arial',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5);
-    randomBtn.add(randomText);
-
-    randomBtn.setInteractive(new Phaser.Geom.Rectangle(-80, -20, 160, 40), Phaser.Geom.Rectangle.Contains);
-
-    randomBtn.on('pointerover', () => {
-      randomBg.clear();
-      randomBg.fillStyle(0x8844aa, 1);
-      randomBg.fillRoundedRect(-80, -20, 160, 40, 8);
-    });
-
-    randomBtn.on('pointerout', () => {
-      randomBg.clear();
-      randomBg.fillStyle(0x663366, 1);
-      randomBg.fillRoundedRect(-80, -20, 160, 40, 8);
-    });
-
-    randomBtn.on('pointerdown', () => {
-      this.randomizeAll();
-    });
+    createHoverButton(this, this.scale.width / 2 - 150, this.scale.height - 80, {
+      width: 160, height: 40, color: 0x336633, hoverColor: 0x44aa44, label: 'AUTO-FILL ALL',
+    }, () => this.autoFillAllSquads());
+    createHoverButton(this, this.scale.width / 2, this.scale.height - 80, {
+      width: 160, height: 40, color: 0x663366, hoverColor: 0x8844aa, label: 'RANDOMIZE',
+    }, () => this.randomizeAll());
   }
 
   private createStartButton(): void {
-    this.startButton = this.add.container(this.scale.width / 2 + 150, this.scale.height - 80);
-
-    const bg = this.add.graphics();
-    bg.fillStyle(0x227722, 1);
-    bg.fillRoundedRect(-80, -20, 160, 40, 8);
-    this.startButton.add(bg);
-
-    const text = this.add
-      .text(0, 0, 'START BATTLE', {
-        font: 'bold 18px Arial',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5);
-    this.startButton.add(text);
-
-    this.startButton.setInteractive(
-      new Phaser.Geom.Rectangle(-80, -20, 160, 40),
-      Phaser.Geom.Rectangle.Contains
-    );
-
-    this.startButton.on('pointerover', () => {
-      bg.clear();
-      bg.fillStyle(0x33aa33, 1);
-      bg.fillRoundedRect(-80, -20, 160, 40, 8);
-    });
-
-    this.startButton.on('pointerout', () => {
-      bg.clear();
-      bg.fillStyle(0x227722, 1);
-      bg.fillRoundedRect(-80, -20, 160, 40, 8);
-    });
-
-    this.startButton.on('pointerdown', () => {
-      this.startBattle();
-    });
+    this.startButton = createHoverButton(this, this.scale.width / 2 + 150, this.scale.height - 80, {
+      width: 160, height: 40, color: 0x227722, hoverColor: 0x33aa33, label: 'START BATTLE',
+    }, () => this.startBattle());
   }
 
   private setupInput(): void {
@@ -621,7 +522,7 @@ export class SquadBuilderScene extends Phaser.Scene {
     const slot = this.factionSlots[slotIndex];
     if (!slot) return;
 
-    const styles: SquadStyle[] = ['balanced', 'swarm', 'elite', 'bomber', 'interceptor'];
+    const styles: SquadStyle[] = ['balanced', 'swarm', 'elite', 'bomber', 'interceptor', 'quick'];
     const currentIndex = styles.indexOf(slot.squadStyle);
     const nextIndex = (currentIndex + 1) % styles.length;
     slot.squadStyle = styles[nextIndex] as SquadStyle;
@@ -633,11 +534,23 @@ export class SquadBuilderScene extends Phaser.Scene {
   private autoFillSquad(slot: FactionSlot): void {
     if (!slot.factionId) return;
 
-    const template = SQUAD_TEMPLATES[slot.squadStyle];
-    const factionShips = getShipsByFaction(slot.factionId);
-
     slot.ships = [];
     slot.pointsUsed = 0;
+
+    // 'quick' style: use authored preset squad, fall back to balanced
+    if (slot.squadStyle === 'quick') {
+      const preset = getQuickBuild(slot.factionId, this.pointLimit);
+      if (preset) {
+        const specs = toSimSpecs(preset);
+        for (const spec of specs) slot.ships.push(spec.shipId);
+        slot.pointsUsed = preset.totalCost;
+        return;
+      }
+      slot.squadStyle = 'balanced';
+    }
+
+    const template = SQUAD_TEMPLATES[slot.squadStyle];
+    const factionShips = getShipsByFaction(slot.factionId);
 
     // Fill based on template roles
     for (const role of template.shipRoles) {
@@ -676,7 +589,7 @@ export class SquadBuilderScene extends Phaser.Scene {
   private randomizeAll(): void {
     // Shuffle factions
     const shuffled = [...ALL_FACTIONS].sort(() => Math.random() - 0.5);
-    const styles: SquadStyle[] = ['balanced', 'swarm', 'elite', 'bomber', 'interceptor'];
+    const styles: SquadStyle[] = ['balanced', 'swarm', 'elite', 'bomber', 'interceptor', 'quick'];
 
     this.factionSlots.forEach((slot, i) => {
       slot.factionId = shuffled[i % shuffled.length] as FactionId;
@@ -729,5 +642,20 @@ export class SquadBuilderScene extends Phaser.Scene {
     } else {
       this.scene.start('ContinuousTacticalScene');
     }
+  }
+
+  /**
+   * Launch ShipPickerScene on top of this scene for the given slot index.
+   * @param slotIndex - The faction slot to customize.
+   */
+  private openShipPicker(slotIndex: number): void {
+    const slot = this.factionSlots[slotIndex];
+    if (!slot?.factionId) return;
+    this.scene.launch('ShipPickerScene', {
+      slotIndex,
+      factionId: slot.factionId,
+      selectedShips: [...slot.ships],
+      pointLimit: this.pointLimit,
+    });
   }
 }

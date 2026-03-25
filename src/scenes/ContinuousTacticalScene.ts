@@ -15,6 +15,7 @@
  */
 
 import Phaser from 'phaser';
+import { ShipStatCard } from '../ui/ShipStatCard';
 import type { ShipState, ManeuverDefinition, ManeuverDirection } from '../core/types';
 import type { FactionId } from '../config';
 import { BATTLEFIELD_SIZE, FACTION_COLORS, SHIP_SIZES } from '../config';
@@ -35,8 +36,16 @@ import { Minimap, type MinimapShip } from '../ui/Minimap';
 import { PauseMenu } from '../ui/PauseMenu';
 import { GameOverScreen, type GameOverStats } from '../ui/GameOverScreen';
 import { EffectsManager } from '../rendering/EffectsManager';
+import { headingDiffToTarget } from '../systems/MovementSystem';
+import { renderBattleStarfield } from '../rendering/Starfield';
 import { ParallaxBackground } from '../rendering/ParallaxBackground';
 import { audioManager } from '../audio/AudioManager';
+import {
+  createPerformanceState,
+  updateFPS,
+  evaluateQuality,
+  type PerformanceState,
+} from '../systems/PerformanceSystem';
 
 // Timing constants
 const MANEUVER_INTERVAL = 300; // ms between maneuver commits
@@ -106,6 +115,7 @@ export class ContinuousTacticalScene extends Phaser.Scene {
   // Visual effects
   private effectsManager!: EffectsManager;
   private background!: ParallaxBackground;
+  private performanceState: PerformanceState = createPerformanceState();
 
   constructor() {
     super({ key: 'ContinuousTacticalScene' });
@@ -121,6 +131,15 @@ export class ContinuousTacticalScene extends Phaser.Scene {
 
     // Initialize effects and background systems
     this.effectsManager = new EffectsManager(this);
+    const savedSettings = this.registry.get('settings') as
+      | { cameraShake: boolean; showDamageNumbers: boolean }
+      | undefined;
+    if (savedSettings) {
+      this.effectsManager.setUserSettings({
+        cameraShake: savedSettings.cameraShake,
+        showDamageNumbers: savedSettings.showDamageNumbers,
+      });
+    }
     this.background = new ParallaxBackground(this, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
     this.background.startShootingStars();
     this.background.addDistantPlanet(BATTLEFIELD_SIZE * 0.8, BATTLEFIELD_SIZE * 0.3, 80, 0x446688);
@@ -168,6 +187,9 @@ export class ContinuousTacticalScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     if (this.isPaused) return;
+    this.performanceState = updateFPS(this.performanceState, delta);
+    this.performanceState = evaluateQuality(this.performanceState, time);
+    this.effectsManager.setQualitySettings(this.performanceState.effectSettings);
 
     // Update background parallax
     this.background.update();
@@ -206,17 +228,7 @@ export class ContinuousTacticalScene extends Phaser.Scene {
   // ==========================================
 
   private createStarfield(): void {
-    const graphics = this.add.graphics();
-
-    for (let i = 0; i < 400; i++) {
-      const x = Phaser.Math.Between(0, BATTLEFIELD_SIZE);
-      const y = Phaser.Math.Between(0, BATTLEFIELD_SIZE);
-      const size = Phaser.Math.FloatBetween(0.5, 2);
-      const alpha = Phaser.Math.FloatBetween(0.2, 0.8);
-
-      graphics.fillStyle(0xffffff, alpha);
-      graphics.fillCircle(x, y, size);
-    }
+    renderBattleStarfield(this, BATTLEFIELD_SIZE, { includeNebula: false });
   }
 
   private spawnShips(): void {
@@ -460,7 +472,11 @@ export class ContinuousTacticalScene extends Phaser.Scene {
         Phaser.Geom.Circle.Contains
       );
       container.on('pointerdown', () => this.selectShip(ship.id));
+    } else {
+      container.setSize(size * 2, size * 2);
+      container.setInteractive();
     }
+    ShipStatCard.attachHoverCard(this, container, ship.definitionId);
 
     this.shipSprites.set(ship.id, container);
   }
@@ -887,11 +903,7 @@ export class ContinuousTacticalScene extends Phaser.Scene {
       }
       if (!target) continue;
 
-      const angleToTarget = Phaser.Math.Angle.Between(ship.x, ship.y, target.x, target.y) * Phaser.Math.RAD_TO_DEG;
-      const shipFacing = ship.angle - 90;
-      let angleDiff = angleToTarget - shipFacing;
-      if (angleDiff > 180) angleDiff -= 360;
-      if (angleDiff < -180) angleDiff += 360;
+      const angleDiff = headingDiffToTarget(ship.x, ship.y, ship.angle, target.x, target.y);
 
       // Choose maneuver based on angle difference
       const dial = getShipDial(ship.definitionId);

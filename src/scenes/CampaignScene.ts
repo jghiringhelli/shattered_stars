@@ -13,6 +13,7 @@ import Phaser from 'phaser';
 import type { FactionId } from '../config';
 import { FACTION_COLORS } from '../config';
 import { FACTION_CAMPAIGNS, type FactionCampaign, type CampaignMission } from '../data/CampaignData';
+import { renderMenuStarfield } from '../rendering/Starfield';
 import { audioManager } from '../audio/AudioManager';
 import { CampaignSaveManager, type CampaignSaveData } from '../systems/CampaignSaveManager';
 import { CAMPAIGN_PILOTS } from '../data/PilotData';
@@ -57,25 +58,16 @@ export class CampaignScene extends Phaser.Scene {
   }
 
   private createStarfield(): void {
-    this.starfield = this.add.graphics();
-
-    for (let i = 0; i < 300; i++) {
-      const x = Phaser.Math.Between(-640, 1920);
-      const y = Phaser.Math.Between(-360, 1080);
-      const size = Phaser.Math.FloatBetween(0.5, 2);
-      const alpha = Phaser.Math.FloatBetween(0.2, 0.8);
-
-      this.starfield.fillStyle(0xffffff, alpha);
-      this.starfield.fillCircle(x, y, size);
-    }
-
-    // Nebula effects
-    this.starfield.fillStyle(0x224488, 0.05);
-    this.starfield.fillCircle(300, 400, 350);
-    this.starfield.fillStyle(0x442266, 0.05);
-    this.starfield.fillCircle(1000, 300, 300);
-    this.starfield.fillStyle(0x662244, 0.04);
-    this.starfield.fillCircle(700, 600, 280);
+    const wideBounds = { minX: -640, maxX: 1920, minY: -360, maxY: 1080 };
+    this.starfield = renderMenuStarfield(this, {
+      starCount: 300,
+      bounds: wideBounds,
+      nebulae: [
+        { x: 300, y: 400, color: 0x224488, radius: 350 },
+        { x: 1000, y: 300, color: 0x442266, radius: 300 },
+        { x: 700, y: 600, color: 0x662244, radius: 280, alpha: 0.04 },
+      ],
+    });
   }
 
   // ==========================================

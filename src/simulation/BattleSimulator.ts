@@ -13,6 +13,21 @@ import { getShipDefinition, SHIP_DEFINITIONS } from '../data/ShipDefinitions';
 import { getModeCombatStats, calculateHitChance, type ModeCombatStats } from '../data/ModeBalancing';
 import { applyManeuver, getManeuverTemplate } from '../systems/ManeuverTemplates';
 import type { ManeuverDirection } from '../core/types';
+import { getLoadoutById } from '../data/ShipLoadouts';
+import { UPGRADE_DEFINITIONS } from '../systems/UpgradeSystem';
+import { PILOT_CARDS } from '../systems/SquadBuilder';
+import { getQuickBuild, toSimSpecs } from '../data/SquadronPresets';
+
+/**
+ * Specifies a ship in simulation with an optional pre-built loadout and pilot.
+ * Upgrade bonuses (attackBonus, shieldBonus, agilityBonus, hullBonus) are applied
+ * to the SimShip's stats when a loadoutId is provided.
+ */
+export interface SimShipSpec {
+  readonly shipId: string;
+  readonly loadoutId?: string; // references SHIP_LOADOUTS[shipId][*].id
+  readonly pilotId?: string;   // references PILOT_CARDS — sets pilotSkill from initiative
+}
 
 // Simulation configuration
 export interface SimulationConfig {
@@ -121,11 +136,18 @@ export class BattleSimulator {
   }
 
   /**
-   * Run a single battle simulation
+   * Run a single battle simulation.
+   * Accepts either ship definition ID strings (backward-compat) or SimShipSpec objects.
    */
-  runBattle(team1Ships: string[], team2Ships: string[]): BattleResult {
+  runBattle(
+    team1Ships: ReadonlyArray<SimShipSpec | string>,
+    team2Ships: ReadonlyArray<SimShipSpec | string>
+  ): BattleResult {
     this.reset();
-    this.spawnTeams(team1Ships, team2Ships);
+    this.spawnTeams(
+      team1Ships.map(s => (typeof s === 'string' ? { shipId: s } : s)),
+      team2Ships.map(s => (typeof s === 'string' ? { shipId: s } : s))
+    );
 
     while (this.currentTurn < this.config.maxTurns) {
       this.currentTurn++;
@@ -154,8 +176,8 @@ export class BattleSimulator {
    * Run multiple battles and aggregate statistics
    */
   runBatchSimulation(
-    team1Ships: string[],
-    team2Ships: string[],
+    team1Ships: ReadonlyArray<SimShipSpec | string>,
+    team2Ships: ReadonlyArray<SimShipSpec | string>,
     numBattles: number
   ): AggregatedStats {
     const results: BattleResult[] = [];
@@ -216,6 +238,17 @@ export class BattleSimulator {
     return results;
   }
 
+  /**
+   * Get a simulation squad for a faction using preset loadouts.
+   * Falls back to random ship selection when no preset is available.
+   */
+  getPresetSquadForFaction(faction: FactionId, budget: number): SimShipSpec[] {
+    const preset = getQuickBuild(faction, budget);
+    if (preset) return toSimSpecs(preset);
+    return this.getRandomShipsForFaction(faction, Math.ceil(budget / 60))
+      .map(shipId => ({ shipId }));
+  }
+
   // ==========================================
   // PRIVATE METHODS
   // ==========================================
@@ -228,7 +261,7 @@ export class BattleSimulator {
     this.shipStats.clear();
   }
 
-  private spawnTeams(team1Ships: string[], team2Ships: string[]): void {
+  private spawnTeams(team1Ships: SimShipSpec[], team2Ships: SimShipSpec[]): void {
     const centerY = this.config.battlefieldSize / 2;
     const spacing = 60;
 
@@ -240,8 +273,8 @@ export class BattleSimulator {
 
     // Spawn team 1 on the left
     // Angle convention: 0=up, 90=right, 180=down, 270=left (Phaser standard)
-    team1Ships.forEach((defId, i) => {
-      const ship = this.createShip(defId, 'team1', i);
+    team1Ships.forEach((spec, i) => {
+      const ship = this.createShip(spec, 'team1', i);
       ship.x = team1X;
       ship.y = centerY + (i - team1Ships.length / 2) * spacing;
       ship.angle = 90; // Facing right (toward enemy)
@@ -252,8 +285,8 @@ export class BattleSimulator {
     });
 
     // Spawn team 2 on the right
-    team2Ships.forEach((defId, i) => {
-      const ship = this.createShip(defId, 'team2', i);
+    team2Ships.forEach((spec, i) => {
+      const ship = this.createShip(spec, 'team2', i);
       ship.x = team2X;
       ship.y = centerY + (i - team2Ships.length / 2) * spacing;
       ship.angle = 270; // Facing left (toward enemy)
@@ -264,27 +297,50 @@ export class BattleSimulator {
     });
   }
 
-  private createShip(definitionId: string, team: string, index: number): SimShip {
-    const def = getShipDefinition(definitionId);
+  private createShip(spec: SimShipSpec, team: string, index: number): SimShip {
+    const def = getShipDefinition(spec.shipId);
     if (!def) {
-      throw new Error(`Unknown ship definition: ${definitionId}`);
+      throw new Error(`Unknown ship definition: ${spec.shipId}`);
     }
 
-    const combatStats = getModeCombatStats(definitionId, this.config.mode);
+    const combatStats = { ...getModeCombatStats(spec.shipId, this.config.mode) };
+    let maxHull = def.baseStats.hull;
+    let maxShields = def.baseStats.shields;
+
+    // Apply upgrade bonuses from loadout
+    if (spec.loadoutId) {
+      const loadout = getLoadoutById(spec.loadoutId);
+      if (loadout) {
+        for (const upgradeId of loadout.upgrades) {
+          const upgrade = UPGRADE_DEFINITIONS[upgradeId];
+          if (!upgrade?.effects) continue;
+          const fx = upgrade.effects;
+          if (fx.attackBonus) combatStats.attackDice += fx.attackBonus;
+          if (fx.agilityBonus) combatStats.agilityDice += fx.agilityBonus;
+          if (fx.hullBonus) maxHull += fx.hullBonus;
+          if (fx.shieldBonus) maxShields += fx.shieldBonus;
+        }
+      }
+    }
+
+    // Use pilot initiative as skill level if pilot specified
+    const pilotSkill = spec.pilotId
+      ? (PILOT_CARDS[spec.pilotId]?.initiative ?? 3)
+      : 3 + Math.floor(Math.random() * 4);
 
     return {
-      id: `${team}_${definitionId}_${index}`,
-      definitionId,
+      id: `${team}_${spec.shipId}_${index}`,
+      definitionId: spec.shipId,
       faction: def.faction,
       owner: team === 'team1' ? 'player' : 'ai',
       x: 0,
       y: 0,
       angle: 0,
-      hull: def.baseStats.hull,
-      maxHull: def.baseStats.hull,
-      shields: def.baseStats.shields,
-      maxShields: def.baseStats.shields,
-      pilotSkill: 3 + Math.floor(Math.random() * 4), // Random 3-6
+      hull: maxHull,
+      maxHull,
+      shields: maxShields,
+      maxShields,
+      pilotSkill,
       combatStats,
       currentSpeed: 2,
       weaponCooldown: 0,

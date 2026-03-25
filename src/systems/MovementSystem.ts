@@ -332,6 +332,24 @@ export function angleToTarget(
   return normalizeAngle(radToDeg(radians));
 }
 
+/**
+ * Compute the signed turn angle (degrees, -180 to +180) a ship must rotate
+ * from its current Phaser heading to face a target position.
+ * Positive = turn clockwise (right), negative = counterclockwise (left).
+ */
+export function headingDiffToTarget(
+  shipX: number,
+  shipY: number,
+  shipAngle: number,
+  targetX: number,
+  targetY: number
+): number {
+  let diff = angleToTarget(shipX, shipY, targetX, targetY) - shipAngle;
+  if (diff > 180) diff -= 360;
+  if (diff < -180) diff += 360;
+  return diff;
+}
+
 // ============================================
 // Maneuver Validation
 // ============================================

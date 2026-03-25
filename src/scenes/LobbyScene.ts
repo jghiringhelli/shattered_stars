@@ -9,6 +9,7 @@
  */
 
 import Phaser from 'phaser';
+import { createHoverButton } from '../ui/ButtonFactory';
 import type { FactionId } from '../config';
 import { FACTION_COLORS } from '../config';
 
@@ -677,38 +678,10 @@ export class LobbyScene extends Phaser.Scene {
   // ==========================================
 
   private createButton(x: number, y: number, label: string, onClick: () => void): Phaser.GameObjects.Container {
-    const container = this.add.container(x, y);
-
-    const bg = this.add.graphics();
-    bg.fillStyle(0x334455, 1);
-    bg.fillRoundedRect(-70, -20, 140, 40, 8);
-    container.add(bg);
-
-    const text = this.add
-      .text(0, 0, label, {
-        font: 'bold 16px Arial',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5);
-    container.add(text);
-
-    container.setInteractive(new Phaser.Geom.Rectangle(-70, -20, 140, 40), Phaser.Geom.Rectangle.Contains);
-
-    container.on('pointerover', () => {
-      bg.clear();
-      bg.fillStyle(0x445566, 1);
-      bg.fillRoundedRect(-70, -20, 140, 40, 8);
-    });
-
-    container.on('pointerout', () => {
-      bg.clear();
-      bg.fillStyle(0x334455, 1);
-      bg.fillRoundedRect(-70, -20, 140, 40, 8);
-    });
-
-    container.on('pointerdown', onClick);
-
-    return container;
+    return createHoverButton(this, x, y, {
+      width: 140, height: 40, color: 0x334455, hoverColor: 0x445566,
+      label, font: 'bold 16px Arial',
+    }, onClick);
   }
 
   private createSmallButton(x: number, y: number, label: string, onClick: () => void): Phaser.GameObjects.Container {

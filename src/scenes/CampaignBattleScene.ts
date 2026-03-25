@@ -6,6 +6,7 @@
  */
 
 import Phaser from 'phaser';
+import { ShipStatCard } from '../ui/ShipStatCard';
 import { GameClock } from '../core/GameClock';
 import { BattleManager, type BattleState, type BattleConfig } from '../core/BattleManager';
 import {
@@ -25,6 +26,7 @@ import { CampaignSaveManager } from '../systems/CampaignSaveManager';
 import { distributeMissionXp } from '../systems/CampaignPilotManager';
 import { CAMPAIGN_PILOTS } from '../data/PilotData';
 import { audioManager } from '../audio/AudioManager';
+import { renderBattleStarfield } from '../rendering/Starfield';
 
 interface ShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
@@ -343,9 +345,13 @@ export class CampaignBattleScene extends Phaser.Scene {
           break;
 
         case 'defend':
-          // For now, same as survive
           if (obj.timeLimit && elapsedSeconds >= obj.timeLimit) {
-            objState.completed = true;
+            if (playerShipsAlive > 0) {
+              objState.completed = true;
+            } else if (!obj.optional) {
+              this.triggerMissionFailed('The defense was overwhelmed');
+              return;
+            }
           }
           objState.progress = Math.floor(elapsedSeconds);
           break;
@@ -359,10 +365,26 @@ export class CampaignBattleScene extends Phaser.Scene {
           break;
 
         case 'escort':
-        case 'capture':
-          // Simplified: complete when enemies eliminated
+          // Protect the convoy by eliminating all threats
           if (enemyShipsAlive === 0 && this.pendingEnemySpawns.length === 0) {
-            objState.completed = true;
+            if (playerShipsAlive > 0) {
+              objState.completed = true;
+            } else if (!obj.optional) {
+              this.triggerMissionFailed('The escort was lost');
+              return;
+            }
+          }
+          break;
+
+        case 'capture':
+          // Secure the area by eliminating all enemy resistance
+          if (enemyShipsAlive === 0 && this.pendingEnemySpawns.length === 0) {
+            if (playerShipsAlive > 0) {
+              objState.completed = true;
+            } else if (!obj.optional) {
+              this.triggerMissionFailed('The capture failed');
+              return;
+            }
           }
           break;
       }
@@ -731,17 +753,7 @@ export class CampaignBattleScene extends Phaser.Scene {
   }
 
   private createStarfield(): void {
-    const graphics = this.add.graphics();
-
-    for (let i = 0; i < 300; i++) {
-      const x = Phaser.Math.Between(0, BATTLEFIELD_SIZE);
-      const y = Phaser.Math.Between(0, BATTLEFIELD_SIZE);
-      const size = Phaser.Math.Between(1, 2);
-      const alpha = Phaser.Math.FloatBetween(0.2, 0.8);
-
-      graphics.fillStyle(0xffffff, alpha);
-      graphics.fillCircle(x, y, size / 2);
-    }
+    renderBattleStarfield(this, BATTLEFIELD_SIZE, { starCount: 300, includeNebula: false });
   }
 
   private createBattlefieldGrid(): void {
@@ -1155,6 +1167,9 @@ export class CampaignBattleScene extends Phaser.Scene {
 
     container.setAngle(ship.angle);
     container.setDepth(10);
+    container.setSize(size * 2, size * 2);
+    container.setInteractive();
+    ShipStatCard.attachHoverCard(this, container, ship.definitionId);
 
     this.shipSprites.set(ship.id, container);
     this.updateShipHealthBar(ship, container);

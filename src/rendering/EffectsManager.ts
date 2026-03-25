@@ -13,6 +13,7 @@ import Phaser from 'phaser';
 import type { FactionId } from '../config';
 import { FACTION_COLORS } from '../config';
 import { audioManager } from '../audio/AudioManager';
+import type { EffectSettings } from '../systems/PerformanceSystem';
 
 // Faction-specific effect colors
 const FACTION_LASER_COLORS: Record<FactionId, number> = {
@@ -51,11 +52,38 @@ export class EffectsManager {
   private engineTrails: Map<string, EngineTrail> = new Map();
   private trailGraphics: Phaser.GameObjects.Graphics;
   private particleEmitters: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
+  private engineTrailsEnabled = true;
+  private damageNumbersEnabled = true;
+  private cameraShakeEnabled = true;
+  private particleMultiplier = 1;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     this.trailGraphics = scene.add.graphics();
     this.trailGraphics.setDepth(2); // Below ships
+  }
+
+  /**
+   * Apply adaptive quality settings from PerformanceSystem.
+   * @param settings - Current effect settings from PerformanceSystem.evaluateQuality()
+   */
+  setQualitySettings(settings: EffectSettings): void {
+    this.engineTrailsEnabled = settings.engineTrails;
+    this.particleMultiplier = settings.particleCount;
+    this.cameraShakeEnabled = settings.screenShake;
+    this.damageNumbersEnabled = settings.damageIndicators;
+    if (!settings.engineTrails) {
+      this.engineTrails.clear();
+    }
+  }
+
+  /**
+   * Apply user preferences from SettingsScene.
+   * @param settings - User preferences (cameraShake, showDamageNumbers)
+   */
+  setUserSettings(settings: { showDamageNumbers: boolean; cameraShake: boolean }): void {
+    this.damageNumbersEnabled = settings.showDamageNumbers;
+    this.cameraShakeEnabled = settings.cameraShake;
   }
 
   // ==========================================
@@ -66,6 +94,7 @@ export class EffectsManager {
    * Register a ship for engine trail rendering
    */
   registerEngineTrail(shipId: string, faction: FactionId, speed: number = 2): void {
+    if (!this.engineTrailsEnabled) return;
     const maxPoints = 15 + speed * 5; // Longer trails for faster ships
 
     this.engineTrails.set(shipId, {
@@ -325,11 +354,12 @@ export class EffectsManager {
     const soundType = size === 'small' ? 'explosion_small' : size === 'medium' ? 'explosion_medium' : 'explosion_large';
     audioManager.playSound(soundType, 0.8);
 
-    const config = {
+    const rawConfig = {
       small: { particles: 8, radius: 30, duration: 300 },
       medium: { particles: 15, radius: 60, duration: 500 },
       large: { particles: 25, radius: 100, duration: 700 },
     }[size];
+    const config = { ...rawConfig, particles: Math.max(1, Math.round(rawConfig.particles * this.particleMultiplier)) };
 
     const colors = [0xff4400, 0xff8800, 0xffaa00, 0xffff00];
 
@@ -410,10 +440,12 @@ export class EffectsManager {
     }
 
     // Screen shake for large explosions
-    if (size === 'large') {
-      this.scene.cameras.main.shake(200, 0.01);
-    } else if (size === 'medium') {
-      this.scene.cameras.main.shake(100, 0.005);
+    if (this.cameraShakeEnabled) {
+      if (size === 'large') {
+        this.scene.cameras.main.shake(200, 0.01);
+      } else if (size === 'medium') {
+        this.scene.cameras.main.shake(100, 0.005);
+      }
     }
   }
 
@@ -425,6 +457,7 @@ export class EffectsManager {
    * Show floating damage number
    */
   showDamageNumber(x: number, y: number, damage: number, isCritical: boolean = false): void {
+    if (!this.damageNumbersEnabled) return;
     const text = this.scene.add.text(x, y, `-${damage}`, {
       font: isCritical ? 'bold 24px monospace' : 'bold 18px monospace',
       color: isCritical ? '#ff0000' : '#ff6644',
@@ -454,6 +487,7 @@ export class EffectsManager {
    * Show healing/shield restore number
    */
   showHealNumber(x: number, y: number, amount: number, isShield: boolean = false): void {
+    if (!this.damageNumbersEnabled) return;
     const text = this.scene.add.text(x, y, `+${amount}`, {
       font: 'bold 16px monospace',
       color: isShield ? '#00aaff' : '#44ff44',

@@ -4,6 +4,7 @@
  */
 
 import Phaser from 'phaser';
+import { ShipStatCard } from '../ui/ShipStatCard';
 import type { ShipState } from '../core/types';
 import {
   createControlState,
@@ -33,6 +34,7 @@ import {
 } from '../config';
 import { HealthBar } from '../ui/HealthBar';
 import { Minimap, type MinimapShip } from '../ui/Minimap';
+import { renderBattleStarfield } from '../rendering/Starfield';
 
 interface ArcadeShip extends ShipState {
   control: ShipControlState;
@@ -55,7 +57,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private projectiles: Projectile[] = [];
   private projectileSprites: Map<string, Phaser.GameObjects.Graphics> = new Map();
   private healthBars: Map<string, HealthBar> = new Map();
-  private minimap!: Minimap;
+  private minimap: Minimap | undefined;
+  private cameraShakeEnabled = true;
+  private damageNumbersEnabled = true;
 
   private playerShipId: string | null = null;
   private keys!: {
@@ -106,6 +110,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   create(): void {
+    const savedSettings = this.registry.get('settings') as
+      | { cameraShake: boolean; showDamageNumbers: boolean; showMinimap: boolean }
+      | undefined;
+    this.cameraShakeEnabled = savedSettings?.cameraShake ?? true;
+    this.damageNumbersEnabled = savedSettings?.showDamageNumbers ?? true;
+    const showMinimap = savedSettings?.showMinimap ?? true;
+
     this.cameras.main.setBounds(0, 0, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
     this.cameras.main.setBackgroundColor(0x050510);
 
@@ -114,7 +125,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.createHUD();
     this.spawnShips();
     this.createHealthBars();
-    this.createMinimap();
+    if (showMinimap) this.createMinimap();
 
     // Follow player
     const playerSprite = this.shipSprites.get(this.playerShipId!);
@@ -170,29 +181,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   private createStarfield(): void {
-    const graphics = this.add.graphics();
-
-    // Background stars
-    for (let i = 0; i < 400; i++) {
-      const x = Phaser.Math.Between(0, BATTLEFIELD_SIZE);
-      const y = Phaser.Math.Between(0, BATTLEFIELD_SIZE);
-      const size = Phaser.Math.FloatBetween(0.5, 2);
-      const alpha = Phaser.Math.FloatBetween(0.2, 0.8);
-
-      graphics.fillStyle(0xffffff, alpha);
-      graphics.fillCircle(x, y, size);
-    }
-
-    // Nebula patches
-    for (let i = 0; i < 5; i++) {
-      const x = Phaser.Math.Between(200, BATTLEFIELD_SIZE - 200);
-      const y = Phaser.Math.Between(200, BATTLEFIELD_SIZE - 200);
-      const colors = [0x4422aa, 0x2244aa, 0x224466, 0x442266];
-      const color = Phaser.Math.RND.pick(colors);
-
-      graphics.fillStyle(color, 0.1);
-      graphics.fillCircle(x, y, Phaser.Math.Between(100, 300));
-    }
+    renderBattleStarfield(this, BATTLEFIELD_SIZE);
   }
 
   private setupInput(): void {
@@ -453,7 +442,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
           }
 
           // Show floating damage number
-          this.showFloatingText(ship.x, ship.y - 20, `-${proj.damage}`, '#ff4444');
+          if (this.damageNumbersEnabled) {
+            this.showFloatingText(ship.x, ship.y - 20, `-${proj.damage}`, '#ff4444');
+          }
 
           // Score and kill notification for player kills
           if (proj.ownerFaction === 'free_confederation' && ship.hull <= 0 && wasAlive) {
@@ -463,7 +454,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
           }
 
           // Visual feedback
-          this.cameras.main.shake(50, 0.005);
+          if (this.cameraShakeEnabled) this.cameras.main.shake(50, 0.005);
           break;
         }
       }
@@ -643,6 +634,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
     container.hull = body;
     container.setAngle(ship.angle);
     container.setDepth(10);
+    container.setSize(size * 2, size * 2);
+    container.setInteractive();
+    ShipStatCard.attachHoverCard(this, container, ship.definitionId);
 
     this.shipSprites.set(ship.id, container);
   }
@@ -711,8 +705,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
       });
     }
 
-    this.minimap.updateShips(minimapShips);
-    this.minimap.updateViewRect();
+    this.minimap?.updateShips(minimapShips);
+    this.minimap?.updateViewRect();
   }
 
   private createHUD(): void {

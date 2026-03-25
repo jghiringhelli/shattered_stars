@@ -155,28 +155,28 @@ export class DebriefScene extends Phaser.Scene {
     this.bg = this.add.graphics();
     // Deep space background
     this.bg.fillStyle(0x050d1a, 1);
-    this.bg.fillRect(0, 0, 1280, 720);
+    this.bg.fillRect(0, 0, this.scale.width, this.scale.height);
 
     // Subtle star field (static dots)
     this.bg.fillStyle(0xffffff, 0.5);
     const rng = new Phaser.Math.RandomDataGenerator(['debrief_stars']);
     for (let i = 0; i < 80; i++) {
-      const sx = rng.integerInRange(0, 1280);
+      const sx = rng.integerInRange(0, this.scale.width);
       const sy = rng.integerInRange(0, 500);
       this.bg.fillRect(sx, sy, 1, 1);
     }
 
     // Faction color gradient strip along bottom
     this.bg.fillStyle(factionColor, 0.08);
-    this.bg.fillRect(0, 500, 1280, 220);
+    this.bg.fillRect(0, this.scale.height - 220, this.scale.width, 220);
   }
 
   private createTopBar(factionColor: number, mission: CampaignMission): void {
     this.topBar = this.add.graphics();
     this.topBar.fillStyle(factionColor, 0.9);
-    this.topBar.fillRect(0, 0, 1280, 48);
+    this.topBar.fillRect(0, 0, this.scale.width, 48);
     this.topBar.fillStyle(0x000000, 0.4);
-    this.topBar.fillRect(0, 48, 1280, 2);
+    this.topBar.fillRect(0, 48, this.scale.width, 2);
 
     this.topBarText = this.add.text(
       640, 24,
@@ -196,7 +196,7 @@ export class DebriefScene extends Phaser.Scene {
     const portraitH = 128;
     const textBoxX = portraitX + portraitW + 18;
     const textBoxY = portraitY - 8;
-    const textBoxW = 1280 - textBoxX - 30;
+    const textBoxW = this.scale.width - textBoxX - 30;
     const textBoxH = 155;
 
     // Portrait border
@@ -641,7 +641,7 @@ export class DebriefScene extends Phaser.Scene {
     // Dim background overlay
     const overlay = this.add.graphics();
     overlay.fillStyle(0x000000, 0.7);
-    overlay.fillRect(0, 0, 1280, 720);
+    overlay.fillRect(0, 0, this.scale.width, this.scale.height);
 
     // Title
     const titleText = this.add.text(

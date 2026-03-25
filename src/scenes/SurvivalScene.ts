@@ -11,6 +11,7 @@
  */
 
 import Phaser from 'phaser';
+import { ShipStatCard } from '../ui/ShipStatCard';
 import type { FactionId } from '../config';
 import { BATTLEFIELD_SIZE, FACTION_COLORS, SHIP_SIZES } from '../config';
 import { getShipDefinition, getShipsByFaction, getShipDial } from '../data/ShipDefinitions';
@@ -18,8 +19,15 @@ import { getModeCombatStats, calculateHitChance, type ModeCombatStats } from '..
 import { getManeuverTemplate, applyManeuver } from '../systems/ManeuverTemplates';
 import { HealthBar } from '../ui/HealthBar';
 import { EffectsManager } from '../rendering/EffectsManager';
+import { headingDiffToTarget } from '../systems/MovementSystem';
 import { ParallaxBackground } from '../rendering/ParallaxBackground';
 import { audioManager } from '../audio/AudioManager';
+import {
+  createPerformanceState,
+  updateFPS,
+  evaluateQuality,
+  type PerformanceState,
+} from '../systems/PerformanceSystem';
 import type { ManeuverDirection } from '../core/types';
 
 interface SurvivalShip {
@@ -93,6 +101,7 @@ export class SurvivalScene extends Phaser.Scene {
   // Effects
   private effectsManager!: EffectsManager;
   private background!: ParallaxBackground;
+  private performanceState: PerformanceState = createPerformanceState();
 
   constructor() {
     super({ key: 'SurvivalScene' });
@@ -106,6 +115,15 @@ export class SurvivalScene extends Phaser.Scene {
     audioManager.playMusic('combat_medium');
 
     this.effectsManager = new EffectsManager(this);
+    const savedSettings = this.registry.get('settings') as
+      | { cameraShake: boolean; showDamageNumbers: boolean }
+      | undefined;
+    if (savedSettings) {
+      this.effectsManager.setUserSettings({
+        cameraShake: savedSettings.cameraShake,
+        showDamageNumbers: savedSettings.showDamageNumbers,
+      });
+    }
     this.background = new ParallaxBackground(this, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
     this.background.startShootingStars();
 
@@ -147,6 +165,9 @@ export class SurvivalScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     if (this.isPaused || this.isUpgradePhase) return;
+    this.performanceState = updateFPS(this.performanceState, delta);
+    this.performanceState = evaluateQuality(this.performanceState, time);
+    this.effectsManager.setQualitySettings(this.performanceState.effectSettings);
 
     this.background.update();
 
@@ -884,6 +905,9 @@ export class SurvivalScene extends Phaser.Scene {
 
     container.setAngle(ship.angle);
     container.setDepth(isBoss ? 15 : 10);
+    container.setSize(size * 2, size * 2);
+    container.setInteractive();
+    ShipStatCard.attachHoverCard(this, container, ship.definitionId);
 
     this.shipSprites.set(ship.id, container);
   }
@@ -1055,11 +1079,7 @@ export class SurvivalScene extends Phaser.Scene {
       const target = this.findClosestEnemy(ship);
       if (!target) continue;
 
-      const angleToTarget = Phaser.Math.Angle.Between(ship.x, ship.y, target.x, target.y) * Phaser.Math.RAD_TO_DEG;
-      const shipFacing = ship.angle - 90;
-      let angleDiff = angleToTarget - shipFacing;
-      if (angleDiff > 180) angleDiff -= 360;
-      if (angleDiff < -180) angleDiff += 360;
+      const angleDiff = headingDiffToTarget(ship.x, ship.y, ship.angle, target.x, target.y);
 
       const dial = getShipDial(ship.definitionId);
 
@@ -1092,11 +1112,7 @@ export class SurvivalScene extends Phaser.Scene {
       const target = this.findClosestEnemy(ship);
       if (!target) continue;
 
-      const angleToTarget = Phaser.Math.Angle.Between(ship.x, ship.y, target.x, target.y) * Phaser.Math.RAD_TO_DEG;
-      const shipFacing = ship.angle - 90;
-      let angleDiff = angleToTarget - shipFacing;
-      if (angleDiff > 180) angleDiff -= 360;
-      if (angleDiff < -180) angleDiff += 360;
+      const angleDiff = headingDiffToTarget(ship.x, ship.y, ship.angle, target.x, target.y);
 
       const dial = getShipDial(ship.definitionId);
 

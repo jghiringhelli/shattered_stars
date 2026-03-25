@@ -131,7 +131,6 @@ export function createAttackPositionConsideration(
       let inRangeCount = 0;
 
       for (const target of targets) {
-        const newDist = distance(result.targetX, result.targetY, target.x, target.y);
         const newRange = calculateRangeBand(
           result.targetX,
           result.targetY,

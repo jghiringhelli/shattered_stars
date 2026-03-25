@@ -13,6 +13,7 @@ import { SHIP_DEFINITIONS, getShipsByFaction } from '../data/ShipDefinitions';
 import { SHIP_LOADOUTS, getAILoadout, getShipSlots, type ShipLoadout } from '../data/ShipLoadouts';
 import { UPGRADE_DEFINITIONS, type UpgradeDefinition } from '../systems/UpgradeSystem';
 import { PILOT_CARDS, type PilotCard, getPilotsForShip } from '../systems/SquadBuilder';
+import { getQuickBuild, toAIConfigs } from '../data/SquadronPresets';
 
 // ============================================
 // AI Ship Configuration
@@ -117,12 +118,11 @@ export function createAISquad(config: AISquadConfig): ShipState[] {
       if (ship) ships.push(ship);
     }
   } else {
-    // Auto-generate squad based on budget
-    const generatedConfigs = generateSquadConfigs(
-      config.faction,
-      config.pointBudget,
-      config.preferredRole ?? 'balanced'
-    );
+    // Prefer authored preset squad over greedy random fill
+    const preset = getQuickBuild(config.faction, config.pointBudget);
+    const generatedConfigs = preset
+      ? toAIConfigs(preset)
+      : generateSquadConfigs(config.faction, config.pointBudget, config.preferredRole ?? 'balanced');
     for (const shipConfig of generatedConfigs) {
       const ship = createAIShip(shipConfig, config.faction, config.difficulty);
       if (ship) ships.push(ship);

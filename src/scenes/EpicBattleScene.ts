@@ -10,6 +10,8 @@
  */
 
 import Phaser from 'phaser';
+import { createHoverButton } from '../ui/ButtonFactory';
+import { ShipStatCard } from '../ui/ShipStatCard';
 import type { FactionId } from '../config';
 import { BATTLEFIELD_SIZE, FACTION_COLORS, SHIP_SIZES } from '../config';
 import { getShipDefinition, getShipsByFaction, getShipDial } from '../data/ShipDefinitions';
@@ -17,8 +19,15 @@ import { getModeCombatStats, calculateHitChance, type ModeCombatStats } from '..
 import { getManeuverTemplate, applyManeuver } from '../systems/ManeuverTemplates';
 import { HealthBar } from '../ui/HealthBar';
 import { EffectsManager } from '../rendering/EffectsManager';
+import { headingDiffToTarget } from '../systems/MovementSystem';
 import { ParallaxBackground } from '../rendering/ParallaxBackground';
 import { audioManager } from '../audio/AudioManager';
+import {
+  createPerformanceState,
+  updateFPS,
+  evaluateQuality,
+  type PerformanceState,
+} from '../systems/PerformanceSystem';
 import type { ManeuverDirection } from '../core/types';
 
 interface BossSection {
@@ -176,6 +185,7 @@ export class EpicBattleScene extends Phaser.Scene {
   // Effects
   private effectsManager!: EffectsManager;
   private background!: ParallaxBackground;
+  private performanceState: PerformanceState = createPerformanceState();
 
   // UI
   private phaseText!: Phaser.GameObjects.Text;
@@ -193,6 +203,15 @@ export class EpicBattleScene extends Phaser.Scene {
     audioManager.initialize();
 
     this.effectsManager = new EffectsManager(this);
+    const savedSettings = this.registry.get('settings') as
+      | { cameraShake: boolean; showDamageNumbers: boolean }
+      | undefined;
+    if (savedSettings) {
+      this.effectsManager.setUserSettings({
+        cameraShake: savedSettings.cameraShake,
+        showDamageNumbers: savedSettings.showDamageNumbers,
+      });
+    }
     this.background = new ParallaxBackground(this, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
     this.background.startShootingStars();
 
@@ -327,37 +346,11 @@ export class EpicBattleScene extends Phaser.Scene {
     this.setupContainer.add(info);
 
     // Start button
-    const startBtn = this.add.container(centerX, this.scale.height - 100);
-    const startBg = this.add.graphics();
-    startBg.fillStyle(0x227722, 1);
-    startBg.fillRoundedRect(-100, -30, 200, 60, 10);
-    startBtn.add(startBg);
-
-    const startText = this.add.text(0, 0, 'BEGIN ASSAULT', {
-      font: 'bold 24px Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5);
-    startBtn.add(startText);
-
-    const startHit = this.add.rectangle(0, 0, 200, 60).setInteractive({ useHandCursor: true });
-    startBtn.add(startHit);
-
-    startHit.on('pointerover', () => {
-      startBg.clear();
-      startBg.fillStyle(0x33aa33, 1);
-      startBg.fillRoundedRect(-100, -30, 200, 60, 10);
-    });
-
-    startHit.on('pointerout', () => {
-      startBg.clear();
-      startBg.fillStyle(0x227722, 1);
-      startBg.fillRoundedRect(-100, -30, 200, 60, 10);
-    });
-
-    startHit.on('pointerdown', () => {
-      this.startBattle();
-    });
-
+    const startBtn = createHoverButton(this, centerX, this.scale.height - 100, {
+      width: 200, height: 60, radius: 10,
+      color: 0x227722, hoverColor: 0x33aa33,
+      label: 'BEGIN ASSAULT', font: 'bold 24px Arial',
+    }, () => this.startBattle());
     this.setupContainer.add(startBtn);
 
     // Back button
@@ -426,6 +419,9 @@ export class EpicBattleScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     if (this.isSetupPhase || this.isPaused || this.gameResult !== 'none') return;
+    this.performanceState = updateFPS(this.performanceState, delta);
+    this.performanceState = evaluateQuality(this.performanceState, time);
+    this.effectsManager.setQualitySettings(this.performanceState.effectSettings);
 
     this.background.update();
 
@@ -786,6 +782,9 @@ export class EpicBattleScene extends Phaser.Scene {
 
     container.setAngle(ship.angle);
     container.setDepth(10);
+    container.setSize(size * 2, size * 2);
+    container.setInteractive();
+    ShipStatCard.attachHoverCard(this, container, ship.definitionId);
 
     this.shipSprites.set(ship.id, container);
   }
@@ -1067,11 +1066,7 @@ export class EpicBattleScene extends Phaser.Scene {
       const target = this.findClosestPlayer(ship);
       if (!target) continue;
 
-      const angleToTarget = Phaser.Math.Angle.Between(ship.x, ship.y, target.x, target.y) * Phaser.Math.RAD_TO_DEG;
-      const shipFacing = ship.angle - 90;
-      let angleDiff = angleToTarget - shipFacing;
-      if (angleDiff > 180) angleDiff -= 360;
-      if (angleDiff < -180) angleDiff += 360;
+      const angleDiff = headingDiffToTarget(ship.x, ship.y, ship.angle, target.x, target.y);
 
       const dial = getShipDial(ship.definitionId);
 
@@ -1110,11 +1105,7 @@ export class EpicBattleScene extends Phaser.Scene {
         }
       }
 
-      const angleToTarget = Phaser.Math.Angle.Between(ship.x, ship.y, targetX, targetY) * Phaser.Math.RAD_TO_DEG;
-      const shipFacing = ship.angle - 90;
-      let angleDiff = angleToTarget - shipFacing;
-      if (angleDiff > 180) angleDiff -= 360;
-      if (angleDiff < -180) angleDiff += 360;
+      const angleDiff = headingDiffToTarget(ship.x, ship.y, ship.angle, targetX, targetY);
 
       const dial = getShipDial(ship.definitionId);
 

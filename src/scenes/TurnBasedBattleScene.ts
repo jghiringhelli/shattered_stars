@@ -9,6 +9,7 @@
  */
 
 import Phaser from 'phaser';
+import { ShipStatCard } from '../ui/ShipStatCard';
 import type { ShipState, ManeuverDefinition } from '../core/types';
 import type { FactionId } from '../config';
 import { BATTLEFIELD_SIZE, FACTION_COLORS, SHIP_SIZES } from '../config';
@@ -49,6 +50,13 @@ import {
   DIFFICULTY_SETTINGS,
   shouldPickOptimalManeuver,
 } from '../ai/AIDifficulty';
+import { renderBattleStarfield } from '../rendering/Starfield';
+import {
+  createPerformanceState,
+  updateFPS,
+  evaluateQuality,
+  type PerformanceState,
+} from '../systems/PerformanceSystem';
 
 interface BattleShip extends ShipState {
   pilotSkill: number;
@@ -96,6 +104,7 @@ export class TurnBasedBattleScene extends Phaser.Scene {
   // Visual effects
   private effectsManager!: EffectsManager;
   private background!: ParallaxBackground;
+  private performanceState: PerformanceState = createPerformanceState();
 
   constructor() {
     super({ key: 'TurnBasedBattleScene' });
@@ -111,6 +120,16 @@ export class TurnBasedBattleScene extends Phaser.Scene {
 
     // Initialize visual effects systems
     this.effectsManager = new EffectsManager(this);
+
+    const savedSettings = this.registry.get('settings') as
+      | { cameraShake: boolean; showDamageNumbers: boolean }
+      | undefined;
+    if (savedSettings) {
+      this.effectsManager.setUserSettings({
+        cameraShake: savedSettings.cameraShake,
+        showDamageNumbers: savedSettings.showDamageNumbers,
+      });
+    }
     this.background = new ParallaxBackground(this, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
     this.background.startShootingStars(8000, 20000); // Less frequent shooting stars in turn-based
     this.background.addDistantPlanet(BATTLEFIELD_SIZE * 0.7, BATTLEFIELD_SIZE * 0.2, 100, 0x664488);
@@ -153,8 +172,11 @@ export class TurnBasedBattleScene extends Phaser.Scene {
     });
   }
 
-  update(): void {
+  update(time: number, delta: number): void {
     if (this.isPaused) return;
+    this.performanceState = updateFPS(this.performanceState, delta);
+    this.performanceState = evaluateQuality(this.performanceState, time);
+    this.effectsManager.setQualitySettings(this.performanceState.effectSettings);
     this.updateSprites();
     this.updateMinimap();
   }
@@ -164,28 +186,7 @@ export class TurnBasedBattleScene extends Phaser.Scene {
   // ==========================================
 
   private createStarfield(): void {
-    const graphics = this.add.graphics();
-
-    for (let i = 0; i < 400; i++) {
-      const x = Phaser.Math.Between(0, BATTLEFIELD_SIZE);
-      const y = Phaser.Math.Between(0, BATTLEFIELD_SIZE);
-      const size = Phaser.Math.FloatBetween(0.5, 2);
-      const alpha = Phaser.Math.FloatBetween(0.2, 0.8);
-
-      graphics.fillStyle(0xffffff, alpha);
-      graphics.fillCircle(x, y, size);
-    }
-
-    // Nebula patches
-    for (let i = 0; i < 5; i++) {
-      const x = Phaser.Math.Between(200, BATTLEFIELD_SIZE - 200);
-      const y = Phaser.Math.Between(200, BATTLEFIELD_SIZE - 200);
-      const colors = [0x4422aa, 0x2244aa, 0x224466, 0x442266];
-      const color = Phaser.Math.RND.pick(colors);
-
-      graphics.fillStyle(color, 0.1);
-      graphics.fillCircle(x, y, Phaser.Math.Between(100, 300));
-    }
+    renderBattleStarfield(this, BATTLEFIELD_SIZE);
   }
 
   private spawnShips(): void {
@@ -405,6 +406,9 @@ export class TurnBasedBattleScene extends Phaser.Scene {
 
     container.setAngle(ship.angle);
     container.setDepth(10);
+    container.setSize(size * 2, size * 2);
+    container.setInteractive();
+    ShipStatCard.attachHoverCard(this, container, ship.definitionId);
 
     this.shipSprites.set(ship.id, container);
   }

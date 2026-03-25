@@ -16,6 +16,8 @@ import { CampaignScene } from './scenes/CampaignScene';
 import { CampaignBattleScene } from './scenes/CampaignBattleScene';
 import { DebriefScene } from './scenes/DebriefScene';
 import { ArcadeBattleScene } from './scenes/ArcadeBattleScene';
+import { EncyclopediaScene } from './scenes/EncyclopediaScene';
+import { ShipPickerScene } from './scenes/ShipPickerScene';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO, // AUTO will try WebGL first, then Canvas
@@ -41,6 +43,8 @@ const config: Phaser.Types.Core.GameConfig = {
     CampaignBattleScene,
     DebriefScene,
     ArcadeBattleScene,
+    EncyclopediaScene,
+    ShipPickerScene,
   ],
   physics: {
     // We don't use physics - movement is chart-based
@@ -62,10 +66,12 @@ const config: Phaser.Types.Core.GameConfig = {
 
 const game = new Phaser.Game(config);
 
-// Expose for debugging in console
+// Expose for debugging and E2E testing in non-production builds
 declare global {
   interface Window {
     game: Phaser.Game;
   }
 }
-window.game = game;
+if (import.meta.env.DEV) {
+  window.game = game;
+}

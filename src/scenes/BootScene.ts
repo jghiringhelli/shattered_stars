@@ -4,6 +4,8 @@
 
 import Phaser from 'phaser';
 import { FACTION_COLORS, SHIP_SIZES } from '../config';
+import { SHIP_DEFINITIONS } from '../data/ShipDefinitions';
+import { loadPortraitImages } from './boot/BootPortraitLoader';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -46,32 +48,19 @@ export class BootScene extends Phaser.Scene {
     this.generatePlaceholderTextures();
 
     // Load pilot portrait images for campaign debrief
-    this.loadPortraitImages();
+    loadPortraitImages(this.load);
 
     // Load ship thumbnail images for campaign debrief stats
     this.loadCampaignShipThumbnails();
 
-    // Fallback: if portrait_command.png fails to load, generate programmatic placeholder
-    this.load.once(Phaser.Loader.Events.COMPLETE, () => {
-      if (!this.textures.exists('portrait_command')) {
-        const g = this.make.graphics({ x: 0, y: 0 });
-        g.fillStyle(0x0a1a3a, 1);
-        g.fillRect(0, 0, 128, 128);
-        g.fillStyle(0x4488cc, 1);
-        const cx = 64, cy = 56, r = 28;
-        for (let i = 0; i < 5; i++) {
-          const a  = (i * 72 - 90) * (Math.PI / 180);
-          const ia = ((i * 72 + 36) - 90) * (Math.PI / 180);
-          g.fillTriangle(
-            cx + Math.cos(a) * r,           cy + Math.sin(a) * r,
-            cx + Math.cos(ia) * (r * 0.4),  cy + Math.sin(ia) * (r * 0.4),
-            cx,                              cy + r * 0.15
-          );
-        }
-        g.generateTexture('portrait_command', 128, 128);
-        g.destroy();
-      }
-    });
+    // Load cinematic art for encyclopedia (768x512 wide landscape per ship)
+    this.loadEncyclopediaArt();
+
+    // Load SD-generated StarCraft-inspired UI textures (fail-silent if not generated)
+    this.loadUiTextures();
+
+    // Fallback: generate portrait_command programmatically if PNG not found
+    this.registerPortraitFallback();
   }
 
   create(): void {
@@ -186,56 +175,47 @@ export class BootScene extends Phaser.Scene {
     graphics.lineStyle(2, 0x00ff00, 1);
     graphics.strokeCircle(20, 20, 18);
     graphics.generateTexture('selection_indicator', 40, 40);
-    // portrait_command is handled in loadPortraitImages() — PNG file preferred,
-    // programmatic fallback generated in the load.once('complete') handler.
   }
 
   /**
-   * Load pilot portrait PNG images for campaign debrief scenes
+   * Generate a programmatic star/badge placeholder for portrait_command if the PNG is absent.
+   * Registered before loader runs so it fires exactly once on load complete.
    */
-  private loadPortraitImages(): void {
-    // COMMAND speaker portrait — real PNG preferred, fallback generated after complete
-    this.load.image('portrait_command', 'assets/portraits/portrait_command.png');
+  private registerPortraitFallback(): void {
+    this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+      if (this.textures.exists('portrait_command')) return;
+      const g = this.make.graphics({ x: 0, y: 0 });
+      g.fillStyle(0x0a1a3a, 1);
+      g.fillRect(0, 0, 128, 128);
+      g.fillStyle(0x4488cc, 1);
+      const cx = 64, cy = 56, r = 28;
+      for (let i = 0; i < 5; i++) {
+        const a  = (i * 72 - 90) * (Math.PI / 180);
+        const ia = ((i * 72 + 36) - 90) * (Math.PI / 180);
+        g.fillTriangle(
+          cx + Math.cos(a) * r,          cy + Math.sin(a) * r,
+          cx + Math.cos(ia) * (r * 0.4), cy + Math.sin(ia) * (r * 0.4),
+          cx,                             cy + r * 0.15
+        );
+      }
+      g.generateTexture('portrait_command', 128, 128);
+      g.destroy();
+    });
+  }
 
-    // Terran Hegemony — base + talking variants
-    this.load.image('portrait_admiral_chen',      'assets/portraits/terran_hegemony/admiral_chen.png');
-    this.load.image('portrait_admiral_chen_talk', 'assets/portraits/terran_hegemony/admiral_chen_talk.png');
-    this.load.image('portrait_striker',           'assets/portraits/terran_hegemony/striker.png');
-    this.load.image('portrait_striker_talk',      'assets/portraits/terran_hegemony/striker_talk.png');
-    this.load.image('portrait_whisper',           'assets/portraits/terran_hegemony/whisper.png');
-    this.load.image('portrait_whisper_talk',      'assets/portraits/terran_hegemony/whisper_talk.png');
-
-    // Free Confederation — base + talking variants
-    this.load.image('portrait_commander_santos',      'assets/portraits/free_confederation/commander_santos.png');
-    this.load.image('portrait_commander_santos_talk', 'assets/portraits/free_confederation/commander_santos_talk.png');
-    this.load.image('portrait_phoenix_one',           'assets/portraits/free_confederation/phoenix_one.png');
-    this.load.image('portrait_phoenix_one_talk',      'assets/portraits/free_confederation/phoenix_one_talk.png');
-    this.load.image('portrait_doc_vasquez',           'assets/portraits/free_confederation/doc_vasquez.png');
-    this.load.image('portrait_doc_vasquez_talk',      'assets/portraits/free_confederation/doc_vasquez_talk.png');
-
-    // Synthetic Collective — base + talking variants
-    this.load.image('portrait_omega_7',                'assets/portraits/synthetic_collective/omega_7.png');
-    this.load.image('portrait_omega_7_talk',           'assets/portraits/synthetic_collective/omega_7_talk.png');
-    this.load.image('portrait_prime_collective',       'assets/portraits/synthetic_collective/prime_collective.png');
-    this.load.image('portrait_prime_collective_talk',  'assets/portraits/synthetic_collective/prime_collective_talk.png');
-    this.load.image('portrait_unit_zero',              'assets/portraits/synthetic_collective/unit_zero.png');
-    this.load.image('portrait_unit_zero_talk',         'assets/portraits/synthetic_collective/unit_zero_talk.png');
-
-    // Void Corsairs — base + talking variants
-    this.load.image('portrait_captain_kira',       'assets/portraits/void_corsairs/captain_kira.png');
-    this.load.image('portrait_captain_kira_talk',  'assets/portraits/void_corsairs/captain_kira_talk.png');
-    this.load.image('portrait_the_admiral',        'assets/portraits/void_corsairs/the_admiral.png');
-    this.load.image('portrait_the_admiral_talk',   'assets/portraits/void_corsairs/the_admiral_talk.png');
-    this.load.image('portrait_bloodfang',          'assets/portraits/void_corsairs/bloodfang.png');
-    this.load.image('portrait_bloodfang_talk',     'assets/portraits/void_corsairs/bloodfang_talk.png');
-
-    // Ascendant Empire — base + talking variants
-    this.load.image('portrait_the_dreamer',             'assets/portraits/ascendant_empire/the_dreamer.png');
-    this.load.image('portrait_the_dreamer_talk',        'assets/portraits/ascendant_empire/the_dreamer_talk.png');
-    this.load.image('portrait_archon_zaelthar',         'assets/portraits/ascendant_empire/archon_zaelthar.png');
-    this.load.image('portrait_archon_zaelthar_talk',    'assets/portraits/ascendant_empire/archon_zaelthar_talk.png');
-    this.load.image('portrait_herald',                  'assets/portraits/ascendant_empire/herald.png');
-    this.load.image('portrait_herald_talk',             'assets/portraits/ascendant_empire/herald_talk.png');
+  /**
+   * Load SD-generated StarCraft-inspired UI textures from public/assets/ui/.
+   * Missing files fail silently — Phaser skips 404s without error.
+   * Generate these with: python scripts/generate_ui_textures.py
+   */
+  private loadUiTextures(): void {
+    const base = 'assets/ui';
+    this.load.image('tex_menu_bg',     `${base}/ui_menu_bg.png`);
+    this.load.image('tex_panel_bg',    `${base}/ui_panel_bg.png`);
+    this.load.image('tex_title_frame', `${base}/ui_title_frame.png`);
+    this.load.image('tex_divider',     `${base}/ui_divider.png`);
+    this.load.image('tex_btn_normal',  `${base}/ui_button_normal.png`);
+    this.load.image('tex_btn_selected',`${base}/ui_button_selected.png`);
   }
 
   /**
@@ -280,5 +260,16 @@ export class BootScene extends Phaser.Scene {
     this.load.image('ship_ascendant_virus',    `${ascend}/ascendant_virus.png`);
     this.load.image('ship_ascendant_symbiont', `${ascend}/ascendant_symbiont.png`);
     this.load.image('ship_ascendant_spore',    `${ascend}/ascendant_spore.png`);
+  }
+
+  /**
+   * Load wide cinematic encyclopedia art for all ships (768×512 PNGs).
+   * Images missing on disk fail silently — Phaser skips 404s without error.
+   * Run scripts/generate_ship_art.py to produce the artwork.
+   */
+  private loadEncyclopediaArt(): void {
+    Object.values(SHIP_DEFINITIONS).forEach(({ id, faction }) => {
+      this.load.image(`ship_art_${id}`, `assets/ships/encyclopedia/${faction}/${id}_art.png`);
+    });
   }
 }

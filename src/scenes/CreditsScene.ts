@@ -5,6 +5,7 @@
  */
 
 import Phaser from 'phaser';
+import { renderMenuStarfield } from '../rendering/Starfield';
 
 export class CreditsScene extends Phaser.Scene {
   private creditsContainer!: Phaser.GameObjects.Container;
@@ -35,17 +36,11 @@ export class CreditsScene extends Phaser.Scene {
   }
 
   private createStarfield(): void {
-    const graphics = this.add.graphics();
-
-    for (let i = 0; i < 100; i++) {
-      const x = Phaser.Math.Between(0, this.scale.width);
-      const y = Phaser.Math.Between(0, this.scale.height);
-      const size = Phaser.Math.FloatBetween(0.5, 1.5);
-      const alpha = Phaser.Math.FloatBetween(0.2, 0.6);
-
-      graphics.fillStyle(0xffffff, alpha);
-      graphics.fillCircle(x, y, size);
-    }
+    renderMenuStarfield(this, {
+      starCount: 100,
+      starSizeRange: [0.5, 1.5],
+      alphaRange: [0.2, 0.6],
+    });
   }
 
   private createCredits(): void {

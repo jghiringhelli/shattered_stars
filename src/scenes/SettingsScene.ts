@@ -9,25 +9,20 @@
 
 import Phaser from 'phaser';
 import { audioManager } from '../audio/AudioManager';
+import { DEFAULT_SETTINGS, loadSettings as loadStoredSettings, saveSettings as saveToStorage } from '../systems/SettingsStorage';
+import { addSceneBackground } from '../ui/TexturedPanel';
 
-interface GameSettings {
+type MutableSettings = {
   masterVolume: number;
   musicVolume: number;
   sfxVolume: number;
   cameraShake: boolean;
   showDamageNumbers: boolean;
   showMinimap: boolean;
-}
+};
 
 export class SettingsScene extends Phaser.Scene {
-  private settings: GameSettings = {
-    masterVolume: 0.8,
-    musicVolume: 0.7,
-    sfxVolume: 1.0,
-    cameraShake: true,
-    showDamageNumbers: true,
-    showMinimap: true,
-  };
+  private settings: MutableSettings = { ...DEFAULT_SETTINGS };
 
   constructor() {
     super({ key: 'SettingsScene' });
@@ -35,10 +30,8 @@ export class SettingsScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor(0x0a0a1a);
-
-    // Load saved settings
+    addSceneBackground(this);
     this.loadSettings();
-
     this.createHeader();
     this.createSettingsUI();
     this.createBackButton();
@@ -46,141 +39,123 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   private createHeader(): void {
-    const centerX = this.scale.width / 2;
-
     this.add
-      .text(centerX, 50, 'SETTINGS', {
-        font: 'bold 48px Arial',
-        color: '#ffffff',
-      })
+      .text(this.scale.width / 2, 50, 'SETTINGS', { font: 'bold 48px Arial', color: '#ffffff' })
       .setOrigin(0.5);
   }
 
   private createSettingsUI(): void {
-    const centerX = this.scale.width / 2;
-    let y = 150;
-    const spacing = 60;
+    const audioEndY = this.createAudioSection(150, 60);
+    this.createVisualSection(audioEndY, 60);
+  }
 
-    // Audio section
-    this.add
-      .text(centerX, y, '--- AUDIO ---', {
-        font: 'bold 24px Arial',
-        color: '#888888',
-      })
-      .setOrigin(0.5);
+  /**
+   * Create the Audio settings section (three sliders: master, music, SFX).
+   *
+   * @param startY  - Top Y position of this section.
+   * @param spacing - Vertical gap between controls.
+   * @returns The Y coordinate after the last slider (ready for the next section).
+   */
+  private createAudioSection(startY: number, spacing: number): number {
+    const cx = this.scale.width / 2;
+    let y = startY;
+    this.add.text(cx, y, '--- AUDIO ---', { font: 'bold 24px Arial', color: '#888888' }).setOrigin(0.5);
     y += 50;
-
-    this.createSlider(centerX, y, 'Master Volume', this.settings.masterVolume, (val) => {
+    this.createSlider(cx, y, 'Master Volume', this.settings.masterVolume, (val) => {
       this.settings.masterVolume = val;
       audioManager.setMasterVolume(val);
       this.saveSettings();
     });
     y += spacing;
-
-    this.createSlider(centerX, y, 'Music Volume', this.settings.musicVolume, (val) => {
+    this.createSlider(cx, y, 'Music Volume', this.settings.musicVolume, (val) => {
       this.settings.musicVolume = val;
       audioManager.setMusicVolume(val);
       this.saveSettings();
     });
     y += spacing;
-
-    this.createSlider(centerX, y, 'SFX Volume', this.settings.sfxVolume, (val) => {
+    this.createSlider(cx, y, 'SFX Volume', this.settings.sfxVolume, (val) => {
       this.settings.sfxVolume = val;
       audioManager.setSfxVolume(val);
       this.saveSettings();
     });
-    y += spacing + 20;
+    return y + spacing + 20;
+  }
 
-    // Visual section
-    this.add
-      .text(centerX, y, '--- VISUAL ---', {
-        font: 'bold 24px Arial',
-        color: '#888888',
-      })
-      .setOrigin(0.5);
+  /**
+   * Create the Visual settings section (three toggles: camera shake, damage numbers, minimap).
+   *
+   * @param startY  - Top Y position of this section.
+   * @param spacing - Vertical gap between controls.
+   */
+  private createVisualSection(startY: number, spacing: number): void {
+    const cx = this.scale.width / 2;
+    let y = startY;
+    this.add.text(cx, y, '--- VISUAL ---', { font: 'bold 24px Arial', color: '#888888' }).setOrigin(0.5);
     y += 50;
-
-    this.createToggle(centerX, y, 'Camera Shake', this.settings.cameraShake, (val) => {
+    this.createToggle(cx, y, 'Camera Shake', this.settings.cameraShake, (val) => {
       this.settings.cameraShake = val;
       this.saveSettings();
     });
     y += spacing;
-
-    this.createToggle(centerX, y, 'Damage Numbers', this.settings.showDamageNumbers, (val) => {
+    this.createToggle(cx, y, 'Damage Numbers', this.settings.showDamageNumbers, (val) => {
       this.settings.showDamageNumbers = val;
       this.saveSettings();
     });
     y += spacing;
-
-    this.createToggle(centerX, y, 'Minimap', this.settings.showMinimap, (val) => {
+    this.createToggle(cx, y, 'Minimap', this.settings.showMinimap, (val) => {
       this.settings.showMinimap = val;
       this.saveSettings();
     });
   }
 
+  /**
+   * Build a shared pointer handler for slider pointerdown and pointermove events.
+   *
+   * @param fill        - Graphics object rendering the filled portion of the slider track.
+   * @param sliderX     - Left-edge X of the slider track.
+   * @param sliderY     - Center Y of the slider track.
+   * @param sliderWidth - Pixel width of the slider track.
+   * @param valueText   - Text object showing the current percentage.
+   * @param onChange    - Callback invoked with the new 0–1 value.
+   * @returns A pointer event handler that computes and applies the new value.
+   */
+  private makeSliderHandler(
+    fill: Phaser.GameObjects.Graphics,
+    sliderX: number, sliderY: number, sliderWidth: number,
+    valueText: Phaser.GameObjects.Text,
+    onChange: (val: number) => void,
+  ): (pointer: Phaser.Input.Pointer) => void {
+    return (pointer) => {
+      const newValue = Phaser.Math.Clamp((pointer.x - sliderX) / sliderWidth, 0, 1);
+      this.updateSliderFill(fill, sliderX, sliderY, sliderWidth, newValue);
+      valueText.setText(`${Math.round(newValue * 100)}%`);
+      onChange(newValue);
+    };
+  }
+
   private createSlider(
-    x: number,
-    y: number,
-    label: string,
-    value: number,
-    onChange: (val: number) => void
+    x: number, y: number, label: string, value: number,
+    onChange: (val: number) => void,
   ): void {
     const sliderWidth = 200;
-
-    // Label
-    this.add
-      .text(x - 150, y, label, {
-        font: '18px Arial',
-        color: '#ffffff',
-      })
-      .setOrigin(1, 0.5);
-
-    // Slider background
+    this.add.text(x - 150, y, label, { font: '18px Arial', color: '#ffffff' }).setOrigin(1, 0.5);
     const bg = this.add.graphics();
     bg.fillStyle(0x333333, 1);
     bg.fillRoundedRect(x - 100, y - 8, sliderWidth, 16, 8);
-
-    // Slider fill
     const fill = this.add.graphics();
     this.updateSliderFill(fill, x - 100, y, sliderWidth, value);
-
-    // Value text
     const valueText = this.add
-      .text(x + 120, y, `${Math.round(value * 100)}%`, {
-        font: '18px Arial',
-        color: '#aaaaaa',
-      })
+      .text(x + 120, y, `${Math.round(value * 100)}%`, { font: '18px Arial', color: '#aaaaaa' })
       .setOrigin(0, 0.5);
-
-    // Interactive zone
     const hitArea = this.add.rectangle(x, y, sliderWidth + 20, 30, 0x000000, 0);
     hitArea.setInteractive();
-
-    hitArea.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      const localX = pointer.x - (x - 100);
-      const newValue = Phaser.Math.Clamp(localX / sliderWidth, 0, 1);
-      this.updateSliderFill(fill, x - 100, y, sliderWidth, newValue);
-      valueText.setText(`${Math.round(newValue * 100)}%`);
-      onChange(newValue);
-    });
-
-    hitArea.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.isDown) {
-        const localX = pointer.x - (x - 100);
-        const newValue = Phaser.Math.Clamp(localX / sliderWidth, 0, 1);
-        this.updateSliderFill(fill, x - 100, y, sliderWidth, newValue);
-        valueText.setText(`${Math.round(newValue * 100)}%`);
-        onChange(newValue);
-      }
-    });
+    const handler = this.makeSliderHandler(fill, x - 100, y, sliderWidth, valueText, onChange);
+    hitArea.on('pointerdown', handler);
+    hitArea.on('pointermove', (pointer: Phaser.Input.Pointer) => { if (pointer.isDown) handler(pointer); });
   }
 
   private updateSliderFill(
-    graphics: Phaser.GameObjects.Graphics,
-    x: number,
-    y: number,
-    width: number,
-    value: number
+    graphics: Phaser.GameObjects.Graphics, x: number, y: number, width: number, value: number,
   ): void {
     graphics.clear();
     graphics.fillStyle(0x44aaff, 1);
@@ -188,42 +163,22 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   private createToggle(
-    x: number,
-    y: number,
-    label: string,
-    value: boolean,
-    onChange: (val: boolean) => void
+    x: number, y: number, label: string, value: boolean,
+    onChange: (val: boolean) => void,
   ): void {
-    // Label
-    this.add
-      .text(x - 150, y, label, {
-        font: '18px Arial',
-        color: '#ffffff',
-      })
-      .setOrigin(1, 0.5);
-
-    // Toggle background
+    this.add.text(x - 150, y, label, { font: '18px Arial', color: '#ffffff' }).setOrigin(1, 0.5);
     const bg = this.add.graphics();
     this.drawToggle(bg, x - 80, y, value);
-
-    // Toggle text
     const toggleText = this.add
-      .text(x - 80, y, value ? 'ON' : 'OFF', {
-        font: 'bold 14px Arial',
-        color: value ? '#44ff44' : '#888888',
-      })
+      .text(x - 80, y, value ? 'ON' : 'OFF', { font: 'bold 14px Arial', color: value ? '#44ff44' : '#888888' })
       .setOrigin(0.5);
-
-    // Interactive
     const hitArea = this.add.rectangle(x - 80, y, 60, 30, 0x000000, 0);
     hitArea.setInteractive({ useHandCursor: true });
-
     hitArea.on('pointerdown', () => {
       const newValue = !value;
       value = newValue;
       this.drawToggle(bg, x - 80, y, newValue);
-      toggleText.setText(newValue ? 'ON' : 'OFF');
-      toggleText.setColor(newValue ? '#44ff44' : '#888888');
+      toggleText.setText(newValue ? 'ON' : 'OFF').setColor(newValue ? '#44ff44' : '#888888');
       onChange(newValue);
     });
   }
@@ -238,62 +193,30 @@ export class SettingsScene extends Phaser.Scene {
 
   private createBackButton(): void {
     const btn = this.add.container(this.scale.width / 2, this.scale.height - 80);
-
     const bg = this.add.graphics();
     bg.fillStyle(0x333344, 1);
     bg.fillRoundedRect(-80, -20, 160, 40, 8);
     btn.add(bg);
-
-    const text = this.add
-      .text(0, 0, 'BACK', {
-        font: 'bold 24px Arial',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5);
-    btn.add(text);
-
+    btn.add(this.add.text(0, 0, 'BACK', { font: 'bold 24px Arial', color: '#ffffff' }).setOrigin(0.5));
     btn.setInteractive(new Phaser.Geom.Rectangle(-80, -20, 160, 40), Phaser.Geom.Rectangle.Contains);
-
-    btn.on('pointerover', () => {
-      bg.clear();
-      bg.fillStyle(0x444466, 1);
-      bg.fillRoundedRect(-80, -20, 160, 40, 8);
-    });
-
-    btn.on('pointerout', () => {
-      bg.clear();
-      bg.fillStyle(0x333344, 1);
-      bg.fillRoundedRect(-80, -20, 160, 40, 8);
-    });
-
-    btn.on('pointerdown', () => {
-      this.scene.start('MainMenuScene');
-    });
+    btn.on('pointerover', () => { bg.clear(); bg.fillStyle(0x444466, 1); bg.fillRoundedRect(-80, -20, 160, 40, 8); });
+    btn.on('pointerout', () => { bg.clear(); bg.fillStyle(0x333344, 1); bg.fillRoundedRect(-80, -20, 160, 40, 8); });
+    btn.on('pointerdown', () => { this.scene.start('MainMenuScene'); });
   }
 
   private setupInput(): void {
-    this.input.keyboard!.on('keydown-ESC', () => {
-      this.scene.start('MainMenuScene');
-    });
+    this.input.keyboard!.on('keydown-ESC', () => { this.scene.start('MainMenuScene'); });
   }
 
   private loadSettings(): void {
-    const saved = localStorage.getItem('shattered_stars_settings');
-    if (saved) {
-      try {
-        this.settings = { ...this.settings, ...JSON.parse(saved) };
-        // Apply loaded volumes to the audio system immediately
-        audioManager.setMasterVolume(this.settings.masterVolume);
-        audioManager.setMusicVolume(this.settings.musicVolume);
-        audioManager.setSfxVolume(this.settings.sfxVolume);
-      } catch {
-        // Use defaults
-      }
-    }
+    this.settings = { ...loadStoredSettings() };
+    audioManager.setMasterVolume(this.settings.masterVolume);
+    audioManager.setMusicVolume(this.settings.musicVolume);
+    audioManager.setSfxVolume(this.settings.sfxVolume);
   }
 
   private saveSettings(): void {
-    localStorage.setItem('shattered_stars_settings', JSON.stringify(this.settings));
+    saveToStorage(this.settings);
     this.registry.set('settings', this.settings);
   }
 }

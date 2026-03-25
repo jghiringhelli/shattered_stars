@@ -10,6 +10,8 @@
  */
 
 import Phaser from 'phaser';
+import { ShipStatCard } from '../ui/ShipStatCard';
+import { createHoverButton, createToggleButton } from '../ui/ButtonFactory';
 import type { FactionId } from '../config';
 import { BATTLEFIELD_SIZE, FACTION_COLORS, SHIP_SIZES } from '../config';
 import { getShipDefinition, getShipsByFaction, getShipDial } from '../data/ShipDefinitions';
@@ -17,8 +19,15 @@ import { getModeCombatStats, calculateHitChance, type ModeCombatStats } from '..
 import { getManeuverTemplate, applyManeuver } from '../systems/ManeuverTemplates';
 import { HealthBar } from '../ui/HealthBar';
 import { EffectsManager } from '../rendering/EffectsManager';
+import { headingDiffToTarget } from '../systems/MovementSystem';
 import { ParallaxBackground } from '../rendering/ParallaxBackground';
 import { audioManager } from '../audio/AudioManager';
+import {
+  createPerformanceState,
+  updateFPS,
+  evaluateQuality,
+  type PerformanceState,
+} from '../systems/PerformanceSystem';
 import type { ManeuverDirection } from '../core/types';
 
 interface DogfightShip {
@@ -85,6 +94,7 @@ export class DogfightScene extends Phaser.Scene {
   // Effects
   private effectsManager!: EffectsManager;
   private background!: ParallaxBackground;
+  private performanceState: PerformanceState = createPerformanceState();
 
   // UI
   private roundText!: Phaser.GameObjects.Text;
@@ -103,6 +113,15 @@ export class DogfightScene extends Phaser.Scene {
     audioManager.initialize();
 
     this.effectsManager = new EffectsManager(this);
+    const savedSettings = this.registry.get('settings') as
+      | { cameraShake: boolean; showDamageNumbers: boolean }
+      | undefined;
+    if (savedSettings) {
+      this.effectsManager.setUserSettings({
+        cameraShake: savedSettings.cameraShake,
+        showDamageNumbers: savedSettings.showDamageNumbers,
+      });
+    }
     this.background = new ParallaxBackground(this, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
     this.background.startShootingStars();
 
@@ -315,37 +334,11 @@ export class DogfightScene extends Phaser.Scene {
     });
 
     // Start button
-    const startBtn = this.add.container(centerX, this.scale.height - 80);
-    const startBg = this.add.graphics();
-    startBg.fillStyle(0x884422, 1);
-    startBg.fillRoundedRect(-80, -25, 160, 50, 10);
-    startBtn.add(startBg);
-
-    const startText = this.add.text(0, 0, 'FIGHT!', {
-      font: 'bold 28px Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5);
-    startBtn.add(startText);
-
-    const startHit = this.add.rectangle(0, 0, 160, 50).setInteractive({ useHandCursor: true });
-    startBtn.add(startHit);
-
-    startHit.on('pointerover', () => {
-      startBg.clear();
-      startBg.fillStyle(0xaa6633, 1);
-      startBg.fillRoundedRect(-80, -25, 160, 50, 10);
-    });
-
-    startHit.on('pointerout', () => {
-      startBg.clear();
-      startBg.fillStyle(0x884422, 1);
-      startBg.fillRoundedRect(-80, -25, 160, 50, 10);
-    });
-
-    startHit.on('pointerdown', () => {
-      this.startMatch();
-    });
-
+    const startBtn = createHoverButton(this, centerX, this.scale.height - 80, {
+      width: 160, height: 50, radius: 10,
+      color: 0x884422, hoverColor: 0xaa6633,
+      label: 'FIGHT!', font: 'bold 28px Arial',
+    }, () => this.startMatch());
     this.setupContainer.add(startBtn);
 
     // Back button
@@ -400,39 +393,13 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   private createSmallButton(
-    x: number,
-    y: number,
-    label: string,
-    selected: boolean,
-    onClick: () => void
+    x: number, y: number, label: string, selected: boolean, onClick: () => void,
   ): Phaser.GameObjects.Container {
-    const container = this.add.container(x, y);
-
-    const bg = this.add.graphics();
-    if (selected) {
-      bg.fillStyle(0x446688, 1);
-      bg.lineStyle(2, 0x66aaff, 1);
-    } else {
-      bg.fillStyle(0x222233, 0.8);
-    }
-    bg.fillRoundedRect(-25, -12, 50, 24, 4);
-    if (selected) {
-      bg.strokeRoundedRect(-25, -12, 50, 24, 4);
-    }
-    container.add(bg);
-
-    const text = this.add.text(0, 0, label, {
-      font: selected ? 'bold 11px Arial' : '11px Arial',
-      color: selected ? '#44ffaa' : '#666666',
-    }).setOrigin(0.5);
-    container.add(text);
-
-    const hitArea = this.add.rectangle(0, 0, 50, 24).setInteractive({ useHandCursor: true });
-    container.add(hitArea);
-
-    hitArea.on('pointerdown', onClick);
-
-    return container;
+    return createToggleButton(this, x, y, label, selected, {
+      width: 50, height: 24,
+      selectedColor: 0x446688, normalColor: 0x222233,
+      selectedFont: 'bold 11px Arial', font: '11px Arial',
+    }, onClick);
   }
 
   private startMatch(): void {
@@ -486,6 +453,9 @@ export class DogfightScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     if (this.isSetupPhase || this.isPaused || this.matchComplete) return;
+    this.performanceState = updateFPS(this.performanceState, delta);
+    this.performanceState = evaluateQuality(this.performanceState, time);
+    this.effectsManager.setQualitySettings(this.performanceState.effectSettings);
 
     this.background.update();
 
@@ -647,6 +617,9 @@ export class DogfightScene extends Phaser.Scene {
 
     container.setAngle(ship.angle);
     container.setDepth(10);
+    container.setSize(size * 2, size * 2);
+    container.setInteractive();
+    ShipStatCard.attachHoverCard(this, container, ship.definitionId);
 
     this.shipSprites.set(ship.id, container);
   }
@@ -782,11 +755,7 @@ export class DogfightScene extends Phaser.Scene {
       const target = this.ships.get(this.playerShipIds[0] ?? '');
       if (!target || target.hull <= 0) continue;
 
-      const angleToTarget = Phaser.Math.Angle.Between(ship.x, ship.y, target.x, target.y) * Phaser.Math.RAD_TO_DEG;
-      const shipFacing = ship.angle - 90;
-      let angleDiff = angleToTarget - shipFacing;
-      if (angleDiff > 180) angleDiff -= 360;
-      if (angleDiff < -180) angleDiff += 360;
+      const angleDiff = headingDiffToTarget(ship.x, ship.y, ship.angle, target.x, target.y);
 
       const dial = getShipDial(ship.definitionId);
 
@@ -830,11 +799,7 @@ export class DogfightScene extends Phaser.Scene {
       const target = this.ships.get(this.enemyShipIds[0] ?? '');
       if (!target || target.hull <= 0) continue;
 
-      const angleToTarget = Phaser.Math.Angle.Between(ship.x, ship.y, target.x, target.y) * Phaser.Math.RAD_TO_DEG;
-      const shipFacing = ship.angle - 90;
-      let angleDiff = angleToTarget - shipFacing;
-      if (angleDiff > 180) angleDiff -= 360;
-      if (angleDiff < -180) angleDiff += 360;
+      const angleDiff = headingDiffToTarget(ship.x, ship.y, ship.angle, target.x, target.y);
 
       const dial = getShipDial(ship.definitionId);
 

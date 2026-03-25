@@ -6,6 +6,7 @@
  */
 
 import Phaser from 'phaser';
+import { createHoverButton } from './ButtonFactory';
 
 export interface PauseMenuConfig {
   scene: Phaser.Scene;
@@ -59,18 +60,13 @@ export class PauseMenu extends Phaser.GameObjects.Container {
     this.panel.add(title);
 
     // Menu items
-    this.createButton(config.scene, 0, -40, 'RESUME', 0x227722, () => {
-      this.hide();
-      this.onResume();
-    });
-
-    this.createButton(config.scene, 0, 40, 'RESTART', 0x666622, () => {
-      this.onRestart();
-    });
-
-    this.createButton(config.scene, 0, 120, 'QUIT TO MENU', 0x662222, () => {
-      this.onQuit();
-    });
+    const btnConfig = { width: 240, height: 50, radius: 8, font: 'bold 24px Arial', hoverScale: 1.05 as const };
+    this.panel.add(createHoverButton(config.scene, 0, -40, { ...btnConfig, color: 0x227722, label: 'RESUME' },
+      () => { this.hide(); this.onResume(); }));
+    this.panel.add(createHoverButton(config.scene, 0, 40, { ...btnConfig, color: 0x666622, label: 'RESTART' },
+      () => { this.onRestart(); }));
+    this.panel.add(createHoverButton(config.scene, 0, 120, { ...btnConfig, color: 0x662222, label: 'QUIT TO MENU' },
+      () => { this.onQuit(); }));
 
     // Set depth and scroll factor
     this.setDepth(2000);
@@ -81,53 +77,6 @@ export class PauseMenu extends Phaser.GameObjects.Container {
 
     // Start hidden
     this.setVisible(false);
-  }
-
-  private createButton(
-    scene: Phaser.Scene,
-    x: number,
-    y: number,
-    label: string,
-    color: number,
-    onClick: () => void
-  ): void {
-    const container = scene.add.container(x, y);
-
-    const bg = scene.add.graphics();
-    bg.fillStyle(color, 1);
-    bg.fillRoundedRect(-120, -25, 240, 50, 8);
-    container.add(bg);
-
-    const text = scene.add
-      .text(0, 0, label, {
-        font: 'bold 24px Arial',
-        color: '#ffffff',
-      })
-      .setOrigin(0.5);
-    container.add(text);
-
-    container.setInteractive(
-      new Phaser.Geom.Rectangle(-120, -25, 240, 50),
-      Phaser.Geom.Rectangle.Contains
-    );
-
-    container.on('pointerover', () => {
-      bg.clear();
-      bg.fillStyle(Phaser.Display.Color.ValueToColor(color).lighten(20).color, 1);
-      bg.fillRoundedRect(-120, -25, 240, 50, 8);
-      text.setScale(1.05);
-    });
-
-    container.on('pointerout', () => {
-      bg.clear();
-      bg.fillStyle(color, 1);
-      bg.fillRoundedRect(-120, -25, 240, 50, 8);
-      text.setScale(1);
-    });
-
-    container.on('pointerdown', onClick);
-
-    this.panel.add(container);
   }
 
   show(): void {
