@@ -299,7 +299,8 @@ export class DebriefScene extends Phaser.Scene {
     const textureKey = line.portraitKey;
     const tex = this.textures.exists(textureKey) ? textureKey : 'portrait_command';
     const prevTex = this.portraitImage.texture.key;
-    this.portraitImage.setTexture(tex);
+    const hasTalkFrame = this.textures.get(tex).has('talk');
+    this.portraitImage.setTexture(tex, hasTalkFrame ? 'base' : undefined);
     this.currentPortraitTex = tex;
 
     if (tex !== prevTex) {
@@ -314,19 +315,18 @@ export class DebriefScene extends Phaser.Scene {
       });
     }
 
-    // Talking animation: alternate base ↔ _talk texture while typewriter is active
+    // Talking animation: alternate base ↔ talk frame while typewriter is active
     if (this.talkTimer) {
       this.talkTimer.remove();
       this.talkTimer = undefined;
     }
-    const talkKey = tex + '_talk';
-    if (this.textures.exists(talkKey)) {
+    if (hasTalkFrame) {
       this.talkTimer = this.time.addEvent({
         delay: 120,
         loop: true,
         callback: () => {
-          const onTalk = this.portraitImage.texture.key !== talkKey;
-          this.portraitImage.setTexture(onTalk ? talkKey : tex);
+          const onBase = this.portraitImage.frame.name === 'base';
+          this.portraitImage.setFrame(onBase ? 'talk' : 'base');
         },
       });
     }
@@ -384,7 +384,9 @@ export class DebriefScene extends Phaser.Scene {
       this.talkTimer.remove();
       this.talkTimer = undefined;
     }
-    this.portraitImage.setTexture(this.currentPortraitTex);
+    if (this.textures.get(this.currentPortraitTex).has('talk')) {
+      this.portraitImage.setFrame('base');
+    }
   }
 
   private advanceLine(): void {

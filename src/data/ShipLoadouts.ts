@@ -591,7 +591,7 @@ export const SHIP_LOADOUTS: Record<string, ShipLoadout[]> = {
   ],
   terran_gladius: [
     { id: 'gladius_striker', name: 'Gladius Striker', shipId: 'terran_gladius', upgrades: ['marksman', 'proton_torpedo', 'fire_control_system'], pointCost: 65, description: 'Heavy strike fighter with torpedo payload', role: 'offense' },
-    { id: 'gladius_patrol', name: 'Gladius Patrol', shipId: 'terran_gladius', upgrades: ['shield_upgrade', 'hull_upgrade'], pointCost: 59, description: 'Durable patrol fighter for extended operations', role: 'defense' },
+    { id: 'gladius_patrol', name: 'Gladius Patrol', shipId: 'terran_gladius', upgrades: ['fire_control_system', 'hull_upgrade'], pointCost: 57, description: 'Durable patrol fighter for extended operations', role: 'defense' },
   ],
   terran_centurion: [
     { id: 'centurion_assault', name: 'Centurion Assault', shipId: 'terran_centurion', upgrades: ['heavy_laser_cannon', 'fire_control_system'], pointCost: 72, description: 'Heavy assault build', role: 'offense' },
@@ -623,11 +623,11 @@ export const SHIP_LOADOUTS: Record<string, ShipLoadout[]> = {
   ],
   terran_guardian: [
     { id: 'guardian_ecm', name: 'Guardian ECM', shipId: 'terran_guardian', upgrades: ['tactical_officer', 'weapons_engineer', 'advanced_sensors'], pointCost: 72, description: 'Electronic warfare platform', role: 'support' },
-    { id: 'guardian_shield', name: 'Guardian Shield', shipId: 'terran_guardian', upgrades: ['shield_upgrade', 'shield_upgrade'], pointCost: 68, description: 'Heavy shield support', role: 'defense' },
+    { id: 'guardian_shield', name: 'Guardian Shield', shipId: 'terran_guardian', upgrades: ['shield_upgrade', 'advanced_sensors', 'tactical_officer'], pointCost: 68, description: 'Heavy shield support', role: 'defense' },
   ],
   terran_harbinger: [
     { id: 'harbinger_scout', name: 'Harbinger Scout', shipId: 'terran_harbinger', upgrades: ['advanced_sensors', 'targeting_computer'], pointCost: 55, description: 'Reconnaissance build', role: 'support' },
-    { id: 'harbinger_coordinator', name: 'Harbinger Coordinator', shipId: 'terran_harbinger', upgrades: ['coordinated_assault'], pointCost: 52, description: 'Fleet coordination build', role: 'support' },
+    { id: 'harbinger_coordinator', name: 'Harbinger Coordinator', shipId: 'terran_harbinger', upgrades: ['coordinated_assault', 'tactical_officer', 'weapons_engineer'], pointCost: 68, description: 'Full coordination platform', role: 'support' },
   ],
   terran_bastion: [
     { id: 'bastion_fortress', name: 'Bastion Fortress', shipId: 'terran_bastion', upgrades: ['twin_laser_turret', 'heavy_laser_cannon', 'veteran_gunner'], pointCost: 92, description: 'Heavy weapons platform', role: 'offense' },
@@ -791,11 +791,11 @@ export const SHIP_LOADOUTS: Record<string, ShipLoadout[]> = {
     { id: 'harrier_escort', name: 'Harrier Escort', shipId: 'confed_harrier', upgrades: ['ion_turret', 'hull_upgrade'], pointCost: 75, description: 'Escort gunship', role: 'balanced' },
   ],
   confed_crane: [
-    { id: 'crane_coordinator', name: 'Crane Coordinator', shipId: 'confed_crane', upgrades: ['coordinated_assault', 'tactical_officer', 'advanced_sensors'], pointCost: 72, description: 'Fleet coordination', role: 'support' },
+    { id: 'crane_coordinator', name: 'Crane Coordinator', shipId: 'confed_crane', upgrades: ['weapons_engineer', 'tactical_officer', 'advanced_sensors'], pointCost: 70, description: 'Fleet coordination', role: 'support' },
     { id: 'crane_support', name: 'Crane Support', shipId: 'confed_crane', upgrades: ['shield_upgrade', 'hull_upgrade'], pointCost: 65, description: 'Durable support', role: 'defense' },
   ],
   confed_heron: [
-    { id: 'heron_command', name: 'Heron Command', shipId: 'confed_heron', upgrades: ['coordinated_assault', 'tactical_officer', 'weapons_engineer', 'advanced_sensors'], pointCost: 85, description: 'Fleet command ship', role: 'support' },
+    { id: 'heron_command', name: 'Heron Command', shipId: 'confed_heron', upgrades: ['hull_upgrade', 'tactical_officer', 'weapons_engineer', 'advanced_sensors'], pointCost: 83, description: 'Fleet command ship', role: 'support' },
     { id: 'heron_relay', name: 'Heron Relay', shipId: 'confed_heron', upgrades: ['advanced_sensors', 'targeting_computer'], pointCost: 75, description: 'Sensor relay', role: 'support' },
   ],
   confed_liberty: [
@@ -932,7 +932,8 @@ export const SHIP_LOADOUTS: Record<string, ShipLoadout[]> = {
     { id: 'annihilator_siege', name: 'Annihilator Siege', shipId: 'synth_annihilator', upgrades: ['proton_torpedo', 'ion_torpedo', 'fire_control_system'], pointCost: 98, description: 'Siege destroyer', role: 'offense' },
   ],
   synth_relay_node: [
-    { id: 'relay_coordinator', name: 'Relay Coordinator', shipId: 'synth_relay_node', upgrades: ['advanced_sensors', 'targeting_computer', 'pattern_analyzer'], pointCost: 58, description: 'Network coordination', role: 'support' },
+    { id: 'relay_coordinator', name: 'Relay Coordinator', shipId: 'synth_relay_node', upgrades: ['coordinated_assault', 'tactical_officer', 'advanced_sensors'], pointCost: 68, description: 'Full network coordination', role: 'support' },
+    { id: 'relay_support', name: 'Relay Support', shipId: 'synth_relay_node', upgrades: ['tactical_officer', 'advanced_sensors'], pointCost: 55, description: 'Enhanced support relay', role: 'support' },
     { id: 'relay_basic', name: 'Relay Basic', shipId: 'synth_relay_node', upgrades: ['advanced_sensors'], pointCost: 48, description: 'Basic relay', role: 'support' },
   ],
   synth_repair_node: [
@@ -1053,7 +1054,7 @@ export const SHIP_LOADOUTS: Record<string, ShipLoadout[]> = {
   ],
 
   corsair_fang: [
-    { id: 'fang_raider', name: 'Fang Raider', shipId: 'corsair_fang', upgrades: ['daredevil', 'hull_upgrade'], pointCost: 42, description: 'Fast raider with reinforced hull', role: 'offense' },
+    { id: 'fang_raider', name: 'Fang Raider', shipId: 'corsair_fang', upgrades: ['predator', 'hull_upgrade'], pointCost: 42, description: 'Fast raider with reinforced hull', role: 'offense' },
     { id: 'fang_swarm', name: 'Fang Swarm', shipId: 'corsair_fang', upgrades: [], pointCost: 32, description: 'Swarm interceptor', role: 'swarm' },
   ],
   corsair_talon: [
@@ -1113,7 +1114,7 @@ export const SHIP_LOADOUTS: Record<string, ShipLoadout[]> = {
     { id: 'frigate_patrol', name: 'Frigate Patrol', shipId: 'corsair_frigate', upgrades: ['ion_turret', 'shield_upgrade'], pointCost: 88, description: 'Patrol frigate', role: 'balanced' },
   ],
   corsair_tender: [
-    { id: 'tender_support', name: 'Tender Support', shipId: 'corsair_tender', upgrades: ['coordinated_assault', 'tactical_officer', 'advanced_sensors'], pointCost: 72, description: 'Fleet support', role: 'support' },
+    { id: 'tender_support', name: 'Tender Support', shipId: 'corsair_tender', upgrades: ['weapons_engineer', 'tactical_officer', 'advanced_sensors'], pointCost: 70, description: 'Fleet support', role: 'support' },
     { id: 'tender_repair', name: 'Tender Repair', shipId: 'corsair_tender', upgrades: ['shield_upgrade', 'hull_upgrade'], pointCost: 65, description: 'Repair tender', role: 'defense' },
   ],
 
@@ -1135,7 +1136,7 @@ export const SHIP_LOADOUTS: Record<string, ShipLoadout[]> = {
       id: 'seraph_warden',
       name: 'Seraph Warden',
       shipId: 'ascendant_seraph',
-      upgrades: ['elusive', 'shield_upgrade', 'hull_upgrade'],
+      upgrades: ['elusive', 'advanced_sensors', 'hull_upgrade'],
       pointCost: 68,
       description: 'Resilient warden with enhanced defenses',
       role: 'defense',
@@ -1156,7 +1157,7 @@ export const SHIP_LOADOUTS: Record<string, ShipLoadout[]> = {
       id: 'templar_guardian',
       name: 'Templar Guardian',
       shipId: 'ascendant_templar',
-      upgrades: ['elusive', 'shield_upgrade', 'hull_upgrade'],
+      upgrades: ['elusive', 'fire_control_system', 'hull_upgrade'],
       pointCost: 68,
       description: 'Durable guardian with enhanced survivability',
       role: 'defense',
@@ -1219,7 +1220,7 @@ export const SHIP_LOADOUTS: Record<string, ShipLoadout[]> = {
   ],
   ascendant_crusader: [
     { id: 'crusader_assault', name: 'Crusader Assault', shipId: 'ascendant_crusader', upgrades: ['marksman', 'heavy_laser_cannon', 'heavy_laser_cannon'], pointCost: 78, description: 'Heavy assault', role: 'offense' },
-    { id: 'crusader_defender', name: 'Crusader Defender', shipId: 'ascendant_crusader', upgrades: ['shield_upgrade', 'hull_upgrade'], pointCost: 68, description: 'Defender build', role: 'defense' },
+    { id: 'crusader_defender', name: 'Crusader Defender', shipId: 'ascendant_crusader', upgrades: ['heavy_laser_cannon', 'hull_upgrade'], pointCost: 68, description: 'Defender build', role: 'defense' },
   ],
   ascendant_paladin: [
     { id: 'paladin_champion', name: 'Paladin Champion', shipId: 'ascendant_paladin', upgrades: ['predator', 'heavy_laser_cannon', 'tactical_officer'], pointCost: 82, description: 'Champion build', role: 'offense' },

@@ -1,0 +1,34 @@
+[
+  {
+    "id": "regen_confed_wasp",
+    "project": "shattered-stars",
+    "checkpoint": "dreamshaper_8.safetensors",
+    "lora": "concept_art",
+    "lora_weight": 0.5,
+    "prompt": "bird's eye view, aerial view from directly above, flat lay photograph style, 2D game sprite, vertically symmetric spaceship icon, nose pointing UP toward top of image, engines at bottom, perfectly centered on solid black background, Chris Metzen StarCraft art style, chunky bold design, high contrast colors, clean silhouette, game asset, mirror symmetry left-right, flat 2D artwork, no depth no shadows, spacecraft icon viewed from orbit looking straight down, Wasp light interceptor spacecraft hull from above, narrow fuselage, swept delta wings, aggressive small fighter, freedom orange forest green gold accents warm tones, rebel fighter icon practical rugged design symmetrical wings visible modifications battle-worn appearance",
+    "negative": "isometric, isometric view, isometric perspective, 3/4 view, three quarter view, oblique view, side view, profile view, front view, rear view, angled, tilted, rotated, diagonal, slanted, skewed, perspective, vanishing point, depth, foreshortening, 3D render, 3D model, CGI, photorealistic, dynamic angle, action pose, flying in motion, robot, mech, humanoid, bipedal, standing, walking, person, face, multiple ships, fleet, formation, swarm, group, background, environment, planet, stars, nebula, space scene, horizon, ground, landscape, atmosphere, low quality, blurry, watermark, text, logo, frame, border, gear, cog, cogwheel, mechanical background, circular decoration, crossed weapons, X marks, propeller, fan blades, medal, badge, ornamental frame, decorative border, emblem background, icon badge, circular background, disc background, military insignia background, plants, bushes, trees, foliage, leaves, vegetation, mech suit, legs, arms, bipedal, cockpit glass",
+    "width": 512,
+    "height": 512,
+    "steps": 30,
+    "cfg": 7.0,
+    "sampler": "DPM++ 2M Karras",
+    "seed": -1,
+    "output": "C:/Users/eu01244715/workspace/ss/public/assets/ships/free_confederation/confed_wasp.png"
+  },
+  {
+    "id": "regen_terran_gladius",
+    "project": "shattered-stars",
+    "checkpoint": "dreamshaper_8.safetensors",
+    "lora": "concept_art",
+    "lora_weight": 0.6,
+    "prompt": "bird's eye view, aerial view from directly above, flat lay photograph style, 2D game sprite, vertically symmetric spaceship icon, nose pointing UP toward top of image, engines at bottom, perfectly centered on solid black background, Chris Metzen StarCraft art style, chunky bold design, high contrast colors, clean silhouette, game asset, mirror symmetry left-right, flat 2D artwork, no depth no shadows, spacecraft icon viewed from orbit looking straight down, Gladius fighter spacecraft hull from above, twin angular wings, dual cannon hardpoints, military design, imperial blue silver white steel gray, military warship icon angular wedge silhouette symmetrical design weapon hardpoints visible engine glow at bottom",
+    "negative": "isometric, isometric view, isometric perspective, 3/4 view, three quarter view, oblique view, side view, profile view, front view, rear view, angled, tilted, rotated, diagonal, slanted, skewed, perspective, vanishing point, depth, foreshortening, 3D render, 3D model, CGI, photorealistic, dynamic angle, action pose, flying in motion, robot, mech, humanoid, bipedal, standing, walking, person, face, multiple ships, fleet, formation, swarm, group, background, environment, planet, stars, nebula, space scene, horizon, ground, landscape, atmosphere, low quality, blurry, watermark, text, logo, frame, border, orbital ring, targeting ring, orbital objects, floating missiles, floating dots, satellite orbit, planet ring, circular border, compass ring, service ring, hangar bay, docking bay, maintenance gantry, space station, docking ring, repair platform, space dock, landing pad, floating weapons, orbiting objects, decorative circles, mech suit, legs, arms, cockpit glass",
+    "width": 512,
+    "height": 512,
+    "steps": 30,
+    "cfg": 7.0,
+    "sampler": "DPM++ 2M Karras",
+    "seed": -1,
+    "output": "C:/Users/eu01244715/workspace/ss/public/assets/ships/terran_hegemony/terran_gladius.png"
+  }
+]

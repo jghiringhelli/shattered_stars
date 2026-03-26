@@ -1,0 +1,34 @@
+[
+  {
+    "id": "regen_confed_condor",
+    "project": "shattered-stars",
+    "checkpoint": "dreamshaper_8.safetensors",
+    "lora": null,
+    "lora_weight": 0.0,
+    "prompt": "top-down 2D spaceship sprite, pure overhead aerial view from directly above, flat 2D illustration, pure solid black background, no environment, heavy durable spacecraft hull, wide rectangular wings, thick armored fuselage segments, four engine exhausts, reinforced plating, hardpoint pylons, Free Confederation faction military ship, orange and forest green color scheme, white hull panel markings, large agile spacecraft, nose pointing upward, flat game sprite, symmetric, no depth perspective",
+    "negative": "bird, condor, eagle, animal, wildlife, tree, forest, nature, grass, clouds, 3D render, CGI, photorealistic, isometric, perspective, angled, side view, front view, oblique, background, environment, stars, planet, white background, gray background, photographic, circular frame, badge, medal, watermark, text",
+    "width": 512,
+    "height": 512,
+    "steps": 40,
+    "cfg": 12.0,
+    "sampler": "Euler a",
+    "seed": -1,
+    "output": "C:/Users/eu01244715/workspace/ss/public/assets/ships/free_confederation/confed_condor.png"
+  },
+  {
+    "id": "regen_terran_thunderbolt",
+    "project": "shattered-stars",
+    "checkpoint": "dreamshaper_8.safetensors",
+    "lora": null,
+    "lora_weight": 0.0,
+    "prompt": "top-down 2D spaceship sprite, pure overhead aerial view from directly above, flat 2D illustration, pure solid black background, sci-fi futuristic heavy bomber spacecraft, not an airplane, wide swept wings with large bomb bay on fuselage underside, torpedo launchers on wings, heavy armored plating, six engine exhausts, thick fuselage, Terran Hegemony military dark navy blue silver metallic colors, orange targeting circles on wings, nose pointing up, flat game sprite, symmetric, no photographic depth",
+    "negative": "World War 2, WW2, propeller, piston engine, World War, historical, vintage, WWII aircraft, P-47, airplane, biplane, bird, 3D render, CGI, photorealistic, isometric, perspective, angled, side view, background, environment, stars, planet, white background, gray oval, circular vignette, fire, explosion, smoke, badge, watermark, text",
+    "width": 512,
+    "height": 512,
+    "steps": 40,
+    "cfg": 12.0,
+    "sampler": "Euler a",
+    "seed": -1,
+    "output": "C:/Users/eu01244715/workspace/ss/public/assets/ships/terran_hegemony/terran_thunderbolt.png"
+  }
+]

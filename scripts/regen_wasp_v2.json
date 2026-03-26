@@ -1,0 +1,18 @@
+[
+  {
+    "id": "regen_confed_wasp_v2",
+    "project": "shattered-stars",
+    "checkpoint": "dreamshaper_8.safetensors",
+    "lora": null,
+    "lora_weight": 0.0,
+    "prompt": "top-down 2D spaceship sprite, bird eye view looking straight down from above, flat lay, overhead aerial view, spacecraft hull viewed from directly above, nose pointing up, engines pointing down, pure solid black background, no background elements, only the ship hull, Wasp light interceptor spacecraft, narrow fuselage, swept delta wings, small agile fighter, freedom orange forest green gold color scheme, clean flat 2D artwork vector style, game asset sprite sheet, perfectly centered, symmetric left right, no shadows no depth, pixel art game icon style, 2D flat illustration, top-down schematic",
+    "negative": "3D render, 3D model, CGI, photorealistic, isometric, isometric view, perspective view, oblique view, angled view, side view, profile, front view, 3/4 view, tilted, diagonal, low angle, high angle perspective, gear, cogwheel, cog, mechanical wheel, circular gear, toothed wheel, crossed weapons, X mark, cross symbol, crossed lines, badge, medal, insignia, emblem, military badge, decorative frame, ornamental frame, circular frame, border, round border, icon badge, faction symbol, background, environment, stars, planet, nebula, space scene, multiple ships, fleet, depth, shadows, lighting, dramatic lighting, rim lighting, studio lighting, specular highlights, reflections, 3D shading, watermark, text, logo, signature, person, mech, robot, humanoid, arms, legs",
+    "width": 512,
+    "height": 512,
+    "steps": 40,
+    "cfg": 11.0,
+    "sampler": "Euler a",
+    "seed": -1,
+    "output": "C:/Users/eu01244715/workspace/ss/public/assets/ships/free_confederation/confed_wasp.png"
+  }
+]

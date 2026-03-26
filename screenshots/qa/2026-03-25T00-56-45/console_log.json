@@ -1,0 +1,692 @@
+{
+  "run": "screenshots\\qa\\2026-03-25T00-56-45",
+  "totalLogs": 114,
+  "errors": 106,
+  "warnings": 4,
+  "errorMessages": [
+    "Failed to process file: %s \"%s\" image ship_art_terran_viper",
+    "Failed to process file: %s \"%s\" image ship_art_terran_stiletto",
+    "Failed to process file: %s \"%s\" image ship_art_terran_raptor",
+    "Failed to process file: %s \"%s\" image ship_art_terran_gladius",
+    "Failed to process file: %s \"%s\" image ship_art_terran_praetorian",
+    "Failed to process file: %s \"%s\" image ship_art_terran_centurion",
+    "Failed to process file: %s \"%s\" image ship_art_terran_legionnaire",
+    "Failed to process file: %s \"%s\" image ship_art_terran_hammer",
+    "Failed to process file: %s \"%s\" image ship_art_terran_thunderbolt",
+    "Failed to process file: %s \"%s\" image ship_art_terran_sentinel",
+    "Failed to process file: %s \"%s\" image ship_art_terran_javelin",
+    "Failed to process file: %s \"%s\" image ship_art_terran_guardian",
+    "Failed to process file: %s \"%s\" image ship_art_terran_bastion",
+    "Failed to process file: %s \"%s\" image ship_art_terran_bulwark",
+    "Failed to process file: %s \"%s\" image ship_art_terran_harbinger",
+    "Failed to process file: %s \"%s\" image ship_art_terran_vindicator",
+    "Failed to process file: %s \"%s\" image ship_art_terran_imperator",
+    "Failed to process file: %s \"%s\" image ship_art_terran_dominator",
+    "Failed to process file: %s \"%s\" image ship_art_terran_executor",
+    "Failed to process file: %s \"%s\" image ship_art_terran_consul",
+    "Failed to process file: %s \"%s\" image ship_art_confed_wasp",
+    "Failed to process file: %s \"%s\" image ship_art_confed_sparrow",
+    "Failed to process file: %s \"%s\" image ship_art_confed_finch",
+    "Failed to process file: %s \"%s\" image ship_art_confed_kestrel",
+    "Failed to process file: %s \"%s\" image ship_art_confed_falcon",
+    "Failed to process file: %s \"%s\" image ship_art_confed_hawk",
+    "Failed to process file: %s \"%s\" image ship_art_confed_eagle",
+    "Failed to process file: %s \"%s\" image ship_art_confed_condor",
+    "Failed to process file: %s \"%s\" image ship_art_confed_raven",
+    "Failed to process file: %s \"%s\" image ship_art_confed_owl",
+    "Failed to process file: %s \"%s\" image ship_art_confed_pelican",
+    "Failed to process file: %s \"%s\" image ship_art_confed_albatross",
+    "Failed to process file: %s \"%s\" image ship_art_confed_phoenix",
+    "Failed to process file: %s \"%s\" image ship_art_confed_thunderbird",
+    "Failed to process file: %s \"%s\" image ship_art_confed_harrier",
+    "Failed to process file: %s \"%s\" image ship_art_confed_crane",
+    "Failed to process file: %s \"%s\" image ship_art_confed_liberty",
+    "Failed to process file: %s \"%s\" image ship_art_confed_heron",
+    "Failed to process file: %s \"%s\" image ship_art_confed_independence",
+    "Failed to process file: %s \"%s\" image ship_art_confed_defiance",
+    "Failed to process file: %s \"%s\" image ship_art_synth_drone",
+    "Failed to process file: %s \"%s\" image ship_art_synth_scout_drone",
+    "Failed to process file: %s \"%s\" image ship_art_synth_heavy_drone",
+    "Failed to process file: %s \"%s\" image ship_art_synth_bomber_drone",
+    "Failed to process file: %s \"%s\" image ship_art_synth_hunter",
+    "Failed to process file: %s \"%s\" image ship_art_synth_interceptor_drone",
+    "Failed to process file: %s \"%s\" image ship_art_synth_stalker",
+    "Failed to process file: %s \"%s\" image ship_art_synth_ravager",
+    "Failed to process file: %s \"%s\" image ship_art_synth_predator",
+    "Failed to process file: %s \"%s\" image ship_art_synth_destroyer",
+    "Failed to process file: %s \"%s\" image ship_art_synth_annihilator",
+    "Failed to process file: %s \"%s\" image ship_art_synth_carrier",
+    "Failed to process file: %s \"%s\" image ship_art_synth_relay_node",
+    "Failed to process file: %s \"%s\" image ship_art_synth_repair_node",
+    "Failed to process file: %s \"%s\" image ship_art_synth_devastator",
+    "Failed to process file: %s \"%s\" image ship_art_synth_eradicator",
+    "Failed to process file: %s \"%s\" image ship_art_synth_nexus",
+    "Failed to process file: %s \"%s\" image ship_art_synth_overmind",
+    "Failed to process file: %s \"%s\" image ship_art_synth_terminus",
+    "Failed to process file: %s \"%s\" image ship_art_synth_conduit",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_blade",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_fang",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_talon",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_venom",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_marauder",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_cutlass",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_specter",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_scimitar",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_saber",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_phantom",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_shadow",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_reaver",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_pillager",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_ravager",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_bomber",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_torpedo_boat",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_dreadnought",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_galleon",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_frigate",
+    "Failed to process file: %s \"%s\" image ship_art_corsair_tender",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_seraph",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_cherub",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_herald",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_virtue",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_templar",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_crusader",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_paladin",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_inquisitor",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_oracle",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_acolyte",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_avatar",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_wrath",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_prophet",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_judgment",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_smiter",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_glory",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_purifier",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_sanctum",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_divine",
+    "Failed to process file: %s \"%s\" image tex_menu_bg",
+    "Failed to process file: %s \"%s\" image ship_art_ascendant_bastion",
+    "Failed to process file: %s \"%s\" image tex_panel_bg",
+    "Failed to process file: %s \"%s\" image tex_title_frame",
+    "Failed to process file: %s \"%s\" image tex_divider",
+    "Failed to process file: %s \"%s\" image tex_btn_normal",
+    "Failed to process file: %s \"%s\" image tex_btn_selected"
+  ],
+  "warningMessages": [
+    "[.WebGL-0x4d401f56900]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[.WebGL-0x4d401f56900]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[.WebGL-0x4d401f56900]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[.WebGL-0x4d401f56900]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)"
+  ],
+  "allLogs": [
+    {
+      "time": "2026-03-25T00:56:45.487Z",
+      "level": "debug",
+      "text": "[vite] connecting..."
+    },
+    {
+      "time": "2026-03-25T00:56:45.500Z",
+      "level": "debug",
+      "text": "[vite] connected."
+    },
+    {
+      "time": "2026-03-25T00:56:45.690Z",
+      "level": "log",
+      "text": "%c %c %c %c %c Phaser v3.90.0 (WebGL | Web Audio) %c https://phaser.io/v390 background: #ff0000 background: #ffff00 background: #00ff00 background: #00ffff color: #ffffff; background: #000000 background: transparent"
+    },
+    {
+      "time": "2026-03-25T00:56:45.786Z",
+      "level": "warning",
+      "text": "[.WebGL-0x4d401f56900]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels"
+    },
+    {
+      "time": "2026-03-25T00:56:45.845Z",
+      "level": "warning",
+      "text": "[.WebGL-0x4d401f56900]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels"
+    },
+    {
+      "time": "2026-03-25T00:56:45.878Z",
+      "level": "warning",
+      "text": "[.WebGL-0x4d401f56900]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels"
+    },
+    {
+      "time": "2026-03-25T00:56:45.883Z",
+      "level": "warning",
+      "text": "[.WebGL-0x4d401f56900]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)"
+    },
+    {
+      "time": "2026-03-25T00:56:46.260Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_viper"
+    },
+    {
+      "time": "2026-03-25T00:56:46.260Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_stiletto"
+    },
+    {
+      "time": "2026-03-25T00:56:46.260Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_raptor"
+    },
+    {
+      "time": "2026-03-25T00:56:46.260Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_gladius"
+    },
+    {
+      "time": "2026-03-25T00:56:46.260Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_praetorian"
+    },
+    {
+      "time": "2026-03-25T00:56:46.260Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_centurion"
+    },
+    {
+      "time": "2026-03-25T00:56:46.260Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_legionnaire"
+    },
+    {
+      "time": "2026-03-25T00:56:46.261Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_hammer"
+    },
+    {
+      "time": "2026-03-25T00:56:46.261Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_thunderbolt"
+    },
+    {
+      "time": "2026-03-25T00:56:46.261Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_sentinel"
+    },
+    {
+      "time": "2026-03-25T00:56:46.261Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_javelin"
+    },
+    {
+      "time": "2026-03-25T00:56:46.349Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_guardian"
+    },
+    {
+      "time": "2026-03-25T00:56:46.358Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_bastion"
+    },
+    {
+      "time": "2026-03-25T00:56:46.358Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_bulwark"
+    },
+    {
+      "time": "2026-03-25T00:56:46.358Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_harbinger"
+    },
+    {
+      "time": "2026-03-25T00:56:46.358Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_vindicator"
+    },
+    {
+      "time": "2026-03-25T00:56:46.358Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_imperator"
+    },
+    {
+      "time": "2026-03-25T00:56:46.359Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_dominator"
+    },
+    {
+      "time": "2026-03-25T00:56:46.359Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_executor"
+    },
+    {
+      "time": "2026-03-25T00:56:46.359Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_terran_consul"
+    },
+    {
+      "time": "2026-03-25T00:56:46.359Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_wasp"
+    },
+    {
+      "time": "2026-03-25T00:56:46.359Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_sparrow"
+    },
+    {
+      "time": "2026-03-25T00:56:46.359Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_finch"
+    },
+    {
+      "time": "2026-03-25T00:56:46.359Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_kestrel"
+    },
+    {
+      "time": "2026-03-25T00:56:46.359Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_falcon"
+    },
+    {
+      "time": "2026-03-25T00:56:46.359Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_hawk"
+    },
+    {
+      "time": "2026-03-25T00:56:46.359Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_eagle"
+    },
+    {
+      "time": "2026-03-25T00:56:46.359Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_condor"
+    },
+    {
+      "time": "2026-03-25T00:56:46.359Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_raven"
+    },
+    {
+      "time": "2026-03-25T00:56:46.359Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_owl"
+    },
+    {
+      "time": "2026-03-25T00:56:46.360Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_pelican"
+    },
+    {
+      "time": "2026-03-25T00:56:46.360Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_albatross"
+    },
+    {
+      "time": "2026-03-25T00:56:46.360Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_phoenix"
+    },
+    {
+      "time": "2026-03-25T00:56:46.360Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_thunderbird"
+    },
+    {
+      "time": "2026-03-25T00:56:46.360Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_harrier"
+    },
+    {
+      "time": "2026-03-25T00:56:46.360Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_crane"
+    },
+    {
+      "time": "2026-03-25T00:56:46.360Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_liberty"
+    },
+    {
+      "time": "2026-03-25T00:56:46.360Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_heron"
+    },
+    {
+      "time": "2026-03-25T00:56:46.360Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_independence"
+    },
+    {
+      "time": "2026-03-25T00:56:46.360Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_confed_defiance"
+    },
+    {
+      "time": "2026-03-25T00:56:46.361Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_drone"
+    },
+    {
+      "time": "2026-03-25T00:56:46.361Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_scout_drone"
+    },
+    {
+      "time": "2026-03-25T00:56:46.361Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_heavy_drone"
+    },
+    {
+      "time": "2026-03-25T00:56:46.378Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_bomber_drone"
+    },
+    {
+      "time": "2026-03-25T00:56:46.386Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_hunter"
+    },
+    {
+      "time": "2026-03-25T00:56:46.386Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_interceptor_drone"
+    },
+    {
+      "time": "2026-03-25T00:56:46.386Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_stalker"
+    },
+    {
+      "time": "2026-03-25T00:56:46.386Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_ravager"
+    },
+    {
+      "time": "2026-03-25T00:56:46.387Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_predator"
+    },
+    {
+      "time": "2026-03-25T00:56:46.387Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_destroyer"
+    },
+    {
+      "time": "2026-03-25T00:56:46.387Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_annihilator"
+    },
+    {
+      "time": "2026-03-25T00:56:46.387Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_carrier"
+    },
+    {
+      "time": "2026-03-25T00:56:46.387Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_relay_node"
+    },
+    {
+      "time": "2026-03-25T00:56:46.387Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_repair_node"
+    },
+    {
+      "time": "2026-03-25T00:56:46.387Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_devastator"
+    },
+    {
+      "time": "2026-03-25T00:56:46.387Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_eradicator"
+    },
+    {
+      "time": "2026-03-25T00:56:46.405Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_nexus"
+    },
+    {
+      "time": "2026-03-25T00:56:46.417Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_overmind"
+    },
+    {
+      "time": "2026-03-25T00:56:46.417Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_terminus"
+    },
+    {
+      "time": "2026-03-25T00:56:46.417Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_conduit"
+    },
+    {
+      "time": "2026-03-25T00:56:46.417Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_blade"
+    },
+    {
+      "time": "2026-03-25T00:56:46.417Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_fang"
+    },
+    {
+      "time": "2026-03-25T00:56:46.417Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_talon"
+    },
+    {
+      "time": "2026-03-25T00:56:46.418Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_venom"
+    },
+    {
+      "time": "2026-03-25T00:56:46.418Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_marauder"
+    },
+    {
+      "time": "2026-03-25T00:56:46.418Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_cutlass"
+    },
+    {
+      "time": "2026-03-25T00:56:46.418Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_specter"
+    },
+    {
+      "time": "2026-03-25T00:56:46.419Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_scimitar"
+    },
+    {
+      "time": "2026-03-25T00:56:46.419Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_saber"
+    },
+    {
+      "time": "2026-03-25T00:56:46.419Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_phantom"
+    },
+    {
+      "time": "2026-03-25T00:56:46.419Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_shadow"
+    },
+    {
+      "time": "2026-03-25T00:56:46.419Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_reaver"
+    },
+    {
+      "time": "2026-03-25T00:56:46.419Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_pillager"
+    },
+    {
+      "time": "2026-03-25T00:56:46.420Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_ravager"
+    },
+    {
+      "time": "2026-03-25T00:56:46.420Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_bomber"
+    },
+    {
+      "time": "2026-03-25T00:56:46.420Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_torpedo_boat"
+    },
+    {
+      "time": "2026-03-25T00:56:46.420Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_dreadnought"
+    },
+    {
+      "time": "2026-03-25T00:56:46.420Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_galleon"
+    },
+    {
+      "time": "2026-03-25T00:56:46.436Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_frigate"
+    },
+    {
+      "time": "2026-03-25T00:56:46.437Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_corsair_tender"
+    },
+    {
+      "time": "2026-03-25T00:56:46.437Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_seraph"
+    },
+    {
+      "time": "2026-03-25T00:56:46.437Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_cherub"
+    },
+    {
+      "time": "2026-03-25T00:56:46.437Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_herald"
+    },
+    {
+      "time": "2026-03-25T00:56:46.437Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_virtue"
+    },
+    {
+      "time": "2026-03-25T00:56:46.438Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_templar"
+    },
+    {
+      "time": "2026-03-25T00:56:46.438Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_crusader"
+    },
+    {
+      "time": "2026-03-25T00:56:46.438Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_paladin"
+    },
+    {
+      "time": "2026-03-25T00:56:46.438Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_inquisitor"
+    },
+    {
+      "time": "2026-03-25T00:56:46.438Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_oracle"
+    },
+    {
+      "time": "2026-03-25T00:56:46.438Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_acolyte"
+    },
+    {
+      "time": "2026-03-25T00:56:46.438Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_avatar"
+    },
+    {
+      "time": "2026-03-25T00:56:46.438Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_wrath"
+    },
+    {
+      "time": "2026-03-25T00:56:46.438Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_prophet"
+    },
+    {
+      "time": "2026-03-25T00:56:46.438Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_judgment"
+    },
+    {
+      "time": "2026-03-25T00:56:46.446Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_smiter"
+    },
+    {
+      "time": "2026-03-25T00:56:46.446Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_glory"
+    },
+    {
+      "time": "2026-03-25T00:56:46.446Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_purifier"
+    },
+    {
+      "time": "2026-03-25T00:56:46.446Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_sanctum"
+    },
+    {
+      "time": "2026-03-25T00:56:46.446Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_divine"
+    },
+    {
+      "time": "2026-03-25T00:56:46.446Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image tex_menu_bg"
+    },
+    {
+      "time": "2026-03-25T00:56:46.446Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_ascendant_bastion"
+    },
+    {
+      "time": "2026-03-25T00:56:46.446Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image tex_panel_bg"
+    },
+    {
+      "time": "2026-03-25T00:56:46.446Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image tex_title_frame"
+    },
+    {
+      "time": "2026-03-25T00:56:46.446Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image tex_divider"
+    },
+    {
+      "time": "2026-03-25T00:56:46.446Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image tex_btn_normal"
+    },
+    {
+      "time": "2026-03-25T00:56:46.446Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image tex_btn_selected"
+    },
+    {
+      "time": "2026-03-25T00:56:46.456Z",
+      "level": "log",
+      "text": "[AudioManager] Initialized"
+    }
+  ]
+}

@@ -6,8 +6,10 @@
  * - Collects statistics on ship/faction performance
  * - Supports batch simulation for statistical significance
  * - Generates balance reports
+ * - Supports seeded RNG for deterministic multiplayer (optional)
  */
 
+import seedrandom from 'seedrandom';
 import type { FactionId } from '../config';
 import { getShipDefinition, SHIP_DEFINITIONS } from '../data/ShipDefinitions';
 import { getModeCombatStats, calculateHitChance, type ModeCombatStats } from '../data/ModeBalancing';
@@ -35,6 +37,7 @@ export interface SimulationConfig {
   maxTurns: number;
   battlefieldSize: number;
   verbose: boolean;
+  seed?: number; // Optional deterministic seed for multiplayer
 }
 
 // Ship in simulation
@@ -130,9 +133,12 @@ export class BattleSimulator {
   private team2ShipIds: string[] = [];
   private currentTurn: number = 0;
   private shipStats: Map<string, ShipBattleStats> = new Map();
+  private rng: () => number; // Deterministic RNG (seeded) or Math.random()
 
   constructor(config: Partial<SimulationConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    // Use seeded RNG if seed provided, otherwise use Math.random()
+    this.rng = config.seed !== undefined ? seedrandom(String(config.seed)) : () => Math.random();
   }
 
   /**
@@ -326,7 +332,7 @@ export class BattleSimulator {
     // Use pilot initiative as skill level if pilot specified
     const pilotSkill = spec.pilotId
       ? (PILOT_CARDS[spec.pilotId]?.initiative ?? 3)
-      : 3 + Math.floor(Math.random() * 4);
+      : 3 + Math.floor(this.rng() * 4);
 
     return {
       id: `${team}_${spec.shipId}_${index}`,
@@ -526,7 +532,7 @@ export class BattleSimulator {
       target.combatStats.agilityDice
     );
 
-    const hit = Math.random() < hitChance;
+    const hit = this.rng() < hitChance;
 
     if (hit) {
       const damage = attacker.combatStats.attackDice;
@@ -744,7 +750,7 @@ export class BattleSimulator {
     const result: string[] = [];
 
     for (let i = 0; i < count; i++) {
-      const ship = factionShips[Math.floor(Math.random() * factionShips.length)];
+      const ship = factionShips[Math.floor(this.rng() * factionShips.length)];
       if (ship) result.push(ship.id);
     }
 

@@ -59,19 +59,19 @@ const SQUADS: ReadonlyArray<QuickBuildSquad> = [
     ],
   },
   {
-    id: 'th_200_iron_fist', factionId: 'terran_hegemony', pointLimit: 200, totalCost: 195,
+    id: 'th_200_iron_fist', factionId: 'terran_hegemony', pointLimit: 200, totalCost: 193,
     name: 'Iron Fist', style: 'balanced',
     ships: [
-      { pilotId: 'iron_wolf', loadoutId: 'gladius_patrol' },         // 52+59=111
+      { pilotId: 'iron_wolf', loadoutId: 'gladius_patrol' },         // 52+57=109
       { pilotId: 'viper_cadet', loadoutId: 'viper_pursuit' },        // 32+52=84
     ],
   },
   {
-    id: 'th_300_battle_squadron', factionId: 'terran_hegemony', pointLimit: 300, totalCost: 293,
-    name: 'Battle Squadron', style: 'aggressive',
+    id: 'th_300_battle_squadron', factionId: 'terran_hegemony', pointLimit: 300, totalCost: 300,
+    name: 'Battle Squadron', style: 'balanced',
     ships: [
       { pilotId: 'viper_ace', loadoutId: 'viper_ace' },              // 40+58=98
-      { pilotId: 'iron_wolf', loadoutId: 'gladius_patrol' },         // 52+59=111
+      { pilotId: 'harbinger_crew', loadoutId: 'harbinger_coordinator' }, // 58+68=126
       { pilotId: 'viper_cadet', loadoutId: 'viper_pursuit' },        // 32+52=84
     ],
   },
@@ -104,7 +104,7 @@ const SQUADS: ReadonlyArray<QuickBuildSquad> = [
   },
   {
     id: 'fc_300_liberation_fleet', factionId: 'free_confederation', pointLimit: 300, totalCost: 290,
-    name: 'Liberation Fleet', style: 'control',
+    name: 'Liberation Fleet', style: 'aggressive',
     ships: [
       { pilotId: 'hawk_rennick', loadoutId: 'hawk_assault' },        // 52+68=120
       { pilotId: 'falcon_veteran', loadoutId: 'falcon_striker' },    // 42+68=110
@@ -141,13 +141,12 @@ const SQUADS: ReadonlyArray<QuickBuildSquad> = [
   },
   {
     id: 'sc_300_hive_fleet', factionId: 'synthetic_collective', pointLimit: 300, totalCost: 296,
-    name: 'Hive Fleet', style: 'swarm',
+    name: 'Hive Fleet', style: 'balanced',
     ships: [
       { pilotId: 'pursuit_protocol', loadoutId: 'interceptor_hunter' }, // 38+38=76
       { pilotId: 'demolition_unit', loadoutId: 'bomber_basic' },         // 38+40=78
       { pilotId: 'interceptor_drone_alpha', loadoutId: 'interceptor_swarm' }, // 24+28=52
-      { pilotId: 'combat_drone_alpha', loadoutId: 'drone_standard' },    // 20+32=52
-      { pilotId: 'scout_drone_alpha', loadoutId: 'scout_basic' },        // 16+22=38
+      { pilotId: 'relay_node_basic', loadoutId: 'relay_support' },      // 42+55=97 (improved from relay_basic 48 → relay_support 55 = +7pts moderate boost)
     ],
   },
 
@@ -176,10 +175,10 @@ const SQUADS: ReadonlyArray<QuickBuildSquad> = [
     ],
   },
   {
-    id: 'vc_300_corsair_fleet', factionId: 'void_corsairs', pointLimit: 300, totalCost: 299,
-    name: 'Corsair Fleet', style: 'aggressive',
+    id: 'vc_300_corsair_fleet', factionId: 'void_corsairs', pointLimit: 300, totalCost: 292,
+    name: 'Corsair Fleet', style: 'balanced',
     ships: [
-      { pilotId: 'iron_fist_mora', loadoutId: 'marauder_brawler' },  // 60+72=132
+      { pilotId: 'tender_crew', loadoutId: 'tender_support' },       // 55+70=125
       { pilotId: 'red_jenna', loadoutId: 'blade_ace' },              // 50+55=105
       { pilotId: 'venom_pilot', loadoutId: 'venom_swarm' },          // 34+28=62
     ],
@@ -210,11 +209,11 @@ const SQUADS: ReadonlyArray<QuickBuildSquad> = [
     ],
   },
   {
-    id: 'ae_300_holy_crusade', factionId: 'ascendant_empire', pointLimit: 300, totalCost: 280,
+    id: 'ae_300_holy_crusade', factionId: 'ascendant_empire', pointLimit: 300, totalCost: 267,
     name: 'Holy Crusade', style: 'control',
     ships: [
       { pilotId: 'crusader_pilot', loadoutId: 'crusader_defender' }, // 44+68=112
-      { pilotId: 'seraph_initiate', loadoutId: 'seraph_warden' },    // 38+68=106
+      { pilotId: 'acolyte_pilot', loadoutId: 'acolyte_support' },    // 38+55=93
       { pilotId: 'cherub_guardian', loadoutId: 'cherub_ace' },       // 30+32=62
     ],
   },

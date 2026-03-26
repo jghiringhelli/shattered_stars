@@ -74,6 +74,7 @@ export class NetworkService extends Phaser.Events.EventEmitter {
   private isLocalMode = true;
   private localRooms: Map<string, RoomInfo> = new Map();
   private localPlayers: Map<string, PlayerInfo> = new Map();
+  private currentBattleSeed: number | null = null; // Seeded RNG for deterministic battles
 
   // Message handlers
   private handlers: Map<NetworkMessageType, MessageHandler[]> = new Map();
@@ -211,6 +212,14 @@ export class NetworkService extends Phaser.Events.EventEmitter {
       this.latency = Date.now() - this.lastPingTime;
       this.emit('latency_update', { latency: this.latency });
       return;
+    }
+
+    // Store battle seed from game_start for deterministic RNG
+    if (message.type === 'game_start') {
+      const payload = message.payload as { seed?: number };
+      if (payload.seed !== undefined) {
+        this.currentBattleSeed = payload.seed;
+      }
     }
 
     // Emit event for this message type
@@ -451,6 +460,10 @@ export class NetworkService extends Phaser.Events.EventEmitter {
 
   getLatency(): number {
     return this.latency;
+  }
+
+  getCurrentBattleSeed(): number | null {
+    return this.currentBattleSeed;
   }
 
   isInLocalMode(): boolean {
