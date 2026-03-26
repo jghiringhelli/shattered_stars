@@ -111,14 +111,15 @@ export async function pressGameKey(page: Page, key: string): Promise<void> {
 
 // MainMenuScene: startY = 250, spacing = 55, centerX = 640
 const MENU_POSITIONS: Record<string, number> = {
-  SKIRMISH:    0,
-  SURVIVAL:    1,
+  SKIRMISH:      0,
+  SURVIVAL:      1,
   'EPIC BATTLE': 2,
-  DOGFIGHT:    3,
-  'ACE DUEL':  4,
-  CAMPAIGN:    5,
-  SETTINGS:    6,
-  CREDITS:     7,
+  DOGFIGHT:      3,
+  'ACE DUEL':    4,
+  CAMPAIGN:      5,
+  SETTINGS:      6,
+  ENCYCLOPEDIA:  7,
+  CREDITS:       8,
 };
 
 /** Click a main-menu item by its visible label. */

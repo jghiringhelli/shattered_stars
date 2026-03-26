@@ -9,6 +9,7 @@
  */
 
 import Phaser from 'phaser';
+import seedrandom from 'seedrandom';
 import { ShipStatCard } from '../ui/ShipStatCard';
 import type { ShipState, ManeuverDefinition } from '../core/types';
 import type { FactionId } from '../config';
@@ -75,6 +76,7 @@ export class TurnBasedBattleScene extends Phaser.Scene {
   private shipSprites: Map<string, ShipSprite> = new Map();
   private healthBars: Map<string, HealthBar> = new Map();
   private minimap!: Minimap;
+  private rng: () => number = Math.random;
 
   private turnState!: TurnState;
   private playerShipIds: string[] = [];
@@ -198,7 +200,13 @@ export class TurnBasedBattleScene extends Phaser.Scene {
         ships: string[];
       }>;
       aiDifficulty?: AIDifficultyLevel;
+      seed?: number;
     } | undefined;
+
+    // Initialize seeded RNG for deterministic pilot skill assignment
+    if (battleConfig?.seed !== undefined) {
+      this.rng = seedrandom(String(battleConfig.seed));
+    }
 
     // Set AI difficulty from config
     if (battleConfig?.aiDifficulty) {
@@ -252,7 +260,7 @@ export class TurnBasedBattleScene extends Phaser.Scene {
           shipX,
           shipY,
           facingAngle,
-          3 + Math.floor(Math.random() * 4), // Random pilot skill 3-6
+          3 + Math.floor(this.rng() * 4), // Pilot skill 3-6 (seeded for determinism)
           initiativeCounter++
         );
 

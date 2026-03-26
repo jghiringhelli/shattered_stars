@@ -49,12 +49,12 @@ test.describe('Main Menu Navigation', () => {
     expect(active).toBe(true);
   });
 
-  test('all 8 menu items are present', async ({ page }) => {
+  test('all 9 menu items are present', async ({ page }) => {
     const count = await page.evaluate(() => {
       const scene = (window as any).game.scene.getScene('MainMenuScene') as any;
       return scene?.menuItems?.length ?? 0;
     });
-    expect(count).toBe(8);
+    expect(count).toBe(9);
   });
 
   // ─── mouse navigation ───────────────────────────────────────────────────
@@ -99,11 +99,11 @@ test.describe('Main Menu Navigation', () => {
     expect(active).toBe(true);
   });
 
-  test('clicking DOGFIGHT → ArcadeBattleScene', async ({ page }) => {
+  test('clicking DOGFIGHT → DogfightScene', async ({ page }) => {
     await clickMenuItem(page, 'DOGFIGHT');
-    await waitForScene(page, 'ArcadeBattleScene');
+    await waitForScene(page, 'DogfightScene');
     const active = await page.evaluate(
-      () => (window as any).game.scene.isActive('ArcadeBattleScene')
+      () => (window as any).game.scene.isActive('DogfightScene')
     );
     expect(active).toBe(true);
   });
@@ -116,9 +116,9 @@ test.describe('Main Menu Navigation', () => {
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
-    await waitForScene(page, 'ArcadeBattleScene');
+    await waitForScene(page, 'DogfightScene');
     const active = await page.evaluate(
-      () => (window as any).game.scene.isActive('ArcadeBattleScene')
+      () => (window as any).game.scene.isActive('DogfightScene')
     );
     expect(active).toBe(true);
   });
@@ -133,8 +133,8 @@ test.describe('Main Menu Navigation', () => {
     expect(active).toBe(true);
   });
 
-  test('ArrowDown × 7 + Enter navigates to CREDITS', async ({ page }) => {
-    for (let i = 0; i < 7; i++) await page.keyboard.press('ArrowDown');
+  test('ArrowDown × 8 + Enter navigates to CREDITS', async ({ page }) => {
+    for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
     await waitForScene(page, 'CreditsScene');
     const active = await page.evaluate(
@@ -154,18 +154,18 @@ test.describe('Main Menu Navigation', () => {
   });
 
   test('ArrowUp wraps around from top to bottom item', async ({ page }) => {
-    // At index 0 (SKIRMISH), ArrowUp should wrap to CREDITS (index 7)
+    // At index 0 (SKIRMISH), ArrowUp should wrap to CREDITS (index 8)
     await page.keyboard.press('ArrowUp');
     const selectedIndex = await page.evaluate(() => {
       const scene = (window as any).game.scene.getScene('MainMenuScene') as any;
       return scene?.selectedIndex ?? -1;
     });
-    expect(selectedIndex).toBe(7);
+    expect(selectedIndex).toBe(8);
   });
 
   test('ArrowDown wraps from last item back to first', async ({ page }) => {
-    // Navigate to last item (7 presses)
-    for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowDown');
+    // Navigate to last item (8 presses: 0→8), then one more wraps to 0
+    for (let i = 0; i < 9; i++) await page.keyboard.press('ArrowDown');
     const selectedIndex = await page.evaluate(() => {
       const scene = (window as any).game.scene.getScene('MainMenuScene') as any;
       return scene?.selectedIndex ?? -1;
@@ -184,7 +184,20 @@ test.describe('ArcadeBattleScene Gameplay', () => {
     suppressWebGLNoise(page as any);
     await page.goto('/');
     await waitForMenuReady(page);
-    await clickMenuItem(page, 'DOGFIGHT');
+
+    // ArcadeBattleScene has no direct menu entry — navigate via registry
+    await page.evaluate(() => {
+      const g = (window as any).game;
+      g.scene.getScenes(true).forEach((s: any) => g.scene.stop(s.sys.settings.key));
+      g.registry.set('battleConfig', {
+        factions: [
+          { factionId: 'free_confederation', controller: 'player', ships: ['confed_sparrow'] },
+          { factionId: 'terran_hegemony',    controller: 'ai',     ships: ['terran_viper', 'terran_viper'] },
+        ],
+        gameMode: 'arcade',
+      });
+      setTimeout(() => g.scene.start('ArcadeBattleScene'), 100);
+    });
     await waitForScene(page, 'ArcadeBattleScene');
 
     // Wait until the player ship is spawned and in-game

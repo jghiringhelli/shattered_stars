@@ -35,6 +35,7 @@ const ALL_FACTIONS: FactionId[] = [
 
 export class LobbyScene extends Phaser.Scene {
   private currentView: 'browser' | 'room' = 'browser';
+  private serverUrl: string | null = null;
 
   // Room browser state
   private rooms: RoomInfo[] = [];
@@ -67,6 +68,7 @@ export class LobbyScene extends Phaser.Scene {
     networkService.on('room_left',     this.onRoomLeft,      this);
     networkService.on('room_update',   this.onRoomUpdate,    this);
     networkService.on('player_joined', this.onPlayerJoined,  this);
+    networkService.on('game_start',    this.onGameStart,     this);
     networkService.on('error',         this.onNetworkError,  this);
 
     // Connect in local simulation mode (no URL = no server required)
@@ -82,6 +84,7 @@ export class LobbyScene extends Phaser.Scene {
     networkService.off('room_left',     this.onRoomLeft,      this);
     networkService.off('room_update',   this.onRoomUpdate,    this);
     networkService.off('player_joined', this.onPlayerJoined,  this);
+    networkService.off('game_start',    this.onGameStart,     this);
     networkService.off('error',         this.onNetworkError,  this);
     if (this.currentRoom) networkService.leaveRoom();
   }
@@ -137,6 +140,12 @@ export class LobbyScene extends Phaser.Scene {
     this.statusText.setColor('#ff4444');
   }
 
+  /** Server-driven game start: received when all players ready on real P2P server. */
+  private onGameStart(data: unknown): void {
+    const { seed } = data as { seed?: number };
+    this.startMultiplayerGame(seed);
+  }
+
   // ==========================================
   // ROOM BROWSER VIEW
   // ==========================================
@@ -189,6 +198,11 @@ export class LobbyScene extends Phaser.Scene {
       this.refreshRoomList();
     });
     this.roomListContainer.add(refreshBtn);
+
+    const onlineBtn = this.createButton(this.scale.width / 2 + 380, 120, 'ONLINE', () => {
+      this.promptOnlineConnect();
+    });
+    this.roomListContainer.add(onlineBtn);
 
     const listBg = this.add.graphics();
     listBg.fillStyle(0x1a1a2a, 0.8);
@@ -421,6 +435,19 @@ export class LobbyScene extends Phaser.Scene {
     networkService.createRoom(name, 4, 'continuous');
   }
 
+  /** Prompt the user for a server URL and reconnect in online mode. */
+  private promptOnlineConnect(): void {
+    const url = window.prompt(
+      'Enter server WebSocket URL:',
+      this.serverUrl ?? 'ws://192.168.1.100:8080'
+    );
+    if (url === null) return; // cancelled
+    this.serverUrl = url.trim() || null;
+    this.statusText.setText('Connecting to server…');
+    this.statusText.setColor('#ffff44');
+    networkService.connect(this.serverUrl ?? undefined);
+  }
+
   private cycleFaction(): void {
     const localId = networkService.getPlayerId();
     const player = this.players.find((p) => p.id === localId);
@@ -431,7 +458,7 @@ export class LobbyScene extends Phaser.Scene {
     networkService.selectFaction(nextFaction);
   }
 
-  private startMultiplayerGame(): void {
+  private startMultiplayerGame(seed?: number): void {
     if (!this.currentRoom) return;
 
     const localId = networkService.getPlayerId();
@@ -447,6 +474,7 @@ export class LobbyScene extends Phaser.Scene {
       })),
     });
 
+    const resolvedSeed = seed ?? networkService.getCurrentBattleSeed() ?? undefined;
     this.registry.set('battleConfig', {
       factions: this.players.map((p) => ({
         factionId: p.factionId,
@@ -455,6 +483,7 @@ export class LobbyScene extends Phaser.Scene {
       })),
       gameMode: this.currentRoom.gameMode,
       pointLimit: 200,
+      seed: resolvedSeed,
     });
 
     if (this.currentRoom.gameMode === 'turn_based') {
