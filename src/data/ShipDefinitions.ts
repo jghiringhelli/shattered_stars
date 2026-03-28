@@ -1539,7 +1539,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     description: 'Fast torpedo attack craft.',
   },
 
-  // Capital Ships (4)
+  // Capital Ships (3)
   corsair_dreadnought: {
     id: 'corsair_dreadnought',
     name: 'Dreadnought Flagship',
@@ -1594,6 +1594,8 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     spriteKey: 'ship_corsair_frigate',
     description: 'Fast raiding frigate.',
   },
+
+  // Support Ships (1)
   corsair_tender: {
     id: 'corsair_tender',
     name: 'Fleet Tender',
@@ -2082,6 +2084,7 @@ export const SHIP_DIALS: Record<string, readonly ManeuverDefinition[]> = {
   corsair_dreadnought: CAPITAL_DIAL,
   corsair_galleon: CAPITAL_DIAL,
   corsair_frigate: CAPITAL_DIAL,
+  // Support Ships (1)
   corsair_tender: CAPITAL_DIAL,
 
   // Ascendant Empire

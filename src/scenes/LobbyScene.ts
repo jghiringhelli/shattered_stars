@@ -16,6 +16,7 @@ import { createHoverButton } from '../ui/ButtonFactory';
 import type { FactionId } from '../config';
 import { FACTION_COLORS } from '../config';
 import { networkService, type RoomInfo, type PlayerInfo } from '../services/NetworkService';
+import type { BattleSnapshot } from '../multiplayer/BattleStateSerializer';
 
 const FACTION_NAMES: Record<FactionId, string> = {
   terran_hegemony: 'Terran Hegemony',
@@ -69,6 +70,7 @@ export class LobbyScene extends Phaser.Scene {
     networkService.on('room_update',   this.onRoomUpdate,    this);
     networkService.on('player_joined', this.onPlayerJoined,  this);
     networkService.on('game_start',    this.onGameStart,     this);
+    networkService.on('battle_snapshot', this.onBattleSnapshot, this);
     networkService.on('error',         this.onNetworkError,  this);
 
     // Connect in local simulation mode (no URL = no server required)
@@ -85,6 +87,7 @@ export class LobbyScene extends Phaser.Scene {
     networkService.off('room_update',   this.onRoomUpdate,    this);
     networkService.off('player_joined', this.onPlayerJoined,  this);
     networkService.off('game_start',    this.onGameStart,     this);
+    networkService.off('battle_snapshot', this.onBattleSnapshot, this);
     networkService.off('error',         this.onNetworkError,  this);
     if (this.currentRoom) networkService.leaveRoom();
   }
@@ -151,6 +154,59 @@ export class LobbyScene extends Phaser.Scene {
     this.startMultiplayerGame(seed, players);
   }
 
+  /**
+   * Fired when joining a room that already has a battle in progress.
+   * Shows an overlay listing AI-controlled ships so the late joiner can claim one.
+   */
+  private onBattleSnapshot(data: unknown): void {
+    const snapshot = data as BattleSnapshot;
+    this.showShipClaimOverlay(snapshot);
+  }
+
+  private showShipClaimOverlay(snapshot: BattleSnapshot): void {
+    const cx = this.scale.width / 2;
+    const overlay = this.add.container(0, 0).setDepth(100);
+
+    const bg = this.add.graphics();
+    bg.fillStyle(0x000000, 0.85);
+    bg.fillRect(0, 0, this.scale.width, this.scale.height);
+    overlay.add(bg);
+
+    overlay.add(
+      this.add
+        .text(cx, 150, 'Battle In Progress — Claim a Ship', { font: 'bold 28px Arial', color: '#ffaa44' })
+        .setOrigin(0.5)
+    );
+    overlay.add(
+      this.add
+        .text(cx, 195, 'Choose an AI-controlled ship to take over:', { font: '18px Arial', color: '#aaaaaa' })
+        .setOrigin(0.5)
+    );
+
+    const aiShips = snapshot.ships.filter((s) => s.owner === 'ai');
+    aiShips.forEach((ship, i) => {
+      const btn = this.createButton(cx, 260 + i * 60, ship.id, () => {
+        overlay.destroy();
+        this.claimAndStart(ship.id, snapshot);
+      });
+      overlay.add(btn);
+    });
+
+    if (aiShips.length === 0) {
+      overlay.add(
+        this.add
+          .text(cx, 280, 'No unclaimed ships available.', { font: '20px Arial', color: '#ff4444' })
+          .setOrigin(0.5)
+      );
+    }
+  }
+
+  private claimAndStart(shipId: string, snapshot: BattleSnapshot): void {
+    networkService.claimShip(shipId);
+    this.registry.set('lateJoinSnapshot', snapshot);
+    this.registry.set('lateJoinShipId', shipId);
+    this.startMultiplayerGame();
+  }
   // ==========================================
   // ROOM BROWSER VIEW
   // ==========================================
@@ -290,6 +346,12 @@ export class LobbyScene extends Phaser.Scene {
         });
         joinBtn.setData('isRoomEntry', true);
         this.roomListContainer.add(joinBtn);
+      } else if (room.isStarted) {
+        const lateBtn = this.createSmallButton(1050, y, 'LATE JOIN', () => {
+          networkService.joinRoom(room.id);
+        });
+        lateBtn.setData('isRoomEntry', true);
+        this.roomListContainer.add(lateBtn);
       }
     });
   }

@@ -209,12 +209,12 @@ const SQUADS: ReadonlyArray<QuickBuildSquad> = [
     ],
   },
   {
-    id: 'ae_300_holy_crusade', factionId: 'ascendant_empire', pointLimit: 300, totalCost: 267,
+    id: 'ae_300_holy_crusade', factionId: 'ascendant_empire', pointLimit: 300, totalCost: 299,
     name: 'Holy Crusade', style: 'control',
     ships: [
       { pilotId: 'crusader_pilot', loadoutId: 'crusader_defender' }, // 44+68=112
       { pilotId: 'acolyte_pilot', loadoutId: 'acolyte_support' },    // 38+55=93
-      { pilotId: 'cherub_guardian', loadoutId: 'cherub_ace' },       // 30+32=62
+      { pilotId: 'virtue_pilot', loadoutId: 'virtue_assault' },      // 36+58=94
     ],
   },
 ];

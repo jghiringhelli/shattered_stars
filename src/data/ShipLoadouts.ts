@@ -974,9 +974,9 @@ export const SHIP_LOADOUTS: Record<string, ShipLoadout[]> = {
       id: 'blade_raider',
       name: 'Blade Raider',
       shipId: 'corsair_blade',
-      upgrades: ['daredevil', 'concussion_missile', 'engine_upgrade'],
+      upgrades: ['hull_upgrade', 'concussion_missile', 'engine_upgrade'],
       pointCost: 58,
-      description: 'Hit-and-run striker with escape capability',
+      description: 'Hit-and-run striker with reinforced hull',
       role: 'offense',
     },
     {
@@ -1058,7 +1058,7 @@ export const SHIP_LOADOUTS: Record<string, ShipLoadout[]> = {
     { id: 'fang_swarm', name: 'Fang Swarm', shipId: 'corsair_fang', upgrades: [], pointCost: 32, description: 'Swarm interceptor', role: 'swarm' },
   ],
   corsair_talon: [
-    { id: 'talon_striker', name: 'Talon Striker', shipId: 'corsair_talon', upgrades: ['predator', 'concussion_missile'], pointCost: 52, description: 'Strike interceptor', role: 'offense' },
+    { id: 'talon_striker', name: 'Talon Striker', shipId: 'corsair_talon', upgrades: ['hull_upgrade', 'concussion_missile'], pointCost: 52, description: 'Reinforced strike interceptor', role: 'offense' },
     { id: 'talon_ace', name: 'Talon Ace', shipId: 'corsair_talon', upgrades: ['elusive', 'engine_upgrade'], pointCost: 48, description: 'Ace pilot build', role: 'defense' },
   ],
   corsair_venom: [
