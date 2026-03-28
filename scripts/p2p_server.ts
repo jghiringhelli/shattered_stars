@@ -382,6 +382,15 @@ wss.on('connection', (ws: WebSocket) => {
         timestamp: Date.now(),
       });
 
+      // Notify remaining players that a mid-battle disconnect occurred
+      if (room.isStarted && room.players.size > 0) {
+        broadcastToRoom(room.id, {
+          type: 'player_disconnected',
+          payload: { playerId, inBattle: true },
+          timestamp: Date.now(),
+        });
+      }
+
       if (room.players.size > 0) {
         broadcastToRoom(room.id, {
           type: 'room_update',

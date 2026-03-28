@@ -12,6 +12,8 @@ import Phaser from 'phaser';
 import seedrandom from 'seedrandom';
 import { ShipStatCard } from '../ui/ShipStatCard';
 import type { ShipState, ManeuverDefinition } from '../core/types';
+import { OnlineTurnManager, type ManeuverPacket } from '../multiplayer/OnlineTurnManager';
+import { networkService } from '../services/NetworkService';
 import type { FactionId } from '../config';
 import { BATTLEFIELD_SIZE, FACTION_COLORS, SHIP_SIZES } from '../config';
 import { getShipDefinition, getShipDial } from '../data/ShipDefinitions';
@@ -108,6 +110,11 @@ export class TurnBasedBattleScene extends Phaser.Scene {
   private background!: ParallaxBackground;
   private performanceState: PerformanceState = createPerformanceState();
 
+  // Online multiplayer
+  private onlineTurnManager: OnlineTurnManager | null = null;
+  private onlineWaitingOverlay: Phaser.GameObjects.Container | null = null;
+  private onlineDisconnectOverlay: Phaser.GameObjects.Container | null = null;
+
   constructor() {
     super({ key: 'TurnBasedBattleScene' });
   }
@@ -174,6 +181,14 @@ export class TurnBasedBattleScene extends Phaser.Scene {
     });
   }
 
+  /** Remove all network listeners on scene shutdown. */
+  shutdown(): void {
+    this.onlineTurnManager?.destroy();
+    this.onlineTurnManager = null;
+    this.onlineDisconnectOverlay?.destroy();
+    this.onlineDisconnectOverlay = null;
+  }
+
   update(time: number, delta: number): void {
     if (this.isPaused) return;
     this.performanceState = updateFPS(this.performanceState, delta);
@@ -201,11 +216,21 @@ export class TurnBasedBattleScene extends Phaser.Scene {
       }>;
       aiDifficulty?: AIDifficultyLevel;
       seed?: number;
+      isOnlineMode?: boolean;
     } | undefined;
 
     // Initialize seeded RNG for deterministic pilot skill assignment
     if (battleConfig?.seed !== undefined) {
       this.rng = seedrandom(String(battleConfig.seed));
+    }
+
+    if (battleConfig?.isOnlineMode) {
+      this.onlineTurnManager = new OnlineTurnManager(networkService);
+      this.onlineTurnManager.onDisconnect(() => {
+        this.showDisconnectOverlay();
+        this.onlineTurnManager?.destroy();
+        this.onlineTurnManager = null;
+      });
     }
 
     // Set AI difficulty from config
@@ -788,8 +813,42 @@ export class TurnBasedBattleScene extends Phaser.Scene {
     this.updateInstructions();
   }
 
-  private tryStartActivation(): void {
-    // Auto-plan AI ships with difficulty-based decision quality
+  private async tryStartActivation(): Promise<void> {
+    if (this.onlineTurnManager) {
+      await this.tryStartActivationOnline();
+    } else {
+      this.planAIManeuvers();
+      this.tryAdvanceToActivation();
+    }
+  }
+
+  /** Submit local maneuvers over the network, wait for opponent's, then proceed. */
+  private async tryStartActivationOnline(): Promise<void> {
+    const allLocalPlanned = this.playerShipIds.every(
+      (id) => this.ships.get(id)?.hull === 0 || this.turnState.plannedManeuvers.has(id),
+    );
+    if (!allLocalPlanned) {
+      this.instructionText.setText('Plan all your ships before confirming!');
+      return;
+    }
+    const myManeuvers = this.buildManeuverPackets(this.playerShipIds);
+    this.showWaitingOverlay();
+    const opponentManeuvers = await this.onlineTurnManager!.submitAndWait(
+      myManeuvers,
+      () => {},
+    );
+    this.applyOpponentManeuvers(opponentManeuvers);
+    // If opponent disconnected (onlineTurnManager nulled by onDisconnect callback),
+    // fill in AI maneuvers so activation can proceed without a planning stall.
+    if (!this.onlineTurnManager) {
+      this.planAIManeuvers();
+    }
+    this.hideWaitingOverlay();
+    this.tryAdvanceToActivation();
+  }
+
+  /** Auto-plan maneuvers for all AI-controlled enemy ships. */
+  private planAIManeuvers(): void {
     for (const shipId of this.enemyShipIds) {
       const ship = this.ships.get(shipId);
       if (!ship || ship.hull <= 0) continue;
@@ -799,41 +858,44 @@ export class TurnBasedBattleScene extends Phaser.Scene {
       let maneuver: ManeuverDefinition;
 
       if (shouldPickOptimalManeuver(this.aiDifficulty)) {
-        // Optimal: pick maneuver that turns toward nearest enemy
-        const target = this.findClosestEnemy(ship);
-        if (target) {
-          const angleToTarget = Phaser.Math.Angle.Between(ship.x, ship.y, target.x, target.y) * Phaser.Math.RAD_TO_DEG;
-          const shipFacing = ship.angle - 90;
-          let angleDiff = angleToTarget - shipFacing;
-          if (angleDiff > 180) angleDiff -= 360;
-          if (angleDiff < -180) angleDiff += 360;
-
-          // Choose maneuver based on angle
-          if (Math.abs(angleDiff) < 30) {
-            // Go straight
-            const straight = dial.find((m) => m.direction === 'straight' && m.speed >= 2);
-            maneuver = straight ?? Phaser.Math.RND.pick([...dial]);
-          } else if (angleDiff > 0) {
-            // Turn right
-            const turn = dial.find((m) => m.direction === 'bank_right' || m.direction === 'turn_right');
-            maneuver = turn ?? Phaser.Math.RND.pick([...dial]);
-          } else {
-            // Turn left
-            const turn = dial.find((m) => m.direction === 'bank_left' || m.direction === 'turn_left');
-            maneuver = turn ?? Phaser.Math.RND.pick([...dial]);
-          }
-        } else {
-          maneuver = Phaser.Math.RND.pick([...dial]);
-        }
+        maneuver = this.pickOptimalManeuver(ship, dial);
       } else {
-        // Random maneuver on lower difficulties
-        maneuver = Phaser.Math.RND.pick([...dial]);
+        maneuver = dial[Math.floor(this.rng() * dial.length)]!;
       }
 
       this.turnState = planManeuver(this.turnState, shipId, maneuver);
     }
+  }
 
-    // Check if all living ships have planned
+  /**
+   * Pick the best maneuver for an AI ship by turning toward the nearest enemy.
+   *
+   * @param ship - The AI ship choosing a maneuver.
+   * @param dial - Full set of available maneuvers for this ship type.
+   * @returns The chosen maneuver.
+   */
+  private pickOptimalManeuver(ship: BattleShip, dial: readonly ManeuverDefinition[]): ManeuverDefinition {
+    const target = this.findClosestEnemy(ship);
+    const randomFallback = (): ManeuverDefinition => dial[Math.floor(this.rng() * dial.length)]!;
+    if (!target) return randomFallback();
+
+    const angleToTarget = Phaser.Math.Angle.Between(ship.x, ship.y, target.x, target.y) * Phaser.Math.RAD_TO_DEG;
+    const shipFacing = ship.angle - 90;
+    let angleDiff = angleToTarget - shipFacing;
+    if (angleDiff > 180) angleDiff -= 360;
+    if (angleDiff < -180) angleDiff += 360;
+
+    if (Math.abs(angleDiff) < 30) {
+      return dial.find((m) => m.direction === 'straight' && m.speed >= 2) ?? randomFallback();
+    }
+    if (angleDiff > 0) {
+      return dial.find((m) => m.direction === 'bank_right' || m.direction === 'turn_right') ?? randomFallback();
+    }
+    return dial.find((m) => m.direction === 'bank_left' || m.direction === 'turn_left') ?? randomFallback();
+  }
+
+  /** Proceed to activation if all living ships have been planned. */
+  private tryAdvanceToActivation(): void {
     const livingShips = [...this.ships.values()].filter((s) => s.hull > 0);
     const allShipIds = livingShips.map((s) => s.id);
 
@@ -843,13 +905,88 @@ export class TurnBasedBattleScene extends Phaser.Scene {
         pilotSkill: s.pilotSkill,
         initiative: s.initiative,
       }));
-
       this.turnState = startActivationPhase(this.turnState, shipsForOrder);
       this.updatePhaseDisplay();
       this.runActivationPhase();
     } else {
       this.instructionText.setText('Select all your ships and choose maneuvers first!');
     }
+  }
+
+  /**
+   * Build ManeuverPacket list from the current planning state for the given ship IDs.
+   *
+   * @param shipIds - Ship IDs whose planned maneuvers to extract.
+   * @returns Array of packets ready to send over the network.
+   */
+  private buildManeuverPackets(shipIds: string[]): ManeuverPacket[] {
+    const packets: ManeuverPacket[] = [];
+    for (const shipId of shipIds) {
+      const planned = this.turnState.plannedManeuvers.get(shipId);
+      if (!planned) continue;
+      packets.push({
+        shipId,
+        direction: planned.maneuver.direction,
+        speed: planned.maneuver.speed,
+        difficulty: planned.maneuver.difficulty,
+      });
+    }
+    return packets;
+  }
+
+  /**
+   * Apply opponent's received maneuver packets into the local turn state.
+   *
+   * @param packets - Opponent's planned maneuvers received from the network.
+   */
+  private applyOpponentManeuvers(packets: ManeuverPacket[]): void {
+    for (const packet of packets) {
+      const maneuver = {
+        direction: packet.direction,
+        speed: packet.speed,
+        difficulty: packet.difficulty,
+      } as ManeuverDefinition;
+      this.turnState = planManeuver(this.turnState, packet.shipId, maneuver);
+    }
+  }
+
+  /** Show a "Waiting for opponent..." overlay during online maneuver sync. */
+  private showWaitingOverlay(): void {
+    const overlay = this.add.container(640, 360);
+    overlay.setScrollFactor(0);
+    const bg = this.add.rectangle(0, 0, 400, 60, 0x000000, 0.85);
+    const label = this.add.text(0, 0, 'Waiting for opponent...', {
+      font: 'bold 18px monospace',
+      color: '#ffff00',
+    });
+    label.setOrigin(0.5, 0.5);
+    overlay.add([bg, label]);
+    this.onlineWaitingOverlay = overlay;
+  }
+
+  /** Remove the opponent-wait overlay. */
+  private hideWaitingOverlay(): void {
+    this.onlineWaitingOverlay?.destroy();
+    this.onlineWaitingOverlay = null;
+  }
+
+  /**
+   * Show a persistent banner informing the player their opponent disconnected.
+   * Displayed at the top of the HUD; dismissed at end of battle.
+   */
+  private showDisconnectOverlay(): void {
+    this.onlineDisconnectOverlay?.destroy();
+    const overlay = this.add.container(640, 30);
+    overlay.setScrollFactor(0);
+    overlay.setDepth(100);
+    const bg = this.add.rectangle(0, 0, 480, 40, 0x880000, 0.9);
+    const label = this.add.text(0, 0, 'Opponent disconnected — continuing with AI', {
+      font: 'bold 14px monospace',
+      color: '#ffffff',
+    });
+    label.setOrigin(0.5, 0.5);
+    overlay.add([bg, label]);
+    this.onlineDisconnectOverlay = overlay;
   }
 
   // ==========================================
@@ -1005,7 +1142,8 @@ export class TurnBasedBattleScene extends Phaser.Scene {
       target.hull,
       attacker.hasFocus,
       target.hasFocus,
-      target.hasEvade
+      target.hasEvade,
+      this.rng,
     );
 
     if (result.hitsLanded > 0) {
@@ -1211,6 +1349,11 @@ export class TurnBasedBattleScene extends Phaser.Scene {
     this.turnState = endTurn(this.turnState);
     this.updatePhaseDisplay();
     this.updateInstructions();
+
+    if (this.onlineTurnManager) {
+      const hash = this.onlineTurnManager.computeStateHash(this.ships as ReadonlyMap<string, ShipState>);
+      this.onlineTurnManager.sendTurnSync(this.turnState.turnNumber - 1, hash);
+    }
 
     // Clear planned maneuver markers
     for (const sprite of this.shipSprites.values()) {

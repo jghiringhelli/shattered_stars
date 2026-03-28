@@ -21,6 +21,7 @@ export type NetworkMessageType =
   | 'game_action'
   | 'game_state'
   | 'chat_message'
+  | 'player_disconnected'
   | 'error'
   | 'ping'
   | 'pong';
@@ -503,10 +504,16 @@ export class NetworkService extends Phaser.Events.EventEmitter {
     });
   }
 
-  selectFaction(factionId: string): void {
+  /**
+   * Announce faction selection and optional pre-built squad for online battles.
+   *
+   * @param factionId - The faction this player has chosen.
+   * @param ships - Ship definition IDs for the player's squad (online mode only).
+   */
+  selectFaction(factionId: string, ships: readonly string[] = []): void {
     this.send({
       type: 'select_faction',
-      payload: { factionId },
+      payload: { factionId, ships },
     });
   }
 

@@ -115,7 +115,17 @@ describe('P2P Server — protocol integration', () => {
   let server: ChildProcess | undefined;
 
   beforeAll(async () => { server = await startServer(); }, 30_000);
-  afterAll(() => { server?.kill(); });
+  afterAll(() => {
+    if (!server) return;
+    if (process.platform === 'win32' && server.pid) {
+      // On Windows, shell:true spawns cmd.exe which shells node. proc.kill() only
+      // kills cmd.exe; the child node process outlives it and holds the port.
+      // taskkill /F /T kills the entire process tree.
+      spawn('taskkill', ['/f', '/t', '/pid', String(server.pid)], { shell: true });
+    } else {
+      server.kill();
+    }
+  });
 
   it('host creates a room and receives room_created', async () => {
     const host = await connectClient();
@@ -256,6 +266,35 @@ describe('P2P Server — protocol integration', () => {
     const left = await host.waitFor('player_left', 3_000);
     expect(left.payload).toBeDefined();
 
+    host.close();
+  });
+
+  it('player_disconnected with inBattle=true is broadcast when game is started', async () => {
+    // Full ready flow: create → join → factions → both ready → game_start
+    const host = await connectClient();
+    host.send('create_room', { name: 'InBattleTest', maxPlayers: 2, gameMode: 'turn_based' });
+    const created = await host.waitFor('room_created');
+    const roomId = (created.payload as any).room.id as string;
+    host.send('select_faction', { factionId: 'terran_hegemony', ships: ['terran_gladius'] });
+
+    const guest = await connectClient();
+    guest.send('join_room', { roomId });
+    await guest.waitFor('room_joined');
+    guest.send('select_faction', { factionId: 'free_confederation', ships: ['confed_falcon'] });
+
+    host.send('player_ready', { isReady: true });
+    guest.send('player_ready', { isReady: true });
+
+    // Wait for game_start so isStarted = true on server
+    await host.waitFor('game_start', 8_000);
+    await guest.waitFor('game_start', 8_000);
+
+    // Guest disconnects mid-battle
+    guest.close();
+    await host.waitFor('player_left', 3_000);
+    const disconnected = await host.waitFor('player_disconnected', 3_000);
+
+    expect((disconnected.payload as any).inBattle).toBe(true);
     host.close();
   });
 });
