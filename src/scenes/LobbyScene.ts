@@ -51,6 +51,11 @@ export class LobbyScene extends Phaser.Scene {
   private statusText!: Phaser.GameObjects.Text;
   private headerText!: Phaser.GameObjects.Text;
 
+  // Chat state (persists across room view rebuilds)
+  private chatMessages: Array<{ name: string; text: string }> = [];
+  private chatInputBuffer = '';
+  private chatFocused = false;
+
   constructor() {
     super({ key: 'LobbyScene' });
   }
@@ -61,6 +66,7 @@ export class LobbyScene extends Phaser.Scene {
     this.createRoomBrowser();
     this.createRoomView();
     this.setupInput();
+    this.setupChatKeyboard();
 
     // Register NetworkService event handlers
     networkService.on('connected',     this.onConnected,     this);
@@ -71,6 +77,7 @@ export class LobbyScene extends Phaser.Scene {
     networkService.on('player_joined', this.onPlayerJoined,  this);
     networkService.on('game_start',    this.onGameStart,     this);
     networkService.on('battle_snapshot', this.onBattleSnapshot, this);
+    networkService.on('chat_message',    this.onChatMessage,    this);
     networkService.on('error',         this.onNetworkError,  this);
 
     // Connect in local simulation mode (no URL = no server required)
@@ -88,6 +95,7 @@ export class LobbyScene extends Phaser.Scene {
     networkService.off('player_joined', this.onPlayerJoined,  this);
     networkService.off('game_start',    this.onGameStart,     this);
     networkService.off('battle_snapshot', this.onBattleSnapshot, this);
+    networkService.off('chat_message',    this.onChatMessage,    this);
     networkService.off('error',         this.onNetworkError,  this);
     if (this.currentRoom) networkService.leaveRoom();
   }
@@ -207,6 +215,39 @@ export class LobbyScene extends Phaser.Scene {
     this.registry.set('lateJoinShipId', shipId);
     this.startMultiplayerGame();
   }
+
+  private onChatMessage(data: unknown): void {
+    const { senderName, text } = data as { senderName: string; text: string };
+    this.chatMessages.push({ name: senderName, text });
+    if (this.chatMessages.length > 8) this.chatMessages.shift();
+    if (this.currentView === 'room') this.updateRoomView();
+  }
+
+  /**
+   * Captures keyboard input for the chat box. Runs independently of Phaser's
+   * key-binding system so all printable characters are captured when focused.
+   */
+  private setupChatKeyboard(): void {
+    this.input.keyboard!.on('keydown', (event: KeyboardEvent) => {
+      if (this.currentView !== 'room' || !this.chatFocused) return;
+      if (event.key === 'Enter') {
+        const text = this.chatInputBuffer.trim();
+        if (text) {
+          networkService.sendChatMessage(text);
+          const localName = this.players.find((p) => p.id === networkService.getPlayerId())?.name ?? 'Me';
+          this.chatMessages.push({ name: localName, text });
+          if (this.chatMessages.length > 8) this.chatMessages.shift();
+          this.chatInputBuffer = '';
+        }
+      } else if (event.key === 'Backspace') {
+        this.chatInputBuffer = this.chatInputBuffer.slice(0, -1);
+      } else if (event.key.length === 1) {
+        if (this.chatInputBuffer.length < 80) this.chatInputBuffer += event.key;
+      }
+      this.updateRoomView();
+    });
+  }
+
   // ==========================================
   // ROOM BROWSER VIEW
   // ==========================================
@@ -428,11 +469,64 @@ export class LobbyScene extends Phaser.Scene {
       }
     }
 
+    this.buildChatSection(centerX, 590);
+  }
+
+  /**
+   * Builds an interactive chat section inside `playerListContainer`.
+   *
+   * @param cx - Horizontal center of the panel.
+   * @param topY - Y position for the top of the chat section.
+   */
+  private buildChatSection(cx: number, topY: number): void {
+    const panelW = this.scale.width - 400;
+    const historyH = 90;
+    const inputH = 30;
+    const leftX = cx - panelW / 2;
+
+    const histBg = this.add.graphics();
+    histBg.fillStyle(0x111122, 0.9);
+    histBg.fillRoundedRect(leftX, topY, panelW, historyH, 6);
+    histBg.lineStyle(1, this.chatFocused ? 0x445566 : 0x2a2a3a, 1);
+    histBg.strokeRoundedRect(leftX, topY, panelW, historyH, 6);
+    this.playerListContainer.add(histBg);
+
+    const visibleMessages = this.chatMessages.slice(-5);
+    visibleMessages.forEach((msg, i) => {
+      this.playerListContainer.add(
+        this.add
+          .text(leftX + 8, topY + 8 + i * 16, `${msg.name}: ${msg.text}`, {
+            font: '13px Arial', color: '#aaaaaa',
+          })
+          .setOrigin(0, 0)
+      );
+    });
+
+    const inputBg = this.add.graphics();
+    inputBg.fillStyle(this.chatFocused ? 0x1e2233 : 0x0f0f1a, 0.95);
+    inputBg.fillRoundedRect(leftX, topY + historyH + 4, panelW, inputH, 4);
+    inputBg.lineStyle(1, this.chatFocused ? 0x556688 : 0x2a2a3a, 1);
+    inputBg.strokeRoundedRect(leftX, topY + historyH + 4, panelW, inputH, 4);
+    this.playerListContainer.add(inputBg);
+
+    const cursor = this.chatFocused && Math.floor(this.time.now / 500) % 2 === 0 ? '|' : '';
+    const placeholder = this.chatFocused ? '' : 'Click here to chat…';
+    const displayText = this.chatFocused ? this.chatInputBuffer + cursor : placeholder;
+    const textColor = this.chatFocused ? '#dddddd' : '#444444';
     this.playerListContainer.add(
       this.add
-        .text(centerX, 630, 'Chat coming soon…', { font: '14px Arial', color: '#444444' })
-        .setOrigin(0.5)
+        .text(leftX + 8, topY + historyH + 4 + inputH / 2, displayText, { font: '13px Arial', color: textColor })
+        .setOrigin(0, 0.5)
     );
+
+    const inputHitArea = this.add
+      .zone(cx, topY + historyH + 4 + inputH / 2, panelW, inputH)
+      .setInteractive();
+    inputHitArea.on('pointerdown', () => {
+      this.chatFocused = true;
+      this.updateRoomView();
+    });
+    this.playerListContainer.add(inputHitArea);
   }
 
   private createPlayerSlot(x: number, y: number, index: number, player?: PlayerInfo): void {
@@ -662,6 +756,7 @@ export class LobbyScene extends Phaser.Scene {
 
   private setupInput(): void {
     this.input.keyboard!.on('keydown-ESC', () => {
+      if (this.chatFocused) { this.chatFocused = false; this.updateRoomView(); return; }
       if (this.currentView === 'room') {
         networkService.leaveRoom();
       } else {

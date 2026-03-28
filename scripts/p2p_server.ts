@@ -353,6 +353,21 @@ function handleMessage(player: PlayerState, message: NetworkMessage): void {
       break;
     }
 
+    case 'chat_message': {
+      if (!roomId) break;
+      const room = rooms.get(roomId);
+      if (!room) break;
+      const text = String((message.payload as { message?: string }).message ?? '').slice(0, 200);
+      if (!text.trim()) break;
+      broadcastToRoom(roomId, {
+        type: 'chat_message',
+        payload: { senderName: player.name, senderId: player.id, text },
+        timestamp: Date.now(),
+      });
+      log(`Chat from ${player.name}: ${text}`);
+      break;
+    }
+
     case 'update_snapshot': {
       if (!roomId) break;
       const room = rooms.get(roomId);
