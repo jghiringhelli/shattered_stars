@@ -13,6 +13,7 @@ import seedrandom from 'seedrandom';
 import { ShipStatCard } from '../ui/ShipStatCard';
 import type { ShipState, ManeuverDefinition } from '../core/types';
 import { OnlineTurnManager, type ManeuverPacket } from '../multiplayer/OnlineTurnManager';
+import { BattleStateSerializer, type SerializableShip } from '../multiplayer/BattleStateSerializer';
 import { networkService } from '../services/NetworkService';
 import type { FactionId } from '../config';
 import { BATTLEFIELD_SIZE, FACTION_COLORS, SHIP_SIZES } from '../config';
@@ -114,6 +115,9 @@ export class TurnBasedBattleScene extends Phaser.Scene {
   private onlineTurnManager: OnlineTurnManager | null = null;
   private onlineWaitingOverlay: Phaser.GameObjects.Container | null = null;
   private onlineDisconnectOverlay: Phaser.GameObjects.Container | null = null;
+  private baseSeed = 0;
+  private readonly serializer = new BattleStateSerializer();
+  private shipClaimedHandler: ((data: unknown) => void) | null = null;
 
   constructor() {
     super({ key: 'TurnBasedBattleScene' });
@@ -187,6 +191,10 @@ export class TurnBasedBattleScene extends Phaser.Scene {
     this.onlineTurnManager = null;
     this.onlineDisconnectOverlay?.destroy();
     this.onlineDisconnectOverlay = null;
+    if (this.shipClaimedHandler) {
+      networkService.off('ship_claimed', this.shipClaimedHandler, this);
+      this.shipClaimedHandler = null;
+    }
   }
 
   update(time: number, delta: number): void {
@@ -221,6 +229,7 @@ export class TurnBasedBattleScene extends Phaser.Scene {
 
     // Initialize seeded RNG for deterministic pilot skill assignment
     if (battleConfig?.seed !== undefined) {
+      this.baseSeed = battleConfig.seed;
       this.rng = seedrandom(String(battleConfig.seed));
     }
 
@@ -231,6 +240,17 @@ export class TurnBasedBattleScene extends Phaser.Scene {
         this.onlineTurnManager?.destroy();
         this.onlineTurnManager = null;
       });
+
+      this.shipClaimedHandler = (data: unknown) => {
+        const { shipId } = data as { shipId: string };
+        const ship = this.ships.get(shipId);
+        if (!ship) return;
+        // owner is readonly on ShipState but BattleShip is fully owned by this scene
+        (ship as unknown as { owner: 'player' | 'ai' }).owner = 'player';
+        this.playerShipIds.push(shipId);
+        this.enemyShipIds = this.enemyShipIds.filter((id) => id !== shipId);
+      };
+      networkService.on('ship_claimed', this.shipClaimedHandler, this);
     }
 
     // Set AI difficulty from config
@@ -971,6 +991,22 @@ export class TurnBasedBattleScene extends Phaser.Scene {
   }
 
   /**
+   * Serialize the current ship states and forward the snapshot to the server
+   * via {@link NetworkService.sendSnapshot} for late-join delivery.
+   *
+   * Called at the end of each online turn from {@link runEndPhase}.
+   */
+  private sendBattleSnapshot(): void {
+    if (!this.baseSeed) return;
+    const snap = this.serializer.serialize(
+      this.ships as ReadonlyMap<string, SerializableShip>,
+      this.turnState.turnNumber,
+      this.baseSeed,
+    );
+    networkService.sendSnapshot(snap);
+  }
+
+  /**
    * Show a persistent banner informing the player their opponent disconnected.
    * Displayed at the top of the HUD; dismissed at end of battle.
    */
@@ -1353,6 +1389,7 @@ export class TurnBasedBattleScene extends Phaser.Scene {
     if (this.onlineTurnManager) {
       const hash = this.onlineTurnManager.computeStateHash(this.ships as ReadonlyMap<string, ShipState>);
       this.onlineTurnManager.sendTurnSync(this.turnState.turnNumber - 1, hash);
+      this.sendBattleSnapshot();
     }
 
     // Clear planned maneuver markers

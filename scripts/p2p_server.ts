@@ -36,6 +36,8 @@ interface RoomState {
   isStarted: boolean;
   battleSeed: number; // Deterministic RNG seed for all clients
   createdAt: number;
+  /** Latest end-of-turn snapshot sent by the host via update_snapshot. */
+  snapshot: unknown;
 }
 
 // ─── Server State ────────────────────────────────────────────────────────────
@@ -99,6 +101,7 @@ function createRoom(data: { hostId: string; hostName: string; name: string; maxP
     isStarted: false,
     battleSeed: generateSeed(),
     createdAt: Date.now(),
+    snapshot: null,
   };
 
   rooms.set(roomId, room);
@@ -210,6 +213,15 @@ function handleMessage(player: PlayerState, message: NetworkMessage): void {
         payload: { room: getRoomStatus(room) },
         timestamp: Date.now(),
       });
+
+      // Deliver the latest battle state to a player joining a started game
+      if (room.isStarted && room.snapshot !== null) {
+        sendToPlayer(player, {
+          type: 'battle_snapshot',
+          payload: room.snapshot,
+          timestamp: Date.now(),
+        });
+      }
 
       broadcastToRoom(room.id, {
         type: 'player_joined',
@@ -338,6 +350,34 @@ function handleMessage(player: PlayerState, message: NetworkMessage): void {
         payload: {},
         timestamp: Date.now(),
       });
+      break;
+    }
+
+    case 'update_snapshot': {
+      if (!roomId) break;
+      const room = rooms.get(roomId);
+      if (!room || !room.isStarted) break;
+
+      // Store the latest end-of-turn snapshot for delivery to late joiners
+      room.snapshot = message.payload;
+      log(`Snapshot stored for room ${roomId}`);
+      break;
+    }
+
+    case 'claim_ship': {
+      if (!roomId) break;
+      const room = rooms.get(roomId);
+      if (!room) break;
+
+      const payload = message.payload as { shipId: string };
+      log(`Player ${player.name} claimed ship ${payload.shipId}`);
+
+      // Notify all other room members that a ship has been claimed
+      broadcastToRoom(roomId, {
+        type: 'ship_claimed',
+        payload: { playerId: player.id, shipId: payload.shipId },
+        timestamp: Date.now(),
+      }, player.id);
       break;
     }
   }

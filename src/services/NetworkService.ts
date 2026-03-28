@@ -22,6 +22,10 @@ export type NetworkMessageType =
   | 'game_state'
   | 'chat_message'
   | 'player_disconnected'
+  | 'battle_snapshot'
+  | 'update_snapshot'
+  | 'ship_claimed'
+  | 'claim_ship'
   | 'error'
   | 'ping'
   | 'pong';
@@ -529,6 +533,30 @@ export class NetworkService extends Phaser.Events.EventEmitter {
       type: 'game_action',
       payload: action,
     });
+  }
+
+  /**
+   * Send an end-of-turn battle snapshot to the server for late-join delivery.
+   *
+   * The server stores the payload and forwards it to any player who joins the
+   * room while `isStarted` is true.
+   *
+   * @param payload - A {@link BattleSnapshot} (imported from BattleStateSerializer).
+   */
+  sendSnapshot(payload: unknown): void {
+    this.send({ type: 'update_snapshot', payload });
+  }
+
+  /**
+   * Claim an AI-controlled ship in a late-join scenario.
+   *
+   * The server broadcasts `ship_claimed` to all other room members so they
+   * can transfer ownership of the specified ship to this player.
+   *
+   * @param shipId - The ID of the ship to claim.
+   */
+  claimShip(shipId: string): void {
+    this.send({ type: 'claim_ship', payload: { shipId } });
   }
 
   sendChatMessage(message: string): void {

@@ -115,17 +115,21 @@ describe('P2P Server — protocol integration', () => {
   let server: ChildProcess | undefined;
 
   beforeAll(async () => { server = await startServer(); }, 30_000);
-  afterAll(() => {
-    if (!server) return;
+  afterAll(() => new Promise<void>((done) => {
+    if (!server) { done(); return; }
     if (process.platform === 'win32' && server.pid) {
       // On Windows, shell:true spawns cmd.exe which shells node. proc.kill() only
       // kills cmd.exe; the child node process outlives it and holds the port.
-      // taskkill /F /T kills the entire process tree.
-      spawn('taskkill', ['/f', '/t', '/pid', String(server.pid)], { shell: true });
+      // taskkill /F /T kills the entire process tree. We await completion so the
+      // port is freed before the next test run starts.
+      const killer = spawn('taskkill', ['/f', '/t', '/pid', String(server.pid)], { shell: true });
+      killer.on('close', () => done());
+      killer.on('error', () => done());
     } else {
       server.kill();
+      done();
     }
-  });
+  }));
 
   it('host creates a room and receives room_created', async () => {
     const host = await connectClient();
@@ -296,5 +300,55 @@ describe('P2P Server — protocol integration', () => {
 
     expect((disconnected.payload as any).inBattle).toBe(true);
     host.close();
+  });
+
+  it('late joiner receives battle_snapshot and can claim a ship', async () => {
+    // Full start flow: host creates, guest joins, both faction+ready → game_start
+    const host = await connectClient();
+    host.send('create_room', { name: 'LateJoinTest', maxPlayers: 4, gameMode: 'turn_based' });
+    const created = await host.waitFor('room_created');
+    const roomId = (created.payload as any).room.id as string;
+    host.send('select_faction', { factionId: 'terran_hegemony', ships: ['terran_gladius'] });
+
+    const guest = await connectClient();
+    guest.send('join_room', { roomId });
+    await guest.waitFor('room_joined');
+    guest.send('select_faction', { factionId: 'free_confederation', ships: ['confed_falcon'] });
+
+    host.send('player_ready', { isReady: true });
+    guest.send('player_ready', { isReady: true });
+    await host.waitFor('game_start', 8_000);
+    await guest.waitFor('game_start', 8_000);
+
+    // Host sends an end-of-turn snapshot (as if the scene called sendBattleSnapshot)
+    const fakeSnapshot = { version: 1, baseSeed: 12345, turnNumber: 1, ships: [], capturedAt: Date.now() };
+    host.send('update_snapshot', fakeSnapshot);
+    // Give the server a moment to store the snapshot before the late joiner arrives
+    await new Promise<void>((r) => setTimeout(r, 150));
+
+    // A third player joins the already-started room
+    const lateJoiner = await connectClient();
+    lateJoiner.send('join_room', { roomId });
+    await lateJoiner.waitFor('room_joined');
+
+    // Late joiner should immediately receive the stored battle snapshot
+    const snap = await lateJoiner.waitFor('battle_snapshot', 3_000);
+    expect((snap.payload as any).version).toBe(1);
+    expect((snap.payload as any).turnNumber).toBe(1);
+    expect((snap.payload as any).baseSeed).toBe(12345);
+
+    // Late joiner claims an AI ship
+    lateJoiner.send('claim_ship', { shipId: 'ship_terran_0' });
+
+    // Both original players are notified of the claim
+    const hostClaim = await host.waitFor('ship_claimed', 3_000);
+    expect((hostClaim.payload as any).shipId).toBe('ship_terran_0');
+
+    const guestClaim = await guest.waitFor('ship_claimed', 3_000);
+    expect((guestClaim.payload as any).shipId).toBe('ship_terran_0');
+
+    host.close();
+    guest.close();
+    lateJoiner.close();
   });
 });
