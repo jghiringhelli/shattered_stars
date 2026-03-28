@@ -12,8 +12,7 @@
  *   npx tsx scripts/p2p_server.ts [--port 8080] [--verbose]
  */
 
-import WebSocket from 'ws';
-import * as fs from 'fs';
+import WebSocket, { WebSocketServer } from 'ws';
 
 // ─── Game State ────────────────────────────────────────────────────────────
 
@@ -21,6 +20,7 @@ interface PlayerState {
   id: string;
   name: string;
   factionId: string | null;
+  ships: string[];  // Ship definition IDs selected by this player
   isReady: boolean;
   isHost: boolean;
   latency: number;
@@ -145,6 +145,7 @@ function getRoomStatus(room: RoomState): object {
       id: p.id,
       name: p.name,
       factionId: p.factionId,
+      ships: p.ships,
       isReady: p.isReady,
       isHost: p.isHost,
       latency: p.latency,
@@ -297,10 +298,13 @@ function handleMessage(player: PlayerState, message: NetworkMessage): void {
       const room = rooms.get(roomId);
       if (!room || room.isStarted) break;
 
-      const payload = message.payload as { factionId: string };
+      const payload = message.payload as { factionId: string; ships?: string[] };
       player.factionId = payload.factionId;
+      if (Array.isArray(payload.ships)) {
+        player.ships = payload.ships;
+      }
 
-      log(`Player ${player.name} selected faction ${payload.factionId}`);
+      log(`Player ${player.name} selected faction ${payload.factionId} (${player.ships.length} ships)`);
 
       broadcastToRoom(roomId, {
         type: 'room_update',
@@ -318,12 +322,13 @@ function handleMessage(player: PlayerState, message: NetworkMessage): void {
 
       log(`Action from ${player.name}: ${JSON.stringify(message.payload).substring(0, 50)}...`);
 
+      // Relay to all other room members (exclude sender to avoid echo)
       broadcastToRoom(roomId, {
         type: 'game_action',
         payload: message.payload,
         senderId: player.id,
         timestamp: Date.now(),
-      });
+      }, player.id);
       break;
     }
 
@@ -340,7 +345,7 @@ function handleMessage(player: PlayerState, message: NetworkMessage): void {
 
 // ─── WebSocket Server ────────────────────────────────────────────────────
 
-const wss = new WebSocket.Server({ port: PORT });
+const wss = new WebSocketServer({ port: PORT });
 
 wss.on('connection', (ws: WebSocket) => {
   const playerId = generateId('player');
@@ -348,6 +353,7 @@ wss.on('connection', (ws: WebSocket) => {
     id: playerId,
     name: `Player_${playerId.substring(0, 6)}`,
     factionId: null,
+    ships: [],
     isReady: false,
     isHost: false,
     latency: 0,

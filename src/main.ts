@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { NetworkService } from './services/NetworkService';
 import { BootScene } from './scenes/BootScene';
 import { MainMenuScene } from './scenes/MainMenuScene';
 import { SquadBuilderScene } from './scenes/SquadBuilderScene';
@@ -68,8 +69,10 @@ const game = new Phaser.Game(config);
 declare global {
   interface Window {
     game: Phaser.Game;
+    networkService: NetworkService;
   }
 }
 if (import.meta.env.DEV) {
   window.game = game;
+  window.networkService = NetworkService.getInstance();
 }
