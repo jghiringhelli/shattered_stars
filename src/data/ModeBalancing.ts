@@ -1,16 +1,14 @@
 /**
  * Mode-Specific Ship Balancing
  *
- * Turn-Based and Continuous modes need different stats to feel right.
- * This file provides multipliers and adjustments per mode.
- *
  * Turn-Based: Strategic, single attacks per round, high damage per hit
  * Continuous: Fast-paced, multiple attacks per second, lower damage per hit
+ * Survival:   Endless waves — durable ships, continuous-speed combat
  */
 
 import { getShipDefinition } from './ShipDefinitions';
 
-export type GameMode = 'turn_based' | 'continuous';
+export type GameMode = 'turn_based' | 'continuous' | 'survival';
 
 /**
  * Combat stats scaled for the specific game mode
@@ -157,6 +155,19 @@ const MODE_BASE_STATS: Record<GameMode, ModeBaseStats> = {
     // Faster animations for responsive arcade feel
     maneuverSpeed: 1.8,     // Increased from 1.5 - snappier movement
   },
+  survival: {
+    // Endless waves — ships must survive multiple engagements.
+    // Same combat speed as continuous but durability tuned so even tiny
+    // light fighters reach hull ≥ 3 (hullMod 0.8 × 1.2 × base ≥ 3).
+    hullMultiplier: 1.2,
+    shieldMultiplier: 0.9,
+    attackBase: 1.5,        // Same damage tempo as continuous
+    agilityBase: 1.2,
+    baseWeaponCooldown: 400,
+    baseWeaponRange: 250,
+    baseFiringArc: 75,
+    maneuverSpeed: 1.8,
+  },
 };
 
 /**
@@ -248,16 +259,23 @@ export function calculateHitChance(attackerAttack: number, defenderAgility: numb
 }
 
 /**
- * Roll attack dice for turn-based mode
- * Returns number of hits (not considering defense)
+ * Roll attack dice for turn-based mode.
+ *
+ * @param numDice - Number of attack dice to roll.
+ * @param rng - Optional seeded RNG. Defaults to Math.random (single-player). Pass a seedrandom
+ *   instance for deterministic multiplayer so both clients produce identical rolls.
+ * @returns Hit, crit, and focus counts.
  */
-export function rollAttackDice(numDice: number): { hits: number; crits: number; focuses: number } {
+export function rollAttackDice(
+  numDice: number,
+  rng: () => number = Math.random,
+): { hits: number; crits: number; focuses: number } {
   let hits = 0;
   let crits = 0;
   let focuses = 0;
 
   for (let i = 0; i < numDice; i++) {
-    const roll = Math.random();
+    const roll = rng();
     if (roll < 0.125) {
       crits++; // 1/8 chance crit
     } else if (roll < 0.375) {
@@ -272,15 +290,21 @@ export function rollAttackDice(numDice: number): { hits: number; crits: number; 
 }
 
 /**
- * Roll defense dice for turn-based mode
- * Returns number of evades
+ * Roll defense dice for turn-based mode.
+ *
+ * @param numDice - Number of defense dice to roll.
+ * @param rng - Optional seeded RNG. Defaults to Math.random (single-player).
+ * @returns Evade and focus counts.
  */
-export function rollDefenseDice(numDice: number): { evades: number; focuses: number } {
+export function rollDefenseDice(
+  numDice: number,
+  rng: () => number = Math.random,
+): { evades: number; focuses: number } {
   let evades = 0;
   let focuses = 0;
 
   for (let i = 0; i < numDice; i++) {
-    const roll = Math.random();
+    const roll = rng();
     if (roll < 0.375) {
       evades++; // 3/8 chance evade
     } else if (roll < 0.625) {
@@ -292,9 +316,7 @@ export function rollDefenseDice(numDice: number): { evades: number; focuses: num
   return { evades, focuses };
 }
 
-/**
- * Resolve a turn-based attack
- */
+/** Result of a resolved turn-based attack. */
 export interface AttackResult {
   hitsLanded: number;
   critsLanded: number;
@@ -303,6 +325,19 @@ export interface AttackResult {
   wasDestroyed: boolean;
 }
 
+/**
+ * Resolve a turn-based attack.
+ *
+ * @param attackDice - Number of attack dice.
+ * @param defenseDice - Number of defense dice.
+ * @param targetShields - Target's current shield count.
+ * @param targetHull - Target's current hull count.
+ * @param attackerHasFocus - Whether attacker has a focus token.
+ * @param defenderHasFocus - Whether defender has a focus token.
+ * @param defenderHasEvade - Whether defender has an evade token.
+ * @param rng - Optional seeded RNG for deterministic multiplayer resolution.
+ * @returns Attack resolution result.
+ */
 export function resolveTurnBasedAttack(
   attackDice: number,
   defenseDice: number,
@@ -310,10 +345,11 @@ export function resolveTurnBasedAttack(
   targetHull: number,
   attackerHasFocus: boolean,
   defenderHasFocus: boolean,
-  defenderHasEvade: boolean
+  defenderHasEvade: boolean,
+  rng: () => number = Math.random,
 ): AttackResult {
   // Roll attack
-  const attack = rollAttackDice(attackDice);
+  const attack = rollAttackDice(attackDice, rng);
   let totalHits = attack.hits + attack.crits;
 
   // Convert focus results if attacker has focus token
@@ -322,7 +358,7 @@ export function resolveTurnBasedAttack(
   }
 
   // Roll defense
-  const defense = rollDefenseDice(defenseDice);
+  const defense = rollDefenseDice(defenseDice, rng);
   let totalEvades = defense.evades;
 
   // Convert focus results if defender has focus token

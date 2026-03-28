@@ -762,6 +762,10 @@ export class SurvivalScene extends Phaser.Scene {
   private gameOver(): void {
     this.isPaused = true;
 
+    // Kill any in-progress wave announcement tween so it doesn't bleed through the overlay
+    this.tweens.killTweensOf(this.messageText);
+    this.messageText.setAlpha(0);
+
     const centerX = this.scale.width / 2;
     const centerY = this.scale.height / 2;
 
@@ -846,7 +850,7 @@ export class SurvivalScene extends Phaser.Scene {
     y: number,
     angle: number
   ): SurvivalShip {
-    const combatStats = getModeCombatStats(defId, 'continuous');
+    const combatStats = getModeCombatStats(defId, 'survival');
 
     return {
       id,
@@ -886,13 +890,7 @@ export class SurvivalScene extends Phaser.Scene {
 
     const body = this.add.graphics();
     body.fillStyle(color, 1);
-    body.beginPath();
-    body.moveTo(0, -size / 2);
-    body.lineTo(-size / 3, size / 2);
-    body.lineTo(0, size / 3);
-    body.lineTo(size / 3, size / 2);
-    body.closePath();
-    body.fillPath();
+    body.fillTriangle(0, -size / 2, -size / 3, size / 2, size / 3, size / 2);
 
     // Elite ships have golden outline
     if (isElite) {
@@ -903,7 +901,7 @@ export class SurvivalScene extends Phaser.Scene {
     } else {
       body.lineStyle(2, 0xffffff, 0.8);
     }
-    body.strokePath();
+    body.strokeTriangle(0, -size / 2, -size / 3, size / 2, size / 3, size / 2);
 
     // Add glow for elite/boss
     if (isElite || isBoss) {

@@ -478,3 +478,64 @@ describe('ARCHETYPE_DESCRIPTIONS', () => {
     expect(combined).toMatch(/damage|fire|tanky|arc/i);
   });
 });
+
+// ============================================
+// Seeded RNG determinism (multiplayer parity)
+// ============================================
+
+describe('Seeded RNG determinism', () => {
+  /** Create a simple deterministic sequence RNG for tests. */
+  const makeSequenceRng = (values: number[]) => {
+    let i = 0;
+    return () => values[i++ % values.length] ?? 0;
+  };
+
+  describe('rollAttackDice with seeded rng', () => {
+    it('produces identical results given the same sequence', () => {
+      const rng = makeSequenceRng([0.05, 0.3, 0.5, 0.8]);
+      const result1 = rollAttackDice(3, rng);
+      const rng2 = makeSequenceRng([0.05, 0.3, 0.5, 0.8]);
+      const result2 = rollAttackDice(3, rng2);
+      expect(result1).toEqual(result2);
+    });
+
+    it('produces different results when sequences differ', () => {
+      const result1 = rollAttackDice(3, makeSequenceRng([0.05, 0.05, 0.05])); // all crits
+      const result2 = rollAttackDice(3, makeSequenceRng([0.9, 0.9, 0.9]));    // all blanks
+      expect(result1.crits).toBeGreaterThan(0);
+      expect(result2.crits).toBe(0);
+    });
+
+    it('defaults to Math.random when no rng is supplied', () => {
+      // Should not throw; uses global Math.random
+      expect(() => rollAttackDice(2)).not.toThrow();
+    });
+  });
+
+  describe('rollDefenseDice with seeded rng', () => {
+    it('produces identical results given the same sequence', () => {
+      const rng = makeSequenceRng([0.1, 0.5, 0.8]);
+      const result1 = rollDefenseDice(2, rng);
+      const rng2 = makeSequenceRng([0.1, 0.5, 0.8]);
+      const result2 = rollDefenseDice(2, rng2);
+      expect(result1).toEqual(result2);
+    });
+  });
+
+  describe('resolveTurnBasedAttack with seeded rng', () => {
+    it('produces the same damage resolution for the same RNG sequence', () => {
+      const seq = [0.1, 0.3, 0.5, 0.2, 0.6, 0.4];
+      const result1 = resolveTurnBasedAttack(3, 2, 1, 4, false, false, false, makeSequenceRng(seq));
+      const result2 = resolveTurnBasedAttack(3, 2, 1, 4, false, false, false, makeSequenceRng(seq));
+      expect(result1).toEqual(result2);
+    });
+
+    it('two clients with the same seed produce identical battle outcomes', () => {
+      // Simulates the multiplayer determinism guarantee: same seed → same result
+      const sharedValues = [0.12, 0.45, 0.22, 0.88, 0.55, 0.33, 0.77, 0.01];
+      const clientA = resolveTurnBasedAttack(4, 3, 2, 5, true, false, false, makeSequenceRng(sharedValues));
+      const clientB = resolveTurnBasedAttack(4, 3, 2, 5, true, false, false, makeSequenceRng(sharedValues));
+      expect(clientA).toEqual(clientB);
+    });
+  });
+});

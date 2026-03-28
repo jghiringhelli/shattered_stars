@@ -887,6 +887,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   private showEndScreen(victory: boolean): void {
+    // Hide player flight-stats HUD — irrelevant (and misleading) on the end screen
+    this.hullText.setVisible(false);
+    this.shieldText.setVisible(false);
+    this.speedText.setVisible(false);
+    this.cooldownText.setVisible(false);
+    this.instructionsText.setVisible(false);
+
     const cx = this.scale.width / 2;
     const cy = this.scale.height / 2;
 

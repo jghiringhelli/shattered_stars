@@ -106,6 +106,7 @@ export class LobbyScene extends Phaser.Scene {
     this.currentRoom = room;
     this.showRoomView();
     this.statusText.setText('Room created — waiting for players…');
+    this.sendPreselectedFaction();
   }
 
   private onRoomJoined(data: unknown): void {
@@ -113,6 +114,7 @@ export class LobbyScene extends Phaser.Scene {
     this.currentRoom = room;
     this.showRoomView();
     this.statusText.setText(`Joined ${room.name}`);
+    this.sendPreselectedFaction();
   }
 
   private onRoomLeft(_data: unknown): void {
@@ -142,8 +144,11 @@ export class LobbyScene extends Phaser.Scene {
 
   /** Server-driven game start: received when all players ready on real P2P server. */
   private onGameStart(data: unknown): void {
-    const { seed } = data as { seed?: number };
-    this.startMultiplayerGame(seed);
+    const { seed, players } = data as {
+      seed?: number;
+      players?: Array<{ id: string; factionId: string | null; ships?: string[] }>;
+    };
+    this.startMultiplayerGame(seed, players);
   }
 
   // ==========================================
@@ -345,11 +350,20 @@ export class LobbyScene extends Phaser.Scene {
 
     if (localPlayer?.isHost) {
       const allReady = this.players.length >= 2 && this.players.every((p) => p.isReady || p.isHost);
-      const startBtn = this.createButton(centerX + 100, 550, 'START GAME', () => {
-        if (allReady) this.startMultiplayerGame();
-      });
-      if (!allReady) startBtn.setAlpha(0.5);
-      this.playerListContainer.add(startBtn);
+      if (networkService.isInLocalMode()) {
+        // Local simulation: host directly starts the game
+        const startBtn = this.createButton(centerX + 100, 550, 'START GAME', () => {
+          if (allReady) this.startMultiplayerGame();
+        });
+        if (!allReady) startBtn.setAlpha(0.5);
+        this.playerListContainer.add(startBtn);
+      } else {
+        // Online mode: host clicks READY so server can auto-start when all ready
+        const readyBtn = this.createButton(centerX + 100, 550, localPlayer.isReady ? 'UNREADY' : 'READY', () => {
+          networkService.setReady(!localPlayer.isReady);
+        });
+        this.playerListContainer.add(readyBtn);
+      }
     }
 
     this.playerListContainer.add(
@@ -455,42 +469,65 @@ export class LobbyScene extends Phaser.Scene {
 
     const currentIndex = player.factionId ? ALL_FACTIONS.indexOf(player.factionId as FactionId) : -1;
     const nextFaction = ALL_FACTIONS[(currentIndex + 1) % ALL_FACTIONS.length] as FactionId;
-    networkService.selectFaction(nextFaction);
+    const onlineSquad = this.registry.get('onlineSquad') as string[] | undefined;
+    networkService.selectFaction(nextFaction, onlineSquad ?? []);
   }
 
-  private startMultiplayerGame(seed?: number): void {
+  /**
+   * Send the faction + squad pre-selected in SquadBuilderScene to the server.
+   * Only fires in real online mode (not local simulation).
+   */
+  private sendPreselectedFaction(): void {
+    if (networkService.isInLocalMode()) return;
+    const factionId = this.registry.get('onlineFaction') as string | undefined;
+    const ships = this.registry.get('onlineSquad') as string[] | undefined;
+    if (factionId) {
+      networkService.selectFaction(factionId as FactionId, ships ?? []);
+    }
+  }
+
+  private startMultiplayerGame(
+    seed?: number,
+    remotePlayers?: Array<{ id: string; factionId: string | null; ships?: string[] }>,
+  ): void {
     if (!this.currentRoom) return;
 
     const localId = networkService.getPlayerId();
-    this.registry.set('multiplayerConfig', {
-      roomId: this.currentRoom.id,
-      gameMode: this.currentRoom.gameMode,
-      players: this.players.map((p) => ({
-        id: p.id,
-        name: p.name,
-        factionId: p.factionId,
-        isHost: p.isHost,
-        isLocal: p.id === localId,
-      })),
-    });
+    const isOnlineMode = !networkService.isInLocalMode();
+    const sources = remotePlayers ?? this.players.map((p) => ({
+      id: p.id,
+      factionId: p.factionId,
+      ships: undefined as string[] | undefined,
+    }));
+
+    const factions = sources.map((p) => ({
+      factionId: (p.factionId ?? 'free_confederation') as FactionId,
+      controller: (p.id === localId ? 'player' : 'ai') as 'player' | 'ai',
+      ships: this.resolveShips(p.factionId, p.ships),
+    }));
 
     const resolvedSeed = seed ?? networkService.getCurrentBattleSeed() ?? undefined;
     this.registry.set('battleConfig', {
-      factions: this.players.map((p) => ({
-        factionId: p.factionId,
-        controller: p.id === localId ? 'player' : 'ai',
-        ships: this.getDefaultShipsForFaction(p.factionId as FactionId | null),
-      })),
+      factions,
       gameMode: this.currentRoom.gameMode,
       pointLimit: 200,
       seed: resolvedSeed,
+      isOnlineMode,
     });
 
-    if (this.currentRoom.gameMode === 'turn_based') {
-      this.scene.start('TurnBasedBattleScene');
-    } else {
-      this.scene.start('ContinuousTacticalScene');
-    }
+    this.scene.start('TurnBasedBattleScene');
+  }
+
+  /**
+   * Resolve ship IDs for a player slot, preferring server-provided data over defaults.
+   *
+   * @param factionId - The player's chosen faction.
+   * @param remoteShips - Ships supplied by the server (empty or absent for local sim).
+   * @returns Array of ship definition IDs to spawn.
+   */
+  private resolveShips(factionId: string | null, remoteShips?: string[]): string[] {
+    if (remoteShips && remoteShips.length > 0) return remoteShips;
+    return this.getDefaultShipsForFaction(factionId as FactionId | null);
   }
 
   private getDefaultShipsForFaction(factionId: FactionId | null): string[] {

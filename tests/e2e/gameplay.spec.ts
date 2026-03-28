@@ -154,18 +154,18 @@ test.describe('Main Menu Navigation', () => {
   });
 
   test('ArrowUp wraps around from top to bottom item', async ({ page }) => {
-    // At index 0 (SKIRMISH), ArrowUp should wrap to CREDITS (index 8)
+    // At index 0 (SKIRMISH), ArrowUp should wrap to CREDITS (index 9 with 10 items)
     await page.keyboard.press('ArrowUp');
     const selectedIndex = await page.evaluate(() => {
       const scene = (window as any).game.scene.getScene('MainMenuScene') as any;
       return scene?.selectedIndex ?? -1;
     });
-    expect(selectedIndex).toBe(8);
+    expect(selectedIndex).toBe(9);
   });
 
   test('ArrowDown wraps from last item back to first', async ({ page }) => {
-    // Navigate to last item (8 presses: 0→8), then one more wraps to 0
-    for (let i = 0; i < 9; i++) await page.keyboard.press('ArrowDown');
+    // Navigate to last item (9 presses: 0→9), then one more wraps to 0
+    for (let i = 0; i < 10; i++) await page.keyboard.press('ArrowDown');
     const selectedIndex = await page.evaluate(() => {
       const scene = (window as any).game.scene.getScene('MainMenuScene') as any;
       return scene?.selectedIndex ?? -1;

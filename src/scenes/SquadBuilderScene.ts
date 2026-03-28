@@ -96,7 +96,7 @@ export class SquadBuilderScene extends Phaser.Scene {
   private factionSlots: FactionSlot[] = [];
   private numFactions = 2;
   private pointLimit = 200;
-  private gameMode: 'turn_based' | 'continuous' | 'arcade' | 'survival' = 'arcade';
+  private gameMode: 'turn_based' | 'continuous' | 'arcade' | 'survival' | 'online' = 'arcade';
   private aiDifficulty: AIDifficultyLevel = 'normal';
 
   private slotContainers: Phaser.GameObjects.Container[] = [];
@@ -114,8 +114,9 @@ export class SquadBuilderScene extends Phaser.Scene {
   init(data: Record<string, unknown>): void {
     // Allow caller to preset initial mode (e.g., SKIRMISH → 'arcade', SURVIVAL → 'survival')
     if (data?.initialMode === 'arcade' || data?.initialMode === 'turn_based' ||
-        data?.initialMode === 'continuous' || data?.initialMode === 'survival') {
-      this.gameMode = data.initialMode as 'arcade' | 'turn_based' | 'continuous' | 'survival';
+        data?.initialMode === 'continuous' || data?.initialMode === 'survival' ||
+        data?.initialMode === 'online') {
+      this.gameMode = data.initialMode as 'arcade' | 'turn_based' | 'continuous' | 'survival' | 'online';
     }
   }
 
@@ -643,6 +644,11 @@ export class SquadBuilderScene extends Phaser.Scene {
     } else if (this.gameMode === 'survival') {
       const playerSlot = this.factionSlots.find((s) => s.controller === 'player');
       this.scene.start('SurvivalScene', { factionId: playerSlot?.factionId ?? 'free_confederation' });
+    } else if (this.gameMode === 'online') {
+      const playerSlot = this.factionSlots.find((s) => s.controller === 'player');
+      this.registry.set('onlineSquad', playerSlot?.ships ?? []);
+      this.registry.set('onlineFaction', playerSlot?.factionId ?? 'free_confederation');
+      this.scene.start('LobbyScene');
     } else {
       this.scene.start('ContinuousTacticalScene');
     }

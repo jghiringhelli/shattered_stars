@@ -103,6 +103,7 @@ export class MainMenuScene extends Phaser.Scene {
       { label: 'DOGFIGHT',     action: () => this.scene.start('DogfightScene') },
       { label: 'ACE DUEL',     action: () => this.scene.start('AceDuelScene') },
       { label: 'CAMPAIGN',     action: () => this.scene.start('CampaignScene') },
+      { label: 'ONLINE',       action: () => this.scene.start('SquadBuilderScene', { initialMode: 'online' }) },
       { label: 'SETTINGS',     action: () => this.scene.start('SettingsScene') },
       { label: 'ENCYCLOPEDIA', action: () => this.scene.start('EncyclopediaScene') },
       { label: 'CREDITS',      action: () => this.scene.start('CreditsScene') },
@@ -112,6 +113,12 @@ export class MainMenuScene extends Phaser.Scene {
       const container = this.createMenuItem(centerX, startY + index * spacing, item.label, item.action);
       this.menuItems.push(container);
     });
+
+    // Visual separator between CAMPAIGN and ONLINE (between indices 5 and 6)
+    const separatorY = startY + 5 * spacing + spacing / 2;
+    const separator = this.add.graphics();
+    separator.lineStyle(1, 0x334455, 0.8);
+    separator.lineBetween(centerX - 120, separatorY, centerX + 120, separatorY);
 
     applyMenuSelection(this.menuItems, this.selectedIndex, this.texturesAvailable);
   }
