@@ -49,12 +49,12 @@ test.describe('Main Menu Navigation', () => {
     expect(active).toBe(true);
   });
 
-  test('all 9 menu items are present', async ({ page }) => {
+  test('all 10 menu items are present', async ({ page }) => {
     const count = await page.evaluate(() => {
       const scene = (window as any).game.scene.getScene('MainMenuScene') as any;
       return scene?.menuItems?.length ?? 0;
     });
-    expect(count).toBe(9);
+    expect(count).toBe(10);
   });
 
   // ─── mouse navigation ───────────────────────────────────────────────────
@@ -123,8 +123,8 @@ test.describe('Main Menu Navigation', () => {
     expect(active).toBe(true);
   });
 
-  test('ArrowDown × 6 + Enter navigates to SETTINGS', async ({ page }) => {
-    for (let i = 0; i < 6; i++) await page.keyboard.press('ArrowDown');
+  test('ArrowDown × 7 + Enter navigates to SETTINGS', async ({ page }) => {
+    for (let i = 0; i < 7; i++) await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
     await waitForScene(page, 'SettingsScene');
     const active = await page.evaluate(
@@ -133,8 +133,8 @@ test.describe('Main Menu Navigation', () => {
     expect(active).toBe(true);
   });
 
-  test('ArrowDown × 8 + Enter navigates to CREDITS', async ({ page }) => {
-    for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowDown');
+  test('ArrowDown × 9 + Enter navigates to CREDITS', async ({ page }) => {
+    for (let i = 0; i < 9; i++) await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
     await waitForScene(page, 'CreditsScene');
     const active = await page.evaluate(

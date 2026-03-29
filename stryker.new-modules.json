@@ -1,0 +1,32 @@
+{
+  "$schema": "https://stryker-mutator.io/schemas/stryker-schema.json#",
+  "testRunner": "vitest",
+  "checkers": ["typescript"],
+  "tsconfigFile": "tsconfig.json",
+  "ignoreStatic": true,
+  "mutate": [
+    "src/data/ShipEncyclopedia.ts",
+    "src/data/ModeBalancing.ts",
+    "src/multiplayer/BattleStateSerializer.ts",
+    "src/data/ShipLoadouts.ts"
+  ],
+  "testFiles": [
+    "tests/unit/data/ShipEncyclopedia.test.ts",
+    "tests/unit/data/ShipDefinitions.test.ts",
+    "tests/unit/data/ModeBalancing.test.ts",
+    "tests/unit/data/ShipLoadouts.test.ts",
+    "tests/unit/multiplayer/BattleStateSerializer.test.ts",
+    "tests/unit/EdgeCases.test.ts"
+  ],
+  "tempDirName": "stryker-tmp",
+  "concurrency": 3,
+  "timeoutMS": 30000,
+  "timeoutFactor": 2,
+  "reporters": ["progress", "clear-text"],
+  "ignorePatterns": ["node_modules", "dist", "stryker-tmp"],
+  "coverageAnalysis": "perTest",
+  "plugins": [
+    "@stryker-mutator/vitest-runner",
+    "@stryker-mutator/typescript-checker"
+  ]
+}

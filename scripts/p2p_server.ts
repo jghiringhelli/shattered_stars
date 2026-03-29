@@ -43,7 +43,7 @@ interface RoomState {
 // ─── Server State ────────────────────────────────────────────────────────────
 
 const args = process.argv.slice(2);
-const PORT = parseInt(args.includes('--port') ? args[args.indexOf('--port') + 1] : '8080', 10);
+const PORT = parseInt(args.includes('--port') ? args[args.indexOf('--port') + 1] : (process.env.PORT ?? '8080'), 10);
 const VERBOSE = args.includes('--verbose');
 
 const rooms = new Map<string, RoomState>();

@@ -132,6 +132,19 @@ describe('ShipLoadouts', () => {
       const loadout = getLoadoutById('nonexistent_loadout');
       expect(loadout).toBeUndefined();
     });
+
+    it('should find loadouts for non-first ships (synth_gestalt)', () => {
+      // gestalt_apex is far into SHIP_LOADOUTS — catches if (true) return found early-exit
+      const loadout = getLoadoutById('gestalt_apex');
+      expect(loadout).toBeDefined();
+      expect(loadout!.shipId).toBe('synth_gestalt');
+    });
+
+    it('found loadout has the requested ID, not a different one', () => {
+      const loadout = getLoadoutById('viper_pursuit');
+      expect(loadout).toBeDefined();
+      expect(loadout!.id).toBe('viper_pursuit');
+    });
   });
 
   describe('getLoadoutsByRole', () => {
@@ -160,6 +173,29 @@ describe('ShipLoadouts', () => {
       const expensiveLoadouts = getLoadoutsByBudget(100);
       expect(expensiveLoadouts.length).toBeGreaterThanOrEqual(cheapLoadouts.length);
     });
+
+    it('should return a non-empty array for any reasonable budget', () => {
+      // There are cheap loadouts well under 60 pts; filter cannot return empty
+      const result = getLoadoutsByBudget(60);
+      expect(result.length).toBeGreaterThan(0);
+    });
+
+    it('should include loadouts whose cost equals the budget exactly', () => {
+      // viper_ace costs a known amount; get its cost then verify it appears in that budget
+      const viperAce = getLoadoutById('viper_ace');
+      expect(viperAce).toBeDefined();
+      const exactBudget = viperAce!.pointCost;
+      const result = getLoadoutsByBudget(exactBudget);
+      expect(result.find((l) => l.id === 'viper_ace')).toBeDefined();
+    });
+
+    it('should exclude loadouts whose cost exceeds the budget', () => {
+      // Budget of 1 should exclude almost all loadouts (cheapest are well above 1pt)
+      const result = getLoadoutsByBudget(1);
+      for (const l of result) {
+        expect(l.pointCost).toBeLessThanOrEqual(1);
+      }
+    });
   });
 
   describe('getAILoadout', () => {
@@ -169,6 +205,18 @@ describe('ShipLoadouts', () => {
 
       const defenseLoadout = getAILoadout('terran_viper', 'defense');
       expect(defenseLoadout).toBeDefined();
+    });
+
+    it('returned offense loadout has role offense', () => {
+      const loadout = getAILoadout('terran_viper', 'offense');
+      expect(loadout).toBeDefined();
+      expect(loadout!.role).toBe('offense');
+    });
+
+    it('returned defense loadout has role defense', () => {
+      const loadout = getAILoadout('terran_viper', 'defense');
+      expect(loadout).toBeDefined();
+      expect(loadout!.role).toBe('defense');
     });
 
     it('should return default loadout for unknown preference', () => {
@@ -209,6 +257,28 @@ describe('ShipLoadouts', () => {
     it('should limit squad size', () => {
       const squad = buildRandomSquad('void_corsairs', 500);
       expect(squad.length).toBeLessThanOrEqual(8);
+    });
+
+    it('should return a non-empty squad for a reasonable budget', () => {
+      // 100 pts is enough for at least one ship across any faction
+      const squad = buildRandomSquad('synthetic_collective', 100);
+      expect(squad.length).toBeGreaterThan(0);
+    });
+
+    it('each ship in the squad respects the running point budget', () => {
+      const squad = buildRandomSquad('free_confederation', 300);
+      let spent = 0;
+      for (const loadout of squad) {
+        // Each loadout's cost must have been affordable when it was added
+        expect(loadout.pointCost).toBeGreaterThan(0);
+        spent += loadout.pointCost;
+      }
+      expect(spent).toBeLessThanOrEqual(300);
+    });
+
+    it('returns empty squad when budget is 0', () => {
+      const squad = buildRandomSquad('terran_hegemony', 0);
+      expect(squad).toEqual([]);
     });
   });
 });

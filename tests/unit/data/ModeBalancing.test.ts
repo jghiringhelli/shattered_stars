@@ -433,6 +433,64 @@ describe('resolveTurnBasedAttack', () => {
       expect(r.hullDamaged + r.shieldsDamaged).toBe(r.hitsLanded);
     }
   });
+
+  it('wasDestroyed is true when hull drops to exactly 0', () => {
+    // seeded rng: 0.3 → 0.125 < 0.3 < 0.375 → always a hit on attack dice
+    // 1 attack die, 0 defense, shields=0, hull=1 → netHits=1, hullDamaged=1, newHull=0
+    // wasDestroyed must be true (newHull <= 0), not false (newHull < 0)
+    const alwaysHit = () => 0.3;
+    const result = resolveTurnBasedAttack(1, 0, 0, 1, false, false, false, alwaysHit);
+    expect(result.hullDamaged).toBe(1);
+    expect(result.wasDestroyed).toBe(true);
+  });
+
+  it('shieldsDamaged is capped at targetShields when damage exceeds shields', () => {
+    // seeded rng: 0.3 → always hit; 3 attack dice, 0 defense, shields=1, hull=5
+    // netHits=3, shieldsDamaged=Math.min(1,3)=1, hullDamaged=2
+    // Math.max mutation would give shieldsDamaged=3, hullDamaged=0
+    const alwaysHit = () => 0.3;
+    const result = resolveTurnBasedAttack(3, 0, 1, 5, false, false, false, alwaysHit);
+    expect(result.shieldsDamaged).toBe(1);
+    expect(result.hullDamaged).toBe(2);
+    expect(result.hitsLanded).toBe(3);
+  });
+
+  it('attacker focus token converts focus results to hits with seeded RNG', () => {
+    // rng=()=>0.5: 0.375 < 0.5 < 0.625 → always a focus result
+    // 3 dice, focus=true: all 3 focuses converted to hits → hitsLanded=3
+    // focus=false: no conversion → hitsLanded=0 (all blanks for hit purposes)
+    const alwaysFocus = () => 0.5;
+    const withFocus = resolveTurnBasedAttack(3, 0, 0, 10, true, false, false, alwaysFocus);
+    const withoutFocus = resolveTurnBasedAttack(3, 0, 0, 10, false, false, false, alwaysFocus);
+    expect(withFocus.hitsLanded).toBe(3);    // focuses converted
+    expect(withoutFocus.hitsLanded).toBe(0); // focuses NOT converted
+  });
+
+  it('defender focus token converts focus results to evades with seeded RNG', () => {
+    // attacker: rng=()=>0.3 → always hits (3 hits)
+    // defense: rng=()=>0.5 → focus on defense dice
+    // With defenderHasFocus=true: focus cvts to evade → 1 die defends, reducing hits
+    // We use a composite rng that returns 0.3 for attack calls and 0.5 for defense calls
+    const alwaysHit = () => 0.3; // attack dice: always hit
+    const attackResult = rollAttackDice(3, alwaysHit);
+    expect(attackResult.hits).toBe(3);
+
+    const alwaysFocusRng = () => 0.5; // defense dice: always focus
+    const defFocus = rollDefenseDice(1, alwaysFocusRng);
+    expect(defFocus.focuses).toBe(1); // 1 focus, 0 evades without conversion
+    expect(defFocus.evades).toBe(0);
+
+    // Full attack with defender focus: 3 attack hits, 1 defense focus converted to evade → 2 net hits
+    // 2 separate RNGs can't be passed to single resolveTurnBasedAttack — use probabilistic verify
+    // Verify focus token DOES reduce damage on aggregate
+    let withFocusDamage = 0;
+    let withoutFocusDamage = 0;
+    for (let i = 0; i < 100; i++) {
+      withFocusDamage += resolveTurnBasedAttack(4, 2, 0, 20, false, true, false).hullDamaged;
+      withoutFocusDamage += resolveTurnBasedAttack(4, 2, 0, 20, false, false, false).hullDamaged;
+    }
+    expect(withFocusDamage).toBeLessThanOrEqual(withoutFocusDamage);
+  });
 });
 
 // ============================================
