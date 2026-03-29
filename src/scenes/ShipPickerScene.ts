@@ -49,7 +49,7 @@ export class ShipPickerScene extends Phaser.Scene {
     const w = this.scale.width;
     const h = this.scale.height;
     const fCol = FACTION_COLORS[this.config.factionId];
-    this.ships = getShipsByFaction(this.config.factionId);
+    this.ships = getShipsByFaction(this.config.factionId).filter((s) => s.baseStats.size !== 'huge');
 
     // Dark overlay backdrop
     const backdrop = this.add.graphics();

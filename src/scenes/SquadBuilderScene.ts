@@ -552,7 +552,7 @@ export class SquadBuilderScene extends Phaser.Scene {
     }
 
     const template = SQUAD_TEMPLATES[slot.squadStyle];
-    const factionShips = getShipsByFaction(slot.factionId);
+    const factionShips = getShipsByFaction(slot.factionId).filter((s) => s.baseStats.size !== 'huge');
 
     // Fill based on template roles
     for (const role of template.shipRoles) {

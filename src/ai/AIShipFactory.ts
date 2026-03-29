@@ -151,7 +151,7 @@ function generateSquadConfigs(
   pointBudget: number,
   preferredRole: 'offense' | 'defense' | 'balanced' | 'swarm'
 ): AIShipConfig[] {
-  const factionShips = getShipsByFaction(faction);
+  const factionShips = getShipsByFaction(faction).filter((s) => s.baseStats.size !== 'huge');
   if (factionShips.length === 0) return [];
 
   const configs: AIShipConfig[] = [];
