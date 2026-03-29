@@ -1,108 +1,610 @@
 {
   "ships": [
-    {"id": "terran_viper",            "name": "Viper-class Interceptor",     "faction": "terran_hegemony",      "role": "interceptor"   },
-    {"id": "terran_stiletto",         "name": "Stiletto Light Fighter",      "faction": "terran_hegemony",      "role": "light_fighter" },
-    {"id": "terran_raptor",           "name": "Raptor Strike Fighter",       "faction": "terran_hegemony",      "role": "interceptor"   },
-    {"id": "terran_gladius",          "name": "Gladius-class Fighter",       "faction": "terran_hegemony",      "role": "heavy_fighter" },
-    {"id": "terran_centurion",        "name": "Centurion Heavy Fighter",     "faction": "terran_hegemony",      "role": "heavy_fighter" },
-    {"id": "terran_praetorian",       "name": "Praetorian Guard Fighter",    "faction": "terran_hegemony",      "role": "heavy_fighter" },
-    {"id": "terran_legionnaire",      "name": "Legionnaire Fighter",         "faction": "terran_hegemony",      "role": "heavy_fighter" },
-    {"id": "terran_hammer",           "name": "Hammer-class Bomber",         "faction": "terran_hegemony",      "role": "bomber"        },
-    {"id": "terran_thunderbolt",      "name": "Thunderbolt Assault Bomber",  "faction": "terran_hegemony",      "role": "bomber"        },
-    {"id": "terran_javelin",          "name": "Javelin Torpedo Bomber",      "faction": "terran_hegemony",      "role": "bomber"        },
-    {"id": "terran_sentinel",         "name": "Sentinel-class Support",      "faction": "terran_hegemony",      "role": "support"       },
-    {"id": "terran_guardian",         "name": "Guardian ECM Ship",           "faction": "terran_hegemony",      "role": "support"       },
-    {"id": "terran_harbinger",        "name": "Harbinger Recon Ship",        "faction": "terran_hegemony",      "role": "support"       },
-    {"id": "terran_bastion",          "name": "Bastion Assault Gunship",     "faction": "terran_hegemony",      "role": "gunship"       },
-    {"id": "terran_bulwark",          "name": "Bulwark Defense Platform",    "faction": "terran_hegemony",      "role": "gunship"       },
-    {"id": "terran_vindicator",       "name": "Vindicator Strike Cruiser",   "faction": "terran_hegemony",      "role": "gunship"       },
-    {"id": "terran_imperator",        "name": "Imperator Battlecruiser",     "faction": "terran_hegemony",      "role": "capital"       },
-    {"id": "terran_dominator",        "name": "Dominator Carrier",           "faction": "terran_hegemony",      "role": "capital"       },
-    {"id": "terran_executor",         "name": "Executor Destroyer",          "faction": "terran_hegemony",      "role": "capital"       },
-    {"id": "terran_consul",           "name": "Consul Command Ship",         "faction": "terran_hegemony",      "role": "capital"       },
-
-    {"id": "confed_sparrow",          "name": "Sparrow Light Fighter",       "faction": "free_confederation",   "role": "light_fighter" },
-    {"id": "confed_wasp",             "name": "Wasp Interceptor",            "faction": "free_confederation",   "role": "light_fighter" },
-    {"id": "confed_finch",            "name": "Finch Scout",                 "faction": "free_confederation",   "role": "light_fighter" },
-    {"id": "confed_kestrel",          "name": "Kestrel Strike Fighter",      "faction": "free_confederation",   "role": "interceptor"   },
-    {"id": "confed_falcon",           "name": "Falcon Strike Fighter",       "faction": "free_confederation",   "role": "heavy_fighter" },
-    {"id": "confed_hawk",             "name": "Hawk Assault Fighter",        "faction": "free_confederation",   "role": "heavy_fighter" },
-    {"id": "confed_eagle",            "name": "Eagle Multi-role Fighter",    "faction": "free_confederation",   "role": "heavy_fighter" },
-    {"id": "confed_condor",           "name": "Condor Heavy Fighter",        "faction": "free_confederation",   "role": "heavy_fighter" },
-    {"id": "confed_raven",            "name": "Raven Stealth Fighter",       "faction": "free_confederation",   "role": "interceptor"   },
-    {"id": "confed_owl",              "name": "Owl Night Fighter",           "faction": "free_confederation",   "role": "interceptor"   },
-    {"id": "confed_pelican",          "name": "Pelican Bomber",              "faction": "free_confederation",   "role": "bomber"        },
-    {"id": "confed_albatross",        "name": "Albatross Heavy Bomber",      "faction": "free_confederation",   "role": "bomber"        },
-    {"id": "confed_phoenix",          "name": "Phoenix Gunship",             "faction": "free_confederation",   "role": "gunship"       },
-    {"id": "confed_thunderbird",      "name": "Thunderbird Assault Ship",    "faction": "free_confederation",   "role": "gunship"       },
-    {"id": "confed_harrier",          "name": "Harrier Support Gunship",     "faction": "free_confederation",   "role": "gunship"       },
-    {"id": "confed_crane",            "name": "Crane Support Vessel",        "faction": "free_confederation",   "role": "support"       },
-    {"id": "confed_heron",            "name": "Heron Command Ship",          "faction": "free_confederation",   "role": "support"       },
-    {"id": "confed_liberty",          "name": "Liberty Cruiser",             "faction": "free_confederation",   "role": "capital"       },
-    {"id": "confed_independence",     "name": "Independence Carrier",        "faction": "free_confederation",   "role": "capital"       },
-    {"id": "confed_defiance",         "name": "Defiance Assault Frigate",    "faction": "free_confederation",   "role": "capital"       },
-
-    {"id": "synth_drone",             "name": "Combat Drone",                "faction": "synthetic_collective", "role": "light_fighter" },
-    {"id": "synth_scout_drone",       "name": "Scout Drone",                 "faction": "synthetic_collective", "role": "light_fighter" },
-    {"id": "synth_heavy_drone",       "name": "Heavy Combat Drone",          "faction": "synthetic_collective", "role": "light_fighter" },
-    {"id": "synth_bomber_drone",      "name": "Bomber Drone",                "faction": "synthetic_collective", "role": "bomber"        },
-    {"id": "synth_interceptor_drone", "name": "Interceptor Drone",           "faction": "synthetic_collective", "role": "interceptor"   },
-    {"id": "synth_hunter",            "name": "Hunter Unit",                 "faction": "synthetic_collective", "role": "heavy_fighter" },
-    {"id": "synth_stalker",           "name": "Stalker Unit",                "faction": "synthetic_collective", "role": "interceptor"   },
-    {"id": "synth_ravager",           "name": "Ravager Unit",                "faction": "synthetic_collective", "role": "heavy_fighter" },
-    {"id": "synth_predator",          "name": "Predator Unit",               "faction": "synthetic_collective", "role": "heavy_fighter" },
-    {"id": "synth_destroyer",         "name": "Destroyer Protocol",          "faction": "synthetic_collective", "role": "bomber"        },
-    {"id": "synth_annihilator",       "name": "Annihilator Protocol",        "faction": "synthetic_collective", "role": "bomber"        },
-    {"id": "synth_carrier",           "name": "Carrier Node",                "faction": "synthetic_collective", "role": "support"       },
-    {"id": "synth_relay_node",        "name": "Relay Node",                  "faction": "synthetic_collective", "role": "support"       },
-    {"id": "synth_repair_node",       "name": "Repair Node",                 "faction": "synthetic_collective", "role": "support"       },
-    {"id": "synth_devastator",        "name": "Devastator Platform",         "faction": "synthetic_collective", "role": "gunship"       },
-    {"id": "synth_eradicator",        "name": "Eradicator Platform",         "faction": "synthetic_collective", "role": "gunship"       },
-    {"id": "synth_nexus",             "name": "Nexus Command Ship",          "faction": "synthetic_collective", "role": "capital"       },
-    {"id": "synth_overmind",          "name": "Overmind Carrier",            "faction": "synthetic_collective", "role": "capital"       },
-    {"id": "synth_terminus",          "name": "Terminus Battleship",         "faction": "synthetic_collective", "role": "capital"       },
-    {"id": "synth_conduit",           "name": "Conduit Cruiser",             "faction": "synthetic_collective", "role": "capital"       },
-
-    {"id": "corsair_blade",           "name": "Blade Raider",                "faction": "void_corsairs",        "role": "interceptor"   },
-    {"id": "corsair_fang",            "name": "Fang Interceptor",            "faction": "void_corsairs",        "role": "interceptor"   },
-    {"id": "corsair_talon",           "name": "Talon Strike Fighter",        "faction": "void_corsairs",        "role": "interceptor"   },
-    {"id": "corsair_venom",           "name": "Venom Light Fighter",         "faction": "void_corsairs",        "role": "light_fighter" },
-    {"id": "corsair_marauder",        "name": "Marauder Assault Ship",       "faction": "void_corsairs",        "role": "heavy_fighter" },
-    {"id": "corsair_cutlass",         "name": "Cutlass Heavy Fighter",       "faction": "void_corsairs",        "role": "heavy_fighter" },
-    {"id": "corsair_scimitar",        "name": "Scimitar Fighter",            "faction": "void_corsairs",        "role": "heavy_fighter" },
-    {"id": "corsair_saber",           "name": "Saber Attack Fighter",        "faction": "void_corsairs",        "role": "heavy_fighter" },
-    {"id": "corsair_specter",         "name": "Specter Infiltrator",         "faction": "void_corsairs",        "role": "interceptor"   },
-    {"id": "corsair_phantom",         "name": "Phantom Stealth Ship",        "faction": "void_corsairs",        "role": "interceptor"   },
-    {"id": "corsair_shadow",          "name": "Shadow Strike Ship",          "faction": "void_corsairs",        "role": "interceptor"   },
-    {"id": "corsair_reaver",          "name": "Reaver Gunboat",              "faction": "void_corsairs",        "role": "gunship"       },
-    {"id": "corsair_pillager",        "name": "Pillager Assault Ship",       "faction": "void_corsairs",        "role": "gunship"       },
-    {"id": "corsair_ravager",         "name": "Ravager War Galley",          "faction": "void_corsairs",        "role": "gunship"       },
-    {"id": "corsair_bomber",          "name": "Corsair Bomber",              "faction": "void_corsairs",        "role": "bomber"        },
-    {"id": "corsair_torpedo_boat",    "name": "Torpedo Boat",                "faction": "void_corsairs",        "role": "bomber"        },
-    {"id": "corsair_dreadnought",     "name": "Dreadnought Flagship",        "faction": "void_corsairs",        "role": "capital"       },
-    {"id": "corsair_galleon",         "name": "Void Galleon",                "faction": "void_corsairs",        "role": "capital"       },
-    {"id": "corsair_frigate",         "name": "Raider Frigate",              "faction": "void_corsairs",        "role": "capital"       },
-    {"id": "corsair_tender",          "name": "Fleet Tender",                "faction": "void_corsairs",        "role": "support"       },
-
-    {"id": "ascendant_seraph",        "name": "Seraph Guardian",             "faction": "ascendant_empire",     "role": "interceptor"   },
-    {"id": "ascendant_cherub",        "name": "Cherub Light Fighter",        "faction": "ascendant_empire",     "role": "light_fighter" },
-    {"id": "ascendant_herald",        "name": "Herald Scout",                "faction": "ascendant_empire",     "role": "interceptor"   },
-    {"id": "ascendant_virtue",        "name": "Virtue Interceptor",          "faction": "ascendant_empire",     "role": "interceptor"   },
-    {"id": "ascendant_templar",       "name": "Templar Heavy Fighter",       "faction": "ascendant_empire",     "role": "heavy_fighter" },
-    {"id": "ascendant_crusader",      "name": "Crusader Assault Fighter",    "faction": "ascendant_empire",     "role": "heavy_fighter" },
-    {"id": "ascendant_paladin",       "name": "Paladin Fighter",             "faction": "ascendant_empire",     "role": "heavy_fighter" },
-    {"id": "ascendant_inquisitor",    "name": "Inquisitor Strike Fighter",   "faction": "ascendant_empire",     "role": "heavy_fighter" },
-    {"id": "ascendant_oracle",        "name": "Oracle Support Craft",        "faction": "ascendant_empire",     "role": "support"       },
-    {"id": "ascendant_prophet",       "name": "Prophet Command Ship",        "faction": "ascendant_empire",     "role": "support"       },
-    {"id": "ascendant_acolyte",       "name": "Acolyte Tender",              "faction": "ascendant_empire",     "role": "support"       },
-    {"id": "ascendant_avatar",        "name": "Avatar Assault Ship",         "faction": "ascendant_empire",     "role": "gunship"       },
-    {"id": "ascendant_wrath",         "name": "Wrath Gunship",               "faction": "ascendant_empire",     "role": "gunship"       },
-    {"id": "ascendant_judgment",      "name": "Judgment Heavy Gunship",      "faction": "ascendant_empire",     "role": "gunship"       },
-    {"id": "ascendant_smiter",        "name": "Smiter Bomber",               "faction": "ascendant_empire",     "role": "bomber"        },
-    {"id": "ascendant_purifier",      "name": "Purifier Heavy Bomber",       "faction": "ascendant_empire",     "role": "bomber"        },
-    {"id": "ascendant_divine",        "name": "Divine Sovereignty",          "faction": "ascendant_empire",     "role": "capital"       },
-    {"id": "ascendant_glory",         "name": "Glory Battleship",            "faction": "ascendant_empire",     "role": "capital"       },
-    {"id": "ascendant_sanctum",       "name": "Sanctum Carrier",             "faction": "ascendant_empire",     "role": "capital"       },
-    {"id": "ascendant_bastion",       "name": "Bastion Cruiser",             "faction": "ascendant_empire",     "role": "capital"       }
+    {
+      "id": "terran_viper",
+      "name": "Viper-class Interceptor",
+      "faction": "terran_hegemony",
+      "role": "interceptor"
+    },
+    {
+      "id": "terran_stiletto",
+      "name": "Stiletto Light Fighter",
+      "faction": "terran_hegemony",
+      "role": "light_fighter"
+    },
+    {
+      "id": "terran_raptor",
+      "name": "Raptor Strike Fighter",
+      "faction": "terran_hegemony",
+      "role": "interceptor"
+    },
+    {
+      "id": "terran_gladius",
+      "name": "Gladius-class Fighter",
+      "faction": "terran_hegemony",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "terran_centurion",
+      "name": "Centurion Heavy Fighter",
+      "faction": "terran_hegemony",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "terran_praetorian",
+      "name": "Praetorian Guard Fighter",
+      "faction": "terran_hegemony",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "terran_legionnaire",
+      "name": "Legionnaire Fighter",
+      "faction": "terran_hegemony",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "terran_hammer",
+      "name": "Hammer-class Bomber",
+      "faction": "terran_hegemony",
+      "role": "bomber"
+    },
+    {
+      "id": "terran_thunderbolt",
+      "name": "Thunderbolt Assault Bomber",
+      "faction": "terran_hegemony",
+      "role": "bomber"
+    },
+    {
+      "id": "terran_javelin",
+      "name": "Javelin Torpedo Bomber",
+      "faction": "terran_hegemony",
+      "role": "bomber"
+    },
+    {
+      "id": "terran_sentinel",
+      "name": "Sentinel-class Support",
+      "faction": "terran_hegemony",
+      "role": "support"
+    },
+    {
+      "id": "terran_guardian",
+      "name": "Guardian ECM Ship",
+      "faction": "terran_hegemony",
+      "role": "support"
+    },
+    {
+      "id": "terran_harbinger",
+      "name": "Harbinger Recon Ship",
+      "faction": "terran_hegemony",
+      "role": "support"
+    },
+    {
+      "id": "terran_bastion",
+      "name": "Bastion Assault Gunship",
+      "faction": "terran_hegemony",
+      "role": "gunship"
+    },
+    {
+      "id": "terran_bulwark",
+      "name": "Bulwark Defense Platform",
+      "faction": "terran_hegemony",
+      "role": "gunship"
+    },
+    {
+      "id": "terran_vindicator",
+      "name": "Vindicator Strike Cruiser",
+      "faction": "terran_hegemony",
+      "role": "gunship"
+    },
+    {
+      "id": "terran_imperator",
+      "name": "Imperator Battlecruiser",
+      "faction": "terran_hegemony",
+      "role": "capital"
+    },
+    {
+      "id": "terran_dominator",
+      "name": "Dominator Carrier",
+      "faction": "terran_hegemony",
+      "role": "capital"
+    },
+    {
+      "id": "terran_executor",
+      "name": "Executor Destroyer",
+      "faction": "terran_hegemony",
+      "role": "capital"
+    },
+    {
+      "id": "terran_consul",
+      "name": "Consul Command Ship",
+      "faction": "terran_hegemony",
+      "role": "capital"
+    },
+    {
+      "id": "confed_sparrow",
+      "name": "Sparrow Light Fighter",
+      "faction": "free_confederation",
+      "role": "light_fighter"
+    },
+    {
+      "id": "confed_wasp",
+      "name": "Wasp Interceptor",
+      "faction": "free_confederation",
+      "role": "light_fighter"
+    },
+    {
+      "id": "confed_finch",
+      "name": "Finch Scout",
+      "faction": "free_confederation",
+      "role": "light_fighter"
+    },
+    {
+      "id": "confed_kestrel",
+      "name": "Kestrel Strike Fighter",
+      "faction": "free_confederation",
+      "role": "interceptor"
+    },
+    {
+      "id": "confed_falcon",
+      "name": "Falcon Strike Fighter",
+      "faction": "free_confederation",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "confed_hawk",
+      "name": "Hawk Assault Fighter",
+      "faction": "free_confederation",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "confed_eagle",
+      "name": "Eagle Multi-role Fighter",
+      "faction": "free_confederation",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "confed_condor",
+      "name": "Condor Heavy Fighter",
+      "faction": "free_confederation",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "confed_raven",
+      "name": "Raven Stealth Fighter",
+      "faction": "free_confederation",
+      "role": "interceptor"
+    },
+    {
+      "id": "confed_owl",
+      "name": "Owl Night Fighter",
+      "faction": "free_confederation",
+      "role": "interceptor"
+    },
+    {
+      "id": "confed_pelican",
+      "name": "Pelican Bomber",
+      "faction": "free_confederation",
+      "role": "bomber"
+    },
+    {
+      "id": "confed_albatross",
+      "name": "Albatross Heavy Bomber",
+      "faction": "free_confederation",
+      "role": "bomber"
+    },
+    {
+      "id": "confed_phoenix",
+      "name": "Phoenix Gunship",
+      "faction": "free_confederation",
+      "role": "gunship"
+    },
+    {
+      "id": "confed_thunderbird",
+      "name": "Thunderbird Assault Ship",
+      "faction": "free_confederation",
+      "role": "gunship"
+    },
+    {
+      "id": "confed_harrier",
+      "name": "Harrier Support Gunship",
+      "faction": "free_confederation",
+      "role": "gunship"
+    },
+    {
+      "id": "confed_crane",
+      "name": "Crane Support Vessel",
+      "faction": "free_confederation",
+      "role": "support"
+    },
+    {
+      "id": "confed_heron",
+      "name": "Heron Command Ship",
+      "faction": "free_confederation",
+      "role": "support"
+    },
+    {
+      "id": "confed_liberty",
+      "name": "Liberty Cruiser",
+      "faction": "free_confederation",
+      "role": "capital"
+    },
+    {
+      "id": "confed_independence",
+      "name": "Independence Carrier",
+      "faction": "free_confederation",
+      "role": "capital"
+    },
+    {
+      "id": "confed_defiance",
+      "name": "Defiance Assault Frigate",
+      "faction": "free_confederation",
+      "role": "capital"
+    },
+    {
+      "id": "synth_drone",
+      "name": "Combat Drone",
+      "faction": "synthetic_collective",
+      "role": "light_fighter"
+    },
+    {
+      "id": "synth_scout_drone",
+      "name": "Scout Drone",
+      "faction": "synthetic_collective",
+      "role": "light_fighter"
+    },
+    {
+      "id": "synth_heavy_drone",
+      "name": "Heavy Combat Drone",
+      "faction": "synthetic_collective",
+      "role": "light_fighter"
+    },
+    {
+      "id": "synth_bomber_drone",
+      "name": "Bomber Drone",
+      "faction": "synthetic_collective",
+      "role": "bomber"
+    },
+    {
+      "id": "synth_interceptor_drone",
+      "name": "Interceptor Drone",
+      "faction": "synthetic_collective",
+      "role": "interceptor"
+    },
+    {
+      "id": "synth_hunter",
+      "name": "Hunter Unit",
+      "faction": "synthetic_collective",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "synth_stalker",
+      "name": "Stalker Unit",
+      "faction": "synthetic_collective",
+      "role": "interceptor"
+    },
+    {
+      "id": "synth_ravager",
+      "name": "Ravager Unit",
+      "faction": "synthetic_collective",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "synth_predator",
+      "name": "Predator Unit",
+      "faction": "synthetic_collective",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "synth_destroyer",
+      "name": "Destroyer Protocol",
+      "faction": "synthetic_collective",
+      "role": "bomber"
+    },
+    {
+      "id": "synth_annihilator",
+      "name": "Annihilator Protocol",
+      "faction": "synthetic_collective",
+      "role": "bomber"
+    },
+    {
+      "id": "synth_carrier",
+      "name": "Carrier Node",
+      "faction": "synthetic_collective",
+      "role": "support"
+    },
+    {
+      "id": "synth_relay_node",
+      "name": "Relay Node",
+      "faction": "synthetic_collective",
+      "role": "support"
+    },
+    {
+      "id": "synth_repair_node",
+      "name": "Repair Node",
+      "faction": "synthetic_collective",
+      "role": "support"
+    },
+    {
+      "id": "synth_devastator",
+      "name": "Devastator Platform",
+      "faction": "synthetic_collective",
+      "role": "gunship"
+    },
+    {
+      "id": "synth_eradicator",
+      "name": "Eradicator Platform",
+      "faction": "synthetic_collective",
+      "role": "gunship"
+    },
+    {
+      "id": "synth_nexus",
+      "name": "Nexus Command Ship",
+      "faction": "synthetic_collective",
+      "role": "capital"
+    },
+    {
+      "id": "synth_overmind",
+      "name": "Overmind Carrier",
+      "faction": "synthetic_collective",
+      "role": "capital"
+    },
+    {
+      "id": "synth_terminus",
+      "name": "Terminus Battleship",
+      "faction": "synthetic_collective",
+      "role": "capital"
+    },
+    {
+      "id": "synth_conduit",
+      "name": "Conduit Cruiser",
+      "faction": "synthetic_collective",
+      "role": "capital"
+    },
+    {
+      "id": "synth_gestalt",
+      "name": "Gestalt Colossus",
+      "faction": "synthetic_collective",
+      "role": "capital"
+    },
+    {
+      "id": "corsair_blade",
+      "name": "Blade Raider",
+      "faction": "void_corsairs",
+      "role": "interceptor"
+    },
+    {
+      "id": "corsair_fang",
+      "name": "Fang Interceptor",
+      "faction": "void_corsairs",
+      "role": "interceptor"
+    },
+    {
+      "id": "corsair_talon",
+      "name": "Talon Strike Fighter",
+      "faction": "void_corsairs",
+      "role": "interceptor"
+    },
+    {
+      "id": "corsair_venom",
+      "name": "Venom Light Fighter",
+      "faction": "void_corsairs",
+      "role": "light_fighter"
+    },
+    {
+      "id": "corsair_marauder",
+      "name": "Marauder Assault Ship",
+      "faction": "void_corsairs",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "corsair_cutlass",
+      "name": "Cutlass Heavy Fighter",
+      "faction": "void_corsairs",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "corsair_scimitar",
+      "name": "Scimitar Fighter",
+      "faction": "void_corsairs",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "corsair_saber",
+      "name": "Saber Attack Fighter",
+      "faction": "void_corsairs",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "corsair_specter",
+      "name": "Specter Infiltrator",
+      "faction": "void_corsairs",
+      "role": "interceptor"
+    },
+    {
+      "id": "corsair_phantom",
+      "name": "Phantom Stealth Ship",
+      "faction": "void_corsairs",
+      "role": "interceptor"
+    },
+    {
+      "id": "corsair_shadow",
+      "name": "Shadow Strike Ship",
+      "faction": "void_corsairs",
+      "role": "interceptor"
+    },
+    {
+      "id": "corsair_reaver",
+      "name": "Reaver Gunboat",
+      "faction": "void_corsairs",
+      "role": "gunship"
+    },
+    {
+      "id": "corsair_pillager",
+      "name": "Pillager Assault Ship",
+      "faction": "void_corsairs",
+      "role": "gunship"
+    },
+    {
+      "id": "corsair_ravager",
+      "name": "Ravager War Galley",
+      "faction": "void_corsairs",
+      "role": "gunship"
+    },
+    {
+      "id": "corsair_bomber",
+      "name": "Corsair Bomber",
+      "faction": "void_corsairs",
+      "role": "bomber"
+    },
+    {
+      "id": "corsair_torpedo_boat",
+      "name": "Torpedo Boat",
+      "faction": "void_corsairs",
+      "role": "bomber"
+    },
+    {
+      "id": "corsair_dreadnought",
+      "name": "Dreadnought Flagship",
+      "faction": "void_corsairs",
+      "role": "capital"
+    },
+    {
+      "id": "corsair_galleon",
+      "name": "Void Galleon",
+      "faction": "void_corsairs",
+      "role": "capital"
+    },
+    {
+      "id": "corsair_frigate",
+      "name": "Raider Frigate",
+      "faction": "void_corsairs",
+      "role": "capital"
+    },
+    {
+      "id": "corsair_tender",
+      "name": "Fleet Tender",
+      "faction": "void_corsairs",
+      "role": "support"
+    },
+    {
+      "id": "ascendant_seraph",
+      "name": "Seraph Guardian",
+      "faction": "ascendant_empire",
+      "role": "interceptor"
+    },
+    {
+      "id": "ascendant_cherub",
+      "name": "Cherub Light Fighter",
+      "faction": "ascendant_empire",
+      "role": "light_fighter"
+    },
+    {
+      "id": "ascendant_herald",
+      "name": "Herald Scout",
+      "faction": "ascendant_empire",
+      "role": "interceptor"
+    },
+    {
+      "id": "ascendant_virtue",
+      "name": "Virtue Interceptor",
+      "faction": "ascendant_empire",
+      "role": "interceptor"
+    },
+    {
+      "id": "ascendant_templar",
+      "name": "Templar Heavy Fighter",
+      "faction": "ascendant_empire",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "ascendant_crusader",
+      "name": "Crusader Assault Fighter",
+      "faction": "ascendant_empire",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "ascendant_paladin",
+      "name": "Paladin Fighter",
+      "faction": "ascendant_empire",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "ascendant_inquisitor",
+      "name": "Inquisitor Strike Fighter",
+      "faction": "ascendant_empire",
+      "role": "heavy_fighter"
+    },
+    {
+      "id": "ascendant_oracle",
+      "name": "Oracle Support Craft",
+      "faction": "ascendant_empire",
+      "role": "support"
+    },
+    {
+      "id": "ascendant_prophet",
+      "name": "Prophet Command Ship",
+      "faction": "ascendant_empire",
+      "role": "support"
+    },
+    {
+      "id": "ascendant_acolyte",
+      "name": "Acolyte Tender",
+      "faction": "ascendant_empire",
+      "role": "support"
+    },
+    {
+      "id": "ascendant_avatar",
+      "name": "Avatar Assault Ship",
+      "faction": "ascendant_empire",
+      "role": "gunship"
+    },
+    {
+      "id": "ascendant_wrath",
+      "name": "Wrath Gunship",
+      "faction": "ascendant_empire",
+      "role": "gunship"
+    },
+    {
+      "id": "ascendant_judgment",
+      "name": "Judgment Heavy Gunship",
+      "faction": "ascendant_empire",
+      "role": "gunship"
+    },
+    {
+      "id": "ascendant_smiter",
+      "name": "Smiter Bomber",
+      "faction": "ascendant_empire",
+      "role": "bomber"
+    },
+    {
+      "id": "ascendant_purifier",
+      "name": "Purifier Heavy Bomber",
+      "faction": "ascendant_empire",
+      "role": "bomber"
+    },
+    {
+      "id": "ascendant_divine",
+      "name": "Divine Sovereignty",
+      "faction": "ascendant_empire",
+      "role": "capital"
+    },
+    {
+      "id": "ascendant_glory",
+      "name": "Glory Battleship",
+      "faction": "ascendant_empire",
+      "role": "capital"
+    },
+    {
+      "id": "ascendant_sanctum",
+      "name": "Sanctum Carrier",
+      "faction": "ascendant_empire",
+      "role": "capital"
+    },
+    {
+      "id": "ascendant_bastion",
+      "name": "Bastion Cruiser",
+      "faction": "ascendant_empire",
+      "role": "capital"
+    }
   ]
 }

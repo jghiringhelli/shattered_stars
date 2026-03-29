@@ -1217,6 +1217,24 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     spriteKey: 'ship_synth_terminus',
     description: 'Heavy battleship for fleet engagements.',
   },
+  synth_gestalt: {
+    id: 'synth_gestalt',
+    name: 'Gestalt Colossus',
+    faction: 'synthetic_collective',
+    role: 'capital',
+    baseStats: {
+      hull: 16,
+      shields: 12,
+      attack: 6,
+      agility: 0,
+      speed: { min: 0, max: 1 },
+      size: 'huge',
+      actions: ['calculate', 'target_lock', 'coordinate', 'reinforce', 'jam'],
+      pointCost: 145,
+    },
+    spriteKey: 'ship_synth_gestalt',
+    description: 'The hive mind manifest — countless drones converged into one apex form.',
+  },
   synth_conduit: {
     id: 'synth_conduit',
     name: 'Conduit Cruiser',
@@ -2062,6 +2080,7 @@ export const SHIP_DIALS: Record<string, readonly ManeuverDefinition[]> = {
   synth_nexus: CAPITAL_DIAL,
   synth_overmind: CAPITAL_DIAL,
   synth_terminus: CAPITAL_DIAL,
+  synth_gestalt: CAPITAL_DIAL,
   synth_conduit: CAPITAL_DIAL,
 
   // Void Corsairs

@@ -342,6 +342,11 @@ export const SHIP_SLOTS: Record<string, ShipSlotConfig> = {
     slots: ['turret', 'cannon', 'sensor', 'sensor', 'tech', 'modification', 'title'],
     charges: 3,
   },
+  synth_gestalt: {
+    shipId: 'synth_gestalt',
+    slots: ['turret', 'turret', 'cannon', 'cannon', 'gunner', 'sensor', 'modification', 'modification', 'title'],
+    charges: 5,
+  },
 
   // ==========================================
   // VOID CORSAIRS (20 ships)
@@ -959,6 +964,10 @@ export const SHIP_LOADOUTS: Record<string, ShipLoadout[]> = {
   synth_terminus: [
     { id: 'terminus_siege', name: 'Terminus Siege', shipId: 'synth_terminus', upgrades: ['quad_laser_turret', 'twin_laser_turret', 'heavy_laser_cannon', 'heavy_laser_cannon'], pointCost: 145, description: 'Siege capital', role: 'offense' },
     { id: 'terminus_assault', name: 'Terminus Assault', shipId: 'synth_terminus', upgrades: ['twin_laser_turret', 'heavy_laser_cannon', 'veteran_gunner'], pointCost: 138, description: 'Assault capital', role: 'offense' },
+  ],
+  synth_gestalt: [
+    { id: 'gestalt_apex', name: 'Gestalt Apex', shipId: 'synth_gestalt', upgrades: ['quad_laser_turret', 'heavy_laser_cannon', 'veteran_gunner', 'fire_control_system'], pointCost: 168, description: 'Maximum convergence — all systems unified', role: 'offense' },
+    { id: 'gestalt_fortress', name: 'Gestalt Fortress', shipId: 'synth_gestalt', upgrades: ['shield_upgrade', 'hull_upgrade', 'advanced_sensors'], pointCost: 158, description: 'Fortified configuration — nearly impervious', role: 'defense' },
   ],
   synth_conduit: [
     { id: 'conduit_relay', name: 'Conduit Relay', shipId: 'synth_conduit', upgrades: ['twin_laser_turret', 'coordinated_assault', 'advanced_sensors', 'targeting_computer'], pointCost: 118, description: 'Network relay', role: 'support' },

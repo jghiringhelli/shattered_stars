@@ -96,7 +96,7 @@ export class SquadBuilderScene extends Phaser.Scene {
   private factionSlots: FactionSlot[] = [];
   private numFactions = 2;
   private pointLimit = 200;
-  private gameMode: 'turn_based' | 'continuous' | 'arcade' | 'survival' | 'online' = 'arcade';
+  private gameMode: 'turn_based' | 'continuous' | 'arcade' | 'survival' | 'online' | 'epic' = 'arcade';
   private aiDifficulty: AIDifficultyLevel = 'normal';
 
   private slotContainers: Phaser.GameObjects.Container[] = [];
@@ -115,9 +115,10 @@ export class SquadBuilderScene extends Phaser.Scene {
     // Allow caller to preset initial mode (e.g., SKIRMISH → 'arcade', SURVIVAL → 'survival')
     if (data?.initialMode === 'arcade' || data?.initialMode === 'turn_based' ||
         data?.initialMode === 'continuous' || data?.initialMode === 'survival' ||
-        data?.initialMode === 'online') {
-      this.gameMode = data.initialMode as 'arcade' | 'turn_based' | 'continuous' | 'survival' | 'online';
+        data?.initialMode === 'online' || data?.initialMode === 'epic') {
+      this.gameMode = data.initialMode as 'arcade' | 'turn_based' | 'continuous' | 'survival' | 'online' | 'epic';
     }
+    if (this.gameMode === 'epic') this.pointLimit = 400;
   }
 
   create(): void {
@@ -200,37 +201,46 @@ export class SquadBuilderScene extends Phaser.Scene {
       })
       .setOrigin(0, 0.5);
 
-    [100, 150, 200, 300].forEach((pts, i) => {
-      const btn = this.createSmallButton(580 + i * 60, 80, `${pts}`, () => {
-        this.pointLimit = pts;
-        this.factionSlots.forEach((slot) => this.autoFillSquad(slot));
-        this.updateDisplay();
+    if (this.gameMode === 'epic') {
+      this.add
+        .text(580, 80, '400 pts  ·  EPIC FORMAT', {
+          font: 'bold 16px Arial',
+          color: '#ffaa44',
+        })
+        .setOrigin(0, 0.5);
+    } else {
+      [100, 150, 200, 300].forEach((pts, i) => {
+        const btn = this.createSmallButton(580 + i * 60, 80, `${pts}`, () => {
+          this.pointLimit = pts;
+          this.factionSlots.forEach((slot) => this.autoFillSquad(slot));
+          this.updateDisplay();
+        });
+        btn.setData('pointLimit', pts);
       });
-      btn.setData('pointLimit', pts);
-    });
 
-    // Game mode selector
-    this.add
-      .text(780, 80, 'Mode:', {
-        font: '18px Arial',
-        color: '#888888',
-      })
-      .setOrigin(0, 0.5);
+      // Game mode selector
+      this.add
+        .text(780, 80, 'Mode:', {
+          font: '18px Arial',
+          color: '#888888',
+        })
+        .setOrigin(0, 0.5);
 
-    this.createSmallButton(845, 80, 'Arcade', () => {
-      this.gameMode = 'arcade';
-      this.updateDisplay();
-    }).setData('mode', 'arcade');
+      this.createSmallButton(845, 80, 'Arcade', () => {
+        this.gameMode = 'arcade';
+        this.updateDisplay();
+      }).setData('mode', 'arcade');
 
-    this.createSmallButton(955, 80, 'Continuous', () => {
-      this.gameMode = 'continuous';
-      this.updateDisplay();
-    }).setData('mode', 'continuous');
+      this.createSmallButton(955, 80, 'Continuous', () => {
+        this.gameMode = 'continuous';
+        this.updateDisplay();
+      }).setData('mode', 'continuous');
 
-    this.createSmallButton(1085, 80, 'Turn-Based', () => {
-      this.gameMode = 'turn_based';
-      this.updateDisplay();
-    }).setData('mode', 'turn_based');
+      this.createSmallButton(1085, 80, 'Turn-Based', () => {
+        this.gameMode = 'turn_based';
+        this.updateDisplay();
+      }).setData('mode', 'turn_based');
+    }
 
     // AI Difficulty selector (second row)
     this.add
@@ -552,7 +562,7 @@ export class SquadBuilderScene extends Phaser.Scene {
     }
 
     const template = SQUAD_TEMPLATES[slot.squadStyle];
-    const factionShips = getShipsByFaction(slot.factionId).filter((s) => s.baseStats.size !== 'huge');
+    const factionShips = getShipsByFaction(slot.factionId).filter((s) => this.gameMode === 'epic' || s.baseStats.size !== 'huge');
 
     // Fill based on template roles
     for (const role of template.shipRoles) {
@@ -637,7 +647,7 @@ export class SquadBuilderScene extends Phaser.Scene {
     });
 
     // Start appropriate battle scene
-    if (this.gameMode === 'turn_based') {
+    if (this.gameMode === 'turn_based' || this.gameMode === 'epic') {
       this.scene.start('TurnBasedBattleScene');
     } else if (this.gameMode === 'arcade') {
       this.scene.start('ArcadeBattleScene');

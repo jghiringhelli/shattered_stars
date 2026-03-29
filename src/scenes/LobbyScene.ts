@@ -291,17 +291,22 @@ export class LobbyScene extends Phaser.Scene {
         .setOrigin(0.5)
     );
 
-    const createBtn = this.createButton(this.scale.width / 2, 120, 'CREATE GAME', () => {
+    const createBtn = this.createButton(this.scale.width / 2 - 240, 120, 'CREATE GAME', () => {
       this.createRoom();
     });
     this.roomListContainer.add(createBtn);
 
-    const refreshBtn = this.createButton(this.scale.width / 2 + 200, 120, 'REFRESH', () => {
+    const refreshBtn = this.createButton(this.scale.width / 2 - 80, 120, 'REFRESH', () => {
       this.refreshRoomList();
     });
     this.roomListContainer.add(refreshBtn);
 
-    const onlineBtn = this.createButton(this.scale.width / 2 + 380, 120, 'ONLINE', () => {
+    const joinCodeBtn = this.createButton(this.scale.width / 2 + 80, 120, 'JOIN CODE', () => {
+      this.joinByCode();
+    });
+    this.roomListContainer.add(joinCodeBtn);
+
+    const onlineBtn = this.createButton(this.scale.width / 2 + 240, 120, 'ONLINE', () => {
       this.promptOnlineConnect();
     });
     this.roomListContainer.add(onlineBtn);
@@ -466,6 +471,13 @@ export class LobbyScene extends Phaser.Scene {
           networkService.setReady(!localPlayer.isReady);
         });
         this.playerListContainer.add(readyBtn);
+
+        const copyBtn = this.createButton(centerX - 100, 550, 'COPY CODE', () => {
+          const code = this.buildInviteCode();
+          if (code) navigator.clipboard.writeText(code).catch(() => window.prompt('Copy invite code:', code));
+          this.statusText.setText('Invite code copied to clipboard!');
+        });
+        this.playerListContainer.add(copyBtn);
       }
     }
 
@@ -616,6 +628,40 @@ export class LobbyScene extends Phaser.Scene {
     this.statusText.setText('Connecting to server…');
     this.statusText.setColor('#ffff44');
     networkService.connect(this.serverUrl ?? undefined);
+  }
+
+  /**
+   * Encode current server URL + room ID into a base64 invite code.
+   * @returns Opaque string safe to paste into a chat message or URL.
+   */
+  private buildInviteCode(): string {
+    if (!this.serverUrl || !this.currentRoom) return '';
+    return btoa(`${this.serverUrl}|${this.currentRoom.id}`);
+  }
+
+  /**
+   * Prompt for a previously copied invite code, decode it, then
+   * auto-connect to the embedded server URL and join the room.
+   */
+  private joinByCode(): void {
+    const code = window.prompt('Paste invite code:');
+    if (!code) return;
+    try {
+      const decoded = atob(code.trim());
+      const pipeIndex = decoded.lastIndexOf('|');
+      if (pipeIndex === -1) throw new Error('missing separator');
+      const url = decoded.slice(0, pipeIndex);
+      const roomId = decoded.slice(pipeIndex + 1);
+      if (!url || !roomId) throw new Error('empty parts');
+      this.serverUrl = url;
+      this.statusText.setText('Connecting…');
+      this.statusText.setColor('#ffff44');
+      networkService.once('connected', () => networkService.joinRoom(roomId), this);
+      networkService.connect(url);
+    } catch {
+      this.statusText.setText('Invalid invite code — ask host to re-copy');
+      this.statusText.setColor('#ff4444');
+    }
   }
 
   private cycleFaction(): void {

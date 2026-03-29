@@ -161,6 +161,42 @@ export function generateLore(def: ShipDefinition): string {
 }
 
 // ============================================
+// Capital ship custom overrides
+// ============================================
+
+/** Hand-authored lore for unique capital ships. Overrides the template-generated lore. */
+const CUSTOM_LORE: Partial<Record<string, string>> = {
+  terran_imperator:
+    'The Imperator is the undisputed crown of Terran Hegemony naval doctrine — a ship so massive it requires its own support fleet to sustain. Glacially slow and fortress-hulled, it projects overwhelming firepower across an entire engagement zone.',
+  confed_liberty:
+    'She began her life as the grain freighter Constance before the Free Confederation stripped her hull to the frame. Now bristling with salvaged cannons and jury-rigged shield emitters, the Liberty anchors every desperate last-stand the Confederation has ever won.',
+  corsair_galleon:
+    "The Void Galleon is the corsairs' oldest tradition made manifest — void sails unfurling like wings of night, a thousand tonnes of stolen plating shielding her crew between raids. Slow in speed, but relentless in predatory intent.",
+  ascendant_divine:
+    'Larger than many moons, the Divine Sovereignty is less a warship than a declaration of faith. Fortress-hulled and burning with perpetual divine fire, it does not merely project power — it inscribes the will of the Ascendant Empire across the stars.',
+  synth_nexus:
+    'The Nexus does not fight — it decides. Hanging motionless at engagement boundaries, it processes the battlefield in microseconds and coordinates its drones with precision no organic mind can match. You destroy what you see; what the Nexus calculates, you never see coming.',
+  synth_gestalt:
+    'There are no adequate words for the moment the swarm stops being many and becomes one. The Gestalt Colossus is the Synthetic Collective\'s apex form: thousands of drones converging into a fortress-hulled titan that thinks, aims, and fires with singular unified intent.',
+};
+
+/** Hand-authored SD art prompt hints for unique capital ships. */
+const CUSTOM_ART_PROMPT: Partial<Record<string, string>> = {
+  terran_imperator:
+    'Terran Imperator massive battlecruiser, enormous grey warship with rows of gun batteries, military escort fighters flanking, harsh vacuum of space, Terran Hegemony insignia, cinematic sci-fi military epic scale',
+  confed_liberty:
+    'Confed Liberty converted freighter warship, patchwork hull plating with welded gun turrets, rebel colors, warm amber engine glow, ragtag escort, contrast of civilian origins and deadly armament, cinematic space rebel epic',
+  corsair_galleon:
+    'Void Corsairs Galleon capital ship, sweeping void-sail wings of dark metalite, skull-and-comet insignia, ramshackle hull glowing with pirate sigils, sickly-green running lights, deep space cinematic epic scale',
+  ascendant_divine:
+    'Ascendant Empire Divine Sovereignty capital ship, cathedral hull with golden spires and divine geometry, glowing green ethereal energy, robed acolytes in observation bays, epic scale dwarfing escort frigates, sacred space opera aesthetic',
+  synth_nexus:
+    'Synthetic Collective Nexus command ship, geometric blue-neon lattice hull with maintenance drone swarms, no organic crew, computation arrays through hull panels, cold deep space, machine intelligence aesthetic, cinematic sci-fi epic',
+  synth_gestalt:
+    'Synthetic Collective Gestalt Colossus, colossal drone-composite titan assembled from thousands of machines, blue-white energy nexus at its core, geometric fractal hull surface, escort drones merging into the mass, cinematic machine-god epic scale',
+};
+
+// ============================================
 // Entry cache
 // ============================================
 
@@ -175,12 +211,13 @@ const byId = new Map<string, EncyclopediaEntry>();
 export function getAllEncyclopediaEntries(): readonly EncyclopediaEntry[] {
   if (cache) return cache;
   cache = Object.values(SHIP_DEFINITIONS).map((def) => {
+    const defaultPrompt = `${def.name} spacecraft, ${FACTION_ART_CTX[def.faction]}, ${ROLE_COMBAT_CTX[def.role] ?? 'dramatic space scene'}`;
     const entry: EncyclopediaEntry = {
       shipId: def.id,
-      lore: generateLore(def),
+      lore: CUSTOM_LORE[def.id] ?? generateLore(def),
       stats: computeEncyclopediaStats(def),
       artKey: `ship_art_${def.id}`,
-      artPromptHint: `${def.name} spacecraft, ${FACTION_ART_CTX[def.faction]}, ${ROLE_COMBAT_CTX[def.role] ?? 'dramatic space scene'}`,
+      artPromptHint: CUSTOM_ART_PROMPT[def.id] ?? defaultPrompt,
     };
     byId.set(def.id, entry);
     return entry;

@@ -2004,9 +2004,28 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     extraSlots: ['crew', 'sensor', 'sensor'],
   },
 
-  // ============================================
-  // NEW VOID CORSAIRS PILOTS
-  // ============================================
+  // Gestalt Colossus
+  gestalt_drone: {
+    id: 'gestalt_drone',
+    name: 'Gestalt Drone',
+    shipId: 'synth_gestalt',
+    faction: 'synthetic_collective',
+    initiative: 1,
+    pointCost: 80,
+    isUnique: false,
+  },
+  apex_gestalt: {
+    id: 'apex_gestalt',
+    name: 'Apex Gestalt',
+    shipId: 'synth_gestalt',
+    faction: 'synthetic_collective',
+    initiative: 3,
+    pointCost: 110,
+    isUnique: true,
+    abilityText: 'While you perform an attack, you may spend up to 2 calculate tokens. For each token spent, change 1 focus result to a hit result.',
+    abilityId: 'convergence_strike',
+    extraSlots: ['gunner', 'sensor', 'modification'],
+  },
 
   // Fang Interceptor
   fang_raider: {
