@@ -110,6 +110,7 @@ export async function pressGameKey(page: Page, key: string): Promise<void> {
 // ─────────────────────────────────────────────
 
 // MainMenuScene: startY = 250, spacing = 55, centerX = 640
+// Items (0-indexed): SKIRMISH SURVIVAL EPIC_BATTLE DOGFIGHT ACE_DUEL CAMPAIGN ONLINE SETTINGS ENCYCLOPEDIA CREDITS
 const MENU_POSITIONS: Record<string, number> = {
   SKIRMISH:      0,
   SURVIVAL:      1,
@@ -117,9 +118,10 @@ const MENU_POSITIONS: Record<string, number> = {
   DOGFIGHT:      3,
   'ACE DUEL':    4,
   CAMPAIGN:      5,
-  SETTINGS:      6,
-  ENCYCLOPEDIA:  7,
-  CREDITS:       8,
+  ONLINE:        6,
+  SETTINGS:      7,
+  ENCYCLOPEDIA:  8,
+  CREDITS:       9,
 };
 
 /** Click a main-menu item by its visible label. */
@@ -129,7 +131,7 @@ export async function clickMenuItem(
 ): Promise<void> {
   const index = MENU_POSITIONS[label];
   if (index === undefined) throw new Error(`Unknown menu label: ${label}`);
-  await clickGameCoord(page, 640, 250 + index * 55);
+  await clickGameCoord(page, 640, 230 + index * 50);
 }
 
 // ─────────────────────────────────────────────
@@ -156,4 +158,60 @@ export async function readSceneState<T>(
     },
     [sceneKey, accessor] as [string, string]
   ) as Promise<T>;
+}
+
+// ─────────────────────────────────────────────
+// Console / error monitoring
+// ─────────────────────────────────────────────
+
+export interface ConsoleErrorLog {
+  consoleErrors: string[];
+  pageErrors: string[];
+}
+
+/**
+ * Attach console/pageerror listeners for the duration of a test.
+ * Ignores headless WebGL/Framebuffer/favicon noise that does not affect gameplay.
+ * Returns the log object — inspect after the test actions complete.
+ */
+export function collectErrors(page: Page): ConsoleErrorLog {
+  const log: ConsoleErrorLog = { consoleErrors: [], pageErrors: [] };
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') {
+      const t = msg.text();
+      if (
+        !t.includes('WebGL') &&
+        !t.includes('Framebuffer') &&
+        !t.includes('favicon') &&
+        !t.includes('Failed to process file') && // missing ship art textures
+        !t.includes('WebSocket connection')        // no P2P server in test env
+      ) {
+        log.consoleErrors.push(t);
+      }
+    }
+  });
+  page.on('pageerror', (err) => log.pageErrors.push(err.message));
+  return log;
+}
+
+/**
+ * Attach listeners that print but do not collect.
+ * Use `collectErrors` when you need to assert zero errors.
+ */
+export function suppressWebGLNoise(page: Page): void {
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') {
+      const t = msg.text();
+      if (
+        !t.includes('WebGL') &&
+        !t.includes('Framebuffer') &&
+        !t.includes('favicon') &&
+        !t.includes('Failed to process file') &&
+        !t.includes('WebSocket connection')
+      ) {
+        console.warn('[console.error]', t);
+      }
+    }
+  });
+  page.on('pageerror', (err) => console.error('[page error]', err.message));
 }

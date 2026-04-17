@@ -93,8 +93,8 @@ export class MainMenuScene extends Phaser.Scene {
     this.menuItems = [];
     this.selectedIndex = 0;
     const centerX = this.scale.width / 2;
-    const startY = 250;
-    const spacing = 55;
+    const startY = 230;
+    const spacing = 50;
 
     const items = [
       { label: 'SKIRMISH',     action: () => this.scene.start('SquadBuilderScene', { initialMode: 'arcade' }) },
