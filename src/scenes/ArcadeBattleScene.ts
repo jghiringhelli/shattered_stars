@@ -92,6 +92,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private playerAngularVelocity = 0;
   private framesAlive = 0;
 
+  // Maneuver indicator HUD elements
+  private maneuverText!: Phaser.GameObjects.Text;
+  private turnGauge!: Phaser.GameObjects.Graphics;
+
   constructor() {
     super({ key: 'ArcadeBattleScene' });
   }
@@ -787,6 +791,12 @@ export class ArcadeBattleScene extends Phaser.Scene {
       '↑↓ Speed | ←→ Turn | SHIFT+←→ Bank | Z K-Turn | SPACE Fire',
       { font: '14px monospace', color: '#888888' }
     ).setOrigin(0.5, 1).setScrollFactor(0).setDepth(1000);
+
+    this.maneuverText = this.add.text(10, 118, 'STRAIGHT', {
+      font: 'bold 13px monospace', color: '#44ff44',
+    }).setScrollFactor(0).setDepth(1000);
+
+    this.turnGauge = this.add.graphics().setScrollFactor(0).setDepth(1000);
   }
 
   private updateHUD(): void {
@@ -808,6 +818,53 @@ export class ArcadeBattleScene extends Phaser.Scene {
     // Hull color
     const hullPct = ship.hull / ship.maxHull;
     this.hullText.setColor(hullPct > 0.5 ? '#44ff44' : hullPct > 0.25 ? '#ffff44' : '#ff4444');
+
+    this.updateTurnIndicator();
+  }
+
+  /**
+   * Redraws the maneuver-state label and turn-rate gauge based on the player's
+   * current angular velocity. Thresholds mirror X-Wing dial difficulty colours:
+   *   < 8 %  → STRAIGHT (green)   8–45 % → BANK (green)
+   *   45–75% → HARD BANK (white)  75–100% → TURN (red)
+   */
+  private updateTurnIndicator(): void {
+    // Max angular velocity matches the constant in handleInput
+    const MAX_ANG_VEL = 160;
+    const ratio = Math.abs(this.playerAngularVelocity) / MAX_ANG_VEL;
+    const dir = Math.sign(this.playerAngularVelocity);
+
+    let label: string;
+    let color: string;
+    if (ratio < 0.08) {
+      label = 'STRAIGHT'; color = '#44ff44';
+    } else if (ratio < 0.45) {
+      label = dir < 0 ? '◄ BANK' : 'BANK ►'; color = '#44ff44';
+    } else if (ratio < 0.75) {
+      label = dir < 0 ? '◄ HARD BANK' : 'HARD BANK ►'; color = '#ffffff';
+    } else {
+      label = dir < 0 ? '◄ TURN' : 'TURN ►'; color = '#ff4444';
+    }
+    this.maneuverText.setText(label).setColor(color);
+
+    // Left/right gauge: 120 px wide, fills from centre toward the active side
+    this.turnGauge.clear();
+    const gx = 10; const gy = 136; const gw = 120; const gh = 5;
+    const cx = gx + gw / 2;
+    this.turnGauge.fillStyle(0x333333, 0.8);
+    this.turnGauge.fillRect(gx, gy, gw, gh);
+    this.turnGauge.fillStyle(0x888888, 1);
+    this.turnGauge.fillRect(cx - 1, gy - 1, 2, gh + 2);
+    if (ratio > 0.02) {
+      const gaugeColor = ratio < 0.45 ? 0x44ff44 : ratio < 0.75 ? 0xffffff : 0xff4444;
+      const fillW = Math.round(ratio * (gw / 2));
+      this.turnGauge.fillStyle(gaugeColor, 0.9);
+      if (dir >= 0) {
+        this.turnGauge.fillRect(cx, gy, fillW, gh);
+      } else {
+        this.turnGauge.fillRect(cx - fillW, gy, fillW, gh);
+      }
+    }
   }
 
   private showFloatingText(x: number, y: number, text: string, color: string): void {
@@ -899,6 +956,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.speedText.setVisible(false);
     this.cooldownText.setVisible(false);
     this.instructionsText.setVisible(false);
+    this.maneuverText.setVisible(false);
+    this.turnGauge.setVisible(false);
 
     const cx = this.scale.width / 2;
     const cy = this.scale.height / 2;
