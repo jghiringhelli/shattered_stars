@@ -28,6 +28,8 @@ interface FactionSlot {
   squadStyle: SquadStyle;
   ships: string[]; // Ship definition IDs
   pointsUsed: number;
+  /** loadoutId keyed by shipId — set by ShipPickerScene when player picks a loadout */
+  loadoutChoices: Record<string, string>;
 }
 
 type SquadStyle = 'balanced' | 'swarm' | 'elite' | 'bomber' | 'interceptor' | 'custom' | 'quick';
@@ -134,10 +136,11 @@ export class SquadBuilderScene extends Phaser.Scene {
     this.updateDisplay();
 
     // Listen for ship selection results from ShipPickerScene
-    this.game.events.on('shipsPicked', (data: { slotIndex: number; ships: string[] }) => {
+    this.game.events.on('shipsPicked', (data: { slotIndex: number; ships: string[]; loadoutChoices?: Record<string, string> }) => {
       const slot = this.factionSlots[data.slotIndex];
       if (!slot) return;
       slot.ships = data.ships;
+      slot.loadoutChoices = data.loadoutChoices ?? {};
       slot.pointsUsed = data.ships.reduce(
         (sum, id) => sum + (SHIP_DEFINITIONS[id]?.baseStats.pointCost ?? 0), 0,
       );
@@ -154,6 +157,7 @@ export class SquadBuilderScene extends Phaser.Scene {
         squadStyle: 'balanced',
         ships: [],
         pointsUsed: 0,
+        loadoutChoices: {},
       },
       {
         factionId: 'terran_hegemony',
@@ -161,6 +165,7 @@ export class SquadBuilderScene extends Phaser.Scene {
         squadStyle: 'balanced',
         ships: [],
         pointsUsed: 0,
+        loadoutChoices: {},
       },
     ];
 
@@ -337,38 +342,19 @@ export class SquadBuilderScene extends Phaser.Scene {
       .setOrigin(0, 0);
     container.add(container.last as Phaser.GameObjects.Text);
 
-    // Faction name & selector
+    // ── Top row (y = -18): faction name + points ────────────────────────────
     const factionName = slot.factionId ? FACTION_NAMES[slot.factionId] : 'Select Faction';
     const factionText = this.add
-      .text(-width / 2 + 20, 0, factionName, {
-        font: 'bold 20px Arial',
+      .text(-width / 2 + 20, -18, factionName, {
+        font: 'bold 18px Arial',
         color: `#${factionColor.toString(16).padStart(6, '0')}`,
       })
       .setOrigin(0, 0.5);
     container.add(factionText);
 
-    // Controller (Player/AI)
-    const controllerText = this.add
-      .text(-width / 2 + 200, -15, slot.controller.toUpperCase(), {
-        font: 'bold 14px Arial',
-        color: slot.controller === 'player' ? '#44ff44' : '#ff8844',
-      })
-      .setOrigin(0, 0.5);
-    container.add(controllerText);
-
-    // Squad style
-    const styleText = this.add
-      .text(-width / 2 + 200, 10, SQUAD_TEMPLATES[slot.squadStyle].name, {
-        font: '14px Arial',
-        color: '#aaaaaa',
-      })
-      .setOrigin(0, 0.5);
-    container.add(styleText);
-
-    // Points used
     const pointsText = this.add
-      .text(width / 2 - 20, -15, `${slot.pointsUsed}/${this.pointLimit} pts`, {
-        font: 'bold 16px Arial',
+      .text(width / 2 - 20, -18, `${slot.pointsUsed}/${this.pointLimit} pts`, {
+        font: 'bold 14px Arial',
         color: slot.pointsUsed <= this.pointLimit ? '#44ff44' : '#ff4444',
       })
       .setOrigin(1, 0.5);
@@ -376,8 +362,8 @@ export class SquadBuilderScene extends Phaser.Scene {
 
     // Ship count — clickable to open ship picker
     const shipCountText = this.add
-      .text(width / 2 - 20, 10, `${slot.ships.length} ships ✎`, {
-        font: '14px Arial',
+      .text(width / 2 - 20, 18, `${slot.ships.length} ships ✎`, {
+        font: '13px Arial',
         color: '#6688aa',
       })
       .setOrigin(1, 0.5)
@@ -389,26 +375,34 @@ export class SquadBuilderScene extends Phaser.Scene {
     });
     container.add(shipCountText);
 
-    // Action buttons
-    const btnY = 0;
+    // ── Bottom row (y = +18): action buttons ────────────────────────────────
+    // Buttons show current state; clicking cycles to next value.
+    const btnY = 18;
 
-    // Change faction button
-    this.createSlotButton(container, -50, btnY, 'Faction', () => {
+    // Faction cycle — shows abbreviated faction name
+    const factionBtnLabel = slot.factionId
+      ? (FACTION_NAMES[slot.factionId].split(' ')[0] ?? 'Faction').slice(0, 6)
+      : 'Faction';
+    this.createSlotButton(container, -120, btnY, factionBtnLabel, () => {
       this.cycleFaction(index);
     });
 
-    // Toggle controller
-    this.createSlotButton(container, 30, btnY, slot.controller === 'player' ? 'AI' : 'Player', () => {
-      this.toggleController(index);
-    });
+    // Controller toggle — shows CURRENT state (green = Player, orange = AI)
+    const ctrlLabel = slot.controller === 'player' ? 'Player' : 'AI';
+    this.createSlotButton(
+      container, -40, btnY, ctrlLabel,
+      () => { this.toggleController(index); },
+      slot.controller === 'player' ? '#44ff44' : '#ff8844',
+    );
 
-    // Cycle squad style
-    this.createSlotButton(container, 110, btnY, 'Style', () => {
+    // Squad style — shows current style name (truncated)
+    const styleLabel = SQUAD_TEMPLATES[slot.squadStyle].name.slice(0, 7);
+    this.createSlotButton(container, 50, btnY, styleLabel, () => {
       this.cycleSquadStyle(index);
     });
 
     // Auto-fill
-    this.createSlotButton(container, 190, btnY, 'Auto', () => {
+    this.createSlotButton(container, 140, btnY, 'Auto', () => {
       this.autoFillSquad(slot);
       this.updateDisplay();
     });
@@ -421,7 +415,8 @@ export class SquadBuilderScene extends Phaser.Scene {
     x: number,
     y: number,
     label: string,
-    onClick: () => void
+    onClick: () => void,
+    textColor = '#aaaaaa',
   ): void {
     const btn = this.add.container(x, y);
 
@@ -433,7 +428,7 @@ export class SquadBuilderScene extends Phaser.Scene {
     const text = this.add
       .text(0, 0, label, {
         font: '12px Arial',
-        color: '#aaaaaa',
+        color: textColor,
       })
       .setOrigin(0.5);
     btn.add(text);
@@ -451,7 +446,7 @@ export class SquadBuilderScene extends Phaser.Scene {
       bg.clear();
       bg.fillStyle(0x2a2a3a, 1);
       bg.fillRoundedRect(-30, -12, 60, 24, 4);
-      text.setColor('#aaaaaa');
+      text.setColor(textColor);
     });
 
     btn.on('pointerdown', onClick);
@@ -499,6 +494,7 @@ export class SquadBuilderScene extends Phaser.Scene {
         squadStyle: 'balanced',
         ships: [],
         pointsUsed: 0,
+        loadoutChoices: {},
       };
       this.autoFillSquad(newSlot);
       this.factionSlots.push(newSlot);
@@ -658,6 +654,7 @@ export class SquadBuilderScene extends Phaser.Scene {
       const playerSlot = this.factionSlots.find((s) => s.controller === 'player');
       this.registry.set('onlineSquad', playerSlot?.ships ?? []);
       this.registry.set('onlineFaction', playerSlot?.factionId ?? 'free_confederation');
+      this.registry.set('onlinePointLimit', this.pointLimit);
       this.scene.start('LobbyScene');
     } else {
       this.scene.start('ContinuousTacticalScene');

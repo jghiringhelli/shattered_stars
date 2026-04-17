@@ -493,7 +493,7 @@ export const PILOT_ABILITIES: Record<string, PilotAbility> = {
     xpCost: 150,
     requiredShipRole: 'bomber',
     effects: {
-      freeActionOnActivate: 'evade', // Placeholder: represented as "extra ordnance action"
+      freeActionOnActivate: 'evade', // Approximates the extra ordnance action; full double-drop requires effect type expansion
     },
   },
 

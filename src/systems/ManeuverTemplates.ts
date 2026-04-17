@@ -161,8 +161,52 @@ export function applyManeuver(
 }
 
 /**
+ * Return the local-frame displacement at t (0..1) along the maneuver.
+ * Curved maneuvers use a true circular arc; straight/k-turn use linear lerp.
+ * Arc radius is derived from the template endpoint for exact path fidelity.
+ */
+function arcInterpolateLocal(
+  direction: ManeuverDirection,
+  template: ManeuverTemplate,
+  t: number
+): ManeuverTemplate {
+  const arcRadius = (sweepAngle: number): number =>
+    Math.abs(template.deltaY) / Math.sin(sweepAngle);
+
+  switch (direction) {
+    case 'bank_left':
+    case 'segnor_left': {
+      const R = arcRadius(Math.PI / 4);
+      const a = (Math.PI / 4) * t;
+      return { deltaX: -R * (1 - Math.cos(a)), deltaY: -R * Math.sin(a), deltaAngle: template.deltaAngle * t };
+    }
+    case 'bank_right':
+    case 'segnor_right': {
+      const R = arcRadius(Math.PI / 4);
+      const a = (Math.PI / 4) * t;
+      return { deltaX: R * (1 - Math.cos(a)), deltaY: -R * Math.sin(a), deltaAngle: template.deltaAngle * t };
+    }
+    case 'turn_left':
+    case 'tallon_left': {
+      const R = arcRadius(Math.PI / 2);
+      const a = (Math.PI / 2) * t;
+      return { deltaX: -R * (1 - Math.cos(a)), deltaY: -R * Math.sin(a), deltaAngle: template.deltaAngle * t };
+    }
+    case 'turn_right':
+    case 'tallon_right': {
+      const R = arcRadius(Math.PI / 2);
+      const a = (Math.PI / 2) * t;
+      return { deltaX: R * (1 - Math.cos(a)), deltaY: -R * Math.sin(a), deltaAngle: template.deltaAngle * t };
+    }
+    default:
+      return { deltaX: template.deltaX * t, deltaY: template.deltaY * t, deltaAngle: template.deltaAngle * t };
+  }
+}
+
+/**
  * Generate waypoints for animating a maneuver.
- * Returns an array of positions from start to end.
+ * Curved maneuvers (bank, turn, segnor, tallon) follow true circular arcs;
+ * straight and k-turns follow linear paths.
  */
 export function generateManeuverPath(
   startX: number,
@@ -176,18 +220,8 @@ export function generateManeuverPath(
   const path: Array<{ x: number; y: number; angle: number }> = [];
 
   for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
-
-    // Interpolate the template
-    const partialTemplate: ManeuverTemplate = {
-      deltaX: template.deltaX * t,
-      deltaY: template.deltaY * t,
-      deltaAngle: template.deltaAngle * t,
-    };
-
-    // Apply the partial maneuver
-    const pos = applyManeuver(startX, startY, startAngle, partialTemplate);
-    path.push(pos);
+    const partial = arcInterpolateLocal(direction, template, i / segments);
+    path.push(applyManeuver(startX, startY, startAngle, partial));
   }
 
   return path;

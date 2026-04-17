@@ -600,6 +600,41 @@ Use `submit_and_start_worker(jobs)` from other scripts.
 - `public/sprites/ui/` — interface elements
 
 
+## Music Generation — Harmonia
+
+**Harmonia** is the local music production service for this project. It is running and fully configured.
+
+| Service | Port | Project ID | Config |
+|---|---|---|---|
+| Harmonia | 8002 | `shattered_stars` | `C:/Users/eu01244715/workspace/harmonia/projects/shattered_stars/` |
+| ACE-Step | 8001 | — | `C:/Users/eu01244715/workspace/ACE-Step/harmonia_adapter.py` |
+
+**Music structure:** Faction-driven. Six contexts: `hegemony`, `confederation`, `synthetic`, `corsairs`, `ascendant`, `void_tide`. Each has tactical + combat + boss tracks. Two cross-faction motifs: `motif_void_tide_cell` (3-note Phrygian descent) and `motif_nexus_broadcast` (electronic activation signal).
+
+**Key routes:**
+```
+GET  http://localhost:8002/projects/shattered_stars/assets/status        # audit
+POST http://localhost:8002/projects/shattered_stars/generate/ace-step    # generate a track
+POST http://localhost:8002/projects/shattered_stars/prompts/composition  # get a paste-ready prompt
+GET  http://localhost:8002/projects/shattered_stars/assets/file/{id}     # fetch audio file
+```
+
+**ACE-Step request shape:**
+```json
+{ "era_id": "hegemony", "mood": "combat", "seed": 42, "duration": 120 }
+```
+
+**Track IDs:** `heg_tactical`, `heg_combat`, `heg_boss`, `heg_victory`, `heg_defeat`, `conf_tactical`, `conf_combat`, `conf_boss`, `conf_victory`, `conf_defeat`, `syn_tactical`, `syn_combat`, `syn_boss`, `syn_awakening`, `cors_tactical`, `cors_combat`, `cors_boss`, `cors_heist`, `asc_tactical`, `asc_combat`, `asc_boss`, `asc_prophecy`, `void_encounter`, `void_nexus_discovery`, `void_campaign_credits`.
+
+**Faction-specific notes:**
+- `synthetic`: synthesizer/electronic only — no acoustic instruments. Chromatic, metric-shifting.
+- `ascendant`: non-Western instruments only (duduk, erhu, oud). 432hz, vast reverb, minimum notes.
+- `void_tide`: no melody, no harmony, subsonic only. The absence of music is intentional.
+
+**Full manual:** `C:/Users/eu01244715/workspace/harmonia/docs/specs/Harmonia_-_Music_Generation_Manual.md`
+
+---
+
 ## Known Issues
 
 - Epic ship format (huge size) not yet implemented as a battle mode

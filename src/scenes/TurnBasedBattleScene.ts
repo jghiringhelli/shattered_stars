@@ -13,7 +13,7 @@ import seedrandom from 'seedrandom';
 import { ShipStatCard } from '../ui/ShipStatCard';
 import type { ShipState, ManeuverDefinition } from '../core/types';
 import { OnlineTurnManager, type ManeuverPacket } from '../multiplayer/OnlineTurnManager';
-import { BattleStateSerializer, type SerializableShip } from '../multiplayer/BattleStateSerializer';
+import { BattleStateSerializer, type SerializableShip, type BattleSnapshot } from '../multiplayer/BattleStateSerializer';
 import { networkService } from '../services/NetworkService';
 import type { FactionId } from '../config';
 import { BATTLEFIELD_SIZE, FACTION_COLORS, SHIP_SIZES } from '../config';
@@ -167,7 +167,7 @@ export class TurnBasedBattleScene extends Phaser.Scene {
 
     // Center camera on battlefield
     this.cameras.main.centerOn(BATTLEFIELD_SIZE / 2, BATTLEFIELD_SIZE / 2);
-    this.cameras.main.setZoom(0.8);
+    this.cameras.main.setZoom(0.6);
   }
 
   private createPauseMenu(): void {
@@ -264,6 +264,15 @@ export class TurnBasedBattleScene extends Phaser.Scene {
       this.spawnDefaultShips();
     }
 
+    // Apply live battle state when joining a game already in progress
+    const lateJoinSnapshot = this.registry.get('lateJoinSnapshot') as BattleSnapshot | undefined;
+    const lateJoinShipId = this.registry.get('lateJoinShipId') as string | undefined;
+    if (lateJoinSnapshot) {
+      this.applyLateJoinSnapshot(lateJoinSnapshot, lateJoinShipId);
+      this.registry.remove('lateJoinSnapshot');
+      this.registry.remove('lateJoinShipId');
+    }
+
     // Create sprites for all ships
     for (const ship of this.ships.values()) {
       this.createShipSprite(ship);
@@ -280,7 +289,9 @@ export class TurnBasedBattleScene extends Phaser.Scene {
     const numFactions = config.factions.length;
     const centerX = BATTLEFIELD_SIZE / 2;
     const centerY = BATTLEFIELD_SIZE / 2;
-    const spawnRadius = 300;
+    // Deploy near opposite edges, X-Wing TMG style — factions start far apart and fly toward center.
+    // Radius scales down slightly with more factions so all starting positions stay on-screen.
+    const spawnRadius = numFactions <= 2 ? 600 : numFactions <= 3 ? 500 : 400;
     let initiativeCounter = 1;
 
     config.factions.forEach((faction, factionIndex) => {
@@ -374,6 +385,44 @@ export class TurnBasedBattleScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Apply a serialized battle snapshot to the already-spawned ship map.
+   *
+   * Called when a player joins a game that is already in progress.
+   * Updates positions, health, and stress state for each ship; re-seeds the
+   * RNG so future dice outcomes remain deterministic; transfers the claimed
+   * ship to player control.
+   *
+   * @param snapshot - Serialized state captured at the last end-of-turn boundary.
+   * @param claimedShipId - The ship ID the late joiner chose to take over.
+   */
+  private applyLateJoinSnapshot(snapshot: BattleSnapshot, claimedShipId: string | undefined): void {
+    const snapMap = this.serializer.deserialize(snapshot);
+    for (const [id, snapShip] of snapMap) {
+      const ship = this.ships.get(id);
+      if (!ship) continue;
+      ship.x = snapShip.x;
+      ship.y = snapShip.y;
+      ship.angle = snapShip.angle;
+      ship.hull = snapShip.hull;
+      ship.shields = snapShip.shields;
+      ship.isStressed = snapShip.isStressed;
+      ship.charges = snapShip.charges;
+    }
+
+    const nextTurnSeed = this.serializer.computeRngSeed(snapshot.baseSeed, snapshot.turnNumber + 1);
+    this.rng = seedrandom(String(nextTurnSeed));
+    this.baseSeed = snapshot.baseSeed;
+
+    if (!claimedShipId) return;
+    const claimedShip = this.ships.get(claimedShipId);
+    if (!claimedShip) return;
+    (claimedShip as unknown as { owner: 'player' | 'ai' }).owner = 'player';
+    this.playerShipIds = this.playerShipIds.filter((id) => id !== claimedShipId);
+    this.playerShipIds.push(claimedShipId);
+    this.enemyShipIds = this.enemyShipIds.filter((id) => id !== claimedShipId);
+  }
+
   private createShip(
     id: string,
     defId: string,
@@ -432,19 +481,27 @@ export class TurnBasedBattleScene extends Phaser.Scene {
     container.add(thruster);
     container.thruster = thruster;
 
-    // Ship body
+    // Ship body — use BootScene faction/size placeholder if available, else triangle
+    const sizeName = shipDef?.baseStats.size ?? 'small';
+    const bootKey = `ship_${ship.faction}_${sizeName}`;
     const body = this.add.graphics();
-    body.fillStyle(color, 1);
-    body.beginPath();
-    body.moveTo(0, -size / 2);
-    body.lineTo(-size / 3, size / 2);
-    body.lineTo(0, size / 3);
-    body.lineTo(size / 3, size / 2);
-    body.closePath();
-    body.fillPath();
-
-    body.lineStyle(2, 0xffffff, 0.8);
-    body.strokePath();
+    if (this.textures.exists(bootKey)) {
+      const img = this.add.image(0, 0, bootKey);
+      img.setDisplaySize(size * 1.8, size * 1.8);
+      img.setBlendMode(Phaser.BlendModes.ADD);
+      container.add(img);
+    } else {
+      body.fillStyle(color, 1);
+      body.beginPath();
+      body.moveTo(0, -size / 2);
+      body.lineTo(-size / 3, size / 2);
+      body.lineTo(0, size / 3);
+      body.lineTo(size / 3, size / 2);
+      body.closePath();
+      body.fillPath();
+      body.lineStyle(2, 0xffffff, 0.8);
+      body.strokePath();
+    }
 
     // Pilot skill indicator
     const skillText = this.add.text(0, -size / 2 - 12, `${ship.pilotSkill}`, {
@@ -1082,37 +1139,33 @@ export class TurnBasedBattleScene extends Phaser.Scene {
     if (!sprite) return;
 
     const path = generateManeuverPath(ship.x, ship.y, ship.angle, maneuver.direction, maneuver.speed);
-    const duration = 800; // Total animation time
-    const stepTime = duration / path.length;
+    const last = path.length - 1;
 
-    for (let i = 1; i < path.length; i++) {
-      const pos = path[i];
-      if (!pos) continue;
-
-      await new Promise<void>((resolve) => {
-        this.tweens.add({
-          targets: sprite,
-          x: pos.x,
-          y: pos.y,
-          angle: pos.angle,
-          duration: stepTime,
-          ease: 'Linear',
-          onComplete: () => resolve(),
-        });
+    await new Promise<void>((resolve) => {
+      const proxy = { t: 0 };
+      this.tweens.add({
+        targets: proxy,
+        t: 1,
+        duration: 800,
+        ease: 'Linear',
+        onUpdate: () => {
+          const rawIdx = proxy.t * last;
+          const lo = Math.min(Math.floor(rawIdx), last - 1);
+          const frac = rawIdx - lo;
+          const a = path[lo]!;
+          const b = path[lo + 1]!;
+          sprite.x = a.x + (b.x - a.x) * frac;
+          sprite.y = a.y + (b.y - a.y) * frac;
+          sprite.angle = a.angle + (b.angle - a.angle) * frac;
+        },
+        onComplete: () => resolve(),
       });
-    }
+    });
 
-    // Update ship state
-    const finalPos = path[path.length - 1];
-    if (finalPos) {
-      ship.x = finalPos.x;
-      ship.y = finalPos.y;
-      ship.angle = finalPos.angle;
-    }
-
-    // Wrap around battlefield
-    ship.x = ((ship.x % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
-    ship.y = ((ship.y % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
+    const finalPos = path[last]!;
+    ship.x = ((finalPos.x % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
+    ship.y = ((finalPos.y % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
+    ship.angle = finalPos.angle;
   }
 
   // ==========================================

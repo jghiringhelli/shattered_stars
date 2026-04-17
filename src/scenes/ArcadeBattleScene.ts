@@ -637,11 +637,17 @@ export class ArcadeBattleScene extends Phaser.Scene {
     container.add(thruster);
     container.thruster = thruster;
 
-    // Ship body — use PNG sprite if loaded, else draw faction-colored triangle
+    // Ship body — use individual PNG if loaded; fall back to faction/size placeholder from BootScene
     const spriteKey = `ship_${ship.definitionId}`;
+    const fallbackKey = `ship_${ship.faction}_${shipDef?.baseStats.size ?? 'small'}`;
+    const textureKey = this.textures.exists(spriteKey)
+      ? spriteKey
+      : this.textures.exists(fallbackKey)
+        ? fallbackKey
+        : null;
     let body: Phaser.GameObjects.Graphics;
-    if (this.textures.exists(spriteKey)) {
-      const img = this.add.image(0, 0, spriteKey);
+    if (textureKey) {
+      const img = this.add.image(0, 0, textureKey);
       img.setDisplaySize(size * 1.8, size * 1.8);
       // ADD blend mode renders dark backgrounds as transparent
       img.setBlendMode(Phaser.BlendModes.ADD);

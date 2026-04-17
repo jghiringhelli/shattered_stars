@@ -83,6 +83,9 @@ export class LobbyScene extends Phaser.Scene {
     // Connect in local simulation mode (no URL = no server required)
     networkService.connect();
 
+    // Expose singleton via registry for E2E test access
+    this.game.registry.set('networkService', networkService);
+
     this.showBrowserView();
   }
 
@@ -614,14 +617,14 @@ export class LobbyScene extends Phaser.Scene {
 
   private createRoom(): void {
     const name = `Game ${Math.floor(Math.random() * 1000)}`;
-    networkService.createRoom(name, 4, 'continuous');
+    networkService.createRoom(name, 4, 'turn_based');
   }
 
   /** Prompt the user for a server URL and reconnect in online mode. */
   private promptOnlineConnect(): void {
     const url = window.prompt(
       'Enter server WebSocket URL:',
-      this.serverUrl ?? 'ws://192.168.1.100:8080'
+      this.serverUrl ?? ''
     );
     if (url === null) return; // cancelled
     this.serverUrl = url.trim() || null;
@@ -712,7 +715,7 @@ export class LobbyScene extends Phaser.Scene {
     this.registry.set('battleConfig', {
       factions,
       gameMode: this.currentRoom.gameMode,
-      pointLimit: 200,
+      pointLimit: (this.registry.get('onlinePointLimit') as number | undefined) ?? 200,
       seed: resolvedSeed,
       isOnlineMode,
     });

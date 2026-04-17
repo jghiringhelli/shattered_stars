@@ -600,20 +600,37 @@ export class DogfightScene extends Phaser.Scene {
     container.shipId = ship.id;
 
     const color = FACTION_COLORS[ship.faction] ?? 0xffffff;
-    const size = SHIP_SIZES.medium; // Slightly larger for dogfight visibility
+    const shipDef = getShipDefinition(ship.definitionId);
+    const sizeName = shipDef?.baseStats.size ?? 'medium';
+    const size = SHIP_SIZES[sizeName] ?? SHIP_SIZES.medium;
 
-    const body = this.add.graphics();
-    body.fillStyle(color, 1);
-    body.beginPath();
-    body.moveTo(0, -size / 2);
-    body.lineTo(-size / 3, size / 2);
-    body.lineTo(0, size / 3);
-    body.lineTo(size / 3, size / 2);
-    body.closePath();
-    body.fillPath();
-    body.lineStyle(2, 0xffffff, 0.9);
-    body.strokePath();
-    container.add(body);
+    const indivKey = `ship_${ship.definitionId}`;
+    const bootKey = `ship_${ship.faction}_${sizeName}`;
+    const textureKey = this.textures.exists(indivKey)
+      ? indivKey
+      : this.textures.exists(bootKey)
+        ? bootKey
+        : null;
+
+    if (textureKey) {
+      const img = this.add.image(0, 0, textureKey);
+      img.setDisplaySize(size * 1.8, size * 1.8);
+      img.setBlendMode(Phaser.BlendModes.ADD);
+      container.add(img);
+    } else {
+      const body = this.add.graphics();
+      body.fillStyle(color, 1);
+      body.beginPath();
+      body.moveTo(0, -size / 2);
+      body.lineTo(-size / 3, size / 2);
+      body.lineTo(0, size / 3);
+      body.lineTo(size / 3, size / 2);
+      body.closePath();
+      body.fillPath();
+      body.lineStyle(2, 0xffffff, 0.9);
+      body.strokePath();
+      container.add(body);
+    }
 
     container.setAngle(ship.angle);
     container.setDepth(10);
