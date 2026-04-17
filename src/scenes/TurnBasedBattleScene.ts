@@ -72,6 +72,7 @@ interface ShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
   shipBody: Phaser.GameObjects.Graphics;
   thruster: Phaser.GameObjects.Graphics;
+  stressIndicator: Phaser.GameObjects.Text;
 }
 
 export class TurnBasedBattleScene extends Phaser.Scene {
@@ -511,6 +512,13 @@ export class TurnBasedBattleScene extends Phaser.Scene {
     skillText.setOrigin(0.5, 0.5);
     container.add(skillText);
 
+    // Stress indicator — visible only when ship is stressed
+    const stressIndicator = this.add.text(0, size / 2 + 14, '⚠', {
+      fontSize: '14px', color: '#ff8800',
+    }).setOrigin(0.5, 0.5).setVisible(ship.isStressed);
+    container.add(stressIndicator);
+    container.stressIndicator = stressIndicator;
+
     container.add(body);
     container.shipBody = body;
 
@@ -690,18 +698,30 @@ export class TurnBasedBattleScene extends Phaser.Scene {
     // Create dial background
     const bg = this.add.graphics();
     bg.fillStyle(0x000000, 0.9);
-    bg.fillRoundedRect(10, 80, 200, 400, 10);
-    bg.lineStyle(2, 0x444444);
-    bg.strokeRoundedRect(10, 80, 200, 400, 10);
+    bg.fillRoundedRect(10, 80, 200, 420, 10);
+    bg.lineStyle(2, ship.isStressed ? 0xff8800 : 0x444444);
+    bg.strokeRoundedRect(10, 80, 200, 420, 10);
     this.dialPanel.add(bg);
 
     // Title
     const title = this.add.text(110, 95, 'MANEUVER DIAL', {
       font: 'bold 14px monospace',
       color: '#ffffff',
-    });
-    title.setOrigin(0.5, 0);
+    }).setOrigin(0.5, 0);
     this.dialPanel.add(title);
+
+    // Stress indicator
+    if (ship.isStressed) {
+      const stressChip = this.add.graphics();
+      stressChip.fillStyle(0xff6600, 0.85);
+      stressChip.fillRoundedRect(18, 113, 184, 18, 4);
+      this.dialPanel.add(stressChip);
+      this.dialPanel.add(
+        this.add.text(110, 122, '⚠  STRESSED — avoid red maneuvers', {
+          font: 'bold 10px monospace', color: '#ffffff',
+        }).setOrigin(0.5, 0.5),
+      );
+    }
 
     // Group maneuvers by speed
     const bySpeed: Map<number, ManeuverDefinition[]> = new Map();
@@ -711,50 +731,66 @@ export class TurnBasedBattleScene extends Phaser.Scene {
       bySpeed.set(m.speed, speedManeuvers);
     }
 
-    let y = 125;
+    let y = ship.isStressed ? 142 : 125;
     const speeds = [...bySpeed.keys()].sort((a, b) => b - a); // High to low
 
     for (const speed of speeds) {
       const maneuvers = bySpeed.get(speed)!;
 
-      // Speed label
       const speedLabel = this.add.text(25, y, `Speed ${speed}`, {
-        font: '12px monospace',
-        color: '#888888',
+        font: '12px monospace', color: '#888888',
       });
       this.dialPanel.add(speedLabel);
       y += 20;
 
-      // Maneuver buttons
       let x = 25;
       for (const maneuver of maneuvers) {
-        const btn = this.createManeuverButton(x, y, maneuver, shipId);
+        const btn = this.createManeuverButton(x, y, maneuver, shipId, ship.isStressed);
         this.dialPanel.add(btn);
         x += 35;
-        if (x > 180) {
-          x = 25;
-          y += 30;
-        }
+        if (x > 180) { x = 25; y += 30; }
       }
       y += 35;
     }
 
+    this.addDialLegend(y);
     this.dialPanel.setVisible(true);
+  }
+
+  /** Render the green/white/red difficulty legend at the bottom of the dial panel. */
+  private addDialLegend(y: number): void {
+    const entries: Array<{ color: number; label: string }> = [
+      { color: 0x00cc44, label: 'clears stress' },
+      { color: 0xffffff, label: 'neutral' },
+      { color: 0xff3333, label: 'adds stress' },
+    ];
+    entries.forEach(({ color, label }, i) => {
+      const chip = this.add.graphics();
+      chip.fillStyle(color, 0.85);
+      chip.fillCircle(22, y + 8 + i * 18, 5);
+      this.dialPanel.add(chip);
+      this.dialPanel.add(
+        this.add.text(32, y + i * 18, label, { font: '10px monospace', color: '#aaaaaa' }),
+      );
+    });
   }
 
   private createManeuverButton(
     x: number,
     y: number,
     maneuver: ManeuverDefinition,
-    shipId: string
+    shipId: string,
+    isStressed: boolean,
   ): Phaser.GameObjects.Container {
     const container = this.add.container(x, y);
 
     const color = getDifficultyColor(maneuver.difficulty);
     const symbol = this.getManeuverSymbol(maneuver.direction);
+    const isRedWhileStressed = isStressed && maneuver.difficulty === 'red';
+    const baseAlpha = isRedWhileStressed ? 0.15 : 0.3;
 
     const bg = this.add.graphics();
-    bg.fillStyle(color, 0.3);
+    bg.fillStyle(color, baseAlpha);
     bg.fillRoundedRect(0, 0, 30, 25, 5);
     bg.lineStyle(1, color);
     bg.strokeRoundedRect(0, 0, 30, 25, 5);
@@ -763,38 +799,36 @@ export class TurnBasedBattleScene extends Phaser.Scene {
     const text = this.add.text(15, 12, symbol, {
       font: '14px monospace',
       color: `#${color.toString(16).padStart(6, '0')}`,
-    });
-    text.setOrigin(0.5, 0.5);
+    }).setOrigin(0.5, 0.5).setAlpha(isRedWhileStressed ? 0.4 : 1);
     container.add(text);
 
-    // Make interactive
     container.setSize(30, 25);
     container.setInteractive({ useHandCursor: true });
 
     container.on('pointerover', () => {
       bg.clear();
-      bg.fillStyle(color, 0.6);
+      bg.fillStyle(color, isRedWhileStressed ? 0.25 : 0.6);
       bg.fillRoundedRect(0, 0, 30, 25, 5);
       bg.lineStyle(2, color);
       bg.strokeRoundedRect(0, 0, 30, 25, 5);
-
-      // Show preview
-      this.showManeuverPreview(shipId, maneuver);
+      if (isRedWhileStressed) {
+        this.instructionText.setText('⚠ Already stressed! Picking red adds more stress — choose bank instead.');
+      } else {
+        this.showManeuverPreview(shipId, maneuver);
+      }
     });
 
     container.on('pointerout', () => {
       bg.clear();
-      bg.fillStyle(color, 0.3);
+      bg.fillStyle(color, baseAlpha);
       bg.fillRoundedRect(0, 0, 30, 25, 5);
       bg.lineStyle(1, color);
       bg.strokeRoundedRect(0, 0, 30, 25, 5);
-
       this.hideManeuverPreview();
+      this.updateInstructions();
     });
 
-    container.on('pointerdown', () => {
-      this.selectManeuver(shipId, maneuver);
-    });
+    container.on('pointerdown', () => this.selectManeuver(shipId, maneuver));
 
     return container;
   }
@@ -1129,9 +1163,16 @@ export class TurnBasedBattleScene extends Phaser.Scene {
     } else if (planned.maneuver.difficulty === 'green' && ship.isStressed) {
       ship.isStressed = false;
     }
+    this.updateStressIndicator(ship);
 
     // Brief pause between activations
     await this.delay(300);
+  }
+
+  /** Sync the ⚠ stress indicator on the ship's sprite with its current stress state. */
+  private updateStressIndicator(ship: BattleShip): void {
+    const sprite = this.shipSprites.get(ship.id);
+    if (sprite?.stressIndicator) sprite.stressIndicator.setVisible(ship.isStressed);
   }
 
   private async animateManeuver(ship: BattleShip, maneuver: ManeuverDefinition): Promise<void> {
