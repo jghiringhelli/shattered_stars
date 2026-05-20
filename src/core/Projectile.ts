@@ -40,7 +40,7 @@ export function createProjectile(
     x,
     y,
     angle,
-    speed: isHoming ? 450 : 600, // Missiles slightly slower than lasers
+    speed: isHoming ? 520 : 600, // Missiles can't be outrun — evade with barrel roll or K-turn
     damage,
     ownerId,
     ownerFaction,

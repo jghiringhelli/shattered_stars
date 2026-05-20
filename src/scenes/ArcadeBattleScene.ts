@@ -82,9 +82,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     z: Phaser.Input.Keyboard.Key;
     shift: Phaser.Input.Keyboard.Key;
     ctrl: Phaser.Input.Keyboard.Key;
-    one: Phaser.Input.Keyboard.Key;
-    two: Phaser.Input.Keyboard.Key;
-    three: Phaser.Input.Keyboard.Key;
+    tab: Phaser.Input.Keyboard.Key;
   };
 
   // HUD
@@ -112,6 +110,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   // Ordnance HUD (up to 3 slots)
   private ordnanceHudTexts: Phaser.GameObjects.Text[] = [];
+  /** -1 = primary laser; 0/1/2 = ordnance slot index */
+  private selectedWeaponSlot = -1;
 
   constructor() {
     super({ key: "ArcadeBattleScene" });
@@ -252,10 +252,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
       z: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.Z),
       shift: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
       ctrl: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL),
-      one: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ONE),
-      two: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.TWO),
-      three: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.THREE),
+      tab: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.TAB),
     };
+
+    // Prevent Tab from moving browser focus away from the canvas
+    this.input.keyboard!.on("keydown-TAB", (e: KeyboardEvent) =>
+      e.preventDefault(),
+    );
 
     this.input.keyboard!.on("keydown-ESC", () => {
       if (this.gameEnded) return;
@@ -387,24 +390,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
       ship.control = processCommand(ship, ship.control, "kturn");
     }
 
-    // Ordnance (keys 1/2/3) — JustDown prevents rapid repeat
-    if (this.framesAlive > 5) {
-      if (Phaser.Input.Keyboard.JustDown(this.keys.one))
-        this.fireOrdnance(ship, 0);
-      if (Phaser.Input.Keyboard.JustDown(this.keys.two))
-        this.fireOrdnance(ship, 1);
-      if (Phaser.Input.Keyboard.JustDown(this.keys.three))
-        this.fireOrdnance(ship, 2);
+    // Cycle weapon selection
+    if (Phaser.Input.Keyboard.JustDown(this.keys.tab)) {
+      this.selectNextWeapon(ship);
     }
 
-    // Fire — skip first few frames to prevent key-bleed from menu navigation
-    if (
-      this.framesAlive > 5 &&
-      this.keys.space.isDown &&
-      canFire(ship.control)
-    ) {
-      ship.control = processCommand(ship, ship.control, "fire");
-      this.fireWeapon(ship);
+    // Fire selected weapon — skip first few frames to prevent key-bleed from menu navigation
+    if (this.framesAlive > 5 && this.keys.space.isDown) {
+      this.fireSelectedWeapon(ship);
     }
   }
 
@@ -542,6 +535,62 @@ export class ArcadeBattleScene extends Phaser.Scene {
         }
       }
       // Movement and cooldowns are already applied each frame by updateShips()
+    }
+  }
+
+  /**
+   * Advances weapon selection: laser → slot 0 → slot 1 → … → laser.
+   * No-op when the ship has no ordnance.
+   *
+   * @param ship - The player ship.
+   */
+  private selectNextWeapon(ship: ArcadeShip): void {
+    if (ship.ordnanceSlots.length === 0) return;
+    this.selectedWeaponSlot =
+      this.selectedWeaponSlot >= ship.ordnanceSlots.length - 1
+        ? -1
+        : this.selectedWeaponSlot + 1;
+  }
+
+  /**
+   * Fires the currently selected weapon.
+   * If the selected ordnance cannot fire (cooldown / no charges), cycles
+   * forward through remaining slots; falls back to the primary laser if
+   * nothing is ready.
+   *
+   * @param ship - The player ship.
+   */
+  private fireSelectedWeapon(ship: ArcadeShip): void {
+    if (this.selectedWeaponSlot < 0) {
+      if (canFire(ship.control)) {
+        ship.control = processCommand(ship, ship.control, "fire");
+        this.fireWeapon(ship);
+      }
+      return;
+    }
+
+    const slot = ship.ordnanceSlots[this.selectedWeaponSlot];
+    if (slot && canFireOrdnance(slot)) {
+      this.fireOrdnance(ship, this.selectedWeaponSlot);
+      return;
+    }
+
+    // Selected ordnance can't fire — check remaining slots in forward order
+    const count = ship.ordnanceSlots.length;
+    for (let offset = 1; offset <= count; offset++) {
+      const idx = (this.selectedWeaponSlot + offset) % count;
+      if (canFireOrdnance(ship.ordnanceSlots[idx]!)) {
+        this.selectedWeaponSlot = idx;
+        this.fireOrdnance(ship, idx);
+        return;
+      }
+    }
+
+    // Nothing ready — fall back to laser
+    this.selectedWeaponSlot = -1;
+    if (canFire(ship.control)) {
+      ship.control = processCommand(ship, ship.control, "fire");
+      this.fireWeapon(ship);
     }
   }
 
@@ -1081,7 +1130,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       .text(
         this.scale.width / 2,
         this.scale.height - 30,
-        "↑↓ Speed | ←→ Turn | Z K-Turn | SPACE Fire | 1/2/3 Ordnance",
+        "↑↓ Speed | ←→ Turn | Z K-Turn | TAB Weapon | SPACE Fire",
         { font: "14px monospace", color: "#888888" },
       )
       .setOrigin(0.5, 1)
@@ -1124,7 +1173,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     );
 
     this.updateTurnIndicator();
-    this.updateOrdnanceHUD(ship);
+    this.updateWeaponSelectorHUD(ship);
   }
 
   /**
@@ -1133,17 +1182,28 @@ export class ArcadeBattleScene extends Phaser.Scene {
    *
    * @param ship - The player ship whose ordnance slots are displayed.
    */
-  private updateOrdnanceHUD(ship: ArcadeShip): void {
+  /**
+   * Draws the weapon selector strip bottom-right.
+   * Laser is always listed first; ordnance slots follow.
+   * The selected entry shows a ► cursor and bright colour.
+   * Lazy-initialises Text nodes on first call when ordnance exists.
+   *
+   * @param ship - The player ship.
+   */
+  private updateWeaponSelectorHUD(ship: ArcadeShip): void {
     if (ship.ordnanceSlots.length === 0) return;
 
-    // Build text nodes on first encounter
+    // One text per entry: index 0 = laser, 1..n = ordnance slots
+    const totalEntries = 1 + ship.ordnanceSlots.length;
     if (this.ordnanceHudTexts.length === 0) {
-      for (let i = 0; i < ship.ordnanceSlots.length; i++) {
+      for (let i = 0; i < totalEntries; i++) {
         const t = this.add
-          .text(this.scale.width - 10, this.scale.height - 60 - i * 26, "", {
-            font: "14px monospace",
-            color: "#ffaa00",
-          })
+          .text(
+            this.scale.width - 10,
+            this.scale.height - 40 - (totalEntries - 1 - i) * 26,
+            "",
+            { font: "13px monospace", color: "#ffffff" },
+          )
           .setOrigin(1, 1)
           .setScrollFactor(0)
           .setDepth(1000);
@@ -1151,18 +1211,28 @@ export class ArcadeBattleScene extends Phaser.Scene {
       }
     }
 
+    // Laser row
+    const laserSelected = this.selectedWeaponSlot < 0;
+    this.ordnanceHudTexts[0]
+      ?.setText(`${laserSelected ? "►" : " "} LASER`)
+      .setColor(laserSelected ? "#ffff44" : "#666644");
+
+    // Ordnance rows
     for (let i = 0; i < ship.ordnanceSlots.length; i++) {
       const slot = ship.ordnanceSlots[i]!;
-      const t = this.ordnanceHudTexts[i];
+      const t = this.ordnanceHudTexts[i + 1];
       if (!t) continue;
+      const selected = this.selectedWeaponSlot === i;
+      const ready = canFireOrdnance(slot);
       const cdSec =
         slot.cooldownRemaining > 0
           ? ` ${Math.ceil(slot.cooldownRemaining / 1000)}s`
           : "";
       const pips =
         "■".repeat(slot.charges) + "□".repeat(slot.maxCharges - slot.charges);
-      t.setText(`[${i + 1}] ${slot.name} ${pips}${cdSec}`);
-      t.setColor(canFireOrdnance(slot) ? "#ffaa00" : "#664400");
+      t.setText(
+        `${selected ? "►" : " "} ${slot.name} ${pips}${cdSec}`,
+      ).setColor(selected ? "#ffaa00" : ready ? "#886600" : "#443300");
     }
   }
 
