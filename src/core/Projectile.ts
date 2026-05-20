@@ -14,6 +14,12 @@ export interface Projectile {
   ownerFaction: string;
   lifetime: number; // ms remaining
   maxLifetime: number;
+  /** If true, steers toward homingTargetId each frame */
+  isHoming: boolean;
+  /** ID of the ship this projectile is tracking (null = fly straight) */
+  homingTargetId: string | null;
+  /** Degrees per second the projectile can turn toward its target */
+  homingTurnRate: number;
 }
 
 let projectileIdCounter = 0;
@@ -24,28 +30,54 @@ export function createProjectile(
   angle: number,
   ownerId: string,
   ownerFaction: string,
-  damage: number = 1
+  damage: number = 1,
+  isHoming: boolean = false,
+  homingTargetId: string | null = null,
+  homingTurnRate: number = 0,
 ): Projectile {
   return {
     id: `proj_${projectileIdCounter++}`,
     x,
     y,
     angle,
-    speed: 600, // Fast!
+    speed: isHoming ? 450 : 600, // Missiles slightly slower than lasers
     damage,
     ownerId,
     ownerFaction,
-    lifetime: 2000, // 2 seconds
-    maxLifetime: 2000,
+    lifetime: isHoming ? 4000 : 2000, // Missiles travel longer
+    maxLifetime: isHoming ? 4000 : 2000,
+    isHoming,
+    homingTargetId,
+    homingTurnRate,
   };
 }
 
-export function updateProjectile(projectile: Projectile, deltaMs: number): Projectile {
-  const rad = (projectile.angle - 90) * (Math.PI / 180);
+export function updateProjectile(
+  projectile: Projectile,
+  deltaMs: number,
+  targetX?: number,
+  targetY?: number,
+): Projectile {
+  let angle = projectile.angle;
+
+  // Homing steering: rotate toward target
+  if (projectile.isHoming && targetX !== undefined && targetY !== undefined) {
+    const dx = targetX - projectile.x;
+    const dy = targetY - projectile.y;
+    const desiredAngle =
+      (Math.atan2(dy, dx) * (180 / Math.PI) + 90 + 360) % 360;
+    const diff = ((desiredAngle - angle + 540) % 360) - 180; // -180..+180
+    const maxTurn = projectile.homingTurnRate * (deltaMs / 1000);
+    angle =
+      (angle + Math.sign(diff) * Math.min(Math.abs(diff), maxTurn) + 360) % 360;
+  }
+
+  const rad = (angle - 90) * (Math.PI / 180);
   const distance = (projectile.speed * deltaMs) / 1000;
 
   return {
     ...projectile,
+    angle,
     x: projectile.x + Math.cos(rad) * distance,
     y: projectile.y + Math.sin(rad) * distance,
     lifetime: projectile.lifetime - deltaMs,
@@ -61,7 +93,7 @@ export function checkProjectileHit(
   targetX: number,
   targetY: number,
   targetRadius: number,
-  targetFaction: string
+  targetFaction: string,
 ): boolean {
   // Don't hit own faction
   if (projectile.ownerFaction === targetFaction) return false;

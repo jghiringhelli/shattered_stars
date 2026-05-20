@@ -3,9 +3,9 @@
  * Real-time dogfighting with direct ship control
  */
 
-import Phaser from 'phaser';
-import { ShipStatCard } from '../ui/ShipStatCard';
-import type { ShipState } from '../core/types';
+import Phaser from "phaser";
+import { ShipStatCard } from "../ui/ShipStatCard";
+import type { ShipState } from "../core/types";
 import {
   createControlState,
   updateManeuver,
@@ -16,25 +16,33 @@ import {
   canKTurn,
   type ShipControlState,
   type FlightCommand,
-} from '../core/ArcadeControls';
+} from "../core/ArcadeControls";
 import {
   createProjectile,
   updateProjectile,
   isProjectileAlive,
   checkProjectileHit,
   type Projectile,
-} from '../core/Projectile';
-import { getShipDefinition } from '../data/ShipDefinitions';
-import { distance } from '../systems/MovementSystem';
+} from "../core/Projectile";
+import {
+  extractOrdnanceSlots,
+  tickOrdnanceCooldowns,
+  canFireOrdnance,
+  consumeOrdnanceCharge,
+  type ArcadeOrdnanceSlot,
+} from "../arcade/ArcadeOrdnance";
+import { getShipDefinition } from "../data/ShipDefinitions";
+import { distance } from "../systems/MovementSystem";
 import {
   BATTLEFIELD_SIZE,
   FACTION_COLORS,
   SHIP_SIZES,
   type FactionId,
-} from '../config';
-import { HealthBar } from '../ui/HealthBar';
-import { Minimap, type MinimapShip } from '../ui/Minimap';
-import { renderBattleStarfield } from '../rendering/Starfield';
+} from "../config";
+import { HealthBar } from "../ui/HealthBar";
+import { Minimap, type MinimapShip } from "../ui/Minimap";
+import { renderBattleStarfield } from "../rendering/Starfield";
+import { applyLoadoutEffects } from "../systems/BattleHelpers";
 
 interface ArcadeShip extends ShipState {
   control: ShipControlState;
@@ -42,6 +50,8 @@ interface ArcadeShip extends ShipState {
   targetId: string | null;
   /** Milliseconds remaining before the AI re-evaluates its target. */
   aiDecisionTimer: number;
+  /** Secondary weapon slots (1/2/3 keys). */
+  ordnanceSlots: ArcadeOrdnanceSlot[];
 }
 
 interface ShipSprite extends Phaser.GameObjects.Container {
@@ -55,7 +65,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private ships: Map<string, ArcadeShip> = new Map();
   private shipSprites: Map<string, ShipSprite> = new Map();
   private projectiles: Projectile[] = [];
-  private projectileSprites: Map<string, Phaser.GameObjects.Graphics> = new Map();
+  private projectileSprites: Map<string, Phaser.GameObjects.Graphics> =
+    new Map();
   private healthBars: Map<string, HealthBar> = new Map();
   private minimap: Minimap | undefined;
   private cameraShakeEnabled = true;
@@ -71,6 +82,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
     z: Phaser.Input.Keyboard.Key;
     shift: Phaser.Input.Keyboard.Key;
     ctrl: Phaser.Input.Keyboard.Key;
+    one: Phaser.Input.Keyboard.Key;
+    two: Phaser.Input.Keyboard.Key;
+    three: Phaser.Input.Keyboard.Key;
   };
 
   // HUD
@@ -81,7 +95,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private instructionsText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
 
-  private playerFaction: FactionId = 'free_confederation';
+  private playerFaction: FactionId = "free_confederation";
   private score = 0;
   private lastTime = 0;
   private gameEnded = false;
@@ -96,14 +110,28 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private maneuverText!: Phaser.GameObjects.Text;
   private turnGauge!: Phaser.GameObjects.Graphics;
 
+  // Ordnance HUD (up to 3 slots)
+  private ordnanceHudTexts: Phaser.GameObjects.Text[] = [];
+
   constructor() {
-    super({ key: 'ArcadeBattleScene' });
+    super({ key: "ArcadeBattleScene" });
   }
 
   preload(): void {
-    const battleConfig = this.registry.get('battleConfig') as {
-      factions: Array<{ factionId: FactionId; controller: 'player' | 'ai'; ships: string[] }>;
-    } | undefined;
+    const battleConfig = this.registry.get("battleConfig") as
+      | {
+          factions: Array<{
+            factionId: FactionId;
+            controller: "player" | "ai";
+            ships: string[];
+          }>;
+        }
+      | undefined;
+
+    // Optional ship PNGs — missing files fall back to faction+size placeholders in createShipSprite().
+    this.load.on("loaderror", (_file: Phaser.Loader.File) => {
+      /* expected for ungenerated sprites */
+    });
 
     const loadIfMissing = (id: string): void => {
       const key = `ship_${id}`;
@@ -117,16 +145,20 @@ export class ArcadeBattleScene extends Phaser.Scene {
         for (const shipId of slot.ships) loadIfMissing(shipId);
       }
     } else {
-      loadIfMissing('confed_sparrow');
-      loadIfMissing('confed_wasp');
-      loadIfMissing('terran_gladius');
-      loadIfMissing('terran_viper');
+      loadIfMissing("confed_sparrow");
+      loadIfMissing("confed_wasp");
+      loadIfMissing("terran_gladius");
+      loadIfMissing("terran_viper");
     }
   }
 
   create(): void {
-    const savedSettings = this.registry.get('settings') as
-      | { cameraShake: boolean; showDamageNumbers: boolean; showMinimap: boolean }
+    const savedSettings = this.registry.get("settings") as
+      | {
+          cameraShake: boolean;
+          showDamageNumbers: boolean;
+          showMinimap: boolean;
+        }
       | undefined;
     this.cameraShakeEnabled = savedSettings?.cameraShake ?? true;
     this.damageNumbersEnabled = savedSettings?.showDamageNumbers ?? true;
@@ -192,7 +224,18 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.checkCollisions();
     this.updateSprites();
     this.updateHUD();
+    this.updateCameraZoom();
     this.checkVictory();
+  }
+
+  /** Pull camera back slightly at high speed for spatial awareness, as in classic space sims. */
+  private updateCameraZoom(): void {
+    const ship = this.ships.get(this.playerShipId!);
+    if (!ship) return;
+    const speedRatio = (ship.control.speed - 1) / 4; // 0 at speed 1 → 1 at speed 5
+    const targetZoom = Phaser.Math.Linear(1.0, 0.78, speedRatio);
+    const current = this.cameras.main.zoom;
+    this.cameras.main.setZoom(current + (targetZoom - current) * 0.03);
   }
 
   private createStarfield(): void {
@@ -209,9 +252,12 @@ export class ArcadeBattleScene extends Phaser.Scene {
       z: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.Z),
       shift: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
       ctrl: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL),
+      one: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ONE),
+      two: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.TWO),
+      three: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.THREE),
     };
 
-    this.input.keyboard!.on('keydown-ESC', () => {
+    this.input.keyboard!.on("keydown-ESC", () => {
       if (this.gameEnded) return;
       if (this.isPaused) {
         this.isPaused = false;
@@ -227,7 +273,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private showPauseOverlay(): void {
     const cx = this.scale.width / 2;
     const cy = this.scale.height / 2;
-    this.pauseOverlay = this.add.container(0, 0).setDepth(3000).setScrollFactor(0);
+    this.pauseOverlay = this.add
+      .container(0, 0)
+      .setDepth(3000)
+      .setScrollFactor(0);
 
     const dim = this.add.graphics();
     dim.fillStyle(0x000000, 0.65);
@@ -237,30 +286,59 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const panel = this.add.graphics();
     panel.fillStyle(0x0a1a2e, 0.98);
     panel.lineStyle(2, 0x2244aa, 1);
-    panel.fillRoundedRect(cx - 150, cy - 90, 300, 180, 12);
-    panel.strokeRoundedRect(cx - 150, cy - 90, 300, 180, 12);
+    panel.fillRoundedRect(cx - 150, cy - 110, 300, 250, 12);
+    panel.strokeRoundedRect(cx - 150, cy - 110, 300, 250, 12);
     this.pauseOverlay.add(panel);
 
-    this.pauseOverlay.add(this.add.text(cx, cy - 55, 'PAUSED', {
-      font: 'bold 32px Arial', color: '#ffffff',
-    }).setOrigin(0.5));
+    this.pauseOverlay.add(
+      this.add
+        .text(cx, cy - 72, "PAUSED", {
+          font: "bold 32px Arial",
+          color: "#ffffff",
+        })
+        .setOrigin(0.5),
+    );
 
-    const resumeBtn = this.add.text(cx, cy + 5, 'RESUME', {
-      font: 'bold 22px Arial', color: '#44ff88',
-      backgroundColor: '#224422', padding: { x: 24, y: 10 },
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    resumeBtn.on('pointerdown', () => {
+    const resumeBtn = this.add
+      .text(cx, cy - 20, "RESUME", {
+        font: "bold 22px Arial",
+        color: "#44ff88",
+        backgroundColor: "#224422",
+        padding: { x: 24, y: 10 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    resumeBtn.on("pointerdown", () => {
       this.isPaused = false;
       this.pauseOverlay?.destroy();
       this.pauseOverlay = null;
     });
     this.pauseOverlay.add(resumeBtn);
 
-    const quitBtn = this.add.text(cx, cy + 55, 'QUIT TO MENU', {
-      font: 'bold 18px Arial', color: '#ff4444',
-      backgroundColor: '#331111', padding: { x: 20, y: 8 },
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    quitBtn.on('pointerdown', () => this.scene.start('MainMenuScene'));
+    const settingsBtn = this.add
+      .text(cx, cy + 35, "SETTINGS", {
+        font: "bold 18px Arial",
+        color: "#88aaff",
+        backgroundColor: "#112244",
+        padding: { x: 24, y: 8 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    settingsBtn.on("pointerdown", () => {
+      this.scene.launch("SettingsScene", { returnScene: "ArcadeBattleScene" });
+    });
+    this.pauseOverlay.add(settingsBtn);
+
+    const quitBtn = this.add
+      .text(cx, cy + 85, "QUIT TO MENU", {
+        font: "bold 18px Arial",
+        color: "#ff4444",
+        backgroundColor: "#331111",
+        padding: { x: 20, y: 8 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    quitBtn.on("pointerdown", () => this.scene.start("MainMenuScene"));
     this.pauseOverlay.add(quitBtn);
   }
 
@@ -270,40 +348,62 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
     // Speed control (discrete steps, X-Wing style)
     if (Phaser.Input.Keyboard.JustDown(this.keys.up)) {
-      ship.control = processCommand(ship, ship.control, 'thrust_increase');
+      ship.control = processCommand(ship, ship.control, "thrust_increase");
     }
     if (Phaser.Input.Keyboard.JustDown(this.keys.down)) {
-      ship.control = processCommand(ship, ship.control, 'thrust_decrease');
+      ship.control = processCommand(ship, ship.control, "thrust_decrease");
     }
 
     // Smooth turning with angular acceleration/deceleration
     const MAX_ANG_VEL = 160; // degrees per second at full deflection
-    const ACCEL      = 480; // degrees per second squared
+    const ACCEL = 480; // degrees per second squared
     const dt = deltaMs / 1000;
 
     if (this.keys.left.isDown) {
-      this.playerAngularVelocity = Math.max(-MAX_ANG_VEL, this.playerAngularVelocity - ACCEL * dt);
+      this.playerAngularVelocity = Math.max(
+        -MAX_ANG_VEL,
+        this.playerAngularVelocity - ACCEL * dt,
+      );
     } else if (this.keys.right.isDown) {
-      this.playerAngularVelocity = Math.min(MAX_ANG_VEL, this.playerAngularVelocity + ACCEL * dt);
+      this.playerAngularVelocity = Math.min(
+        MAX_ANG_VEL,
+        this.playerAngularVelocity + ACCEL * dt,
+      );
     } else {
       const decel = ACCEL * 2 * dt;
       if (Math.abs(this.playerAngularVelocity) <= decel) {
         this.playerAngularVelocity = 0;
       } else {
-        this.playerAngularVelocity -= Math.sign(this.playerAngularVelocity) * decel;
+        this.playerAngularVelocity -=
+          Math.sign(this.playerAngularVelocity) * decel;
       }
     }
 
-    ship.angle = ((ship.angle + this.playerAngularVelocity * dt) % 360 + 360) % 360;
+    ship.angle =
+      (((ship.angle + this.playerAngularVelocity * dt) % 360) + 360) % 360;
 
     // K-turn (180 flip)
     if (Phaser.Input.Keyboard.JustDown(this.keys.z)) {
-      ship.control = processCommand(ship, ship.control, 'kturn');
+      ship.control = processCommand(ship, ship.control, "kturn");
+    }
+
+    // Ordnance (keys 1/2/3) — JustDown prevents rapid repeat
+    if (this.framesAlive > 5) {
+      if (Phaser.Input.Keyboard.JustDown(this.keys.one))
+        this.fireOrdnance(ship, 0);
+      if (Phaser.Input.Keyboard.JustDown(this.keys.two))
+        this.fireOrdnance(ship, 1);
+      if (Phaser.Input.Keyboard.JustDown(this.keys.three))
+        this.fireOrdnance(ship, 2);
     }
 
     // Fire — skip first few frames to prevent key-bleed from menu navigation
-    if (this.framesAlive > 5 && this.keys.space.isDown && canFire(ship.control)) {
-      ship.control = processCommand(ship, ship.control, 'fire');
+    if (
+      this.framesAlive > 5 &&
+      this.keys.space.isDown &&
+      canFire(ship.control)
+    ) {
+      ship.control = processCommand(ship, ship.control, "fire");
       this.fireWeapon(ship);
     }
   }
@@ -314,6 +414,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
       // Update cooldowns
       ship.control = updateCooldowns(ship.control, deltaMs);
+      tickOrdnanceCooldowns(ship.ordnanceSlots, deltaMs);
 
       // Update maneuver
       const { control, position } = updateManeuver(ship.control, deltaMs);
@@ -331,8 +432,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
       }
 
       // Wrap around battlefield
-      ship.x = ((ship.x % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
-      ship.y = ((ship.y % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
+      ship.x =
+        ((ship.x % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
+      ship.y =
+        ((ship.y % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
     }
   }
 
@@ -340,11 +443,24 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const alive: Projectile[] = [];
 
     for (const proj of this.projectiles) {
-      const updated = updateProjectile(proj, deltaMs);
+      let targetX: number | undefined;
+      let targetY: number | undefined;
+      if (proj.isHoming && proj.homingTargetId) {
+        const homingTarget = this.ships.get(proj.homingTargetId);
+        if (homingTarget && homingTarget.hull > 0) {
+          targetX = homingTarget.x;
+          targetY = homingTarget.y;
+        }
+      }
+      const updated = updateProjectile(proj, deltaMs, targetX, targetY);
 
-      if (isProjectileAlive(updated) &&
-          updated.x >= 0 && updated.x <= BATTLEFIELD_SIZE &&
-          updated.y >= 0 && updated.y <= BATTLEFIELD_SIZE) {
+      if (
+        isProjectileAlive(updated) &&
+        updated.x >= 0 &&
+        updated.x <= BATTLEFIELD_SIZE &&
+        updated.y >= 0 &&
+        updated.y <= BATTLEFIELD_SIZE
+      ) {
         alive.push(updated);
       } else {
         // Remove sprite
@@ -359,15 +475,21 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   private updateAI(deltaMs: number): void {
     for (const ship of this.ships.values()) {
-      if (ship.owner === 'player' || ship.hull <= 0) continue;
+      if (ship.owner === "player" || ship.hull <= 0) continue;
 
       // Tick the decision timer down
       ship.aiDecisionTimer -= deltaMs;
 
       // Re-evaluate target only when the timer expires or the current target
       // is dead/missing — each ship commits to its target in between decisions.
-      const currentTarget = ship.targetId ? this.ships.get(ship.targetId) : null;
-      if (!currentTarget || currentTarget.hull <= 0 || ship.aiDecisionTimer <= 0) {
+      const currentTarget = ship.targetId
+        ? this.ships.get(ship.targetId)
+        : null;
+      if (
+        !currentTarget ||
+        currentTarget.hull <= 0 ||
+        ship.aiDecisionTimer <= 0
+      ) {
         let nearestEnemy: ArcadeShip | null = null;
         let nearestDist = Infinity;
 
@@ -391,7 +513,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
       const dx = target.x - ship.x;
       const dy = target.y - ship.y;
-      const targetAngle = (Math.atan2(dy, dx) * 180 / Math.PI + 90 + 360) % 360;
+      const targetAngle =
+        ((Math.atan2(dy, dx) * 180) / Math.PI + 90 + 360) % 360;
 
       let angleDiff = targetAngle - ship.angle;
       if (angleDiff > 180) angleDiff -= 360;
@@ -400,19 +523,33 @@ export class ArcadeBattleScene extends Phaser.Scene {
       const AI_TURN_RATE = 120; // degrees per second
       const maxTurn = AI_TURN_RATE * (deltaMs / 1000);
       const turn = Math.max(-maxTurn, Math.min(maxTurn, angleDiff));
-      ship.angle = ((ship.angle + turn) % 360 + 360) % 360;
+      ship.angle = (((ship.angle + turn) % 360) + 360) % 360;
 
       // Fire when roughly facing the target and in range
       const dist = distance(ship.x, ship.y, target.x, target.y);
       if (Math.abs(angleDiff) < 30 && dist < 400 && canFire(ship.control)) {
-        ship.control = processCommand(ship, ship.control, 'fire');
+        ship.control = processCommand(ship, ship.control, "fire");
         this.fireWeapon(ship);
+      }
+
+      // AI ordnance: fire first ready slot when in wider arc and longer range
+      if (Math.abs(angleDiff) < 45 && dist < 600) {
+        for (let i = 0; i < ship.ordnanceSlots.length; i++) {
+          if (canFireOrdnance(ship.ordnanceSlots[i]!)) {
+            this.fireOrdnance(ship, i);
+            break;
+          }
+        }
       }
       // Movement and cooldowns are already applied each frame by updateShips()
     }
   }
 
   private fireWeapon(ship: ArcadeShip): void {
+    // Forward laser damage capped at 2 — secondary weapons handle higher burst
+    const baseAttack =
+      getShipDefinition(ship.definitionId)?.baseStats.attack ?? 2;
+    const damage = Math.min(baseAttack, 2);
     // Spawn projectile from ship nose
     const rad = (ship.angle - 90) * (Math.PI / 180);
     const spawnDist = 20;
@@ -421,15 +558,78 @@ export class ArcadeBattleScene extends Phaser.Scene {
       ship.y + Math.sin(rad) * spawnDist,
       ship.angle,
       ship.id,
-      ship.faction
+      ship.faction,
+      damage,
     );
 
     this.projectiles.push(proj);
 
     // Create sprite
     const sprite = this.add.graphics();
-    sprite.fillStyle(ship.faction === this.playerFaction ? 0xff8800 : 0x00ff00, 1);
+    sprite.fillStyle(
+      ship.faction === this.playerFaction ? 0xff8800 : 0x00ff00,
+      1,
+    );
     sprite.fillCircle(0, 0, 3);
+    sprite.setPosition(proj.x, proj.y);
+    sprite.setDepth(5);
+    this.projectileSprites.set(proj.id, sprite);
+  }
+
+  /**
+   * Fires an ordnance slot for the given ship.
+   * Finds the nearest enemy in the front 120° arc as the homing target.
+   * Bombs fly straight (no target).
+   *
+   * @param ship - The firing ship.
+   * @param slotIndex - Index into ship.ordnanceSlots (0/1/2).
+   */
+  private fireOrdnance(ship: ArcadeShip, slotIndex: number): void {
+    const slot = ship.ordnanceSlots[slotIndex];
+    if (!slot || !canFireOrdnance(slot)) return;
+
+    let bestTarget: ArcadeShip | null = null;
+    if (slot.isHoming) {
+      let bestDist = Infinity;
+      for (const other of this.ships.values()) {
+        if (other.faction === ship.faction || other.hull <= 0) continue;
+        const dx = other.x - ship.x;
+        const dy = other.y - ship.y;
+        const angleToTarget =
+          ((Math.atan2(dy, dx) * 180) / Math.PI + 90 + 360) % 360;
+        let angleDiff = Math.abs(angleToTarget - ship.angle);
+        if (angleDiff > 180) angleDiff = 360 - angleDiff;
+        if (angleDiff > 60) continue; // outside 120° front arc
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestTarget = other;
+        }
+      }
+    }
+
+    consumeOrdnanceCharge(slot);
+
+    const rad = (ship.angle - 90) * (Math.PI / 180);
+    const proj = createProjectile(
+      ship.x + Math.cos(rad) * 20,
+      ship.y + Math.sin(rad) * 20,
+      ship.angle,
+      ship.id,
+      ship.faction,
+      slot.damage,
+      slot.isHoming,
+      bestTarget?.id ?? null,
+      slot.homingTurnRate,
+    );
+    this.projectiles.push(proj);
+
+    const sprite = this.add.graphics();
+    const isPlayerFaction = ship.faction === this.playerFaction;
+    const missileColor = isPlayerFaction ? 0xff6600 : 0xff2200;
+    const bombColor = isPlayerFaction ? 0xffcc00 : 0xaaff00;
+    sprite.fillStyle(slot.isHoming ? missileColor : bombColor, 1);
+    sprite.fillCircle(0, 0, slot.ordnanceClass === "torpedo" ? 5 : 4);
     sprite.setPosition(proj.x, proj.y);
     sprite.setDepth(5);
     this.projectileSprites.set(proj.id, sprite);
@@ -458,13 +658,22 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
           // Show floating damage number
           if (this.damageNumbersEnabled) {
-            this.showFloatingText(ship.x, ship.y - 20, `-${proj.damage}`, '#ff4444');
+            this.showFloatingText(
+              ship.x,
+              ship.y - 20,
+              `-${proj.damage}`,
+              "#ff4444",
+            );
           }
 
           // Score and kill notification for player kills
-          if (proj.ownerFaction === this.playerFaction && ship.hull <= 0 && wasAlive) {
+          if (
+            proj.ownerFaction === this.playerFaction &&
+            ship.hull <= 0 &&
+            wasAlive
+          ) {
             this.score += 100;
-            this.showFloatingText(ship.x, ship.y - 40, 'KILL!', '#ffff00');
+            this.showFloatingText(ship.x, ship.y - 40, "KILL!", "#ffff00");
             this.scoreText.setText(`SCORE: ${this.score}`);
           }
 
@@ -476,7 +685,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
     }
 
     // Remove hit projectiles
-    this.projectiles = this.projectiles.filter((p) => !hitProjectiles.has(p.id));
+    this.projectiles = this.projectiles.filter(
+      (p) => !hitProjectiles.has(p.id),
+    );
     for (const id of hitProjectiles) {
       const sprite = this.projectileSprites.get(id);
       sprite?.destroy();
@@ -485,9 +696,16 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   private spawnShips(): void {
-    const battleConfig = this.registry.get('battleConfig') as {
-      factions: Array<{ factionId: FactionId; controller: 'player' | 'ai'; ships: string[] }>;
-    } | undefined;
+    const battleConfig = this.registry.get("battleConfig") as
+      | {
+          factions: Array<{
+            factionId: FactionId;
+            controller: "player" | "ai";
+            ships: string[];
+            loadoutChoices?: Record<string, string>;
+          }>;
+        }
+      | undefined;
 
     if (battleConfig?.factions?.length) {
       this.spawnFromConfig(battleConfig.factions);
@@ -501,30 +719,63 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   private spawnFromConfig(
-    factions: Array<{ factionId: FactionId; controller: 'player' | 'ai'; ships: string[] }>
+    factions: Array<{
+      factionId: FactionId;
+      controller: "player" | "ai";
+      ships: string[];
+      loadoutChoices?: Record<string, string>;
+    }>,
   ): void {
-    const playerSlot = factions.find((f) => f.controller === 'player') ?? factions[0]!;
+    const playerSlot =
+      factions.find((f) => f.controller === "player") ?? factions[0]!;
     const enemySlots = factions.filter((f) => f !== playerSlot);
     this.playerFaction = playerSlot.factionId;
 
     // Spawn player-controlled ship (first in player slot)
-    const playerShipId = playerSlot.ships[0] ?? 'confed_sparrow';
+    const playerShipId = playerSlot.ships[0] ?? "confed_sparrow";
     const playerShip = this.createShip(
-      'player_0', playerShipId, playerSlot.factionId, 'player',
-      BATTLEFIELD_SIZE / 2, BATTLEFIELD_SIZE / 2 + 200, 0
+      "player_0",
+      playerShipId,
+      playerSlot.factionId,
+      "player",
+      BATTLEFIELD_SIZE / 2,
+      BATTLEFIELD_SIZE / 2 + 200,
+      0,
     );
     playerShip.hull = playerShip.maxHull = Math.max(6, playerShip.maxHull);
-    playerShip.shields = playerShip.maxShields = Math.max(3, playerShip.maxShields);
+    playerShip.shields = playerShip.maxShields = Math.max(
+      3,
+      playerShip.maxShields,
+    );
+    applyLoadoutEffects(playerShip, playerSlot.loadoutChoices?.["0"]);
+    playerShip.ordnanceSlots = extractOrdnanceSlots(
+      playerShip.definitionId,
+      playerSlot.loadoutChoices?.["0"] ?? null,
+    );
     this.ships.set(playerShip.id, playerShip);
     this.playerShipId = playerShip.id;
 
     // Remaining player-slot ships are AI allies in wing formation
-    const wingOffsets = [{ x: -150, y: 350 }, { x: 150, y: 350 }, { x: 0, y: 450 }];
+    const wingOffsets = [
+      { x: -150, y: 350 },
+      { x: 150, y: 350 },
+      { x: 0, y: 450 },
+    ];
     playerSlot.ships.slice(1).forEach((shipId, i) => {
       const offset = wingOffsets[i] ?? { x: (i - 1) * 160, y: 400 };
       const ally = this.createShip(
-        `ally_${i}`, shipId, playerSlot.factionId, 'ai',
-        BATTLEFIELD_SIZE / 2 + offset.x, BATTLEFIELD_SIZE / 2 + offset.y, 0
+        `ally_${i}`,
+        shipId,
+        playerSlot.factionId,
+        "ai",
+        BATTLEFIELD_SIZE / 2 + offset.x,
+        BATTLEFIELD_SIZE / 2 + offset.y,
+        0,
+      );
+      applyLoadoutEffects(ally, playerSlot.loadoutChoices?.[String(i + 1)]);
+      ally.ordnanceSlots = extractOrdnanceSlots(
+        ally.definitionId,
+        playerSlot.loadoutChoices?.[String(i + 1)] ?? null,
       );
       this.ships.set(ally.id, ally);
     });
@@ -533,36 +784,58 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const totalEnemies = enemySlots.reduce((sum, s) => sum + s.ships.length, 0);
     let enemyIndex = 0;
     for (const slot of enemySlots) {
-      for (const shipId of slot.ships) {
+      slot.ships.forEach((shipId, shipIdx) => {
         const angle = (enemyIndex / Math.max(totalEnemies, 1)) * Math.PI * 2;
         const radius = 550;
         const enemy = this.createShip(
-          `enemy_${enemyIndex}`, shipId, slot.factionId, 'ai',
+          `enemy_${enemyIndex}`,
+          shipId,
+          slot.factionId,
+          "ai",
           BATTLEFIELD_SIZE / 2 + Math.cos(angle) * radius,
-          BATTLEFIELD_SIZE / 2 + Math.sin(angle) * radius - 350, 0
+          BATTLEFIELD_SIZE / 2 + Math.sin(angle) * radius - 350,
+          0,
+        );
+        applyLoadoutEffects(enemy, slot.loadoutChoices?.[String(shipIdx)]);
+        enemy.ordnanceSlots = extractOrdnanceSlots(
+          enemy.definitionId,
+          slot.loadoutChoices?.[String(shipIdx)] ?? null,
         );
         this.ships.set(enemy.id, enemy);
         enemyIndex++;
-      }
+      });
     }
   }
 
   private spawnDefaultShips(): void {
     const playerShip = this.createShip(
-      'player_0', 'confed_sparrow', 'free_confederation', 'player',
-      BATTLEFIELD_SIZE / 2, BATTLEFIELD_SIZE / 2 + 200, 0
+      "player_0",
+      "confed_sparrow",
+      "free_confederation",
+      "player",
+      BATTLEFIELD_SIZE / 2,
+      BATTLEFIELD_SIZE / 2 + 200,
+      0,
     );
     playerShip.hull = playerShip.maxHull = 8;
     playerShip.shields = playerShip.maxShields = 4;
     this.ships.set(playerShip.id, playerShip);
     this.playerShipId = playerShip.id;
 
-    const wingOffsets = [{ x: -150, y: 350 }, { x: 150, y: 350 }];
+    const wingOffsets = [
+      { x: -150, y: 350 },
+      { x: 150, y: 350 },
+    ];
     for (let i = 0; i < wingOffsets.length; i++) {
       const offset = wingOffsets[i]!;
       const ally = this.createShip(
-        `ally_${i}`, 'confed_wasp', 'free_confederation', 'ai',
-        BATTLEFIELD_SIZE / 2 + offset.x, BATTLEFIELD_SIZE / 2 + offset.y, 0
+        `ally_${i}`,
+        "confed_wasp",
+        "free_confederation",
+        "ai",
+        BATTLEFIELD_SIZE / 2 + offset.x,
+        BATTLEFIELD_SIZE / 2 + offset.y,
+        0,
       );
       ally.hull = ally.maxHull = 5;
       ally.shields = ally.maxShields = 3;
@@ -573,9 +846,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
       const angle = (i / 3) * Math.PI * 2;
       const radius = 550;
       const enemy = this.createShip(
-        `enemy_${i}`, i === 0 ? 'terran_gladius' : 'terran_viper', 'terran_hegemony', 'ai',
+        `enemy_${i}`,
+        i === 0 ? "terran_gladius" : "terran_viper",
+        "terran_hegemony",
+        "ai",
         BATTLEFIELD_SIZE / 2 + Math.cos(angle) * radius,
-        BATTLEFIELD_SIZE / 2 + Math.sin(angle) * radius - 350, 0
+        BATTLEFIELD_SIZE / 2 + Math.sin(angle) * radius - 350,
+        0,
       );
       this.ships.set(enemy.id, enemy);
     }
@@ -585,10 +862,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
     id: string,
     defId: string,
     faction: FactionId,
-    owner: 'player' | 'ai',
+    owner: "player" | "ai",
     x: number,
     y: number,
-    angle: number
+    angle: number,
   ): ArcadeShip {
     const def = getShipDefinition(defId);
     const baseShip: ShipState = {
@@ -610,7 +887,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       isCloaked: false,
       currentManeuver: null,
       maneuverProgress: 0,
-      mobileArcDirection: 'front',
+      mobileArcDirection: "front",
       charges: 0,
       maxCharges: 0,
     };
@@ -620,19 +897,23 @@ export class ArcadeBattleScene extends Phaser.Scene {
       control: createControlState(baseShip),
       targetId: null,
       aiDecisionTimer: 0, // fire immediately on first update
+      ordnanceSlots: [],
     };
 
     return ship;
   }
 
   private createShipSprite(ship: ArcadeShip): void {
-    const container = this.add.container(ship.x, ship.y) as unknown as ShipSprite;
+    const container = this.add.container(
+      ship.x,
+      ship.y,
+    ) as unknown as ShipSprite;
     container.shipId = ship.id;
 
     const color = FACTION_COLORS[ship.faction as FactionId] ?? 0xffffff;
     const shipDef = getShipDefinition(ship.definitionId);
-    const baseSize = SHIP_SIZES[shipDef?.baseStats.size ?? 'small'];
-    const size = ship.owner === 'player' ? baseSize * 1.2 : baseSize;
+    const baseSize = SHIP_SIZES[shipDef?.baseStats.size ?? "small"];
+    const size = ship.owner === "player" ? baseSize * 1.2 : baseSize;
 
     // Thruster glow
     const thruster = this.add.graphics();
@@ -643,7 +924,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
     // Ship body — use individual PNG if loaded; fall back to faction/size placeholder from BootScene
     const spriteKey = `ship_${ship.definitionId}`;
-    const fallbackKey = `ship_${ship.faction}_${shipDef?.baseStats.size ?? 'small'}`;
+    const fallbackKey = `ship_${ship.faction}_${shipDef?.baseStats.size ?? "small"}`;
     const textureKey = this.textures.exists(spriteKey)
       ? spriteKey
       : this.textures.exists(fallbackKey)
@@ -658,7 +939,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       container.add(img);
 
       // Player indicator ring (drawn on top of the sprite)
-      if (ship.owner === 'player') {
+      if (ship.owner === "player") {
         const ring = this.add.graphics();
         ring.lineStyle(2, 0xffff00, 0.9);
         ring.strokeCircle(0, 0, size * 1.02);
@@ -682,7 +963,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       body.lineStyle(2, 0xffffff, 0.8);
       body.strokePath();
 
-      if (ship.owner === 'player') {
+      if (ship.owner === "player") {
         body.lineStyle(2, 0xffff00, 1);
         body.strokeCircle(0, 0, size * 0.84);
       }
@@ -768,33 +1049,52 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   private createHUD(): void {
-    const style = { font: 'bold 16px monospace', color: '#ffffff' };
+    const style = { font: "bold 16px monospace", color: "#ffffff" };
 
-    this.speedText = this.add.text(10, 10, 'SPEED: 3', style)
-      .setScrollFactor(0).setDepth(1000);
+    this.speedText = this.add
+      .text(10, 10, "SPEED: 3", style)
+      .setScrollFactor(0)
+      .setDepth(1000);
 
-    this.hullText = this.add.text(10, 35, 'HULL: 4/4', style)
-      .setScrollFactor(0).setDepth(1000);
+    this.hullText = this.add
+      .text(10, 35, "HULL: 4/4", style)
+      .setScrollFactor(0)
+      .setDepth(1000);
 
-    this.shieldText = this.add.text(10, 60, 'SHIELDS: 2/2', { ...style, color: '#00bfff' })
-      .setScrollFactor(0).setDepth(1000);
+    this.shieldText = this.add
+      .text(10, 60, "SHIELDS: 2/2", { ...style, color: "#00bfff" })
+      .setScrollFactor(0)
+      .setDepth(1000);
 
-    this.cooldownText = this.add.text(10, 90, '', { font: '14px monospace', color: '#ff8888' })
-      .setScrollFactor(0).setDepth(1000);
+    this.cooldownText = this.add
+      .text(10, 90, "", { font: "14px monospace", color: "#ff8888" })
+      .setScrollFactor(0)
+      .setDepth(1000);
 
-    this.scoreText = this.add.text(this.scale.width - 10, 10, 'SCORE: 0', style)
-      .setOrigin(1, 0).setScrollFactor(0).setDepth(1000);
+    this.scoreText = this.add
+      .text(this.scale.width - 10, 10, "SCORE: 0", style)
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setDepth(1000);
 
-    this.instructionsText = this.add.text(
-      this.scale.width / 2,
-      this.scale.height - 30,
-      '↑↓ Speed | ←→ Turn | SHIFT+←→ Bank | Z K-Turn | SPACE Fire',
-      { font: '14px monospace', color: '#888888' }
-    ).setOrigin(0.5, 1).setScrollFactor(0).setDepth(1000);
+    this.instructionsText = this.add
+      .text(
+        this.scale.width / 2,
+        this.scale.height - 30,
+        "↑↓ Speed | ←→ Turn | Z K-Turn | SPACE Fire | 1/2/3 Ordnance",
+        { font: "14px monospace", color: "#888888" },
+      )
+      .setOrigin(0.5, 1)
+      .setScrollFactor(0)
+      .setDepth(1000);
 
-    this.maneuverText = this.add.text(10, 118, 'STRAIGHT', {
-      font: 'bold 13px monospace', color: '#44ff44',
-    }).setScrollFactor(0).setDepth(1000);
+    this.maneuverText = this.add
+      .text(10, 118, "STRAIGHT", {
+        font: "bold 13px monospace",
+        color: "#44ff44",
+      })
+      .setScrollFactor(0)
+      .setDepth(1000);
 
     this.turnGauge = this.add.graphics().setScrollFactor(0).setDepth(1000);
   }
@@ -811,15 +1111,59 @@ export class ArcadeBattleScene extends Phaser.Scene {
     // Cooldowns
     const cooldowns: string[] = [];
     if (!canKTurn(ship.control)) {
-      cooldowns.push(`K-TURN: ${Math.ceil(ship.control.kturnCooldown / 1000)}s`);
+      cooldowns.push(
+        `K-TURN: ${Math.ceil(ship.control.kturnCooldown / 1000)}s`,
+      );
     }
-    this.cooldownText.setText(cooldowns.join(' | '));
+    this.cooldownText.setText(cooldowns.join(" | "));
 
     // Hull color
     const hullPct = ship.hull / ship.maxHull;
-    this.hullText.setColor(hullPct > 0.5 ? '#44ff44' : hullPct > 0.25 ? '#ffff44' : '#ff4444');
+    this.hullText.setColor(
+      hullPct > 0.5 ? "#44ff44" : hullPct > 0.25 ? "#ffff44" : "#ff4444",
+    );
 
     this.updateTurnIndicator();
+    this.updateOrdnanceHUD(ship);
+  }
+
+  /**
+   * Lazy-initialises ordnance slot labels on first call, then updates
+   * charge counts and cooldown countdowns each frame.
+   *
+   * @param ship - The player ship whose ordnance slots are displayed.
+   */
+  private updateOrdnanceHUD(ship: ArcadeShip): void {
+    if (ship.ordnanceSlots.length === 0) return;
+
+    // Build text nodes on first encounter
+    if (this.ordnanceHudTexts.length === 0) {
+      for (let i = 0; i < ship.ordnanceSlots.length; i++) {
+        const t = this.add
+          .text(this.scale.width - 10, this.scale.height - 60 - i * 26, "", {
+            font: "14px monospace",
+            color: "#ffaa00",
+          })
+          .setOrigin(1, 1)
+          .setScrollFactor(0)
+          .setDepth(1000);
+        this.ordnanceHudTexts.push(t);
+      }
+    }
+
+    for (let i = 0; i < ship.ordnanceSlots.length; i++) {
+      const slot = ship.ordnanceSlots[i]!;
+      const t = this.ordnanceHudTexts[i];
+      if (!t) continue;
+      const cdSec =
+        slot.cooldownRemaining > 0
+          ? ` ${Math.ceil(slot.cooldownRemaining / 1000)}s`
+          : "";
+      const pips =
+        "■".repeat(slot.charges) + "□".repeat(slot.maxCharges - slot.charges);
+      t.setText(`[${i + 1}] ${slot.name} ${pips}${cdSec}`);
+      t.setColor(canFireOrdnance(slot) ? "#ffaa00" : "#664400");
+    }
   }
 
   /**
@@ -837,26 +1181,34 @@ export class ArcadeBattleScene extends Phaser.Scene {
     let label: string;
     let color: string;
     if (ratio < 0.08) {
-      label = 'STRAIGHT'; color = '#44ff44';
+      label = "STRAIGHT";
+      color = "#44ff44";
     } else if (ratio < 0.45) {
-      label = dir < 0 ? '◄ BANK' : 'BANK ►'; color = '#44ff44';
+      label = dir < 0 ? "◄ BANK" : "BANK ►";
+      color = "#44ff44";
     } else if (ratio < 0.75) {
-      label = dir < 0 ? '◄ HARD BANK' : 'HARD BANK ►'; color = '#ffffff';
+      label = dir < 0 ? "◄ HARD BANK" : "HARD BANK ►";
+      color = "#ffffff";
     } else {
-      label = dir < 0 ? '◄ TURN' : 'TURN ►'; color = '#ff4444';
+      label = dir < 0 ? "◄ TURN" : "TURN ►";
+      color = "#ff4444";
     }
     this.maneuverText.setText(label).setColor(color);
 
     // Left/right gauge: 120 px wide, fills from centre toward the active side
     this.turnGauge.clear();
-    const gx = 10; const gy = 136; const gw = 120; const gh = 5;
+    const gx = 10;
+    const gy = 136;
+    const gw = 120;
+    const gh = 5;
     const cx = gx + gw / 2;
     this.turnGauge.fillStyle(0x333333, 0.8);
     this.turnGauge.fillRect(gx, gy, gw, gh);
     this.turnGauge.fillStyle(0x888888, 1);
     this.turnGauge.fillRect(cx - 1, gy - 1, 2, gh + 2);
     if (ratio > 0.02) {
-      const gaugeColor = ratio < 0.45 ? 0x44ff44 : ratio < 0.75 ? 0xffffff : 0xff4444;
+      const gaugeColor =
+        ratio < 0.45 ? 0x44ff44 : ratio < 0.75 ? 0xffffff : 0xff4444;
       const fillW = Math.round(ratio * (gw / 2));
       this.turnGauge.fillStyle(gaugeColor, 0.9);
       if (dir >= 0) {
@@ -867,20 +1219,28 @@ export class ArcadeBattleScene extends Phaser.Scene {
     }
   }
 
-  private showFloatingText(x: number, y: number, text: string, color: string): void {
-    const t = this.add.text(x, y, text, {
-      font: 'bold 18px Arial',
-      color,
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(50);
+  private showFloatingText(
+    x: number,
+    y: number,
+    text: string,
+    color: string,
+  ): void {
+    const t = this.add
+      .text(x, y, text, {
+        font: "bold 18px Arial",
+        color,
+        stroke: "#000000",
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(50);
 
     this.tweens.add({
       targets: t,
       y: y - 60,
       alpha: 0,
       duration: 900,
-      ease: 'Power2',
+      ease: "Power2",
       onComplete: () => t.destroy(),
     });
   }
@@ -908,7 +1268,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
         alpha: 0,
         scale: 0.1,
         duration: 500,
-        ease: 'Power2',
+        ease: "Power2",
         onComplete: () => particle.destroy(),
       });
     }
@@ -925,7 +1285,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       alpha: 0,
       scale: 3,
       duration: 300,
-      ease: 'Power2',
+      ease: "Power2",
       onComplete: () => flash.destroy(),
     });
   }
@@ -934,10 +1294,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
     if (this.gameEnded) return;
 
     const enemies = Array.from(this.ships.values()).filter(
-      (s) => s.faction !== this.playerFaction && s.hull > 0
+      (s) => s.faction !== this.playerFaction && s.hull > 0,
     );
     const allies = Array.from(this.ships.values()).filter(
-      (s) => s.faction === this.playerFaction && s.hull > 0
+      (s) => s.faction === this.playerFaction && s.hull > 0,
     );
 
     if (enemies.length === 0) {
@@ -958,6 +1318,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.instructionsText.setVisible(false);
     this.maneuverText.setVisible(false);
     this.turnGauge.setVisible(false);
+    for (const t of this.ordnanceHudTexts) t.setVisible(false);
 
     const cx = this.scale.width / 2;
     const cy = this.scale.height / 2;
@@ -967,40 +1328,58 @@ export class ArcadeBattleScene extends Phaser.Scene {
     overlay.fillRect(0, 0, this.scale.width, this.scale.height);
     overlay.setScrollFactor(0).setDepth(2000);
 
-    const title = victory ? 'VICTORY!' : 'DEFEATED';
-    const titleColor = victory ? '#44ff44' : '#ff4444';
-    this.add.text(cx, cy - 70, title, {
-      font: 'bold 56px Arial',
-      color: titleColor,
-      stroke: '#000000',
-      strokeThickness: 4,
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
+    const title = victory ? "VICTORY!" : "DEFEATED";
+    const titleColor = victory ? "#44ff44" : "#ff4444";
+    this.add
+      .text(cx, cy - 70, title, {
+        font: "bold 56px Arial",
+        color: titleColor,
+        stroke: "#000000",
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(2001);
 
-    this.add.text(cx, cy - 15, `Score: ${this.score}`, {
-      font: '26px Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
+    this.add
+      .text(cx, cy - 15, `Score: ${this.score}`, {
+        font: "26px Arial",
+        color: "#ffffff",
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(2001);
 
     // RETRY button
-    const retryBtn = this.add.text(cx - 100, cy + 50, 'RETRY', {
-      font: 'bold 24px Arial',
-      color: '#44ff88',
-      backgroundColor: '#224422',
-      padding: { x: 20, y: 10 },
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001).setInteractive({ useHandCursor: true });
-    retryBtn.on('pointerover', () => retryBtn.setStyle({ color: '#ffffff' }));
-    retryBtn.on('pointerout', () => retryBtn.setStyle({ color: '#44ff88' }));
-    retryBtn.on('pointerdown', () => this.scene.restart());
+    const retryBtn = this.add
+      .text(cx - 100, cy + 50, "RETRY", {
+        font: "bold 24px Arial",
+        color: "#44ff88",
+        backgroundColor: "#224422",
+        padding: { x: 20, y: 10 },
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(2001)
+      .setInteractive({ useHandCursor: true });
+    retryBtn.on("pointerover", () => retryBtn.setStyle({ color: "#ffffff" }));
+    retryBtn.on("pointerout", () => retryBtn.setStyle({ color: "#44ff88" }));
+    retryBtn.on("pointerdown", () => this.scene.restart());
 
     // MENU button
-    const menuBtn = this.add.text(cx + 100, cy + 50, 'MENU', {
-      font: 'bold 24px Arial',
-      color: '#aaaaaa',
-      backgroundColor: '#333333',
-      padding: { x: 20, y: 10 },
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001).setInteractive({ useHandCursor: true });
-    menuBtn.on('pointerover', () => menuBtn.setStyle({ color: '#ffffff' }));
-    menuBtn.on('pointerout', () => menuBtn.setStyle({ color: '#aaaaaa' }));
-    menuBtn.on('pointerdown', () => this.scene.start('MainMenuScene'));
+    const menuBtn = this.add
+      .text(cx + 100, cy + 50, "MENU", {
+        font: "bold 24px Arial",
+        color: "#aaaaaa",
+        backgroundColor: "#333333",
+        padding: { x: 20, y: 10 },
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(2001)
+      .setInteractive({ useHandCursor: true });
+    menuBtn.on("pointerover", () => menuBtn.setStyle({ color: "#ffffff" }));
+    menuBtn.on("pointerout", () => menuBtn.setStyle({ color: "#aaaaaa" }));
+    menuBtn.on("pointerdown", () => this.scene.start("MainMenuScene"));
   }
 }
