@@ -25,6 +25,11 @@ export interface ArcadeOrdnanceSlot {
   readonly isHoming: boolean;
   /** Degrees per second turn rate for homing (0 for bombs) */
   readonly homingTurnRate: number;
+  /**
+   * Total degrees of steering a fired projectile begins with.
+   * Once exhausted the missile flies straight. 0 for non-homing weapons.
+   */
+  readonly homingTurnBudget: number;
   /** Cooldown between shots in ms */
   readonly cooldownMax: number;
   /** Ms remaining before next shot */
@@ -52,6 +57,7 @@ const SLOT_TYPE_PROPS: Record<
     damage: 3,
     isHoming: true,
     homingTurnRate: 90,
+    homingTurnBudget: 360, // ~4 hard 90° dodges before it flies straight
     cooldownMax: 4000,
   },
   torpedo: {
@@ -59,6 +65,7 @@ const SLOT_TYPE_PROPS: Record<
     damage: 5,
     isHoming: true,
     homingTurnRate: 50,
+    homingTurnBudget: 240, // slower + less tracking — 3 hard turns then straight
     cooldownMax: 6000,
   },
   bomb: {
@@ -66,6 +73,7 @@ const SLOT_TYPE_PROPS: Record<
     damage: 4,
     isHoming: false,
     homingTurnRate: 0,
+    homingTurnBudget: 0,
     cooldownMax: 8000,
   },
   mine: {
@@ -73,6 +81,7 @@ const SLOT_TYPE_PROPS: Record<
     damage: 4,
     isHoming: false,
     homingTurnRate: 0,
+    homingTurnBudget: 0,
     cooldownMax: 10000,
   },
 };

@@ -20,6 +20,13 @@ export interface Projectile {
   homingTargetId: string | null;
   /** Degrees per second the projectile can turn toward its target */
   homingTurnRate: number;
+  /**
+   * Total degrees of steering remaining. Decremented each frame by the
+   * actual turn applied. When it reaches 0 the missile stops homing and
+   * flies straight — it has "run out of maneuvering fuel".
+   * Non-homing projectiles set this to 0.
+   */
+  homingTurnBudget: number;
 }
 
 let projectileIdCounter = 0;
@@ -34,6 +41,7 @@ export function createProjectile(
   isHoming: boolean = false,
   homingTargetId: string | null = null,
   homingTurnRate: number = 0,
+  homingTurnBudget: number = 0,
 ): Projectile {
   return {
     id: `proj_${projectileIdCounter++}`,
@@ -44,11 +52,12 @@ export function createProjectile(
     damage,
     ownerId,
     ownerFaction,
-    lifetime: isHoming ? 4000 : 2000, // Missiles travel longer
+    lifetime: isHoming ? 4000 : 2000,
     maxLifetime: isHoming ? 4000 : 2000,
     isHoming,
     homingTargetId,
     homingTurnRate,
+    homingTurnBudget,
   };
 }
 
@@ -59,17 +68,24 @@ export function updateProjectile(
   targetY?: number,
 ): Projectile {
   let angle = projectile.angle;
+  let homingTurnBudget = projectile.homingTurnBudget;
 
-  // Homing steering: rotate toward target
-  if (projectile.isHoming && targetX !== undefined && targetY !== undefined) {
+  // Homing steering: rotate toward target while turn budget remains
+  if (
+    projectile.isHoming &&
+    homingTurnBudget > 0 &&
+    targetX !== undefined &&
+    targetY !== undefined
+  ) {
     const dx = targetX - projectile.x;
     const dy = targetY - projectile.y;
     const desiredAngle =
       (Math.atan2(dy, dx) * (180 / Math.PI) + 90 + 360) % 360;
     const diff = ((desiredAngle - angle + 540) % 360) - 180; // -180..+180
     const maxTurn = projectile.homingTurnRate * (deltaMs / 1000);
-    angle =
-      (angle + Math.sign(diff) * Math.min(Math.abs(diff), maxTurn) + 360) % 360;
+    const actualTurn = Math.min(Math.abs(diff), maxTurn);
+    angle = (angle + Math.sign(diff) * actualTurn + 360) % 360;
+    homingTurnBudget = Math.max(0, homingTurnBudget - actualTurn);
   }
 
   const rad = (angle - 90) * (Math.PI / 180);
@@ -78,6 +94,7 @@ export function updateProjectile(
   return {
     ...projectile,
     angle,
+    homingTurnBudget,
     x: projectile.x + Math.cos(rad) * distance,
     y: projectile.y + Math.sin(rad) * distance,
     lifetime: projectile.lifetime - deltaMs,

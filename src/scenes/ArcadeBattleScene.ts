@@ -670,6 +670,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       slot.isHoming,
       bestTarget?.id ?? null,
       slot.homingTurnRate,
+      slot.homingTurnBudget,
     );
     this.projectiles.push(proj);
 
