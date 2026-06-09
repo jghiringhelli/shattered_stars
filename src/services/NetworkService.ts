@@ -5,30 +5,30 @@
  * Supports both real server connections and local simulation mode.
  */
 
-import Phaser from 'phaser';
+import Phaser from "phaser";
 
 // Message types for client-server communication
 export type NetworkMessageType =
-  | 'join_lobby'
-  | 'leave_lobby'
-  | 'create_room'
-  | 'join_room'
-  | 'leave_room'
-  | 'room_update'
-  | 'player_ready'
-  | 'select_faction'
-  | 'game_start'
-  | 'game_action'
-  | 'game_state'
-  | 'chat_message'
-  | 'player_disconnected'
-  | 'battle_snapshot'
-  | 'update_snapshot'
-  | 'ship_claimed'
-  | 'claim_ship'
-  | 'error'
-  | 'ping'
-  | 'pong';
+  | "join_lobby"
+  | "leave_lobby"
+  | "create_room"
+  | "join_room"
+  | "leave_room"
+  | "room_update"
+  | "player_ready"
+  | "select_faction"
+  | "game_start"
+  | "game_action"
+  | "game_state"
+  | "chat_message"
+  | "player_disconnected"
+  | "battle_snapshot"
+  | "update_snapshot"
+  | "ship_claimed"
+  | "claim_ship"
+  | "error"
+  | "ping"
+  | "pong";
 
 export interface NetworkMessage {
   type: NetworkMessageType;
@@ -44,7 +44,7 @@ export interface RoomInfo {
   hostName: string;
   playerCount: number;
   maxPlayers: number;
-  gameMode: 'turn_based' | 'continuous';
+  gameMode: "arcade" | "continuous";
   isStarted: boolean;
 }
 
@@ -71,8 +71,8 @@ export class NetworkService extends Phaser.Events.EventEmitter {
 
   private socket: WebSocket | null = null;
   private isConnected = false;
-  private playerId: string = '';
-  private playerName: string = '';
+  private playerId: string = "";
+  private playerName: string = "";
   private currentRoomId: string | null = null;
 
   // Local simulation mode
@@ -117,8 +117,8 @@ export class NetworkService extends Phaser.Events.EventEmitter {
       // Use local simulation mode
       this.isLocalMode = true;
       this.isConnected = true;
-      this.emit('connected', { local: true });
-      console.log('[NetworkService] Running in local simulation mode');
+      this.emit("connected", { local: true });
+      console.log("[NetworkService] Running in local simulation mode");
       return true;
     }
   }
@@ -132,8 +132,8 @@ export class NetworkService extends Phaser.Events.EventEmitter {
           this.isConnected = true;
           this.isLocalMode = false;
           this.reconnectAttempts = 0;
-          this.emit('connected', { local: false });
-          console.log('[NetworkService] Connected to server');
+          this.emit("connected", { local: false });
+          console.log("[NetworkService] Connected to server");
 
           // Start ping interval
           this.startPingInterval();
@@ -143,16 +143,16 @@ export class NetworkService extends Phaser.Events.EventEmitter {
 
         this.socket.onclose = () => {
           this.isConnected = false;
-          this.emit('disconnected');
-          console.log('[NetworkService] Disconnected from server');
+          this.emit("disconnected");
+          console.log("[NetworkService] Disconnected from server");
 
           // Attempt reconnection
           this.attemptReconnect(url);
         };
 
         this.socket.onerror = (error) => {
-          console.error('[NetworkService] WebSocket error:', error);
-          this.emit('error', { message: 'Connection error' });
+          console.error("[NetworkService] WebSocket error:", error);
+          this.emit("error", { message: "Connection error" });
           resolve(false);
         };
 
@@ -161,11 +161,11 @@ export class NetworkService extends Phaser.Events.EventEmitter {
             const message = JSON.parse(event.data) as NetworkMessage;
             this.handleMessage(message);
           } catch (e) {
-            console.error('[NetworkService] Failed to parse message:', e);
+            console.error("[NetworkService] Failed to parse message:", e);
           }
         };
       } catch (e) {
-        console.error('[NetworkService] Failed to connect:', e);
+        console.error("[NetworkService] Failed to connect:", e);
         resolve(false);
       }
     });
@@ -178,20 +178,22 @@ export class NetworkService extends Phaser.Events.EventEmitter {
     }
     this.isConnected = false;
     this.currentRoomId = null;
-    this.emit('disconnected');
+    this.emit("disconnected");
   }
 
   private attemptReconnect(url: string): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log('[NetworkService] Max reconnection attempts reached');
-      this.emit('reconnect_failed');
+      console.log("[NetworkService] Max reconnection attempts reached");
+      this.emit("reconnect_failed");
       return;
     }
 
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * this.reconnectAttempts;
 
-    console.log(`[NetworkService] Attempting reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`);
+    console.log(
+      `[NetworkService] Attempting reconnect in ${delay}ms (attempt ${this.reconnectAttempts})`,
+    );
 
     setTimeout(() => {
       this.connectToServer(url);
@@ -202,7 +204,7 @@ export class NetworkService extends Phaser.Events.EventEmitter {
     setInterval(() => {
       if (this.isConnected && !this.isLocalMode) {
         this.lastPingTime = Date.now();
-        this.send({ type: 'ping', payload: {} });
+        this.send({ type: "ping", payload: {} });
       }
     }, 5000);
   }
@@ -213,14 +215,14 @@ export class NetworkService extends Phaser.Events.EventEmitter {
 
   private handleMessage(message: NetworkMessage): void {
     // Handle pong for latency calculation
-    if (message.type === 'pong') {
+    if (message.type === "pong") {
       this.latency = Date.now() - this.lastPingTime;
-      this.emit('latency_update', { latency: this.latency });
+      this.emit("latency_update", { latency: this.latency });
       return;
     }
 
     // Store battle seed from game_start for deterministic RNG
-    if (message.type === 'game_start') {
+    if (message.type === "game_start") {
       const payload = message.payload as { seed?: number };
       if (payload.seed !== undefined) {
         this.currentBattleSeed = payload.seed;
@@ -253,7 +255,7 @@ export class NetworkService extends Phaser.Events.EventEmitter {
     }
   }
 
-  private send(message: Omit<NetworkMessage, 'timestamp'>): void {
+  private send(message: Omit<NetworkMessage, "timestamp">): void {
     const fullMessage: NetworkMessage = {
       ...message,
       timestamp: Date.now(),
@@ -276,29 +278,39 @@ export class NetworkService extends Phaser.Events.EventEmitter {
     // Simulate server processing with a small delay
     setTimeout(() => {
       switch (message.type) {
-        case 'create_room':
-          this.localCreateRoom(message.payload as { name: string; maxPlayers: number; gameMode: string });
+        case "create_room":
+          this.localCreateRoom(
+            message.payload as {
+              name: string;
+              maxPlayers: number;
+              gameMode: string;
+            },
+          );
           break;
-        case 'join_room':
+        case "join_room":
           this.localJoinRoom(message.payload as { roomId: string });
           break;
-        case 'leave_room':
+        case "leave_room":
           this.localLeaveRoom();
           break;
-        case 'player_ready':
+        case "player_ready":
           this.localSetReady(message.payload as { isReady: boolean });
           break;
-        case 'select_faction':
+        case "select_faction":
           this.localSelectFaction(message.payload as { factionId: string });
           break;
-        case 'game_action':
+        case "game_action":
           this.localProcessAction(message.payload as GameAction);
           break;
       }
     }, 50);
   }
 
-  private localCreateRoom(data: { name: string; maxPlayers: number; gameMode: string }): void {
+  private localCreateRoom(data: {
+    name: string;
+    maxPlayers: number;
+    gameMode: string;
+  }): void {
     const roomId = `room_${Date.now()}`;
     const room: RoomInfo = {
       id: roomId,
@@ -307,7 +319,7 @@ export class NetworkService extends Phaser.Events.EventEmitter {
       hostName: this.playerName,
       playerCount: 1,
       maxPlayers: data.maxPlayers,
-      gameMode: data.gameMode as 'turn_based' | 'continuous',
+      gameMode: data.gameMode as "arcade" | "continuous",
       isStarted: false,
     };
 
@@ -324,8 +336,8 @@ export class NetworkService extends Phaser.Events.EventEmitter {
     };
     this.localPlayers.set(this.playerId, player);
 
-    this.emit('room_created', { room });
-    this.emit('room_update', { room, players: [player] });
+    this.emit("room_created", { room });
+    this.emit("room_update", { room, players: [player] });
 
     // Simulate AI players joining
     this.simulateAIPlayers(roomId);
@@ -334,7 +346,7 @@ export class NetworkService extends Phaser.Events.EventEmitter {
   private localJoinRoom(data: { roomId: string }): void {
     const room = this.localRooms.get(data.roomId);
     if (!room || room.playerCount >= room.maxPlayers) {
-      this.emit('error', { message: 'Cannot join room' });
+      this.emit("error", { message: "Cannot join room" });
       return;
     }
 
@@ -351,7 +363,7 @@ export class NetworkService extends Phaser.Events.EventEmitter {
     };
     this.localPlayers.set(this.playerId, player);
 
-    this.emit('room_joined', { room });
+    this.emit("room_joined", { room });
     this.broadcastRoomUpdate();
   }
 
@@ -368,7 +380,7 @@ export class NetworkService extends Phaser.Events.EventEmitter {
 
     this.localPlayers.delete(this.playerId);
     this.currentRoomId = null;
-    this.emit('room_left', {});
+    this.emit("room_left", {});
   }
 
   private localSetReady(data: { isReady: boolean }): void {
@@ -389,7 +401,7 @@ export class NetworkService extends Phaser.Events.EventEmitter {
 
   private localProcessAction(action: GameAction): void {
     // Broadcast action to all players
-    this.emit('game_action', { action, senderId: this.playerId });
+    this.emit("game_action", { action, senderId: this.playerId });
   }
 
   private broadcastRoomUpdate(): void {
@@ -399,19 +411,24 @@ export class NetworkService extends Phaser.Events.EventEmitter {
     if (!room) return;
 
     const players = Array.from(this.localPlayers.values());
-    this.emit('room_update', { room, players });
+    this.emit("room_update", { room, players });
   }
 
   private simulateAIPlayers(roomId: string): void {
     // Add simulated AI players after delays
-    const aiNames = ['AICommander', 'BotPilot', 'AutoWing'];
-    const factions = ['terran_hegemony', 'synthetic_collective', 'void_corsairs'];
+    const aiNames = ["AICommander", "BotPilot", "AutoWing"];
+    const factions = [
+      "terran_hegemony",
+      "synthetic_collective",
+      "void_corsairs",
+    ];
 
     let delay = 2000;
     aiNames.forEach((name, i) => {
       setTimeout(() => {
         const room = this.localRooms.get(roomId);
-        if (!room || room.isStarted || room.playerCount >= room.maxPlayers) return;
+        if (!room || room.isStarted || room.playerCount >= room.maxPlayers)
+          return;
 
         const aiId = `ai_${Date.now()}_${i}`;
         const aiPlayer: PlayerInfo = {
@@ -426,7 +443,7 @@ export class NetworkService extends Phaser.Events.EventEmitter {
         this.localPlayers.set(aiId, aiPlayer);
         room.playerCount++;
 
-        this.emit('player_joined', { player: aiPlayer });
+        this.emit("player_joined", { player: aiPlayer });
         this.broadcastRoomUpdate();
 
         // AI readies up after a bit
@@ -480,30 +497,34 @@ export class NetworkService extends Phaser.Events.EventEmitter {
   }
 
   // Room operations
-  createRoom(name: string, maxPlayers: number, gameMode: 'turn_based' | 'continuous'): void {
+  createRoom(
+    name: string,
+    maxPlayers: number,
+    gameMode: "arcade" | "continuous",
+  ): void {
     this.send({
-      type: 'create_room',
+      type: "create_room",
       payload: { name, maxPlayers, gameMode },
     });
   }
 
   joinRoom(roomId: string): void {
     this.send({
-      type: 'join_room',
+      type: "join_room",
       payload: { roomId },
     });
   }
 
   leaveRoom(): void {
     this.send({
-      type: 'leave_room',
+      type: "leave_room",
       payload: {},
     });
   }
 
   setReady(isReady: boolean): void {
     this.send({
-      type: 'player_ready',
+      type: "player_ready",
       payload: { isReady },
     });
   }
@@ -516,21 +537,21 @@ export class NetworkService extends Phaser.Events.EventEmitter {
    */
   selectFaction(factionId: string, ships: readonly string[] = []): void {
     this.send({
-      type: 'select_faction',
+      type: "select_faction",
       payload: { factionId, ships },
     });
   }
 
   startGame(): void {
     this.send({
-      type: 'game_start',
+      type: "game_start",
       payload: {},
     });
   }
 
   sendGameAction(action: GameAction): void {
     this.send({
-      type: 'game_action',
+      type: "game_action",
       payload: action,
     });
   }
@@ -544,7 +565,7 @@ export class NetworkService extends Phaser.Events.EventEmitter {
    * @param payload - A {@link BattleSnapshot} (imported from BattleStateSerializer).
    */
   sendSnapshot(payload: unknown): void {
-    this.send({ type: 'update_snapshot', payload });
+    this.send({ type: "update_snapshot", payload });
   }
 
   /**
@@ -556,12 +577,12 @@ export class NetworkService extends Phaser.Events.EventEmitter {
    * @param shipId - The ID of the ship to claim.
    */
   claimShip(shipId: string): void {
-    this.send({ type: 'claim_ship', payload: { shipId } });
+    this.send({ type: "claim_ship", payload: { shipId } });
   }
 
   sendChatMessage(message: string): void {
     this.send({
-      type: 'chat_message',
+      type: "chat_message",
       payload: { message },
     });
   }

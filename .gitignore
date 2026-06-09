@@ -28,6 +28,9 @@ npm-debug.log*
 *.tmp
 nul
 
+# Stryker mutation testing sandbox
+stryker-tmp/
+
 # Python (for SD scripts)
 __pycache__/
 *.pyc

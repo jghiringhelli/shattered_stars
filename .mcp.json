@@ -9,7 +9,7 @@
     },
     "forgecraft": {
       "command": "npx",
-      "args": ["-y", "forgecraft-mcp@0.5.1"]
+      "args": ["-y", "forgecraft-mcp@^1.8.0"]
     }
   }
 }

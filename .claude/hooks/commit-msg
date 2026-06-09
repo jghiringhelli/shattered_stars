@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# commit-msg hook — delegates to commit-msg.sh
+set -euo pipefail
+HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+"$HOOKS_DIR/commit-msg.sh" "$1"

@@ -3,9 +3,9 @@
  * Shows ship positions in a small overview
  */
 
-import Phaser from 'phaser';
-import type { FactionId } from '../config';
-import { FACTION_COLORS, BATTLEFIELD_SIZE } from '../config';
+import Phaser from "phaser";
+import type { FactionId } from "../config";
+import { FACTION_COLORS, BATTLEFIELD_SIZE } from "../config";
 
 export interface MinimapShip {
   id: string;
@@ -62,10 +62,15 @@ export class Minimap extends Phaser.GameObjects.Container {
     this.add(this.border);
 
     // Make it interactive for camera panning
-    const hitArea = new Phaser.Geom.Rectangle(0, 0, this.mapWidth, this.mapHeight);
+    const hitArea = new Phaser.Geom.Rectangle(
+      0,
+      0,
+      this.mapWidth,
+      this.mapHeight,
+    );
     this.setInteractive(hitArea, Phaser.Geom.Rectangle.Contains);
 
-    this.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+    this.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       this.handleClick(pointer);
     });
 
@@ -115,12 +120,17 @@ export class Minimap extends Phaser.GameObjects.Container {
     this.viewRect.clear();
     this.viewRect.lineStyle(1, 0xffffff, 0.6);
 
-    const rectX = (camera.scrollX * this.mapScale);
-    const rectY = (camera.scrollY * this.mapScale);
-    const rectW = camera.width * this.mapScale;
-    const rectH = camera.height * this.mapScale;
+    const rectX = Math.max(0, camera.scrollX * this.mapScale);
+    const rectY = Math.max(0, camera.scrollY * this.mapScale);
+    const rectW = Math.min(camera.width * this.mapScale, this.mapWidth - rectX);
+    const rectH = Math.min(
+      camera.height * this.mapScale,
+      this.mapHeight - rectY,
+    );
 
-    this.viewRect.strokeRect(rectX, rectY, rectW, rectH);
+    if (rectW > 0 && rectH > 0) {
+      this.viewRect.strokeRect(rectX, rectY, rectW, rectH);
+    }
   }
 
   update(ships: MinimapShip[]): void {

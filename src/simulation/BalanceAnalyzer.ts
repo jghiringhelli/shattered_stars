@@ -10,11 +10,22 @@
  * This is the main entry point for understanding game health.
  */
 
-import { BattleSimulator, type AggregatedStats, type ShipPerformanceStats } from './BattleSimulator';
-import { GameplayMetricsAnalyzer, type GameplayFeelReport } from './GameplayMetrics';
-import { SHIP_DEFINITIONS } from '../data/ShipDefinitions';
-import { MONSTER_DEFINITIONS, getBossMonsters, getMonstersByCategory } from '../data/SpaceMonsters';
-import type { FactionId } from '../config';
+import {
+  BattleSimulator,
+  type AggregatedStats,
+  type ShipPerformanceStats,
+} from "./BattleSimulator";
+import {
+  GameplayMetricsAnalyzer,
+  type GameplayFeelReport,
+} from "./GameplayMetrics";
+import { SHIP_DEFINITIONS } from "../data/ShipDefinitions";
+import {
+  MONSTER_DEFINITIONS,
+  getBossMonsters,
+  getMonstersByCategory,
+} from "../data/SpaceMonsters";
+import type { FactionId } from "../config";
 
 // ============================================
 // Types
@@ -41,7 +52,7 @@ export interface BalanceReport {
   // Metadata
   generatedAt: string;
   simulationRuns: number;
-  mode: 'turn_based' | 'continuous';
+  mode: "arcade" | "continuous";
 }
 
 export interface FactionBalanceData {
@@ -67,7 +78,11 @@ export interface MatchupStats {
   faction2WinRate: number;
   drawRate: number;
   averageTurns: number;
-  balance: 'balanced' | 'slightly_favored' | 'imbalanced' | 'severely_imbalanced';
+  balance:
+    | "balanced"
+    | "slightly_favored"
+    | "imbalanced"
+    | "severely_imbalanced";
 }
 
 export interface ShipBalanceData {
@@ -86,7 +101,7 @@ export interface ShipStats {
   avgKills: number;
   avgDamage: number;
   efficiency: number; // Performance per point cost
-  rating: 'S' | 'A' | 'B' | 'C' | 'D' | 'F';
+  rating: "S" | "A" | "B" | "C" | "D" | "F";
 }
 
 export interface RoleBalanceData {
@@ -122,7 +137,7 @@ export interface DifficultySpread {
 
 export interface OverallHealthScore {
   score: number; // 0-100
-  grade: 'A' | 'B' | 'C' | 'D' | 'F';
+  grade: "A" | "B" | "C" | "D" | "F";
   breakdown: {
     factionBalance: number;
     shipBalance: number;
@@ -133,12 +148,12 @@ export interface OverallHealthScore {
 }
 
 export interface PrioritizedRecommendation {
-  priority: 'critical' | 'high' | 'medium' | 'low';
-  category: 'balance' | 'gameplay' | 'content' | 'polish';
+  priority: "critical" | "high" | "medium" | "low";
+  category: "balance" | "gameplay" | "content" | "polish";
   title: string;
   description: string;
-  effort: 'small' | 'medium' | 'large';
-  impact: 'small' | 'medium' | 'large';
+  effort: "small" | "medium" | "large";
+  impact: "small" | "medium" | "large";
 }
 
 // ============================================
@@ -148,16 +163,20 @@ export interface PrioritizedRecommendation {
 export class BalanceAnalyzer {
   private battleSim: BattleSimulator;
   private metricsAnalyzer: GameplayMetricsAnalyzer;
-  private mode: 'turn_based' | 'continuous';
+  private mode: "arcade" | "continuous";
   private battlesPerMatchup: number;
 
   constructor(
-    mode: 'turn_based' | 'continuous' = 'continuous',
-    battlesPerMatchup: number = 50
+    mode: "arcade" | "continuous" = "continuous",
+    battlesPerMatchup: number = 50,
   ) {
     this.mode = mode;
     this.battlesPerMatchup = battlesPerMatchup;
-    this.battleSim = new BattleSimulator({ mode, verbose: false, maxTurns: 60 });
+    this.battleSim = new BattleSimulator({
+      mode,
+      verbose: false,
+      maxTurns: 60,
+    });
     this.metricsAnalyzer = new GameplayMetricsAnalyzer(mode);
   }
 
@@ -165,39 +184,39 @@ export class BalanceAnalyzer {
    * Run complete analysis and generate report
    */
   async analyze(): Promise<BalanceReport> {
-    console.log('Starting comprehensive balance analysis...\n');
+    console.log("Starting comprehensive balance analysis...\n");
 
-    console.log('1. Analyzing faction balance...');
+    console.log("1. Analyzing faction balance...");
     const factionBalance = this.analyzeFactionBalance();
 
-    console.log('2. Analyzing ship balance...');
+    console.log("2. Analyzing ship balance...");
     const shipBalance = this.analyzeShipBalance(factionBalance);
 
-    console.log('3. Analyzing role balance...');
+    console.log("3. Analyzing role balance...");
     const roleBalance = this.analyzeRoleBalance();
 
-    console.log('4. Analyzing gameplay feel...');
+    console.log("4. Analyzing gameplay feel...");
     const gameplayFeel = this.metricsAnalyzer.analyzeGameplayFeel();
 
-    console.log('5. Analyzing monster/PvE content...');
+    console.log("5. Analyzing monster/PvE content...");
     const monsterAnalysis = this.analyzeMonsters();
 
-    console.log('6. Calculating overall health...');
+    console.log("6. Calculating overall health...");
     const overallHealth = this.calculateOverallHealth(
       factionBalance,
       shipBalance,
       gameplayFeel,
-      monsterAnalysis
+      monsterAnalysis,
     );
 
-    console.log('7. Generating recommendations...');
+    console.log("7. Generating recommendations...");
     const recommendations = this.generateRecommendations(
       factionBalance,
       shipBalance,
       roleBalance,
       gameplayFeel,
       monsterAnalysis,
-      overallHealth
+      overallHealth,
     );
 
     return {
@@ -219,11 +238,11 @@ export class BalanceAnalyzer {
    */
   private analyzeFactionBalance(): FactionBalanceData {
     const factions: FactionId[] = [
-      'terran_hegemony',
-      'free_confederation',
-      'synthetic_collective',
-      'void_corsairs',
-      'ascendant_empire',
+      "terran_hegemony",
+      "free_confederation",
+      "synthetic_collective",
+      "void_corsairs",
+      "ascendant_empire",
     ];
 
     const matchups = new Map<string, MatchupStats>();
@@ -231,11 +250,14 @@ export class BalanceAnalyzer {
     const warnings: string[] = [];
 
     // Run all matchups
-    const matchupResults = this.battleSim.runAllFactionMatchups(3, this.battlesPerMatchup);
+    const matchupResults = this.battleSim.runAllFactionMatchups(
+      3,
+      this.battlesPerMatchup,
+    );
 
     // Process matchup results
     for (const [matchupKey, stats] of matchupResults) {
-      const [f1, , f2] = matchupKey.split(' ');
+      const [f1, , f2] = matchupKey.split(" ");
       const faction1 = f1 as FactionId;
       const faction2 = f2 as FactionId;
 
@@ -243,18 +265,18 @@ export class BalanceAnalyzer {
       const f2WinRate = stats.team2Wins / stats.totalBattles;
       const drawRate = stats.draws / stats.totalBattles;
 
-      let balance: MatchupStats['balance'];
+      let balance: MatchupStats["balance"];
       const diff = Math.abs(f1WinRate - f2WinRate);
-      if (diff < 0.1) balance = 'balanced';
-      else if (diff < 0.25) balance = 'slightly_favored';
-      else if (diff < 0.4) balance = 'imbalanced';
-      else balance = 'severely_imbalanced';
+      if (diff < 0.1) balance = "balanced";
+      else if (diff < 0.25) balance = "slightly_favored";
+      else if (diff < 0.4) balance = "imbalanced";
+      else balance = "severely_imbalanced";
 
-      if (balance === 'imbalanced' || balance === 'severely_imbalanced') {
+      if (balance === "imbalanced" || balance === "severely_imbalanced") {
         const favored = f1WinRate > f2WinRate ? faction1 : faction2;
         const unfavored = f1WinRate > f2WinRate ? faction2 : faction1;
         warnings.push(
-          `${favored} has ${balance} advantage over ${unfavored} (${(Math.max(f1WinRate, f2WinRate) * 100).toFixed(0)}% win rate)`
+          `${favored} has ${balance} advantage over ${unfavored} (${(Math.max(f1WinRate, f2WinRate) * 100).toFixed(0)}% win rate)`,
         );
       }
 
@@ -271,8 +293,11 @@ export class BalanceAnalyzer {
 
     // Calculate per-faction stats
     for (const faction of factions) {
-      const ships = Object.values(SHIP_DEFINITIONS).filter(s => s.faction === faction);
-      const avgCost = ships.reduce((sum, s) => sum + s.baseStats.pointCost, 0) / ships.length;
+      const ships = Object.values(SHIP_DEFINITIONS).filter(
+        (s) => s.faction === faction,
+      );
+      const avgCost =
+        ships.reduce((sum, s) => sum + s.baseStats.pointCost, 0) / ships.length;
 
       let wins = 0;
       let games = 0;
@@ -284,19 +309,31 @@ export class BalanceAnalyzer {
           wins += ms.faction1WinRate;
           games++;
           if (ms.faction1WinRate > strongestMatchup.winRate) {
-            strongestMatchup = { opponent: ms.faction2, winRate: ms.faction1WinRate };
+            strongestMatchup = {
+              opponent: ms.faction2,
+              winRate: ms.faction1WinRate,
+            };
           }
           if (ms.faction1WinRate < weakestMatchup.winRate) {
-            weakestMatchup = { opponent: ms.faction2, winRate: ms.faction1WinRate };
+            weakestMatchup = {
+              opponent: ms.faction2,
+              winRate: ms.faction1WinRate,
+            };
           }
         } else if (ms.faction2 === faction) {
           wins += ms.faction2WinRate;
           games++;
           if (ms.faction2WinRate > strongestMatchup.winRate) {
-            strongestMatchup = { opponent: ms.faction1, winRate: ms.faction2WinRate };
+            strongestMatchup = {
+              opponent: ms.faction1,
+              winRate: ms.faction2WinRate,
+            };
           }
           if (ms.faction2WinRate < weakestMatchup.winRate) {
-            weakestMatchup = { opponent: ms.faction1, winRate: ms.faction2WinRate };
+            weakestMatchup = {
+              opponent: ms.faction1,
+              winRate: ms.faction2WinRate,
+            };
           }
         }
       }
@@ -325,39 +362,50 @@ export class BalanceAnalyzer {
     const outliers: string[] = [];
 
     const allShips = Object.values(SHIP_DEFINITIONS);
-    const avgCost = allShips.reduce((sum, s) => sum + s.baseStats.pointCost, 0) / allShips.length;
+    const avgCost =
+      allShips.reduce((sum, s) => sum + s.baseStats.pointCost, 0) /
+      allShips.length;
 
     for (const ship of allShips) {
       const stats = ship.baseStats;
 
       // Calculate a simple efficiency score
-      const offensivePower = stats.attack * 2 + (stats.actions?.includes('target_lock') ? 0.5 : 0);
+      const offensivePower =
+        stats.attack * 2 + (stats.actions?.includes("target_lock") ? 0.5 : 0);
       const defensivePower = stats.hull + stats.shields + stats.agility * 1.5;
-      const mobilityScore = stats.speed.max - stats.speed.min + (stats.actions?.includes('boost') ? 1 : 0);
+      const mobilityScore =
+        stats.speed.max -
+        stats.speed.min +
+        (stats.actions?.includes("boost") ? 1 : 0);
 
       const totalPower = offensivePower + defensivePower + mobilityScore;
       const efficiency = totalPower / stats.pointCost;
 
       // Estimate survival and damage based on stats
-      const estimatedSurvival = (stats.hull + stats.shields + stats.agility) / 15;
+      const estimatedSurvival =
+        (stats.hull + stats.shields + stats.agility) / 15;
       const estimatedDamage = stats.attack * 3;
 
       // Calculate rating
-      let rating: ShipStats['rating'];
-      if (efficiency > 0.35) rating = 'S';
-      else if (efficiency > 0.30) rating = 'A';
-      else if (efficiency > 0.25) rating = 'B';
-      else if (efficiency > 0.20) rating = 'C';
-      else if (efficiency > 0.15) rating = 'D';
-      else rating = 'F';
+      let rating: ShipStats["rating"];
+      if (efficiency > 0.35) rating = "S";
+      else if (efficiency > 0.3) rating = "A";
+      else if (efficiency > 0.25) rating = "B";
+      else if (efficiency > 0.2) rating = "C";
+      else if (efficiency > 0.15) rating = "D";
+      else rating = "F";
 
       // Track outliers
-      if (efficiency > 0.40) {
+      if (efficiency > 0.4) {
         overperformers.push(ship.id);
-        outliers.push(`${ship.name}: Too efficient (${(efficiency * 100).toFixed(0)}%)`);
+        outliers.push(
+          `${ship.name}: Too efficient (${(efficiency * 100).toFixed(0)}%)`,
+        );
       } else if (efficiency < 0.15) {
         underperformers.push(ship.id);
-        outliers.push(`${ship.name}: Underperforming (${(efficiency * 100).toFixed(0)}%)`);
+        outliers.push(
+          `${ship.name}: Underperforming (${(efficiency * 100).toFixed(0)}%)`,
+        );
       }
 
       ships.set(ship.id, {
@@ -394,11 +442,18 @@ export class BalanceAnalyzer {
 
     // Calculate per-role stats
     for (const [role, ships] of roleGroups) {
-      const avgCost = ships.reduce((sum, s) => sum + s.baseStats.pointCost, 0) / ships.length;
-      const avgDamage = ships.reduce((sum, s) => sum + s.baseStats.attack * 3, 0) / ships.length;
-      const avgSurvival = ships.reduce((sum, s) => {
-        return sum + (s.baseStats.hull + s.baseStats.shields + s.baseStats.agility) / 15;
-      }, 0) / ships.length;
+      const avgCost =
+        ships.reduce((sum, s) => sum + s.baseStats.pointCost, 0) / ships.length;
+      const avgDamage =
+        ships.reduce((sum, s) => sum + s.baseStats.attack * 3, 0) /
+        ships.length;
+      const avgSurvival =
+        ships.reduce((sum, s) => {
+          return (
+            sum +
+            (s.baseStats.hull + s.baseStats.shields + s.baseStats.agility) / 15
+          );
+        }, 0) / ships.length;
 
       roles.set(role, {
         role,
@@ -417,7 +472,8 @@ export class BalanceAnalyzer {
     let minScore = Infinity;
 
     for (const [role, stats] of roles) {
-      const score = stats.avgSurvivalRate * stats.avgDamage / stats.avgPointCost;
+      const score =
+        (stats.avgSurvivalRate * stats.avgDamage) / stats.avgPointCost;
       if (score > maxScore) {
         maxScore = score;
         dominantRole = role;
@@ -458,9 +514,15 @@ export class BalanceAnalyzer {
     }
 
     // Difficulty spread based on effective health and abilities
-    const difficultySpread: DifficultySpread = { easy: 0, medium: 0, hard: 0, extreme: 0 };
+    const difficultySpread: DifficultySpread = {
+      easy: 0,
+      medium: 0,
+      hard: 0,
+      extreme: 0,
+    };
     for (const monster of monsters) {
-      const effectiveHealth = monster.hull + monster.shields + monster.armor * 5;
+      const effectiveHealth =
+        monster.hull + monster.shields + monster.armor * 5;
       const abilityPower = monster.abilities.length * 2;
       const difficulty = effectiveHealth / 5 + abilityPower;
 
@@ -472,16 +534,16 @@ export class BalanceAnalyzer {
 
     // Check for design issues
     if (difficultySpread.easy < 2) {
-      designIssues.push('Not enough easy monsters for early game');
+      designIssues.push("Not enough easy monsters for early game");
     }
     if (difficultySpread.extreme < 2) {
-      designIssues.push('Not enough extreme difficulty bosses for endgame');
+      designIssues.push("Not enough extreme difficulty bosses for endgame");
     }
     if (bosses.length < 5) {
-      designIssues.push('Need more boss encounters for variety');
+      designIssues.push("Need more boss encounters for variety");
     }
     if (categoryBreakdown.size < 4) {
-      designIssues.push('Need more monster categories for variety');
+      designIssues.push("Need more monster categories for variety");
     }
 
     return {
@@ -500,7 +562,7 @@ export class BalanceAnalyzer {
     factionBalance: FactionBalanceData,
     shipBalance: ShipBalanceData,
     gameplayFeel: GameplayFeelReport,
-    monsterAnalysis: MonsterAnalysis
+    monsterAnalysis: MonsterAnalysis,
   ): OverallHealthScore {
     const criticalIssues: string[] = [];
 
@@ -509,7 +571,7 @@ export class BalanceAnalyzer {
     factionScore -= factionBalance.imbalanceWarnings.length * 5;
     factionScore = Math.max(0, factionScore);
     if (factionScore < 10) {
-      criticalIssues.push('Severe faction imbalance detected');
+      criticalIssues.push("Severe faction imbalance detected");
     }
 
     // Ship balance score (0-25)
@@ -517,13 +579,13 @@ export class BalanceAnalyzer {
     shipScore -= shipBalance.outliers.length * 2;
     shipScore = Math.max(0, shipScore);
     if (shipBalance.overperformers.length > 5) {
-      criticalIssues.push('Too many overperforming ships');
+      criticalIssues.push("Too many overperforming ships");
     }
 
     // Gameplay feel score (0-25)
     const gameplayScore = gameplayFeel.overallAssessment.healthScore * 0.25;
     if (gameplayFeel.funFactor.warnings.length > 3) {
-      criticalIssues.push('Multiple gameplay feel warnings');
+      criticalIssues.push("Multiple gameplay feel warnings");
     }
 
     // PvE content score (0-25)
@@ -531,14 +593,16 @@ export class BalanceAnalyzer {
     pveScore -= monsterAnalysis.designIssues.length * 4;
     pveScore = Math.max(0, pveScore);
 
-    const totalScore = Math.round(factionScore + shipScore + gameplayScore + pveScore);
+    const totalScore = Math.round(
+      factionScore + shipScore + gameplayScore + pveScore,
+    );
 
-    let grade: OverallHealthScore['grade'];
-    if (totalScore >= 85) grade = 'A';
-    else if (totalScore >= 70) grade = 'B';
-    else if (totalScore >= 55) grade = 'C';
-    else if (totalScore >= 40) grade = 'D';
-    else grade = 'F';
+    let grade: OverallHealthScore["grade"];
+    if (totalScore >= 85) grade = "A";
+    else if (totalScore >= 70) grade = "B";
+    else if (totalScore >= 55) grade = "C";
+    else if (totalScore >= 40) grade = "D";
+    else grade = "F";
 
     return {
       score: totalScore,
@@ -562,96 +626,98 @@ export class BalanceAnalyzer {
     roleBalance: RoleBalanceData,
     gameplayFeel: GameplayFeelReport,
     monsterAnalysis: MonsterAnalysis,
-    overallHealth: OverallHealthScore
+    overallHealth: OverallHealthScore,
   ): PrioritizedRecommendation[] {
     const recommendations: PrioritizedRecommendation[] = [];
 
     // Critical issues first
     for (const issue of overallHealth.criticalIssues) {
       recommendations.push({
-        priority: 'critical',
-        category: 'balance',
-        title: 'Critical Issue',
+        priority: "critical",
+        category: "balance",
+        title: "Critical Issue",
         description: issue,
-        effort: 'medium',
-        impact: 'large',
+        effort: "medium",
+        impact: "large",
       });
     }
 
     // Faction balance recommendations
     for (const warning of factionBalance.imbalanceWarnings) {
       recommendations.push({
-        priority: 'high',
-        category: 'balance',
-        title: 'Faction Imbalance',
+        priority: "high",
+        category: "balance",
+        title: "Faction Imbalance",
         description: warning,
-        effort: 'medium',
-        impact: 'large',
+        effort: "medium",
+        impact: "large",
       });
     }
 
     // Ship balance recommendations
     if (shipBalance.overperformers.length > 0) {
       recommendations.push({
-        priority: 'high',
-        category: 'balance',
-        title: 'Nerf Overperformers',
-        description: `Ships needing nerfs: ${shipBalance.overperformers.slice(0, 5).join(', ')}`,
-        effort: 'small',
-        impact: 'medium',
+        priority: "high",
+        category: "balance",
+        title: "Nerf Overperformers",
+        description: `Ships needing nerfs: ${shipBalance.overperformers.slice(0, 5).join(", ")}`,
+        effort: "small",
+        impact: "medium",
       });
     }
 
     if (shipBalance.underperformers.length > 0) {
       recommendations.push({
-        priority: 'medium',
-        category: 'balance',
-        title: 'Buff Underperformers',
-        description: `Ships needing buffs: ${shipBalance.underperformers.slice(0, 5).join(', ')}`,
-        effort: 'small',
-        impact: 'medium',
+        priority: "medium",
+        category: "balance",
+        title: "Buff Underperformers",
+        description: `Ships needing buffs: ${shipBalance.underperformers.slice(0, 5).join(", ")}`,
+        effort: "small",
+        impact: "medium",
       });
     }
 
     // Role balance
     if (roleBalance.dominantRole) {
       recommendations.push({
-        priority: 'medium',
-        category: 'balance',
-        title: 'Role Dominance',
+        priority: "medium",
+        category: "balance",
+        title: "Role Dominance",
         description: `${roleBalance.dominantRole} role may be too strong. Consider counters.`,
-        effort: 'medium',
-        impact: 'medium',
+        effort: "medium",
+        impact: "medium",
       });
     }
 
     // Gameplay feel recommendations
     for (const rec of gameplayFeel.recommendations) {
       recommendations.push({
-        priority: 'medium',
-        category: 'gameplay',
-        title: 'Gameplay Feel',
+        priority: "medium",
+        category: "gameplay",
+        title: "Gameplay Feel",
         description: rec,
-        effort: 'medium',
-        impact: 'large',
+        effort: "medium",
+        impact: "large",
       });
     }
 
     // Monster/PvE recommendations
     for (const issue of monsterAnalysis.designIssues) {
       recommendations.push({
-        priority: 'low',
-        category: 'content',
-        title: 'PvE Content',
+        priority: "low",
+        category: "content",
+        title: "PvE Content",
         description: issue,
-        effort: 'medium',
-        impact: 'small',
+        effort: "medium",
+        impact: "small",
       });
     }
 
     // Sort by priority
     const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
-    recommendations.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+    recommendations.sort(
+      (a, b) => priorityOrder[a.priority] - priorityOrder[b.priority],
+    );
 
     return recommendations;
   }
@@ -660,90 +726,127 @@ export class BalanceAnalyzer {
    * Generate formatted text report
    */
   generateReport(report: BalanceReport): string {
-    let output = '';
+    let output = "";
 
-    output += '╔══════════════════════════════════════════════════════════════════════╗\n';
-    output += '║              SHATTERED STARS - BALANCE ANALYSIS REPORT               ║\n';
-    output += `║              Generated: ${report.generatedAt.substring(0, 19).replace('T', ' ')}                       ║\n`;
-    output += '╚══════════════════════════════════════════════════════════════════════╝\n\n';
+    output +=
+      "╔══════════════════════════════════════════════════════════════════════╗\n";
+    output +=
+      "║              SHATTERED STARS - BALANCE ANALYSIS REPORT               ║\n";
+    output += `║              Generated: ${report.generatedAt.substring(0, 19).replace("T", " ")}                       ║\n`;
+    output +=
+      "╚══════════════════════════════════════════════════════════════════════╝\n\n";
 
     // Overall Health
-    output += '┌──────────────────────────────────────────────────────────────────────┐\n';
-    output += '│ OVERALL HEALTH                                                       │\n';
-    output += '├──────────────────────────────────────────────────────────────────────┤\n';
+    output +=
+      "┌──────────────────────────────────────────────────────────────────────┐\n";
+    output +=
+      "│ OVERALL HEALTH                                                       │\n";
+    output +=
+      "├──────────────────────────────────────────────────────────────────────┤\n";
     output += `│ Grade: ${report.overallHealth.grade}    Score: ${report.overallHealth.score}/100                                          │\n`;
-    output += '│                                                                      │\n';
-    output += '│ Breakdown:                                                           │\n';
+    output +=
+      "│                                                                      │\n";
+    output +=
+      "│ Breakdown:                                                           │\n";
     output += `│   Faction Balance:  ${report.overallHealth.breakdown.factionBalance.toString().padStart(2)}/25                                          │\n`;
     output += `│   Ship Balance:     ${report.overallHealth.breakdown.shipBalance.toString().padStart(2)}/25                                          │\n`;
     output += `│   Gameplay Feel:    ${report.overallHealth.breakdown.gameplayFeel.toFixed(0).padStart(2)}/25                                          │\n`;
     output += `│   PvE Content:      ${report.overallHealth.breakdown.pveContent.toString().padStart(2)}/25                                          │\n`;
 
     if (report.overallHealth.criticalIssues.length > 0) {
-      output += '│                                                                      │\n';
-      output += '│ ⚠ CRITICAL ISSUES:                                                  │\n';
+      output +=
+        "│                                                                      │\n";
+      output +=
+        "│ ⚠ CRITICAL ISSUES:                                                  │\n";
       for (const issue of report.overallHealth.criticalIssues) {
         output += `│   • ${issue.substring(0, 64).padEnd(64)}│\n`;
       }
     }
-    output += '└──────────────────────────────────────────────────────────────────────┘\n\n';
+    output +=
+      "└──────────────────────────────────────────────────────────────────────┘\n\n";
 
     // Faction Balance Summary
-    output += '┌──────────────────────────────────────────────────────────────────────┐\n';
-    output += '│ FACTION BALANCE                                                      │\n';
-    output += '├──────────────────────────────────────────────────────────────────────┤\n';
+    output +=
+      "┌──────────────────────────────────────────────────────────────────────┐\n";
+    output +=
+      "│ FACTION BALANCE                                                      │\n";
+    output +=
+      "├──────────────────────────────────────────────────────────────────────┤\n";
     for (const [faction, stats] of report.factionBalance.factions) {
       const winRate = (stats.overallWinRate * 100).toFixed(0);
       output += `│ ${faction.padEnd(22)} Win Rate: ${winRate.padStart(3)}%  Ships: ${stats.shipCount.toString().padStart(2)}            │\n`;
     }
 
     if (report.factionBalance.imbalanceWarnings.length > 0) {
-      output += '│                                                                      │\n';
-      output += '│ Warnings:                                                            │\n';
-      for (const warning of report.factionBalance.imbalanceWarnings.slice(0, 3)) {
+      output +=
+        "│                                                                      │\n";
+      output +=
+        "│ Warnings:                                                            │\n";
+      for (const warning of report.factionBalance.imbalanceWarnings.slice(
+        0,
+        3,
+      )) {
         output += `│   • ${warning.substring(0, 64).padEnd(64)}│\n`;
       }
     }
-    output += '└──────────────────────────────────────────────────────────────────────┘\n\n';
+    output +=
+      "└──────────────────────────────────────────────────────────────────────┘\n\n";
 
     // Ship Balance Summary
-    output += '┌──────────────────────────────────────────────────────────────────────┐\n';
-    output += '│ SHIP BALANCE                                                         │\n';
-    output += '├──────────────────────────────────────────────────────────────────────┤\n';
+    output +=
+      "┌──────────────────────────────────────────────────────────────────────┐\n";
+    output +=
+      "│ SHIP BALANCE                                                         │\n";
+    output +=
+      "├──────────────────────────────────────────────────────────────────────┤\n";
     output += `│ Total Ships: ${report.shipBalance.ships.size}                                                      │\n`;
     output += `│ Overperformers: ${report.shipBalance.overperformers.length}    Underperformers: ${report.shipBalance.underperformers.length}                          │\n`;
 
     if (report.shipBalance.outliers.length > 0) {
-      output += '│                                                                      │\n';
-      output += '│ Outliers:                                                            │\n';
+      output +=
+        "│                                                                      │\n";
+      output +=
+        "│ Outliers:                                                            │\n";
       for (const outlier of report.shipBalance.outliers.slice(0, 5)) {
         output += `│   • ${outlier.substring(0, 64).padEnd(64)}│\n`;
       }
     }
-    output += '└──────────────────────────────────────────────────────────────────────┘\n\n';
+    output +=
+      "└──────────────────────────────────────────────────────────────────────┘\n\n";
 
     // Monster Analysis
-    output += '┌──────────────────────────────────────────────────────────────────────┐\n';
-    output += '│ PVE CONTENT (MONSTERS)                                               │\n';
-    output += '├──────────────────────────────────────────────────────────────────────┤\n';
+    output +=
+      "┌──────────────────────────────────────────────────────────────────────┐\n";
+    output +=
+      "│ PVE CONTENT (MONSTERS)                                               │\n";
+    output +=
+      "├──────────────────────────────────────────────────────────────────────┤\n";
     output += `│ Total Monsters: ${report.monsterAnalysis.totalMonsters}    Bosses: ${report.monsterAnalysis.bossCount}                                        │\n`;
-    output += '│                                                                      │\n';
-    output += '│ Difficulty Spread:                                                   │\n';
+    output +=
+      "│                                                                      │\n";
+    output +=
+      "│ Difficulty Spread:                                                   │\n";
     output += `│   Easy: ${report.monsterAnalysis.difficultySpread.easy}  Medium: ${report.monsterAnalysis.difficultySpread.medium}  Hard: ${report.monsterAnalysis.difficultySpread.hard}  Extreme: ${report.monsterAnalysis.difficultySpread.extreme}                        │\n`;
 
     if (report.monsterAnalysis.designIssues.length > 0) {
-      output += '│                                                                      │\n';
-      output += '│ Issues:                                                              │\n';
+      output +=
+        "│                                                                      │\n";
+      output +=
+        "│ Issues:                                                              │\n";
       for (const issue of report.monsterAnalysis.designIssues) {
         output += `│   • ${issue.substring(0, 64).padEnd(64)}│\n`;
       }
     }
-    output += '└──────────────────────────────────────────────────────────────────────┘\n\n';
+    output +=
+      "└──────────────────────────────────────────────────────────────────────┘\n\n";
 
     // Recommendations
-    output += '┌──────────────────────────────────────────────────────────────────────┐\n';
-    output += '│ PRIORITIZED RECOMMENDATIONS                                          │\n';
-    output += '├──────────────────────────────────────────────────────────────────────┤\n';
+    output +=
+      "┌──────────────────────────────────────────────────────────────────────┐\n";
+    output +=
+      "│ PRIORITIZED RECOMMENDATIONS                                          │\n";
+    output +=
+      "├──────────────────────────────────────────────────────────────────────┤\n";
 
     for (const rec of report.recommendations.slice(0, 10)) {
       const priority = rec.priority.toUpperCase().padEnd(8);
@@ -752,22 +855,24 @@ export class BalanceAnalyzer {
       for (const line of descLines) {
         output += `│     ${line.padEnd(65)}│\n`;
       }
-      output += '│                                                                      │\n';
+      output +=
+        "│                                                                      │\n";
     }
 
-    output += '└──────────────────────────────────────────────────────────────────────┘\n';
+    output +=
+      "└──────────────────────────────────────────────────────────────────────┘\n";
 
     return output;
   }
 
   private wrapText(text: string, maxWidth: number): string[] {
-    const words = text.split(' ');
+    const words = text.split(" ");
     const lines: string[] = [];
-    let currentLine = '';
+    let currentLine = "";
 
     for (const word of words) {
       if (currentLine.length + word.length + 1 <= maxWidth) {
-        currentLine += (currentLine ? ' ' : '') + word;
+        currentLine += (currentLine ? " " : "") + word;
       } else {
         if (currentLine) lines.push(currentLine);
         currentLine = word;
@@ -780,8 +885,8 @@ export class BalanceAnalyzer {
 
 // Convenience function for quick analysis
 export async function runBalanceAnalysis(
-  mode: 'turn_based' | 'continuous' = 'continuous',
-  battlesPerMatchup: number = 30
+  mode: "arcade" | "continuous" = "continuous",
+  battlesPerMatchup: number = 30,
 ): Promise<string> {
   const analyzer = new BalanceAnalyzer(mode, battlesPerMatchup);
   const report = await analyzer.analyze();

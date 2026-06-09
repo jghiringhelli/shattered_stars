@@ -6,7 +6,7 @@
  * and waiting for scene transitions.
  */
 
-import type { Page } from '@playwright/test';
+import type { Page } from "@playwright/test";
 
 // ─────────────────────────────────────────────
 // Scene helpers
@@ -16,7 +16,7 @@ import type { Page } from '@playwright/test';
 export async function waitForScene(
   page: Page,
   sceneKey: string,
-  timeout = 30_000
+  timeout = 30_000,
 ): Promise<void> {
   await page.waitForFunction(
     (key: string) => {
@@ -24,7 +24,7 @@ export async function waitForScene(
       return g?.isBooted === true && g.scene.isActive(key);
     },
     sceneKey,
-    { timeout }
+    { timeout },
   );
 }
 
@@ -36,16 +36,16 @@ export async function waitForScene(
  */
 export async function waitForMenuReady(page: Page): Promise<void> {
   // Allow up to 50s for cold Vite boot with 4 parallel workers
-  await waitForScene(page, 'MainMenuScene', 50_000);
+  await waitForScene(page, "MainMenuScene", 50_000);
   await page.waitForFunction(
     () => {
       const g = (window as any).game;
-      const scene = g?.scene.getScene('MainMenuScene') as any;
+      const scene = g?.scene.getScene("MainMenuScene") as any;
       if (!scene?.menuItems?.length) return false;
       const lastItem = scene.menuItems[scene.menuItems.length - 1];
       return lastItem?.x > 600;
     },
-    { timeout: 15_000 }
+    { timeout: 15_000 },
   );
 }
 
@@ -62,10 +62,13 @@ interface CanvasTransform {
 
 /** Return conversion factors between Phaser game coords (1280×720) and real viewport pixels. */
 async function getCanvasTransform(page: Page): Promise<CanvasTransform> {
-  const box = (await page.locator('canvas').boundingBox())!;
+  const box = (await page.locator("canvas").boundingBox())!;
   const { gw, gh } = await page.evaluate(() => {
     const g = (window as any).game;
-    return { gw: g.scale.gameSize.width as number, gh: g.scale.gameSize.height as number };
+    return {
+      gw: g.scale.gameSize.width as number,
+      gh: g.scale.gameSize.height as number,
+    };
   });
   return {
     offsetX: box.x,
@@ -76,7 +79,11 @@ async function getCanvasTransform(page: Page): Promise<CanvasTransform> {
 }
 
 /** Click at a position expressed in Phaser game-world coordinates (not viewport pixels). */
-export async function clickGameCoord(page: Page, gameX: number, gameY: number): Promise<void> {
+export async function clickGameCoord(
+  page: Page,
+  gameX: number,
+  gameY: number,
+): Promise<void> {
   const { offsetX, offsetY, scaleX, scaleY } = await getCanvasTransform(page);
   await page.mouse.click(offsetX + gameX * scaleX, offsetY + gameY * scaleY);
 }
@@ -93,16 +100,30 @@ export async function clickGameCoord(page: Page, gameX: number, gameY: number): 
  */
 export async function pressGameKey(page: Page, key: string): Promise<void> {
   const KEY_CODES: Record<string, number> = {
-    Escape: 27, Space: 32, Enter: 13,
-    ArrowUp: 38, ArrowDown: 40, ArrowLeft: 37, ArrowRight: 39,
+    Escape: 27,
+    Space: 32,
+    Enter: 13,
+    ArrowUp: 38,
+    ArrowDown: 40,
+    ArrowLeft: 37,
+    ArrowRight: 39,
   };
   const keyCode = KEY_CODES[key] ?? 0;
-  await page.evaluate(([k, kc]: [string, number]) => {
-    window.dispatchEvent(new KeyboardEvent('keydown', {
-      key: k, code: k, keyCode: kc, which: kc,
-      bubbles: true, cancelable: true,
-    } as KeyboardEventInit));
-  }, [key, keyCode] as [string, number]);
+  await page.evaluate(
+    ([k, kc]: [string, number]) => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: k,
+          code: k,
+          keyCode: kc,
+          which: kc,
+          bubbles: true,
+          cancelable: true,
+        } as KeyboardEventInit),
+      );
+    },
+    [key, keyCode] as [string, number],
+  );
 }
 
 // ─────────────────────────────────────────────
@@ -110,24 +131,24 @@ export async function pressGameKey(page: Page, key: string): Promise<void> {
 // ─────────────────────────────────────────────
 
 // MainMenuScene: startY = 250, spacing = 55, centerX = 640
-// Items (0-indexed): SKIRMISH SURVIVAL EPIC_BATTLE DOGFIGHT ACE_DUEL CAMPAIGN ONLINE SETTINGS ENCYCLOPEDIA CREDITS
+// Items (0-indexed): SKIRMISH SURVIVAL EPIC_FORMAT DOGFIGHT ACE_DUEL CAMPAIGN ONLINE SETTINGS ENCYCLOPEDIA CREDITS
 const MENU_POSITIONS: Record<string, number> = {
-  SKIRMISH:      0,
-  SURVIVAL:      1,
-  'EPIC BATTLE': 2,
-  DOGFIGHT:      3,
-  'ACE DUEL':    4,
-  CAMPAIGN:      5,
-  ONLINE:        6,
-  SETTINGS:      7,
-  ENCYCLOPEDIA:  8,
-  CREDITS:       9,
+  SKIRMISH: 0,
+  SURVIVAL: 1,
+  "EPIC FORMAT": 2,
+  DOGFIGHT: 3,
+  "ACE DUEL": 4,
+  CAMPAIGN: 5,
+  ONLINE: 6,
+  SETTINGS: 7,
+  ENCYCLOPEDIA: 8,
+  CREDITS: 9,
 };
 
 /** Click a main-menu item by its visible label. */
 export async function clickMenuItem(
   page: Page,
-  label: keyof typeof MENU_POSITIONS
+  label: keyof typeof MENU_POSITIONS,
 ): Promise<void> {
   const index = MENU_POSITIONS[label];
   if (index === undefined) throw new Error(`Unknown menu label: ${label}`);
@@ -146,17 +167,17 @@ export async function clickMenuItem(
 export async function readSceneState<T>(
   page: Page,
   sceneKey: string,
-  accessor: string
+  accessor: string,
 ): Promise<T> {
   return page.evaluate(
     ([key, acc]: [string, string]) => {
       const scene = (window as any).game?.scene.getScene(key) as any;
       if (!scene) return undefined;
       return (acc as string)
-        .split('.')
+        .split(".")
         .reduce((obj: any, k: string) => obj?.[k], scene) as unknown;
     },
-    [sceneKey, accessor] as [string, string]
+    [sceneKey, accessor] as [string, string],
   ) as Promise<T>;
 }
 
@@ -176,21 +197,21 @@ export interface ConsoleErrorLog {
  */
 export function collectErrors(page: Page): ConsoleErrorLog {
   const log: ConsoleErrorLog = { consoleErrors: [], pageErrors: [] };
-  page.on('console', (msg) => {
-    if (msg.type() === 'error') {
+  page.on("console", (msg) => {
+    if (msg.type() === "error") {
       const t = msg.text();
       if (
-        !t.includes('WebGL') &&
-        !t.includes('Framebuffer') &&
-        !t.includes('favicon') &&
-        !t.includes('Failed to process file') && // missing ship art textures
-        !t.includes('WebSocket connection')        // no P2P server in test env
+        !t.includes("WebGL") &&
+        !t.includes("Framebuffer") &&
+        !t.includes("favicon") &&
+        !t.includes("Failed to process file") && // missing ship art textures
+        !t.includes("WebSocket connection") // no P2P server in test env
       ) {
         log.consoleErrors.push(t);
       }
     }
   });
-  page.on('pageerror', (err) => log.pageErrors.push(err.message));
+  page.on("pageerror", (err) => log.pageErrors.push(err.message));
   return log;
 }
 
@@ -199,19 +220,19 @@ export function collectErrors(page: Page): ConsoleErrorLog {
  * Use `collectErrors` when you need to assert zero errors.
  */
 export function suppressWebGLNoise(page: Page): void {
-  page.on('console', (msg) => {
-    if (msg.type() === 'error') {
+  page.on("console", (msg) => {
+    if (msg.type() === "error") {
       const t = msg.text();
       if (
-        !t.includes('WebGL') &&
-        !t.includes('Framebuffer') &&
-        !t.includes('favicon') &&
-        !t.includes('Failed to process file') &&
-        !t.includes('WebSocket connection')
+        !t.includes("WebGL") &&
+        !t.includes("Framebuffer") &&
+        !t.includes("favicon") &&
+        !t.includes("Failed to process file") &&
+        !t.includes("WebSocket connection")
       ) {
-        console.warn('[console.error]', t);
+        console.warn("[console.error]", t);
       }
     }
   });
-  page.on('pageerror', (err) => console.error('[page error]', err.message));
+  page.on("pageerror", (err) => console.error("[page error]", err.message));
 }

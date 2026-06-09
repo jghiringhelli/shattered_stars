@@ -9,32 +9,35 @@
  * - Damage output consistency
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
-import { BattleSimulator, type AggregatedStats } from '../../src/simulation/BattleSimulator';
-import { SHIP_DEFINITIONS } from '../../src/data/ShipDefinitions';
-import type { FactionId } from '../../src/config';
+import { describe, it, expect, beforeAll } from "vitest";
+import {
+  BattleSimulator,
+  type AggregatedStats,
+} from "../../src/simulation/BattleSimulator";
+import { SHIP_DEFINITIONS } from "../../src/data/ShipDefinitions";
+import type { FactionId } from "../../src/config";
 
 // Helper to get ships by faction
 function getShipsForFaction(faction: FactionId): string[] {
   return Object.values(SHIP_DEFINITIONS)
-    .filter(ship => ship.faction === faction)
-    .map(ship => ship.id);
+    .filter((ship) => ship.faction === faction)
+    .map((ship) => ship.id);
 }
 
 // Helper to get ships by role
 function getShipsByRole(role: string): string[] {
   return Object.values(SHIP_DEFINITIONS)
-    .filter(ship => ship.role === role)
-    .map(ship => ship.id);
+    .filter((ship) => ship.role === role)
+    .map((ship) => ship.id);
 }
 
-describe('BattleSimulator', () => {
-  describe('Basic Functionality', () => {
-    it('should run a single battle to completion', () => {
+describe("BattleSimulator", () => {
+  describe("Basic Functionality", () => {
+    it("should run a single battle to completion", () => {
       const sim = new BattleSimulator({ verbose: false, maxTurns: 50 });
       const result = sim.runBattle(
-        ['terran_viper', 'terran_gladius'],
-        ['confed_sparrow', 'confed_falcon']
+        ["terran_viper", "terran_gladius"],
+        ["confed_sparrow", "confed_falcon"],
       );
 
       expect(result).toBeDefined();
@@ -43,12 +46,9 @@ describe('BattleSimulator', () => {
       expect(result.turnsElapsed).toBeLessThanOrEqual(50);
     });
 
-    it('should track ship statistics correctly', () => {
+    it("should track ship statistics correctly", () => {
       const sim = new BattleSimulator({ verbose: false, maxTurns: 30 });
-      const result = sim.runBattle(
-        ['terran_viper'],
-        ['confed_sparrow']
-      );
+      const result = sim.runBattle(["terran_viper"], ["confed_sparrow"]);
 
       expect(result.shipStats.size).toBe(2);
 
@@ -59,12 +59,12 @@ describe('BattleSimulator', () => {
       }
     });
 
-    it('should run batch simulations', () => {
+    it("should run batch simulations", () => {
       const sim = new BattleSimulator({ verbose: false, maxTurns: 30 });
       const stats = sim.runBatchSimulation(
-        ['terran_viper', 'terran_gladius'],
-        ['confed_sparrow', 'confed_falcon'],
-        10
+        ["terran_viper", "terran_gladius"],
+        ["confed_sparrow", "confed_falcon"],
+        10,
       );
 
       expect(stats.totalBattles).toBe(10);
@@ -73,14 +73,14 @@ describe('BattleSimulator', () => {
     });
   });
 
-  describe('Ship Definitions', () => {
-    it('should have ships for all factions', () => {
+  describe("Ship Definitions", () => {
+    it("should have ships for all factions", () => {
       const factions: FactionId[] = [
-        'terran_hegemony',
-        'free_confederation',
-        'synthetic_collective',
-        'void_corsairs',
-        'ascendant_empire',
+        "terran_hegemony",
+        "free_confederation",
+        "synthetic_collective",
+        "void_corsairs",
+        "ascendant_empire",
       ];
 
       for (const faction of factions) {
@@ -89,23 +89,23 @@ describe('BattleSimulator', () => {
       }
     });
 
-    it('should have multiple ship roles', () => {
+    it("should have multiple ship roles", () => {
       const allShips = Object.values(SHIP_DEFINITIONS);
-      const roles = new Set(allShips.map(s => s.role));
+      const roles = new Set(allShips.map((s) => s.role));
 
       expect(roles.size).toBeGreaterThanOrEqual(4);
     });
   });
 });
 
-describe('Faction Balance', () => {
+describe("Faction Balance", () => {
   const BATTLES_PER_MATCHUP = 50;
   const factions: FactionId[] = [
-    'terran_hegemony',
-    'free_confederation',
-    'synthetic_collective',
-    'void_corsairs',
-    'ascendant_empire',
+    "terran_hegemony",
+    "free_confederation",
+    "synthetic_collective",
+    "void_corsairs",
+    "ascendant_empire",
   ];
 
   // Cache matchup results
@@ -126,7 +126,7 @@ describe('Faction Balance', () => {
           const stats = sim.runBatchSimulation(
             ships1.slice(0, 2),
             ships2.slice(0, 2),
-            BATTLES_PER_MATCHUP
+            BATTLES_PER_MATCHUP,
           );
           matchupResults.set(`${faction1}_vs_${faction2}`, stats);
         }
@@ -134,7 +134,7 @@ describe('Faction Balance', () => {
     }
   }, 120000); // 2 minute timeout for all matchups
 
-  it('should have no faction with >97% win rate against another', () => {
+  it("should have no faction with >97% win rate against another", () => {
     // Balance threshold: 97% is near-unwinnable dominance
     // Note: With arcade tuning (faster TTK) and small samples (50 battles), variance is high
     // Current arcade mode sees up to 96% in some matchups - tracking for future tuning
@@ -149,18 +149,18 @@ describe('Faction Balance', () => {
     }
   });
 
-  it('should have reasonable draw rates (<90%)', () => {
+  it("should have reasonable draw rates (<90%)", () => {
     // Note: Draw rates can be high with faster TTK and small samples (50 battles)
     // This test uses a relaxed threshold to track improvement over time
     // Current arcade mode sees up to 86% draws in some matchups - tracking for tuning
     // TODO: Reduce to 50% threshold after balance pass
     for (const [matchup, stats] of matchupResults) {
       const drawRate = stats.draws / stats.totalBattles;
-      expect(drawRate).toBeLessThanOrEqual(0.90); // Very relaxed for arcade tuning variance
+      expect(drawRate).toBeLessThanOrEqual(0.9); // Very relaxed for arcade tuning variance
     }
   });
 
-  it('should have battles resolve in reasonable time', () => {
+  it("should have battles resolve in reasonable time", () => {
     for (const [matchup, stats] of matchupResults) {
       // Battles shouldn't stalemate - average should be under 60 turns (maxTurns)
       // Note: Currently some matchups average 56+ turns as ships need time to engage
@@ -171,19 +171,19 @@ describe('Faction Balance', () => {
   });
 });
 
-describe('Ship Role Balance', () => {
+describe("Ship Role Balance", () => {
   const BATTLES = 30;
 
-  it('should have fighters competitive with each other', () => {
+  it("should have fighters competitive with each other", () => {
     const sim = new BattleSimulator({ verbose: false, maxTurns: 50 });
-    const fighters = getShipsByRole('light_fighter');
+    const fighters = getShipsByRole("light_fighter");
 
     if (fighters.length >= 2) {
       // Pick two different fighters from different factions
       const stats = sim.runBatchSimulation(
         [fighters[0]!, fighters[0]!],
         [fighters[1] || fighters[0]!, fighters[1] || fighters[0]!],
-        BATTLES
+        BATTLES,
       );
 
       // Battles should resolve (not all draws) - someone should win
@@ -194,49 +194,53 @@ describe('Ship Role Balance', () => {
     }
   });
 
-  it('should have bombers deal more damage than fighters', () => {
+  it("should have bombers deal more damage than fighters", () => {
     const sim = new BattleSimulator({ verbose: false, maxTurns: 50 });
-    const fighters = getShipsByRole('light_fighter');
-    const bombers = getShipsByRole('bomber');
+    const fighters = getShipsByRole("light_fighter");
+    const bombers = getShipsByRole("bomber");
 
     if (fighters.length > 0 && bombers.length > 0) {
       // Run fighter vs fighter
       const fighterStats = sim.runBatchSimulation(
         [fighters[0]!],
         [fighters[0]!],
-        BATTLES
+        BATTLES,
       );
 
       // Run bomber vs bomber
       const bomberStats = sim.runBatchSimulation(
         [bombers[0]!],
         [bombers[0]!],
-        BATTLES
+        BATTLES,
       );
 
       // Bombers should average more damage
-      const fighterDamage = fighterStats.shipPerformance.get(fighters[0]!)?.averageDamageDealt || 0;
-      const bomberDamage = bomberStats.shipPerformance.get(bombers[0]!)?.averageDamageDealt || 0;
+      const fighterDamage =
+        fighterStats.shipPerformance.get(fighters[0]!)?.averageDamageDealt || 0;
+      const bomberDamage =
+        bomberStats.shipPerformance.get(bombers[0]!)?.averageDamageDealt || 0;
 
       expect(bomberDamage).toBeGreaterThanOrEqual(fighterDamage * 0.8); // At least 80% of fighter damage
     }
   });
 
-  it('should have interceptors with higher survival than bombers', () => {
+  it("should have interceptors with higher survival than bombers", () => {
     const sim = new BattleSimulator({ verbose: false, maxTurns: 50 });
-    const interceptors = getShipsByRole('interceptor');
-    const bombers = getShipsByRole('bomber');
+    const interceptors = getShipsByRole("interceptor");
+    const bombers = getShipsByRole("bomber");
 
     if (interceptors.length > 0 && bombers.length > 0) {
       // Mixed battle
       const stats = sim.runBatchSimulation(
         [interceptors[0]!, bombers[0]!],
         [interceptors[0]!, bombers[0]!],
-        BATTLES
+        BATTLES,
       );
 
-      const interceptorSurvival = stats.shipPerformance.get(interceptors[0]!)?.survivalRate || 0;
-      const bomberSurvival = stats.shipPerformance.get(bombers[0]!)?.survivalRate || 0;
+      const interceptorSurvival =
+        stats.shipPerformance.get(interceptors[0]!)?.survivalRate || 0;
+      const bomberSurvival =
+        stats.shipPerformance.get(bombers[0]!)?.survivalRate || 0;
 
       // Interceptors should survive more often (more agile)
       // Allow some variance but interceptors should generally survive better
@@ -245,13 +249,13 @@ describe('Ship Role Balance', () => {
   });
 });
 
-describe('Combat Mechanics', () => {
-  it('should have ships dealing damage', () => {
+describe("Combat Mechanics", () => {
+  it("should have ships dealing damage", () => {
     const sim = new BattleSimulator({ verbose: false, maxTurns: 40 });
     const stats = sim.runBatchSimulation(
-      ['terran_viper', 'terran_gladius'],
-      ['confed_sparrow', 'confed_falcon'],
-      20
+      ["terran_viper", "terran_gladius"],
+      ["confed_sparrow", "confed_falcon"],
+      20,
     );
 
     // Ships should be dealing damage
@@ -260,29 +264,30 @@ describe('Combat Mechanics', () => {
     }
   });
 
-  it('should have reasonable hit rates (30-80%)', () => {
+  it("should have reasonable hit rates (30-80%)", () => {
     const sim = new BattleSimulator({ verbose: false, maxTurns: 40 });
     const stats = sim.runBatchSimulation(
-      ['terran_viper', 'terran_gladius'],
-      ['confed_sparrow', 'confed_falcon'],
-      30
+      ["terran_viper", "terran_gladius"],
+      ["confed_sparrow", "confed_falcon"],
+      30,
     );
 
     for (const [, perf] of stats.shipPerformance) {
       // Hit rate should be reasonable
-      if (perf.hitRate > 0) { // Only check if shots were fired
+      if (perf.hitRate > 0) {
+        // Only check if shots were fired
         expect(perf.hitRate).toBeGreaterThan(0.2);
         expect(perf.hitRate).toBeLessThan(0.9);
       }
     }
   });
 
-  it('should have ships accumulating kills', () => {
+  it("should have ships accumulating kills", () => {
     const sim = new BattleSimulator({ verbose: false, maxTurns: 50 });
     const stats = sim.runBatchSimulation(
-      ['terran_viper', 'terran_gladius', 'terran_hammer'],
-      ['confed_sparrow', 'confed_falcon', 'confed_raven'],
-      20
+      ["terran_viper", "terran_gladius", "terran_hammer"],
+      ["confed_sparrow", "confed_falcon", "confed_raven"],
+      20,
     );
 
     let totalKills = 0;
@@ -295,33 +300,33 @@ describe('Combat Mechanics', () => {
   });
 });
 
-describe('Game Mode Balance', () => {
-  it('should work in continuous mode', () => {
+describe("Game Mode Balance", () => {
+  it("should work in continuous mode", () => {
     const sim = new BattleSimulator({
       verbose: false,
       maxTurns: 50,
-      mode: 'continuous'
+      mode: "continuous",
     });
 
     const result = sim.runBattle(
-      ['terran_viper', 'terran_gladius'],
-      ['confed_sparrow', 'confed_falcon']
+      ["terran_viper", "terran_gladius"],
+      ["confed_sparrow", "confed_falcon"],
     );
 
     expect(result.winner).toBeDefined();
     expect(result.turnsElapsed).toBeGreaterThan(0);
   });
 
-  it('should work in turn-based mode', () => {
+  it("should work in turn-based mode", () => {
     const sim = new BattleSimulator({
       verbose: false,
       maxTurns: 50,
-      mode: 'turn_based'
+      mode: "arcade",
     });
 
     const result = sim.runBattle(
-      ['terran_viper', 'terran_gladius'],
-      ['confed_sparrow', 'confed_falcon']
+      ["terran_viper", "terran_gladius"],
+      ["confed_sparrow", "confed_falcon"],
     );
 
     expect(result.winner).toBeDefined();
@@ -329,20 +334,20 @@ describe('Game Mode Balance', () => {
   });
 });
 
-describe('Balance Report', () => {
-  it('should generate a readable balance report', () => {
+describe("Balance Report", () => {
+  it("should generate a readable balance report", () => {
     const sim = new BattleSimulator({ verbose: false, maxTurns: 40 });
     const stats = sim.runBatchSimulation(
-      ['terran_viper', 'terran_gladius'],
-      ['confed_sparrow', 'confed_falcon'],
-      10
+      ["terran_viper", "terran_gladius"],
+      ["confed_sparrow", "confed_falcon"],
+      10,
     );
 
     const report = sim.generateBalanceReport(stats);
 
-    expect(report).toContain('BALANCE SIMULATION REPORT');
-    expect(report).toContain('Total Battles:');
-    expect(report).toContain('FACTION PERFORMANCE');
-    expect(report).toContain('SHIP PERFORMANCE');
+    expect(report).toContain("BALANCE SIMULATION REPORT");
+    expect(report).toContain("Total Battles:");
+    expect(report).toContain("FACTION PERFORMANCE");
+    expect(report).toContain("SHIP PERFORMANCE");
   });
 });

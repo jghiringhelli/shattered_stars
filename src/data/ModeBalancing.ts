@@ -1,14 +1,14 @@
 /**
  * Mode-Specific Ship Balancing
  *
- * Turn-Based: Strategic, single attacks per round, high damage per hit
- * Continuous: Fast-paced, multiple attacks per second, lower damage per hit
+ * Arcade:    Fast-paced real-time, direct control, forward laser capped at 2 dmg
+ * Continuous: Interval maneuvers + continuous combat, tactical positioning
  * Survival:   Endless waves — durable ships, continuous-speed combat
  */
 
-import { getShipDefinition } from './ShipDefinitions';
+import { getShipDefinition } from "./ShipDefinitions";
 
-export type GameMode = 'turn_based' | 'continuous' | 'survival';
+export type GameMode = "arcade" | "continuous" | "survival";
 
 /**
  * Combat stats scaled for the specific game mode
@@ -120,40 +120,34 @@ interface ModeBaseStats {
 }
 
 const MODE_BASE_STATS: Record<GameMode, ModeBaseStats> = {
-  turn_based: {
-    // Higher HP for longer battles
-    hullMultiplier: 1.5,
-    shieldMultiplier: 1.5,
-    // Attack = number of attack dice
-    attackBase: 3,
-    // Agility = number of defense dice
-    agilityBase: 2,
-    // Not really used in turn-based but needed for interface
-    baseWeaponCooldown: 0,
-    // Range bands: 1=100px, 2=200px, 3=300px
-    baseWeaponRange: 300,
-    // Standard 90 degree arc
-    baseFiringArc: 90,
-    // Slower animations for dramatic effect
-    maneuverSpeed: 1.0,
+  arcade: {
+    // Forward laser capped at 2 — fast kills, direct control
+    hullMultiplier: 0.6,
+    shieldMultiplier: 0.5,
+    attackBase: 1.5,
+    agilityBase: 1.2,
+    baseWeaponCooldown: 400,
+    baseWeaponRange: 250,
+    baseFiringArc: 75,
+    maneuverSpeed: 1.8,
   },
   continuous: {
     // === ARCADE MODE TUNING (Target: ~4 hit TTK like X-Wing) ===
     // Lower HP for faster kills - aim for 4-6 effective HP
-    hullMultiplier: 0.6,    // Reduced from 1.0 - faster deaths
-    shieldMultiplier: 0.5,  // Reduced from 0.8 - shields break fast
+    hullMultiplier: 0.6, // Reduced from 1.0 - faster deaths
+    shieldMultiplier: 0.5, // Reduced from 0.8 - shields break fast
     // Attack = damage per hit - 1-2 per hit for 4-5 hit kills
-    attackBase: 1.5,        // Reduced from 2 - more hits needed but lower HP
+    attackBase: 1.5, // Reduced from 2 - more hits needed but lower HP
     // Agility = dodge chance modifier - keep dodging meaningful
-    agilityBase: 1.2,       // Increased from 1 - evasion matters
+    agilityBase: 1.2, // Increased from 1 - evasion matters
     // Base weapon cooldown in ms - fast but not instant
     baseWeaponCooldown: 400, // Reduced from 500 - snappier combat
     // Range for engagement - close range dogfighting
-    baseWeaponRange: 250,   // Reduced from 300 - forces closer combat
+    baseWeaponRange: 250, // Reduced from 300 - forces closer combat
     // Firing arc - requires aim but not punishing
-    baseFiringArc: 75,      // Reduced from 90 - positioning matters
+    baseFiringArc: 75, // Reduced from 90 - positioning matters
     // Faster animations for responsive arcade feel
-    maneuverSpeed: 1.8,     // Increased from 1.5 - snappier movement
+    maneuverSpeed: 1.8, // Increased from 1.5 - snappier movement
   },
   survival: {
     // Endless waves — ships must survive multiple engagements.
@@ -161,7 +155,7 @@ const MODE_BASE_STATS: Record<GameMode, ModeBaseStats> = {
     // light fighters reach hull ≥ 3 (hullMod 0.8 × 1.2 × base ≥ 3).
     hullMultiplier: 1.2,
     shieldMultiplier: 0.9,
-    attackBase: 1.5,        // Same damage tempo as continuous
+    attackBase: 1.5, // Same damage tempo as continuous
     agilityBase: 1.2,
     baseWeaponCooldown: 400,
     baseWeaponRange: 250,
@@ -173,7 +167,10 @@ const MODE_BASE_STATS: Record<GameMode, ModeBaseStats> = {
 /**
  * Get combat stats for a ship in a specific game mode
  */
-export function getModeCombatStats(shipDefId: string, mode: GameMode): ModeCombatStats {
+export function getModeCombatStats(
+  shipDefId: string,
+  mode: GameMode,
+): ModeCombatStats {
   const shipDef = getShipDefinition(shipDefId);
   if (!shipDef) {
     // Return default stats if ship not found
@@ -181,34 +178,45 @@ export function getModeCombatStats(shipDefId: string, mode: GameMode): ModeComba
   }
 
   const baseStats = shipDef.baseStats;
-  const roleModifiers = ROLE_MODIFIERS[shipDef.role] ?? ROLE_MODIFIERS['heavy_fighter'];
+  const roleModifiers =
+    ROLE_MODIFIERS[shipDef.role] ?? ROLE_MODIFIERS["heavy_fighter"];
   const modeStats = MODE_BASE_STATS[mode];
 
   // Calculate hull and shields
-  const hull = Math.round(baseStats.hull * modeStats.hullMultiplier * (roleModifiers?.hullMod ?? 1));
-  const shields = Math.round(baseStats.shields * modeStats.shieldMultiplier * (roleModifiers?.shieldMod ?? 1));
+  const hull = Math.round(
+    baseStats.hull * modeStats.hullMultiplier * (roleModifiers?.hullMod ?? 1),
+  );
+  const shields = Math.round(
+    baseStats.shields *
+      modeStats.shieldMultiplier *
+      (roleModifiers?.shieldMod ?? 1),
+  );
 
   // Calculate attack value (dice or damage)
   const attackDice = Math.round(
-    baseStats.attack * (modeStats.attackBase / 3) * (roleModifiers?.attackMod ?? 1)
+    baseStats.attack *
+      (modeStats.attackBase / 3) *
+      (roleModifiers?.attackMod ?? 1),
   );
 
   // Calculate agility (dice or modifier)
   const agilityDice = Math.round(
-    baseStats.agility * (modeStats.agilityBase / 2) * (roleModifiers?.agilityMod ?? 1)
+    baseStats.agility *
+      (modeStats.agilityBase / 2) *
+      (roleModifiers?.agilityMod ?? 1),
   );
 
   // Calculate weapon stats for continuous mode
   const weaponCooldown = Math.round(
-    modeStats.baseWeaponCooldown * (roleModifiers?.cooldownMod ?? 1)
+    modeStats.baseWeaponCooldown * (roleModifiers?.cooldownMod ?? 1),
   );
 
   const weaponRange = Math.round(
-    modeStats.baseWeaponRange * (roleModifiers?.rangeMod ?? 1)
+    modeStats.baseWeaponRange * (roleModifiers?.rangeMod ?? 1),
   );
 
   const firingArc = Math.round(
-    modeStats.baseFiringArc * (roleModifiers?.arcMod ?? 1)
+    modeStats.baseFiringArc * (roleModifiers?.arcMod ?? 1),
   );
 
   return {
@@ -247,7 +255,10 @@ function getDefaultStats(mode: GameMode): ModeCombatStats {
  * Calculate hit chance in continuous mode
  * Based on attacker's attack stat and defender's agility
  */
-export function calculateHitChance(attackerAttack: number, defenderAgility: number): number {
+export function calculateHitChance(
+  attackerAttack: number,
+  defenderAgility: number,
+): number {
   // Base 60% hit chance
   const baseChance = 0.6;
   // Each point of attack adds 5%
@@ -255,7 +266,10 @@ export function calculateHitChance(attackerAttack: number, defenderAgility: numb
   // Each point of agility reduces by 8%
   const agilityPenalty = defenderAgility * 0.08;
 
-  return Math.max(0.2, Math.min(0.95, baseChance + attackBonus - agilityPenalty));
+  return Math.max(
+    0.2,
+    Math.min(0.95, baseChance + attackBonus - agilityPenalty),
+  );
 }
 
 /**
@@ -400,35 +414,38 @@ export function resolveTurnBasedAttack(
 /**
  * Ship archetype descriptions for UI
  */
-export const ARCHETYPE_DESCRIPTIONS: Record<string, { name: string; strengths: string; weaknesses: string }> = {
+export const ARCHETYPE_DESCRIPTIONS: Record<
+  string,
+  { name: string; strengths: string; weaknesses: string }
+> = {
   light_fighter: {
-    name: 'Light Fighter',
-    strengths: 'High agility, fast firing, cheap',
-    weaknesses: 'Low durability, weak damage',
+    name: "Light Fighter",
+    strengths: "High agility, fast firing, cheap",
+    weaknesses: "Low durability, weak damage",
   },
   interceptor: {
-    name: 'Interceptor',
-    strengths: 'Fastest ships, excellent evasion, rapid fire',
-    weaknesses: 'Fragile, short range, narrow arc',
+    name: "Interceptor",
+    strengths: "Fastest ships, excellent evasion, rapid fire",
+    weaknesses: "Fragile, short range, narrow arc",
   },
   heavy_fighter: {
-    name: 'Heavy Fighter',
-    strengths: 'Balanced stats, versatile',
-    weaknesses: 'No particular specialty',
+    name: "Heavy Fighter",
+    strengths: "Balanced stats, versatile",
+    weaknesses: "No particular specialty",
   },
   bomber: {
-    name: 'Bomber',
-    strengths: 'High durability, ordnance capability',
-    weaknesses: 'Slow, poor agility, slow firing',
+    name: "Bomber",
+    strengths: "High durability, ordnance capability",
+    weaknesses: "Slow, poor agility, slow firing",
   },
   gunship: {
-    name: 'Gunship',
-    strengths: 'Highest damage, wide arcs, tanky',
-    weaknesses: 'Very slow, easy to outmaneuver',
+    name: "Gunship",
+    strengths: "Highest damage, wide arcs, tanky",
+    weaknesses: "Very slow, easy to outmaneuver",
   },
   support: {
-    name: 'Support',
-    strengths: 'Team buffs, high shields, 360° coverage',
-    weaknesses: 'Minimal offense, sitting duck if alone',
+    name: "Support",
+    strengths: "Team buffs, high shields, 360° coverage",
+    weaknesses: "Minimal offense, sitting duck if alone",
   },
 };

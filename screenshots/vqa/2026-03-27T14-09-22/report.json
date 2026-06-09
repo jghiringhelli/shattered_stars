@@ -1,0 +1,77 @@
+{
+  "run": "screenshots\\vqa\\2026-03-27T14-09-22",
+  "date": "2026-03-27T14:09:38.221Z",
+  "summary": {
+    "total": 9,
+    "passed": 7,
+    "failed": 2
+  },
+  "jsErrors": [
+    "Failed to process file: %s \"%s\" image ship_terran_stiletto"
+  ],
+  "scenarios": [
+    {
+      "scenario": "ArcadeBattle",
+      "passed": false,
+      "checks": [
+        {
+          "name": "Exactly one player-owned ship",
+          "passed": true,
+          "detail": "1 player ship(s) out of 4 total. IDs: player_0"
+        },
+        {
+          "name": "Ship count matches injected config (4)",
+          "passed": true,
+          "detail": "4 ships, factions: free_confederation, terran_hegemony"
+        },
+        {
+          "name": "All ships alive at battle start",
+          "passed": true,
+          "detail": "OK"
+        },
+        {
+          "name": "Projectiles appear when player fires",
+          "passed": true,
+          "detail": "7 projectile(s) in flight"
+        },
+        {
+          "name": "Vision: mid-combat visual quality",
+          "passed": false,
+          "detail": "Vision API error 401: {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011CZTibbm9tuSc7TcWWk3f8\"}",
+          "screenshotPath": "screenshots\\vqa\\2026-03-27T14-09-22\\arcade_02_mid_combat.png",
+          "visionAnalysis": "Vision API error 401: {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011CZTibbm9tuSc7TcWWk3f8\"}"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "scenario": "SurvivalScene",
+      "passed": false,
+      "checks": [
+        {
+          "name": "Player ship spawned",
+          "passed": true,
+          "detail": "1 player ship(s): confed_sparrow (hull 1/1)"
+        },
+        {
+          "name": "Enemies spawned for wave 1",
+          "passed": true,
+          "detail": "3 enemy ship(s) on field"
+        },
+        {
+          "name": "Enemy ships not stacked on spawn point (avg distance > 10 px)",
+          "passed": true,
+          "detail": "Avg inter-enemy distance: 268 px"
+        },
+        {
+          "name": "Vision: survival wave visual quality",
+          "passed": false,
+          "detail": "Vision API error 401: {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011CZTibnuNqQpReR9CKHbKr\"}",
+          "screenshotPath": "screenshots\\vqa\\2026-03-27T14-09-22\\survival_01_wave.png",
+          "visionAnalysis": "Vision API error 401: {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"},\"request_id\":\"req_011CZTibnuNqQpReR9CKHbKr\"}"
+        }
+      ],
+      "errors": []
+    }
+  ]
+}

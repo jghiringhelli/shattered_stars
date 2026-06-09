@@ -2,14 +2,14 @@
  * Boot scene - handles asset loading and initialization
  */
 
-import Phaser from 'phaser';
-import { FACTION_COLORS, SHIP_SIZES } from '../config';
-import { SHIP_DEFINITIONS } from '../data/ShipDefinitions';
-import { loadPortraitImages } from './boot/BootPortraitLoader';
+import Phaser from "phaser";
+import { FACTION_COLORS, SHIP_SIZES } from "../config";
+import { SHIP_DEFINITIONS } from "../data/ShipDefinitions";
+import { loadPortraitImages } from "./boot/BootPortraitLoader";
 
 export class BootScene extends Phaser.Scene {
   constructor() {
-    super({ key: 'BootScene' });
+    super({ key: "BootScene" });
   }
 
   preload(): void {
@@ -24,21 +24,21 @@ export class BootScene extends Phaser.Scene {
     const loadingText = this.make.text({
       x: width / 2,
       y: height / 2 - 50,
-      text: 'Loading...',
+      text: "Loading...",
       style: {
-        font: '24px monospace',
-        color: '#ffffff',
+        font: "24px monospace",
+        color: "#ffffff",
       },
     });
     loadingText.setOrigin(0.5, 0.5);
 
-    this.load.on('progress', (value: number) => {
+    this.load.on("progress", (value: number) => {
       progressBar.clear();
       progressBar.fillStyle(0x00bfff, 1);
       progressBar.fillRect(450, 330, 380 * value, 30);
     });
 
-    this.load.on('complete', () => {
+    this.load.on("complete", () => {
       progressBar.destroy();
       progressBox.destroy();
       loadingText.destroy();
@@ -65,7 +65,7 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     // Transition to main menu
-    this.scene.start('MainMenuScene');
+    this.scene.start("MainMenuScene");
   }
 
   /**
@@ -96,7 +96,7 @@ export class BootScene extends Phaser.Scene {
     graphics: Phaser.GameObjects.Graphics,
     key: string,
     color: number,
-    size: number
+    size: number,
   ): void {
     graphics.clear();
 
@@ -113,9 +113,12 @@ export class BootScene extends Phaser.Scene {
     // Add a lighter accent for the cockpit/front
     graphics.fillStyle(0xffffff, 0.3);
     graphics.fillTriangle(
-      size / 2, 0,
-      size / 2 - size / 6, size / 3,
-      size / 2 + size / 6, size / 3
+      size / 2,
+      0,
+      size / 2 - size / 6,
+      size / 3,
+      size / 2 + size / 6,
+      size / 3,
     );
 
     // Add engine glow at back
@@ -125,14 +128,16 @@ export class BootScene extends Phaser.Scene {
     graphics.generateTexture(key, size, size);
   }
 
-  private generateProjectileTextures(graphics: Phaser.GameObjects.Graphics): void {
+  private generateProjectileTextures(
+    graphics: Phaser.GameObjects.Graphics,
+  ): void {
     // Laser bolt
     graphics.clear();
     graphics.fillStyle(0x00bfff, 1);
     graphics.fillRect(0, 0, 4, 12);
     graphics.fillStyle(0xffffff, 0.8);
     graphics.fillRect(1, 1, 2, 10);
-    graphics.generateTexture('projectile_laser', 4, 12);
+    graphics.generateTexture("projectile_laser", 4, 12);
 
     // Missile
     graphics.clear();
@@ -141,7 +146,7 @@ export class BootScene extends Phaser.Scene {
     graphics.fillRect(2, 8, 4, 8);
     graphics.fillStyle(0xffff00, 0.8);
     graphics.fillCircle(4, 16, 3);
-    graphics.generateTexture('projectile_missile', 8, 20);
+    graphics.generateTexture("projectile_missile", 8, 20);
   }
 
   private generateUITextures(graphics: Phaser.GameObjects.Graphics): void {
@@ -149,32 +154,32 @@ export class BootScene extends Phaser.Scene {
     graphics.clear();
     graphics.fillStyle(0x333333, 1);
     graphics.fillRect(0, 0, 40, 6);
-    graphics.generateTexture('healthbar_bg', 40, 6);
+    graphics.generateTexture("healthbar_bg", 40, 6);
 
     // Health bar fill (hull)
     graphics.clear();
     graphics.fillStyle(0x00ff00, 1);
     graphics.fillRect(0, 0, 40, 6);
-    graphics.generateTexture('healthbar_hull', 40, 6);
+    graphics.generateTexture("healthbar_hull", 40, 6);
 
     // Health bar fill (shields)
     graphics.clear();
     graphics.fillStyle(0x00bfff, 1);
     graphics.fillRect(0, 0, 40, 6);
-    graphics.generateTexture('healthbar_shields', 40, 6);
+    graphics.generateTexture("healthbar_shields", 40, 6);
 
     // Target indicator
     graphics.clear();
     graphics.lineStyle(2, 0xff0000, 1);
     graphics.strokeCircle(16, 16, 14);
     graphics.strokeCircle(16, 16, 8);
-    graphics.generateTexture('target_indicator', 32, 32);
+    graphics.generateTexture("target_indicator", 32, 32);
 
     // Selection indicator
     graphics.clear();
     graphics.lineStyle(2, 0x00ff00, 1);
     graphics.strokeCircle(20, 20, 18);
-    graphics.generateTexture('selection_indicator', 40, 40);
+    graphics.generateTexture("selection_indicator", 40, 40);
   }
 
   /**
@@ -183,22 +188,27 @@ export class BootScene extends Phaser.Scene {
    */
   private registerPortraitFallback(): void {
     this.load.once(Phaser.Loader.Events.COMPLETE, () => {
-      if (this.textures.exists('portrait_command')) return;
+      if (this.textures.exists("portrait_command")) return;
       const g = this.make.graphics({ x: 0, y: 0 });
       g.fillStyle(0x0a1a3a, 1);
       g.fillRect(0, 0, 128, 128);
       g.fillStyle(0x4488cc, 1);
-      const cx = 64, cy = 56, r = 28;
+      const cx = 64,
+        cy = 56,
+        r = 28;
       for (let i = 0; i < 5; i++) {
-        const a  = (i * 72 - 90) * (Math.PI / 180);
-        const ia = ((i * 72 + 36) - 90) * (Math.PI / 180);
+        const a = (i * 72 - 90) * (Math.PI / 180);
+        const ia = (i * 72 + 36 - 90) * (Math.PI / 180);
         g.fillTriangle(
-          cx + Math.cos(a) * r,          cy + Math.sin(a) * r,
-          cx + Math.cos(ia) * (r * 0.4), cy + Math.sin(ia) * (r * 0.4),
-          cx,                             cy + r * 0.15
+          cx + Math.cos(a) * r,
+          cy + Math.sin(a) * r,
+          cx + Math.cos(ia) * (r * 0.4),
+          cy + Math.sin(ia) * (r * 0.4),
+          cx,
+          cy + r * 0.15,
         );
       }
-      g.generateTexture('portrait_command', 128, 128);
+      g.generateTexture("portrait_command", 128, 128);
       g.destroy();
     });
   }
@@ -209,67 +219,51 @@ export class BootScene extends Phaser.Scene {
    * Generate these with: python scripts/generate_ui_textures.py
    */
   private loadUiTextures(): void {
-    const base = 'assets/ui';
-    this.load.image('tex_menu_bg',     `${base}/ui_menu_bg.png`);
-    this.load.image('tex_panel_bg',    `${base}/ui_panel_bg.png`);
-    this.load.image('tex_title_frame', `${base}/ui_title_frame.png`);
-    this.load.image('tex_divider',     `${base}/ui_divider.png`);
-    this.load.image('tex_btn_normal',  `${base}/ui_button_normal.png`);
-    this.load.image('tex_btn_selected',`${base}/ui_button_selected.png`);
+    const base = "assets/ui";
+    this.load.image("tex_menu_bg", `${base}/ui_menu_bg.png`);
+    this.load.image("tex_panel_bg", `${base}/ui_panel_bg.png`);
+    this.load.image("tex_title_frame", `${base}/ui_title_frame.png`);
+    this.load.image("tex_divider", `${base}/ui_divider.png`);
+    this.load.image("tex_btn_normal", `${base}/ui_button_normal.png`);
+    this.load.image("tex_btn_selected", `${base}/ui_button_selected.png`);
   }
 
   /**
-   * Load ship sprite images used as thumbnails in campaign debrief and briefing.
-   * Texture keys: ship_<shipId>, e.g. ship_terran_raptor
-   * Missing files fail silently — Phaser skips them without error.
+   * Load all ship sprites for every ship definition.
+   * Key: def.spriteKey (e.g. "ship_terran_raptor")
+   * Path: assets/ships/<faction>/<id>.png
+   * Missing files fail silently — Phaser skips 404s.
    */
   private loadCampaignShipThumbnails(): void {
-    // Terran Hegemony — pilot ships + evolution ships
-    const th = 'assets/ships/terran_hegemony';
-    this.load.image('ship_terran_raptor',     `${th}/terran_raptor.png`);
-    this.load.image('ship_terran_viper',      `${th}/terran_viper.png`);
-    this.load.image('ship_terran_gladius',    `${th}/terran_gladius.png`);
-    this.load.image('ship_terran_hawk',       `${th}/terran_hawk.png`);
-    this.load.image('ship_terran_sentinel',   `${th}/terran_sentinel.png`);
-    this.load.image('ship_terran_aegis',      `${th}/terran_aegis.png`);
-    this.load.image('ship_terran_devastator', `${th}/terran_devastator.png`);
-    this.load.image('ship_terran_phantom',    `${th}/terran_phantom.png`);
-    this.load.image('ship_terran_reaper',     `${th}/terran_reaper.png`);
-
-    // Free Confederation pilot ships
-    const confed = 'assets/ships/free_confederation';
-    this.load.image('ship_confed_aurora',   `${confed}/confed_aurora.png`);
-    this.load.image('ship_confed_nova',     `${confed}/confed_nova.png`);
-    this.load.image('ship_confed_meteor',   `${confed}/confed_meteor.png`);
-    this.load.image('ship_confed_phoenix',  `${confed}/confed_phoenix.png`);
-
-    // Synthetic Collective pilot ships
-    const synth = 'assets/ships/synthetic_collective';
-    this.load.image('ship_synth_interceptor', `${synth}/synth_interceptor.png`);
-    this.load.image('ship_synth_scout',       `${synth}/synth_scout.png`);
-    this.load.image('ship_synth_nexus',       `${synth}/synth_nexus.png`);
-
-    // Void Corsairs pilot ships
-    const corsair = 'assets/ships/void_corsairs';
-    this.load.image('ship_corsair_dart',     `${corsair}/corsair_dart.png`);
-    this.load.image('ship_corsair_razor',    `${corsair}/corsair_razor.png`);
-    this.load.image('ship_corsair_phantom',  `${corsair}/corsair_phantom.png`);
-
-    // Ascendant Empire pilot ships
-    const ascend = 'assets/ships/ascendant_empire';
-    this.load.image('ship_ascendant_virus',    `${ascend}/ascendant_virus.png`);
-    this.load.image('ship_ascendant_symbiont', `${ascend}/ascendant_symbiont.png`);
-    this.load.image('ship_ascendant_spore',    `${ascend}/ascendant_spore.png`);
+    Object.values(SHIP_DEFINITIONS).forEach(({ id, faction, spriteKey }) => {
+      this.load.image(spriteKey, `assets/ships/${faction}/${id}.png`);
+    });
   }
 
   /**
    * Load wide cinematic encyclopedia art for all ships (768×512 PNGs).
-   * Images missing on disk fail silently — Phaser skips 404s without error.
-   * Run scripts/generate_ship_art.py to produce the artwork.
+   * Missing files are expected (art is generated separately via generate_ship_art.py).
+   * Phaser logs a console.warn for every 404 before the loaderror event fires, so we
+   * suppress those warnings for ship_art_* keys for the duration of this load phase.
    */
   private loadEncyclopediaArt(): void {
+    const originalWarn = console.warn.bind(console);
+    const silenceArtWarnings = (...args: unknown[]): void => {
+      const first = args[0];
+      if (typeof first === "string" && first.includes("Failed to process file"))
+        return;
+      originalWarn(...args);
+    };
+    console.warn = silenceArtWarnings;
+    this.load.once("complete", () => {
+      console.warn = originalWarn;
+    });
+
     Object.values(SHIP_DEFINITIONS).forEach(({ id, faction }) => {
-      this.load.image(`ship_art_${id}`, `assets/ships/encyclopedia/${faction}/${id}_art.png`);
+      this.load.image(
+        `ship_art_${id}`,
+        `assets/ships/encyclopedia/${faction}/${id}_art.png`,
+      );
     });
   }
 }

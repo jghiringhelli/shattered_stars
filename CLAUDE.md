@@ -497,6 +497,13 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 - **PerformanceSystem.ts** - Adaptive quality for large battles
 
 
+### Arcade Systems (src/arcade/)
+- **ArcadeStress.ts** - Pilot stress driven by ship dial difficulty (green/white/red rates,
+  K-turn + boost instant spikes, hysteresis thresholds, HUD color helpers)
+- **ArcadeOrdnance.ts** - Arcade ordnance slots, cooldowns, homing
+- **ArcadeTurret.ts** - 360° auto-targeting turrets with ms-based cooldowns
+
+
 ### Data (src/data/)
 - **ShipDefinitions.ts** - All ship stats and configurations
 - **ModeBalancing.ts** - Per-mode stat adjustments
@@ -505,6 +512,9 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 ### Core Types (src/core/)
 - **types.ts** - ShipState, ManeuverDefinition, etc.
 - **errors.ts** - Typed error handling
+- **ArcadeControls.ts** - Discrete 500ms cycle system: createControlState, processCommand,
+  updateManeuver, advanceCycle, startManeuver. Ships always execute a maneuver (default straight);
+  nextManeuver queues the next cycle. SPEED_SCALE_FACTOR + baseSize drives per-cycle displacement.
 
 
 ## Factions
@@ -642,6 +652,9 @@ GET  http://localhost:8002/projects/shattered_stars/assets/file/{id}     # fetch
 
 ## Next Steps
 
-- Epic ship support (huge ship format battle mode — EpicBattleScene uses boss encounters, not X-Wing epic format)
-- Multiplayer networking (Step 2: real WebSocket server; Step 1 local sim done)
-- Balance tuning: VC/AE loadout bonuses added, re-run headless sim matrix to verify improvement
+- Segnor/tallon key bindings in arcade: engine + dials already ready; needs key bindings
+  (suggest Shift+Q/E for segnor left/right, or X key for segnor + T for tallon)
+- Wingman formation AI (Phase 4): flagship + wing offset AI, formation hold/break signals
+- E2E tests for arcade stress + cloak (Playwright: verify stress bar HUD, alpha, cloak timer)
+- Balance re-run: `npx tsx scripts/headless_sim.ts --matrix --battles 50` after action redistribution
+- Vercel/GitHub Pages publish (user-directed when ready)

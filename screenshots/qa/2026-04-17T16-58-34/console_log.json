@@ -1,0 +1,80 @@
+{
+  "run": "screenshots\\qa\\2026-04-17T16-58-34",
+  "totalLogs": 12,
+  "errors": 4,
+  "warnings": 4,
+  "errorMessages": [
+    "Failed to process file: %s \"%s\" image ship_art_synth_gestalt",
+    "Failed to process file: %s \"%s\" image ship_confed_kestrel",
+    "Failed to process file: %s \"%s\" image ship_confed_crane",
+    "Failed to process file: %s \"%s\" image ship_terran_stiletto"
+  ],
+  "warningMessages": [
+    "[.WebGL-0x4fa40345ce00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[.WebGL-0x4fa40345ce00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[.WebGL-0x4fa40345ce00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[.WebGL-0x4fa40345ce00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)"
+  ],
+  "allLogs": [
+    {
+      "time": "2026-04-17T16:58:34.633Z",
+      "level": "debug",
+      "text": "[vite] connecting..."
+    },
+    {
+      "time": "2026-04-17T16:58:34.673Z",
+      "level": "debug",
+      "text": "[vite] connected."
+    },
+    {
+      "time": "2026-04-17T16:58:34.910Z",
+      "level": "log",
+      "text": "%c %c %c %c %c Phaser v3.90.0 (WebGL | Web Audio) %c https://phaser.io/v390 background: #ff0000 background: #ffff00 background: #00ff00 background: #00ffff color: #ffffff; background: #000000 background: transparent"
+    },
+    {
+      "time": "2026-04-17T16:58:35.093Z",
+      "level": "warning",
+      "text": "[.WebGL-0x4fa40345ce00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels"
+    },
+    {
+      "time": "2026-04-17T16:58:35.099Z",
+      "level": "warning",
+      "text": "[.WebGL-0x4fa40345ce00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels"
+    },
+    {
+      "time": "2026-04-17T16:58:35.117Z",
+      "level": "warning",
+      "text": "[.WebGL-0x4fa40345ce00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels"
+    },
+    {
+      "time": "2026-04-17T16:58:35.136Z",
+      "level": "warning",
+      "text": "[.WebGL-0x4fa40345ce00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)"
+    },
+    {
+      "time": "2026-04-17T16:58:36.390Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_art_synth_gestalt"
+    },
+    {
+      "time": "2026-04-17T16:58:36.779Z",
+      "level": "log",
+      "text": "[AudioManager] Initialized"
+    },
+    {
+      "time": "2026-04-17T16:58:40.425Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_confed_kestrel"
+    },
+    {
+      "time": "2026-04-17T16:58:40.426Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_confed_crane"
+    },
+    {
+      "time": "2026-04-17T16:58:40.427Z",
+      "level": "error",
+      "text": "Failed to process file: %s \"%s\" image ship_terran_stiletto"
+    }
+  ]
+}

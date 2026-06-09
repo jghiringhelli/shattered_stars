@@ -5,14 +5,17 @@
 // Display settings
 export const GAME_WIDTH = 1280;
 export const GAME_HEIGHT = 720;
-export const BATTLEFIELD_SIZE = 2000; // Larger than screen, camera follows
+export const BATTLEFIELD_SIZE = 6000; // Large open space; camera follows player at zoom ~0.25
+/** Turn-based field sized for X-Wing TMG proportions: Range 3 = 300px ≈ 37% of field, ships 29px at 0.9 zoom. */
+export const TURN_BASED_FIELD_SIZE = 800;
 
 // Timing
 export const LOGIC_FPS = 60;
 export const LOGIC_DELTA = 1000 / LOGIC_FPS; // ~16.67ms per tick
 
 // Movement
-export const SPEED_SCALE_FACTOR = 40; // Pixels per speed unit
+export const SPEED_SCALE_FACTOR = 40; // Pixels per speed unit (template unit length)
+export const CYCLE_DURATION_MS = 500; // Fixed duration of every maneuver cycle
 export const MANEUVER_DURATION_BASE = 500; // ms for speed 1
 export const MANEUVER_DURATION_SCALE = 0.15; // Faster speeds are quicker
 

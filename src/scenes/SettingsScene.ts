@@ -7,10 +7,14 @@
  * - Controls
  */
 
-import Phaser from 'phaser';
-import { audioManager } from '../audio/AudioManager';
-import { DEFAULT_SETTINGS, loadSettings as loadStoredSettings, saveSettings as saveToStorage } from '../systems/SettingsStorage';
-import { addSceneBackground } from '../ui/TexturedPanel';
+import Phaser from "phaser";
+import { audioManager } from "../audio/AudioManager";
+import {
+  DEFAULT_SETTINGS,
+  loadSettings as loadStoredSettings,
+  saveSettings as saveToStorage,
+} from "../systems/SettingsStorage";
+import { addSceneBackground } from "../ui/TexturedPanel";
 
 type MutableSettings = {
   masterVolume: number;
@@ -23,9 +27,14 @@ type MutableSettings = {
 
 export class SettingsScene extends Phaser.Scene {
   private settings: MutableSettings = { ...DEFAULT_SETTINGS };
+  private returnScene: string | null = null;
 
   constructor() {
-    super({ key: 'SettingsScene' });
+    super({ key: "SettingsScene" });
+  }
+
+  init(data: { returnScene?: string } = {}): void {
+    this.returnScene = data.returnScene ?? null;
   }
 
   create(): void {
@@ -40,7 +49,10 @@ export class SettingsScene extends Phaser.Scene {
 
   private createHeader(): void {
     this.add
-      .text(this.scale.width / 2, 50, 'SETTINGS', { font: 'bold 48px Arial', color: '#ffffff' })
+      .text(this.scale.width / 2, 50, "SETTINGS", {
+        font: "bold 48px Arial",
+        color: "#ffffff",
+      })
       .setOrigin(0.5);
   }
 
@@ -59,21 +71,38 @@ export class SettingsScene extends Phaser.Scene {
   private createAudioSection(startY: number, spacing: number): number {
     const cx = this.scale.width / 2;
     let y = startY;
-    this.add.text(cx, y, '--- AUDIO ---', { font: 'bold 24px Arial', color: '#888888' }).setOrigin(0.5);
+    this.add
+      .text(cx, y, "--- AUDIO ---", {
+        font: "bold 24px Arial",
+        color: "#888888",
+      })
+      .setOrigin(0.5);
     y += 50;
-    this.createSlider(cx, y, 'Master Volume', this.settings.masterVolume, (val) => {
-      this.settings.masterVolume = val;
-      audioManager.setMasterVolume(val);
-      this.saveSettings();
-    });
+    this.createSlider(
+      cx,
+      y,
+      "Master Volume",
+      this.settings.masterVolume,
+      (val) => {
+        this.settings.masterVolume = val;
+        audioManager.setMasterVolume(val);
+        this.saveSettings();
+      },
+    );
     y += spacing;
-    this.createSlider(cx, y, 'Music Volume', this.settings.musicVolume, (val) => {
-      this.settings.musicVolume = val;
-      audioManager.setMusicVolume(val);
-      this.saveSettings();
-    });
+    this.createSlider(
+      cx,
+      y,
+      "Music Volume",
+      this.settings.musicVolume,
+      (val) => {
+        this.settings.musicVolume = val;
+        audioManager.setMusicVolume(val);
+        this.saveSettings();
+      },
+    );
     y += spacing;
-    this.createSlider(cx, y, 'SFX Volume', this.settings.sfxVolume, (val) => {
+    this.createSlider(cx, y, "SFX Volume", this.settings.sfxVolume, (val) => {
       this.settings.sfxVolume = val;
       audioManager.setSfxVolume(val);
       this.saveSettings();
@@ -90,19 +119,36 @@ export class SettingsScene extends Phaser.Scene {
   private createVisualSection(startY: number, spacing: number): void {
     const cx = this.scale.width / 2;
     let y = startY;
-    this.add.text(cx, y, '--- VISUAL ---', { font: 'bold 24px Arial', color: '#888888' }).setOrigin(0.5);
+    this.add
+      .text(cx, y, "--- VISUAL ---", {
+        font: "bold 24px Arial",
+        color: "#888888",
+      })
+      .setOrigin(0.5);
     y += 50;
-    this.createToggle(cx, y, 'Camera Shake', this.settings.cameraShake, (val) => {
-      this.settings.cameraShake = val;
-      this.saveSettings();
-    });
+    this.createToggle(
+      cx,
+      y,
+      "Camera Shake",
+      this.settings.cameraShake,
+      (val) => {
+        this.settings.cameraShake = val;
+        this.saveSettings();
+      },
+    );
     y += spacing;
-    this.createToggle(cx, y, 'Damage Numbers', this.settings.showDamageNumbers, (val) => {
-      this.settings.showDamageNumbers = val;
-      this.saveSettings();
-    });
+    this.createToggle(
+      cx,
+      y,
+      "Damage Numbers",
+      this.settings.showDamageNumbers,
+      (val) => {
+        this.settings.showDamageNumbers = val;
+        this.saveSettings();
+      },
+    );
     y += spacing;
-    this.createToggle(cx, y, 'Minimap', this.settings.showMinimap, (val) => {
+    this.createToggle(cx, y, "Minimap", this.settings.showMinimap, (val) => {
       this.settings.showMinimap = val;
       this.saveSettings();
     });
@@ -121,12 +167,18 @@ export class SettingsScene extends Phaser.Scene {
    */
   private makeSliderHandler(
     fill: Phaser.GameObjects.Graphics,
-    sliderX: number, sliderY: number, sliderWidth: number,
+    sliderX: number,
+    sliderY: number,
+    sliderWidth: number,
     valueText: Phaser.GameObjects.Text,
     onChange: (val: number) => void,
   ): (pointer: Phaser.Input.Pointer) => void {
     return (pointer) => {
-      const newValue = Phaser.Math.Clamp((pointer.x - sliderX) / sliderWidth, 0, 1);
+      const newValue = Phaser.Math.Clamp(
+        (pointer.x - sliderX) / sliderWidth,
+        0,
+        1,
+      );
       this.updateSliderFill(fill, sliderX, sliderY, sliderWidth, newValue);
       valueText.setText(`${Math.round(newValue * 100)}%`);
       onChange(newValue);
@@ -134,28 +186,49 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   private createSlider(
-    x: number, y: number, label: string, value: number,
+    x: number,
+    y: number,
+    label: string,
+    value: number,
     onChange: (val: number) => void,
   ): void {
     const sliderWidth = 200;
-    this.add.text(x - 150, y, label, { font: '18px Arial', color: '#ffffff' }).setOrigin(1, 0.5);
+    this.add
+      .text(x - 150, y, label, { font: "18px Arial", color: "#ffffff" })
+      .setOrigin(1, 0.5);
     const bg = this.add.graphics();
     bg.fillStyle(0x333333, 1);
     bg.fillRoundedRect(x - 100, y - 8, sliderWidth, 16, 8);
     const fill = this.add.graphics();
     this.updateSliderFill(fill, x - 100, y, sliderWidth, value);
     const valueText = this.add
-      .text(x + 120, y, `${Math.round(value * 100)}%`, { font: '18px Arial', color: '#aaaaaa' })
+      .text(x + 120, y, `${Math.round(value * 100)}%`, {
+        font: "18px Arial",
+        color: "#aaaaaa",
+      })
       .setOrigin(0, 0.5);
     const hitArea = this.add.rectangle(x, y, sliderWidth + 20, 30, 0x000000, 0);
     hitArea.setInteractive();
-    const handler = this.makeSliderHandler(fill, x - 100, y, sliderWidth, valueText, onChange);
-    hitArea.on('pointerdown', handler);
-    hitArea.on('pointermove', (pointer: Phaser.Input.Pointer) => { if (pointer.isDown) handler(pointer); });
+    const handler = this.makeSliderHandler(
+      fill,
+      x - 100,
+      y,
+      sliderWidth,
+      valueText,
+      onChange,
+    );
+    hitArea.on("pointerdown", handler);
+    hitArea.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (pointer.isDown) handler(pointer);
+    });
   }
 
   private updateSliderFill(
-    graphics: Phaser.GameObjects.Graphics, x: number, y: number, width: number, value: number,
+    graphics: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    width: number,
+    value: number,
   ): void {
     graphics.clear();
     graphics.fillStyle(0x44aaff, 1);
@@ -163,27 +236,42 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   private createToggle(
-    x: number, y: number, label: string, value: boolean,
+    x: number,
+    y: number,
+    label: string,
+    value: boolean,
     onChange: (val: boolean) => void,
   ): void {
-    this.add.text(x - 150, y, label, { font: '18px Arial', color: '#ffffff' }).setOrigin(1, 0.5);
+    this.add
+      .text(x - 150, y, label, { font: "18px Arial", color: "#ffffff" })
+      .setOrigin(1, 0.5);
     const bg = this.add.graphics();
     this.drawToggle(bg, x - 80, y, value);
     const toggleText = this.add
-      .text(x - 80, y, value ? 'ON' : 'OFF', { font: 'bold 14px Arial', color: value ? '#44ff44' : '#888888' })
+      .text(x - 80, y, value ? "ON" : "OFF", {
+        font: "bold 14px Arial",
+        color: value ? "#44ff44" : "#888888",
+      })
       .setOrigin(0.5);
     const hitArea = this.add.rectangle(x - 80, y, 60, 30, 0x000000, 0);
     hitArea.setInteractive({ useHandCursor: true });
-    hitArea.on('pointerdown', () => {
+    hitArea.on("pointerdown", () => {
       const newValue = !value;
       value = newValue;
       this.drawToggle(bg, x - 80, y, newValue);
-      toggleText.setText(newValue ? 'ON' : 'OFF').setColor(newValue ? '#44ff44' : '#888888');
+      toggleText
+        .setText(newValue ? "ON" : "OFF")
+        .setColor(newValue ? "#44ff44" : "#888888");
       onChange(newValue);
     });
   }
 
-  private drawToggle(graphics: Phaser.GameObjects.Graphics, x: number, y: number, on: boolean): void {
+  private drawToggle(
+    graphics: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    on: boolean,
+  ): void {
     graphics.clear();
     graphics.fillStyle(on ? 0x226622 : 0x333333, 1);
     graphics.fillRoundedRect(x - 30, y - 15, 60, 30, 8);
@@ -192,20 +280,50 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   private createBackButton(): void {
-    const btn = this.add.container(this.scale.width / 2, this.scale.height - 80);
+    const btn = this.add.container(
+      this.scale.width / 2,
+      this.scale.height - 80,
+    );
     const bg = this.add.graphics();
     bg.fillStyle(0x333344, 1);
     bg.fillRoundedRect(-80, -20, 160, 40, 8);
     btn.add(bg);
-    btn.add(this.add.text(0, 0, 'BACK', { font: 'bold 24px Arial', color: '#ffffff' }).setOrigin(0.5));
-    btn.setInteractive(new Phaser.Geom.Rectangle(-80, -20, 160, 40), Phaser.Geom.Rectangle.Contains);
-    btn.on('pointerover', () => { bg.clear(); bg.fillStyle(0x444466, 1); bg.fillRoundedRect(-80, -20, 160, 40, 8); });
-    btn.on('pointerout', () => { bg.clear(); bg.fillStyle(0x333344, 1); bg.fillRoundedRect(-80, -20, 160, 40, 8); });
-    btn.on('pointerdown', () => { this.scene.start('MainMenuScene'); });
+    btn.add(
+      this.add
+        .text(0, 0, "BACK", { font: "bold 24px Arial", color: "#ffffff" })
+        .setOrigin(0.5),
+    );
+    btn.setInteractive(
+      new Phaser.Geom.Rectangle(-80, -20, 160, 40),
+      Phaser.Geom.Rectangle.Contains,
+    );
+    btn.on("pointerover", () => {
+      bg.clear();
+      bg.fillStyle(0x444466, 1);
+      bg.fillRoundedRect(-80, -20, 160, 40, 8);
+    });
+    btn.on("pointerout", () => {
+      bg.clear();
+      bg.fillStyle(0x333344, 1);
+      bg.fillRoundedRect(-80, -20, 160, 40, 8);
+    });
+    btn.on("pointerdown", () => {
+      this.exitSettings();
+    });
   }
 
   private setupInput(): void {
-    this.input.keyboard!.on('keydown-ESC', () => { this.scene.start('MainMenuScene'); });
+    this.input.keyboard!.on("keydown-ESC", () => {
+      this.exitSettings();
+    });
+  }
+
+  private exitSettings(): void {
+    if (this.returnScene) {
+      this.scene.stop();
+    } else {
+      this.scene.start("MainMenuScene");
+    }
   }
 
   private loadSettings(): void {
@@ -217,6 +335,6 @@ export class SettingsScene extends Phaser.Scene {
 
   private saveSettings(): void {
     saveToStorage(this.settings);
-    this.registry.set('settings', this.settings);
+    this.registry.set("settings", this.settings);
   }
 }

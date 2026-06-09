@@ -10,31 +10,39 @@
  * - Completion tracker for all matchups
  */
 
-import Phaser from 'phaser';
-import { ShipStatCard } from '../ui/ShipStatCard';
-import { createHoverButton, createToggleButton } from '../ui/ButtonFactory';
-import type { FactionId } from '../config';
-import { BATTLEFIELD_SIZE, FACTION_COLORS, SHIP_SIZES } from '../config';
-import { getShipDefinition, getShipDial } from '../data/ShipDefinitions';
-import { getModeCombatStats, calculateHitChance, type ModeCombatStats } from '../data/ModeBalancing';
-import { getManeuverTemplate, applyManeuver } from '../systems/ManeuverTemplates';
-import { HealthBar } from '../ui/HealthBar';
-import { EffectsManager } from '../rendering/EffectsManager';
-import { ParallaxBackground } from '../rendering/ParallaxBackground';
-import { audioManager } from '../audio/AudioManager';
+import Phaser from "phaser";
+import { ShipStatCard } from "../ui/ShipStatCard";
+import { createHoverButton, createToggleButton } from "../ui/ButtonFactory";
+import type { FactionId } from "../config";
+import { BATTLEFIELD_SIZE, FACTION_COLORS, SHIP_SIZES } from "../config";
+import { getShipDefinition, getShipDial } from "../data/ShipDefinitions";
+import {
+  getModeCombatStats,
+  calculateHitChance,
+  type ModeCombatStats,
+} from "../data/ModeBalancing";
+import {
+  getManeuverTemplate,
+  applyManeuver,
+} from "../systems/ManeuverTemplates";
+import { HealthBar } from "../ui/HealthBar";
+import { EffectsManager } from "../rendering/EffectsManager";
+import { ParallaxBackground } from "../rendering/ParallaxBackground";
+import { audioManager } from "../audio/AudioManager";
 import {
   createPerformanceState,
   updateFPS,
   evaluateQuality,
   type PerformanceState,
-} from '../systems/PerformanceSystem';
-import type { ManeuverDirection } from '../core/types';
+} from "../systems/PerformanceSystem";
+import type { ManeuverDirection } from "../core/types";
+import { PILOT_ABILITIES } from "../systems/PilotAbilities";
 
 interface AceDuelShip {
   id: string;
   definitionId: string;
   faction: FactionId;
-  owner: 'player' | 'ai';
+  owner: "player" | "ai";
   x: number;
   y: number;
   angle: number;
@@ -49,6 +57,7 @@ interface AceDuelShip {
   targetY: number;
   targetAngle: number;
   weaponCooldown: number;
+  abilities: string[];
 }
 
 interface ShipSprite extends Phaser.GameObjects.Container {
@@ -64,113 +73,196 @@ interface AceMatchup {
     name: string;
     faction: FactionId;
     ships: string[];
+    abilities: string[];
   };
   side2: {
     name: string;
     faction: FactionId;
     ships: string[];
+    abilities: string[];
   };
 }
 
 // Preset matchups based on spec (translated from Star Wars to Shattered Stars factions)
 const ACE_MATCHUPS: AceMatchup[] = [
   {
-    id: 'elite_fighters',
-    name: 'Elite Fighters',
-    description: 'Admiral Kronos vs Phoenix Commander',
-    flavorText: 'Two legendary aces clash in a battle of wits and reflexes. Only one will emerge victorious.',
+    id: "elite_fighters",
+    name: "Elite Fighters",
+    description: "Admiral Kronos vs Phoenix Commander",
+    flavorText:
+      "Two legendary aces clash in a battle of wits and reflexes. Only one will emerge victorious.",
     side1: {
-      name: 'Admiral Kronos',
-      faction: 'terran_hegemony',
-      ships: ['terran_raptor'],
+      name: "Admiral Kronos",
+      faction: "terran_hegemony",
+      ships: ["terran_raptor"],
+      abilities: ["marksmanship", "lone_wolf"],
     },
     side2: {
-      name: 'Phoenix Commander',
-      faction: 'free_confederation',
-      ships: ['confed_falcon'],
+      name: "Phoenix Commander",
+      faction: "free_confederation",
+      ships: ["confed_falcon"],
+      abilities: ["predator", "outmaneuver"],
     },
   },
   {
-    id: 'interceptor_duel',
-    name: 'Interceptor Duel',
-    description: 'Raptor Squadron vs Vortex Wing',
-    flavorText: 'Speed versus agility. These interceptors dance through space at impossible velocities.',
+    id: "interceptor_duel",
+    name: "Interceptor Duel",
+    description: "Raptor Squadron vs Vortex Wing",
+    flavorText:
+      "Speed versus agility. These interceptors dance through space at impossible velocities.",
     side1: {
-      name: 'Raptor Squadron Leader',
-      faction: 'terran_hegemony',
-      ships: ['terran_viper'],
+      name: "Raptor Squadron Leader",
+      faction: "terran_hegemony",
+      ships: ["terran_viper"],
+      abilities: ["supernatural_reflexes", "predator"],
     },
     side2: {
-      name: 'Vortex Ace',
-      faction: 'void_corsairs',
-      ships: ['corsair_fang'],
+      name: "Vortex Ace",
+      faction: "void_corsairs",
+      ships: ["corsair_fang"],
+      abilities: ["fearless", "lone_wolf"],
     },
   },
   {
-    id: 'heavy_duel',
-    name: 'Heavy Ship Duel',
-    description: 'Corsair Captain vs Freighter Captain',
-    flavorText: 'Massive ships trade devastating broadsides. Hull plating groans under the assault.',
+    id: "heavy_duel",
+    name: "Heavy Ship Duel",
+    description: "Corsair Captain vs Freighter Captain",
+    flavorText:
+      "Massive ships trade devastating broadsides. Hull plating groans under the assault.",
     side1: {
-      name: 'Corsair Captain Deathmark',
-      faction: 'void_corsairs',
-      ships: ['corsair_marauder'],
+      name: "Corsair Captain Deathmark",
+      faction: "void_corsairs",
+      ships: ["corsair_marauder"],
+      abilities: ["tenacity", "fearless"],
     },
     side2: {
-      name: 'Confederation Freighter Captain',
-      faction: 'free_confederation',
-      ships: ['confed_hawk'],
+      name: "Confederation Freighter Captain",
+      faction: "free_confederation",
+      ships: ["confed_hawk"],
+      abilities: ["regenerative_shields", "stealth_device"],
     },
   },
   {
-    id: 'gunship_duel',
-    name: 'Gunship Showdown',
-    description: 'Collective Prime Node vs Empire Archon',
-    flavorText: 'Two capital-class vessels, each capable of leveling cities, face off in the void.',
+    id: "gunship_duel",
+    name: "Gunship Showdown",
+    description: "Collective Prime Node vs Empire Archon",
+    flavorText:
+      "Two capital-class vessels, each capable of leveling cities, face off in the void.",
     side1: {
-      name: 'Collective Prime Node',
-      faction: 'synthetic_collective',
-      ships: ['synth_devastator'],
+      name: "Collective Prime Node",
+      faction: "synthetic_collective",
+      ships: ["synth_devastator"],
+      abilities: ["networked_aim", "predatory_instinct"],
     },
     side2: {
-      name: 'Empire Archon',
-      faction: 'ascendant_empire',
-      ships: ['ascendant_bastion'],
+      name: "Empire Archon",
+      faction: "ascendant_empire",
+      ships: ["ascendant_bastion"],
+      abilities: ["regenerative_shields", "tenacity"],
     },
   },
   {
-    id: 'bomber_squadron',
-    name: 'Bomber Squadron',
-    description: 'Hegemony Bomber Wing vs Confederation Strike Team',
-    flavorText: 'Heavy ordnance fills the void as bomber squadrons clash in a devastating exchange.',
+    id: "bomber_squadron",
+    name: "Bomber Squadron",
+    description: "Hegemony Bomber Wing vs Confederation Strike Team",
+    flavorText:
+      "Heavy ordnance fills the void as bomber squadrons clash in a devastating exchange.",
     side1: {
-      name: 'Hegemony Bomber Wing',
-      faction: 'terran_hegemony',
-      ships: ['terran_thunderbolt', 'terran_thunderbolt'],
+      name: "Hegemony Bomber Wing",
+      faction: "terran_hegemony",
+      ships: ["terran_thunderbolt", "terran_thunderbolt"],
+      abilities: ["marksmanship"],
     },
     side2: {
-      name: 'Confederation Strike Team',
-      faction: 'free_confederation',
-      ships: ['confed_condor', 'confed_condor'],
+      name: "Confederation Strike Team",
+      faction: "free_confederation",
+      ships: ["confed_condor", "confed_condor"],
+      abilities: ["predator"],
     },
   },
   {
-    id: 'hunter_hunted',
-    name: 'Hunter vs Hunted',
-    description: 'Corsair Bounty Hunter vs Collective Assassin',
-    flavorText: 'A deadly game of cat and mouse. The hunter becomes the hunted.',
+    id: "hunter_hunted",
+    name: "Hunter vs Hunted",
+    description: "Corsair Bounty Hunter vs Collective Assassin",
+    flavorText:
+      "A deadly game of cat and mouse. The hunter becomes the hunted.",
     side1: {
-      name: 'Corsair Bounty Hunter',
-      faction: 'void_corsairs',
-      ships: ['corsair_talon'],
+      name: "Corsair Bounty Hunter",
+      faction: "void_corsairs",
+      ships: ["corsair_talon"],
+      abilities: ["predatory_instinct", "outmaneuver"],
     },
     side2: {
-      name: 'Collective Assassin Drone',
-      faction: 'synthetic_collective',
-      ships: ['synth_interceptor_drone'],
+      name: "Collective Assassin Drone",
+      faction: "synthetic_collective",
+      ships: ["synth_interceptor_drone"],
+      abilities: ["stealth_device", "tenacity"],
     },
   },
 ];
+
+interface AbilityBonuses {
+  atkBonus: number;
+  defBonus: number;
+  rerollAtk: number;
+  rerollDef: number;
+  extraDmg: number;
+}
+
+/**
+ * Computes effective combat bonuses from attacker's pilot abilities for a single attack.
+ * Conditions like 'behind_target' and 'outnumbered' are simplified or always-active in AceDuel.
+ */
+function computeAbilityBonuses(
+  attacker: AceDuelShip,
+  target: AceDuelShip,
+): AbilityBonuses {
+  const bonuses: AbilityBonuses = {
+    atkBonus: 0,
+    defBonus: 0,
+    rerollAtk: 0,
+    rerollDef: 0,
+    extraDmg: 0,
+  };
+  const hullPct = attacker.hull / attacker.maxHull;
+  const targetDamaged = target.hull < target.maxHull;
+  for (const abilityId of attacker.abilities) {
+    switch (abilityId) {
+      case "marksmanship":
+        bonuses.extraDmg += 0.5;
+        break;
+      case "lone_wolf":
+        bonuses.rerollAtk += 1;
+        bonuses.rerollDef += 1;
+        break;
+      case "predator":
+        bonuses.rerollAtk += 1;
+        break;
+      case "outmaneuver":
+        bonuses.atkBonus += 1;
+        break;
+      case "fearless":
+        bonuses.atkBonus += 1;
+        break;
+      case "tenacity":
+        if (hullPct < 0.5) {
+          bonuses.atkBonus += 1;
+          bonuses.defBonus += 1;
+        }
+        break;
+      case "predatory_instinct":
+        if (targetDamaged) bonuses.atkBonus += 1;
+        break;
+      case "supernatural_reflexes":
+        bonuses.defBonus += 1;
+        break;
+      case "stealth_device":
+        if (attacker.hull >= attacker.maxHull) bonuses.defBonus += 1;
+        break;
+    }
+  }
+  return bonuses;
+}
 
 export class AceDuelScene extends Phaser.Scene {
   private ships: Map<string, AceDuelShip> = new Map();
@@ -190,7 +282,7 @@ export class AceDuelScene extends Phaser.Scene {
   private matchComplete = false;
 
   // Settings
-  private difficulty: 'easy' | 'normal' | 'hard' | 'brutal' = 'normal';
+  private difficulty: "easy" | "normal" | "hard" | "brutal" = "normal";
 
   // Game state
   private isPaused = false;
@@ -214,7 +306,7 @@ export class AceDuelScene extends Phaser.Scene {
   private completedMatchups: Set<string> = new Set();
 
   constructor() {
-    super({ key: 'AceDuelScene' });
+    super({ key: "AceDuelScene" });
   }
 
   create(): void {
@@ -224,7 +316,7 @@ export class AceDuelScene extends Phaser.Scene {
     audioManager.initialize();
 
     this.effectsManager = new EffectsManager(this);
-    const savedSettings = this.registry.get('settings') as
+    const savedSettings = this.registry.get("settings") as
       | { cameraShake: boolean; showDamageNumbers: boolean }
       | undefined;
     if (savedSettings) {
@@ -233,7 +325,11 @@ export class AceDuelScene extends Phaser.Scene {
         showDamageNumbers: savedSettings.showDamageNumbers,
       });
     }
-    this.background = new ParallaxBackground(this, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
+    this.background = new ParallaxBackground(
+      this,
+      BATTLEFIELD_SIZE,
+      BATTLEFIELD_SIZE,
+    );
     this.background.startShootingStars();
 
     this.loadCompletedMatchups();
@@ -246,7 +342,7 @@ export class AceDuelScene extends Phaser.Scene {
 
   private loadCompletedMatchups(): void {
     try {
-      const saved = localStorage.getItem('shattered_stars_ace_duel');
+      const saved = localStorage.getItem("shattered_stars_ace_duel");
       if (saved) {
         const ids: string[] = JSON.parse(saved);
         this.completedMatchups = new Set(ids);
@@ -258,8 +354,8 @@ export class AceDuelScene extends Phaser.Scene {
 
   private saveCompletedMatchups(): void {
     localStorage.setItem(
-      'shattered_stars_ace_duel',
-      JSON.stringify(Array.from(this.completedMatchups))
+      "shattered_stars_ace_duel",
+      JSON.stringify(Array.from(this.completedMatchups)),
     );
   }
 
@@ -273,9 +369,9 @@ export class AceDuelScene extends Phaser.Scene {
 
   private resetRoundState(): void {
     this.ships.clear();
-    this.shipSprites.forEach(s => s.destroy());
+    this.shipSprites.forEach((s) => s.destroy());
     this.shipSprites.clear();
-    this.healthBars.forEach(h => h.destroy());
+    this.healthBars.forEach((h) => h.destroy());
     this.healthBars.clear();
     this.side1ShipIds = [];
     this.side2ShipIds = [];
@@ -297,16 +393,20 @@ export class AceDuelScene extends Phaser.Scene {
     this.setupContainer.add(bg);
 
     // Title
-    const title = this.add.text(centerX, 40, 'ACE DUEL', {
-      font: 'bold 48px Arial',
-      color: '#ffdd00',
-    }).setOrigin(0.5);
+    const title = this.add
+      .text(centerX, 40, "ACE DUEL", {
+        font: "bold 48px Arial",
+        color: "#ffdd00",
+      })
+      .setOrigin(0.5);
     this.setupContainer.add(title);
 
-    const subtitle = this.add.text(centerX, 80, 'Legendary Matchups', {
-      font: '18px Arial',
-      color: '#aaaaaa',
-    }).setOrigin(0.5);
+    const subtitle = this.add
+      .text(centerX, 80, "Legendary Matchups", {
+        font: "18px Arial",
+        color: "#aaaaaa",
+      })
+      .setOrigin(0.5);
     this.setupContainer.add(subtitle);
 
     // Matchup selection
@@ -315,10 +415,17 @@ export class AceDuelScene extends Phaser.Scene {
       const isSelected = matchup.id === this.selectedMatchup.id;
       const isCompleted = this.completedMatchups.has(matchup.id);
 
-      const btn = this.createMatchupButton(centerX, yPos, matchup, isSelected, isCompleted, () => {
-        this.selectedMatchup = matchup;
-        this.showSetupScreen();
-      });
+      const btn = this.createMatchupButton(
+        centerX,
+        yPos,
+        matchup,
+        isSelected,
+        isCompleted,
+        () => {
+          this.selectedMatchup = matchup;
+          this.showSetupScreen();
+        },
+      );
       this.setupContainer.add(btn);
       yPos += 55;
     });
@@ -330,12 +437,14 @@ export class AceDuelScene extends Phaser.Scene {
     detailsBg.fillRoundedRect(centerX - 300, detailsY - 10, 600, 100, 8);
     this.setupContainer.add(detailsBg);
 
-    const flavorText = this.add.text(centerX, detailsY + 10, `"${this.selectedMatchup.flavorText}"`, {
-      font: 'italic 14px Arial',
-      color: '#aaaaaa',
-      wordWrap: { width: 560 },
-      align: 'center',
-    }).setOrigin(0.5, 0);
+    const flavorText = this.add
+      .text(centerX, detailsY + 10, `"${this.selectedMatchup.flavorText}"`, {
+        font: "italic 14px Arial",
+        color: "#aaaaaa",
+        wordWrap: { width: 560 },
+        align: "center",
+      })
+      .setOrigin(0.5, 0);
     this.setupContainer.add(flavorText);
 
     // Side selection
@@ -352,14 +461,16 @@ export class AceDuelScene extends Phaser.Scene {
       () => {
         this.playerSide = 1;
         this.showSetupScreen();
-      }
+      },
     );
     this.setupContainer.add(side1Btn);
 
-    const vsText = this.add.text(centerX, sideY, 'VS', {
-      font: 'bold 24px Arial',
-      color: '#666666',
-    }).setOrigin(0.5);
+    const vsText = this.add
+      .text(centerX, sideY, "VS", {
+        font: "bold 24px Arial",
+        color: "#666666",
+      })
+      .setOrigin(0.5);
     this.setupContainer.add(vsText);
 
     const side2Btn = this.createSideButton(
@@ -371,19 +482,53 @@ export class AceDuelScene extends Phaser.Scene {
       () => {
         this.playerSide = 2;
         this.showSetupScreen();
-      }
+      },
     );
     this.setupContainer.add(side2Btn);
 
+    // Ability chips under each side
+    const abilityY = sideY + 30;
+    [this.selectedMatchup.side1, this.selectedMatchup.side2].forEach(
+      (side, si) => {
+        const chipX = centerX + (si === 0 ? -150 : 150);
+        side.abilities.forEach((abilityId, ai) => {
+          const ab = PILOT_ABILITIES[abilityId];
+          if (!ab) return;
+          const col = FACTION_COLORS[side.faction];
+          const chip = this.add.container(chipX, abilityY + ai * 18);
+          const chipBg = this.add.graphics();
+          chipBg.fillStyle(col, 0.18);
+          chipBg.fillRoundedRect(-60, -8, 120, 16, 4);
+          chipBg.lineStyle(1, col, 0.5);
+          chipBg.strokeRoundedRect(-60, -8, 120, 16, 4);
+          const chipTxt = this.add
+            .text(0, 0, ab.name, {
+              font: "9px Arial",
+              color: `#${col.toString(16).padStart(6, "0")}`,
+            })
+            .setOrigin(0.5);
+          chip.add([chipBg, chipTxt]);
+          this.setupContainer.add(chip);
+        });
+      },
+    );
+
     // Difficulty selection
-    const diffY = sideY + 60;
-    const diffLabel = this.add.text(centerX, diffY, 'AI Difficulty:', {
-      font: '14px Arial',
-      color: '#888888',
-    }).setOrigin(0.5);
+    const diffY = sideY + 100;
+    const diffLabel = this.add
+      .text(centerX, diffY, "AI Difficulty:", {
+        font: "14px Arial",
+        color: "#888888",
+      })
+      .setOrigin(0.5);
     this.setupContainer.add(diffLabel);
 
-    const difficulties: Array<'easy' | 'normal' | 'hard' | 'brutal'> = ['easy', 'normal', 'hard', 'brutal'];
+    const difficulties: Array<"easy" | "normal" | "hard" | "brutal"> = [
+      "easy",
+      "normal",
+      "hard",
+      "brutal",
+    ];
     difficulties.forEach((diff, i) => {
       const btn = this.createSmallButton(
         centerX - 120 + i * 80,
@@ -393,29 +538,41 @@ export class AceDuelScene extends Phaser.Scene {
         () => {
           this.difficulty = diff;
           this.showSetupScreen();
-        }
+        },
       );
       this.setupContainer.add(btn);
     });
 
     // Start button
-    const startBtn = createHoverButton(this, centerX, this.scale.height - 60, {
-      width: 160, height: 50, radius: 10,
-      color: 0x886622, hoverColor: 0xaa8833,
-      label: 'DUEL!', font: 'bold 28px Arial',
-    }, () => this.startDuel());
+    const startBtn = createHoverButton(
+      this,
+      centerX,
+      this.scale.height - 60,
+      {
+        width: 160,
+        height: 50,
+        radius: 10,
+        color: 0x886622,
+        hoverColor: 0xaa8833,
+        label: "DUEL!",
+        font: "bold 28px Arial",
+      },
+      () => this.startDuel(),
+    );
     this.setupContainer.add(startBtn);
 
     // Back button
-    const backBtn = this.add.text(50, 40, '< BACK', {
-      font: 'bold 20px Arial',
-      color: '#aaaaaa',
-    }).setInteractive({ useHandCursor: true });
+    const backBtn = this.add
+      .text(50, 40, "< BACK", {
+        font: "bold 20px Arial",
+        color: "#aaaaaa",
+      })
+      .setInteractive({ useHandCursor: true });
 
-    backBtn.on('pointerover', () => backBtn.setColor('#ffffff'));
-    backBtn.on('pointerout', () => backBtn.setColor('#aaaaaa'));
-    backBtn.on('pointerdown', () => {
-      this.scene.start('MainMenuScene');
+    backBtn.on("pointerover", () => backBtn.setColor("#ffffff"));
+    backBtn.on("pointerout", () => backBtn.setColor("#aaaaaa"));
+    backBtn.on("pointerdown", () => {
+      this.scene.start("MainMenuScene");
     });
 
     this.setupContainer.add(backBtn);
@@ -423,10 +580,12 @@ export class AceDuelScene extends Phaser.Scene {
     // Completion counter
     const completed = this.completedMatchups.size;
     const total = ACE_MATCHUPS.length;
-    const completionText = this.add.text(this.scale.width - 50, 40, `${completed}/${total} Completed`, {
-      font: '14px Arial',
-      color: completed === total ? '#44ff44' : '#888888',
-    }).setOrigin(1, 0.5);
+    const completionText = this.add
+      .text(this.scale.width - 50, 40, `${completed}/${total} Completed`, {
+        font: "14px Arial",
+        color: completed === total ? "#44ff44" : "#888888",
+      })
+      .setOrigin(1, 0.5);
     this.setupContainer.add(completionText);
   }
 
@@ -436,7 +595,7 @@ export class AceDuelScene extends Phaser.Scene {
     matchup: AceMatchup,
     selected: boolean,
     completed: boolean,
-    onClick: () => void
+    onClick: () => void,
   ): Phaser.GameObjects.Container {
     const container = this.add.container(x, y);
 
@@ -455,25 +614,31 @@ export class AceDuelScene extends Phaser.Scene {
 
     // Completion indicator
     if (completed) {
-      const checkmark = this.add.text(-260, 0, '✓', {
-        font: 'bold 18px Arial',
-        color: '#44ff44',
-      }).setOrigin(0.5);
+      const checkmark = this.add
+        .text(-260, 0, "✓", {
+          font: "bold 18px Arial",
+          color: "#44ff44",
+        })
+        .setOrigin(0.5);
       container.add(checkmark);
     }
 
     // Matchup name
-    const name = this.add.text(-230, -5, matchup.name, {
-      font: selected ? 'bold 16px Arial' : '16px Arial',
-      color: selected ? '#ffffff' : '#aaaaaa',
-    }).setOrigin(0, 0.5);
+    const name = this.add
+      .text(-230, -5, matchup.name, {
+        font: selected ? "bold 16px Arial" : "16px Arial",
+        color: selected ? "#ffffff" : "#aaaaaa",
+      })
+      .setOrigin(0, 0.5);
     container.add(name);
 
     // Description
-    const desc = this.add.text(-230, 10, matchup.description, {
-      font: '12px Arial',
-      color: '#666666',
-    }).setOrigin(0, 0.5);
+    const desc = this.add
+      .text(-230, 10, matchup.description, {
+        font: "12px Arial",
+        color: "#666666",
+      })
+      .setOrigin(0, 0.5);
     container.add(desc);
 
     // Faction colors
@@ -485,10 +650,12 @@ export class AceDuelScene extends Phaser.Scene {
     indicator1.fillCircle(220, 0, 8);
     container.add(indicator1);
 
-    const vsIndicator = this.add.text(240, 0, 'vs', {
-      font: '12px Arial',
-      color: '#666666',
-    }).setOrigin(0.5);
+    const vsIndicator = this.add
+      .text(240, 0, "vs", {
+        font: "12px Arial",
+        color: "#666666",
+      })
+      .setOrigin(0.5);
     container.add(vsIndicator);
 
     const indicator2 = this.add.graphics();
@@ -496,10 +663,12 @@ export class AceDuelScene extends Phaser.Scene {
     indicator2.fillCircle(260, 0, 8);
     container.add(indicator2);
 
-    const hitArea = this.add.rectangle(0, 0, 560, 44).setInteractive({ useHandCursor: true });
+    const hitArea = this.add
+      .rectangle(0, 0, 560, 44)
+      .setInteractive({ useHandCursor: true });
     container.add(hitArea);
 
-    hitArea.on('pointerdown', onClick);
+    hitArea.on("pointerdown", onClick);
 
     return container;
   }
@@ -510,7 +679,7 @@ export class AceDuelScene extends Phaser.Scene {
     label: string,
     color: number,
     selected: boolean,
-    onClick: () => void
+    onClick: () => void,
   ): Phaser.GameObjects.Container {
     const container = this.add.container(x, y);
 
@@ -527,35 +696,54 @@ export class AceDuelScene extends Phaser.Scene {
     }
     container.add(bg);
 
-    const text = this.add.text(0, 0, label, {
-      font: selected ? 'bold 13px Arial' : '13px Arial',
-      color: selected ? '#ffffff' : '#888888',
-    }).setOrigin(0.5);
+    const text = this.add
+      .text(0, 0, label, {
+        font: selected ? "bold 13px Arial" : "13px Arial",
+        color: selected ? "#ffffff" : "#888888",
+      })
+      .setOrigin(0.5);
     container.add(text);
 
-    const hitArea = this.add.rectangle(0, 0, 140, 40).setInteractive({ useHandCursor: true });
+    const hitArea = this.add
+      .rectangle(0, 0, 140, 40)
+      .setInteractive({ useHandCursor: true });
     container.add(hitArea);
 
-    hitArea.on('pointerdown', onClick);
+    hitArea.on("pointerdown", onClick);
 
     return container;
   }
 
   private createSmallButton(
-    x: number, y: number, label: string, selected: boolean, onClick: () => void,
+    x: number,
+    y: number,
+    label: string,
+    selected: boolean,
+    onClick: () => void,
   ): Phaser.GameObjects.Container {
-    return createToggleButton(this, x, y, label, selected, {
-      width: 60, height: 24,
-      selectedColor: 0x446688, normalColor: 0x222233,
-      selectedFont: 'bold 10px Arial', font: '10px Arial',
-    }, onClick);
+    return createToggleButton(
+      this,
+      x,
+      y,
+      label,
+      selected,
+      {
+        width: 60,
+        height: 24,
+        selectedColor: 0x446688,
+        normalColor: 0x222233,
+        selectedFont: "bold 10px Arial",
+        font: "10px Arial",
+      },
+      onClick,
+    );
   }
 
   private startDuel(): void {
     this.setupContainer.destroy();
     this.isSetupPhase = false;
 
-    audioManager.playMusic('combat_high');
+    audioManager.playMusic("combat_high");
 
     this.createHUD();
     this.setupInput();
@@ -577,7 +765,7 @@ export class AceDuelScene extends Phaser.Scene {
     const side1 = this.selectedMatchup.side1;
     side1.ships.forEach((shipId, i) => {
       const offsetX = (i - (side1.ships.length - 1) / 2) * 60;
-      const owner: 'player' | 'ai' = this.playerSide === 1 ? 'player' : 'ai';
+      const owner: "player" | "ai" = this.playerSide === 1 ? "player" : "ai";
       this.spawnShip(
         `side1_${i}`,
         shipId,
@@ -586,7 +774,8 @@ export class AceDuelScene extends Phaser.Scene {
         centerX + offsetX,
         centerY + spawnDistance,
         0,
-        1
+        1,
+        side1.abilities,
       );
     });
 
@@ -594,7 +783,7 @@ export class AceDuelScene extends Phaser.Scene {
     const side2 = this.selectedMatchup.side2;
     side2.ships.forEach((shipId, i) => {
       const offsetX = (i - (side2.ships.length - 1) / 2) * 60;
-      const owner: 'player' | 'ai' = this.playerSide === 2 ? 'player' : 'ai';
+      const owner: "player" | "ai" = this.playerSide === 2 ? "player" : "ai";
       this.spawnShip(
         `side2_${i}`,
         shipId,
@@ -603,7 +792,8 @@ export class AceDuelScene extends Phaser.Scene {
         centerX + offsetX,
         centerY - spawnDistance,
         180,
-        2
+        2,
+        side2.abilities,
       );
     });
 
@@ -611,12 +801,21 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   private showRoundStart(): void {
-    const text = this.add.text(this.scale.width / 2, this.scale.height / 2, `ROUND ${this.currentRound}`, {
-      font: 'bold 48px Arial',
-      color: '#ffdd00',
-      stroke: '#000000',
-      strokeThickness: 4,
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1001);
+    const text = this.add
+      .text(
+        this.scale.width / 2,
+        this.scale.height / 2,
+        `ROUND ${this.currentRound}`,
+        {
+          font: "bold 48px Arial",
+          color: "#ffdd00",
+          stroke: "#000000",
+          strokeThickness: 4,
+        },
+      )
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(1001);
 
     this.tweens.add({
       targets: text,
@@ -634,7 +833,9 @@ export class AceDuelScene extends Phaser.Scene {
     if (this.isSetupPhase || this.isPaused || this.matchComplete) return;
     this.performanceState = updateFPS(this.performanceState, delta);
     this.performanceState = evaluateQuality(this.performanceState, time);
-    this.effectsManager.setQualitySettings(this.performanceState.effectSettings);
+    this.effectsManager.setQualitySettings(
+      this.performanceState.effectSettings,
+    );
 
     this.background.update();
 
@@ -652,9 +853,9 @@ export class AceDuelScene extends Phaser.Scene {
 
   private createHUD(): void {
     this.roundText = this.add
-      .text(this.scale.width / 2, 30, 'ROUND 1', {
-        font: 'bold 24px Arial',
-        color: '#ffdd00',
+      .text(this.scale.width / 2, 30, "ROUND 1", {
+        font: "bold 24px Arial",
+        color: "#ffdd00",
       })
       .setOrigin(0.5)
       .setScrollFactor(0)
@@ -663,17 +864,17 @@ export class AceDuelScene extends Phaser.Scene {
     // Show matchup name
     this.add
       .text(this.scale.width / 2, 60, this.selectedMatchup.name, {
-        font: '18px Arial',
-        color: '#888888',
+        font: "18px Arial",
+        color: "#888888",
       })
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(1000);
 
     this.scoreText = this.add
-      .text(this.scale.width / 2, 90, '0 - 0', {
-        font: 'bold 28px Arial',
-        color: '#888888',
+      .text(this.scale.width / 2, 90, "0 - 0", {
+        font: "bold 28px Arial",
+        color: "#888888",
       })
       .setOrigin(0.5)
       .setScrollFactor(0)
@@ -694,10 +895,15 @@ export class AceDuelScene extends Phaser.Scene {
     side2Indicator.setScrollFactor(0).setDepth(1000);
 
     this.add
-      .text(this.scale.width / 2, this.scale.height - 25, 'Scroll: Zoom | ESC: Pause', {
-        font: '14px monospace',
-        color: '#666666',
-      })
+      .text(
+        this.scale.width / 2,
+        this.scale.height - 25,
+        "Scroll: Zoom | ESC: Pause",
+        {
+          font: "14px monospace",
+          color: "#666666",
+        },
+      )
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(1000);
@@ -708,27 +914,36 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   private setupInput(): void {
-    this.input.keyboard!.on('keydown-ESC', () => {
+    this.input.keyboard!.on("keydown-ESC", () => {
       this.isPaused = !this.isPaused;
     });
 
-    this.input.on('wheel', (_pointer: Phaser.Input.Pointer, _gos: unknown, _dx: number, deltaY: number) => {
-      const zoom = this.cameras.main.zoom - deltaY * 0.001;
-      this.cameras.main.setZoom(Phaser.Math.Clamp(zoom, 0.7, 1.5));
-    });
+    this.input.on(
+      "wheel",
+      (
+        _pointer: Phaser.Input.Pointer,
+        _gos: unknown,
+        _dx: number,
+        deltaY: number,
+      ) => {
+        const zoom = this.cameras.main.zoom - deltaY * 0.001;
+        this.cameras.main.setZoom(Phaser.Math.Clamp(zoom, 0.7, 1.5));
+      },
+    );
   }
 
   private spawnShip(
     id: string,
     defId: string,
     faction: FactionId,
-    owner: 'player' | 'ai',
+    owner: "player" | "ai",
     x: number,
     y: number,
     angle: number,
-    side: 1 | 2
+    side: 1 | 2,
+    abilities: string[] = [],
   ): void {
-    const combatStats = getModeCombatStats(defId, 'continuous');
+    const combatStats = getModeCombatStats(defId, "continuous");
 
     const ship: AceDuelShip = {
       id,
@@ -743,12 +958,13 @@ export class AceDuelScene extends Phaser.Scene {
       shields: combatStats.shields,
       maxShields: combatStats.maxShields,
       combatStats,
-      currentManeuverDir: 'straight',
+      currentManeuverDir: "straight",
       currentSpeed: 2,
       targetX: x,
       targetY: y,
       targetAngle: angle,
       weaponCooldown: 0,
+      abilities,
     };
 
     this.ships.set(id, ship);
@@ -764,7 +980,10 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   private createShipSprite(ship: AceDuelShip): void {
-    const container = this.add.container(ship.x, ship.y) as unknown as ShipSprite;
+    const container = this.add.container(
+      ship.x,
+      ship.y,
+    ) as unknown as ShipSprite;
     container.shipId = ship.id;
 
     const color = FACTION_COLORS[ship.faction] ?? 0xffffff;
@@ -810,12 +1029,24 @@ export class AceDuelScene extends Phaser.Scene {
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
 
-      const template = getManeuverTemplate(ship.currentManeuverDir, ship.currentSpeed);
+      const template = getManeuverTemplate(
+        ship.currentManeuverDir,
+        ship.currentSpeed,
+      );
       const result = applyManeuver(ship.x, ship.y, ship.angle, template);
 
       ship.targetX = result.x;
       ship.targetY = result.y;
       ship.targetAngle = result.angle;
+
+      // Regenerative shields: recover 1 shield per maneuver step (every 300ms)
+      if (
+        ship.abilities.includes("regenerative_shields") &&
+        ship.shields < ship.maxShields
+      ) {
+        ship.shields = Math.min(ship.maxShields, ship.shields + 1);
+        this.healthBars.get(ship.id)?.update(ship.hull, ship.shields);
+      }
     }
   }
 
@@ -834,8 +1065,10 @@ export class AceDuelScene extends Phaser.Scene {
       ship.angle += angleDiff * t * 3;
       ship.angle = ((ship.angle % 360) + 360) % 360;
 
-      ship.x = ((ship.x % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
-      ship.y = ((ship.y % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
+      ship.x =
+        ((ship.x % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
+      ship.y =
+        ((ship.y % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
 
       const sprite = this.shipSprites.get(ship.id);
       if (sprite) {
@@ -868,8 +1101,18 @@ export class AceDuelScene extends Phaser.Scene {
     for (const other of this.ships.values()) {
       if (other.faction === ship.faction || other.hull <= 0) continue;
 
-      const dist = Phaser.Math.Distance.Between(ship.x, ship.y, other.x, other.y);
-      const angleToTarget = Phaser.Math.Angle.Between(ship.x, ship.y, other.x, other.y);
+      const dist = Phaser.Math.Distance.Between(
+        ship.x,
+        ship.y,
+        other.x,
+        other.y,
+      );
+      const angleToTarget = Phaser.Math.Angle.Between(
+        ship.x,
+        ship.y,
+        other.x,
+        other.y,
+      );
       const shipFacing = (ship.angle - 90) * Phaser.Math.DEG_TO_RAD;
       let angleDiff = Math.abs(angleToTarget - shipFacing);
       if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
@@ -883,10 +1126,22 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   private fireAt(attacker: AceDuelShip, target: AceDuelShip): void {
-    let hitChance = calculateHitChance(attacker.combatStats.attackDice, target.combatStats.agilityDice);
+    const atkB = computeAbilityBonuses(attacker, target);
+    const defB = computeAbilityBonuses(target, attacker);
+    const atkDice =
+      attacker.combatStats.attackDice +
+      atkB.atkBonus +
+      Math.round(atkB.rerollAtk * 0.5);
+    const defDice =
+      target.combatStats.agilityDice +
+      defB.defBonus +
+      Math.round(defB.rerollDef * 0.5);
+    let hitChance = calculateHitChance(atkDice, defDice);
 
-    if (attacker.owner === 'ai') {
-      const diffMod = { easy: 0.7, normal: 1, hard: 1.1, brutal: 1.2 }[this.difficulty];
+    if (attacker.owner === "ai") {
+      const diffMod = { easy: 0.7, normal: 1, hard: 1.1, brutal: 1.2 }[
+        this.difficulty
+      ];
       hitChance *= diffMod;
     }
 
@@ -894,6 +1149,7 @@ export class AceDuelScene extends Phaser.Scene {
 
     if (hit) {
       let damage = attacker.combatStats.attackDice;
+      if (atkB.extraDmg > 0 && Math.random() < atkB.extraDmg) damage += 1;
 
       if (target.shields > 0) {
         const shieldDmg = Math.min(target.shields, damage);
@@ -904,12 +1160,26 @@ export class AceDuelScene extends Phaser.Scene {
         target.hull = Math.max(0, target.hull - damage);
       }
 
-      this.effectsManager.fireLaser(attacker.x, attacker.y, target.x, target.y, attacker.faction, true);
+      this.effectsManager.fireLaser(
+        attacker.x,
+        attacker.y,
+        target.x,
+        target.y,
+        attacker.faction,
+        true,
+      );
 
       const healthBar = this.healthBars.get(target.id);
       healthBar?.update(target.hull, target.shields);
     } else {
-      this.effectsManager.fireLaser(attacker.x, attacker.y, target.x, target.y, attacker.faction, false);
+      this.effectsManager.fireLaser(
+        attacker.x,
+        attacker.y,
+        target.x,
+        target.y,
+        attacker.faction,
+        false,
+      );
     }
   }
 
@@ -918,7 +1188,9 @@ export class AceDuelScene extends Phaser.Scene {
       if (ship.hull <= 0) continue;
 
       // Find enemy ships
-      const enemyIds = this.side1ShipIds.includes(ship.id) ? this.side2ShipIds : this.side1ShipIds;
+      const enemyIds = this.side1ShipIds.includes(ship.id)
+        ? this.side2ShipIds
+        : this.side1ShipIds;
       let closestEnemy: AceDuelShip | null = null;
       let closestDist = Infinity;
 
@@ -926,7 +1198,12 @@ export class AceDuelScene extends Phaser.Scene {
         const enemy = this.ships.get(enemyId);
         if (!enemy || enemy.hull <= 0) continue;
 
-        const dist = Phaser.Math.Distance.Between(ship.x, ship.y, enemy.x, enemy.y);
+        const dist = Phaser.Math.Distance.Between(
+          ship.x,
+          ship.y,
+          enemy.x,
+          enemy.y,
+        );
         if (dist < closestDist) {
           closestEnemy = enemy;
           closestDist = dist;
@@ -935,7 +1212,13 @@ export class AceDuelScene extends Phaser.Scene {
 
       if (!closestEnemy) continue;
 
-      const angleToTarget = Phaser.Math.Angle.Between(ship.x, ship.y, closestEnemy.x, closestEnemy.y) * Phaser.Math.RAD_TO_DEG;
+      const angleToTarget =
+        Phaser.Math.Angle.Between(
+          ship.x,
+          ship.y,
+          closestEnemy.x,
+          closestEnemy.y,
+        ) * Phaser.Math.RAD_TO_DEG;
       const shipFacing = ship.angle - 90;
       let angleDiff = angleToTarget - shipFacing;
       if (angleDiff > 180) angleDiff -= 360;
@@ -945,29 +1228,37 @@ export class AceDuelScene extends Phaser.Scene {
 
       // AI decision quality based on ownership and difficulty
       let optimalChance = 0.8; // Default for player ships (simple AI)
-      if (ship.owner === 'ai') {
-        optimalChance = { easy: 0.5, normal: 0.7, hard: 0.9, brutal: 1 }[this.difficulty];
+      if (ship.owner === "ai") {
+        optimalChance = { easy: 0.5, normal: 0.7, hard: 0.9, brutal: 1 }[
+          this.difficulty
+        ];
       }
 
       if (Math.random() < optimalChance) {
         if (Math.abs(angleDiff) < 20) {
-          ship.currentManeuverDir = 'straight';
+          ship.currentManeuverDir = "straight";
           ship.currentSpeed = 2;
         } else if (angleDiff > 0) {
-          const turn = dial.find(m => m.direction === 'bank_right' || m.direction === 'turn_right');
+          const turn = dial.find(
+            (m) => m.direction === "bank_right" || m.direction === "turn_right",
+          );
           if (turn) {
             ship.currentManeuverDir = turn.direction;
             ship.currentSpeed = turn.speed;
           }
         } else {
-          const turn = dial.find(m => m.direction === 'bank_left' || m.direction === 'turn_left');
+          const turn = dial.find(
+            (m) => m.direction === "bank_left" || m.direction === "turn_left",
+          );
           if (turn) {
             ship.currentManeuverDir = turn.direction;
             ship.currentSpeed = turn.speed;
           }
         }
       } else {
-        const maneuvers = dial.filter(m => ['straight', 'bank_left', 'bank_right'].includes(m.direction));
+        const maneuvers = dial.filter((m) =>
+          ["straight", "bank_left", "bank_right"].includes(m.direction),
+        );
         const chosen = maneuvers[Math.floor(Math.random() * maneuvers.length)];
         if (chosen) {
           ship.currentManeuverDir = chosen.direction;
@@ -989,12 +1280,12 @@ export class AceDuelScene extends Phaser.Scene {
   private checkRoundEnd(): void {
     if (!this.isRoundActive) return;
 
-    const side1Alive = this.side1ShipIds.some(id => {
+    const side1Alive = this.side1ShipIds.some((id) => {
       const ship = this.ships.get(id);
       return ship && ship.hull > 0;
     });
 
-    const side2Alive = this.side2ShipIds.some(id => {
+    const side2Alive = this.side2ShipIds.some((id) => {
       const ship = this.ships.get(id);
       return ship && ship.hull > 0;
     });
@@ -1012,11 +1303,17 @@ export class AceDuelScene extends Phaser.Scene {
     if (winner === 1) {
       this.side1Wins++;
       const isPlayerWin = this.playerSide === 1;
-      this.showRoundResult(isPlayerWin ? 'VICTORY!' : 'DEFEAT', isPlayerWin ? '#44ff44' : '#ff4444');
+      this.showRoundResult(
+        isPlayerWin ? "VICTORY!" : "DEFEAT",
+        isPlayerWin ? "#44ff44" : "#ff4444",
+      );
     } else {
       this.side2Wins++;
       const isPlayerWin = this.playerSide === 2;
-      this.showRoundResult(isPlayerWin ? 'VICTORY!' : 'DEFEAT', isPlayerWin ? '#44ff44' : '#ff4444');
+      this.showRoundResult(
+        isPlayerWin ? "VICTORY!" : "DEFEAT",
+        isPlayerWin ? "#44ff44" : "#ff4444",
+      );
     }
 
     this.updateScoreDisplay();
@@ -1030,12 +1327,16 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   private showRoundResult(message: string, color: string): void {
-    const text = this.add.text(this.scale.width / 2, this.scale.height / 2, message, {
-      font: 'bold 48px Arial',
-      color,
-      stroke: '#000000',
-      strokeThickness: 4,
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(1001);
+    const text = this.add
+      .text(this.scale.width / 2, this.scale.height / 2, message, {
+        font: "bold 48px Arial",
+        color,
+        stroke: "#000000",
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(1001);
 
     this.tweens.add({
       targets: text,
@@ -1069,48 +1370,75 @@ export class AceDuelScene extends Phaser.Scene {
     bg.setScrollFactor(0);
     bg.setDepth(2000);
 
-    const title = playerWon ? 'DUEL WON!' : 'DUEL LOST';
-    const color = playerWon ? '#44ff44' : '#ff4444';
+    const title = playerWon ? "DUEL WON!" : "DUEL LOST";
+    const color = playerWon ? "#44ff44" : "#ff4444";
 
-    this.add.text(centerX, centerY - 80, title, {
-      font: 'bold 56px Arial',
-      color,
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
+    this.add
+      .text(centerX, centerY - 80, title, {
+        font: "bold 56px Arial",
+        color,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(2001);
 
-    this.add.text(centerX, centerY - 20, `Final Score: ${playerWins} - ${enemyWins}`, {
-      font: '28px Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
+    this.add
+      .text(
+        centerX,
+        centerY - 20,
+        `Final Score: ${playerWins} - ${enemyWins}`,
+        {
+          font: "28px Arial",
+          color: "#ffffff",
+        },
+      )
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(2001);
 
     // Achievement check
     if (this.completedMatchups.size === ACE_MATCHUPS.length) {
-      this.add.text(centerX, centerY + 20, '🏆 DUELIST ACHIEVEMENT UNLOCKED!', {
-        font: 'bold 20px Arial',
-        color: '#ffdd00',
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(2001);
+      this.add
+        .text(centerX, centerY + 20, "🏆 DUELIST ACHIEVEMENT UNLOCKED!", {
+          font: "bold 20px Arial",
+          color: "#ffdd00",
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(2001);
     }
 
     // Buttons
-    const retryBtn = this.add.text(centerX - 100, centerY + 80, 'REMATCH', {
-      font: 'bold 24px Arial',
-      color: '#44ff44',
-      backgroundColor: '#224422',
-      padding: { x: 16, y: 8 },
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001).setInteractive({ useHandCursor: true });
+    const retryBtn = this.add
+      .text(centerX - 100, centerY + 80, "REMATCH", {
+        font: "bold 24px Arial",
+        color: "#44ff44",
+        backgroundColor: "#224422",
+        padding: { x: 16, y: 8 },
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(2001)
+      .setInteractive({ useHandCursor: true });
 
-    retryBtn.on('pointerdown', () => {
+    retryBtn.on("pointerdown", () => {
       this.scene.restart();
     });
 
-    const menuBtn = this.add.text(centerX + 100, centerY + 80, 'MENU', {
-      font: 'bold 24px Arial',
-      color: '#ffffff',
-      backgroundColor: '#444444',
-      padding: { x: 20, y: 8 },
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001).setInteractive({ useHandCursor: true });
+    const menuBtn = this.add
+      .text(centerX + 100, centerY + 80, "MENU", {
+        font: "bold 24px Arial",
+        color: "#ffffff",
+        backgroundColor: "#444444",
+        padding: { x: 20, y: 8 },
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(2001)
+      .setInteractive({ useHandCursor: true });
 
-    menuBtn.on('pointerdown', () => {
-      this.scene.start('MainMenuScene');
+    menuBtn.on("pointerdown", () => {
+      this.scene.start("MainMenuScene");
     });
   }
 }

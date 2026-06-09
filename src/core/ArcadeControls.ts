@@ -1,54 +1,86 @@
 /**
- * Arcade Controls
- * Real-time ship control with X-Wing style maneuvers mapped to arcade inputs
+ * ArcadeControls — Discrete cycle-based ship control for arcade dogfight mode.
+ *
+ * Movement model: ships are ALWAYS executing a maneuver. Each cycle is a fixed
+ * CYCLE_DURATION_MS window during which the ship follows a pre-calculated
+ * template path. Player input queues the NEXT maneuver; the queue commits at
+ * cycle end. Default queue is 'straight' at current speed.
+ *
+ * This mirrors X-Wing TMG: you commit to a maneuver in advance and ride it out.
+ * The template distance includes the ship's physical base size (front-to-back
+ * geometry), so larger ships naturally cover more ground at the same speed.
  */
 
-import type { ShipState, ManeuverDefinition, ManeuverDirection } from './types';
-import { resolveManeuver, generateManeuverPath } from '../systems/MovementSystem';
+import type { ShipState, ManeuverDefinition, ManeuverDirection } from "./types";
+import {
+  resolveManeuver,
+  generateManeuverPath,
+} from "../systems/MovementSystem";
+import { CYCLE_DURATION_MS } from "../config";
 
 // ============================================
 // Control State
 // ============================================
 
 export interface ShipControlState {
-  // Current speed (1-5)
   speed: number;
   maxSpeed: number;
   minSpeed: number;
 
-  // Current maneuver being executed
+  /** Ship base size in pixels; injected from SHIP_SIZES at creation time. */
+  baseSize: number;
+
+  /** Maneuver currently being executed (always set after first cycle starts). */
   currentManeuver: ManeuverDirection | null;
-  maneuverProgress: number; // 0-1
+  maneuverProgress: number; // 0–1 within the current cycle
   maneuverPath: Array<{ x: number; y: number; angle: number }>;
   maneuverTarget: { x: number; y: number; angle: number } | null;
 
-  // Weapons
-  weaponCooldown: number; // ms until can fire again
+  /** Maneuver queued for the next cycle (null = default straight). */
+  nextManeuver: ManeuverDirection | null;
+
+  weaponCooldown: number;
   weaponCooldownMax: number;
 
-  // Special maneuvers cooldown
   kturnCooldown: number;
   kturnCooldownMax: number;
   barrelRollCooldown: number;
   barrelRollCooldownMax: number;
+  boostCooldown: number;
+  boostCooldownMax: number;
 }
 
-export function createControlState(ship: ShipState): ShipControlState {
-  return {
+/**
+ * Creates initial control state and immediately starts a straight maneuver
+ * so the ship is never idle.
+ *
+ * @param ship     - Ship whose position/angle seeds the first path.
+ * @param baseSize - Ship base size in pixels (from SHIP_SIZES[size]).
+ */
+export function createControlState(
+  ship: ShipState,
+  baseSize: number = 0,
+): ShipControlState {
+  const base: ShipControlState = {
     speed: 3,
     maxSpeed: 5,
     minSpeed: 1,
+    baseSize,
     currentManeuver: null,
     maneuverProgress: 0,
     maneuverPath: [],
     maneuverTarget: null,
+    nextManeuver: null,
     weaponCooldown: 0,
-    weaponCooldownMax: 500, // 0.5s between shots
+    weaponCooldownMax: 500,
     kturnCooldown: 0,
-    kturnCooldownMax: 5000, // 5s cooldown
+    kturnCooldownMax: 5000,
     barrelRollCooldown: 0,
-    barrelRollCooldownMax: 2000, // 2s cooldown
+    barrelRollCooldownMax: 2000,
+    boostCooldown: 0,
+    boostCooldownMax: 3000,
   };
+  return startManeuver(ship, base, "straight");
 }
 
 // ============================================
@@ -56,44 +88,61 @@ export function createControlState(ship: ShipState): ShipControlState {
 // ============================================
 
 export type FlightCommand =
-  | 'thrust_increase'
-  | 'thrust_decrease'
-  | 'turn_left'
-  | 'turn_right'
-  | 'bank_left'
-  | 'bank_right'
-  | 'kturn'
-  | 'barrel_roll_left'
-  | 'barrel_roll_right'
-  | 'fire'
-  | 'focus'
-  | 'evade';
+  | "thrust_increase"
+  | "thrust_decrease"
+  | "turn_left"
+  | "turn_right"
+  | "bank_left"
+  | "bank_right"
+  | "kturn"
+  | "tallon_left"
+  | "tallon_right"
+  | "segnor_left"
+  | "segnor_right"
+  | "barrel_roll_left"
+  | "barrel_roll_right"
+  | "fire"
+  | "focus"
+  | "evade";
 
 // ============================================
-// Movement Execution
+// Cycle Execution
 // ============================================
 
 /**
- * Start a maneuver from current position
+ * Starts the given maneuver immediately, overwriting any in-progress one.
+ * Called by createControlState (first cycle) and advanceCycle (each subsequent cycle).
+ *
+ * @param ship      - Current ship state (position/angle used as path start).
+ * @param control   - Control state; baseSize drives template length.
+ * @param direction - Maneuver direction to execute.
  */
 export function startManeuver(
   ship: ShipState,
   control: ShipControlState,
-  direction: ManeuverDirection
+  direction: ManeuverDirection,
 ): ShipControlState {
-  // Can't start new maneuver while one is in progress
-  if (control.currentManeuver !== null && control.maneuverProgress < 1) {
-    return control;
-  }
-
   const maneuver: ManeuverDefinition = {
     direction,
     speed: control.speed,
     difficulty: getManeuverDifficulty(direction, control.speed),
   };
 
-  const path = generateManeuverPath(ship.x, ship.y, ship.angle, maneuver, 20);
-  const result = resolveManeuver(ship.x, ship.y, ship.angle, maneuver);
+  const path = generateManeuverPath(
+    ship.x,
+    ship.y,
+    ship.angle,
+    maneuver,
+    20,
+    control.baseSize,
+  );
+  const result = resolveManeuver(
+    ship.x,
+    ship.y,
+    ship.angle,
+    maneuver,
+    control.baseSize,
+  );
 
   return {
     ...control,
@@ -109,95 +158,109 @@ export function startManeuver(
 }
 
 /**
- * Update maneuver progress based on delta time
+ * Advances the current maneuver by one frame.
+ *
+ * Returns `cycleComplete: true` when the cycle finishes; the caller must then
+ * invoke {@link advanceCycle} to commit the queued maneuver and begin the next one.
+ *
+ * @param control  - Current control state.
+ * @param deltaMs  - Elapsed frame time in ms.
  */
 export function updateManeuver(
   control: ShipControlState,
-  deltaMs: number
-): { control: ShipControlState; position: { x: number; y: number; angle: number } | null } {
+  deltaMs: number,
+): {
+  control: ShipControlState;
+  position: { x: number; y: number; angle: number } | null;
+  cycleComplete: boolean;
+} {
   if (control.currentManeuver === null || control.maneuverPath.length === 0) {
-    return { control, position: null };
+    return { control, position: null, cycleComplete: false };
   }
 
-  // Maneuver duration based on speed (faster = quicker maneuver)
-  const baseDuration = 800; // ms for speed 1
-  const duration = baseDuration / (control.speed * 0.5);
-
-  const newProgress = Math.min(1, control.maneuverProgress + deltaMs / duration);
-
-  // Get interpolated position from path
+  const newProgress = Math.min(
+    1,
+    control.maneuverProgress + deltaMs / CYCLE_DURATION_MS,
+  );
   const pathIndex = Math.floor(newProgress * (control.maneuverPath.length - 1));
-  const position = control.maneuverPath[pathIndex] ?? control.maneuverTarget;
+  const pathPoint = control.maneuverPath[pathIndex] ?? control.maneuverTarget;
 
-  // Check if maneuver is complete
   if (newProgress >= 1) {
     return {
-      control: {
-        ...control,
-        currentManeuver: null,
-        maneuverProgress: 0,
-        maneuverPath: [],
-        maneuverTarget: null,
-      },
+      control: { ...control, maneuverProgress: 1 },
       position: control.maneuverTarget,
+      cycleComplete: true,
     };
   }
 
   return {
     control: { ...control, maneuverProgress: newProgress },
-    position: position ?? null,
+    position: pathPoint ?? null,
+    cycleComplete: false,
   };
 }
 
 /**
- * Continuous forward movement when no maneuver active
+ * Commits the queued maneuver and starts the next cycle.
+ * Must be called immediately when {@link updateManeuver} returns cycleComplete=true,
+ * with the ship's position already updated to the cycle's final target.
+ *
+ * @param ship    - Ship state at the end of the completed cycle.
+ * @param control - Control state (reads nextManeuver; clears it after commit).
  */
-export function getContinuousMovement(
+export function advanceCycle(
   ship: ShipState,
   control: ShipControlState,
-  deltaMs: number
-): { x: number; y: number } {
-  if (control.currentManeuver !== null) {
-    return { x: ship.x, y: ship.y };
-  }
-
-  // Move forward based on current speed
-  const pixelsPerSecond = control.speed * 60; // 60 pixels per speed unit per second
-  const distance = (pixelsPerSecond * deltaMs) / 1000;
-
-  const rad = (ship.angle - 90) * (Math.PI / 180); // -90 because 0 = up
-  return {
-    x: ship.x + Math.cos(rad) * distance,
-    y: ship.y + Math.sin(rad) * distance,
-  };
+): ShipControlState {
+  const direction: ManeuverDirection = control.nextManeuver ?? "straight";
+  return startManeuver(ship, { ...control, nextManeuver: null }, direction);
 }
 
 // ============================================
 // Cooldown Management
 // ============================================
 
+/**
+ * Drains all per-frame cooldown timers.
+ *
+ * @param control  - Current control state.
+ * @param deltaMs  - Elapsed frame time in ms.
+ */
 export function updateCooldowns(
   control: ShipControlState,
-  deltaMs: number
+  deltaMs: number,
 ): ShipControlState {
   return {
     ...control,
     weaponCooldown: Math.max(0, control.weaponCooldown - deltaMs),
     kturnCooldown: Math.max(0, control.kturnCooldown - deltaMs),
     barrelRollCooldown: Math.max(0, control.barrelRollCooldown - deltaMs),
+    boostCooldown: Math.max(0, control.boostCooldown - deltaMs),
   };
 }
 
+/** @returns true when the ship can fire its primary weapon. */
 export function canFire(control: ShipControlState): boolean {
   return control.weaponCooldown <= 0;
 }
 
+/** @returns true when a K-turn (or Tallon/Segnor) can be queued. */
 export function canKTurn(control: ShipControlState): boolean {
-  return control.kturnCooldown <= 0 && control.currentManeuver === null;
+  return control.kturnCooldown <= 0;
 }
 
+/** @returns true when a barrel roll can be queued. */
 export function canBarrelRoll(control: ShipControlState): boolean {
-  return control.barrelRollCooldown <= 0 && control.currentManeuver === null;
+  return control.barrelRollCooldown <= 0;
+}
+
+/**
+ * Returns true when the boost dash is off cooldown.
+ *
+ * @param control - Current control state.
+ */
+export function canBoost(control: ShipControlState): boolean {
+  return control.boostCooldown <= 0;
 }
 
 export function fireWeapon(control: ShipControlState): ShipControlState {
@@ -212,99 +275,149 @@ export function useBarrelRoll(control: ShipControlState): ShipControlState {
   return { ...control, barrelRollCooldown: control.barrelRollCooldownMax };
 }
 
+/**
+ * Starts the boost cooldown timer.
+ *
+ * @param control - Current control state.
+ * @returns Updated state with boost on cooldown.
+ */
+export function useBoost(control: ShipControlState): ShipControlState {
+  return { ...control, boostCooldown: control.boostCooldownMax };
+}
+
 // ============================================
 // Helpers
 // ============================================
 
 function getManeuverDifficulty(
   direction: ManeuverDirection,
-  speed: number
-): 'green' | 'white' | 'red' {
-  // K-turns and high-speed turns are red
-  if (direction === 'kturn') return 'red';
-  if (direction.includes('tallon') || direction.includes('segnor')) return 'red';
-  if ((direction === 'turn_left' || direction === 'turn_right') && speed >= 3) return 'red';
-
-  // Straight at low speed is green
-  if (direction === 'straight' && speed <= 2) return 'green';
-
-  return 'white';
+  speed: number,
+): "green" | "white" | "red" {
+  if (direction === "kturn") return "red";
+  if (direction.includes("tallon") || direction.includes("segnor"))
+    return "red";
+  if ((direction === "turn_left" || direction === "turn_right") && speed >= 3)
+    return "red";
+  if (direction === "straight" && speed <= 2) return "green";
+  return "white";
 }
 
 /**
- * Process a flight command and return updated control state
+ * Process a flight command and return updated control state.
+ *
+ * Movement commands (bank, turn, kturn, etc.) write to `nextManeuver` and
+ * take effect at the next cycle boundary — they do NOT interrupt the current
+ * executing maneuver. Speed changes, fire, focus, and evade are immediate.
+ *
+ * @param ship    - Ship state (position/angle used if a maneuver must start immediately).
+ * @param control - Current control state.
+ * @param command - The command to process.
  */
 export function processCommand(
   ship: ShipState,
   control: ShipControlState,
-  command: FlightCommand
+  command: FlightCommand,
 ): ShipControlState {
   switch (command) {
-    case 'thrust_increase':
+    case "thrust_increase":
       return {
         ...control,
         speed: Math.min(control.maxSpeed, control.speed + 1),
       };
 
-    case 'thrust_decrease':
+    case "thrust_decrease":
       return {
         ...control,
         speed: Math.max(control.minSpeed, control.speed - 1),
       };
 
-    case 'turn_left':
-      if (control.currentManeuver === null) {
-        return startManeuver(ship, control, 'turn_left');
-      }
+    // Standard direction queues — take effect next cycle
+    case "turn_left":
+      return { ...control, nextManeuver: "turn_left" };
+    case "turn_right":
+      return { ...control, nextManeuver: "turn_right" };
+    case "bank_left":
+      return { ...control, nextManeuver: "bank_left" };
+    case "bank_right":
+      return { ...control, nextManeuver: "bank_right" };
+
+    // Special maneuvers — consume cooldown at queue time
+    case "kturn":
+      if (canKTurn(control))
+        return { ...useKTurn(control), nextManeuver: "kturn" };
       return control;
 
-    case 'turn_right':
-      if (control.currentManeuver === null) {
-        return startManeuver(ship, control, 'turn_right');
-      }
+    case "tallon_left":
+      if (canKTurn(control))
+        return { ...useKTurn(control), nextManeuver: "tallon_left" };
       return control;
 
-    case 'bank_left':
-      if (control.currentManeuver === null) {
-        return startManeuver(ship, control, 'bank_left');
-      }
+    case "tallon_right":
+      if (canKTurn(control))
+        return { ...useKTurn(control), nextManeuver: "tallon_right" };
       return control;
 
-    case 'bank_right':
-      if (control.currentManeuver === null) {
-        return startManeuver(ship, control, 'bank_right');
-      }
+    case "segnor_left":
+      if (canKTurn(control))
+        return { ...useKTurn(control), nextManeuver: "segnor_left" };
       return control;
 
-    case 'kturn':
-      if (canKTurn(control)) {
-        let newControl = useKTurn(control);
-        return startManeuver(ship, newControl, 'kturn');
-      }
+    case "segnor_right":
+      if (canKTurn(control))
+        return { ...useKTurn(control), nextManeuver: "segnor_right" };
       return control;
 
-    case 'barrel_roll_left':
-      if (canBarrelRoll(control)) {
-        let newControl = useBarrelRoll(control);
-        // Barrel roll is a lateral move, we'll handle it specially
-        return startManeuver(ship, newControl, 'bank_left');
-      }
+    case "barrel_roll_left":
+      if (canBarrelRoll(control))
+        return { ...useBarrelRoll(control), nextManeuver: "bank_left" };
       return control;
 
-    case 'barrel_roll_right':
-      if (canBarrelRoll(control)) {
-        let newControl = useBarrelRoll(control);
-        return startManeuver(ship, newControl, 'bank_right');
-      }
+    case "barrel_roll_right":
+      if (canBarrelRoll(control))
+        return { ...useBarrelRoll(control), nextManeuver: "bank_right" };
       return control;
 
-    case 'fire':
-      if (canFire(control)) {
-        return fireWeapon(control);
-      }
+    case "fire":
+      if (canFire(control)) return fireWeapon(control);
       return control;
 
     default:
       return control;
   }
+}
+
+// ============================================
+// Legacy helpers (kept for turn-based scene compatibility)
+// ============================================
+
+export const SIZE_BASE_SPEED: Readonly<Record<string, number>> = {
+  tiny: 140,
+  small: 120,
+  medium: 105,
+  large: 90,
+  huge: 70,
+};
+
+/**
+ * Returns the pixels-per-speed-unit for the given size category.
+ * Used by the turn-based battle scene; arcade mode uses the cycle system instead.
+ */
+export function getSizeMovementBase(size: string): number {
+  return SIZE_BASE_SPEED[size] ?? 120;
+}
+
+/**
+ * @deprecated Arcade mode uses the discrete cycle system. This remains for
+ * turn-based compatibility but should not be used in ArcadeBattleScene.
+ */
+export function getContinuousMovement(
+  ship: ShipState,
+  control: ShipControlState,
+  deltaMs: number,
+  speedBase = 120,
+): { x: number; y: number } {
+  if (control.currentManeuver !== null) return { x: ship.x, y: ship.y };
+  const dist = (speedBase * control.speed * deltaMs) / 1000;
+  const rad = (ship.angle - 90) * (Math.PI / 180);
+  return { x: ship.x + Math.cos(rad) * dist, y: ship.y + Math.sin(rad) * dist };
 }
