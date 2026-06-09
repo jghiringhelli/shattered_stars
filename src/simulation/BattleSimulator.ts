@@ -9,16 +9,34 @@
  * - Supports seeded RNG for deterministic multiplayer (optional)
  */
 
-import seedrandom from 'seedrandom';
-import type { FactionId } from '../config';
-import { getShipDefinition, SHIP_DEFINITIONS } from '../data/ShipDefinitions';
-import { getModeCombatStats, calculateHitChance, type ModeCombatStats } from '../data/ModeBalancing';
-import { applyManeuver, getManeuverTemplate } from '../systems/ManeuverTemplates';
-import type { ManeuverDirection } from '../core/types';
-import { getLoadoutById } from '../data/ShipLoadouts';
-import { UPGRADE_DEFINITIONS } from '../systems/UpgradeSystem';
-import { PILOT_CARDS } from '../systems/SquadBuilder';
-import { getQuickBuild, toSimSpecs } from '../data/SquadronPresets';
+import seedrandom from "seedrandom";
+import type { FactionId } from "../config";
+import { getShipDefinition, SHIP_DEFINITIONS } from "../data/ShipDefinitions";
+import {
+  getModeCombatStats,
+  calculateHitChance,
+  type ModeCombatStats,
+} from "../data/ModeBalancing";
+import {
+  applyManeuver,
+  getManeuverTemplate,
+} from "../systems/ManeuverTemplates";
+import type { ManeuverDirection } from "../core/types";
+import { getLoadoutById } from "../data/ShipLoadouts";
+import { UPGRADE_DEFINITIONS } from "../systems/UpgradeSystem";
+import { PILOT_CARDS } from "../systems/SquadBuilder";
+import { getQuickBuild, toSimSpecs } from "../data/SquadronPresets";
+
+/** Ordnance fires at this px range or less (range 2 equivalent). */
+const ORDNANCE_RANGE = 250;
+
+/** Attack dice for each ordnance slot type. */
+const ORDNANCE_DICE_BY_SLOT: Readonly<Record<string, number>> = {
+  missile: 3,
+  torpedo: 4,
+  bomb: 2,
+  mine: 2,
+};
 
 /**
  * Specifies a ship in simulation with an optional pre-built loadout and pilot.
@@ -28,12 +46,12 @@ import { getQuickBuild, toSimSpecs } from '../data/SquadronPresets';
 export interface SimShipSpec {
   readonly shipId: string;
   readonly loadoutId?: string; // references SHIP_LOADOUTS[shipId][*].id
-  readonly pilotId?: string;   // references PILOT_CARDS — sets pilotSkill from initiative
+  readonly pilotId?: string; // references PILOT_CARDS — sets pilotSkill from initiative
 }
 
 // Simulation configuration
 export interface SimulationConfig {
-  mode: 'turn_based' | 'continuous';
+  mode: "arcade" | "continuous";
   maxTurns: number;
   battlefieldSize: number;
   verbose: boolean;
@@ -45,7 +63,7 @@ interface SimShip {
   id: string;
   definitionId: string;
   faction: FactionId;
-  owner: 'player' | 'ai';
+  owner: "player" | "ai";
   x: number;
   y: number;
   angle: number;
@@ -57,11 +75,18 @@ interface SimShip {
   combatStats: ModeCombatStats;
   currentSpeed: number;
   weaponCooldown: number;
+  focusToken: boolean;
+  evadeToken: boolean;
+  targetLockToken: boolean;
+  ordnanceCharges: number;
+  ordnanceDice: number;
+  hasStealthDevice: boolean;
+  hasPredator: boolean;
 }
 
 // Battle result
 export interface BattleResult {
-  winner: 'team1' | 'team2' | 'draw';
+  winner: "team1" | "team2" | "draw";
   turnsElapsed: number;
   team1ShipsRemaining: number;
   team2ShipsRemaining: number;
@@ -77,7 +102,7 @@ export interface ShipBattleStats {
   shipId: string;
   definitionId: string;
   faction: FactionId;
-  team: 'team1' | 'team2';
+  team: "team1" | "team2";
   survived: boolean;
   damageDealt: number;
   damageTaken: number;
@@ -120,7 +145,7 @@ export interface FactionPerformanceStats {
 
 // Default configuration
 const DEFAULT_CONFIG: SimulationConfig = {
-  mode: 'continuous',
+  mode: "continuous",
   maxTurns: 100,
   battlefieldSize: 1000, // Smaller battlefield for faster engagement
   verbose: false,
@@ -138,7 +163,10 @@ export class BattleSimulator {
   constructor(config: Partial<SimulationConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     // Use seeded RNG if seed provided, otherwise use Math.random()
-    this.rng = config.seed !== undefined ? seedrandom(String(config.seed)) : () => Math.random();
+    this.rng =
+      config.seed !== undefined
+        ? seedrandom(String(config.seed))
+        : () => Math.random();
   }
 
   /**
@@ -147,12 +175,12 @@ export class BattleSimulator {
    */
   runBattle(
     team1Ships: ReadonlyArray<SimShipSpec | string>,
-    team2Ships: ReadonlyArray<SimShipSpec | string>
+    team2Ships: ReadonlyArray<SimShipSpec | string>,
   ): BattleResult {
     this.reset();
     this.spawnTeams(
-      team1Ships.map(s => (typeof s === 'string' ? { shipId: s } : s)),
-      team2Ships.map(s => (typeof s === 'string' ? { shipId: s } : s))
+      team1Ships.map((s) => (typeof s === "string" ? { shipId: s } : s)),
+      team2Ships.map((s) => (typeof s === "string" ? { shipId: s } : s)),
     );
 
     while (this.currentTurn < this.config.maxTurns) {
@@ -160,12 +188,12 @@ export class BattleSimulator {
       this.simulateTurn();
 
       // Check victory conditions
-      const team1Alive = this.team1ShipIds.filter(id => {
+      const team1Alive = this.team1ShipIds.filter((id) => {
         const ship = this.ships.get(id);
         return ship && ship.hull > 0;
       }).length;
 
-      const team2Alive = this.team2ShipIds.filter(id => {
+      const team2Alive = this.team2ShipIds.filter((id) => {
         const ship = this.ships.get(id);
         return ship && ship.hull > 0;
       }).length;
@@ -184,12 +212,42 @@ export class BattleSimulator {
   runBatchSimulation(
     team1Ships: ReadonlyArray<SimShipSpec | string>,
     team2Ships: ReadonlyArray<SimShipSpec | string>,
-    numBattles: number
+    numBattles: number,
   ): AggregatedStats {
     const results: BattleResult[] = [];
 
     for (let i = 0; i < numBattles; i++) {
-      const result = this.runBattle(team1Ships, team2Ships);
+      // Alternate spawn sides each battle to cancel out positional bias
+      const swapped = i % 2 === 1;
+      const rawResult = swapped
+        ? this.runBattle(team2Ships, team1Ships)
+        : this.runBattle(team1Ships, team2Ships);
+
+      // Re-label the result so team1/team2 always refer to the original squads
+      const result: BattleResult = swapped
+        ? {
+            ...rawResult,
+            winner:
+              rawResult.winner === "team1"
+                ? "team2"
+                : rawResult.winner === "team2"
+                  ? "team1"
+                  : "draw",
+            team1ShipsRemaining: rawResult.team2ShipsRemaining,
+            team2ShipsRemaining: rawResult.team1ShipsRemaining,
+            team1TotalDamageDealt: rawResult.team2TotalDamageDealt,
+            team2TotalDamageDealt: rawResult.team1TotalDamageDealt,
+            team1ShipsDestroyed: rawResult.team2ShipsDestroyed,
+            team2ShipsDestroyed: rawResult.team1ShipsDestroyed,
+            shipStats: new Map(
+              [...rawResult.shipStats.entries()].map(([k, v]) => [
+                k,
+                { ...v, team: v.team === "team1" ? "team2" : "team1" },
+              ]),
+            ),
+          }
+        : rawResult;
+
       results.push(result);
 
       if (this.config.verbose && (i + 1) % 10 === 0) {
@@ -207,7 +265,7 @@ export class BattleSimulator {
     faction1: FactionId,
     faction2: FactionId,
     shipsPerTeam: number,
-    numBattles: number
+    numBattles: number,
   ): AggregatedStats {
     const faction1Ships = this.getRandomShipsForFaction(faction1, shipsPerTeam);
     const faction2Ships = this.getRandomShipsForFaction(faction2, shipsPerTeam);
@@ -218,13 +276,16 @@ export class BattleSimulator {
   /**
    * Run all faction matchups
    */
-  runAllFactionMatchups(shipsPerTeam: number, battlesPerMatchup: number): Map<string, AggregatedStats> {
+  runAllFactionMatchups(
+    shipsPerTeam: number,
+    battlesPerMatchup: number,
+  ): Map<string, AggregatedStats> {
     const factions: FactionId[] = [
-      'terran_hegemony',
-      'free_confederation',
-      'synthetic_collective',
-      'void_corsairs',
-      'ascendant_empire',
+      "terran_hegemony",
+      "free_confederation",
+      "synthetic_collective",
+      "void_corsairs",
+      "ascendant_empire",
     ];
 
     const results = new Map<string, AggregatedStats>();
@@ -236,7 +297,12 @@ export class BattleSimulator {
           console.log(`[Simulator] Running matchup: ${matchupKey}`);
         }
 
-        const stats = this.runFactionBattle(factions[i]!, factions[j]!, shipsPerTeam, battlesPerMatchup);
+        const stats = this.runFactionBattle(
+          factions[i]!,
+          factions[j]!,
+          shipsPerTeam,
+          battlesPerMatchup,
+        );
         results.set(matchupKey, stats);
       }
     }
@@ -251,8 +317,9 @@ export class BattleSimulator {
   getPresetSquadForFaction(faction: FactionId, budget: number): SimShipSpec[] {
     const preset = getQuickBuild(faction, budget);
     if (preset) return toSimSpecs(preset);
-    return this.getRandomShipsForFaction(faction, Math.ceil(budget / 60))
-      .map(shipId => ({ shipId }));
+    return this.getRandomShipsForFaction(faction, Math.ceil(budget / 60)).map(
+      (shipId) => ({ shipId }),
+    );
   }
 
   // ==========================================
@@ -267,7 +334,10 @@ export class BattleSimulator {
     this.shipStats.clear();
   }
 
-  private spawnTeams(team1Ships: SimShipSpec[], team2Ships: SimShipSpec[]): void {
+  private spawnTeams(
+    team1Ships: SimShipSpec[],
+    team2Ships: SimShipSpec[],
+  ): void {
     const centerY = this.config.battlefieldSize / 2;
     const spacing = 60;
 
@@ -280,26 +350,26 @@ export class BattleSimulator {
     // Spawn team 1 on the left
     // Angle convention: 0=up, 90=right, 180=down, 270=left (Phaser standard)
     team1Ships.forEach((spec, i) => {
-      const ship = this.createShip(spec, 'team1', i);
+      const ship = this.createShip(spec, "team1", i);
       ship.x = team1X;
       ship.y = centerY + (i - team1Ships.length / 2) * spacing;
       ship.angle = 90; // Facing right (toward enemy)
 
       this.ships.set(ship.id, ship);
       this.team1ShipIds.push(ship.id);
-      this.initShipStats(ship, 'team1');
+      this.initShipStats(ship, "team1");
     });
 
     // Spawn team 2 on the right
     team2Ships.forEach((spec, i) => {
-      const ship = this.createShip(spec, 'team2', i);
+      const ship = this.createShip(spec, "team2", i);
       ship.x = team2X;
       ship.y = centerY + (i - team2Ships.length / 2) * spacing;
       ship.angle = 270; // Facing left (toward enemy)
 
       this.ships.set(ship.id, ship);
       this.team2ShipIds.push(ship.id);
-      this.initShipStats(ship, 'team2');
+      this.initShipStats(ship, "team2");
     });
   }
 
@@ -309,11 +379,18 @@ export class BattleSimulator {
       throw new Error(`Unknown ship definition: ${spec.shipId}`);
     }
 
-    const combatStats = { ...getModeCombatStats(spec.shipId, this.config.mode) };
+    const combatStats = {
+      ...getModeCombatStats(spec.shipId, this.config.mode),
+    };
     let maxHull = def.baseStats.hull;
     let maxShields = def.baseStats.shields;
 
     // Apply upgrade bonuses from loadout
+    let ordnanceCharges = 0;
+    let ordnanceDice = 0;
+    let hasStealthDevice = false;
+    let hasPredator = false;
+
     if (spec.loadoutId) {
       const loadout = getLoadoutById(spec.loadoutId);
       if (loadout) {
@@ -322,9 +399,23 @@ export class BattleSimulator {
           if (!upgrade?.effects) continue;
           const fx = upgrade.effects;
           if (fx.attackBonus) combatStats.attackDice += fx.attackBonus;
-          if (fx.agilityBonus) combatStats.agilityDice += fx.agilityBonus;
           if (fx.hullBonus) maxHull += fx.hullBonus;
           if (fx.shieldBonus) maxShields += fx.shieldBonus;
+          if (fx.agilityBonus) {
+            if (upgradeId === "stealth_device") {
+              hasStealthDevice = true;
+            } else {
+              combatStats.agilityDice += fx.agilityBonus;
+            }
+          }
+          if (fx.chargesAdded) {
+            const slotDice = ORDNANCE_DICE_BY_SLOT[upgrade.slotType] ?? 0;
+            if (slotDice > 0) {
+              ordnanceCharges += fx.chargesAdded;
+              ordnanceDice = Math.max(ordnanceDice, slotDice);
+            }
+          }
+          if (fx.rerollCount) hasPredator = true;
         }
       }
     }
@@ -338,7 +429,7 @@ export class BattleSimulator {
       id: `${team}_${spec.shipId}_${index}`,
       definitionId: spec.shipId,
       faction: def.faction,
-      owner: team === 'team1' ? 'player' : 'ai',
+      owner: team === "team1" ? "player" : "ai",
       x: 0,
       y: 0,
       angle: 0,
@@ -350,10 +441,17 @@ export class BattleSimulator {
       combatStats,
       currentSpeed: 2,
       weaponCooldown: 0,
+      focusToken: false,
+      evadeToken: false,
+      targetLockToken: false,
+      ordnanceCharges,
+      ordnanceDice,
+      hasStealthDevice,
+      hasPredator,
     };
   }
 
-  private initShipStats(ship: SimShip, team: 'team1' | 'team2'): void {
+  private initShipStats(ship: SimShip, team: "team1" | "team2"): void {
     this.shipStats.set(ship.id, {
       shipId: ship.id,
       definitionId: ship.definitionId,
@@ -369,7 +467,34 @@ export class BattleSimulator {
     });
   }
 
+  /**
+   * Heuristic action selection per round.
+   * Priority: ordnance available → target lock; bomber/support → evade; default → focus.
+   */
+  private selectAction(ship: SimShip): void {
+    const role = getShipDefinition(ship.definitionId)?.role ?? "heavy_fighter";
+    if (ship.ordnanceCharges > 0) {
+      ship.targetLockToken = true;
+      ship.focusToken = false;
+      ship.evadeToken = false;
+    } else if (role === "bomber" || role === "support") {
+      ship.evadeToken = true;
+      ship.focusToken = false;
+      ship.targetLockToken = false;
+    } else {
+      ship.focusToken = true;
+      ship.evadeToken = false;
+      ship.targetLockToken = false;
+    }
+  }
+
   private simulateTurn(): void {
+    // Action phase
+    for (const ship of this.ships.values()) {
+      if (ship.hull <= 0) continue;
+      this.selectAction(ship);
+    }
+
     // Movement phase
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
@@ -411,7 +536,7 @@ export class BattleSimulator {
     const enemyIds = isTeam1 ? this.team2ShipIds : this.team1ShipIds;
 
     return enemyIds
-      .map(id => this.ships.get(id))
+      .map((id) => this.ships.get(id))
       .filter((s): s is SimShip => s !== undefined && s.hull > 0);
   }
 
@@ -434,12 +559,16 @@ export class BattleSimulator {
     return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
   }
 
-  private chooseManeuver(ship: SimShip, target: SimShip): { direction: ManeuverDirection; speed: number } {
+  private chooseManeuver(
+    ship: SimShip,
+    target: SimShip,
+  ): { direction: ManeuverDirection; speed: number } {
     // Calculate angle to target using Phaser convention: 0=up, 90=right, 180=down, 270=left
     // atan2 gives: 0=right, 90=down, 180=left, -90=up (screen space)
     // Conversion: phaserAngle = atan2Angle + 90
-    const atan2Angle = Math.atan2(target.y - ship.y, target.x - ship.x) * (180 / Math.PI);
-    const angleToTarget = ((atan2Angle + 90) % 360 + 360) % 360;
+    const atan2Angle =
+      Math.atan2(target.y - ship.y, target.x - ship.x) * (180 / Math.PI);
+    const angleToTarget = (((atan2Angle + 90) % 360) + 360) % 360;
 
     let angleDiff = angleToTarget - ship.angle;
 
@@ -452,11 +581,11 @@ export class BattleSimulator {
     // Negative angleDiff = target is to the left of current facing
     let direction: ManeuverDirection;
     if (Math.abs(angleDiff) < 20) {
-      direction = 'straight';
+      direction = "straight";
     } else if (angleDiff > 0) {
-      direction = angleDiff > 45 ? 'turn_right' : 'bank_right';
+      direction = angleDiff > 45 ? "turn_right" : "bank_right";
     } else {
-      direction = angleDiff < -45 ? 'turn_left' : 'bank_left';
+      direction = angleDiff < -45 ? "turn_left" : "bank_left";
     }
 
     // Choose speed - always aggressive, faster movement
@@ -466,16 +595,14 @@ export class BattleSimulator {
     return { direction, speed };
   }
 
-  private executeManeuver(ship: SimShip, maneuver: { direction: ManeuverDirection; speed: number }): void {
+  private executeManeuver(
+    ship: SimShip,
+    maneuver: { direction: ManeuverDirection; speed: number },
+  ): void {
     const template = getManeuverTemplate(maneuver.direction, maneuver.speed);
     if (!template) return;
 
-    const result = applyManeuver(
-      ship.x,
-      ship.y,
-      ship.angle,
-      template
-    );
+    const result = applyManeuver(ship.x, ship.y, ship.angle, template);
 
     ship.x = result.x;
     ship.y = result.y;
@@ -500,8 +627,10 @@ export class BattleSimulator {
       if (dist > maxRange) continue;
 
       // Check firing arc using Phaser angle convention: 0=up, 90=right, 180=down, 270=left
-      const atan2Angle = Math.atan2(enemy.y - attacker.y, enemy.x - attacker.x) * (180 / Math.PI);
-      const angleToTarget = ((atan2Angle + 90) % 360 + 360) % 360;
+      const atan2Angle =
+        Math.atan2(enemy.y - attacker.y, enemy.x - attacker.x) *
+        (180 / Math.PI);
+      const angleToTarget = (((atan2Angle + 90) % 360) + 360) % 360;
 
       // Calculate angle difference between ship facing and target direction
       let angleDiff = angleToTarget - attacker.angle;
@@ -512,7 +641,7 @@ export class BattleSimulator {
       if (Math.abs(angleDiff) > maxArc) continue;
 
       // Score based on distance (closer is better) and health (lower is better)
-      const score = (maxRange - dist) + (enemy.maxHull - enemy.hull) * 10;
+      const score = maxRange - dist + (enemy.maxHull - enemy.hull) * 10;
       if (score > bestScore) {
         bestScore = score;
         best = enemy;
@@ -525,41 +654,55 @@ export class BattleSimulator {
   private executeAttack(attacker: SimShip, target: SimShip): void {
     const attackerStats = this.shipStats.get(attacker.id);
     const targetStats = this.shipStats.get(target.id);
+    const dist = this.distance(attacker, target);
 
-    // Calculate hit chance
-    const hitChance = calculateHitChance(
-      attacker.combatStats.attackDice,
-      target.combatStats.agilityDice
-    );
+    const canFireOrdnance =
+      attacker.ordnanceCharges > 0 &&
+      attacker.targetLockToken &&
+      dist <= ORDNANCE_RANGE;
 
+    const baseAttackDice = canFireOrdnance
+      ? attacker.ordnanceDice
+      : attacker.combatStats.attackDice;
+
+    const effectiveAttack =
+      baseAttackDice +
+      (attacker.focusToken ? 1.0 : 0) +
+      (attacker.targetLockToken && !canFireOrdnance ? 0.6 : 0) +
+      (attacker.hasPredator ? 0.4 : 0);
+
+    const stealthBonus =
+      target.hasStealthDevice && target.hull === target.maxHull ? 1 : 0;
+    const effectiveAgility =
+      target.combatStats.agilityDice +
+      stealthBonus +
+      (target.focusToken ? 1.0 : 0) +
+      (target.evadeToken ? 1.0 : 0);
+
+    // Consume tokens regardless of hit/miss
+    if (canFireOrdnance) attacker.ordnanceCharges--;
+    attacker.focusToken = false;
+    attacker.targetLockToken = false;
+    target.focusToken = false;
+    target.evadeToken = false;
+
+    const hitChance = calculateHitChance(effectiveAttack, effectiveAgility);
     const hit = this.rng() < hitChance;
 
     if (hit) {
-      const damage = attacker.combatStats.attackDice;
+      const damage = baseAttackDice;
       let remainingDamage = damage;
-
-      // Damage shields first
       if (target.shields > 0) {
         const shieldDamage = Math.min(target.shields, remainingDamage);
         target.shields -= shieldDamage;
         remainingDamage -= shieldDamage;
       }
-
-      // Then hull
-      if (remainingDamage > 0) {
-        target.hull -= remainingDamage;
-      }
-
-      // Track stats
+      if (remainingDamage > 0) target.hull -= remainingDamage;
       if (attackerStats) {
         attackerStats.damageDealt += damage;
         attackerStats.shotsHit++;
       }
-      if (targetStats) {
-        targetStats.damageTaken += damage;
-      }
-
-      // Check for destruction
+      if (targetStats) targetStats.damageTaken += damage;
       if (target.hull <= 0) {
         if (targetStats) targetStats.survived = false;
         if (attackerStats) attackerStats.kills++;
@@ -568,8 +711,9 @@ export class BattleSimulator {
       if (attackerStats) attackerStats.shotsMissed++;
     }
 
-    // Set cooldown (convert ms to turns, roughly 300ms per turn)
-    attacker.weaponCooldown = Math.ceil(attacker.combatStats.weaponCooldown / 300);
+    attacker.weaponCooldown = Math.ceil(
+      attacker.combatStats.weaponCooldown / 300,
+    );
   }
 
   private generateResult(): BattleResult {
@@ -581,7 +725,7 @@ export class BattleSimulator {
     let team2Destroyed = 0;
 
     for (const [shipId, stats] of this.shipStats) {
-      if (stats.team === 'team1') {
+      if (stats.team === "team1") {
         if (stats.survived) team1Alive++;
         else team2Destroyed++;
         team1Damage += stats.damageDealt;
@@ -592,13 +736,13 @@ export class BattleSimulator {
       }
     }
 
-    let winner: 'team1' | 'team2' | 'draw';
+    let winner: "team1" | "team2" | "draw";
     if (team1Alive > 0 && team2Alive === 0) {
-      winner = 'team1';
+      winner = "team1";
     } else if (team2Alive > 0 && team1Alive === 0) {
-      winner = 'team2';
+      winner = "team2";
     } else {
-      winner = 'draw';
+      winner = "draw";
     }
 
     return {
@@ -626,30 +770,36 @@ export class BattleSimulator {
     };
 
     let totalTurns = 0;
-    const shipAggregates = new Map<string, {
-      battles: number;
-      survived: number;
-      kills: number;
-      damageDealt: number;
-      damageTaken: number;
-      turnsAlive: number;
-      shotsHit: number;
-      shotsMissed: number;
-      faction: FactionId;
-    }>();
+    const shipAggregates = new Map<
+      string,
+      {
+        battles: number;
+        survived: number;
+        kills: number;
+        damageDealt: number;
+        damageTaken: number;
+        turnsAlive: number;
+        shotsHit: number;
+        shotsMissed: number;
+        faction: FactionId;
+      }
+    >();
 
-    const factionAggregates = new Map<FactionId, {
-      battles: number;
-      wins: number;
-      shipsTotal: number;
-      shipsSurvived: number;
-      damageDealt: number;
-    }>();
+    const factionAggregates = new Map<
+      FactionId,
+      {
+        battles: number;
+        wins: number;
+        shipsTotal: number;
+        shipsSurvived: number;
+        damageDealt: number;
+      }
+    >();
 
     for (const result of results) {
       // Count wins
-      if (result.winner === 'team1') stats.team1Wins++;
-      else if (result.winner === 'team2') stats.team2Wins++;
+      if (result.winner === "team1") stats.team1Wins++;
+      else if (result.winner === "team2") stats.team2Wins++;
       else stats.draws++;
 
       totalTurns += result.turnsElapsed;
@@ -686,13 +836,20 @@ export class BattleSimulator {
         const faction = shipStats.faction;
         let factionAgg = factionAggregates.get(faction);
         if (!factionAgg) {
-          factionAgg = { battles: 0, wins: 0, shipsTotal: 0, shipsSurvived: 0, damageDealt: 0 };
+          factionAgg = {
+            battles: 0,
+            wins: 0,
+            shipsTotal: 0,
+            shipsSurvived: 0,
+            damageDealt: 0,
+          };
           factionAggregates.set(faction, factionAgg);
         }
 
         // This ship's team won?
-        const teamWon = (shipStats.team === 'team1' && result.winner === 'team1') ||
-                       (shipStats.team === 'team2' && result.winner === 'team2');
+        const teamWon =
+          (shipStats.team === "team1" && result.winner === "team1") ||
+          (shipStats.team === "team2" && result.winner === "team2");
         if (teamWon && !factionAggregates.get(faction)!.battles) {
           factionAgg.wins++;
         }
@@ -736,7 +893,8 @@ export class BattleSimulator {
         faction,
         battles: agg.battles,
         winRate: agg.battles > 0 ? agg.wins / agg.battles : 0,
-        averageShipsSurviving: agg.battles > 0 ? agg.shipsSurvived / agg.battles : 0,
+        averageShipsSurviving:
+          agg.battles > 0 ? agg.shipsSurvived / agg.battles : 0,
         averageDamageDealt: agg.battles > 0 ? agg.damageDealt / agg.battles : 0,
       });
     }
@@ -744,9 +902,12 @@ export class BattleSimulator {
     return stats;
   }
 
-  private getRandomShipsForFaction(faction: FactionId, count: number): string[] {
+  private getRandomShipsForFaction(
+    faction: FactionId,
+    count: number,
+  ): string[] {
     const allShips = Object.values(SHIP_DEFINITIONS);
-    const factionShips = allShips.filter(def => def.faction === faction);
+    const factionShips = allShips.filter((def) => def.faction === faction);
     const result: string[] = [];
 
     for (let i = 0; i < count; i++) {
@@ -761,7 +922,7 @@ export class BattleSimulator {
    * Generate a balance report
    */
   generateBalanceReport(stats: AggregatedStats): string {
-    let report = '=== BALANCE SIMULATION REPORT ===\n\n';
+    let report = "=== BALANCE SIMULATION REPORT ===\n\n";
 
     report += `Total Battles: ${stats.totalBattles}\n`;
     report += `Team 1 Wins: ${stats.team1Wins} (${((stats.team1Wins / stats.totalBattles) * 100).toFixed(1)}%)\n`;
@@ -769,7 +930,7 @@ export class BattleSimulator {
     report += `Draws: ${stats.draws} (${((stats.draws / stats.totalBattles) * 100).toFixed(1)}%)\n`;
     report += `Average Turns: ${stats.averageTurns.toFixed(1)}\n\n`;
 
-    report += '--- FACTION PERFORMANCE ---\n';
+    report += "--- FACTION PERFORMANCE ---\n";
     for (const [faction, perf] of stats.factionPerformance) {
       report += `\n${faction}:\n`;
       report += `  Win Rate: ${(perf.winRate * 100).toFixed(1)}%\n`;
@@ -777,9 +938,10 @@ export class BattleSimulator {
       report += `  Avg Damage Dealt: ${perf.averageDamageDealt.toFixed(1)}\n`;
     }
 
-    report += '\n--- SHIP PERFORMANCE ---\n';
-    const sortedShips = Array.from(stats.shipPerformance.values())
-      .sort((a, b) => b.survivalRate - a.survivalRate);
+    report += "\n--- SHIP PERFORMANCE ---\n";
+    const sortedShips = Array.from(stats.shipPerformance.values()).sort(
+      (a, b) => b.survivalRate - a.survivalRate,
+    );
 
     for (const ship of sortedShips) {
       report += `\n${ship.definitionId} (${ship.faction}):\n`;
