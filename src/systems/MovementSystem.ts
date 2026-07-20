@@ -11,6 +11,7 @@ import type {
   ManeuverResult,
 } from "../core/types";
 import { SPEED_SCALE_FACTOR } from "../config";
+import type { MovementProfile } from "../data/ShipDefinitions";
 
 // ============================================
 // Maneuver Templates
@@ -191,6 +192,7 @@ export function resolveManeuver(
  * @param maneuver  - The maneuver to execute
  * @param numPoints - Number of intermediate waypoints (default 10)
  * @param baseSize  - Ship base size in pixels (see resolveManeuver)
+ * @param profile   - Movement profile: "fighter" (default) or "capital" (boat easing)
  * @returns Array of {x, y, angle} points from start to end
  */
 export function generateManeuverPath(
@@ -200,6 +202,7 @@ export function generateManeuverPath(
   maneuver: ManeuverDefinition,
   numPoints: number = 10,
   baseSize: number = 0,
+  profile: MovementProfile = "fighter",
 ): Array<{ x: number; y: number; angle: number }> {
   const result = resolveManeuver(
     startX,
@@ -226,23 +229,35 @@ export function generateManeuverPath(
       template.pathType === "segnor" ||
       template.pathType === "tallon"
     ) {
-      // Smooth curve: position follows a smoothstep arc to the endpoint.
-      // Segnor/Tallon use the same position curve as bank/turn but rotate further.
-      const easeT = t * t * (3 - 2 * t); // Smoothstep
+      // Capital ships: quadratic ease-in (committed turn, no snap)
+      // Fighter ships: smoothstep position, linear angle (unchanged)
+      const easeT = profile === "capital" ? t * t : t * t * (3 - 2 * t);
+      const angleT = profile === "capital" ? t * t : t;
       points.push({
         x: startX + (result.targetX - startX) * easeT,
         y: startY + (result.targetY - startY) * easeT,
-        angle: normalizeAngle(startAngle + template.deltaAngle * t),
+        angle: normalizeAngle(startAngle + template.deltaAngle * angleT),
       });
     } else {
       // K-turn: move straight forward, then flip 180° at the end.
-      const movePhase = Math.min(t * 1.5, 1); // Reach endpoint at t=0.67
-      const rotatePhase = Math.max((t - 0.6) * 2.5, 0); // Flip in last 40%
-      points.push({
-        x: startX + (result.targetX - startX) * movePhase,
-        y: startY + (result.targetY - startY) * movePhase,
-        angle: normalizeAngle(startAngle + 180 * rotatePhase),
-      });
+      if (profile === "capital") {
+        // Capital: gradual rotation across full cycle (no late snap)
+        const movePhase = Math.min(t * 1.5, 1);
+        const rotatePhase = t * t;
+        points.push({
+          x: startX + (result.targetX - startX) * movePhase,
+          y: startY + (result.targetY - startY) * movePhase,
+          angle: normalizeAngle(startAngle + 180 * rotatePhase),
+        });
+      } else {
+        const movePhase = Math.min(t * 1.5, 1);
+        const rotatePhase = Math.max((t - 0.6) * 2.5, 0);
+        points.push({
+          x: startX + (result.targetX - startX) * movePhase,
+          y: startY + (result.targetY - startY) * movePhase,
+          angle: normalizeAngle(startAngle + 180 * rotatePhase),
+        });
+      }
     }
   }
 

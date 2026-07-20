@@ -118,7 +118,7 @@ const LIGHT_FIGHTER_DIAL: ManeuverDefinition[] = [
 ];
 
 /** Capital ship dial - minimal mobility */
-const CAPITAL_DIAL: ManeuverDefinition[] = [
+export const CAPITAL_DIAL: ManeuverDefinition[] = [
   // Speed 0 (stationary)
   { direction: "straight", speed: 0, difficulty: "white" },
   // Speed 1
@@ -2365,6 +2365,22 @@ export function getShipDial(
   definitionId: string,
 ): readonly ManeuverDefinition[] {
   return SHIP_DIALS[definitionId] ?? FIGHTER_DIAL;
+}
+
+/** Movement profile determines intra-cycle interpolation curve. */
+export type MovementProfile = "fighter" | "capital";
+
+/**
+ * Returns the movement profile for a ship definition.
+ * Capital profile = boat-style easing (committed turns, no snap).
+ *
+ * @param definitionId - Ship definition ID.
+ */
+export function getMovementProfile(definitionId: string): MovementProfile {
+  if (SHIP_DIALS[definitionId] === CAPITAL_DIAL) return "capital";
+  const def = SHIP_DEFINITIONS[definitionId];
+  if (def?.baseStats.size === "huge") return "capital";
+  return "fighter";
 }
 
 export function getShipsByFaction(faction: FactionId): ShipDefinition[] {

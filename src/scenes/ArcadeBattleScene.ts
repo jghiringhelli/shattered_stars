@@ -53,7 +53,11 @@ import {
   consumeTurretShot,
   type ArcadeTurretSlot,
 } from "../arcade/ArcadeTurret";
-import { getShipDefinition, getShipDial } from "../data/ShipDefinitions";
+import {
+  getShipDefinition,
+  getShipDial,
+  getMovementProfile,
+} from "../data/ShipDefinitions";
 import { distance } from "../systems/MovementSystem";
 import type { ShipRole } from "../core/types";
 import {
@@ -173,6 +177,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private playerFaction: FactionId = "free_confederation";
   private score = 0;
   private lastTime = 0;
+  private accumulator = 0;
+  private static readonly FIXED_DT = 1000 / 60; // 16.667ms per logic tick
   private gameEnded = false;
   private isPaused = false;
   private pauseOverlay: Phaser.GameObjects.Container | null = null;
@@ -316,19 +322,31 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const deltaMs = time - this.lastTime;
     this.lastTime = time;
 
-    if (deltaMs <= 0 || deltaMs > 100) return;
+    if (deltaMs <= 0) return;
     if (this.isPaused || this.gameEnded) return;
 
-    this.framesAlive++;
-    this.handleInput(deltaMs);
-    this.updateShips(deltaMs);
-    this.updateProjectiles(deltaMs);
-    this.updateAI(deltaMs);
-    this.updateTurrets();
-    this.checkCollisions();
+    // Clamp to prevent spiral-of-death on tab-switch or long pause
+    this.accumulator += Math.min(deltaMs, 250);
+
+    while (this.accumulator >= ArcadeBattleScene.FIXED_DT) {
+      this.tickLogic(ArcadeBattleScene.FIXED_DT);
+      this.accumulator -= ArcadeBattleScene.FIXED_DT;
+    }
+
+    // Render-only updates: every real frame (not fixed-step)
     this.updateSprites();
     this.updateHUD();
     this.updateCameraFollow();
+  }
+
+  private tickLogic(dt: number): void {
+    this.framesAlive++;
+    this.handleInput(dt);
+    this.updateShips(dt);
+    this.updateProjectiles(dt);
+    this.updateAI(dt);
+    this.updateTurrets();
+    this.checkCollisions();
     this.checkVictory();
   }
 
@@ -1575,6 +1593,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       control: createControlState(
         baseShip,
         SHIP_SIZES[def?.baseStats.size ?? "small"] ?? 32,
+        getMovementProfile(defId),
       ),
       targetId: null,
       aiDecisionTimer: 0, // fire immediately on first update

@@ -17,6 +17,7 @@ import {
   generateManeuverPath,
 } from "../systems/MovementSystem";
 import { CYCLE_DURATION_MS } from "../config";
+import type { MovementProfile } from "../data/ShipDefinitions";
 
 // ============================================
 // Control State
@@ -30,6 +31,9 @@ export interface ShipControlState {
   /** Ship base size in pixels; injected from SHIP_SIZES at creation time. */
   baseSize: number;
 
+  /** Movement interpolation profile: "fighter" (snap/smoothstep) or "capital" (boat easing). */
+  movementProfile: MovementProfile;
+
   /** Maneuver currently being executed (always set after first cycle starts). */
   currentManeuver: ManeuverDirection | null;
   maneuverProgress: number; // 0–1 within the current cycle
@@ -39,8 +43,8 @@ export interface ShipControlState {
   /** Maneuver queued for the next cycle (null = default straight). */
   nextManeuver: ManeuverDirection | null;
 
-  weaponCooldown: number;
-  weaponCooldownMax: number;
+  /** True once the ship fires its primary laser this cycle; resets at cycle start. */
+  firedLaserThisCycle: boolean;
 
   kturnCooldown: number;
   kturnCooldownMax: number;
@@ -54,25 +58,27 @@ export interface ShipControlState {
  * Creates initial control state and immediately starts a straight maneuver
  * so the ship is never idle.
  *
- * @param ship     - Ship whose position/angle seeds the first path.
- * @param baseSize - Ship base size in pixels (from SHIP_SIZES[size]).
+ * @param ship            - Ship whose position/angle seeds the first path.
+ * @param baseSize        - Ship base size in pixels (from SHIP_SIZES[size]).
+ * @param movementProfile - "fighter" (default) or "capital" (boat easing).
  */
 export function createControlState(
   ship: ShipState,
   baseSize: number = 0,
+  movementProfile: MovementProfile = "fighter",
 ): ShipControlState {
   const base: ShipControlState = {
     speed: 3,
     maxSpeed: 5,
     minSpeed: 1,
     baseSize,
+    movementProfile,
     currentManeuver: null,
     maneuverProgress: 0,
     maneuverPath: [],
     maneuverTarget: null,
     nextManeuver: null,
-    weaponCooldown: 0,
-    weaponCooldownMax: 500,
+    firedLaserThisCycle: false,
     kturnCooldown: 0,
     kturnCooldownMax: 5000,
     barrelRollCooldown: 0,
@@ -135,6 +141,7 @@ export function startManeuver(
     maneuver,
     20,
     control.baseSize,
+    control.movementProfile,
   );
   const result = resolveManeuver(
     ship.x,
@@ -154,6 +161,7 @@ export function startManeuver(
       y: result.targetY,
       angle: result.targetAngle,
     },
+    firedLaserThisCycle: false,
   };
 }
 
@@ -221,7 +229,7 @@ export function advanceCycle(
 // ============================================
 
 /**
- * Drains all per-frame cooldown timers.
+ * Drains all per-frame cooldown timers (actions only, not weapon fire).
  *
  * @param control  - Current control state.
  * @param deltaMs  - Elapsed frame time in ms.
@@ -232,16 +240,20 @@ export function updateCooldowns(
 ): ShipControlState {
   return {
     ...control,
-    weaponCooldown: Math.max(0, control.weaponCooldown - deltaMs),
     kturnCooldown: Math.max(0, control.kturnCooldown - deltaMs),
     barrelRollCooldown: Math.max(0, control.barrelRollCooldown - deltaMs),
     boostCooldown: Math.max(0, control.boostCooldown - deltaMs),
   };
 }
 
-/** @returns true when the ship can fire its primary weapon. */
+/** @returns true when the ship can fire its primary laser (once per cycle). */
 export function canFire(control: ShipControlState): boolean {
-  return control.weaponCooldown <= 0;
+  return !control.firedLaserThisCycle;
+}
+
+/** Marks the primary laser as fired for this cycle. */
+export function fireWeapon(control: ShipControlState): ShipControlState {
+  return { ...control, firedLaserThisCycle: true };
 }
 
 /** @returns true when a K-turn (or Tallon/Segnor) can be queued. */
@@ -261,10 +273,6 @@ export function canBarrelRoll(control: ShipControlState): boolean {
  */
 export function canBoost(control: ShipControlState): boolean {
   return control.boostCooldown <= 0;
-}
-
-export function fireWeapon(control: ShipControlState): ShipControlState {
-  return { ...control, weaponCooldown: control.weaponCooldownMax };
 }
 
 export function useKTurn(control: ShipControlState): ShipControlState {

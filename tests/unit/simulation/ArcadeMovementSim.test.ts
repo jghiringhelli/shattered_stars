@@ -14,8 +14,13 @@ import { describe, it, expect } from "vitest";
 import {
   SHIP_DEFINITIONS,
   getShipDial,
+  getMovementProfile,
 } from "../../../src/data/ShipDefinitions";
-import { resolveManeuver, distance } from "../../../src/systems/MovementSystem";
+import {
+  resolveManeuver,
+  distance,
+  generateManeuverPath,
+} from "../../../src/systems/MovementSystem";
 import {
   createControlState,
   updateManeuver,
@@ -417,5 +422,116 @@ describe("ArcadeMovementSim — position log (half-second snapshots)", () => {
 
     const totalDist = distance(3000, 3000, last.x, last.y);
     expect(totalDist).toBeCloseTo(numCycles * templateLength, 0);
+  });
+});
+
+describe("Capital ship movement profile (boat easing)", () => {
+  it("getMovementProfile returns 'capital' for CAPITAL_DIAL ships", () => {
+    expect(getMovementProfile("terran_imperator")).toBe("capital");
+    expect(getMovementProfile("synth_nexus")).toBe("capital");
+    expect(getMovementProfile("corsair_galleon")).toBe("capital");
+    expect(getMovementProfile("ascendant_divine")).toBe("capital");
+  });
+
+  it("getMovementProfile returns 'fighter' for non-capital ships", () => {
+    expect(getMovementProfile("terran_gladius")).toBe("fighter");
+    expect(getMovementProfile("terran_viper")).toBe("fighter");
+    expect(getMovementProfile("confed_falcon")).toBe("fighter");
+  });
+
+  it("capital bank_left midpoint angle differs from fighter (quadratic vs linear)", () => {
+    const maneuver = {
+      direction: "bank_left" as ManeuverDirection,
+      speed: 1,
+      difficulty: "white" as const,
+    };
+    const baseSize = SHIP_SIZES["huge"];
+
+    const fighterPath = generateManeuverPath(
+      0,
+      0,
+      0,
+      maneuver,
+      20,
+      baseSize,
+      "fighter",
+    );
+    const capitalPath = generateManeuverPath(
+      0,
+      0,
+      0,
+      maneuver,
+      20,
+      baseSize,
+      "capital",
+    );
+
+    const midFighter = fighterPath[10]!;
+    const midCapital = capitalPath[10]!;
+
+    // At t=0.5: fighter linear angle = -22.5°, capital quadratic = -11.25°
+    expect(Math.abs(midFighter.angle - midCapital.angle)).toBeGreaterThan(5);
+  });
+
+  it("capital and fighter paths reach the same endpoint", () => {
+    const maneuver = {
+      direction: "bank_right" as ManeuverDirection,
+      speed: 2,
+      difficulty: "red" as const,
+    };
+    const baseSize = SHIP_SIZES["huge"];
+
+    const fighterPath = generateManeuverPath(
+      0,
+      0,
+      0,
+      maneuver,
+      20,
+      baseSize,
+      "fighter",
+    );
+    const capitalPath = generateManeuverPath(
+      0,
+      0,
+      0,
+      maneuver,
+      20,
+      baseSize,
+      "capital",
+    );
+
+    const endFighter = fighterPath[fighterPath.length - 1]!;
+    const endCapital = capitalPath[capitalPath.length - 1]!;
+
+    expect(endCapital.x).toBeCloseTo(endFighter.x, 1);
+    expect(endCapital.y).toBeCloseTo(endFighter.y, 1);
+    expect(endCapital.angle).toBeCloseTo(endFighter.angle, 1);
+  });
+
+  it("capital ship cycle-end position still matches resolveManeuver target", () => {
+    const shipId = "terran_imperator";
+    const def = SHIP_DEFINITIONS[shipId]!;
+    const baseSize = SHIP_SIZES[def.baseStats.size] ?? 96;
+    const ship = makeShip(shipId);
+    const control = createControlState(ship, baseSize, "capital");
+
+    const bankControl = startManeuver(
+      ship,
+      { ...control, speed: 1 },
+      "bank_left",
+    );
+    const target = bankControl.maneuverTarget!;
+
+    const expected = resolveManeuver(
+      ship.x,
+      ship.y,
+      ship.angle,
+      { direction: "bank_left", speed: 1, difficulty: "white" },
+      baseSize,
+    );
+
+    expect(target.x).toBeCloseTo(expected.targetX, 1);
+    expect(target.y).toBeCloseTo(expected.targetY, 1);
+    expect(target.angle).toBeCloseTo(expected.targetAngle, 1);
   });
 });

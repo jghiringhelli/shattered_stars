@@ -17,6 +17,7 @@
 import type { ShipRole, ManeuverDefinition } from "../core/types";
 import type { StressState } from "../arcade/ArcadeStress";
 import type { ShipControlState } from "../core/ArcadeControls";
+import { canFire } from "../core/ArcadeControls";
 import {
   getFormationTarget,
   blendFormationTarget,
@@ -371,7 +372,7 @@ export function computeAIDecision(
     angleDiffToTarget >= 45;
 
   const firePrimary =
-    angleDiffToTarget < 30 && dist < 400 && ship.control.weaponCooldown <= 0;
+    angleDiffToTarget < 30 && dist < 400 && canFire(ship.control);
   const firingOrdnanceSlot = angleDiffToTarget < 45 && dist < 600 ? 0 : -1;
 
   return {

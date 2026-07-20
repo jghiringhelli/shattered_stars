@@ -55,7 +55,7 @@ describe("ArcadeControls", () => {
       // Cycle system: a maneuver is always executing from creation
       expect(control.currentManeuver).toBe("straight");
       expect(control.maneuverPath.length).toBeGreaterThan(0);
-      expect(control.weaponCooldown).toBe(0);
+      expect(control.firedLaserThisCycle).toBe(false);
       expect(control.kturnCooldown).toBe(0);
       // nextManeuver queue starts empty
       expect(control.nextManeuver).toBeNull();
@@ -160,13 +160,13 @@ describe("ArcadeControls", () => {
       expect(result.currentManeuver).toBe("straight");
     });
 
-    it("should update weapon cooldown on fire", () => {
+    it("should mark laser as fired on fire command", () => {
       const ship = createMockShip();
       const control = createControlState(ship);
 
       const result = processCommand(ship, control, "fire");
 
-      expect(result.weaponCooldown).toBeGreaterThan(0);
+      expect(result.firedLaserThisCycle).toBe(true);
     });
   });
 
@@ -276,30 +276,6 @@ describe("ArcadeControls", () => {
   });
 
   describe("updateCooldowns", () => {
-    it("should decrease weapon cooldown", () => {
-      const ship = createMockShip();
-      const control: ShipControlState = {
-        ...createControlState(ship),
-        weaponCooldown: 500,
-      };
-
-      const result = updateCooldowns(control, 100);
-
-      expect(result.weaponCooldown).toBe(400);
-    });
-
-    it("should not go below 0", () => {
-      const ship = createMockShip();
-      const control: ShipControlState = {
-        ...createControlState(ship),
-        weaponCooldown: 50,
-      };
-
-      const result = updateCooldowns(control, 100);
-
-      expect(result.weaponCooldown).toBe(0);
-    });
-
     it("should decrease kturn cooldown", () => {
       const ship = createMockShip();
       const control: ShipControlState = {
@@ -393,9 +369,12 @@ describe("ArcadeControls", () => {
       expect(canFire(control)).toBe(true);
     });
 
-    it("should return false when on cooldown", () => {
+    it("should return false when already fired this cycle", () => {
       const ship = createMockShip();
-      const control = { ...createControlState(ship), weaponCooldown: 100 };
+      const control = {
+        ...createControlState(ship),
+        firedLaserThisCycle: true,
+      };
 
       expect(canFire(control)).toBe(false);
     });
@@ -540,6 +519,49 @@ describe("ArcadeControls", () => {
       // Segnor ends at 225° (−135° from 0°), bank_left ends at 315° (−45° from 0°)
       expect(segnor.maneuverTarget?.angle).toBeCloseTo(225, 1);
       expect(bank.maneuverTarget?.angle).toBeCloseTo(315, 1);
+    });
+  });
+
+  describe("firedLaserThisCycle — cycle-gated laser", () => {
+    it("resets to false at cycle start (startManeuver)", () => {
+      const ship = createMockShip();
+      let control = createControlState(ship);
+      control = processCommand(ship, control, "fire");
+      expect(control.firedLaserThisCycle).toBe(true);
+
+      const reset = startManeuver(ship, control, "straight");
+      expect(reset.firedLaserThisCycle).toBe(false);
+    });
+
+    it("resets to false on advanceCycle", () => {
+      const ship = createMockShip();
+      let control = createControlState(ship);
+      control = processCommand(ship, control, "fire");
+      expect(control.firedLaserThisCycle).toBe(true);
+
+      const advanced = advanceCycle(ship, control);
+      expect(advanced.firedLaserThisCycle).toBe(false);
+    });
+
+    it("prevents second fire within same cycle", () => {
+      const ship = createMockShip();
+      let control = createControlState(ship);
+      control = processCommand(ship, control, "fire");
+      expect(control.firedLaserThisCycle).toBe(true);
+
+      const second = processCommand(ship, control, "fire");
+      expect(second).toBe(control);
+    });
+
+    it("allows fire again after new cycle starts", () => {
+      const ship = createMockShip();
+      let control = createControlState(ship);
+      control = processCommand(ship, control, "fire");
+      control = advanceCycle(ship, control);
+
+      expect(canFire(control)).toBe(true);
+      const fired = processCommand(ship, control, "fire");
+      expect(fired.firedLaserThisCycle).toBe(true);
     });
   });
 });
