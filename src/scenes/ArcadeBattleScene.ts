@@ -86,6 +86,17 @@ import {
   type FactionId,
 } from "../config";
 import { HealthBar } from "../ui/HealthBar";
+import {
+  buildFrameCache,
+  type FrameCache,
+} from "../arcade/systems/ArcadeFrameCache";
+import { checkVictoryCondition } from "../arcade/systems/ArcadeVictorySystem";
+import {
+  createPerformanceState,
+  updateFPS,
+  evaluateQuality,
+  type PerformanceState,
+} from "../systems/PerformanceSystem";
 import { Minimap, type MinimapShip } from "../ui/Minimap";
 import { renderBattleStarfield } from "../rendering/Starfield";
 import { applyLoadoutEffects } from "../systems/BattleHelpers";
@@ -143,6 +154,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private minimap: Minimap | undefined;
   private cameraShakeEnabled = true;
   private damageNumbersEnabled = true;
+  private userWantsCameraShake = true;
+  private userWantsDamageNumbers = true;
 
   private playerShipId: string | null = null;
   private keys!: {
@@ -178,7 +191,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private score = 0;
   private lastTime = 0;
   private accumulator = 0;
-  private static readonly FIXED_DT = 1000 / 60; // 16.667ms per logic tick
+  private static readonly FIXED_DT = 1000 / 60;
+  private frameCache: FrameCache | null = null;
+  private perfState: PerformanceState = createPerformanceState();
   private gameEnded = false;
   private isPaused = false;
   private pauseOverlay: Phaser.GameObjects.Container | null = null;
@@ -262,8 +277,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
           showMinimap: boolean;
         }
       | undefined;
-    this.cameraShakeEnabled = savedSettings?.cameraShake ?? true;
-    this.damageNumbersEnabled = savedSettings?.showDamageNumbers ?? true;
+    this.userWantsCameraShake = savedSettings?.cameraShake ?? true;
+    this.userWantsDamageNumbers = savedSettings?.showDamageNumbers ?? true;
+    this.cameraShakeEnabled = this.userWantsCameraShake;
+    this.damageNumbersEnabled = this.userWantsDamageNumbers;
     const showMinimap = savedSettings?.showMinimap ?? true;
 
     // No setBounds — we manage the camera manually for seamless toroid wrapping.
@@ -341,6 +358,16 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   private tickLogic(dt: number): void {
     this.framesAlive++;
+    this.perfState = updateFPS(this.perfState, dt);
+    if (this.framesAlive % 30 === 0) {
+      this.perfState = evaluateQuality(this.perfState, this.lastTime);
+      this.cameraShakeEnabled =
+        this.userWantsCameraShake && this.perfState.effectSettings.screenShake;
+      this.damageNumbersEnabled =
+        this.userWantsDamageNumbers &&
+        this.perfState.effectSettings.damageIndicators;
+    }
+    this.frameCache = buildFrameCache(this.ships.values());
     this.handleInput(dt);
     this.updateShips(dt);
     this.updateProjectiles(dt);
@@ -958,26 +985,22 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   private updateAI(deltaMs: number): void {
-    const allShips = [...this.ships.values()];
-    const aiViews = new Map<string, AIShipView>(
-      allShips.map((s) => [s.id, this.toAIView(s)]),
-    );
+    if (!this.frameCache) return;
+    const aiViews = new Map<string, AIShipView>();
+    for (const ship of this.ships.values()) {
+      aiViews.set(ship.id, this.toAIView(ship));
+    }
 
-    for (const ship of allShips) {
+    for (const ship of this.ships.values()) {
       if (ship.owner === "player" || ship.hull <= 0) continue;
 
       ship.aiDecisionTimer -= deltaMs;
 
-      const allies = allShips.filter(
-        (s) => s.faction === ship.faction && s.hull > 0,
-      );
-      const enemies = allShips.filter(
-        (s) => s.faction !== ship.faction && s.hull > 0,
-      );
-      const allyViews = allies.map((s) => aiViews.get(s.id)!);
-      const enemyViews = enemies.map((s) => aiViews.get(s.id)!);
+      const allyList = this.frameCache.aliveByFaction.get(ship.faction) ?? [];
+      const enemyList = this.frameCache.aliveEnemiesOf(ship.faction);
+      const allyViews = allyList.map((s) => aiViews.get(s.id)!);
+      const enemyViews = enemyList.map((s) => aiViews.get(s.id)!);
 
-      // Re-select target on timer expiry or when current target is dead
       const currentTarget = ship.targetId
         ? this.ships.get(ship.targetId)
         : null;
@@ -1302,39 +1325,34 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   private checkCollisions(): void {
+    if (!this.frameCache) return;
     const hitProjectiles = new Set<string>();
 
     for (const proj of this.projectiles) {
-      for (const ship of this.ships.values()) {
-        if (ship.hull <= 0) continue;
-        if (ship.id === proj.ownerId) continue;
+      for (const view of this.frameCache.aliveShips) {
+        if (view.id === proj.ownerId) continue;
 
-        if (checkProjectileHit(proj, ship.x, ship.y, 15, ship.faction)) {
-          // Hit!
+        if (checkProjectileHit(proj, view.x, view.y, 15, view.faction)) {
           hitProjectiles.add(proj.id);
+          const ship = this.ships.get(view.id)!;
 
           const wasAlive = ship.hull > 0;
-          // Cloaked ships deflect half the incoming damage (+2 agility equivalent)
           const damage = ship.isCloaked
             ? Math.max(1, Math.floor(proj.damage / 2))
             : proj.damage;
-          // A hit breaks cloak
           ship.isCloaked = false;
           ship.cloakTimer = 0;
 
-          // Apply damage
           if (ship.shields > 0) {
             ship.shields = Math.max(0, ship.shields - damage);
           } else {
             ship.hull = Math.max(0, ship.hull - damage);
           }
 
-          // Show floating damage number
           if (this.damageNumbersEnabled) {
             this.showFloatingText(ship.x, ship.y - 20, `-${damage}`, "#ff4444");
           }
 
-          // Score and kill notification for player kills
           if (
             proj.ownerFaction === this.playerFaction &&
             ship.hull <= 0 &&
@@ -1345,14 +1363,12 @@ export class ArcadeBattleScene extends Phaser.Scene {
             this.scoreText.setText(`SCORE: ${this.score}`);
           }
 
-          // Visual feedback
           if (this.cameraShakeEnabled) this.cameras.main.shake(50, 0.005);
           break;
         }
       }
     }
 
-    // Remove hit projectiles
     this.projectiles = this.projectiles.filter(
       (p) => !hitProjectiles.has(p.id),
     );
@@ -2262,18 +2278,19 @@ export class ArcadeBattleScene extends Phaser.Scene {
    * handleGunnerInput instead.
    */
   private updateTurrets(): void {
+    if (!this.frameCache) return;
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0 || !ship.turretSlot) continue;
       if (ship.id === this.playerShipId && ship.crewMode === "gunner") continue;
 
+      const enemies = this.frameCache.aliveEnemiesOf(ship.faction);
       let nearestEnemy: ArcadeShip | null = null;
       let nearestDist = ship.turretSlot.range;
-      for (const other of this.ships.values()) {
-        if (other.faction === ship.faction || other.hull <= 0) continue;
-        const dist = distance(ship.x, ship.y, other.x, other.y);
+      for (const view of enemies) {
+        const dist = distance(ship.x, ship.y, view.x, view.y);
         if (dist < nearestDist) {
           nearestDist = dist;
-          nearestEnemy = other;
+          nearestEnemy = this.ships.get(view.id) ?? null;
         }
       }
       if (!nearestEnemy) continue;
@@ -2367,17 +2384,12 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   private checkVictory(): void {
-    const enemies = Array.from(this.ships.values()).filter(
-      (s) => s.faction !== this.playerFaction && s.hull > 0,
-    );
-    const allies = Array.from(this.ships.values()).filter(
-      (s) => s.faction === this.playerFaction && s.hull > 0,
-    );
-
-    if (enemies.length === 0) {
+    if (!this.frameCache) return;
+    const result = checkVictoryCondition(this.frameCache, this.playerFaction);
+    if (result.outcome === "victory") {
       this.gameEnded = true;
       this.showEndScreen(true);
-    } else if (allies.length === 0) {
+    } else if (result.outcome === "defeat") {
       this.gameEnded = true;
       this.showEndScreen(false);
     }
