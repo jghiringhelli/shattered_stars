@@ -186,6 +186,18 @@ export class SquadRosterPanel extends Phaser.Events.EventEmitter {
         .setOrigin(1, 0),
     );
 
+    const dupeCount = this.instances.filter(
+      (i) => i.shipId === inst.shipId,
+    ).length;
+    if (dupeCount > 1) {
+      this.container.add(
+        this.scene.add.text(ROSTER_X + ROSTER_W - 58, y + 15, `×${dupeCount}`, {
+          font: "bold 9px Arial",
+          color: "#ccaa44",
+        }),
+      );
+    }
+
     const rm = this.scene.add
       .text(ROSTER_X + ROSTER_W - 22, y + (ROW_H - 4) / 2, "×", {
         font: "bold 14px Arial",

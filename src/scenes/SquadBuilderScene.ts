@@ -20,6 +20,7 @@ import type { AIDifficultyLevel } from "../ai/AIDifficulty";
 import { FormatPanel } from "../ui/squad/FormatPanel";
 import type { FormatPanelState } from "../ui/squad/FormatPanel";
 import { SquadListPanel } from "../ui/squad/SquadListPanel";
+import { flashText } from "../ui/textFlash";
 
 type ShipsPickedEvent = {
   slotIndex: number;
@@ -146,13 +147,25 @@ export class SquadBuilderScene extends Phaser.Scene {
       this.squadListPanel.render();
     });
     this.squadListPanel.on("removeSquad", (e: { squadIdx: number }) => {
-      if (this.squads.length <= 2) return;
+      if (this.squads.length <= 2) {
+        flashText(this, this.instructionText, {
+          message: "Minimum 2 squads required",
+          color: "#ff8844",
+        });
+        return;
+      }
       this.squads.splice(e.squadIdx, 1);
       this.squadListPanel.render();
     });
     this.squadListPanel.on("removeTeam", (teamId: number) => {
       const uniqueTeams = new Set(this.squads.map((s) => s.teamId));
-      if (uniqueTeams.size <= 2) return;
+      if (uniqueTeams.size <= 2) {
+        flashText(this, this.instructionText, {
+          message: "Minimum 2 teams required",
+          color: "#ff8844",
+        });
+        return;
+      }
       this.squads = this.squads.filter((s) => s.teamId !== teamId);
       this.squadListPanel.render();
     });
@@ -162,7 +175,22 @@ export class SquadBuilderScene extends Phaser.Scene {
 
   private onFormatChange(): void {
     this.formatPanel.setState({ gameMode: this.gameMode });
-    if (this.gameMode !== "epic") this.stripHugeShips();
+    if (this.gameMode !== "epic") {
+      const hadCapitals = this.squads.some((s) =>
+        s.ships.some((id) => {
+          const def = SHIP_DEFINITIONS[id];
+          return def?.baseStats.size === "huge" || def?.role === "capital";
+        }),
+      );
+      this.stripHugeShips();
+      if (hadCapitals) {
+        flashText(this, this.instructionText, {
+          message: "Capital ships removed — not allowed outside Epic mode",
+          color: "#cc8833",
+          durationMs: 2500,
+        });
+      }
+    }
     this.squadListPanel.update({ gameMode: this.gameMode });
   }
 
@@ -290,7 +318,13 @@ export class SquadBuilderScene extends Phaser.Scene {
 
   private openShipPicker(squadIdx: number): void {
     const squad = this.squads[squadIdx];
-    if (!squad?.factionId) return;
+    if (!squad?.factionId) {
+      flashText(this, this.instructionText, {
+        message: "Select a faction first (click the faction button)",
+        color: "#ffaa44",
+      });
+      return;
+    }
     this.scene.launch("ShipPickerScene", {
       slotIndex: squadIdx,
       factionId: squad.factionId,
@@ -324,17 +358,33 @@ export class SquadBuilderScene extends Phaser.Scene {
     if (this.gameMode !== "epic") this.stripHugeShips();
     const uniqueTeams = new Set(this.squads.map((s) => s.teamId));
     if (uniqueTeams.size < 2) {
-      this.instructionText.setText(
-        "Assign squads to at least 2 different teams before starting!",
-      );
-      this.instructionText.setColor("#ff5544");
+      flashText(this, this.instructionText, {
+        message: "Assign squads to at least 2 different teams before starting!",
+        color: "#ff5544",
+        durationMs: 3000,
+      });
+      this.tweens.add({
+        targets: this.instructionText,
+        scaleX: 1.12,
+        scaleY: 1.12,
+        yoyo: true,
+        duration: 200,
+      });
       return;
     }
     if (this.squads.some((s) => !s.factionId || s.ships.length === 0)) {
-      this.instructionText.setText(
-        "All squads must have ships before starting!",
-      );
-      this.instructionText.setColor("#ff5544");
+      flashText(this, this.instructionText, {
+        message: "All squads must have ships before starting!",
+        color: "#ff5544",
+        durationMs: 3000,
+      });
+      this.tweens.add({
+        targets: this.instructionText,
+        scaleX: 1.12,
+        scaleY: 1.12,
+        yoyo: true,
+        duration: 200,
+      });
       return;
     }
     const factions = this.squads.map((squad) => ({
