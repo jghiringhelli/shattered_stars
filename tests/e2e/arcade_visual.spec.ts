@@ -199,16 +199,16 @@ test.describe("ArcadeBattleScene — stress HUD", () => {
     expect(stressLevel).toBeLessThanOrEqual(0.05);
   });
 
-  test("stress increases after sustained hard turning", async ({ page }) => {
+  test("stress spikes after K-turn (hard maneuver)", async ({ page }) => {
     suppressWebGLNoise(page);
     await openArcadeScene(page);
 
-    // Hold RIGHT for 4 seconds — sustained turn = red maneuver → stress builds
-    const end = Date.now() + 4000;
-    while (Date.now() < end) {
-      await holdKey(page, "ArrowRight", 39);
-      await page.waitForTimeout(50);
-    }
+    // K-turn = red maneuver with an instant 0.5 stress spike (applyKturnStress).
+    // Sustained ArrowRight at default speed 3 on INTERCEPTOR_DIAL is bank=white
+    // and cannot build stress, so we trigger a K-turn instead — same intent
+    // (a hard maneuver taxes the pilot), reliably observable.
+    await holdKey(page, "Z", 90);
+    await page.waitForTimeout(300);
 
     const stressLevel = await page.evaluate(() => {
       const scene = (window as any).game?.scene.getScene(
@@ -219,47 +219,37 @@ test.describe("ArcadeBattleScene — stress HUD", () => {
         : null;
       return ship?.stress?.level ?? -1;
     });
-    // Sustained red-difficulty turning should push stress above 0.1
-    expect(stressLevel).toBeGreaterThan(0.1);
+    // K-turn adds 0.5 instantly; some cycle decay possible → assert > 0.3
+    expect(stressLevel).toBeGreaterThan(0.3);
   });
 
-  test("stress bar pixel turns non-green when stress is high", async ({
-    page,
-  }) => {
+  test("stress bar redraws after stress spike", async ({ page }) => {
     suppressWebGLNoise(page);
     await openArcadeScene(page);
 
-    // Build stress by holding RIGHT hard
-    const end = Date.now() + 5000;
-    while (Date.now() < end) {
-      await holdKey(page, "ArrowRight", 39);
-      await page.waitForTimeout(50);
-    }
-    await page.waitForTimeout(200); // let HUD redraw
+    // Trigger K-turn for reliable stress spike (see prior test comment)
+    await holdKey(page, "Z", 90);
+    await page.waitForTimeout(300);
 
-    const stressLevel = await page.evaluate(() => {
+    const state = await page.evaluate(() => {
       const scene = (window as any).game?.scene.getScene(
         "ArcadeBattleScene",
       ) as any;
       const ship = scene?.playerShipId
         ? scene.ships.get(scene.playerShipId)
         : null;
-      return ship?.stress?.level ?? 0;
+      return {
+        level: ship?.stress?.level ?? 0,
+        barVisible: !!scene?.stressBarGraphics?.visible,
+      };
     });
 
-    if (stressLevel > 0.1) {
-      // At stress > 0.1 the bar pixel should have some red/yellow component
-      // Stress bar is at game coords x=10..130, y=150..155. Sample the filled region.
-      const filledX = 10 + Math.round(stressLevel * 120 * 0.5); // midpoint of fill
-      const pixel = await sampleCanvasPixel(page, filledX, 152);
-      if (pixel) {
-        // A non-zero pixel means the bar has color (not all black)
-        const brightness = pixel.r + pixel.g + pixel.b;
-        expect(brightness).toBeGreaterThan(50);
-      }
-    }
-    // Test passes regardless if stress didn't build (flaky env) — core logic tested in unit tests
-    expect(stressLevel).toBeGreaterThanOrEqual(0);
+    // Pixel-sampling the Phaser Graphics HUD is fragile (canvas layering,
+    // Phaser world→screen scaling). Assert the observable game state instead:
+    // stress rose past the K-turn spike threshold, and the bar graphic stays
+    // visible after redraw. Visual regression covered by the snapshot test.
+    expect(state.level).toBeGreaterThan(0.3);
+    expect(state.barVisible).toBe(true);
   });
 });
 
