@@ -20,11 +20,15 @@ import {
 import { type Power, applyPower, drawPowers } from "../../data/survival/powers";
 import {
   type HangarOption,
-  applyEscort,
   applyEvolve,
   applyGraduate,
   hangarOptions,
 } from "../../data/survival/hangar";
+import {
+  type EscortOption,
+  applyEscortOption,
+  escortOptions,
+} from "../../data/survival/escorts";
 import {
   type WaveSize,
   computeThreat,
@@ -91,15 +95,23 @@ export class SurvivalRunController {
     return hangarOptions(this.run);
   }
 
-  /** Applies a Hangar choice (graduate / evolve / escort). */
+  /** Applies a Hangar choice (graduate / evolve). */
   chooseHangar(option: HangarOption): void {
     if (option.kind === "graduate" && option.hull) {
       applyGraduate(this.run, option.hull);
     } else if (option.kind === "evolve") {
       applyEvolve(this.run);
-    } else if (option.kind === "escort") {
-      applyEscort(this.run);
     }
+  }
+
+  /** The parallel escort-track choice offered each wave. */
+  draftEscort(): EscortOption[] {
+    return escortOptions(this.run);
+  }
+
+  /** Applies an escort-track choice (recruit / bank). */
+  chooseEscort(option: EscortOption): void {
+    applyEscortOption(this.run, option);
   }
 
   /** Escorts earned by the run but not yet spawned into the fleet. */

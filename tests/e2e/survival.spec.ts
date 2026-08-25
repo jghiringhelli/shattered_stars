@@ -53,6 +53,23 @@ async function clickFirstCard(page: any): Promise<void> {
   });
 }
 
+/**
+ * Resolves every sequential choice panel of a wave. Each wave now presents two
+ * parallel decisions (the power draft / Hangar, then the escort track), shown
+ * one panel after the other; this clicks the first card of each until the
+ * choice phase ends.
+ */
+async function clickThroughChoices(page: any): Promise<void> {
+  for (let i = 0; i < 2; i++) {
+    const open = await page.evaluate(() => {
+      const s = (window as any).game.scene.getScene("SurvivalScene") as any;
+      return s?.isChoicePhase === true && s?.choicePanel?.isOpen === true;
+    });
+    if (!open) break;
+    await clickFirstCard(page);
+  }
+}
+
 // ─── Initial state ────────────────────────────────────────────────────────────
 
 test.describe("SurvivalScene — initial state", () => {
@@ -180,7 +197,7 @@ test.describe("SurvivalScene — power draft", () => {
       return { invested, escorts: st.escorts, rerolls: st.rerolls };
     });
 
-    await clickFirstCard(page);
+    await clickThroughChoices(page);
 
     await page.waitForFunction(
       () =>
@@ -240,7 +257,7 @@ test.describe("SurvivalScene — hangar", () => {
     );
     expect(opened).toBe(true);
 
-    await clickFirstCard(page);
+    await clickThroughChoices(page);
     await page.waitForFunction(
       () =>
         ((window as any).game.scene.getScene("SurvivalScene") as any)

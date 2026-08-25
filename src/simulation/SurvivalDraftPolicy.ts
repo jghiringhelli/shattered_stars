@@ -18,6 +18,7 @@ import {
 } from "../data/survival/model";
 import type { Power } from "../data/survival/powers";
 import type { HangarOption } from "../data/survival/hangar";
+import type { EscortOption } from "../data/survival/escorts";
 
 /** A drafting strategy: chooses one power and one Hangar option per prompt. */
 export interface DraftPolicy {
@@ -30,6 +31,10 @@ export interface DraftPolicy {
     options: readonly HangarOption[],
     state: Readonly<SurvivalRunState>,
   ): HangarOption;
+  pickEscort(
+    options: readonly EscortOption[],
+    state: Readonly<SurvivalRunState>,
+  ): EscortOption;
 }
 
 /** Stats that make a fleet tankier rather than deadlier. */
@@ -88,6 +93,9 @@ export function specialistPolicy(): DraftPolicy {
     pickHangar(options) {
       return options.find((o) => o.kind === "evolve") ?? options[0]!;
     },
+    pickEscort(options) {
+      return options.find((o) => o.kind === "bank") ?? options[0]!;
+    },
   };
 }
 
@@ -112,12 +120,15 @@ export function generalistPolicy(): DraftPolicy {
         options[0]!
       );
     },
+    pickEscort(options) {
+      return options.find((o) => o.kind === "recruit") ?? options[0]!;
+    },
   };
 }
 
 /**
  * Brawler: prioritises durability stats and the bulwark/fleet branches, favours
- * more hulls. Hangar → escort (add a ship).
+ * more hulls. Hangar → evolve (deepen bulwark/fleet); escort → always recruit.
  */
 export function brawlerPolicy(): DraftPolicy {
   return {
@@ -140,7 +151,10 @@ export function brawlerPolicy(): DraftPolicy {
       );
     },
     pickHangar(options) {
-      return options.find((o) => o.kind === "escort") ?? options[0]!;
+      return options.find((o) => o.kind === "evolve") ?? options[0]!;
+    },
+    pickEscort(options) {
+      return options.find((o) => o.kind === "recruit") ?? options[0]!;
     },
   };
 }
@@ -153,6 +167,9 @@ export function randomPolicy(rng: RandomGenerator): DraftPolicy {
       return rng.pick([...offered]) ?? offered[0]!;
     },
     pickHangar(options) {
+      return rng.pick([...options]) ?? options[0]!;
+    },
+    pickEscort(options) {
       return rng.pick([...options]) ?? options[0]!;
     },
   };

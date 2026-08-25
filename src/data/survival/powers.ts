@@ -235,16 +235,6 @@ export const ATOMS: readonly Power[] = [
     "maxHull",
     2,
   ),
-  specialAtom(
-    "fleet_escort",
-    "fleet",
-    "Wingman",
-    "Add an AI escort",
-    "👨‍✈️",
-    (_b, s) => {
-      s.escorts += 1;
-    },
-  ),
   atom(
     "bul_hull",
     "bulwark",

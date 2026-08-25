@@ -29,6 +29,7 @@ import {
   sweepPolicy,
 } from "../src/simulation/SurvivalBalanceSim";
 import { computeThreat } from "../src/data/survival/threat";
+import { escortFleetPower } from "../src/data/survival/escorts";
 import { SurvivalRunController } from "../src/systems/survival/SurvivalRunController";
 
 function arg(flag: string): string | null {
@@ -72,7 +73,8 @@ function printCurve(): void {
   for (let i = 0; i < 20 && controller.level < 20; i++) {
     controller.beginWave();
     const ships = Math.min(1 + controller.state.escorts, 6);
-    const power = fleetPower(controller.bonuses, ships);
+    const power =
+      fleetPower(controller.bonuses, 1) + escortFleetPower(controller.state);
     const threat = computeThreat(controller.state, ships);
     const pWin = survivalProbability(power, threat);
     console.log(
@@ -87,6 +89,11 @@ function printCurve(): void {
       if (offered.length)
         controller.choosePower(policy.pickPower(offered, controller.state));
     }
+    const escortOffered = controller.draftEscort();
+    if (escortOffered.length)
+      controller.chooseEscort(
+        policy.pickEscort(escortOffered, controller.state),
+      );
   }
 }
 

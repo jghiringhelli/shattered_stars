@@ -9,6 +9,7 @@ import {
 import { createRunState } from "../../../src/data/survival/model";
 import { ATOMS, type Power } from "../../../src/data/survival/powers";
 import type { HangarOption } from "../../../src/data/survival/hangar";
+import type { EscortOption } from "../../../src/data/survival/escorts";
 
 function atomById(id: string): Power {
   const p = ATOMS.find((a) => a.id === id);
@@ -56,7 +57,6 @@ describe("SurvivalDraftPolicy — generalist", () => {
         description: "",
         icon: "",
       },
-      { kind: "escort", name: "", description: "", icon: "" },
       { kind: "evolve", name: "", description: "", icon: "" },
     ];
     expect(generalistPolicy().pickHangar(options, createRunState()).kind).toBe(
@@ -73,13 +73,23 @@ describe("SurvivalDraftPolicy — brawler", () => {
     expect(pick.stat).toBe("maxHull");
   });
 
-  it("adds an escort at the hangar", () => {
+  it("evolves at the hangar (escorts are a separate track)", () => {
     const options: HangarOption[] = [
       { kind: "graduate", hull: "ace", name: "", description: "", icon: "" },
-      { kind: "escort", name: "", description: "", icon: "" },
+      { kind: "evolve", name: "", description: "", icon: "" },
     ];
     expect(brawlerPolicy().pickHangar(options, createRunState()).kind).toBe(
-      "escort",
+      "evolve",
+    );
+  });
+
+  it("recruits on the escort track", () => {
+    const options: EscortOption[] = [
+      { kind: "recruit", name: "", description: "", icon: "" },
+      { kind: "bank", name: "", description: "", icon: "" },
+    ];
+    expect(brawlerPolicy().pickEscort(options, createRunState()).kind).toBe(
+      "recruit",
     );
   });
 });

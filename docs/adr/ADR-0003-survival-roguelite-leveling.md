@@ -155,3 +155,37 @@ picks and assert the run is reproducible (aligns with the deterministic-replay g
 - Exact branch count and the two-branch thresholds that gate cross powers.
 - Per-hull branch multipliers (which hull amplifies which two branches).
 - Threat curve coefficients (`computeThreat`) — calibrated later via headless sim.
+
+## Addendum (2026-08, escort redesign) — parallel escort progression
+
+The first escort model made stacking escorts a **runaway strategy**: in the balance sim
+`fleetPower` multiplied *both* offense and durability by the ship count, so every escort was
+effectively a full copy of the fully-upgraded flagship, and the escort-heavy archetype
+(`brawler`) hit the level cap at p90. Escorts also competed *inside* the same power draft
+(the `fleet_escort` atom + the Hangar's escort option), so "recruit" repeatedly beat any
+single-ship buff.
+
+**Decision (owner):** split progression into **two parallel decisions per wave**:
+
+1. **Ship / powers track** — the existing 3-card power draft, now **100% about your own
+   ship**. The escort-granting atom (`fleet_escort`) and the Hangar's escort option are
+   **removed** so the draft never trades your ship's growth for a body.
+2. **Escort track** — a separate parallel choice each wave: **Recruit Escort** (`+1`
+   escort, capped at `MAX_ESCORTS = 5`) vs **Hold Formation** (bank a reroll charge).
+   Escorts are **weak, basic bodies** — the faction's cheap starter ship — that do **not**
+   inherit the flagship's drafted bonuses.
+
+**Quantity vs quality (owner):** the escort pick only grants **quantity**. Escort **quality
+scales with support investment** — the **fleet branch depth** and the **carrier hull** —
+via `escortQualityMultiplier(state) = 1 + fleet·ESCORT_FLEET_SCALE + (carrier ? ESCORT_CARRIER_BONUS : 0)`.
+Total fleet power becomes `fleetPower(bonuses, 1) + escorts·ESCORT_UNIT_POWER·quality`
+(escorts capped). Without support, more escorts = more weak bodies (diminishing returns);
+with a support build (fleet/carrier), the wing becomes worthwhile — escorts are a payoff for
+the support playstyle, not a universal auto-take.
+
+**New code:** `src/data/survival/escorts.ts` (pure: constants, `escortQualityMultiplier`,
+`escortFleetPower`, `escortOptions`, `applyEscortOption`); `SurvivalRunController` gains
+`draftEscort()` / `chooseEscort()`; `DraftPolicy` gains `pickEscort()`; `SurvivalScene`
+presents the two panels sequentially each wave and spawns escorts as basic bodies without
+flagship bonuses. Anti-runaway invariant locked by unit test (brawler `p90 < SIM_MAX_LEVEL`).
+Post-redesign sweep (400 runs/policy): medians 4–5, p90 7–14, no policy near the cap.

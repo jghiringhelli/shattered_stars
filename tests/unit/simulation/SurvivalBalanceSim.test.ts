@@ -135,10 +135,12 @@ describe("SurvivalBalanceSim — balance invariants", () => {
     expect(crosses).toBeGreaterThan(0);
   });
 
-  it("durability/escort builds (brawler) outlast pure specialists at the top end", () => {
+  it("escort-stacking (brawler) is no longer a runaway to the level cap", () => {
+    // The redesign makes escorts weak, support-scaled bodies rather than
+    // flagship copies, so the escort-heavy archetype must not snowball to the
+    // cap at p90 the way it did under the old multiply-everything model.
     const brawler = sweepPolicy(brawlerPolicy(), RUNS, 1).summary;
-    const specialist = sweepPolicy(specialistPolicy(), RUNS, 1).summary;
-    expect(brawler.p90).toBeGreaterThan(specialist.p90);
+    expect(brawler.p90).toBeLessThan(SIM_MAX_LEVEL);
   });
 
   it("summary percentiles are ordered p10 <= median <= p90", () => {

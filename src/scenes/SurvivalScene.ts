@@ -4,8 +4,9 @@
  * Roguelite survival mode (see docs/adr/ADR-0003):
  * - Start with one ship
  * - Defeat threat-scaled waves of enemies
- * - Draft one power per wave (branch-based progression)
- * - Milestone waves open the Hangar (graduate / escort / evolve)
+ * - Two parallel choices per wave: draft a power for your ship AND decide the
+ *   escort track (recruit a weak basic escort or bank a reroll)
+ * - Milestone waves open the Hangar (graduate / evolve)
  * - Permanent death - start over on loss
  */
 
@@ -47,6 +48,7 @@ import {
 } from "../ui/survival/SurvivalChoicePanel";
 import type { Power } from "../data/survival/powers";
 import type { HangarOption } from "../data/survival/hangar";
+import type { EscortOption } from "../data/survival/escorts";
 
 /** Default starting ship for each faction in Survival mode. */
 const FACTION_STARTER_SHIPS: Record<FactionId, string> = {
@@ -95,6 +97,9 @@ export class SurvivalScene extends Phaser.Scene {
 
   private playerShipIds: string[] = [];
   private enemyShipIds: string[] = [];
+
+  /** Player ship ids that are escorts (weak basic bodies, no flagship bonuses). */
+  private escortShipIds: Set<string> = new Set();
 
   // Survival state
   private wave = 0;
@@ -182,6 +187,7 @@ export class SurvivalScene extends Phaser.Scene {
     this.healthBars.clear();
     this.playerShipIds = [];
     this.enemyShipIds = [];
+    this.escortShipIds.clear();
 
     // Spawn initial player ship based on chosen faction
     this.spawnPlayerShip(
@@ -483,8 +489,7 @@ export class SurvivalScene extends Phaser.Scene {
   private onPowerChosen(power: Power): void {
     this.run.choosePower(power);
     this.applyBonusesToFleet();
-    this.reconcileEscorts();
-    this.endChoicePhase();
+    this.showEscortChoice();
   }
 
   private showHangar(): void {
@@ -504,6 +509,29 @@ export class SurvivalScene extends Phaser.Scene {
   private onHangarChosen(option: HangarOption): void {
     this.run.chooseHangar(option);
     this.applyBonusesToFleet();
+    this.showEscortChoice();
+  }
+
+  /**
+   * Second, parallel choice each wave: the escort track. Shown after the power
+   * draft / Hangar so every wave presents two independent decisions.
+   */
+  private showEscortChoice(): void {
+    this.isChoicePhase = true;
+    const options = this.run.draftEscort();
+    const cards: ChoiceCard[] = options.map((o) => ({
+      icon: o.icon,
+      name: o.name,
+      description: o.description,
+    }));
+    this.choicePanel.show("REINFORCE WING", cards, (index) => {
+      const chosen = options[index];
+      if (chosen) this.onEscortChosen(chosen);
+    });
+  }
+
+  private onEscortChosen(option: EscortOption): void {
+    this.run.chooseEscort(option);
     this.reconcileEscorts();
     this.endChoicePhase();
   }
@@ -513,7 +541,12 @@ export class SurvivalScene extends Phaser.Scene {
     this.startNextWave();
   }
 
-  /** Materialises any escorts the run has earned but not yet spawned. */
+  /**
+   * Materialises any escorts the run has earned but not yet spawned. Escorts are
+   * the faction's basic starter ship — weak bodies that do NOT inherit the
+   * flagship's drafted bonuses (their strength comes from support investment,
+   * modelled in the balance sim, not from copying the flagship).
+   */
   private reconcileEscorts(): void {
     const anchor = this.ships.get(this.playerShipIds[0] ?? "");
     if (!anchor) return;
@@ -521,19 +554,22 @@ export class SurvivalScene extends Phaser.Scene {
       this.run.pendingEscorts() > 0 &&
       this.playerShipIds.length < MAX_FLEET
     ) {
-      const roster = getShipsByFaction(this.playerFaction);
-      const def = roster[Math.floor(Math.random() * roster.length)];
-      if (!def) break;
       const offset = this.playerShipIds.length * 80;
-      this.spawnPlayerShip(def.id, anchor.x + offset, anchor.y + 50);
+      this.spawnPlayerShip(
+        FACTION_STARTER_SHIPS[this.playerFaction],
+        anchor.x + offset,
+        anchor.y + 50,
+        true,
+      );
       this.run.markEscortSpawned();
     }
   }
 
-  /** Re-applies hull/shield bonuses to the live fleet after a choice. */
+  /** Re-applies hull/shield bonuses to the flagship fleet (escorts stay basic). */
   private applyBonusesToFleet(): void {
     const { maxHull, maxShields } = this.run.bonuses;
     for (const id of this.playerShipIds) {
+      if (this.escortShipIds.has(id)) continue;
       const ship = this.ships.get(id);
       if (!ship) continue;
       ship.maxHull = ship.combatStats.maxHull + maxHull;
@@ -628,8 +664,14 @@ export class SurvivalScene extends Phaser.Scene {
   // SHIP MANAGEMENT
   // ==========================================
 
-  private spawnPlayerShip(defId: string, x: number, y: number): void {
+  private spawnPlayerShip(
+    defId: string,
+    x: number,
+    y: number,
+    isEscort = false,
+  ): void {
     const id = `player_${this.playerShipIds.length}`;
+    if (isEscort) this.escortShipIds.add(id);
     const ship = this.createShip(
       id,
       defId,
@@ -670,6 +712,12 @@ export class SurvivalScene extends Phaser.Scene {
   ): SurvivalShip {
     const combatStats = getModeCombatStats(defId, "survival");
 
+    // Escorts are weak basic bodies: they never inherit the flagship's drafted
+    // bonuses. Only the flagship (a non-escort player ship) gets them.
+    const isFlagship = owner === "player" && !this.escortShipIds.has(id);
+    const hullBonus = isFlagship ? this.run.bonuses.maxHull : 0;
+    const shieldBonus = isFlagship ? this.run.bonuses.maxShields : 0;
+
     return {
       id,
       definitionId: defId,
@@ -678,17 +726,10 @@ export class SurvivalScene extends Phaser.Scene {
       x,
       y,
       angle,
-      hull:
-        combatStats.hull + (owner === "player" ? this.run.bonuses.maxHull : 0),
-      maxHull:
-        combatStats.maxHull +
-        (owner === "player" ? this.run.bonuses.maxHull : 0),
-      shields:
-        combatStats.shields +
-        (owner === "player" ? this.run.bonuses.maxShields : 0),
-      maxShields:
-        combatStats.maxShields +
-        (owner === "player" ? this.run.bonuses.maxShields : 0),
+      hull: combatStats.hull + hullBonus,
+      maxHull: combatStats.maxHull + hullBonus,
+      shields: combatStats.shields + shieldBonus,
+      maxShields: combatStats.maxShields + shieldBonus,
       combatStats,
       currentManeuverDir: "straight",
       currentSpeed: 2,

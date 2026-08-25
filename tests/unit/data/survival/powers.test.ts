@@ -47,11 +47,9 @@ describe("survival/powers apply", () => {
     expect(s.bonuses.damage).toBeCloseTo(1.5);
   });
 
-  it("special atoms grant escorts and rerolls without stats", () => {
+  it("special atoms grant rerolls without stats", () => {
     const s = createRunState();
-    applyPower(s, byId("fleet_escort"));
     applyPower(s, byId("drv_reroll"));
-    expect(s.escorts).toBe(1);
     expect(s.rerolls).toBe(1);
   });
 

@@ -52,12 +52,12 @@ describe("SurvivalRunController drafting", () => {
 });
 
 describe("SurvivalRunController hangar", () => {
-  it("offers graduation lanes plus escort and evolve", () => {
+  it("offers graduation lanes plus evolve (no escort)", () => {
     const c = new SurvivalRunController(1);
     const kinds = c.hangar().map((o) => o.kind);
     expect(kinds).toContain("graduate");
-    expect(kinds).toContain("escort");
     expect(kinds).toContain("evolve");
+    expect(kinds).not.toContain("escort");
   });
 
   it("graduating changes the hull", () => {
@@ -69,12 +69,20 @@ describe("SurvivalRunController hangar", () => {
     }
   });
 
-  it("choosing escort raises the pending escort count", () => {
+  it("recruiting on the escort track raises the pending escort count", () => {
     const c = new SurvivalRunController(1);
-    const escort = c.hangar().find((o) => o.kind === "escort")!;
-    c.chooseHangar(escort);
+    const recruit = c.draftEscort().find((o) => o.kind === "recruit")!;
+    c.chooseEscort(recruit);
     expect(c.pendingEscorts()).toBe(1);
     c.markEscortSpawned();
+    expect(c.pendingEscorts()).toBe(0);
+  });
+
+  it("banking on the escort track adds a reroll charge", () => {
+    const c = new SurvivalRunController(1);
+    const bank = c.draftEscort().find((o) => o.kind === "bank")!;
+    c.chooseEscort(bank);
+    expect(c.state.rerolls).toBe(1);
     expect(c.pendingEscorts()).toBe(0);
   });
 });

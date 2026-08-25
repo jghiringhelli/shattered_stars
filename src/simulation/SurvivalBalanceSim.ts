@@ -21,6 +21,7 @@ import {
 } from "../data/survival/model";
 import { SurvivalRunController } from "../systems/survival/SurvivalRunController";
 import { computeThreat } from "../data/survival/threat";
+import { escortFleetPower } from "../data/survival/escorts";
 import type { DraftPolicy } from "./SurvivalDraftPolicy";
 
 // ─── Fleet power model (documented tuning constants) ─────────────────────────
@@ -45,9 +46,20 @@ export const SIM_MAX_FLEET = 6;
 /** Runs cannot exceed this level (bounds otherwise-snowballing builds). */
 export const SIM_MAX_LEVEL = 60;
 
-/** Effective number of hulls, escort-inclusive and capped. */
+/** Effective number of hulls for threat accounting, escort-inclusive and capped. */
 function shipCount(state: Readonly<SurvivalRunState>): number {
   return Math.min(1 + state.escorts, SIM_MAX_FLEET);
+}
+
+/**
+ * Total fleet combat power: the flagship (a single, fully-upgraded ship) plus
+ * the escort wing. Escorts are weak, basic bodies whose contribution scales with
+ * support investment (fleet branch + carrier hull), never with the flagship's
+ * own bonuses — so stacking escorts without support yields diminishing returns
+ * rather than the old runaway where each escort was a flagship copy.
+ */
+function totalFleetPower(state: Readonly<SurvivalRunState>): number {
+  return fleetPower(state.bonuses, 1) + escortFleetPower(state);
 }
 
 /**
@@ -123,10 +135,9 @@ export function simulateRun(
 
   while (controller.level < SIM_MAX_LEVEL) {
     controller.beginWave();
-    const ships = shipCount(controller.state);
-    const power = fleetPower(controller.bonuses, ships);
+    const power = totalFleetPower(controller.state);
     peakPower = Math.max(peakPower, power);
-    const threat = computeThreat(controller.state, ships);
+    const threat = computeThreat(controller.state, shipCount(controller.state));
 
     if (combatRng.next() >= survivalProbability(power, threat)) break;
     levelsCleared = controller.level;
@@ -141,6 +152,14 @@ export function simulateRun(
       if (offered.length > 0) {
         controller.choosePower(policy.pickPower(offered, controller.state));
       }
+    }
+
+    // Parallel escort-track decision every wave (independent of the power draft).
+    const escortOffered = controller.draftEscort();
+    if (escortOffered.length > 0) {
+      controller.chooseEscort(
+        policy.pickEscort(escortOffered, controller.state),
+      );
     }
   }
 

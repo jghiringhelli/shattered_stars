@@ -1,6 +1,7 @@
 /**
  * Survival roguelite — milestone Hangar (pure). Every 5th level opens a choice
- * to graduate the hull ("saltar"), add an escort, or evolve the current hull.
+ * to graduate the hull ("saltar") or evolve the current hull. Escorts are no
+ * longer offered here; they have their own parallel track (see escorts.ts).
  * See ADR-0003.
  */
 
@@ -10,7 +11,7 @@ import {
   HULL_BRANCH_BIAS,
 } from "./model";
 
-export type HangarKind = "graduate" | "escort" | "evolve";
+export type HangarKind = "graduate" | "evolve";
 
 export interface HangarOption {
   kind: HangarKind;
@@ -40,7 +41,7 @@ const HULL_LABEL: Readonly<Record<HullClass, string>> = {
   capital: "Capital",
 };
 
-/** Milestone options: graduation lanes plus escort and evolve. */
+/** Milestone options: graduation lanes plus evolve. */
 export function hangarOptions(state: SurvivalRunState): HangarOption[] {
   const options: HangarOption[] = GRADUATION[state.hull].map((hull) => ({
     kind: "graduate",
@@ -49,12 +50,6 @@ export function hangarOptions(state: SurvivalRunState): HangarOption[] {
     description: `Graduate to a ${HULL_LABEL[hull]} hull (amplifies ${HULL_BRANCH_BIAS[hull].join(" + ")})`,
     icon: "🚁",
   }));
-  options.push({
-    kind: "escort",
-    name: "Escort Wing",
-    description: "Add an AI escort to your fleet",
-    icon: "🛩️",
-  });
   options.push({
     kind: "evolve",
     name: "Evolve Hull",
@@ -79,11 +74,5 @@ export function applyEvolve(state: SurvivalRunState): SurvivalRunState {
   for (const branch of HULL_BRANCH_BIAS[state.hull]) {
     state.branch[branch] += 1;
   }
-  return state;
-}
-
-/** Adds an escort to the fleet. */
-export function applyEscort(state: SurvivalRunState): SurvivalRunState {
-  state.escorts += 1;
   return state;
 }
