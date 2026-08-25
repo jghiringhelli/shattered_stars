@@ -1,244 +1,284 @@
 /**
- * SurvivalScene E2E Tests
+ * SurvivalScene E2E — roguelite leveling (ADR-0003).
  *
- * Covers: initial state, wave mechanics, upgrade phase, game-over path.
+ * Covers the controller + choice-panel wiring that replaced the old credits shop:
+ * initial state, wave spawning, the power draft after a regular wave, the
+ * milestone Hangar, applying a choice, and the game-over path.
  *
  * SurvivalScene starts immediately when launched — no setup screen.
- * Navigate: MainMenu → SURVIVAL → SquadBuilderScene (survival mode) → START.
- * Shortcut: direct scene.start() from MainMenu for speed in most tests.
  */
 
-import { test, expect } from '@playwright/test';
-import { waitForScene, waitForMenuReady, collectErrors } from './helpers/game';
-
-// ─── helper ──────────────────────────────────────────────────────────────────
+import { test, expect } from "@playwright/test";
+import { waitForScene, waitForMenuReady, collectErrors } from "./helpers/game";
 
 async function launchSurvival(page: any): Promise<void> {
-  await page.goto('/');
+  await page.goto("/");
   await waitForMenuReady(page);
-  // Start SurvivalScene directly — avoids clicking through SquadBuilder
   await page.evaluate(() => {
-    (window as any).game.scene.start('SurvivalScene', { factionId: 'free_confederation' });
+    (window as any).game.scene.start("SurvivalScene", {
+      factionId: "free_confederation",
+    });
   });
-  await waitForScene(page, 'SurvivalScene');
-  // Wait for player ship to spawn (create() is synchronous, but give Phaser one frame)
+  await waitForScene(page, "SurvivalScene");
   await page.waitForFunction(
-    () => {
-      const s = (window as any).game.scene.getScene('SurvivalScene') as any;
-      return s?.playerShipIds?.length > 0;
-    },
+    () =>
+      ((window as any).game.scene.getScene("SurvivalScene") as any)
+        ?.playerShipIds?.length > 0,
     { timeout: 8_000 },
   );
 }
 
+/** Clear the current wave and force the wave-complete check to run now. */
+async function clearWave(page: any): Promise<void> {
+  await page.evaluate(() => {
+    const s = (window as any).game.scene.getScene("SurvivalScene") as any;
+    for (const id of s.enemyShipIds) {
+      const ship = s.ships.get(id);
+      if (ship) ship.hull = 0;
+    }
+    s.enemyShipIds = [];
+    s.checkWaveComplete();
+  });
+}
+
+/** Trigger the first choice card by emitting its interactive pointerdown. */
+async function clickFirstCard(page: any): Promise<void> {
+  await page.evaluate(() => {
+    const s = (window as any).game.scene.getScene("SurvivalScene") as any;
+    const container = s.choicePanel.container;
+    const groups = container.list.filter((o: any) => o.type === "Container");
+    const group = groups[0];
+    const hit = group.list[group.list.length - 1];
+    hit.emit("pointerdown");
+  });
+}
+
 // ─── Initial state ────────────────────────────────────────────────────────────
 
-test.describe('SurvivalScene — initial state', () => {
-  test('SurvivalScene becomes active', async ({ page }) => {
-    await launchSurvival(page);
-    const active = await page.evaluate(
-      () => (window as any).game.scene.isActive('SurvivalScene'),
-    );
-    expect(active).toBe(true);
-  });
-
-  test('starts at wave 0 (before first wave spawns)', async ({ page }) => {
-    await launchSurvival(page);
-    const wave = await page.evaluate(
-      () => (window as any).game.scene.getScene('SurvivalScene')?.wave ?? -1,
-    );
-    // wave is 0 initially; first wave hasn't fired yet (2s delay)
-    expect(wave).toBeGreaterThanOrEqual(0);
-  });
-
-  test('player has at least 1 ship', async ({ page }) => {
-    await launchSurvival(page);
-    const count = await page.evaluate(
-      () => (window as any).game.scene.getScene('SurvivalScene')?.playerShipIds?.length ?? 0,
-    );
-    expect(count).toBeGreaterThanOrEqual(1);
-  });
-
-  test('player ship starts at full hull', async ({ page }) => {
+test.describe("SurvivalScene — initial state", () => {
+  test("becomes active with at least one player ship at full hull", async ({
+    page,
+  }) => {
     await launchSurvival(page);
     const result = await page.evaluate(() => {
-      const s = (window as any).game.scene.getScene('SurvivalScene') as any;
+      const s = (window as any).game.scene.getScene("SurvivalScene") as any;
       const id = s.playerShipIds?.[0];
       const ship = s.ships?.get(id);
-      return { hull: ship?.hull ?? 0, maxHull: ship?.maxHull ?? 0 };
+      return {
+        active: (window as any).game.scene.isActive("SurvivalScene"),
+        ships: s.playerShipIds?.length ?? 0,
+        hull: ship?.hull ?? 0,
+        maxHull: ship?.maxHull ?? 0,
+      };
     });
+    expect(result.active).toBe(true);
+    expect(result.ships).toBeGreaterThanOrEqual(1);
     expect(result.hull).toBe(result.maxHull);
     expect(result.maxHull).toBeGreaterThan(0);
   });
 
-  test('not in upgrade phase on start', async ({ page }) => {
+  test("starts at score 0 and not in a choice phase", async ({ page }) => {
     await launchSurvival(page);
-    const isUpgrade = await page.evaluate(
-      () => (window as any).game.scene.getScene('SurvivalScene')?.isUpgradePhase ?? true,
-    );
-    expect(isUpgrade).toBe(false);
+    const state = await page.evaluate(() => {
+      const s = (window as any).game.scene.getScene("SurvivalScene") as any;
+      return { score: s.score, choicePhase: s.isChoicePhase };
+    });
+    expect(state.score).toBe(0);
+    expect(state.choicePhase).toBe(false);
   });
 
-  test('credits start at 0', async ({ page }) => {
-    await launchSurvival(page);
-    const credits = await page.evaluate(
-      () => (window as any).game.scene.getScene('SurvivalScene')?.credits ?? -1,
-    );
-    expect(credits).toBe(0);
-  });
-
-  test('score starts at 0', async ({ page }) => {
-    await launchSurvival(page);
-    const score = await page.evaluate(
-      () => (window as any).game.scene.getScene('SurvivalScene')?.score ?? -1,
-    );
-    expect(score).toBe(0);
-  });
-
-  test('no page errors on load', async ({ page }) => {
+  test("no page errors on load", async ({ page }) => {
     const errors = collectErrors(page as any);
     await launchSurvival(page);
     expect(errors.pageErrors).toHaveLength(0);
   });
 });
 
-// ─── Wave progression ─────────────────────────────────────────────────────────
+// ─── Wave spawning ────────────────────────────────────────────────────────────
 
-test.describe('SurvivalScene — wave mechanics', () => {
-  test('wave 1 starts within 5 seconds', async ({ page }) => {
-    await launchSurvival(page);
-    // SurvivalScene starts wave 1 after a 2s delay
-    await page.waitForFunction(
-      () => (window as any).game.scene.getScene('SurvivalScene')?.wave >= 1,
-      { timeout: 8_000 },
-    );
-    const wave = await page.evaluate(
-      () => (window as any).game.scene.getScene('SurvivalScene')?.wave ?? 0,
-    );
-    expect(wave).toBe(1);
-  });
-
-  test('enemy ships spawn in wave 1', async ({ page }) => {
+test.describe("SurvivalScene — waves", () => {
+  test("wave 1 starts and spawns enemies", async ({ page }) => {
     await launchSurvival(page);
     await page.waitForFunction(
-      () => (window as any).game.scene.getScene('SurvivalScene')?.wave >= 1,
+      () => {
+        const s = (window as any).game.scene.getScene("SurvivalScene") as any;
+        return s?.wave >= 1 && (s?.enemyShipIds?.length ?? 0) > 0;
+      },
       { timeout: 8_000 },
     );
-    const enemyCount = await page.evaluate(
-      () => (window as any).game.scene.getScene('SurvivalScene')?.enemyShipIds?.length ?? 0,
-    );
-    expect(enemyCount).toBeGreaterThan(0);
-  });
-
-  test('isWaveActive is true during a wave', async ({ page }) => {
-    await launchSurvival(page);
-    await page.waitForFunction(
-      () => (window as any).game.scene.getScene('SurvivalScene')?.isWaveActive === true,
-      { timeout: 8_000 },
-    );
-    const active = await page.evaluate(
-      () => (window as any).game.scene.getScene('SurvivalScene')?.isWaveActive,
-    );
-    expect(active).toBe(true);
-  });
-
-  test('total ship count equals player + enemy counts', async ({ page }) => {
-    await launchSurvival(page);
-    await page.waitForFunction(
-      () => (window as any).game.scene.getScene('SurvivalScene')?.wave >= 1,
-      { timeout: 8_000 },
-    );
-    const counts = await page.evaluate(() => {
-      const s = (window as any).game.scene.getScene('SurvivalScene') as any;
+    const state = await page.evaluate(() => {
+      const s = (window as any).game.scene.getScene("SurvivalScene") as any;
       return {
-        total: s.ships?.size ?? 0,
-        player: s.playerShipIds?.length ?? 0,
-        enemy: s.enemyShipIds?.length ?? 0,
+        wave: s.wave,
+        enemies: s.enemyShipIds.length,
+        active: s.isWaveActive,
+        total: s.ships.size,
+        player: s.playerShipIds.length,
       };
     });
-    expect(counts.total).toBe(counts.player + counts.enemy);
+    expect(state.wave).toBe(1);
+    expect(state.enemies).toBeGreaterThan(0);
+    expect(state.active).toBe(true);
+    expect(state.total).toBe(state.player + state.enemies);
   });
 });
 
-// ─── Upgrade phase ────────────────────────────────────────────────────────────
+// ─── Power draft (regular level) ──────────────────────────────────────────────
 
-test.describe('SurvivalScene — upgrade phase', () => {
-  test('upgrade phase triggers after all enemies die', async ({ page }) => {
+test.describe("SurvivalScene — power draft", () => {
+  test("clearing a regular wave opens the power draft panel", async ({
+    page,
+  }) => {
     await launchSurvival(page);
-
-    // Wait for wave to start, then eliminate all enemies instantly
-    await page.waitForFunction(
-      () => (window as any).game.scene.getScene('SurvivalScene')?.isWaveActive === true,
-      { timeout: 8_000 },
-    );
-    await page.evaluate(() => {
-      const s = (window as any).game.scene.getScene('SurvivalScene') as any;
-      for (const id of s.enemyShipIds) {
-        const ship = s.ships.get(id);
-        if (ship) ship.hull = 0;
-      }
-      // Trigger the wave-end check (scene calls this in its update loop or via destroyShip)
-      s.enemyShipIds = [];
-      if (typeof s.checkWaveEnd === 'function') s.checkWaveEnd();
-      else if (typeof s.onWaveComplete === 'function') s.onWaveComplete();
-    });
-
-    // Upgrade phase should appear after a brief delay (≤ 4s)
     await page.waitForFunction(
       () =>
-        (window as any).game.scene.getScene('SurvivalScene')?.isUpgradePhase === true
-        || (window as any).game.scene.getScene('SurvivalScene')?.wave >= 2,
+        ((window as any).game.scene.getScene("SurvivalScene") as any)
+          ?.isWaveActive === true,
       { timeout: 8_000 },
     );
-
-    // Either upgrade phase started or wave 2 was triggered — both are valid progressions
-    const state = await page.evaluate(() => {
-      const s = (window as any).game.scene.getScene('SurvivalScene') as any;
-      return { isUpgradePhase: s?.isUpgradePhase, wave: s?.wave };
-    });
-    expect(state.isUpgradePhase === true || state.wave >= 2).toBe(true);
+    await clearWave(page);
+    await page.waitForFunction(
+      () => {
+        const s = (window as any).game.scene.getScene("SurvivalScene") as any;
+        return s?.isChoicePhase === true && s?.choicePanel?.isOpen === true;
+      },
+      { timeout: 6_000 },
+    );
+    const open = await page.evaluate(
+      () =>
+        ((window as any).game.scene.getScene("SurvivalScene") as any)
+          ?.choicePanel?.isOpen,
+    );
+    expect(open).toBe(true);
   });
 
-  test('upgrade bonuses start at 0', async ({ page }) => {
+  test("picking a power invests in the run and resumes into the next wave", async ({
+    page,
+  }) => {
     await launchSurvival(page);
-    const bonuses = await page.evaluate(() => {
-      const s = (window as any).game.scene.getScene('SurvivalScene') as any;
+    await page.waitForFunction(
+      () =>
+        ((window as any).game.scene.getScene("SurvivalScene") as any)
+          ?.isWaveActive === true,
+      { timeout: 8_000 },
+    );
+    await clearWave(page);
+    await page.waitForFunction(
+      () =>
+        ((window as any).game.scene.getScene("SurvivalScene") as any)
+          ?.choicePanel?.isOpen === true,
+      { timeout: 6_000 },
+    );
+
+    const before = await page.evaluate(() => {
+      const s = (window as any).game.scene.getScene("SurvivalScene") as any;
+      const st = s.run.state;
+      const invested = Object.values(st.branch).reduce(
+        (a: number, b: any) => a + b,
+        0,
+      );
+      return { invested, escorts: st.escorts, rerolls: st.rerolls };
+    });
+
+    await clickFirstCard(page);
+
+    await page.waitForFunction(
+      () =>
+        ((window as any).game.scene.getScene("SurvivalScene") as any)
+          ?.isChoicePhase === false,
+      { timeout: 6_000 },
+    );
+    const after = await page.evaluate(() => {
+      const s = (window as any).game.scene.getScene("SurvivalScene") as any;
+      const st = s.run.state;
+      const invested = Object.values(st.branch).reduce(
+        (a: number, b: any) => a + b,
+        0,
+      );
       return {
-        attack: s?.attackBonus ?? -1,
-        defense: s?.defenseBonus ?? -1,
-        speed: s?.speedBonus ?? -1,
+        invested,
+        escorts: st.escorts,
+        rerolls: st.rerolls,
+        wave: s.wave,
+        active: s.isWaveActive,
       };
     });
-    expect(bonuses.attack).toBe(0);
-    expect(bonuses.defense).toBe(0);
-    expect(bonuses.speed).toBe(0);
+
+    // A regular-level draft always advances the run in some way.
+    const advanced =
+      after.invested > before.invested ||
+      after.escorts > before.escorts ||
+      after.rerolls > before.rerolls;
+    expect(advanced).toBe(true);
+    expect(after.wave).toBe(2);
+    expect(after.active).toBe(true);
   });
 });
 
-// ─── Game-over path ───────────────────────────────────────────────────────────
+// ─── Milestone Hangar ─────────────────────────────────────────────────────────
 
-test.describe('SurvivalScene — game over', () => {
-  test('player ships at 0 hull triggers game-over state (isWaveActive false)', async ({ page }) => {
+test.describe("SurvivalScene — hangar", () => {
+  test("hangar opens with options and a choice resumes the run", async ({
+    page,
+  }) => {
     await launchSurvival(page);
-
-    // Kill all player ships
     await page.evaluate(() => {
-      const s = (window as any).game.scene.getScene('SurvivalScene') as any;
+      const s = (window as any).game.scene.getScene("SurvivalScene") as any;
+      s.isWaveActive = false;
+      s.showHangar();
+    });
+    await page.waitForFunction(
+      () =>
+        ((window as any).game.scene.getScene("SurvivalScene") as any)
+          ?.choicePanel?.isOpen === true,
+      { timeout: 6_000 },
+    );
+    const opened = await page.evaluate(
+      () =>
+        ((window as any).game.scene.getScene("SurvivalScene") as any)
+          ?.isChoicePhase,
+    );
+    expect(opened).toBe(true);
+
+    await clickFirstCard(page);
+    await page.waitForFunction(
+      () =>
+        ((window as any).game.scene.getScene("SurvivalScene") as any)
+          ?.isChoicePhase === false,
+      { timeout: 6_000 },
+    );
+    const resumed = await page.evaluate(
+      () =>
+        ((window as any).game.scene.getScene("SurvivalScene") as any)
+          ?.isWaveActive,
+    );
+    expect(resumed).toBe(true);
+  });
+});
+
+// ─── Game over ────────────────────────────────────────────────────────────────
+
+test.describe("SurvivalScene — game over", () => {
+  test("losing all player ships ends the wave", async ({ page }) => {
+    await launchSurvival(page);
+    await page.evaluate(() => {
+      const s = (window as any).game.scene.getScene("SurvivalScene") as any;
       for (const id of s.playerShipIds) {
         const ship = s.ships.get(id);
         if (ship) ship.hull = 0;
       }
-      if (typeof s.gameOver === 'function') s.gameOver();
+      s.checkWaveComplete();
     });
-
-    // Wave should no longer be active
     await page.waitForFunction(
-      () => (window as any).game.scene.getScene('SurvivalScene')?.isWaveActive !== true,
+      () =>
+        ((window as any).game.scene.getScene("SurvivalScene") as any)
+          ?.isWaveActive !== true,
       { timeout: 5_000 },
     );
-
     const active = await page.evaluate(
-      () => (window as any).game.scene.getScene('SurvivalScene')?.isWaveActive,
+      () =>
+        ((window as any).game.scene.getScene("SurvivalScene") as any)
+          ?.isWaveActive,
     );
     expect(active).not.toBe(true);
   });
