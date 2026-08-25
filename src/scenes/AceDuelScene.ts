@@ -37,6 +37,7 @@ import {
 } from "../systems/PerformanceSystem";
 import type { ManeuverDirection } from "../core/types";
 import { PILOT_ABILITIES } from "../systems/PilotAbilities";
+import { ACE_MATCHUPS, type AceMatchup } from "../data/AceMatchups";
 
 interface AceDuelShip {
   id: string;
@@ -63,143 +64,6 @@ interface AceDuelShip {
 interface ShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
 }
-
-interface AceMatchup {
-  id: string;
-  name: string;
-  description: string;
-  flavorText: string;
-  side1: {
-    name: string;
-    faction: FactionId;
-    ships: string[];
-    abilities: string[];
-  };
-  side2: {
-    name: string;
-    faction: FactionId;
-    ships: string[];
-    abilities: string[];
-  };
-}
-
-// Preset matchups based on spec (translated from Star Wars to Shattered Stars factions)
-const ACE_MATCHUPS: AceMatchup[] = [
-  {
-    id: "elite_fighters",
-    name: "Elite Fighters",
-    description: "Admiral Kronos vs Phoenix Commander",
-    flavorText:
-      "Two legendary aces clash in a battle of wits and reflexes. Only one will emerge victorious.",
-    side1: {
-      name: "Admiral Kronos",
-      faction: "terran_hegemony",
-      ships: ["terran_raptor"],
-      abilities: ["marksmanship", "lone_wolf"],
-    },
-    side2: {
-      name: "Phoenix Commander",
-      faction: "free_confederation",
-      ships: ["confed_falcon"],
-      abilities: ["predator", "outmaneuver"],
-    },
-  },
-  {
-    id: "interceptor_duel",
-    name: "Interceptor Duel",
-    description: "Raptor Squadron vs Vortex Wing",
-    flavorText:
-      "Speed versus agility. These interceptors dance through space at impossible velocities.",
-    side1: {
-      name: "Raptor Squadron Leader",
-      faction: "terran_hegemony",
-      ships: ["terran_viper"],
-      abilities: ["supernatural_reflexes", "predator"],
-    },
-    side2: {
-      name: "Vortex Ace",
-      faction: "void_corsairs",
-      ships: ["corsair_fang"],
-      abilities: ["fearless", "lone_wolf"],
-    },
-  },
-  {
-    id: "heavy_duel",
-    name: "Heavy Ship Duel",
-    description: "Corsair Captain vs Freighter Captain",
-    flavorText:
-      "Massive ships trade devastating broadsides. Hull plating groans under the assault.",
-    side1: {
-      name: "Corsair Captain Deathmark",
-      faction: "void_corsairs",
-      ships: ["corsair_marauder"],
-      abilities: ["tenacity", "fearless"],
-    },
-    side2: {
-      name: "Confederation Freighter Captain",
-      faction: "free_confederation",
-      ships: ["confed_hawk"],
-      abilities: ["regenerative_shields", "stealth_device"],
-    },
-  },
-  {
-    id: "gunship_duel",
-    name: "Gunship Showdown",
-    description: "Collective Prime Node vs Empire Archon",
-    flavorText:
-      "Two capital-class vessels, each capable of leveling cities, face off in the void.",
-    side1: {
-      name: "Collective Prime Node",
-      faction: "synthetic_collective",
-      ships: ["synth_devastator"],
-      abilities: ["networked_aim", "predatory_instinct"],
-    },
-    side2: {
-      name: "Empire Archon",
-      faction: "ascendant_empire",
-      ships: ["ascendant_bastion"],
-      abilities: ["regenerative_shields", "tenacity"],
-    },
-  },
-  {
-    id: "bomber_squadron",
-    name: "Bomber Squadron",
-    description: "Hegemony Bomber Wing vs Confederation Strike Team",
-    flavorText:
-      "Heavy ordnance fills the void as bomber squadrons clash in a devastating exchange.",
-    side1: {
-      name: "Hegemony Bomber Wing",
-      faction: "terran_hegemony",
-      ships: ["terran_thunderbolt", "terran_thunderbolt"],
-      abilities: ["marksmanship"],
-    },
-    side2: {
-      name: "Confederation Strike Team",
-      faction: "free_confederation",
-      ships: ["confed_condor", "confed_condor"],
-      abilities: ["predator"],
-    },
-  },
-  {
-    id: "hunter_hunted",
-    name: "Hunter vs Hunted",
-    description: "Corsair Bounty Hunter vs Collective Assassin",
-    flavorText:
-      "A deadly game of cat and mouse. The hunter becomes the hunted.",
-    side1: {
-      name: "Corsair Bounty Hunter",
-      faction: "void_corsairs",
-      ships: ["corsair_talon"],
-      abilities: ["predatory_instinct", "outmaneuver"],
-    },
-    side2: {
-      name: "Collective Assassin Drone",
-      faction: "synthetic_collective",
-      ships: ["synth_interceptor_drone"],
-      abilities: ["stealth_device", "tenacity"],
-    },
-  },
-];
 
 interface AbilityBonuses {
   atkBonus: number;
@@ -317,8 +181,7 @@ export class AceDuelScene extends Phaser.Scene {
 
     this.effectsManager = new EffectsManager(this);
     const savedSettings = this.registry.get("settings") as
-      | { cameraShake: boolean; showDamageNumbers: boolean }
-      | undefined;
+      { cameraShake: boolean; showDamageNumbers: boolean } | undefined;
     if (savedSettings) {
       this.effectsManager.setUserSettings({
         cameraShake: savedSettings.cameraShake,
@@ -941,7 +804,7 @@ export class AceDuelScene extends Phaser.Scene {
     y: number,
     angle: number,
     side: 1 | 2,
-    abilities: string[] = [],
+    abilities: readonly string[] = [],
   ): void {
     const combatStats = getModeCombatStats(defId, "continuous");
 
@@ -964,7 +827,7 @@ export class AceDuelScene extends Phaser.Scene {
       targetY: y,
       targetAngle: angle,
       weaponCooldown: 0,
-      abilities,
+      abilities: [...abilities],
     };
 
     this.ships.set(id, ship);

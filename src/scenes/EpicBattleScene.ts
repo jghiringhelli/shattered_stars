@@ -40,6 +40,12 @@ import {
   type PerformanceState,
 } from "../systems/PerformanceSystem";
 import type { ManeuverDirection } from "../core/types";
+import {
+  bossPhaseForHullRatio,
+  bossBroadsideDamage,
+  bossReinforcementCount,
+  sumSectionHull,
+} from "../systems/EpicBossRules";
 
 interface BossSection {
   id: string;
@@ -309,8 +315,7 @@ export class EpicBattleScene extends Phaser.Scene {
 
     this.effectsManager = new EffectsManager(this);
     const savedSettings = this.registry.get("settings") as
-      | { cameraShake: boolean; showDamageNumbers: boolean }
-      | undefined;
+      { cameraShake: boolean; showDamageNumbers: boolean } | undefined;
     if (savedSettings) {
       this.effectsManager.setUserSettings({
         cameraShake: savedSettings.cameraShake,
@@ -763,7 +768,7 @@ export class EpicBattleScene extends Phaser.Scene {
               ship.y,
             );
             if (dist < 400) {
-              const damage = boss.phase === 3 ? 4 : boss.phase === 2 ? 3 : 2;
+              const damage = bossBroadsideDamage(boss.phase);
               this.damageShip(ship, damage);
               this.effectsManager.fireLaser(
                 boss.x,
@@ -783,7 +788,7 @@ export class EpicBattleScene extends Phaser.Scene {
         cooldown: 15000,
         effect: (boss) => {
           // Spawn additional escorts
-          const escortCount = boss.phase === 3 ? 3 : 2;
+          const escortCount = bossReinforcementCount(boss.phase);
           const ships = getShipsByFaction(boss.faction);
           const escortDef =
             ships.find(
@@ -1195,10 +1200,7 @@ export class EpicBattleScene extends Phaser.Scene {
           }
         }
 
-        this.boss.totalHull = this.boss.sections.reduce(
-          (sum, s) => sum + s.hull,
-          0,
-        );
+        this.boss.totalHull = sumSectionHull(this.boss.sections);
         this.checkBossPhaseTransition();
       }
 
@@ -1227,13 +1229,14 @@ export class EpicBattleScene extends Phaser.Scene {
     if (!this.boss) return;
 
     const hullRatio = this.boss.totalHull / this.boss.maxTotalHull;
+    const targetPhase = bossPhaseForHullRatio(hullRatio);
 
-    if (hullRatio <= 0.3 && this.boss.phase < 3) {
+    if (targetPhase === 3 && this.boss.phase < 3) {
       this.boss.phase = 3;
       this.phaseText.setText("PHASE 3 - CRITICAL");
       this.phaseText.setColor("#ff4444");
       this.showMessage("BOSS ENTERING CRITICAL PHASE!");
-    } else if (hullRatio <= 0.6 && this.boss.phase < 2) {
+    } else if (targetPhase === 2 && this.boss.phase < 2) {
       this.boss.phase = 2;
       this.phaseText.setText("PHASE 2 - SHIELDS FAILING");
       this.phaseText.setColor("#ffaa44");
