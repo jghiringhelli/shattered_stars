@@ -17,6 +17,7 @@
     "qa:gameplay": "npx tsx scripts/gameplay_vision_qa.ts",
     "analyze:telemetry": "tsx scripts/analyze_telemetry.ts",
     "sentinel": "tsx scripts/sentinel.ts",
+    "verify:loop": "tsx scripts/verify_loop.ts",
     "start:server": "tsx scripts/p2p_server.ts"
   },
   "dependencies": {

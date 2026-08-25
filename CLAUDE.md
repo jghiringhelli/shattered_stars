@@ -647,7 +647,15 @@ GET  http://localhost:8002/projects/shattered_stars/assets/file/{id}     # fetch
 
 ## Known Issues
 
-_(none currently open — Epic format ships as of 2026-03-28; huge ships gated to Epic/Campaign in squad builder)_
+_(Epic format ships as of 2026-03-28; huge ships gated to Epic/Campaign in squad builder)_
+
+Surfaced by the verify loop (`npm run verify:loop`) — tracked SHOULD findings, not gameplay-state defects:
+- **Scene re-entry texture re-add** (INV-6b): forcing a scene restart re-adds runtime ship
+  PNG textures → Phaser logs `Texture key already in use`. Real fix = idempotent scene
+  texture registration. Tracked; MUST NOT be resolved by weakening a MUST invariant.
+- **Missing encyclopedia art** (INV-6c): `ship_art_synth_gestalt` fails to decode
+  (`assets/ships/encyclopedia/synthetic_collective/synth_gestalt_art.png`). Worklist for
+  the asset audit to regenerate via the SD queue.
 
 
 ## Next Steps
