@@ -28,8 +28,18 @@ interface Scenario {
   readonly sceneKey: string;
   readonly requiresPlayer: boolean;
   readonly runMs: number;
-  readonly battleConfig: Record<string, unknown>;
+  readonly start: StartSpec;
+  /** Exact expected ship count. Omit for dynamic-spawn modes (INV-1 becomes >=1). */
+  readonly expected?: number;
+  /** Where live ships live: scene.ships (default) or the campaign battle manager. */
+  readonly shipsVia?: "ships" | "battleManager";
 }
+
+/** How a scenario boots its scene at the game's boundary. */
+type StartSpec =
+  | { readonly via: "registry"; readonly battleConfig: Record<string, unknown> }
+  | { readonly via: "init"; readonly data: Record<string, unknown> }
+  | { readonly via: "hook"; readonly hook: string; readonly arg: string };
 
 interface Ship {
   id: string;
@@ -51,7 +61,7 @@ interface Capture {
   samples: Sample[];
   errors: string[];
   shot: string;
-  expected: number;
+  expected: number | null;
 }
 interface Inv {
   id: string;
@@ -65,43 +75,80 @@ interface Report {
   invariants: Inv[];
 }
 
+const REGISTRY_2V2: Record<string, unknown> = {
+  factions: [
+    {
+      factionId: "free_confederation",
+      controller: "player",
+      ships: ["confed_sparrow", "confed_wasp"],
+    },
+    {
+      factionId: "terran_hegemony",
+      controller: "ai",
+      ships: ["terran_viper", "terran_gladius"],
+    },
+  ],
+};
+
 const SCENARIOS: Scenario[] = [
   {
     name: "arcade-2v2",
     sceneKey: "ArcadeBattleScene",
     requiresPlayer: true,
     runMs: 3_000,
-    battleConfig: {
-      playerFaction: "free_confederation",
-      enemyFaction: "terran_hegemony",
-      gameMode: "arcade",
-      factions: [
-        {
-          factionId: "free_confederation",
-          controller: "player",
-          ships: ["confed_sparrow", "confed_wasp"],
-        },
-        {
-          factionId: "terran_hegemony",
-          controller: "ai",
-          ships: ["terran_viper", "terran_gladius"],
-        },
-      ],
+    expected: 4,
+    start: { via: "registry", battleConfig: REGISTRY_2V2 },
+  },
+  {
+    name: "continuous-2v2",
+    sceneKey: "ContinuousTacticalScene",
+    requiresPlayer: true,
+    runMs: 3_000,
+    expected: 4,
+    start: { via: "registry", battleConfig: REGISTRY_2V2 },
+  },
+  {
+    name: "survival-solo",
+    sceneKey: "SurvivalScene",
+    requiresPlayer: true,
+    runMs: 3_500,
+    start: { via: "init", data: { factionId: "free_confederation" } },
+  },
+  {
+    name: "campaign-mission1",
+    sceneKey: "CampaignBattleScene",
+    requiresPlayer: true,
+    runMs: 2_500,
+    shipsVia: "battleManager",
+    start: {
+      via: "hook",
+      hook: "__verifyStartCampaign",
+      arg: "free_confederation",
     },
   },
 ];
 
-/** COLLAPSE: inject a deterministic battle config and start the target scene. */
+/** COLLAPSE: stop active scenes and boot the target scene by its start strategy. */
 async function collapse(page: Page, s: Scenario): Promise<boolean> {
   await page.evaluate(
-    (cfg: { key: string; battleConfig: Record<string, unknown> }) => {
+    (spec: { sceneKey: string; start: StartSpec }) => {
       const g = (window as any).game;
-      g.registry.set("battleConfig", cfg.battleConfig);
       const active: any[] = g.scene.getScenes(true) ?? [];
       for (const sc of active) g.scene.stop(sc.sys.settings.key);
-      setTimeout(() => g.scene.start(cfg.key), 120);
+      const start = spec.start;
+      setTimeout(() => {
+        if (start.via === "registry") {
+          g.registry.set("battleConfig", start.battleConfig);
+          g.scene.start(spec.sceneKey);
+        } else if (start.via === "init") {
+          g.scene.start(spec.sceneKey, start.data);
+        } else {
+          const fn = (window as any)[start.hook];
+          if (typeof fn === "function") fn(start.arg);
+        }
+      }, 120);
     },
-    { key: s.sceneKey, battleConfig: s.battleConfig },
+    { sceneKey: s.sceneKey, start: s.start },
   );
   try {
     await waitForScene(page, s.sceneKey, 15_000);
@@ -118,19 +165,27 @@ async function recover(
   errors: string[],
 ): Promise<Capture> {
   await page.waitForTimeout(s.runMs);
-  const ships = (await page.evaluate((key: string) => {
-    const scene = (window as any).game?.scene.getScene(key) as any;
-    const src = scene?.ships ? Array.from(scene.ships.values()) : [];
-    return src.map((sh: any) => ({
-      id: sh.id,
-      owner: sh.owner,
-      x: sh.x,
-      y: sh.y,
-      angle: sh.angle,
-      hull: sh.hull,
-      maxHull: sh.maxHull ?? sh.hull,
-    }));
-  }, s.sceneKey)) as Ship[];
+  const via = s.shipsVia ?? "ships";
+  const ships = (await page.evaluate(
+    (arg: { key: string; via: string }) => {
+      const scene = (window as any).game?.scene.getScene(arg.key) as any;
+      const map =
+        arg.via === "battleManager"
+          ? scene?.battleManager?.getState?.().ships
+          : scene?.ships;
+      const src = map ? Array.from(map.values()) : [];
+      return src.map((sh: any) => ({
+        id: sh.id,
+        owner: sh.owner,
+        x: sh.x,
+        y: sh.y,
+        angle: sh.angle,
+        hull: sh.hull,
+        maxHull: sh.maxHull ?? sh.hull,
+      }));
+    },
+    { key: s.sceneKey, via },
+  )) as Ship[];
   const projectiles = (await page.evaluate((key: string) => {
     const scene = (window as any).game?.scene.getScene(key) as any;
     return scene?.projectiles?.length ?? 0;
@@ -142,10 +197,14 @@ async function recover(
       : [];
   })) as Sample[];
   const shot = await takeShot(page, OUT_DIR, s.name);
-  const expected = (
-    s.battleConfig.factions as Array<{ ships: string[] }>
-  ).reduce((n, f) => n + f.ships.length, 0);
-  return { ships, projectiles, samples, errors: [...errors], shot, expected };
+  return {
+    ships,
+    projectiles,
+    samples,
+    errors: [...errors],
+    shot,
+    expected: s.expected ?? null,
+  };
 }
 
 /**
@@ -201,11 +260,15 @@ function stepStats(samples: Sample[]): { max: number; nan: number } {
 /** VERIFY: evaluate the invariants for one capture. */
 async function verify(cap: Capture, s: Scenario): Promise<Inv[]> {
   const inv: Inv[] = [];
+  const exp = cap.expected;
   inv.push({
     id: "INV-1 ship count",
     must: true,
-    passed: cap.ships.length === cap.expected,
-    detail: `${cap.ships.length}/${cap.expected}`,
+    passed: exp == null ? cap.ships.length >= 1 : cap.ships.length === exp,
+    detail:
+      exp == null
+        ? `${cap.ships.length} (dynamic, >=1)`
+        : `${cap.ships.length}/${exp}`,
   });
   const players = cap.ships.filter((x) => x.owner === "player").length;
   inv.push({

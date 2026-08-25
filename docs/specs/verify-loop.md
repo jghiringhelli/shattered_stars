@@ -67,10 +67,20 @@ the deduped keys so the audit has a concrete worklist.
 
 ## Scenarios
 
-Defined in `scripts/verify_loop.ts`:
+Defined in `scripts/verify_loop.ts`. Each scenario boots its scene at the game boundary
+via one of three start strategies: `registry` (set `battleConfig`, then `scene.start`),
+`init` (`scene.start(key, data)`), or `hook` (call a DEV-only `window.__verify*` function
+that assembles config from game modules — see `src/debug/verifyHooks.ts`). Scenarios with a
+fixed roster set `expected`; dynamic-spawn modes omit it and INV-1 becomes "≥1 ship".
 
-- **arcade-2v2** — ArcadeBattleScene, 2 player + 2 AI, 3s window. Core gameplay smoke.
-- **survival-wave** — SurvivalScene, first wave, 3s window. Spawn + formation.
+- **arcade-2v2** — ArcadeBattleScene (registry), 2 player + 2 AI, 3s. Core real-time smoke.
+- **continuous-2v2** — ContinuousTacticalScene (registry), 2 player + 2 AI, 3s.
+- **survival-solo** — SurvivalScene (init `{factionId}`), dynamic roster, 3.5s. Wave spawn.
+- **campaign-mission1** — CampaignBattleScene (hook `__verifyStartCampaign`), mission 1 with
+  a fresh save; ships read from the battle manager state, 2.5s.
+
+Not yet covered (UI-driven setup screens — need button-clicking or a start hook):
+EpicBattleScene, DogfightScene, AceDuelScene.
 
 ## Running
 

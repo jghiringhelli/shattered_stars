@@ -18,8 +18,12 @@ import { ArcadeBattleScene } from "./scenes/ArcadeBattleScene";
 import { EncyclopediaScene } from "./scenes/EncyclopediaScene";
 import { ShipPickerScene } from "./scenes/ShipPickerScene";
 
+const forceCanvas =
+  typeof window !== "undefined" &&
+  (window.location.search.includes("renderer=canvas") ||
+    (typeof navigator !== "undefined" && navigator.webdriver === true));
 const config: Phaser.Types.Core.GameConfig = {
-  type: Phaser.AUTO, // AUTO will try WebGL first, then Canvas
+  type: forceCanvas ? Phaser.CANVAS : Phaser.AUTO, // AUTO will try WebGL first, then Canvas
   width: 1280,
   height: 720,
   parent: "game-container",
@@ -73,4 +77,5 @@ declare global {
 if (import.meta.env.DEV) {
   window.game = game;
   window.networkService = NetworkService.getInstance();
+  void import("./debug/verifyHooks").then((m) => m.installVerifyHooks(game));
 }
