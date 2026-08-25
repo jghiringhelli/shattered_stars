@@ -6,6 +6,7 @@ import Phaser from "phaser";
 import { FACTION_COLORS, SHIP_SIZES } from "../config";
 import { SHIP_DEFINITIONS } from "../data/ShipDefinitions";
 import { loadPortraitImages } from "./boot/BootPortraitLoader";
+import { PlayerProfileManager } from "../systems/PlayerProfile";
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -64,8 +65,25 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.applyProfileFromUrl();
     // Transition to main menu
     this.scene.start("MainMenuScene");
+  }
+
+  /**
+   * Select the active player profile from a `?profile=<id>` URL param, if present.
+   * Enables quick testing (e.g. ?profile=dev-unlock-all, ?profile=test-veteran).
+   */
+  private applyProfileFromUrl(): void {
+    try {
+      const id = new URLSearchParams(window.location.search).get("profile");
+      if (!id) return;
+      if (PlayerProfileManager.list().some((p) => p.id === id)) {
+        PlayerProfileManager.setActive(id);
+      }
+    } catch {
+      /* no-op: URL/profile access is best-effort */
+    }
   }
 
   /**

@@ -55,3 +55,15 @@ its own unlock cadence reflecting its playstyle.
 
 `localStorage` key `shattered_stars_profiles` = `{ activeId, profiles: PlayerProfile[] }`,
 versioned. Independent of `shattered_stars_campaign_*`.
+
+## XP awards & testing
+
+- Arcade battles award XP on the end screen: `kills × XP_REWARDS.perKill` plus the
+  win/loss bonus (`ArcadeBattleScene.awardProgressionXp`, kills derived exactly from score
+  at 100/kill). Playing arcade therefore advances the picker's unlocks.
+- Seeded profiles (created on first load): `player-default` (fresh), `dev-unlock-all`
+  (everything unlocked), `test-novice` (0 XP), `test-veteran` (3000 XP), `test-admiral`
+  (8000 XP).
+- Select a profile for a session with the `?profile=<id>` URL param, e.g.
+  `?profile=dev-unlock-all` to test with the full roster, or `?profile=test-veteran`
+  to test a mid-progression roster.

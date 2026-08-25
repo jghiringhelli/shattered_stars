@@ -91,6 +91,14 @@ import {
   type FrameCache,
 } from "../arcade/systems/ArcadeFrameCache";
 import { checkVictoryCondition } from "../arcade/systems/ArcadeVictorySystem";
+import { PlayerProfileManager } from "../systems/PlayerProfile";
+import {
+  createFleeState,
+  updateFleeState,
+  fleeSecondsRemaining,
+  type FleeState,
+} from "../arcade/systems/FleeDetector";
+import { torusDistance } from "../core/Torus";
 import {
   createPerformanceState,
   updateFPS,
@@ -102,6 +110,7 @@ import { renderBattleStarfield } from "../rendering/Starfield";
 import { applyLoadoutEffects } from "../systems/BattleHelpers";
 import { audioManager } from "../audio/AudioManager";
 import { getHandlingProfile } from "../systems/FlightControlSystem";
+import { ShipTelemetry } from "../debug/ShipTelemetry";
 
 interface ArcadeShip extends ShipState {
   control: ShipControlState;
@@ -147,6 +156,7 @@ interface ShipSprite extends Phaser.GameObjects.Container {
 export class ArcadeBattleScene extends Phaser.Scene {
   private ships: Map<string, ArcadeShip> = new Map();
   private shipSprites: Map<string, ShipSprite> = new Map();
+  private telemetry: ShipTelemetry | null = null;
   private projectiles: Projectile[] = [];
   private projectileSprites: Map<string, Phaser.GameObjects.Graphics> =
     new Map();
@@ -158,6 +168,18 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private userWantsDamageNumbers = true;
 
   private playerShipId: string | null = null;
+
+  /** Test/telemetry contract shared with Continuous + TurnBased scenes. */
+  get playerShipIds(): string[] {
+    return this.playerShipId ? [this.playerShipId] : [];
+  }
+  get enemyShipIds(): string[] {
+    const out: string[] = [];
+    for (const s of this.ships.values()) {
+      if (s.owner === "ai" && s.faction !== this.playerFaction) out.push(s.id);
+    }
+    return out;
+  }
   private keys!: {
     up: Phaser.Input.Keyboard.Key;
     down: Phaser.Input.Keyboard.Key;
@@ -197,6 +219,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private gameEnded = false;
   private isPaused = false;
   private pauseOverlay: Phaser.GameObjects.Container | null = null;
+
+  private fleeState: FleeState = createFleeState();
+  private damageThisFrame = false;
+  private fleeWarningText: Phaser.GameObjects.Text | null = null;
 
   private framesAlive = 0;
 
@@ -294,6 +320,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.createHealthBars();
     if (showMinimap) this.createMinimap();
 
+    if (ShipTelemetry.isEnabled()) {
+      this.telemetry = new ShipTelemetry();
+      this.telemetry.start();
+      (
+        window as unknown as { __shipTelemetry: ShipTelemetry }
+      ).__shipTelemetry = this.telemetry;
+    }
+
     this.lastTime = this.time.now;
 
     // Initialise virtual camera to player spawn position (no startFollow — we drive it manually).
@@ -368,12 +402,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
         this.perfState.effectSettings.damageIndicators;
     }
     this.frameCache = buildFrameCache(this.ships.values());
+    this.damageThisFrame = false;
     this.handleInput(dt);
     this.updateShips(dt);
     this.updateProjectiles(dt);
     this.updateAI(dt);
     this.updateTurrets();
     this.checkCollisions();
+    this.updateFleeDetector(dt);
     this.checkVictory();
   }
 
@@ -939,14 +975,17 @@ export class ArcadeBattleScene extends Phaser.Scene {
       ship.y =
         ((ship.y % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
 
-      // Tick down cloak
-      if (ship.isCloaked) {
-        ship.cloakTimer -= deltaMs / 1000;
-        if (ship.cloakTimer <= 0) {
-          ship.isCloaked = false;
-          ship.cloakTimer = 0;
-        }
-      }
+      this.tickCloak(ship, deltaMs);
+      this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
+    }
+  }
+
+  private tickCloak(ship: ArcadeShip, deltaMs: number): void {
+    if (!ship.isCloaked) return;
+    ship.cloakTimer -= deltaMs / 1000;
+    if (ship.cloakTimer <= 0) {
+      ship.isCloaked = false;
+      ship.cloakTimer = 0;
     }
   }
 
@@ -1013,6 +1052,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
           aiViews.get(ship.id)!,
           allyViews,
           enemyViews,
+          BATTLEFIELD_SIZE,
         );
         ship.targetId = newTarget?.id ?? null;
         ship.aiDecisionTimer = 300 + Math.random() * 200;
@@ -1027,6 +1067,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
         allyViews,
         enemyViews,
         deltaMs,
+        BATTLEFIELD_SIZE,
       );
 
       this.applyAIDecision(ship, target, decision, deltaMs);
@@ -1332,7 +1373,16 @@ export class ArcadeBattleScene extends Phaser.Scene {
       for (const view of this.frameCache.aliveShips) {
         if (view.id === proj.ownerId) continue;
 
-        if (checkProjectileHit(proj, view.x, view.y, 15, view.faction)) {
+        if (
+          checkProjectileHit(
+            proj,
+            view.x,
+            view.y,
+            15,
+            view.faction,
+            BATTLEFIELD_SIZE,
+          )
+        ) {
           hitProjectiles.add(proj.id);
           const ship = this.ships.get(view.id)!;
 
@@ -1347,6 +1397,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
             ship.shields = Math.max(0, ship.shields - damage);
           } else {
             ship.hull = Math.max(0, ship.hull - damage);
+            this.damageThisFrame = true;
           }
 
           if (this.damageNumbersEnabled) {
@@ -1469,6 +1520,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
         ally.definitionId,
         playerSlot.loadoutChoices?.[String(i + 1)] ?? null,
       );
+      // Arcade wingman hull floor — glass-cannon light fighters (hull 2) get
+      // one-shot by any decent burst. Bumps floor so wingmen survive a hit.
+      ally.hull = ally.maxHull = Math.max(4, ally.maxHull);
       // First two allies form up on the player; remaining fly independently.
       if (i < 2) {
         ally.wingLeaderId = playerShip.id;
@@ -1483,7 +1537,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     for (const slot of enemySlots) {
       slot.ships.forEach((shipId, shipIdx) => {
         const angle = (enemyIndex / Math.max(totalEnemies, 1)) * Math.PI * 2;
-        const radius = 2200;
+        const radius = 1200;
         const enemy = this.createShip(
           `enemy_${enemyIndex}`,
           shipId,
@@ -1545,7 +1599,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
     for (let i = 0; i < 3; i++) {
       const angle = (i / 3) * Math.PI * 2;
-      const radius = 2200;
+      const radius = 1200;
       const enemy = this.createShip(
         `enemy_${i}`,
         i === 0 ? "terran_gladius" : "terran_viper",
@@ -1820,6 +1874,19 @@ export class ArcadeBattleScene extends Phaser.Scene {
       .setOrigin(1, 0)
       .setScrollFactor(0)
       .setDepth(1000);
+
+    this.fleeWarningText = this.add
+      .text(this.scale.width / 2, 80, "", {
+        font: "bold 22px Arial",
+        color: "#ff4444",
+        stroke: "#000000",
+        strokeThickness: 3,
+        align: "center",
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setDepth(1500)
+      .setVisible(false);
 
     this.instructionsText = this.add
       .text(10, this.scale.height - 20, "", {
@@ -2383,6 +2450,45 @@ export class ArcadeBattleScene extends Phaser.Scene {
     ship.control = processCommand(ship, ship.control, direction);
   }
 
+  private updateFleeDetector(deltaMs: number): void {
+    if (!this.frameCache || this.gameEnded) return;
+    const player = this.playerShipId ? this.ships.get(this.playerShipId) : null;
+    if (!player || player.hull <= 0) {
+      // No player alive → flee doesn't apply; regular victory check handles it
+      if (this.fleeWarningText) this.fleeWarningText.setVisible(false);
+      return;
+    }
+
+    let nearest = Infinity;
+    for (const s of this.frameCache.aliveShips) {
+      if (s.faction === this.playerFaction) continue;
+      const d = torusDistance(player.x, player.y, s.x, s.y, BATTLEFIELD_SIZE);
+      if (d < nearest) nearest = d;
+    }
+
+    this.fleeState = updateFleeState(this.fleeState, {
+      deltaMs,
+      damageThisFrame: this.damageThisFrame,
+      playerNearestEnemyDist: nearest,
+    });
+
+    if (this.fleeWarningText) {
+      if (this.fleeState.isWarning && !this.fleeState.hasFled) {
+        const secs = fleeSecondsRemaining(this.fleeState);
+        this.fleeWarningText
+          .setText(`⚠ RETURN TO COMBAT — battle ends in ${secs.toFixed(1)}s`)
+          .setVisible(true);
+      } else {
+        this.fleeWarningText.setVisible(false);
+      }
+    }
+
+    if (this.fleeState.hasFled) {
+      this.gameEnded = true;
+      this.showEndScreen(false);
+    }
+  }
+
   private checkVictory(): void {
     if (!this.frameCache) return;
     const result = checkVictoryCondition(this.frameCache, this.playerFaction);
@@ -2395,7 +2501,22 @@ export class ArcadeBattleScene extends Phaser.Scene {
     }
   }
 
+  /** Award global progression XP for this battle (score is exactly 100 per kill). */
+  private awardProgressionXp(victory: boolean): void {
+    try {
+      const kills = Math.max(0, Math.floor(this.score / 100));
+      const active = PlayerProfileManager.getActive();
+      PlayerProfileManager.awardBattleResult(active.id, {
+        kills,
+        won: victory,
+      });
+    } catch (e) {
+      console.error("Failed to award progression XP:", e);
+    }
+  }
+
   private showEndScreen(victory: boolean): void {
+    this.awardProgressionXp(victory);
     // Hide player flight-stats HUD — irrelevant (and misleading) on the end screen
     this.hullText.setVisible(false);
     this.shieldText.setVisible(false);
@@ -2408,6 +2529,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.teamHudGraphics.setVisible(false);
     for (const t of this.teamHudTexts) t.setVisible(false);
     for (const t of this.ordnanceHudTexts) t.setVisible(false);
+    this.fleeWarningText?.setVisible(false);
 
     const cx = this.scale.width / 2;
     const cy = this.scale.height / 2;
