@@ -25,6 +25,17 @@ import type { LoadoutBonuses } from "./types";
 export type { LoadoutBonuses };
 export { CAT_X, CAT_W };
 
+/** XP-gating hooks: which ship ids are locked and why. Defaults to "nothing locked". */
+export interface CatalogGating {
+  readonly lockedShipIds: ReadonlySet<string>;
+  reasonFor(shipId: string): string;
+}
+
+const NO_GATING: CatalogGating = {
+  lockedShipIds: new Set<string>(),
+  reasonFor: () => "",
+};
+
 const ROLE_SORT: Record<string, number> = {
   interceptor: 0,
   light_fighter: 1,
@@ -55,6 +66,7 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
     private readonly scene: Phaser.Scene,
     private readonly ships: ShipDefinition[],
     private readonly factionId: FactionId,
+    private readonly gating: CatalogGating = NO_GATING,
   ) {
     super();
     this.tooltip = new ShipTooltip(scene);
@@ -120,40 +132,64 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
   }
 
   private drawShipRow(def: ShipDefinition, x: number, y: number): void {
-    const isSel = this.staging.getSelectedShipId() === def.id;
-    const bg = this.scene.add.graphics();
-    bg.fillStyle(isSel ? 0x0e2618 : 0x111a28, 1);
-    bg.fillRoundedRect(x, y, COL_W - 8, ROW_H, 5);
-    bg.lineStyle(1, isSel ? 0x44ff88 : 0x223040, 1);
-    bg.strokeRoundedRect(x, y, COL_W - 8, ROW_H, 5);
+    const locked = this.gating.lockedShipIds.has(def.id);
+    const isSel = !locked && this.staging.getSelectedShipId() === def.id;
+    const base = this.buildRowBase(def, x, y, isSel, locked);
+    const tags = locked ? [] : this.buildTags(def, x, y);
+    const hit = this.buildRowHit(def, x, y, locked);
+    const lock = locked ? this.buildLockBadge(def, x, y) : [];
+    this.gridContainer.add([...base, ...tags, hit, ...lock]);
+  }
 
+  private buildRowBase(
+    def: ShipDefinition,
+    x: number,
+    y: number,
+    isSel: boolean,
+    locked: boolean,
+  ): Phaser.GameObjects.GameObject[] {
+    const bg = this.scene.add.graphics();
+    bg.fillStyle(locked ? 0x0b0f16 : isSel ? 0x0e2618 : 0x111a28, 1);
+    bg.fillRoundedRect(x, y, COL_W - 8, ROW_H, 5);
+    bg.lineStyle(1, locked ? 0x2a2f38 : isSel ? 0x44ff88 : 0x223040, 1);
+    bg.strokeRoundedRect(x, y, COL_W - 8, ROW_H, 5);
     const spriteKey = this.scene.textures.exists(def.spriteKey)
       ? def.spriteKey
       : `ship_${def.faction}_${def.baseStats.size}`;
     const sprite = this.scene.add
       .image(x + 18, y + ROW_H / 2, spriteKey)
-      .setDisplaySize(32, 32);
+      .setDisplaySize(32, 32)
+      .setAlpha(locked ? 0.35 : 1);
     const nameT = this.scene.add.text(x + 38, y + 6, def.name, {
       font: `bold 12px Arial`,
-      color: isSel ? "#88ffcc" : "#d8ecff",
+      color: locked ? "#5a6472" : isSel ? "#88ffcc" : "#d8ecff",
     });
     const ptsT = this.scene.add
       .text(x + COL_W - 12, y + 6, `${def.baseStats.pointCost}pt`, {
         font: "11px Arial",
-        color: isSel ? "#aaddaa" : "#88aa66",
+        color: locked ? "#556" : isSel ? "#aaddaa" : "#88aa66",
       })
       .setOrigin(1, 0);
     const roleT = this.scene.add.text(
       x + 38,
       y + 24,
       def.role.replace(/_/g, " "),
-      { font: "10px Arial", color: isSel ? "#55cc88" : "#5a8060" },
+      {
+        font: "10px Arial",
+        color: locked ? "#48505c" : isSel ? "#55cc88" : "#5a8060",
+      },
     );
+    return [bg, sprite, nameT, ptsT, roleT];
+  }
 
-    const tags = secondaryTags(def);
+  private buildTags(
+    def: ShipDefinition,
+    x: number,
+    y: number,
+  ): Phaser.GameObjects.Text[] {
     const tagObjs: Phaser.GameObjects.Text[] = [];
     let tagX = x + 38 + 72;
-    for (const tag of tags) {
+    for (const tag of secondaryTags(def)) {
       const tObj = this.scene.add.text(tagX, y + 24, tag, {
         font: "8px Arial",
         color: "#446688",
@@ -163,11 +199,35 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
       tagObjs.push(tObj);
       tagX += (tObj.width ?? 40) + 4;
     }
+    return tagObjs;
+  }
 
+  private buildLockBadge(
+    def: ShipDefinition,
+    x: number,
+    y: number,
+  ): Phaser.GameObjects.GameObject[] {
+    const reason = this.gating.reasonFor(def.id);
+    const badge = this.scene.add
+      .text(x + COL_W - 14, y + 26, `\uD83D\uDD12 ${reason}`, {
+        font: "8px Arial",
+        color: "#c8a24a",
+      })
+      .setOrigin(1, 0);
+    return [badge];
+  }
+
+  private buildRowHit(
+    def: ShipDefinition,
+    x: number,
+    y: number,
+    locked: boolean,
+  ): Phaser.GameObjects.Rectangle {
     const hit = this.scene.add
       .rectangle(x + (COL_W - 8) / 2, y + ROW_H / 2, COL_W - 8, ROW_H, 0, 0)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ useHandCursor: !locked });
     hit.on("pointerdown", () => {
+      if (locked) return;
       this.staging.selectShip(def.id);
       this.render();
     });
@@ -178,9 +238,7 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
       const b = computeLoadoutBonuses(selLd?.upgrades ?? []);
       this.tooltip.show(def, CAT_X + CAT_W + 8, this.gridContainer.y + y, b);
     });
-    hit.on("pointerout", () => {
-      this.tooltip.hide();
-    });
-    this.gridContainer.add([bg, sprite, nameT, ptsT, roleT, ...tagObjs, hit]);
+    hit.on("pointerout", () => this.tooltip.hide());
+    return hit;
   }
 }

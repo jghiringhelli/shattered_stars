@@ -13,6 +13,7 @@ import type { ShipDefinition } from "../core/types";
 import { FACTION_COLORS } from "../config";
 import type { FactionId } from "../config";
 import { ShipCatalogPanel, CAT_X, CAT_W } from "../ui/picker/ShipCatalogPanel";
+import type { CatalogGating } from "../ui/picker/ShipCatalogPanel";
 import {
   SquadRosterPanel,
   ROSTER_X,
@@ -20,6 +21,8 @@ import {
   type SquadInstance,
 } from "../ui/picker/SquadRosterPanel";
 import { getShipLoadouts } from "../data/ShipLoadouts";
+import { PlayerProfileManager } from "../systems/PlayerProfile";
+import { isShipUnlocked, lockReason } from "../data/ProgressionData";
 
 interface PickerConfig {
   slotIndex: number;
@@ -38,6 +41,7 @@ export class ShipPickerScene extends Phaser.Scene {
   private catalogPanel!: ShipCatalogPanel;
   private rosterPanel!: SquadRosterPanel;
   private pointsText!: Phaser.GameObjects.Text;
+  private lockedShipIds = new Set<string>();
 
   constructor() {
     super({ key: "ShipPickerScene" });
@@ -104,15 +108,32 @@ export class ShipPickerScene extends Phaser.Scene {
     return this.ships[0]?.faction.replace(/_/g, " ").toUpperCase() ?? "";
   }
 
+  /** Compute XP-lock state for the active profile and expose it to the catalog. */
+  private buildGating(): CatalogGating {
+    const profile = PlayerProfileManager.getActive();
+    this.lockedShipIds = new Set(
+      this.ships.filter((s) => !isShipUnlocked(s, profile)).map((s) => s.id),
+    );
+    const reasons = new Map(
+      this.ships.map((s) => [s.id, lockReason(s, profile)]),
+    );
+    return {
+      lockedShipIds: this.lockedShipIds,
+      reasonFor: (id: string) => reasons.get(id) ?? "",
+    };
+  }
+
   private buildCatalogPanel(fCol: number): void {
     this.catalogPanel = new ShipCatalogPanel(
       this,
       this.ships,
       this.config.factionId,
+      this.buildGating(),
     );
     this.catalogPanel.on(
       "addInstance",
       ({ shipId, loadoutId }: { shipId: string; loadoutId: string | null }) => {
+        if (this.lockedShipIds.has(shipId)) return;
         this.squadInstances.push({
           id: `i${++this.instanceCounter}`,
           shipId,
