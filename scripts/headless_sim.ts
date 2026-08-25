@@ -21,6 +21,11 @@ import {
   type AggregatedStats,
   type SimShipSpec,
 } from "../src/simulation/BattleSimulator";
+import {
+  WIN_RATE_OUTLIER,
+  runFactionMatrix,
+  matchupsToMap,
+} from "../src/simulation/FactionBalance";
 import * as fs from "fs";
 
 // ─── Arg parsing ────────────────────────────────────────────────────────────
@@ -74,7 +79,7 @@ function parseArgs(): {
 
 // ─── Display helpers ─────────────────────────────────────────────────────────
 
-const WIN_RATE_THRESHOLD = 0.6;
+const WIN_RATE_THRESHOLD = WIN_RATE_OUTLIER;
 const OUTLIER_MARK = "▲";
 
 function pct(n: number): string {
@@ -166,28 +171,14 @@ async function main(): Promise<void> {
     console.log(
       `\nRunning full faction matrix (${battles} battles per matchup)…\n`,
     );
-    const mapResults = new Map<string, AggregatedStats>();
 
-    for (let i = 0; i < ALL_FACTIONS.length; i++) {
-      for (let j = i + 1; j < ALL_FACTIONS.length; j++) {
-        const f1 = ALL_FACTIONS[i]!;
-        const f2 = ALL_FACTIONS[j]!;
-        const key = `${f1} vs ${f2}`;
-        process.stdout.write(
-          `  ${FACTION_LABELS[f1]} vs ${FACTION_LABELS[f2]}… `,
-        );
-
-        const t1 = sim.getPresetSquadForFaction(f1, budget);
-        const t2 = sim.getPresetSquadForFaction(f2, budget);
-        const stats = sim.runBatchSimulation(t1, t2, battles);
-
-        mapResults.set(key, stats);
-        allResults[key] = stats;
-        process.stdout.write("done\n");
-      }
+    const matchups = runFactionMatrix(sim, ALL_FACTIONS, budget, battles);
+    for (const { a, b, stats } of matchups) {
+      allResults[`${a} vs ${b}`] = stats;
+      console.log(`  ${FACTION_LABELS[a]} vs ${FACTION_LABELS[b]}… done`);
     }
 
-    printMatrix(mapResults);
+    printMatrix(matchupsToMap(matchups));
   } else {
     const label = `${FACTION_LABELS[faction1]} vs ${FACTION_LABELS[faction2]}`;
     console.log(`\nRunning: ${label}…`);
