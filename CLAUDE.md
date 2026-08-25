@@ -653,10 +653,10 @@ Surfaced by the verify loop (`npm run verify:loop`) — tracked SHOULD findings,
 - **Scene re-entry texture re-add** (INV-6b): forcing a scene restart re-adds runtime ship
   PNG textures → Phaser logs `Texture key already in use`. Real fix = idempotent scene
   texture registration. Tracked; MUST NOT be resolved by weakening a MUST invariant.
-- **Missing encyclopedia art** (INV-6c): `ship_art_synth_gestalt` fails to decode
-  (`assets/ships/encyclopedia/synthetic_collective/synth_gestalt_art.png`). The generation
-  job is defined (scripts/ship_art_data.json) — remedy is one command once the SD queue
-  server (port 8010) is up: `python scripts/generate_ship_art.py --id synth_gestalt`.
+- **Missing encyclopedia art** (INV-6c): RESOLVED (2026-08-25). `synth_gestalt_art.png`
+  was generated (Forge :7860 + `python scripts/generate_ship_art.py --id synth_gestalt`
+  → `python scripts/direct_forge_worker.py`); verify loop reports `INV-6c asset gaps none`.
+  Full runbook for starting Forge and regenerating any asset: [docs/ASSET_GENERATION.md](docs/ASSET_GENERATION.md).
 
 
 ## Next Steps
