@@ -1,12 +1,11 @@
 /**
  * Survival Mode Scene
  *
- * Roguelite survival mode:
+ * Roguelite survival mode (see docs/adr/ADR-0003):
  * - Start with one ship
- * - Defeat waves of enemies
- * - Earn credits between waves
- * - Choose upgrades/perks
- * - Recruit additional ships
+ * - Defeat threat-scaled waves of enemies
+ * - Draft one power per wave (branch-based progression)
+ * - Milestone waves open the Hangar (graduate / escort / evolve)
  * - Permanent death - start over on loss
  */
 
@@ -41,6 +40,13 @@ import {
 } from "../systems/PerformanceSystem";
 import { findClosestEnemy as battleFindClosestEnemy } from "../systems/BattleHelpers";
 import type { ManeuverDirection } from "../core/types";
+import { SurvivalRunController } from "../systems/survival/SurvivalRunController";
+import {
+  SurvivalChoicePanel,
+  type ChoiceCard,
+} from "../ui/survival/SurvivalChoicePanel";
+import type { Power } from "../data/survival/powers";
+import type { HangarOption } from "../data/survival/hangar";
 
 /** Default starting ship for each faction in Survival mode. */
 const FACTION_STARTER_SHIPS: Record<FactionId, string> = {
@@ -50,6 +56,12 @@ const FACTION_STARTER_SHIPS: Record<FactionId, string> = {
   void_corsairs: "corsair_fang",
   ascendant_empire: "ascendant_herald",
 };
+
+/** Maximum ships (flagship + escorts) the player fleet may field. */
+const MAX_FLEET = 6;
+
+/** Extra weapon range in pixels granted per point of the range bonus. */
+const RANGE_PER_POINT = 40;
 
 interface SurvivalShip {
   id: string;
@@ -72,15 +84,6 @@ interface SurvivalShip {
   weaponCooldown: number;
 }
 
-interface Upgrade {
-  id: string;
-  name: string;
-  description: string;
-  cost: number;
-  effect: () => void;
-  icon: string;
-}
-
 interface ShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
 }
@@ -95,25 +98,20 @@ export class SurvivalScene extends Phaser.Scene {
 
   // Survival state
   private wave = 0;
-  private credits = 0;
   private score = 0;
   private playerFaction: FactionId = "free_confederation";
   private isWaveActive = false;
   private isPaused = false;
-  private isUpgradePhase = false;
+  private isChoicePhase = false;
 
-  // Upgrades
-  private attackBonus = 0;
-  private defenseBonus = 0;
-  private speedBonus = 0;
-  private maxShipsBonus = 0;
+  // Progression — single source of truth for pacing, drafts and bonuses.
+  private run!: SurvivalRunController;
+  private choicePanel!: SurvivalChoicePanel;
 
   // UI
   private waveText!: Phaser.GameObjects.Text;
-  private creditsText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
   private messageText!: Phaser.GameObjects.Text;
-  private upgradeContainer!: Phaser.GameObjects.Container;
 
   // Timing
   private lastManeuverTime = 0;
@@ -141,8 +139,7 @@ export class SurvivalScene extends Phaser.Scene {
 
     this.effectsManager = new EffectsManager(this);
     const savedSettings = this.registry.get("settings") as
-      | { cameraShake: boolean; showDamageNumbers: boolean }
-      | undefined;
+      { cameraShake: boolean; showDamageNumbers: boolean } | undefined;
     if (savedSettings) {
       this.effectsManager.setUserSettings({
         cameraShake: savedSettings.cameraShake,
@@ -156,6 +153,7 @@ export class SurvivalScene extends Phaser.Scene {
     );
     this.background.startShootingStars();
 
+    this.choicePanel = new SurvivalChoicePanel(this);
     this.resetState();
     this.createHUD();
     this.setupInput();
@@ -170,15 +168,12 @@ export class SurvivalScene extends Phaser.Scene {
 
   private resetState(): void {
     this.wave = 0;
-    this.credits = 0;
     this.score = 0;
-    this.attackBonus = 0;
-    this.defenseBonus = 0;
-    this.speedBonus = 0;
-    this.maxShipsBonus = 0;
+    this.run = new SurvivalRunController(this.rollSeed());
     this.isWaveActive = false;
     this.isPaused = false;
-    this.isUpgradePhase = false;
+    this.isChoicePhase = false;
+    this.choicePanel.hide();
 
     this.ships.clear();
     this.shipSprites.forEach((s) => s.destroy());
@@ -196,8 +191,13 @@ export class SurvivalScene extends Phaser.Scene {
     );
   }
 
+  /** Fresh, unpredictable seed for a run's deterministic draft sequence. */
+  private rollSeed(): number {
+    return (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+  }
+
   update(time: number, delta: number): void {
-    if (this.isPaused || this.isUpgradePhase) return;
+    if (this.isPaused || this.isChoicePhase) return;
     this.performanceState = updateFPS(this.performanceState, delta);
     this.performanceState = evaluateQuality(this.performanceState, time);
     this.effectsManager.setQualitySettings(
@@ -226,11 +226,6 @@ export class SurvivalScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(1000);
 
-    this.creditsText = this.add
-      .text(20, 50, "CREDITS: 0", { ...style, color: "#ffdd44" })
-      .setScrollFactor(0)
-      .setDepth(1000);
-
     this.scoreText = this.add
       .text(this.scale.width - 20, 20, "SCORE: 0", style)
       .setOrigin(1, 0)
@@ -249,11 +244,6 @@ export class SurvivalScene extends Phaser.Scene {
       .setDepth(1001)
       .setAlpha(0);
 
-    this.upgradeContainer = this.add.container(0, 0);
-    this.upgradeContainer.setScrollFactor(0);
-    this.upgradeContainer.setDepth(1002);
-    this.upgradeContainer.setVisible(false);
-
     this.add
       .text(
         this.scale.width / 2,
@@ -271,7 +261,7 @@ export class SurvivalScene extends Phaser.Scene {
 
   private setupInput(): void {
     this.input.keyboard!.on("keydown-ESC", () => {
-      if (this.isUpgradePhase) return;
+      if (this.isChoicePhase) return;
       this.isPaused = !this.isPaused;
       if (this.isPaused) {
         this.showMessage("PAUSED", "Press ESC to resume");
@@ -319,17 +309,14 @@ export class SurvivalScene extends Phaser.Scene {
    * 21+: Endless scaling, boss every 5 waves
    */
   private startNextWave(): void {
-    this.wave++;
+    this.wave = this.run.beginWave();
     this.waveText.setText(`WAVE ${this.wave}`);
     this.isWaveActive = true;
 
-    const isBossWave = this.wave % 5 === 0;
-    const waveType = this.getWaveType();
-
-    if (isBossWave) {
-      this.showMessage(`WAVE ${this.wave}`, `BOSS INCOMING!`);
+    if (this.run.isMilestone) {
+      this.showMessage(`WAVE ${this.wave}`, "BOSS INCOMING!");
     } else {
-      this.showMessage(`WAVE ${this.wave}`, waveType);
+      this.showMessage(`WAVE ${this.wave}`, this.getWaveType());
     }
 
     this.spawnWaveEnemies();
@@ -343,188 +330,38 @@ export class SurvivalScene extends Phaser.Scene {
     return "Endless Wave";
   }
 
-  private spawnWaveEnemies(): void {
-    const factions: FactionId[] = [
-      "terran_hegemony",
-      "synthetic_collective",
-      "void_corsairs",
-      "ascendant_empire",
-    ];
-    const enemyFaction = factions[(this.wave - 1) % factions.length]!;
-    const enemyShips = getShipsByFaction(enemyFaction);
-    const centerX = BATTLEFIELD_SIZE / 2;
-    const isBossWave = this.wave % 5 === 0;
+  private checkWaveComplete(): void {
+    if (!this.isWaveActive) return;
 
-    // Determine wave composition based on spec
-    if (this.wave <= 5) {
-      // Waves 1-5: Basic fighters and interceptors
-      const baseCount = 2 + this.wave;
-      const shipTypes = enemyShips.filter(
-        (s) =>
-          s.role === "light_fighter" ||
-          s.role === "heavy_fighter" ||
-          s.role === "interceptor",
-      );
+    const enemiesAlive = this.enemyShipIds.filter((id) => {
+      const ship = this.ships.get(id);
+      return ship && ship.hull > 0;
+    }).length;
 
-      for (let i = 0; i < baseCount; i++) {
-        const angle = (i / baseCount) * Math.PI - Math.PI / 2;
-        const radius = 350 + Math.random() * 100;
-        const x = centerX + Math.cos(angle) * radius;
-        const y = 100 + Math.sin(angle) * 50 + i * 30;
+    if (enemiesAlive === 0) {
+      this.isWaveActive = false;
+      this.score += this.wave * 100;
+      this.updateHUD();
 
-        const shipDef = shipTypes[i % shipTypes.length] ?? enemyShips[0];
-        if (shipDef) this.spawnEnemyShip(shipDef.id, enemyFaction, x, y);
-      }
+      const heading = this.run.isMilestone ? "HANGAR" : "WAVE COMPLETE!";
+      this.showMessage(heading, "Choose your upgrade");
 
-      // Wave 5 mini-boss: elite ace
-      if (isBossWave) {
-        const aceShip =
-          enemyShips.find(
-            (s) => s.role === "light_fighter" || s.role === "heavy_fighter",
-          ) ?? enemyShips[0];
-        if (aceShip)
-          this.spawnEliteShip(aceShip.id, enemyFaction, centerX, 150);
-      }
-    } else if (this.wave <= 10) {
-      // Waves 6-10: Mixed squadrons with bombers
-      const baseCount = 4 + Math.floor((this.wave - 5) * 1.5);
-      const shipTypes = enemyShips.filter(
-        (s) =>
-          s.role === "light_fighter" ||
-          s.role === "heavy_fighter" ||
-          s.role === "interceptor" ||
-          s.role === "bomber",
-      );
-
-      for (let i = 0; i < baseCount; i++) {
-        const angle = (i / baseCount) * Math.PI - Math.PI / 2;
-        const radius = 350 + Math.random() * 100;
-        const x = centerX + Math.cos(angle) * radius;
-        const y = 100 + Math.sin(angle) * 50 + i * 25;
-
-        const shipDef = shipTypes[i % shipTypes.length] ?? enemyShips[0];
-        if (shipDef) this.spawnEnemyShip(shipDef.id, enemyFaction, x, y);
-      }
-
-      // Wave 10 boss: heavy gunship
-      if (isBossWave) {
-        const bossShip =
-          enemyShips.find((s) => s.role === "bomber" || s.role === "gunship") ??
-          enemyShips[0];
-        if (bossShip)
-          this.spawnBossShip(bossShip.id, enemyFaction, centerX, 150, 2);
-      }
-    } else if (this.wave <= 15) {
-      // Waves 11-15: Elite pilots and heavy ships
-      const baseCount = 6 + Math.floor((this.wave - 10) * 1.2);
-
-      for (let i = 0; i < baseCount; i++) {
-        const angle = (i / baseCount) * Math.PI - Math.PI / 2;
-        const radius = 350 + Math.random() * 100;
-        const x = centerX + Math.cos(angle) * radius;
-        const y = 100 + Math.sin(angle) * 50 + i * 20;
-
-        const shipDef = enemyShips[i % enemyShips.length] ?? enemyShips[0];
-        if (shipDef) {
-          // 30% chance of elite ship
-          if (Math.random() < 0.3) {
-            this.spawnEliteShip(shipDef.id, enemyFaction, x, y);
-          } else {
-            this.spawnEnemyShip(shipDef.id, enemyFaction, x, y);
-          }
+      this.time.delayedCall(2000, () => {
+        if (this.run.isMilestone) {
+          this.showHangar();
+        } else {
+          this.showDraft();
         }
-      }
+      });
+    }
 
-      // Wave 15 boss: capital escort
-      if (isBossWave) {
-        const bossShip =
-          enemyShips.find((s) => s.role === "gunship") ??
-          enemyShips[enemyShips.length - 1];
-        if (bossShip)
-          this.spawnBossShip(bossShip.id, enemyFaction, centerX, 150, 3);
-        // Add escorts
-        const escortShip =
-          enemyShips.find(
-            (s) => s.role === "light_fighter" || s.role === "heavy_fighter",
-          ) ?? enemyShips[0];
-        if (escortShip) {
-          this.spawnEnemyShip(escortShip.id, enemyFaction, centerX - 100, 200);
-          this.spawnEnemyShip(escortShip.id, enemyFaction, centerX + 100, 200);
-        }
-      }
-    } else if (this.wave <= 20) {
-      // Waves 16-20: Epic ship sections appear
-      const baseCount = 8 + Math.floor((this.wave - 15) * 1.5);
+    const playersAlive = this.playerShipIds.filter((id) => {
+      const ship = this.ships.get(id);
+      return ship && ship.hull > 0;
+    }).length;
 
-      for (let i = 0; i < baseCount; i++) {
-        const angle = (i / baseCount) * Math.PI - Math.PI / 2;
-        const radius = 350 + Math.random() * 120;
-        const x = centerX + Math.cos(angle) * radius;
-        const y = 100 + Math.sin(angle) * 60 + i * 18;
-
-        const shipDef = enemyShips[i % enemyShips.length] ?? enemyShips[0];
-        if (shipDef) {
-          if (Math.random() < 0.4) {
-            this.spawnEliteShip(shipDef.id, enemyFaction, x, y);
-          } else {
-            this.spawnEnemyShip(shipDef.id, enemyFaction, x, y);
-          }
-        }
-      }
-
-      // Wave 20 boss: full capital ship
-      if (isBossWave) {
-        const bossShip =
-          enemyShips.find((s) => s.role === "gunship") ??
-          enemyShips[enemyShips.length - 1];
-        if (bossShip)
-          this.spawnBossShip(bossShip.id, enemyFaction, centerX, 150, 4);
-        // Heavy escort
-        const escortShip =
-          enemyShips.find((s) => s.role === "bomber") ?? enemyShips[0];
-        if (escortShip) {
-          this.spawnEnemyShip(escortShip.id, enemyFaction, centerX - 120, 220);
-          this.spawnEnemyShip(escortShip.id, enemyFaction, centerX + 120, 220);
-        }
-      }
-    } else {
-      // Wave 21+: Endless scaling
-      const baseCount = Math.min(10 + Math.floor((this.wave - 20) * 0.5), 16);
-
-      for (let i = 0; i < baseCount; i++) {
-        const angle = (i / baseCount) * Math.PI - Math.PI / 2;
-        const radius = 350 + Math.random() * 150;
-        const x = centerX + Math.cos(angle) * radius;
-        const y = 100 + Math.sin(angle) * 70 + i * 15;
-
-        const shipDef = enemyShips[i % enemyShips.length] ?? enemyShips[0];
-        if (shipDef) {
-          if (Math.random() < 0.5) {
-            this.spawnEliteShip(shipDef.id, enemyFaction, x, y);
-          } else {
-            this.spawnEnemyShip(shipDef.id, enemyFaction, x, y);
-          }
-        }
-      }
-
-      // Boss every 5 waves in endless
-      if (isBossWave) {
-        const bossShip =
-          enemyShips.find((s) => s.role === "gunship") ??
-          enemyShips[enemyShips.length - 1];
-        const bossMultiplier = Math.min(
-          5 + Math.floor((this.wave - 20) / 5),
-          10,
-        );
-        if (bossShip)
-          this.spawnBossShip(
-            bossShip.id,
-            enemyFaction,
-            centerX,
-            150,
-            bossMultiplier,
-          );
-      }
+    if (playersAlive === 0) {
+      this.gameOver();
     }
   }
 
@@ -573,314 +410,137 @@ export class SurvivalScene extends Phaser.Scene {
     this.createHealthBar(ship);
   }
 
-  private checkWaveComplete(): void {
-    if (!this.isWaveActive) return;
+  private spawnWaveEnemies(): void {
+    const enemyFaction = this.rotatingEnemyFaction();
+    const roster = getShipsByFaction(enemyFaction);
+    if (roster.length === 0) return;
 
-    const enemiesAlive = this.enemyShipIds.filter((id) => {
-      const ship = this.ships.get(id);
-      return ship && ship.hull > 0;
-    }).length;
+    const { enemyCount, eliteCount } = this.run.waveSize(
+      this.playerShipIds.length,
+    );
+    const centerX = BATTLEFIELD_SIZE / 2;
 
-    if (enemiesAlive === 0) {
-      this.isWaveActive = false;
-
-      // Calculate rewards based on wave milestones (from spec)
-      let waveCredits = 50 + this.wave * 25;
-      let bonusMessage = "";
-
-      // Boss wave bonuses
-      if (this.wave % 5 === 0) {
-        waveCredits += 100; // Boss defeat bonus
-        bonusMessage = " (Boss Bonus!)";
-      }
-
-      // Milestone rewards
-      if (this.wave === 5) {
-        bonusMessage = " - Faction Ability Unlocked!";
-      } else if (this.wave === 10) {
-        bonusMessage = " - Upgrade Slot Added!";
-      } else if (this.wave === 15) {
-        bonusMessage = " - Dual Faction Abilities!";
-      } else if (this.wave === 20) {
-        bonusMessage = " - Ultimate Unlocked!";
-      }
-
-      this.credits += waveCredits;
-      this.score += this.wave * 100; // 100 points per wave
-      this.updateHUD();
-
-      this.showMessage(
-        "WAVE COMPLETE!",
-        `+${waveCredits} credits${bonusMessage}`,
-      );
-
-      this.time.delayedCall(2000, () => {
-        this.showUpgradeMenu();
-      });
+    for (let i = 0; i < enemyCount; i++) {
+      const def = roster[i % roster.length]!;
+      const slot = this.spawnSlot(i, enemyCount, centerX);
+      this.spawnEnemyShip(def.id, enemyFaction, slot.x, slot.y);
     }
 
-    // Check player defeat
-    const playersAlive = this.playerShipIds.filter((id) => {
-      const ship = this.ships.get(id);
-      return ship && ship.hull > 0;
-    }).length;
+    for (let i = 0; i < eliteCount; i++) {
+      const def =
+        roster.find((s) => s.role === "gunship" || s.role === "bomber") ??
+        roster[0]!;
+      this.spawnEliteShip(def.id, enemyFaction, centerX + (i - 1) * 120, 160);
+    }
 
-    if (playersAlive === 0) {
-      this.gameOver();
+    if (this.run.isMilestone) {
+      const boss =
+        roster.find((s) => s.role === "gunship") ?? roster[roster.length - 1]!;
+      const multiplier = 2 + Math.floor(this.wave / 5);
+      this.spawnBossShip(boss.id, enemyFaction, centerX, 150, multiplier);
     }
   }
 
-  private showUpgradeMenu(): void {
-    this.isUpgradePhase = true;
-    this.upgradeContainer.removeAll(true);
-
-    const centerX = this.scale.width / 2;
-    const centerY = this.scale.height / 2;
-
-    // Background
-    const bg = this.add.graphics();
-    bg.fillStyle(0x000000, 0.85);
-    bg.fillRect(0, 0, this.scale.width, this.scale.height);
-    this.upgradeContainer.add(bg);
-
-    // Title
-    const title = this.add
-      .text(centerX, 80, "UPGRADE SHOP", {
-        font: "bold 36px Arial",
-        color: "#ffdd44",
-      })
-      .setOrigin(0.5);
-    this.upgradeContainer.add(title);
-
-    const credits = this.add
-      .text(centerX, 120, `Credits: ${this.credits}`, {
-        font: "24px Arial",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5);
-    this.upgradeContainer.add(credits);
-
-    const upgrades = this.getAvailableUpgrades();
-    const startY = 180;
-    const spacing = 80;
-
-    upgrades.forEach((upgrade, i) => {
-      this.createUpgradeButton(centerX, startY + i * spacing, upgrade);
-    });
-
-    // Continue button
-    this.createContinueButton(centerX, this.scale.height - 80);
-
-    this.upgradeContainer.setVisible(true);
-  }
-
-  private getAvailableUpgrades(): Upgrade[] {
-    const upgrades: Upgrade[] = [
-      {
-        id: "attack",
-        name: "Weapon Upgrade",
-        description: "+1 Attack damage",
-        cost: 75,
-        effect: () => {
-          this.attackBonus++;
-        },
-        icon: "⚔️",
-      },
-      {
-        id: "defense",
-        name: "Hull Plating",
-        description: "+2 Max Hull for all ships",
-        cost: 100,
-        effect: () => {
-          this.defenseBonus += 2;
-          this.playerShipIds.forEach((id) => {
-            const ship = this.ships.get(id);
-            if (ship) {
-              ship.maxHull += 2;
-              ship.hull = Math.min(ship.hull + 2, ship.maxHull);
-            }
-          });
-        },
-        icon: "🛡️",
-      },
-      {
-        id: "speed",
-        name: "Engine Boost",
-        description: "Faster weapon cooldown",
-        cost: 60,
-        effect: () => {
-          this.speedBonus++;
-        },
-        icon: "🚀",
-      },
-      {
-        id: "repair",
-        name: "Emergency Repair",
-        description: "Restore all ships to full health",
-        cost: 50,
-        effect: () => {
-          this.playerShipIds.forEach((id) => {
-            const ship = this.ships.get(id);
-            if (ship) {
-              ship.hull = ship.maxHull;
-              ship.shields = ship.maxShields;
-              const healthBar = this.healthBars.get(id);
-              healthBar?.update(ship.hull, ship.shields);
-            }
-          });
-        },
-        icon: "💚",
-      },
+  /** Cycles the enemy faction so successive waves feel varied. */
+  private rotatingEnemyFaction(): FactionId {
+    const factions: FactionId[] = [
+      "terran_hegemony",
+      "synthetic_collective",
+      "void_corsairs",
+      "ascendant_empire",
     ];
-
-    // Add recruit ship if player has less than max
-    const maxShips = 3 + this.maxShipsBonus;
-    if (this.playerShipIds.length < maxShips) {
-      upgrades.push({
-        id: "recruit",
-        name: "Recruit Wingman",
-        description: "Add a new ship to your fleet",
-        cost: 150,
-        effect: () => {
-          const ships = getShipsByFaction(this.playerFaction);
-          const shipDef = ships[Math.floor(Math.random() * ships.length)];
-          if (shipDef) {
-            const playerShip = this.ships.get(this.playerShipIds[0]!);
-            if (playerShip) {
-              const offset = this.playerShipIds.length * 80;
-              this.spawnPlayerShip(
-                shipDef.id,
-                playerShip.x + offset,
-                playerShip.y + 50,
-              );
-            }
-          }
-        },
-        icon: "👨‍✈️",
-      });
-    }
-
-    return upgrades;
+    return factions[(this.wave - 1) % factions.length]!;
   }
 
-  private createUpgradeButton(x: number, y: number, upgrade: Upgrade): void {
-    const canAfford = this.credits >= upgrade.cost;
-    const container = this.add.container(x, y);
-
-    const bg = this.add.graphics();
-    bg.fillStyle(canAfford ? 0x224466 : 0x333333, 0.9);
-    bg.fillRoundedRect(-250, -30, 500, 60, 8);
-    if (canAfford) {
-      bg.lineStyle(2, 0x44aaff, 1);
-      bg.strokeRoundedRect(-250, -30, 500, 60, 8);
-    }
-    container.add(bg);
-
-    const icon = this.add
-      .text(-220, 0, upgrade.icon, { font: "24px Arial" })
-      .setOrigin(0, 0.5);
-    container.add(icon);
-
-    const nameText = this.add
-      .text(-180, -8, upgrade.name, {
-        font: "bold 18px Arial",
-        color: canAfford ? "#ffffff" : "#888888",
-      })
-      .setOrigin(0, 0.5);
-    container.add(nameText);
-
-    const descText = this.add
-      .text(-180, 12, upgrade.description, {
-        font: "14px Arial",
-        color: "#aaaaaa",
-      })
-      .setOrigin(0, 0.5);
-    container.add(descText);
-
-    const costText = this.add
-      .text(220, 0, `${upgrade.cost}`, {
-        font: "bold 20px Arial",
-        color: canAfford ? "#ffdd44" : "#ff4444",
-      })
-      .setOrigin(1, 0.5);
-    container.add(costText);
-
-    if (canAfford) {
-      const hitArea = this.add
-        .rectangle(0, 0, 500, 60)
-        .setInteractive({ useHandCursor: true });
-      container.add(hitArea);
-
-      hitArea.on("pointerover", () => {
-        bg.clear();
-        bg.fillStyle(0x336688, 0.9);
-        bg.fillRoundedRect(-250, -30, 500, 60, 8);
-        bg.lineStyle(2, 0x66ccff, 1);
-        bg.strokeRoundedRect(-250, -30, 500, 60, 8);
-      });
-
-      hitArea.on("pointerout", () => {
-        bg.clear();
-        bg.fillStyle(0x224466, 0.9);
-        bg.fillRoundedRect(-250, -30, 500, 60, 8);
-        bg.lineStyle(2, 0x44aaff, 1);
-        bg.strokeRoundedRect(-250, -30, 500, 60, 8);
-      });
-
-      hitArea.on("pointerdown", () => {
-        if (this.credits >= upgrade.cost) {
-          this.credits -= upgrade.cost;
-          upgrade.effect();
-          this.updateHUD();
-          audioManager.playSound("ui_select", 0.7);
-          this.showUpgradeMenu(); // Refresh menu
-        }
-      });
-    }
-
-    this.upgradeContainer.add(container);
+  /** Spread spawn point for the i-th enemy of a wave along an entry arc. */
+  private spawnSlot(
+    index: number,
+    total: number,
+    centerX: number,
+  ): { x: number; y: number } {
+    const angle = (index / Math.max(1, total)) * Math.PI - Math.PI / 2;
+    const radius = 350 + Math.random() * 120;
+    return {
+      x: centerX + Math.cos(angle) * radius,
+      y: 100 + Math.sin(angle) * 60 + index * 18,
+    };
   }
 
-  private createContinueButton(x: number, y: number): void {
-    const container = this.add.container(x, y);
-
-    const bg = this.add.graphics();
-    bg.fillStyle(0x227722, 1);
-    bg.fillRoundedRect(-100, -25, 200, 50, 8);
-    container.add(bg);
-
-    const text = this.add
-      .text(0, 0, "CONTINUE", {
-        font: "bold 24px Arial",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5);
-    container.add(text);
-
-    const hitArea = this.add
-      .rectangle(0, 0, 200, 50)
-      .setInteractive({ useHandCursor: true });
-    container.add(hitArea);
-
-    hitArea.on("pointerover", () => {
-      bg.clear();
-      bg.fillStyle(0x33aa33, 1);
-      bg.fillRoundedRect(-100, -25, 200, 50, 8);
+  private showDraft(): void {
+    this.isChoicePhase = true;
+    const powers = this.run.draft();
+    const cards: ChoiceCard[] = powers.map((p) => ({
+      icon: p.icon,
+      name: p.name,
+      description: p.description,
+    }));
+    this.choicePanel.show("CHOOSE A POWER", cards, (index) => {
+      const chosen = powers[index];
+      if (chosen) this.onPowerChosen(chosen);
     });
+  }
 
-    hitArea.on("pointerout", () => {
-      bg.clear();
-      bg.fillStyle(0x227722, 1);
-      bg.fillRoundedRect(-100, -25, 200, 50, 8);
+  private onPowerChosen(power: Power): void {
+    this.run.choosePower(power);
+    this.applyBonusesToFleet();
+    this.reconcileEscorts();
+    this.endChoicePhase();
+  }
+
+  private showHangar(): void {
+    this.isChoicePhase = true;
+    const options = this.run.hangar();
+    const cards: ChoiceCard[] = options.map((o) => ({
+      icon: o.icon,
+      name: o.name,
+      description: o.description,
+    }));
+    this.choicePanel.show("HANGAR", cards, (index) => {
+      const chosen = options[index];
+      if (chosen) this.onHangarChosen(chosen);
     });
+  }
 
-    hitArea.on("pointerdown", () => {
-      this.upgradeContainer.setVisible(false);
-      this.isUpgradePhase = false;
-      this.startNextWave();
-    });
+  private onHangarChosen(option: HangarOption): void {
+    this.run.chooseHangar(option);
+    this.applyBonusesToFleet();
+    this.reconcileEscorts();
+    this.endChoicePhase();
+  }
 
-    this.upgradeContainer.add(container);
+  private endChoicePhase(): void {
+    this.isChoicePhase = false;
+    this.startNextWave();
+  }
+
+  /** Materialises any escorts the run has earned but not yet spawned. */
+  private reconcileEscorts(): void {
+    const anchor = this.ships.get(this.playerShipIds[0] ?? "");
+    if (!anchor) return;
+    while (
+      this.run.pendingEscorts() > 0 &&
+      this.playerShipIds.length < MAX_FLEET
+    ) {
+      const roster = getShipsByFaction(this.playerFaction);
+      const def = roster[Math.floor(Math.random() * roster.length)];
+      if (!def) break;
+      const offset = this.playerShipIds.length * 80;
+      this.spawnPlayerShip(def.id, anchor.x + offset, anchor.y + 50);
+      this.run.markEscortSpawned();
+    }
+  }
+
+  /** Re-applies hull/shield bonuses to the live fleet after a choice. */
+  private applyBonusesToFleet(): void {
+    const { maxHull, maxShields } = this.run.bonuses;
+    for (const id of this.playerShipIds) {
+      const ship = this.ships.get(id);
+      if (!ship) continue;
+      ship.maxHull = ship.combatStats.maxHull + maxHull;
+      ship.maxShields = ship.combatStats.maxShields + maxShields;
+      ship.hull = Math.min(ship.hull, ship.maxHull);
+      this.healthBars.get(id)?.update(ship.hull, ship.shields);
+    }
   }
 
   private gameOver(): void {
@@ -961,7 +621,6 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   private updateHUD(): void {
-    this.creditsText.setText(`CREDITS: ${this.credits}`);
     this.scoreText.setText(`SCORE: ${this.score}`);
   }
 
@@ -1019,11 +678,17 @@ export class SurvivalScene extends Phaser.Scene {
       x,
       y,
       angle,
-      hull: combatStats.hull + (owner === "player" ? this.defenseBonus : 0),
+      hull:
+        combatStats.hull + (owner === "player" ? this.run.bonuses.maxHull : 0),
       maxHull:
-        combatStats.maxHull + (owner === "player" ? this.defenseBonus : 0),
-      shields: combatStats.shields,
-      maxShields: combatStats.maxShields,
+        combatStats.maxHull +
+        (owner === "player" ? this.run.bonuses.maxHull : 0),
+      shields:
+        combatStats.shields +
+        (owner === "player" ? this.run.bonuses.maxShields : 0),
+      maxShields:
+        combatStats.maxShields +
+        (owner === "player" ? this.run.bonuses.maxShields : 0),
       combatStats,
       currentManeuverDir: "straight",
       currentSpeed: 2,
@@ -1154,18 +819,25 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   private processCombat(delta: number): void {
+    const { fireRate, shieldRegen } = this.run.bonuses;
+    const playerCooldownMod = Math.max(0.5, 1 - fireRate);
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
 
-      const cooldownMod =
-        ship.owner === "player" ? Math.max(0.5, 1 - this.speedBonus * 0.1) : 1;
+      if (ship.owner === "player" && shieldRegen > 0) {
+        ship.shields = Math.min(
+          ship.maxShields,
+          ship.shields + (shieldRegen * delta) / 1000,
+        );
+      }
       ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
 
       if (ship.weaponCooldown <= 0) {
         const target = this.findTarget(ship);
         if (target) {
           this.fireAt(ship, target);
-          ship.weaponCooldown = ship.combatStats.weaponCooldown * cooldownMod;
+          const mod = ship.owner === "player" ? playerCooldownMod : 1;
+          ship.weaponCooldown = ship.combatStats.weaponCooldown * mod;
         }
       }
     }
@@ -1175,7 +847,9 @@ export class SurvivalScene extends Phaser.Scene {
     let best: SurvivalShip | null = null;
     let bestDist = Infinity;
 
-    const maxRange = ship.combatStats.weaponRange;
+    const maxRange =
+      ship.combatStats.weaponRange +
+      (ship.owner === "player" ? this.run.bonuses.range * RANGE_PER_POINT : 0);
     const maxArcRad = (ship.combatStats.firingArc / 2) * Phaser.Math.DEG_TO_RAD;
 
     for (const other of this.ships.values()) {
@@ -1207,9 +881,13 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   private fireAt(attacker: SurvivalShip, target: SurvivalShip): void {
-    let hitChance = calculateHitChance(
+    const bonuses = this.run.bonuses;
+    const targetAgility =
+      target.combatStats.agilityDice +
+      (target.owner === "player" ? bonuses.evasion : 0);
+    const hitChance = calculateHitChance(
       attacker.combatStats.attackDice,
-      target.combatStats.agilityDice,
+      targetAgility,
     );
 
     const hit = Math.random() < hitChance;
@@ -1217,7 +895,10 @@ export class SurvivalScene extends Phaser.Scene {
     if (hit) {
       let damage =
         attacker.combatStats.attackDice +
-        (attacker.owner === "player" ? this.attackBonus : 0);
+        (attacker.owner === "player" ? bonuses.damage : 0);
+      if (attacker.owner === "player" && Math.random() < bonuses.critChance) {
+        damage *= 2;
+      }
 
       if (target.shields > 0) {
         const shieldDmg = Math.min(target.shields, damage);
@@ -1344,7 +1025,7 @@ export class SurvivalScene extends Phaser.Scene {
 
       if (Math.abs(angleDiff) < 25) {
         ship.currentManeuverDir = "straight";
-        ship.currentSpeed = 2;
+        ship.currentSpeed = 2 + Math.min(3, Math.floor(this.run.bonuses.speed));
       } else if (angleDiff > 0) {
         const turn = dial.find((m) => m.direction === "bank_right");
         if (turn) {
