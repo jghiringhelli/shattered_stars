@@ -151,6 +151,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='Generate ship encyclopedia art via SD queue.')
     parser.add_argument('--faction', metavar='FACTION_ID',
                         help='Limit generation to one faction (e.g. void_corsairs)')
+    parser.add_argument('--id', dest='ship_id', metavar='SHIP_ID',
+                        help='Limit generation to one ship (e.g. synth_gestalt)')
     parser.add_argument('--dry-run', action='store_true',
                         help='Print prompts without submitting to the queue')
     args = parser.parse_args()
@@ -162,6 +164,12 @@ def main() -> None:
         ships = [s for s in ships if s['faction'] == args.faction]
         if not ships:
             print(f'No ships found for faction: {args.faction}', file=sys.stderr)
+            sys.exit(1)
+
+    if args.ship_id:
+        ships = [s for s in ships if s['id'] == args.ship_id]
+        if not ships:
+            print(f'No ship found with id: {args.ship_id}', file=sys.stderr)
             sys.exit(1)
 
     jobs = make_jobs(ships)

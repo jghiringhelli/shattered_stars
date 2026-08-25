@@ -654,8 +654,9 @@ Surfaced by the verify loop (`npm run verify:loop`) — tracked SHOULD findings,
   PNG textures → Phaser logs `Texture key already in use`. Real fix = idempotent scene
   texture registration. Tracked; MUST NOT be resolved by weakening a MUST invariant.
 - **Missing encyclopedia art** (INV-6c): `ship_art_synth_gestalt` fails to decode
-  (`assets/ships/encyclopedia/synthetic_collective/synth_gestalt_art.png`). Worklist for
-  the asset audit to regenerate via the SD queue.
+  (`assets/ships/encyclopedia/synthetic_collective/synth_gestalt_art.png`). The generation
+  job is defined (scripts/ship_art_data.json) — remedy is one command once the SD queue
+  server (port 8010) is up: `python scripts/generate_ship_art.py --id synth_gestalt`.
 
 
 ## Next Steps
