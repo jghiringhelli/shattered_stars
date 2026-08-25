@@ -16,6 +16,7 @@
     "test:e2e:ui": "playwright test --ui",
     "qa:gameplay": "npx tsx scripts/gameplay_vision_qa.ts",
     "analyze:telemetry": "tsx scripts/analyze_telemetry.ts",
+    "sentinel": "tsx scripts/sentinel.ts",
     "start:server": "tsx scripts/p2p_server.ts"
   },
   "dependencies": {

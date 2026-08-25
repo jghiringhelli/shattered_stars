@@ -546,7 +546,7 @@ Run tests before committing:
 npm test -- --run
 ```
 
-All tests must pass. Current: 1450 tests (82%+ line coverage).
+All tests must pass. Current: 1738 unit tests + 183 e2e tests (82%+ line coverage).
 
 
 ## Development Workflow
@@ -647,14 +647,42 @@ GET  http://localhost:8002/projects/shattered_stars/assets/file/{id}     # fetch
 
 ## Known Issues
 
-- Epic ship format (huge size) not yet implemented as a battle mode
+_(none currently open — Epic format ships as of 2026-03-28; huge ships gated to Epic/Campaign in squad builder)_
 
 
 ## Next Steps
 
-- Segnor/tallon key bindings in arcade: engine + dials already ready; needs key bindings
-  (suggest Shift+Q/E for segnor left/right, or X key for segnor + T for tallon)
 - Wingman formation AI (Phase 4): flagship + wing offset AI, formation hold/break signals
 - E2E tests for arcade stress + cloak (Playwright: verify stress bar HUD, alpha, cloak timer)
 - Balance re-run: `npx tsx scripts/headless_sim.ts --matrix --battles 50` after action redistribution
 - Vercel/GitHub Pages publish (user-directed when ready)
+
+
+## Routing (sentinel navigation)
+
+The one door routes to scoped slices — do not scan the whole tree. Run `npm run sentinel`
+for live status + next action. Full concern→file index: [docs/spec-map.md](docs/spec-map.md).
+
+- **Movement / telemetry fidelity** → docs/specs/telemetry-xwing-reference.md, ADR-0001,
+  src/systems/MovementSystem.ts, src/simulation/XWingReference.ts. Gate: `npm run analyze:telemetry`.
+- **Progression / XP / unlocks** → docs/specs/progression.md, ADR-0002,
+  src/systems/PlayerProfile.ts, src/data/ProgressionData.ts, src/systems/CampaignSaveManager.ts.
+- **Verify loop** → docs/specs/verify-loop.md, scripts/verify_loop.ts, scripts/vqa_helpers.ts.
+- **Squad building** → src/systems/SquadBuilder.ts, src/scenes/SquadBuilderScene.ts, ShipPickerScene.ts.
+- **Bound prompts** (unit of work) → DEVELOPMENT_PROMPTS.md.
+
+## Known Pitfalls
+
+Technology traps in this repo — what goes wrong, the wrong pattern, the right one.
+
+- **`npx tsx` fetches remotely when tsx is not installed.** `tsx` is a declared dep but
+  can be absent from `node_modules` after a partial install; then every `npx tsx`
+  (scripts, hooks, tests/integration/p2p_server.test.ts) hits the registry and hangs
+  ~40s, making the coverage hook fail. → Run `npm install`; confirm `node_modules/.bin/tsx`
+  exists before running tsx-based scripts.
+- **Coverage pre-commit hook runs the FULL suite under `--coverage`** only when `src/`
+  files are staged. A single slow/flaky suite (e.g. the p2p subprocess test) blocks the
+  commit even though unit tests pass. → Keep integration subprocess startup fast; never
+  bypass with `--no-verify`.
+- **Git identity is not set globally.** Commits succeed with a fallback author; set
+  `git config user.email/name` if authorship matters.
