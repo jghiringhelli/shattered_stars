@@ -1,13 +1,20 @@
 # Status.md
 
-## Last Updated: 2026-06-09 (session 2)
+## Last Updated: 2026-06-09 (session 3 — GS verify loop + XP progression + deploy prep)
 ## Session Summary
-Arcade pivot deep work complete. Discrete X-Wing cycle movement system (500ms cycles,
-SPEED_SCALE_FACTOR geometry, baseSize per ship), ArcadeStress pilot stress system
-(dial-based difficulty classification, green/white/red rates, K-turn and boost instant
-spikes), stealth/cloak mechanic (8s timer, 12% alpha, damage halving, breaks on fire),
-and ship action redistribution (barrel_roll added to 11 ships, total 23→34).
-All 1717 unit tests passing. 0 TypeScript errors.
+Applied the Generative Specification (GS) method. Built the phase-collapse verify loop
+(scripts/verify_loop.ts + docs/specs/verify-loop.md, `npm run verify:loop`): COLLAPSE →
+RECOVER → VERIFY (INV-1..6 MUST, INV-6b/6c/7 SHOULD) → REGENERATE; live run PASS.
+Added global XP progression: ProgressionData.ts (pure) + PlayerProfile.ts + 24 unit tests +
+progression.md + ADR-0002. Seed profiles: player-default, dev-unlock-all, and graded
+test profiles (novice/veteran/admiral). XP-gated the ship picker (locked rows dimmed with
+lock badge + reason). ArcadeBattleScene now awards XP on battle end (kills*perKill + win/loss
+bonus), closing the play→earn→unlock loop. BootScene honors `?profile=<id>` for testing.
+Asset audit: 101 ships, only 1 missing encyclopedia art (synth_gestalt) — added `--id`
+filter to generate_ship_art.py + documented one-command remedy (SD queue port 8010 required).
+Prepared manual GitHub Pages deploy (.github/workflows/pages.yml, workflow_dispatch only,
+does NOT auto-publish) + docs/DEPLOY.md. Build verified (exit 0, relative asset URLs).
+0 TypeScript errors throughout.
 
 ## Project Structure
 ```
