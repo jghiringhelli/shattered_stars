@@ -98,7 +98,19 @@ import {
   fleeSecondsRemaining,
   type FleeState,
 } from "../arcade/systems/FleeDetector";
-import { torusDistance } from "../core/Torus";
+import { torusDistance, torusDelta } from "../core/Torus";
+import {
+  createSideScore,
+  creditKill,
+  resolveByPoints,
+  type SideScore,
+} from "../systems/arena/BattleScore";
+import {
+  createMatchTimer,
+  tickMatchTimer,
+  formatMatchClock,
+  type MatchTimerState,
+} from "../systems/arena/MatchTimer";
 import {
   createPerformanceState,
   updateFPS,
@@ -223,6 +235,18 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private fleeState: FleeState = createFleeState();
   private damageThisFrame = false;
   private fleeWarningText: Phaser.GameObjects.Text | null = null;
+  private fleeArrow: Phaser.GameObjects.Graphics | null = null;
+
+  /** Competitive time limit (ms); when it runs out, destroyed point cost decides the match. */
+  private static readonly MATCH_DURATION_MS = 180_000;
+  private matchTimer: MatchTimerState = createMatchTimer(
+    ArcadeBattleScene.MATCH_DURATION_MS,
+  );
+  private matchTimerText: Phaser.GameObjects.Text | null = null;
+  /** Point cost of enemy ships the player's side has destroyed. */
+  private playerSideScore: SideScore = createSideScore();
+  /** Point cost of the player's ships the enemy side has destroyed. */
+  private enemySideScore: SideScore = createSideScore();
 
   private framesAlive = 0;
 
@@ -330,6 +354,12 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
     this.lastTime = this.time.now;
 
+    this.gameEnded = false;
+    this.fleeState = createFleeState();
+    this.matchTimer = createMatchTimer(ArcadeBattleScene.MATCH_DURATION_MS);
+    this.playerSideScore = createSideScore();
+    this.enemySideScore = createSideScore();
+
     // Initialise virtual camera to player spawn position (no startFollow — we drive it manually).
     const playerSprite = this.shipSprites.get(this.playerShipId!);
     if (playerSprite) {
@@ -411,6 +441,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.checkCollisions();
     this.updateFleeDetector(dt);
     this.checkVictory();
+    this.updateMatchTimer(dt);
   }
 
   /**
@@ -1414,6 +1445,20 @@ export class ArcadeBattleScene extends Phaser.Scene {
             this.scoreText.setText(`SCORE: ${this.score}`);
           }
 
+          if (ship.hull <= 0 && wasAlive) {
+            if (ship.faction === this.playerFaction) {
+              this.enemySideScore = creditKill(
+                this.enemySideScore,
+                ship.definitionId,
+              );
+            } else {
+              this.playerSideScore = creditKill(
+                this.playerSideScore,
+                ship.definitionId,
+              );
+            }
+          }
+
           if (this.cameraShakeEnabled) this.cameras.main.shake(50, 0.005);
           break;
         }
@@ -1875,6 +1920,22 @@ export class ArcadeBattleScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(1000);
 
+    this.matchTimerText = this.add
+      .text(
+        this.scale.width / 2,
+        10,
+        formatMatchClock(ArcadeBattleScene.MATCH_DURATION_MS),
+        {
+          font: "bold 24px Arial",
+          color: "#ffffff",
+          stroke: "#000000",
+          strokeThickness: 3,
+        },
+      )
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setDepth(1000);
+
     this.fleeWarningText = this.add
       .text(this.scale.width / 2, 80, "", {
         font: "bold 22px Arial",
@@ -1887,6 +1948,22 @@ export class ArcadeBattleScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(1500)
       .setVisible(false);
+
+    this.fleeArrow = this.add
+      .graphics()
+      .setScrollFactor(0)
+      .setDepth(1500)
+      .setVisible(false);
+    this.fleeArrow.fillStyle(0xff4444, 1);
+    this.fleeArrow.lineStyle(2, 0x000000, 1);
+    this.fleeArrow.beginPath();
+    this.fleeArrow.moveTo(20, 0);
+    this.fleeArrow.lineTo(-12, -11);
+    this.fleeArrow.lineTo(-12, 11);
+    this.fleeArrow.closePath();
+    this.fleeArrow.fillPath();
+    this.fleeArrow.strokePath();
+    this.fleeArrow.setPosition(this.scale.width / 2, 132);
 
     this.instructionsText = this.add
       .text(10, this.scale.height - 20, "", {
@@ -2456,14 +2533,21 @@ export class ArcadeBattleScene extends Phaser.Scene {
     if (!player || player.hull <= 0) {
       // No player alive → flee doesn't apply; regular victory check handles it
       if (this.fleeWarningText) this.fleeWarningText.setVisible(false);
+      this.fleeArrow?.setVisible(false);
       return;
     }
 
     let nearest = Infinity;
+    let nearestX = 0;
+    let nearestY = 0;
     for (const s of this.frameCache.aliveShips) {
       if (s.faction === this.playerFaction) continue;
       const d = torusDistance(player.x, player.y, s.x, s.y, BATTLEFIELD_SIZE);
-      if (d < nearest) nearest = d;
+      if (d < nearest) {
+        nearest = d;
+        nearestX = s.x;
+        nearestY = s.y;
+      }
     }
 
     this.fleeState = updateFleeState(this.fleeState, {
@@ -2478,8 +2562,19 @@ export class ArcadeBattleScene extends Phaser.Scene {
         this.fleeWarningText
           .setText(`⚠ RETURN TO COMBAT — battle ends in ${secs.toFixed(1)}s`)
           .setVisible(true);
+        if (this.fleeArrow && nearest < Infinity) {
+          const { dx, dy } = torusDelta(
+            player.x,
+            player.y,
+            nearestX,
+            nearestY,
+            BATTLEFIELD_SIZE,
+          );
+          this.fleeArrow.setRotation(Math.atan2(dy, dx)).setVisible(true);
+        }
       } else {
         this.fleeWarningText.setVisible(false);
+        this.fleeArrow?.setVisible(false);
       }
     }
 
@@ -2498,6 +2593,35 @@ export class ArcadeBattleScene extends Phaser.Scene {
     } else if (result.outcome === "defeat") {
       this.gameEnded = true;
       this.showEndScreen(false);
+    }
+  }
+
+  /**
+   * Advance the competitive match clock. When it expires, the destroyed
+   * squad-point cost on each side decides the winner (miniatures-style margin
+   * of victory), falling back to kills and then a draw.
+   */
+  private updateMatchTimer(deltaMs: number): void {
+    if (this.gameEnded) return;
+    this.matchTimer = tickMatchTimer(this.matchTimer, deltaMs);
+    if (this.matchTimerText) {
+      const remaining = this.matchTimer.remainingMs;
+      this.matchTimerText.setText(formatMatchClock(remaining));
+      this.matchTimerText.setColor(
+        remaining <= 30_000
+          ? "#ff4444"
+          : remaining <= 60_000
+            ? "#ffcc00"
+            : "#ffffff",
+      );
+    }
+    if (this.matchTimer.expired) {
+      this.gameEnded = true;
+      const outcome = resolveByPoints(
+        this.playerSideScore,
+        this.enemySideScore,
+      );
+      this.showEndScreen(outcome === "side1");
     }
   }
 
@@ -2530,6 +2654,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     for (const t of this.teamHudTexts) t.setVisible(false);
     for (const t of this.ordnanceHudTexts) t.setVisible(false);
     this.fleeWarningText?.setVisible(false);
+    this.fleeArrow?.setVisible(false);
 
     const cx = this.scale.width / 2;
     const cy = this.scale.height / 2;
