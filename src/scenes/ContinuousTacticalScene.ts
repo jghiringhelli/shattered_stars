@@ -59,6 +59,19 @@ import {
   ContinuousBaseScene,
   type ContinuousShip,
 } from "./ContinuousBaseScene";
+import { ShipTelemetry } from "../debug/ShipTelemetry";
+import {
+  createSideScore,
+  creditKill,
+  resolveByPoints,
+  type SideScore,
+} from "../systems/arena/BattleScore";
+import {
+  createMatchTimer,
+  tickMatchTimer,
+  formatMatchClock,
+  type MatchTimerState,
+} from "../systems/arena/MatchTimer";
 
 interface TacticalShip extends ShipState, ContinuousShip {
   pilotSkill: number;
@@ -103,8 +116,20 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
 
   private stats = { shipsDestroyed: 0, shipsLost: 0, damageDealt: 0 };
 
+  /** Match time limit (ms); on timeout, destroyed point cost decides the winner. */
+  private static readonly MATCH_DURATION_MS = 240_000;
+  private matchTimer: MatchTimerState = createMatchTimer(
+    ContinuousTacticalScene.MATCH_DURATION_MS,
+  );
+  private timerText: Phaser.GameObjects.Text | null = null;
+  /** Point cost of enemy ships the player destroyed. */
+  private playerSideScore: SideScore = createSideScore();
+  /** Point cost of the player's ships the enemy destroyed. */
+  private enemySideScore: SideScore = createSideScore();
+
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private previewGraphics: Phaser.GameObjects.Graphics | null = null;
+  private telemetry: ShipTelemetry | null = null;
 
   constructor() {
     super({ key: "ContinuousTacticalScene" });
@@ -119,8 +144,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
 
     this.effectsManager = new EffectsManager(this);
     const savedSettings = this.registry.get("settings") as
-      | { cameraShake: boolean; showDamageNumbers: boolean }
-      | undefined;
+      { cameraShake: boolean; showDamageNumbers: boolean } | undefined;
     if (savedSettings) {
       this.effectsManager.setUserSettings({
         cameraShake: savedSettings.cameraShake,
@@ -159,8 +183,21 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     this.lastManeuverTime = this.time.now;
     this.battleStartTime = this.time.now;
     this.stats = { shipsDestroyed: 0, shipsLost: 0, damageDealt: 0 };
+    this.matchTimer = createMatchTimer(
+      ContinuousTacticalScene.MATCH_DURATION_MS,
+    );
+    this.playerSideScore = createSideScore();
+    this.enemySideScore = createSideScore();
 
     this.createPauseMenu();
+
+    if (ShipTelemetry.isEnabled()) {
+      this.telemetry = new ShipTelemetry();
+      this.telemetry.start();
+      (
+        window as unknown as { __shipTelemetry: ShipTelemetry }
+      ).__shipTelemetry = this.telemetry;
+    }
 
     if (this.playerShipIds.length > 0) {
       this.selectShip(this.playerShipIds[0] as string);
@@ -171,6 +208,8 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     if (this.isPaused) return;
     super.update(time, delta);
 
+    if (this.updateMatchTimer(delta)) return;
+
     for (const ship of this.ships.values()) {
       if (ship.hull > 0) {
         this.effectsManager.updateTrailPosition(
@@ -179,6 +218,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
           ship.y,
           ship.angle,
         );
+        this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
       }
     }
     this.effectsManager.renderTrails();
@@ -233,8 +273,15 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
 
     if (wasPlayerShip) {
       this.stats.shipsLost++;
+      this.enemySideScore = creditKill(this.enemySideScore, ship!.definitionId);
     } else {
       this.stats.shipsDestroyed++;
+      if (ship) {
+        this.playerSideScore = creditKill(
+          this.playerSideScore,
+          ship.definitionId,
+        );
+      }
     }
 
     this.playerShipIds = this.playerShipIds.filter((id) => id !== shipId);
@@ -258,6 +305,33 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     } else if (!playerAlive) {
       this.showGameOver(false, "Enemy Forces");
     }
+  }
+
+  /**
+   * Advance the match clock. On timeout the winner is decided by destroyed
+   * squad-point cost (miniatures-style), else kills, else the enemy holds.
+   * @returns true if the match ended this frame.
+   */
+  private updateMatchTimer(deltaMs: number): boolean {
+    this.matchTimer = tickMatchTimer(this.matchTimer, deltaMs);
+    if (this.timerText) {
+      const remaining = this.matchTimer.remainingMs;
+      this.timerText.setText(formatMatchClock(remaining));
+      this.timerText.setColor(
+        remaining <= 30_000
+          ? "#ff4444"
+          : remaining <= 60_000
+            ? "#ffcc00"
+            : "#ffffff",
+      );
+    }
+    if (!this.matchTimer.expired) return false;
+    const outcome = resolveByPoints(this.playerSideScore, this.enemySideScore);
+    this.showGameOver(
+      outcome === "side1",
+      outcome === "side1" ? "Player Forces" : "Enemy Forces",
+    );
+    return true;
   }
 
   // ──────────────────────────────────────────────
@@ -758,6 +832,22 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
         "Arrow keys: Change maneuver | W/S: Speed | Click: Select ship | Space: Pause",
         { font: "14px monospace", color: "#888888" },
       )
+      .setScrollFactor(0)
+      .setDepth(1000);
+
+    this.timerText = this.add
+      .text(
+        this.scale.width / 2,
+        52,
+        formatMatchClock(ContinuousTacticalScene.MATCH_DURATION_MS),
+        {
+          font: "bold 22px monospace",
+          color: "#ffffff",
+          stroke: "#000000",
+          strokeThickness: 3,
+        },
+      )
+      .setOrigin(0.5, 0)
       .setScrollFactor(0)
       .setDepth(1000);
 
