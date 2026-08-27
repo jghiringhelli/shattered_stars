@@ -28,6 +28,11 @@ import {
   getManeuverTemplate,
   applyManeuver,
 } from "../systems/ManeuverTemplates";
+import {
+  beltDamageForFrame,
+  tightenBelt,
+  type BeltConfig,
+} from "../systems/arena/ArenaBoundary";
 import { HealthBar } from "../ui/HealthBar";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { headingDiffToTarget } from "../systems/MovementSystem";
@@ -64,6 +69,17 @@ const MAX_FLEET = 6;
 
 /** Extra weapon range in pixels granted per point of the range bonus. */
 const RANGE_PER_POINT = 40;
+
+/**
+ * Base asteroid-belt containment field before per-wave tightening. The belt is
+ * harmless within `safeRadius` of the arena center and impassable at
+ * `wallRadius`; each wave squeezes it inward (see tightenBelt).
+ */
+const BASE_BELT: BeltConfig = {
+  safeRadius: 2600,
+  wallRadius: 3000,
+  maxDamagePerSecond: 3,
+};
 
 interface SurvivalShip {
   id: string;
@@ -104,6 +120,10 @@ export class SurvivalScene extends Phaser.Scene {
   // Survival state
   private wave = 0;
   private score = 0;
+
+  // Asteroid-belt containment (see docs/adr/ADR-0003): tightens each wave.
+  private beltConfig: BeltConfig = BASE_BELT;
+  private beltGraphics!: Phaser.GameObjects.Graphics;
   private playerFaction: FactionId = "free_confederation";
   private isWaveActive = false;
   private isPaused = false;
@@ -159,6 +179,7 @@ export class SurvivalScene extends Phaser.Scene {
     this.background.startShootingStars();
 
     this.choicePanel = new SurvivalChoicePanel(this);
+    this.beltGraphics = this.add.graphics().setDepth(1);
     this.resetState();
     this.createHUD();
     this.setupInput();
@@ -174,6 +195,8 @@ export class SurvivalScene extends Phaser.Scene {
   private resetState(): void {
     this.wave = 0;
     this.score = 0;
+    this.beltConfig = BASE_BELT;
+    this.drawBelt();
     this.run = new SurvivalRunController(this.rollSeed());
     this.isWaveActive = false;
     this.isPaused = false;
@@ -219,6 +242,7 @@ export class SurvivalScene extends Phaser.Scene {
 
     this.interpolatePositions(delta);
     this.processCombat(delta);
+    this.applyBeltDamage(delta);
     this.updateAI();
     this.updateSprites();
     this.checkWaveComplete();
@@ -316,6 +340,8 @@ export class SurvivalScene extends Phaser.Scene {
    */
   private startNextWave(): void {
     this.wave = this.run.beginWave();
+    this.beltConfig = tightenBelt(BASE_BELT, this.wave);
+    this.drawBelt();
     this.waveText.setText(`WAVE ${this.wave}`);
     this.isWaveActive = true;
 
@@ -334,6 +360,38 @@ export class SurvivalScene extends Phaser.Scene {
     if (this.wave <= 15) return "Elite Pilots";
     if (this.wave <= 20) return "Epic Forces";
     return "Endless Wave";
+  }
+
+  /**
+   * Redraw the asteroid-belt rings for the current belt config. The inner ring
+   * marks the safe zone; the outer ring is the impassable wall.
+   */
+  private drawBelt(): void {
+    const cx = BATTLEFIELD_SIZE / 2;
+    const cy = BATTLEFIELD_SIZE / 2;
+    this.beltGraphics.clear();
+    this.beltGraphics.lineStyle(6, 0x884422, 0.5);
+    this.beltGraphics.strokeCircle(cx, cy, this.beltConfig.safeRadius);
+    this.beltGraphics.lineStyle(10, 0xaa3311, 0.8);
+    this.beltGraphics.strokeCircle(cx, cy, this.beltConfig.wallRadius);
+  }
+
+  /**
+   * Apply asteroid-belt damage to every living ship based on its distance from
+   * the arena center; ships driven to zero hull are destroyed as belt kills.
+   */
+  private applyBeltDamage(deltaMs: number): void {
+    const cx = BATTLEFIELD_SIZE / 2;
+    const cy = BATTLEFIELD_SIZE / 2;
+    for (const ship of [...this.ships.values()]) {
+      if (ship.hull <= 0) continue;
+      const dist = Math.hypot(ship.x - cx, ship.y - cy);
+      const damage = beltDamageForFrame(dist, this.beltConfig, deltaMs);
+      if (damage <= 0) continue;
+      ship.hull = Math.max(0, ship.hull - damage);
+      this.healthBars.get(ship.id)?.update(ship.hull, ship.shields);
+      if (ship.hull <= 0) this.destroyShip(ship.id, false);
+    }
   }
 
   private checkWaveComplete(): void {
