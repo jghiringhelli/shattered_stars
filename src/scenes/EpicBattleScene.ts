@@ -46,6 +46,18 @@ import {
   bossReinforcementCount,
   sumSectionHull,
 } from "../systems/EpicBossRules";
+import {
+  createSideScore,
+  creditKill,
+  resolveByPoints,
+  type SideScore,
+} from "../systems/arena/BattleScore";
+import {
+  createMatchTimer,
+  tickMatchTimer,
+  formatMatchClock,
+  type MatchTimerState,
+} from "../systems/arena/MatchTimer";
 
 interface BossSection {
   id: string;
@@ -287,6 +299,17 @@ export class EpicBattleScene extends Phaser.Scene {
   private isSetupPhase = true;
   private gameResult: "none" | "victory" | "defeat" = "none";
 
+  /** Raid time limit (ms); on timeout the boss survives and points decide it. */
+  private static readonly RAID_DURATION_MS = 300_000;
+  private raidTimer: MatchTimerState = createMatchTimer(
+    EpicBattleScene.RAID_DURATION_MS,
+  );
+  private timerText: Phaser.GameObjects.Text | null = null;
+  /** Point cost of enemy ships the player destroyed. */
+  private playerSideScore: SideScore = createSideScore();
+  /** Point cost of the player's ships the enemy destroyed. */
+  private enemySideScore: SideScore = createSideScore();
+
   // Timing
   private lastManeuverTime = 0;
   private maneuverInterval = 300;
@@ -354,6 +377,9 @@ export class EpicBattleScene extends Phaser.Scene {
     this.isPaused = false;
     this.isSetupPhase = true;
     this.gameResult = "none";
+    this.raidTimer = createMatchTimer(EpicBattleScene.RAID_DURATION_MS);
+    this.playerSideScore = createSideScore();
+    this.enemySideScore = createSideScore();
   }
 
   private showSetupScreen(): void {
@@ -583,6 +609,8 @@ export class EpicBattleScene extends Phaser.Scene {
 
     this.background.update();
 
+    if (this.updateRaidTimer(delta)) return;
+
     if (time - this.lastManeuverTime >= this.maneuverInterval) {
       this.processManeuvers();
       this.lastManeuverTime = time;
@@ -605,6 +633,22 @@ export class EpicBattleScene extends Phaser.Scene {
         color: "#44ff44",
       })
       .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(1000);
+
+    this.timerText = this.add
+      .text(
+        this.scale.width - 20,
+        30,
+        formatMatchClock(EpicBattleScene.RAID_DURATION_MS),
+        {
+          font: "bold 22px Arial",
+          color: "#ffffff",
+          stroke: "#000000",
+          strokeThickness: 3,
+        },
+      )
+      .setOrigin(1, 0)
       .setScrollFactor(0)
       .setDepth(1000);
 
@@ -1300,6 +1344,15 @@ export class EpicBattleScene extends Phaser.Scene {
     const ship = this.ships.get(shipId);
     if (!ship) return;
 
+    if (ship.owner === "player") {
+      this.enemySideScore = creditKill(this.enemySideScore, ship.definitionId);
+    } else {
+      this.playerSideScore = creditKill(
+        this.playerSideScore,
+        ship.definitionId,
+      );
+    }
+
     const sprite = this.shipSprites.get(shipId);
     if (sprite) {
       this.effectsManager.createExplosion(sprite.x, sprite.y, "medium");
@@ -1481,6 +1534,36 @@ export class EpicBattleScene extends Phaser.Scene {
         healthBar.setPosition(ship.x, ship.y - 40);
       }
     }
+  }
+
+  /**
+   * Advance the raid clock. On timeout the boss has survived, so the winner is
+   * decided by destroyed squad-point cost (marginal victory) else defeat.
+   * @returns true if the raid ended this frame.
+   */
+  private updateRaidTimer(deltaMs: number): boolean {
+    this.raidTimer = tickMatchTimer(this.raidTimer, deltaMs);
+    if (this.timerText) {
+      const remaining = this.raidTimer.remainingMs;
+      this.timerText.setText(formatMatchClock(remaining));
+      this.timerText.setColor(
+        remaining <= 30_000
+          ? "#ff4444"
+          : remaining <= 60_000
+            ? "#ffcc00"
+            : "#ffffff",
+      );
+    }
+    if (!this.raidTimer.expired) return false;
+    const outcome = resolveByPoints(this.playerSideScore, this.enemySideScore);
+    if (outcome === "side1") {
+      this.gameResult = "victory";
+      this.showVictoryScreen();
+    } else {
+      this.gameResult = "defeat";
+      this.showDefeatScreen();
+    }
+    return true;
   }
 
   private checkVictoryConditions(): void {

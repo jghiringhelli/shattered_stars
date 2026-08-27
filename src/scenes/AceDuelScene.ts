@@ -38,6 +38,18 @@ import {
 import type { ManeuverDirection } from "../core/types";
 import { PILOT_ABILITIES } from "../systems/PilotAbilities";
 import { ACE_MATCHUPS, type AceMatchup } from "../data/AceMatchups";
+import {
+  createSideScore,
+  creditKill,
+  resolveByPoints,
+  type SideScore,
+} from "../systems/arena/BattleScore";
+import {
+  createMatchTimer,
+  tickMatchTimer,
+  formatMatchClock,
+  type MatchTimerState,
+} from "../systems/arena/MatchTimer";
 
 interface AceDuelShip {
   id: string;
@@ -145,6 +157,16 @@ export class AceDuelScene extends Phaser.Scene {
   private isRoundActive = false;
   private matchComplete = false;
 
+  /** Per-round time limit (ms); a timed-out round is decided by destroyed points. */
+  private static readonly ROUND_DURATION_MS = 180_000;
+  private roundTimer: MatchTimerState = createMatchTimer(
+    AceDuelScene.ROUND_DURATION_MS,
+  );
+  private timerText: Phaser.GameObjects.Text | null = null;
+  /** Destroyed squad-point cost each side inflicted this round. */
+  private side1Score: SideScore = createSideScore();
+  private side2Score: SideScore = createSideScore();
+
   // Settings
   private difficulty: "easy" | "normal" | "hard" | "brutal" = "normal";
 
@@ -238,6 +260,9 @@ export class AceDuelScene extends Phaser.Scene {
     this.healthBars.clear();
     this.side1ShipIds = [];
     this.side2ShipIds = [];
+    this.roundTimer = createMatchTimer(AceDuelScene.ROUND_DURATION_MS);
+    this.side1Score = createSideScore();
+    this.side2Score = createSideScore();
     this.isPaused = false;
   }
 
@@ -702,6 +727,34 @@ export class AceDuelScene extends Phaser.Scene {
 
     this.background.update();
 
+    if (this.isRoundActive) {
+      this.roundTimer = tickMatchTimer(this.roundTimer, delta);
+      if (this.timerText) {
+        const remaining = this.roundTimer.remainingMs;
+        this.timerText.setText(formatMatchClock(remaining));
+        this.timerText.setColor(
+          remaining <= 30_000
+            ? "#ff4444"
+            : remaining <= 60_000
+              ? "#ffcc00"
+              : "#ffffff",
+        );
+      }
+      if (this.roundTimer.expired) {
+        const outcome = resolveByPoints(this.side1Score, this.side2Score);
+        const winner: 1 | 2 =
+          outcome === "side1"
+            ? 1
+            : outcome === "side2"
+              ? 2
+              : this.playerSide === 1
+                ? 2
+                : 1;
+        this.endRound(winner);
+        return;
+      }
+    }
+
     if (time - this.lastManeuverTime >= this.maneuverInterval) {
       this.processManeuvers();
       this.lastManeuverTime = time;
@@ -720,6 +773,22 @@ export class AceDuelScene extends Phaser.Scene {
         font: "bold 24px Arial",
         color: "#ffdd00",
       })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(1000);
+
+    this.timerText = this.add
+      .text(
+        this.scale.width / 2,
+        88,
+        formatMatchClock(AceDuelScene.ROUND_DURATION_MS),
+        {
+          font: "bold 22px Arial",
+          color: "#ffffff",
+          stroke: "#000000",
+          strokeThickness: 3,
+        },
+      )
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(1000);
@@ -1020,7 +1089,15 @@ export class AceDuelScene extends Phaser.Scene {
         damage -= shieldDmg;
       }
       if (damage > 0) {
+        const wasAlive = target.hull > 0;
         target.hull = Math.max(0, target.hull - damage);
+        if (wasAlive && target.hull <= 0) {
+          if (this.side1ShipIds.includes(target.id)) {
+            this.side2Score = creditKill(this.side2Score, target.definitionId);
+          } else {
+            this.side1Score = creditKill(this.side1Score, target.definitionId);
+          }
+        }
       }
 
       this.effectsManager.fireLaser(
