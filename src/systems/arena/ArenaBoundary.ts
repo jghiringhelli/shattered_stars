@@ -68,6 +68,18 @@ export function beltDamageForFrame(
 }
 
 /**
+ * Belt damage for one full turn at a distance from center. Turn-based modes
+ * (Campaign) apply the belt once per turn, treating `maxDamagePerSecond` as the
+ * damage dealt at the wall each turn.
+ */
+export function beltDamagePerTurn(
+  distFromCenter: number,
+  config: BeltConfig,
+): number {
+  return beltIntensity(distFromCenter, config) * config.maxDamagePerSecond;
+}
+
+/**
  * Tighten the belt by `steps` (e.g. the Survival wave index): shrink both radii
  * and raise damage. The safe radius floors at MIN_SAFE_RADIUS and the wall stays
  * a fixed margin outside it, so the arena squeezes inward without collapsing.

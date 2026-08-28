@@ -7,6 +7,7 @@ import {
   beltIntensity,
   beltDamagePerSecond,
   beltDamageForFrame,
+  beltDamagePerTurn,
   tightenBelt,
   MIN_SAFE_RADIUS,
   type BeltConfig,
@@ -55,6 +56,22 @@ describe("beltDamageForFrame", () => {
   it("converts dps to per-frame damage by delta time", () => {
     // At the wall, 4 dps over 500ms → 2 damage.
     expect(beltDamageForFrame(BASE.wallRadius, BASE, 500)).toBeCloseTo(2);
+  });
+});
+
+describe("beltDamagePerTurn", () => {
+  it("deals max damage at the wall and none in the safe zone", () => {
+    expect(beltDamagePerTurn(BASE.wallRadius, BASE)).toBe(
+      BASE.maxDamagePerSecond,
+    );
+    expect(beltDamagePerTurn(0, BASE)).toBe(0);
+  });
+
+  it("scales quadratically with distance across the belt", () => {
+    const mid = (BASE.safeRadius + BASE.wallRadius) / 2;
+    expect(beltDamagePerTurn(mid, BASE)).toBeCloseTo(
+      0.25 * BASE.maxDamagePerSecond,
+    );
   });
 });
 

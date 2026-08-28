@@ -3,8 +3,8 @@
  * Coordinates the full battle loop with player and AI ships
  */
 
-import type { ShipState, ManeuverDefinition, ActionType } from './types';
-import type { TurnState } from '../systems/TurnSystem';
+import type { ShipState, ManeuverDefinition, ActionType } from "./types";
+import type { TurnState } from "../systems/TurnSystem";
 import {
   createInitialTurnState,
   advancePhase,
@@ -20,13 +20,22 @@ import {
   getNextShipToEngage,
   processEndPhaseForAll,
   checkVictory,
-} from '../systems/TurnSystem';
-import { resolveAttack, type AttackContext } from '../systems/CombatSystem';
-import { getTargetInfo, getValidTargets } from '../systems/TargetingSystem';
-import { planAIManeuvers, planAIAction, planAIAttack } from '../ai/AIBrain';
-import { getShipDefinition, getShipDial, SHIP_DEFINITIONS } from '../data/ShipDefinitions';
-import { createSeededRng, type RandomGenerator } from '../utils/random';
-import type { FactionId } from '../config';
+} from "../systems/TurnSystem";
+import { resolveAttack, type AttackContext } from "../systems/CombatSystem";
+import { getTargetInfo, getValidTargets } from "../systems/TargetingSystem";
+import { planAIManeuvers, planAIAction, planAIAttack } from "../ai/AIBrain";
+import {
+  getShipDefinition,
+  getShipDial,
+  SHIP_DEFINITIONS,
+} from "../data/ShipDefinitions";
+import { createSeededRng, type RandomGenerator } from "../utils/random";
+import type { FactionId } from "../config";
+import {
+  beltDamagePerTurn,
+  tightenBelt,
+  type BeltConfig,
+} from "../systems/arena/ArenaBoundary";
 
 // ============================================
 // Battle State
@@ -43,6 +52,17 @@ export interface BattleConfig {
     hull?: number;
     shields?: number;
   };
+
+  /**
+   * Optional asteroid-belt containment. When set, a belt centered on
+   * (centerX, centerY) tightens each turn and damages ships that drift out,
+   * preventing turn-based stalemates (Campaign). Absent = no belt (default).
+   */
+  readonly belt?: {
+    readonly centerX: number;
+    readonly centerY: number;
+    readonly base: BeltConfig;
+  };
 }
 
 export interface BattleState {
@@ -53,7 +73,7 @@ export interface BattleState {
   readonly selectedTarget: string | null;
   readonly battleLog: string[];
   readonly isPlayerTurn: boolean;
-  readonly waitingForPlayerInput: 'maneuver' | 'action' | 'target' | null;
+  readonly waitingForPlayerInput: "maneuver" | "action" | "target" | null;
 }
 
 // ============================================
@@ -65,10 +85,12 @@ export class BattleManager {
   private rng: RandomGenerator;
   private onStateChange: ((state: BattleState) => void) | null = null;
   private onLog: ((message: string) => void) | null = null;
+  private beltSetup: BattleConfig["belt"] | null = null;
 
   constructor(config: BattleConfig) {
     this.rng = createSeededRng(config.seed ?? Date.now());
     this.state = this.initializeBattle(config);
+    this.beltSetup = config.belt ?? null;
   }
 
   private initializeBattle(config: BattleConfig): BattleState {
@@ -78,7 +100,8 @@ export class BattleManager {
     // Spawn player ships (bottom of field, facing up)
     const playerStartY = 800;
     const playerSpacing = 80;
-    const playerStartX = 500 - ((config.playerShips.length - 1) * playerSpacing) / 2;
+    const playerStartX =
+      500 - ((config.playerShips.length - 1) * playerSpacing) / 2;
 
     for (let i = 0; i < config.playerShips.length; i++) {
       const defId = config.playerShips[i]!;
@@ -91,7 +114,7 @@ export class BattleManager {
         id: `player_${shipIndex++}`,
         definitionId: defId,
         faction: config.playerFaction,
-        owner: 'player',
+        owner: "player",
         x: playerStartX + i * playerSpacing,
         y: playerStartY,
         angle: 0, // Facing up
@@ -106,7 +129,7 @@ export class BattleManager {
         isCloaked: false,
         currentManeuver: null,
         maneuverProgress: 0,
-        mobileArcDirection: 'front',
+        mobileArcDirection: "front",
         charges: 0,
         maxCharges: 0,
       };
@@ -116,7 +139,8 @@ export class BattleManager {
     // Spawn enemy ships (top of field, facing down)
     const enemyStartY = 200;
     const enemySpacing = 80;
-    const enemyStartX = 500 - ((config.enemyShips.length - 1) * enemySpacing) / 2;
+    const enemyStartX =
+      500 - ((config.enemyShips.length - 1) * enemySpacing) / 2;
 
     for (let i = 0; i < config.enemyShips.length; i++) {
       const defId = config.enemyShips[i]!;
@@ -127,7 +151,7 @@ export class BattleManager {
         id: `enemy_${shipIndex++}`,
         definitionId: defId,
         faction: config.enemyFaction,
-        owner: 'ai',
+        owner: "ai",
         x: enemyStartX + i * enemySpacing,
         y: enemyStartY,
         angle: 180, // Facing down
@@ -142,7 +166,7 @@ export class BattleManager {
         isCloaked: false,
         currentManeuver: null,
         maneuverProgress: 0,
-        mobileArcDirection: 'front',
+        mobileArcDirection: "front",
         charges: 0,
         maxCharges: 0,
       };
@@ -150,9 +174,8 @@ export class BattleManager {
     }
 
     // Find first player ship to control
-    const playerShipId = Array.from(ships.values()).find(
-      (s) => s.owner === 'player'
-    )?.id ?? null;
+    const playerShipId =
+      Array.from(ships.values()).find((s) => s.owner === "player")?.id ?? null;
 
     return {
       ships,
@@ -160,9 +183,9 @@ export class BattleManager {
       playerShipId,
       selectedManeuver: null,
       selectedTarget: null,
-      battleLog: ['Battle started!'],
+      battleLog: ["Battle started!"],
       isPlayerTurn: true,
-      waitingForPlayerInput: 'maneuver',
+      waitingForPlayerInput: "maneuver",
     };
   }
 
@@ -172,6 +195,18 @@ export class BattleManager {
 
   getState(): BattleState {
     return this.state;
+  }
+
+  /**
+   * Current asteroid-belt geometry for the active turn (tightens each turn), or
+   * null when containment is disabled. Scenes read this to render the belt.
+   */
+  getBeltConfig(): BeltConfig | null {
+    if (!this.beltSetup) return null;
+    return tightenBelt(
+      this.beltSetup.base,
+      this.state.turnState.turnNumber - 1,
+    );
   }
 
   setOnStateChange(callback: (state: BattleState) => void): void {
@@ -207,7 +242,7 @@ export class BattleManager {
 
   /** Select a maneuver for the player's ship */
   selectManeuver(maneuver: ManeuverDefinition): void {
-    if (this.state.waitingForPlayerInput !== 'maneuver') return;
+    if (this.state.waitingForPlayerInput !== "maneuver") return;
     if (!this.state.playerShipId) return;
 
     this.updateState({ selectedManeuver: maneuver });
@@ -221,7 +256,7 @@ export class BattleManager {
     let turnState = setPlannedManeuver(
       this.state.turnState,
       this.state.playerShipId,
-      this.state.selectedManeuver
+      this.state.selectedManeuver,
     );
 
     // Plan AI maneuvers
@@ -231,7 +266,7 @@ export class BattleManager {
       aiShips,
       allShips,
       (ship) => getShipDial(ship.definitionId),
-      turnState.turnNumber
+      turnState.turnNumber,
     );
 
     for (const [shipId, maneuver] of aiManeuvers) {
@@ -252,7 +287,7 @@ export class BattleManager {
 
   /** Select a target for attacking */
   selectTarget(targetId: string): void {
-    if (this.state.waitingForPlayerInput !== 'target') return;
+    if (this.state.waitingForPlayerInput !== "target") return;
     this.updateState({ selectedTarget: targetId });
   }
 
@@ -278,7 +313,10 @@ export class BattleManager {
   skipAttack(): void {
     if (!this.state.playerShipId) return;
 
-    let turnState = markShipAttacked(this.state.turnState, this.state.playerShipId);
+    let turnState = markShipAttacked(
+      this.state.turnState,
+      this.state.playerShipId,
+    );
     this.updateState({ turnState, waitingForPlayerInput: null });
     this.continueEngagement();
   }
@@ -304,7 +342,10 @@ export class BattleManager {
   skipAction(): void {
     if (!this.state.playerShipId) return;
 
-    let turnState = markShipActivated(this.state.turnState, this.state.playerShipId);
+    let turnState = markShipActivated(
+      this.state.turnState,
+      this.state.playerShipId,
+    );
     this.updateState({ turnState, waitingForPlayerInput: null });
     this.continueActivation();
   }
@@ -322,7 +363,9 @@ export class BattleManager {
   }
 
   private runActivationPhase(): void {
-    const allShips = Array.from(this.state.ships.values()).filter((s) => s.hull > 0);
+    const allShips = Array.from(this.state.ships.values()).filter(
+      (s) => s.hull > 0,
+    );
     const activationOrder = getActivationOrder(allShips, (s) => {
       const def = getShipDefinition(s.definitionId);
       return def?.baseStats.agility ?? 2;
@@ -355,16 +398,18 @@ export class BattleManager {
       const ships = new Map(this.state.ships);
       ships.set(nextId, updatedShip);
 
-      this.log(`${ship.id} executed ${maneuver.direction} speed ${maneuver.speed}`);
+      this.log(
+        `${ship.id} executed ${maneuver.direction} speed ${maneuver.speed}`,
+      );
       this.updateState({ ships });
     }
 
     // If player ship, wait for action input
-    if (ship.owner === 'player' && ship.id === this.state.playerShipId) {
+    if (ship.owner === "player" && ship.id === this.state.playerShipId) {
       let turnState = markShipActivated(this.state.turnState, nextId);
       this.updateState({
         turnState,
-        waitingForPlayerInput: 'action',
+        waitingForPlayerInput: "action",
         isPlayerTurn: true,
       });
       return;
@@ -374,11 +419,20 @@ export class BattleManager {
     const allShips = Array.from(this.state.ships.values());
     const def = getShipDefinition(ship.definitionId);
     const actionBar = def?.baseStats.actions ?? [];
-    const actionDecision = planAIAction(ship, actionBar, allShips, this.state.turnState.turnNumber);
+    const actionDecision = planAIAction(
+      ship,
+      actionBar,
+      allShips,
+      this.state.turnState.turnNumber,
+    );
 
     if (actionDecision) {
       const ships = new Map(this.state.ships);
-      const updatedShip = this.applyAction(ship, actionDecision.action, actionDecision.targetId);
+      const updatedShip = this.applyAction(
+        ship,
+        actionDecision.action,
+        actionDecision.targetId,
+      );
       ships.set(nextId, updatedShip);
       this.log(`${ship.id} performed ${actionDecision.action}`);
       this.updateState({ ships });
@@ -392,7 +446,9 @@ export class BattleManager {
   }
 
   private continueActivation(): void {
-    const allShips = Array.from(this.state.ships.values()).filter((s) => s.hull > 0);
+    const allShips = Array.from(this.state.ships.values()).filter(
+      (s) => s.hull > 0,
+    );
     const activationOrder = getActivationOrder(allShips, (s) => {
       const def = getShipDefinition(s.definitionId);
       return def?.baseStats.agility ?? 2;
@@ -408,7 +464,9 @@ export class BattleManager {
   }
 
   private runEngagementPhase(): void {
-    const allShips = Array.from(this.state.ships.values()).filter((s) => s.hull > 0);
+    const allShips = Array.from(this.state.ships.values()).filter(
+      (s) => s.hull > 0,
+    );
     const engagementOrder = getEngagementOrder(allShips, (s) => {
       const def = getShipDefinition(s.definitionId);
       return def?.baseStats.agility ?? 2;
@@ -435,9 +493,9 @@ export class BattleManager {
     }
 
     // If player ship, wait for target input
-    if (ship.owner === 'player' && ship.id === this.state.playerShipId) {
+    if (ship.owner === "player" && ship.id === this.state.playerShipId) {
       const enemies = Array.from(this.state.ships.values()).filter(
-        (s) => s.faction !== ship.faction && s.hull > 0
+        (s) => s.faction !== ship.faction && s.hull > 0,
       );
       const validTargets = getValidTargets(ship, enemies, true);
 
@@ -450,7 +508,7 @@ export class BattleManager {
       }
 
       this.updateState({
-        waitingForPlayerInput: 'target',
+        waitingForPlayerInput: "target",
         isPlayerTurn: true,
       });
       return;
@@ -458,7 +516,11 @@ export class BattleManager {
 
     // AI attack
     const allShips = Array.from(this.state.ships.values());
-    const targetDecision = planAIAttack(ship, allShips, this.state.turnState.turnNumber);
+    const targetDecision = planAIAttack(
+      ship,
+      allShips,
+      this.state.turnState.turnNumber,
+    );
 
     if (targetDecision) {
       const target = this.state.ships.get(targetDecision.targetId);
@@ -474,7 +536,9 @@ export class BattleManager {
   }
 
   private continueEngagement(): void {
-    const allShips = Array.from(this.state.ships.values()).filter((s) => s.hull > 0);
+    const allShips = Array.from(this.state.ships.values()).filter(
+      (s) => s.hull > 0,
+    );
     const engagementOrder = getEngagementOrder(allShips, (s) => {
       const def = getShipDefinition(s.definitionId);
       return def?.baseStats.agility ?? 2;
@@ -483,9 +547,26 @@ export class BattleManager {
     setTimeout(() => this.processNextEngagement(engagementOrder), 500);
   }
 
+  /**
+   * Apply asteroid-belt damage (once per turn) to every ship based on its
+   * distance from the belt center; ships driven to zero hull die. No-op when
+   * containment is disabled.
+   */
+  private applyBeltDamage(ships: Map<string, ShipState>): void {
+    const belt = this.getBeltConfig();
+    if (!belt || !this.beltSetup) return;
+    const { centerX, centerY } = this.beltSetup;
+    for (const ship of ships.values()) {
+      if (ship.hull <= 0) continue;
+      const dist = Math.hypot(ship.x - centerX, ship.y - centerY);
+      const damage = beltDamagePerTurn(dist, belt);
+      if (damage <= 0) continue;
+      ships.set(ship.id, { ...ship, hull: Math.max(0, ship.hull - damage) });
+    }
+  }
+
   private advanceToEnd(): void {
     let turnState = advancePhase(this.state.turnState); // engagement -> end
-
     // Clear round tokens
     const ships = new Map(this.state.ships);
     const processed = processEndPhaseForAll(Array.from(ships.values()));
@@ -493,8 +574,13 @@ export class BattleManager {
       ships.set(ship.id, ship);
     }
 
+    this.applyBeltDamage(ships);
+
     // Check victory
-    const victory = checkVictory(Array.from(ships.values()), turnState.turnNumber);
+    const victory = checkVictory(
+      Array.from(ships.values()),
+      turnState.turnNumber,
+    );
 
     if (victory.isComplete) {
       this.log(`Battle Over: ${victory.reason}`);
@@ -509,7 +595,7 @@ export class BattleManager {
     this.updateState({
       ships,
       turnState,
-      waitingForPlayerInput: 'maneuver',
+      waitingForPlayerInput: "maneuver",
       isPlayerTurn: true,
     });
   }
@@ -551,7 +637,7 @@ export class BattleManager {
 
     // Spend tokens
     let updatedAttacker = attacker;
-    if (attacker.hasFocus && result.modifiedAttack.some((f) => f === 'hit')) {
+    if (attacker.hasFocus && result.modifiedAttack.some((f) => f === "hit")) {
       updatedAttacker = { ...updatedAttacker, hasFocus: false };
     }
     if (attacker.hasTargetLock === target.id) {
@@ -561,19 +647,23 @@ export class BattleManager {
 
     this.log(
       `${attacker.id} attacks ${target.id}: ${result.totalDamage} damage` +
-        (result.shipDestroyed ? ' - DESTROYED!' : '')
+        (result.shipDestroyed ? " - DESTROYED!" : ""),
     );
 
     this.updateState({ ships });
   }
 
-  private applyAction(ship: ShipState, action: ActionType, targetId?: string): ShipState {
+  private applyAction(
+    ship: ShipState,
+    action: ActionType,
+    targetId?: string,
+  ): ShipState {
     switch (action) {
-      case 'focus':
+      case "focus":
         return { ...ship, hasFocus: true };
-      case 'evade':
+      case "evade":
         return { ...ship, hasEvade: true };
-      case 'target_lock':
+      case "target_lock":
         return { ...ship, hasTargetLock: targetId ?? null };
       default:
         return ship;
@@ -586,7 +676,7 @@ export class BattleManager {
 
   private getAIShips(): ShipState[] {
     return Array.from(this.state.ships.values()).filter(
-      (s) => s.owner === 'ai' && s.hull > 0
+      (s) => s.owner === "ai" && s.hull > 0,
     );
   }
 
@@ -606,7 +696,7 @@ export class BattleManager {
     if (!ship) return [];
 
     const enemies = Array.from(this.state.ships.values()).filter(
-      (s) => s.faction !== ship.faction && s.hull > 0
+      (s) => s.faction !== ship.faction && s.hull > 0,
     );
     const targetInfos = getValidTargets(ship, enemies, true);
     return targetInfos

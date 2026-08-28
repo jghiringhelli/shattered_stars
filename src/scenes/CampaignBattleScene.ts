@@ -5,10 +5,14 @@
  * enemy spawning based on mission data, and victory/defeat conditions.
  */
 
-import Phaser from 'phaser';
-import { ShipStatCard } from '../ui/ShipStatCard';
-import { GameClock } from '../core/GameClock';
-import { BattleManager, type BattleState, type BattleConfig } from '../core/BattleManager';
+import Phaser from "phaser";
+import { ShipStatCard } from "../ui/ShipStatCard";
+import { GameClock } from "../core/GameClock";
+import {
+  BattleManager,
+  type BattleState,
+  type BattleConfig,
+} from "../core/BattleManager";
 import {
   BATTLEFIELD_SIZE,
   CAMERA_ZOOM_MIN,
@@ -17,16 +21,34 @@ import {
   FACTION_COLORS,
   SHIP_SIZES,
   type FactionId,
-} from '../config';
-import type { ShipState, ManeuverDefinition } from '../core/types';
-import { getShipDefinition } from '../data/ShipDefinitions';
-import type { CampaignMission, MissionObjective, MissionEnemy } from '../data/CampaignData';
-import type { CampaignSaveData } from '../systems/CampaignSaveManager';
-import { CampaignSaveManager } from '../systems/CampaignSaveManager';
-import { distributeMissionXp } from '../systems/CampaignPilotManager';
-import { CAMPAIGN_PILOTS } from '../data/PilotData';
-import { audioManager } from '../audio/AudioManager';
-import { renderBattleStarfield } from '../rendering/Starfield';
+} from "../config";
+import type { ShipState, ManeuverDefinition } from "../core/types";
+import { getShipDefinition } from "../data/ShipDefinitions";
+import type {
+  CampaignMission,
+  MissionObjective,
+  MissionEnemy,
+} from "../data/CampaignData";
+import type { CampaignSaveData } from "../systems/CampaignSaveManager";
+import { CampaignSaveManager } from "../systems/CampaignSaveManager";
+import { distributeMissionXp } from "../systems/CampaignPilotManager";
+import { CAMPAIGN_PILOTS } from "../data/PilotData";
+import { audioManager } from "../audio/AudioManager";
+import { renderBattleStarfield } from "../rendering/Starfield";
+import type { BeltConfig } from "../systems/arena/ArenaBoundary";
+
+/** Battle center for campaign missions (camera and starting formations). */
+const CAMPAIGN_CENTER = { x: 500, y: 500 };
+
+/**
+ * Base asteroid-belt containment for campaign battles before per-turn
+ * tightening. Sized to the turn-based board so the net closes over a few turns.
+ */
+const CAMPAIGN_BELT_BASE: BeltConfig = {
+  safeRadius: 700,
+  wallRadius: 1100,
+  maxDamagePerSecond: 2,
+};
 
 interface ShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
@@ -82,18 +104,23 @@ export class CampaignBattleScene extends Phaser.Scene {
   private targetButtons: Phaser.GameObjects.Container[] = [];
   private actionButtons: Phaser.GameObjects.Container[] = [];
 
+  // Asteroid-belt containment (tightens each turn to prevent stalemates).
+  private beltGraphics!: Phaser.GameObjects.Graphics;
+
   constructor() {
-    super({ key: 'CampaignBattleScene' });
+    super({ key: "CampaignBattleScene" });
   }
 
   init(data: SceneData): void {
     this.factionId = data.factionId;
     this.mission = data.mission;
     this.saveData = data.saveData;
-    this.selectedShips = data.selectedShips ?? this.mission.playerShips.slice(0, this.mission.maxSquadSize);
+    this.selectedShips =
+      data.selectedShips ??
+      this.mission.playerShips.slice(0, this.mission.maxSquadSize);
 
     // Initialize objective states
-    this.objectiveStates = this.mission.objectives.map(obj => ({
+    this.objectiveStates = this.mission.objectives.map((obj) => ({
       objective: obj,
       completed: false,
       progress: 0,
@@ -118,12 +145,13 @@ export class CampaignBattleScene extends Phaser.Scene {
 
     this.createStarfield();
     this.createBattlefieldGrid();
+    this.beltGraphics = this.add.graphics().setDepth(1);
     this.setupInput();
     this.createHUD();
     this.createObjectivePanel();
 
     // Play combat music
-    audioManager.playMusic('combat_medium');
+    audioManager.playMusic("combat_medium");
 
     // Build enemy ship list
     const enemyShips: string[] = [];
@@ -148,12 +176,14 @@ export class CampaignBattleScene extends Phaser.Scene {
     }
 
     // Determine enemy faction from first enemy
-    const enemyFaction = immediateEnemies[0]?.faction ?? 'terran_hegemony';
+    const enemyFaction = immediateEnemies[0]?.faction ?? "terran_hegemony";
 
     // Collect protagonist stat bonuses from pilot evolutions
-    const protagonist = this.saveData.campaignPilots.find(p => {
-      const def = CAMPAIGN_PILOTS[this.factionId]?.find(d => d.id === p.pilotId);
-      return def?.role === 'protagonist';
+    const protagonist = this.saveData.campaignPilots.find((p) => {
+      const def = CAMPAIGN_PILOTS[this.factionId]?.find(
+        (d) => d.id === p.pilotId,
+      );
+      return def?.role === "protagonist";
     });
     const statBonuses = protagonist?.statBonuses;
 
@@ -164,13 +194,23 @@ export class CampaignBattleScene extends Phaser.Scene {
       playerShips: this.selectedShips,
       enemyShips,
       seed: Date.now(),
+      belt: {
+        centerX: CAMPAIGN_CENTER.x,
+        centerY: CAMPAIGN_CENTER.y,
+        base: CAMPAIGN_BELT_BASE,
+      },
       ...(statBonuses !== undefined && {
-        playerStatBonuses: { hull: statBonuses.hull, shields: statBonuses.shields },
+        playerStatBonuses: {
+          hull: statBonuses.hull,
+          shields: statBonuses.shields,
+        },
       }),
     };
 
     this.battleManager = new BattleManager(config);
-    this.battleManager.setOnStateChange((state) => this.onBattleStateChange(state));
+    this.battleManager.setOnStateChange((state) =>
+      this.onBattleStateChange(state),
+    );
     this.battleManager.setOnLog((msg) => this.addLogMessage(msg));
 
     // Create initial ship sprites
@@ -182,7 +222,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     // Seed previous counts so first onBattleStateChange doesn't falsely count kills
     for (const ship of state.ships.values()) {
       if (ship.hull > 0) {
-        if (ship.owner === 'ai') this.previousEnemyCount++;
+        if (ship.owner === "ai") this.previousEnemyCount++;
         else this.previousPlayerCount++;
       }
     }
@@ -215,7 +255,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     const now = Date.now();
     const toSpawn: MissionEnemy[] = [];
 
-    this.pendingEnemySpawns = this.pendingEnemySpawns.filter(spawn => {
+    this.pendingEnemySpawns = this.pendingEnemySpawns.filter((spawn) => {
       if (now >= spawn.spawnAt) {
         toSpawn.push(spawn.enemy);
         return false;
@@ -269,7 +309,7 @@ export class CampaignBattleScene extends Phaser.Scene {
       const newShip: ShipState = {
         id: shipId,
         definitionId: enemy.shipId,
-        owner: 'ai',
+        owner: "ai",
         faction: enemy.faction,
         x,
         y,
@@ -283,7 +323,7 @@ export class CampaignBattleScene extends Phaser.Scene {
         hasEvade: false,
         hasTargetLock: null,
         isCloaked: false,
-        mobileArcDirection: 'front',
+        mobileArcDirection: "front",
         charges: 0,
         maxCharges: 0,
         currentManeuver: null,
@@ -305,7 +345,7 @@ export class CampaignBattleScene extends Phaser.Scene {
 
     for (const ship of state.ships.values()) {
       if (ship.hull > 0) {
-        if (ship.owner === 'player') {
+        if (ship.owner === "player") {
           playerShipsAlive++;
         } else {
           enemyShipsAlive++;
@@ -320,7 +360,7 @@ export class CampaignBattleScene extends Phaser.Scene {
       const obj = objState.objective;
 
       switch (obj.type) {
-        case 'eliminate':
+        case "eliminate":
           // Track kills
           objState.progress = this.totalKills;
           if (objState.progress >= objState.target) {
@@ -328,7 +368,7 @@ export class CampaignBattleScene extends Phaser.Scene {
           }
           break;
 
-        case 'survive':
+        case "survive":
           // Check if time limit reached
           if (obj.timeLimit && elapsedSeconds >= obj.timeLimit) {
             if (playerShipsAlive > 0) {
@@ -336,7 +376,7 @@ export class CampaignBattleScene extends Phaser.Scene {
             } else {
               // Failed to survive
               if (!obj.optional) {
-                this.triggerMissionFailed('Your ships were destroyed');
+                this.triggerMissionFailed("Your ships were destroyed");
                 return;
               }
             }
@@ -344,19 +384,19 @@ export class CampaignBattleScene extends Phaser.Scene {
           objState.progress = Math.floor(elapsedSeconds);
           break;
 
-        case 'defend':
+        case "defend":
           if (obj.timeLimit && elapsedSeconds >= obj.timeLimit) {
             if (playerShipsAlive > 0) {
               objState.completed = true;
             } else if (!obj.optional) {
-              this.triggerMissionFailed('The defense was overwhelmed');
+              this.triggerMissionFailed("The defense was overwhelmed");
               return;
             }
           }
           objState.progress = Math.floor(elapsedSeconds);
           break;
 
-        case 'assassinate':
+        case "assassinate":
           // Check if boss/ace is dead
           // For simplicity, complete when all enemies dead
           if (enemyShipsAlive === 0 && this.pendingEnemySpawns.length === 0) {
@@ -364,25 +404,25 @@ export class CampaignBattleScene extends Phaser.Scene {
           }
           break;
 
-        case 'escort':
+        case "escort":
           // Protect the convoy by eliminating all threats
           if (enemyShipsAlive === 0 && this.pendingEnemySpawns.length === 0) {
             if (playerShipsAlive > 0) {
               objState.completed = true;
             } else if (!obj.optional) {
-              this.triggerMissionFailed('The escort was lost');
+              this.triggerMissionFailed("The escort was lost");
               return;
             }
           }
           break;
 
-        case 'capture':
+        case "capture":
           // Secure the area by eliminating all enemy resistance
           if (enemyShipsAlive === 0 && this.pendingEnemySpawns.length === 0) {
             if (playerShipsAlive > 0) {
               objState.completed = true;
             } else if (!obj.optional) {
-              this.triggerMissionFailed('The capture failed');
+              this.triggerMissionFailed("The capture failed");
               return;
             }
           }
@@ -391,8 +431,10 @@ export class CampaignBattleScene extends Phaser.Scene {
     }
 
     // Check victory conditions
-    const requiredObjectives = this.objectiveStates.filter(o => !o.objective.optional);
-    const allRequiredComplete = requiredObjectives.every(o => o.completed);
+    const requiredObjectives = this.objectiveStates.filter(
+      (o) => !o.objective.optional,
+    );
+    const allRequiredComplete = requiredObjectives.every((o) => o.completed);
 
     if (allRequiredComplete && !this.missionComplete) {
       this.triggerMissionVictory();
@@ -400,16 +442,18 @@ export class CampaignBattleScene extends Phaser.Scene {
 
     // Check failure conditions
     if (playerShipsAlive === 0 && !this.missionFailed) {
-      this.triggerMissionFailed('All ships destroyed');
+      this.triggerMissionFailed("All ships destroyed");
     }
   }
 
   private triggerMissionVictory(): void {
     this.missionComplete = true;
-    audioManager.playMusic('victory_sting');
+    audioManager.playMusic("victory_sting");
 
     // Calculate rewards
-    const optionalComplete = this.objectiveStates.filter(o => o.objective.optional && o.completed);
+    const optionalComplete = this.objectiveStates.filter(
+      (o) => o.objective.optional && o.completed,
+    );
     let bonusXp = 0;
     for (const obj of optionalComplete) {
       bonusXp += obj.objective.xpBonus ?? 50;
@@ -424,7 +468,7 @@ export class CampaignBattleScene extends Phaser.Scene {
       this.saveData.campaignPilots,
       pilotDefs,
       this.mission.rewards.xp,
-      bonusXp
+      bonusXp,
     );
 
     // Set pendingEvolution if this mission has an evolution choice
@@ -441,12 +485,12 @@ export class CampaignBattleScene extends Phaser.Scene {
       this.playerShipsLost,
       this.mission.rewards.unlocks ?? [],
       updatedPilots,
-      pendingEvolution
+      pendingEvolution,
     );
 
     // Brief flash then transition to DebriefScene
     this.showMissionCompleteFlash(() => {
-      this.scene.start('DebriefScene', {
+      this.scene.start("DebriefScene", {
         factionId: this.factionId,
         mission: this.mission,
         preMissionSave,
@@ -471,23 +515,35 @@ export class CampaignBattleScene extends Phaser.Scene {
     const centerX = this.scale.width / 2;
     const centerY = this.scale.height / 2;
 
-    const flashText = this.add.text(centerX, centerY, 'MISSION COMPLETE', {
-      font: 'bold 48px Arial',
-      color: '#44ff66',
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(2001).setAlpha(0);
+    const flashText = this.add
+      .text(centerX, centerY, "MISSION COMPLETE", {
+        font: "bold 48px Arial",
+        color: "#44ff66",
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(2001)
+      .setAlpha(0);
 
     this.tweens.add({
       targets: flashText,
       alpha: 1,
       duration: 400,
-      ease: 'Linear',
+      ease: "Linear",
       onComplete: () => {
         this.time.delayedCall(1600, () => {
-          this.cameras.main.fade(400, 0, 0, 0, false, (_cam: Phaser.Cameras.Scene2D.Camera, progress: number) => {
-            if (progress === 1) {
-              onComplete();
-            }
-          });
+          this.cameras.main.fade(
+            400,
+            0,
+            0,
+            0,
+            false,
+            (_cam: Phaser.Cameras.Scene2D.Camera, progress: number) => {
+              if (progress === 1) {
+                onComplete();
+              }
+            },
+          );
         });
       },
     });
@@ -495,7 +551,7 @@ export class CampaignBattleScene extends Phaser.Scene {
 
   private triggerMissionFailed(reason: string): void {
     this.missionFailed = true;
-    audioManager.playMusic('defeat_sting');
+    audioManager.playMusic("defeat_sting");
 
     // Show defeat screen
     this.showResultScreen(false, 0, 0, this.saveData, reason);
@@ -506,7 +562,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     xpEarned: number,
     creditsEarned: number,
     saveData: CampaignSaveData,
-    failReason?: string
+    failReason?: string,
   ): void {
     // Dim the battlefield
     const dimmer = this.add.graphics();
@@ -532,17 +588,21 @@ export class CampaignBattleScene extends Phaser.Scene {
     panel.add(bg);
 
     // Title
-    const title = this.add.text(0, -160, victory ? 'MISSION COMPLETE' : 'MISSION FAILED', {
-      font: 'bold 36px Arial',
-      color: victory ? '#44ff66' : '#ff4444',
-    }).setOrigin(0.5);
+    const title = this.add
+      .text(0, -160, victory ? "MISSION COMPLETE" : "MISSION FAILED", {
+        font: "bold 36px Arial",
+        color: victory ? "#44ff66" : "#ff4444",
+      })
+      .setOrigin(0.5);
     panel.add(title);
 
     // Mission name
-    const missionName = this.add.text(0, -110, this.mission.title, {
-      font: '24px Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5);
+    const missionName = this.add
+      .text(0, -110, this.mission.title, {
+        font: "24px Arial",
+        color: "#ffffff",
+      })
+      .setOrigin(0.5);
     panel.add(missionName);
 
     let yOffset = -60;
@@ -550,47 +610,65 @@ export class CampaignBattleScene extends Phaser.Scene {
     if (victory) {
       // Show rewards
       const xpText = this.add.text(-100, yOffset, `XP Earned: ${xpEarned}`, {
-        font: '20px Arial',
-        color: '#88ff88',
+        font: "20px Arial",
+        color: "#88ff88",
       });
       panel.add(xpText);
       yOffset += 35;
 
-      const creditsText = this.add.text(-100, yOffset, `Credits: ${creditsEarned}`, {
-        font: '20px Arial',
-        color: '#ffcc44',
-      });
+      const creditsText = this.add.text(
+        -100,
+        yOffset,
+        `Credits: ${creditsEarned}`,
+        {
+          font: "20px Arial",
+          color: "#ffcc44",
+        },
+      );
       panel.add(creditsText);
       yOffset += 35;
 
       // Stats
-      const killsText = this.add.text(-100, yOffset, `Enemies Destroyed: ${this.totalKills}`, {
-        font: '16px Arial',
-        color: '#aaaaaa',
-      });
+      const killsText = this.add.text(
+        -100,
+        yOffset,
+        `Enemies Destroyed: ${this.totalKills}`,
+        {
+          font: "16px Arial",
+          color: "#aaaaaa",
+        },
+      );
       panel.add(killsText);
       yOffset += 25;
 
-      const lossText = this.add.text(-100, yOffset, `Ships Lost: ${this.playerShipsLost}`, {
-        font: '16px Arial',
-        color: '#aaaaaa',
-      });
+      const lossText = this.add.text(
+        -100,
+        yOffset,
+        `Ships Lost: ${this.playerShipsLost}`,
+        {
+          font: "16px Arial",
+          color: "#aaaaaa",
+        },
+      );
       panel.add(lossText);
       yOffset += 35;
 
       // Show unlocks if any
-      if (this.mission.rewards.unlocks && this.mission.rewards.unlocks.length > 0) {
-        const unlockLabel = this.add.text(-100, yOffset, 'Unlocked:', {
-          font: 'bold 16px Arial',
-          color: '#ffaa44',
+      if (
+        this.mission.rewards.unlocks &&
+        this.mission.rewards.unlocks.length > 0
+      ) {
+        const unlockLabel = this.add.text(-100, yOffset, "Unlocked:", {
+          font: "bold 16px Arial",
+          color: "#ffaa44",
         });
         panel.add(unlockLabel);
         yOffset += 25;
 
         for (const unlock of this.mission.rewards.unlocks) {
           const unlockText = this.add.text(-80, yOffset, `• ${unlock}`, {
-            font: '14px Arial',
-            color: '#ffcc88',
+            font: "14px Arial",
+            color: "#ffcc88",
           });
           panel.add(unlockText);
           yOffset += 20;
@@ -598,17 +676,21 @@ export class CampaignBattleScene extends Phaser.Scene {
       }
     } else {
       // Show failure reason
-      const reasonText = this.add.text(0, yOffset, failReason ?? 'Objectives not completed', {
-        font: '18px Arial',
-        color: '#ff8888',
-      }).setOrigin(0.5);
+      const reasonText = this.add
+        .text(0, yOffset, failReason ?? "Objectives not completed", {
+          font: "18px Arial",
+          color: "#ff8888",
+        })
+        .setOrigin(0.5);
       panel.add(reasonText);
       yOffset += 50;
 
-      const tipText = this.add.text(0, yOffset, 'Try different tactics or ship loadouts', {
-        font: '14px Arial',
-        color: '#888888',
-      }).setOrigin(0.5);
+      const tipText = this.add
+        .text(0, yOffset, "Try different tactics or ship loadouts", {
+          font: "14px Arial",
+          color: "#888888",
+        })
+        .setOrigin(0.5);
       panel.add(tipText);
     }
 
@@ -617,21 +699,39 @@ export class CampaignBattleScene extends Phaser.Scene {
 
     if (victory) {
       // Continue button
-      const continueBtn = this.createResultButton(0, buttonY, 'CONTINUE', 0x44aa44, () => {
-        this.scene.start('CampaignScene', { factionId: this.factionId });
-      });
+      const continueBtn = this.createResultButton(
+        0,
+        buttonY,
+        "CONTINUE",
+        0x44aa44,
+        () => {
+          this.scene.start("CampaignScene", { factionId: this.factionId });
+        },
+      );
       panel.add(continueBtn);
     } else {
       // Retry button
-      const retryBtn = this.createResultButton(-80, buttonY, 'RETRY', 0xaa8844, () => {
-        this.scene.restart();
-      });
+      const retryBtn = this.createResultButton(
+        -80,
+        buttonY,
+        "RETRY",
+        0xaa8844,
+        () => {
+          this.scene.restart();
+        },
+      );
       panel.add(retryBtn);
 
       // Quit button
-      const quitBtn = this.createResultButton(80, buttonY, 'QUIT', 0x666666, () => {
-        this.scene.start('CampaignScene', { factionId: this.factionId });
-      });
+      const quitBtn = this.createResultButton(
+        80,
+        buttonY,
+        "QUIT",
+        0x666666,
+        () => {
+          this.scene.start("CampaignScene", { factionId: this.factionId });
+        },
+      );
       panel.add(quitBtn);
     }
 
@@ -643,7 +743,7 @@ export class CampaignBattleScene extends Phaser.Scene {
       scale: 1,
       alpha: 1,
       duration: 300,
-      ease: 'Back.out',
+      ease: "Back.out",
     });
   }
 
@@ -652,7 +752,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     y: number,
     text: string,
     color: number,
-    onClick: () => void
+    onClick: () => void,
   ): Phaser.GameObjects.Container {
     const container = this.add.container(x, y);
 
@@ -661,16 +761,18 @@ export class CampaignBattleScene extends Phaser.Scene {
     bg.fillRoundedRect(-60, -20, 120, 40, 8);
     container.add(bg);
 
-    const label = this.add.text(0, 0, text, {
-      font: 'bold 18px Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5);
+    const label = this.add
+      .text(0, 0, text, {
+        font: "bold 18px Arial",
+        color: "#ffffff",
+      })
+      .setOrigin(0.5);
     container.add(label);
 
     container.setSize(120, 40);
     container.setInteractive({ useHandCursor: true });
 
-    container.on('pointerover', () => {
+    container.on("pointerover", () => {
       bg.clear();
       bg.fillStyle(color, 0.8);
       bg.fillRoundedRect(-60, -20, 120, 40, 8);
@@ -678,14 +780,14 @@ export class CampaignBattleScene extends Phaser.Scene {
       bg.strokeRoundedRect(-60, -20, 120, 40, 8);
     });
 
-    container.on('pointerout', () => {
+    container.on("pointerout", () => {
       bg.clear();
       bg.fillStyle(color, 1);
       bg.fillRoundedRect(-60, -20, 120, 40, 8);
     });
 
-    container.on('pointerdown', () => {
-      audioManager.playSound('ui_select', 0.7);
+    container.on("pointerdown", () => {
+      audioManager.playSound("ui_select", 0.7);
       onClick();
     });
 
@@ -700,13 +802,19 @@ export class CampaignBattleScene extends Phaser.Scene {
     // Background
     const bg = this.add.graphics();
     bg.fillStyle(0x112233, 0.8);
-    bg.fillRoundedRect(-260, 0, 260, 30 + this.mission.objectives.length * 25, 8);
+    bg.fillRoundedRect(
+      -260,
+      0,
+      260,
+      30 + this.mission.objectives.length * 25,
+      8,
+    );
     this.objectivePanel.add(bg);
 
     // Title
-    const title = this.add.text(-250, 5, 'OBJECTIVES', {
-      font: 'bold 14px Arial',
-      color: '#ffcc00',
+    const title = this.add.text(-250, 5, "OBJECTIVES", {
+      font: "bold 14px Arial",
+      color: "#ffcc00",
     });
     this.objectivePanel.add(title);
 
@@ -715,12 +823,17 @@ export class CampaignBattleScene extends Phaser.Scene {
     let yOffset = 30;
 
     for (const objState of this.objectiveStates) {
-      const prefix = objState.objective.optional ? '(Bonus) ' : '';
-      const text = this.add.text(-250, yOffset, `${prefix}${objState.objective.description}`, {
-        font: '12px Arial',
-        color: '#ffffff',
-        wordWrap: { width: 240 },
-      });
+      const prefix = objState.objective.optional ? "(Bonus) " : "";
+      const text = this.add.text(
+        -250,
+        yOffset,
+        `${prefix}${objState.objective.description}`,
+        {
+          font: "12px Arial",
+          color: "#ffffff",
+          wordWrap: { width: 240 },
+        },
+      );
       this.objectivePanel.add(text);
       this.objectiveTexts.push(text);
       yOffset += 25;
@@ -733,19 +846,23 @@ export class CampaignBattleScene extends Phaser.Scene {
       const text = this.objectiveTexts[i];
       if (!text || !objState) continue;
 
-      const prefix = objState.objective.optional ? '(Bonus) ' : '';
-      let status = '';
+      const prefix = objState.objective.optional ? "(Bonus) " : "";
+      let status = "";
 
       if (objState.completed) {
-        text.setColor('#44ff44');
-        status = ' ✓';
-      } else if (objState.objective.type === 'eliminate') {
+        text.setColor("#44ff44");
+        status = " ✓";
+      } else if (objState.objective.type === "eliminate") {
         status = ` (${objState.progress}/${objState.target})`;
-        text.setColor('#ffffff');
-      } else if (objState.objective.type === 'survive' || objState.objective.type === 'defend') {
-        const remaining = (objState.objective.timeLimit ?? 0) - objState.progress;
+        text.setColor("#ffffff");
+      } else if (
+        objState.objective.type === "survive" ||
+        objState.objective.type === "defend"
+      ) {
+        const remaining =
+          (objState.objective.timeLimit ?? 0) - objState.progress;
         status = ` (${Math.max(0, remaining)}s)`;
-        text.setColor('#ffffff');
+        text.setColor("#ffffff");
       }
 
       text.setText(`${prefix}${objState.objective.description}${status}`);
@@ -753,7 +870,10 @@ export class CampaignBattleScene extends Phaser.Scene {
   }
 
   private createStarfield(): void {
-    renderBattleStarfield(this, BATTLEFIELD_SIZE, { starCount: 300, includeNebula: false });
+    renderBattleStarfield(this, BATTLEFIELD_SIZE, {
+      starCount: 300,
+      includeNebula: false,
+    });
   }
 
   private createBattlefieldGrid(): void {
@@ -772,18 +892,26 @@ export class CampaignBattleScene extends Phaser.Scene {
   private setupInput(): void {
     this.cursors = this.input.keyboard!.createCursorKeys();
 
-    this.input.on('wheel', (_pointer: Phaser.Input.Pointer, _gameObjects: unknown[], _deltaX: number, deltaY: number) => {
-      const camera = this.cameras.main;
-      const newZoom = Phaser.Math.Clamp(
-        camera.zoom - deltaY * CAMERA_ZOOM_SPEED * 0.01,
-        CAMERA_ZOOM_MIN,
-        CAMERA_ZOOM_MAX
-      );
-      camera.setZoom(newZoom);
-    });
+    this.input.on(
+      "wheel",
+      (
+        _pointer: Phaser.Input.Pointer,
+        _gameObjects: unknown[],
+        _deltaX: number,
+        deltaY: number,
+      ) => {
+        const camera = this.cameras.main;
+        const newZoom = Phaser.Math.Clamp(
+          camera.zoom - deltaY * CAMERA_ZOOM_SPEED * 0.01,
+          CAMERA_ZOOM_MIN,
+          CAMERA_ZOOM_MAX,
+        );
+        camera.setZoom(newZoom);
+      },
+    );
 
     // Escape to pause/quit
-    this.input.keyboard!.on('keydown-ESC', () => {
+    this.input.keyboard!.on("keydown-ESC", () => {
       if (!this.missionComplete && !this.missionFailed) {
         this.showPauseMenu();
       }
@@ -803,7 +931,10 @@ export class CampaignBattleScene extends Phaser.Scene {
     const cx = this.scale.width / 2;
     const cy = this.scale.height / 2;
 
-    this.pauseOverlay = this.add.container(0, 0).setDepth(3000).setScrollFactor(0);
+    this.pauseOverlay = this.add
+      .container(0, 0)
+      .setDepth(3000)
+      .setScrollFactor(0);
 
     const dimBg = this.add.graphics();
     dimBg.fillStyle(0x000000, 0.65);
@@ -817,9 +948,12 @@ export class CampaignBattleScene extends Phaser.Scene {
     panel.strokeRoundedRect(cx - 180, cy - 100, 360, 200, 12);
     this.pauseOverlay.add(panel);
 
-    const title = this.add.text(cx, cy - 60, 'PAUSED', {
-      font: 'bold 36px Arial', color: '#ffffff',
-    }).setOrigin(0.5);
+    const title = this.add
+      .text(cx, cy - 60, "PAUSED", {
+        font: "bold 36px Arial",
+        color: "#ffffff",
+      })
+      .setOrigin(0.5);
     this.pauseOverlay.add(title);
 
     // Resume button
@@ -828,11 +962,18 @@ export class CampaignBattleScene extends Phaser.Scene {
     resumeBg.fillStyle(0x224422, 1);
     resumeBg.fillRoundedRect(-100, -22, 200, 44, 8);
     resumeBtn.add(resumeBg);
-    resumeBtn.add(this.add.text(0, 0, 'RESUME', {
-      font: 'bold 22px Arial', color: '#44ff88',
-    }).setOrigin(0.5));
-    const resumeHit = this.add.rectangle(0, 0, 200, 44, 0, 0).setInteractive({ useHandCursor: true });
-    resumeHit.on('pointerdown', () => {
+    resumeBtn.add(
+      this.add
+        .text(0, 0, "RESUME", {
+          font: "bold 22px Arial",
+          color: "#44ff88",
+        })
+        .setOrigin(0.5),
+    );
+    const resumeHit = this.add
+      .rectangle(0, 0, 200, 44, 0, 0)
+      .setInteractive({ useHandCursor: true });
+    resumeHit.on("pointerdown", () => {
       this.isPaused = false;
       this.pauseOverlay?.destroy();
       this.pauseOverlay = null;
@@ -846,12 +987,19 @@ export class CampaignBattleScene extends Phaser.Scene {
     quitBg.fillStyle(0x331111, 1);
     quitBg.fillRoundedRect(-100, -22, 200, 44, 8);
     quitBtn.add(quitBg);
-    quitBtn.add(this.add.text(0, 0, 'QUIT MISSION', {
-      font: 'bold 22px Arial', color: '#ff4444',
-    }).setOrigin(0.5));
-    const quitHit = this.add.rectangle(0, 0, 200, 44, 0, 0).setInteractive({ useHandCursor: true });
-    quitHit.on('pointerdown', () => {
-      this.scene.start('CampaignScene', { factionId: this.factionId });
+    quitBtn.add(
+      this.add
+        .text(0, 0, "QUIT MISSION", {
+          font: "bold 22px Arial",
+          color: "#ff4444",
+        })
+        .setOrigin(0.5),
+    );
+    const quitHit = this.add
+      .rectangle(0, 0, 200, 44, 0, 0)
+      .setInteractive({ useHandCursor: true });
+    quitHit.on("pointerdown", () => {
+      this.scene.start("CampaignScene", { factionId: this.factionId });
     });
     quitBtn.add(quitHit);
     this.pauseOverlay.add(quitBtn);
@@ -869,35 +1017,72 @@ export class CampaignBattleScene extends Phaser.Scene {
 
   private createHUD(): void {
     // Mission name
-    this.add.text(10, 10, this.mission.title, {
-      font: 'bold 20px Arial',
-      color: '#ffffff',
-    }).setScrollFactor(0).setDepth(1000);
+    this.add
+      .text(10, 10, this.mission.title, {
+        font: "bold 20px Arial",
+        color: "#ffffff",
+      })
+      .setScrollFactor(0)
+      .setDepth(1000);
 
     // Turn/Phase display
-    this.turnText = this.add.text(10, 40, 'Turn 1', {
-      font: 'bold 16px Arial',
-      color: '#ffffff',
-    }).setScrollFactor(0).setDepth(1000);
+    this.turnText = this.add
+      .text(10, 40, "Turn 1", {
+        font: "bold 16px Arial",
+        color: "#ffffff",
+      })
+      .setScrollFactor(0)
+      .setDepth(1000);
 
-    this.phaseText = this.add.text(10, 60, 'Planning Phase', {
-      font: '14px Arial',
-      color: '#88ff88',
-    }).setScrollFactor(0).setDepth(1000);
+    this.phaseText = this.add
+      .text(10, 60, "Planning Phase", {
+        font: "14px Arial",
+        color: "#88ff88",
+      })
+      .setScrollFactor(0)
+      .setDepth(1000);
 
     // Instructions
-    this.instructionText = this.add.text(10, 90, '', {
-      font: '14px Arial',
-      color: '#ffff88',
-      wordWrap: { width: 300 },
-    }).setScrollFactor(0).setDepth(1000);
+    this.instructionText = this.add
+      .text(10, 90, "", {
+        font: "14px Arial",
+        color: "#ffff88",
+        wordWrap: { width: 300 },
+      })
+      .setScrollFactor(0)
+      .setDepth(1000);
 
     // Battle log
-    this.logText = this.add.text(10, this.scale.height - 120, '', {
-      font: '12px monospace',
-      color: '#aaaaaa',
-      wordWrap: { width: 400 },
-    }).setScrollFactor(0).setDepth(1000);
+    this.logText = this.add
+      .text(10, this.scale.height - 120, "", {
+        font: "12px monospace",
+        color: "#aaaaaa",
+        wordWrap: { width: 400 },
+      })
+      .setScrollFactor(0)
+      .setDepth(1000);
+  }
+
+  /**
+   * Redraw the asteroid-belt rings for the current (per-turn) belt geometry.
+   * Inner ring = safe zone, outer ring = impassable wall.
+   */
+  private drawBelt(): void {
+    const belt = this.battleManager.getBeltConfig();
+    if (!belt) return;
+    this.beltGraphics.clear();
+    this.beltGraphics.lineStyle(6, 0x884422, 0.4);
+    this.beltGraphics.strokeCircle(
+      CAMPAIGN_CENTER.x,
+      CAMPAIGN_CENTER.y,
+      belt.safeRadius,
+    );
+    this.beltGraphics.lineStyle(10, 0xaa3311, 0.75);
+    this.beltGraphics.strokeCircle(
+      CAMPAIGN_CENTER.x,
+      CAMPAIGN_CENTER.y,
+      belt.wallRadius,
+    );
   }
 
   private onBattleStateChange(state: BattleState): void {
@@ -907,16 +1092,22 @@ export class CampaignBattleScene extends Phaser.Scene {
 
     for (const ship of state.ships.values()) {
       if (ship.hull > 0) {
-        if (ship.owner === 'ai') currentEnemyCount++;
+        if (ship.owner === "ai") currentEnemyCount++;
         else currentPlayerCount++;
       }
     }
 
     if (this.previousEnemyCount > 0) {
-      this.totalKills += Math.max(0, this.previousEnemyCount - currentEnemyCount);
+      this.totalKills += Math.max(
+        0,
+        this.previousEnemyCount - currentEnemyCount,
+      );
     }
     if (this.previousPlayerCount > 0) {
-      this.playerShipsLost += Math.max(0, this.previousPlayerCount - currentPlayerCount);
+      this.playerShipsLost += Math.max(
+        0,
+        this.previousPlayerCount - currentPlayerCount,
+      );
     }
     this.previousEnemyCount = currentEnemyCount;
     this.previousPlayerCount = currentPlayerCount;
@@ -924,14 +1115,16 @@ export class CampaignBattleScene extends Phaser.Scene {
     // Update turn/phase display
     this.turnText.setText(`Turn ${state.turnState.turnNumber}`);
 
+    this.drawBelt();
+
     const phaseNames: Record<string, string> = {
-      planning: 'Planning Phase',
-      system: 'System Phase',
-      activation: 'Activation Phase',
-      engagement: 'Engagement Phase',
-      end: 'End Phase',
+      planning: "Planning Phase",
+      system: "System Phase",
+      activation: "Activation Phase",
+      engagement: "Engagement Phase",
+      end: "End Phase",
     };
-    this.phaseText.setText(phaseNames[state.turnState.currentPhase] ?? '');
+    this.phaseText.setText(phaseNames[state.turnState.currentPhase] ?? "");
 
     // Clear old UI
     this.clearManeuverUI();
@@ -939,17 +1132,17 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.clearActionUI();
 
     // Show appropriate UI based on state
-    if (state.waitingForPlayerInput === 'maneuver') {
-      this.instructionText.setText('Select a maneuver for your ship:');
+    if (state.waitingForPlayerInput === "maneuver") {
+      this.instructionText.setText("Select a maneuver for your ship:");
       this.showManeuverUI();
-    } else if (state.waitingForPlayerInput === 'action') {
-      this.instructionText.setText('Choose an action (or skip):');
+    } else if (state.waitingForPlayerInput === "action") {
+      this.instructionText.setText("Choose an action (or skip):");
       this.showActionUI();
-    } else if (state.waitingForPlayerInput === 'target') {
-      this.instructionText.setText('Select a target to attack:');
+    } else if (state.waitingForPlayerInput === "target") {
+      this.instructionText.setText("Select a target to attack:");
       this.showTargetUI();
     } else {
-      this.instructionText.setText('');
+      this.instructionText.setText("");
     }
 
     // Update ship sprites
@@ -957,9 +1150,9 @@ export class CampaignBattleScene extends Phaser.Scene {
   }
 
   private addLogMessage(msg: string): void {
-    const lines = this.logText.text.split('\n').slice(-5);
+    const lines = this.logText.text.split("\n").slice(-5);
     lines.push(msg);
-    this.logText.setText(lines.join('\n'));
+    this.logText.setText(lines.join("\n"));
   }
 
   private showManeuverUI(): void {
@@ -971,10 +1164,13 @@ export class CampaignBattleScene extends Phaser.Scene {
 
     for (const [speed, speedManeuvers] of Object.entries(grouped)) {
       // Speed label
-      this.add.text(xStart, yOffset, `Speed ${speed}:`, {
-        font: 'bold 12px Arial',
-        color: '#ffffff',
-      }).setScrollFactor(0).setDepth(1000);
+      this.add
+        .text(xStart, yOffset, `Speed ${speed}:`, {
+          font: "bold 12px Arial",
+          color: "#ffffff",
+        })
+        .setScrollFactor(0)
+        .setDepth(1000);
 
       yOffset += 20;
       let xOffset = xStart;
@@ -988,7 +1184,7 @@ export class CampaignBattleScene extends Phaser.Scene {
           () => {
             this.battleManager.selectManeuver(maneuver);
             this.battleManager.confirmManeuver();
-          }
+          },
         );
         this.maneuverButtons.push(btn);
         xOffset += 70;
@@ -997,7 +1193,9 @@ export class CampaignBattleScene extends Phaser.Scene {
     }
   }
 
-  private groupManeuversBySpeed(maneuvers: ManeuverDefinition[]): Record<number, ManeuverDefinition[]> {
+  private groupManeuversBySpeed(
+    maneuvers: ManeuverDefinition[],
+  ): Record<number, ManeuverDefinition[]> {
     const grouped: Record<number, ManeuverDefinition[]> = {};
     for (const m of maneuvers) {
       if (!grouped[m.speed]) grouped[m.speed] = [];
@@ -1008,26 +1206,30 @@ export class CampaignBattleScene extends Phaser.Scene {
 
   private getManeuverLabel(m: ManeuverDefinition): string {
     const labels: Record<string, string> = {
-      straight: '↑',
-      bank_left: '↖',
-      bank_right: '↗',
-      turn_left: '←',
-      turn_right: '→',
-      kturn: '↩',
-      segnor_left: '⤹',
-      segnor_right: '⤸',
-      tallon_left: '↰',
-      tallon_right: '↱',
+      straight: "↑",
+      bank_left: "↖",
+      bank_right: "↗",
+      turn_left: "←",
+      turn_right: "→",
+      kturn: "↩",
+      segnor_left: "⤹",
+      segnor_right: "⤸",
+      tallon_left: "↰",
+      tallon_right: "↱",
     };
     return labels[m.direction] ?? m.direction;
   }
 
   private getManeuverColor(m: ManeuverDefinition): number {
     switch (m.difficulty) {
-      case 'green': return 0x44aa44;
-      case 'white': return 0x888888;
-      case 'red': return 0xaa4444;
-      default: return 0x888888;
+      case "green":
+        return 0x44aa44;
+      case "white":
+        return 0x888888;
+      case "red":
+        return 0xaa4444;
+      default:
+        return 0x888888;
     }
   }
 
@@ -1043,18 +1245,24 @@ export class CampaignBattleScene extends Phaser.Scene {
 
     for (const action of actions) {
       // Skip if already has token
-      if (action === 'focus' && ship.hasFocus) continue;
-      if (action === 'evade' && ship.hasEvade) continue;
+      if (action === "focus" && ship.hasFocus) continue;
+      if (action === "evade" && ship.hasEvade) continue;
 
-      const btn = this.createButton(10, yOffset, action.toUpperCase(), 0x4488aa, () => {
-        this.battleManager.performAction(action);
-      });
+      const btn = this.createButton(
+        10,
+        yOffset,
+        action.toUpperCase(),
+        0x4488aa,
+        () => {
+          this.battleManager.performAction(action);
+        },
+      );
       this.actionButtons.push(btn);
       yOffset += 35;
     }
 
     // Skip button
-    const skipBtn = this.createButton(10, yOffset, 'SKIP', 0x666666, () => {
+    const skipBtn = this.createButton(10, yOffset, "SKIP", 0x666666, () => {
       this.battleManager.skipAction();
     });
     this.actionButtons.push(skipBtn);
@@ -1078,13 +1286,25 @@ export class CampaignBattleScene extends Phaser.Scene {
     }
 
     // Skip button
-    const skipBtn = this.createButton(10, yOffset, 'SKIP ATTACK', 0x666666, () => {
-      this.battleManager.skipAttack();
-    });
+    const skipBtn = this.createButton(
+      10,
+      yOffset,
+      "SKIP ATTACK",
+      0x666666,
+      () => {
+        this.battleManager.skipAttack();
+      },
+    );
     this.targetButtons.push(skipBtn);
   }
 
-  private createButton(x: number, y: number, text: string, color: number, onClick: () => void): Phaser.GameObjects.Container {
+  private createButton(
+    x: number,
+    y: number,
+    text: string,
+    color: number,
+    onClick: () => void,
+  ): Phaser.GameObjects.Container {
     const container = this.add.container(x, y);
     container.setScrollFactor(0);
     container.setDepth(1000);
@@ -1096,17 +1316,19 @@ export class CampaignBattleScene extends Phaser.Scene {
     bg.lineStyle(2, 0xffffff, 0.5);
     bg.strokeRoundedRect(0, 0, width, 28, 4);
 
-    const label = this.add.text(width / 2, 14, text, {
-      font: 'bold 11px Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5, 0.5);
+    const label = this.add
+      .text(width / 2, 14, text, {
+        font: "bold 11px Arial",
+        color: "#ffffff",
+      })
+      .setOrigin(0.5, 0.5);
 
     container.add([bg, label]);
     container.setSize(width, 28);
     container.setInteractive({ useHandCursor: true });
-    container.on('pointerdown', onClick);
-    container.on('pointerover', () => bg.setAlpha(1));
-    container.on('pointerout', () => bg.setAlpha(0.8));
+    container.on("pointerdown", onClick);
+    container.on("pointerover", () => bg.setAlpha(1));
+    container.on("pointerout", () => bg.setAlpha(0.8));
 
     return container;
   }
@@ -1134,7 +1356,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     const body = this.add.graphics();
     const color = FACTION_COLORS[ship.faction as FactionId] ?? 0xffffff;
     const shipDef = getShipDefinition(ship.definitionId);
-    const size = SHIP_SIZES[shipDef?.baseStats.size ?? 'small'];
+    const size = SHIP_SIZES[shipDef?.baseStats.size ?? "small"];
 
     body.fillStyle(color, 1);
     body.beginPath();
@@ -1156,7 +1378,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     container.add(healthBar);
 
     // Selection ring (hidden by default)
-    if (ship.owner === 'player') {
+    if (ship.owner === "player") {
       const ring = this.add.graphics();
       ring.lineStyle(2, 0xffff00, 0.8);
       ring.strokeCircle(0, 0, size * 0.8);
@@ -1222,13 +1444,24 @@ export class CampaignBattleScene extends Phaser.Scene {
     // Shields
     const shieldPct = ship.shields / ship.maxShields;
     bar.fillStyle(0x00bfff, 1);
-    bar.fillRect(-barWidth / 2 + 1, barY + 1, (barWidth - 2) * shieldPct, barHeight);
+    bar.fillRect(
+      -barWidth / 2 + 1,
+      barY + 1,
+      (barWidth - 2) * shieldPct,
+      barHeight,
+    );
 
     // Hull
     const hullPct = ship.hull / ship.maxHull;
-    const hullColor = hullPct > 0.5 ? 0x44ff44 : hullPct > 0.25 ? 0xffff44 : 0xff4444;
+    const hullColor =
+      hullPct > 0.5 ? 0x44ff44 : hullPct > 0.25 ? 0xffff44 : 0xff4444;
     bar.fillStyle(hullColor, 1);
-    bar.fillRect(-barWidth / 2 + 1, barY + barHeight + 2, (barWidth - 2) * hullPct, barHeight);
+    bar.fillRect(
+      -barWidth / 2 + 1,
+      barY + barHeight + 2,
+      (barWidth - 2) * hullPct,
+      barHeight,
+    );
 
     // Token indicators
     let tokenX = -barWidth / 2;
