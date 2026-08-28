@@ -279,29 +279,35 @@ export class CampaignBattleScene extends Phaser.Scene {
       const def = getShipDefinition(enemy.shipId);
       if (!def) continue;
 
-      // Spawn at random edge position
+      // Spawn at a random edge of the current safe zone around the battle
+      // center, facing inward, so reinforcements arrive on-screen and inside
+      // the closing belt rather than off in the far corners of the field.
+      const belt = this.battleManager.getBeltConfig();
+      const spawnRadius = belt?.safeRadius ?? CAMPAIGN_BELT_BASE.safeRadius;
+      const cx = CAMPAIGN_CENTER.x;
+      const cy = CAMPAIGN_CENTER.y;
       const edge = Phaser.Math.Between(0, 3);
       let x: number, y: number, angle: number;
 
       switch (edge) {
         case 0: // Top
-          x = Phaser.Math.Between(200, BATTLEFIELD_SIZE - 200);
-          y = 50;
+          x = Phaser.Math.Between(cx - spawnRadius, cx + spawnRadius);
+          y = cy - spawnRadius;
           angle = 180;
           break;
         case 1: // Right
-          x = BATTLEFIELD_SIZE - 50;
-          y = Phaser.Math.Between(200, BATTLEFIELD_SIZE - 200);
+          x = cx + spawnRadius;
+          y = Phaser.Math.Between(cy - spawnRadius, cy + spawnRadius);
           angle = 270;
           break;
         case 2: // Bottom
-          x = Phaser.Math.Between(200, BATTLEFIELD_SIZE - 200);
-          y = BATTLEFIELD_SIZE - 50;
+          x = Phaser.Math.Between(cx - spawnRadius, cx + spawnRadius);
+          y = cy + spawnRadius;
           angle = 0;
           break;
         default: // Left
-          x = 50;
-          y = Phaser.Math.Between(200, BATTLEFIELD_SIZE - 200);
+          x = cx - spawnRadius;
+          y = Phaser.Math.Between(cy - spawnRadius, cy + spawnRadius);
           angle = 90;
           break;
       }
