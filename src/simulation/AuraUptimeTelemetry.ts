@@ -12,14 +12,15 @@
  */
 
 import {
-  resolveSupportAuras,
-  AURA_RADIUS_DEFAULT,
+  alliesCoveredWithinRadius,
   type AuraShip,
-  type SupportAuraParams,
 } from "../systems/SupportAura";
 
 /** Fixed simulation step (60 Hz), matching the arcade scene. */
 const STEP_MS = 1000 / 60;
+
+/** Mid-range coverage radius used when a measurement omits one. */
+const DEFAULT_MEASURE_RADIUS = 300;
 
 /** Tunable parameters for an uptime measurement. */
 export interface AuraUptimeParams {
@@ -141,14 +142,13 @@ function snapshot(support: Vec, ally: Vec): AuraShip[] {
  * @returns Fraction of frames (0-1) the ally sits inside the aura, averaged over seeds.
  */
 export function measureAuraUptime(params: AuraUptimeParams = {}): number {
-  const radius = params.radius ?? AURA_RADIUS_DEFAULT;
+  const radius = params.radius ?? DEFAULT_MEASURE_RADIUS;
   const allySpeed = params.allySpeed ?? 220;
   const supportSpeed = params.supportSpeed ?? 210;
   const turnRate = params.supportTurnRateDegPerSec ?? 140;
   const jitterDeg = params.allyJitterDeg ?? 90;
   const frames = params.frames ?? 1800;
   const seeds = params.seeds ?? 12;
-  const auraParams: SupportAuraParams = { radius, shieldRegenPerSecond: 0 };
 
   let coveredTotal = 0;
   for (let s = 0; s < seeds; s++) {
@@ -158,12 +158,11 @@ export function measureAuraUptime(params: AuraUptimeParams = {}): number {
     for (let f = 0; f < frames; f++) {
       stepAlly(ally, allySpeed, jitterDeg, rng);
       stepSupport(support, ally, supportSpeed, turnRate);
-      const { coveredShipIds } = resolveSupportAuras(
+      const covered = alliesCoveredWithinRadius(
         snapshot(support, ally),
-        STEP_MS,
-        auraParams,
+        radius,
       );
-      if (coveredShipIds.has("ally")) coveredTotal++;
+      if (covered.has("ally")) coveredTotal++;
     }
   }
   return coveredTotal / (frames * seeds);

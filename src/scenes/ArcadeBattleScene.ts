@@ -66,7 +66,7 @@ import {
   selectAITarget,
   computeAIDecision,
 } from "../systems/ArcadeAI";
-import type { ManeuverDefinition } from "../core/types";
+import type { ManeuverDefinition, ManeuverDifficulty } from "../core/types";
 import {
   type StressState,
   INITIAL_STRESS,
@@ -125,8 +125,8 @@ import { getHandlingProfile } from "../systems/FlightControlSystem";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import {
   resolveSupportAuras,
-  DEFAULT_AURA_PARAMS,
   type AuraShip,
+  type ActiveAura,
 } from "../systems/SupportAura";
 
 interface ArcadeShip extends ShipState {
@@ -170,6 +170,32 @@ interface ShipSprite extends Phaser.GameObjects.Container {
   ring?: Phaser.GameObjects.Graphics;
 }
 
+/** Maneuver difficulty ordered from most to least stressful. */
+const DIFFICULTY_ORDER: readonly ManeuverDifficulty[] = [
+  "red",
+  "white",
+  "green",
+];
+
+/**
+ * Ease a maneuver difficulty toward "green" by a number of tiers.
+ * @param difficulty - The base maneuver difficulty.
+ * @param tiers - How many tiers to relax (0 = unchanged).
+ * @returns The eased difficulty.
+ */
+function easeDifficulty(
+  difficulty: ManeuverDifficulty,
+  tiers: number,
+): ManeuverDifficulty {
+  if (tiers <= 0) return difficulty;
+  const index = DIFFICULTY_ORDER.indexOf(difficulty);
+  const eased = Math.min(
+    DIFFICULTY_ORDER.length - 1,
+    index + Math.floor(tiers),
+  );
+  return DIFFICULTY_ORDER[eased]!;
+}
+
 export class ArcadeBattleScene extends Phaser.Scene {
   private ships: Map<string, ArcadeShip> = new Map();
   private shipSprites: Map<string, ShipSprite> = new Map();
@@ -183,6 +209,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private damageNumbersEnabled = true;
   private userWantsCameraShake = true;
   private userWantsDamageNumbers = true;
+
+  /** Per-tick support-aura buffs keyed by ship id (recomputed in updateAuras). */
+  private activeAuras: ReadonlyMap<string, ActiveAura> = new Map();
 
   private playerShipId: string | null = null;
 
@@ -1002,7 +1031,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
           ship.control.speed,
           ship.shipDial,
         );
-        ship.stress = updateStress(ship.stress, difficulty, CYCLE_DURATION_MS);
+        const relief = this.activeAuras.get(ship.id)?.stressReliefTiers ?? 0;
+        const eased = easeDifficulty(difficulty, relief);
+        ship.stress = updateStress(ship.stress, eased, CYCLE_DURATION_MS);
         ship.control = advanceCycle(ship, ship.control);
       }
 
@@ -1018,10 +1049,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   /**
-   * Applies support-ship auras for this tick: living support ships regenerate
-   * shields on allied ships inside {@link DEFAULT_AURA_PARAMS} radius. Uses the
-   * shared pure {@link resolveSupportAuras} resolver so gameplay coverage
-   * matches the headless uptime telemetry.
+   * Recomputes each faction's support aura for this tick and applies the slow
+   * shield-regen effect. Damage, mitigation and stress-relief effects are read
+   * at their own consumption points from {@link activeAuras}. Uses the shared
+   * pure {@link resolveSupportAuras} resolver so gameplay matches telemetry.
    *
    * @param deltaMs - Elapsed simulation time for this tick, in milliseconds.
    */
@@ -1040,16 +1071,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
       });
     }
 
-    const { shieldGain } = resolveSupportAuras(
-      snapshot,
-      deltaMs,
-      DEFAULT_AURA_PARAMS,
-    );
-    if (shieldGain.size === 0) return;
+    const { buffs } = resolveSupportAuras(snapshot);
+    this.activeAuras = buffs;
 
-    for (const [id, gain] of shieldGain) {
+    for (const [id, aura] of buffs) {
+      if (aura.shieldRegenPerSecond <= 0) continue;
       const ship = this.ships.get(id);
-      if (!ship) continue;
+      if (!ship || ship.shields >= ship.maxShields) continue;
+      const gain = (aura.shieldRegenPerSecond * deltaMs) / 1000;
       ship.shields = Math.min(ship.maxShields, ship.shields + gain);
     }
   }
@@ -1350,10 +1379,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const baseAttack =
       getShipDefinition(ship.definitionId)?.baseStats.attack ?? 2;
     const stressMult = ship.stress.isStressed ? 0.75 : 1;
-    const damage = Math.max(
-      1,
-      Math.round(Math.min(baseAttack, 2) * stressMult),
-    );
+    const auraBonus = this.activeAuras.get(ship.id)?.damageBonus ?? 0;
+    const damage =
+      Math.max(1, Math.round(Math.min(baseAttack, 2) * stressMult)) + auraBonus;
     // Spawn projectile from ship nose
     const rad = (ship.angle - 90) * (Math.PI / 180);
     const spawnDist = 20;
@@ -1461,9 +1489,15 @@ export class ArcadeBattleScene extends Phaser.Scene {
           const ship = this.ships.get(view.id)!;
 
           const wasAlive = ship.hull > 0;
-          const damage = ship.isCloaked
+          const rawDamage = ship.isCloaked
             ? Math.max(1, Math.floor(proj.damage / 2))
             : proj.damage;
+          const mitigation =
+            this.activeAuras.get(ship.id)?.damageTakenMultiplier ?? 1;
+          const damage =
+            mitigation < 1
+              ? Math.max(1, Math.round(rawDamage * mitigation))
+              : rawDamage;
           ship.isCloaked = false;
           ship.cloakTimer = 0;
 
@@ -2501,13 +2535,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
     consumeTurretShot(ship.turretSlot);
 
     const rad = (ship.turretSlot.turretFacing - 90) * (Math.PI / 180);
+    const auraBonus = this.activeAuras.get(ship.id)?.damageBonus ?? 0;
     const proj = createProjectile(
       ship.x + Math.cos(rad) * 20,
       ship.y + Math.sin(rad) * 20,
       ship.turretSlot.turretFacing,
       ship.id,
       ship.faction,
-      ship.turretSlot.damage,
+      ship.turretSlot.damage + auraBonus,
     );
     this.projectiles.push(proj);
 
