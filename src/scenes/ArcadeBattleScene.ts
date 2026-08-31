@@ -123,6 +123,11 @@ import { applyLoadoutEffects } from "../systems/BattleHelpers";
 import { audioManager } from "../audio/AudioManager";
 import { getHandlingProfile } from "../systems/FlightControlSystem";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
+import {
+  resolveSupportAuras,
+  DEFAULT_AURA_PARAMS,
+  type AuraShip,
+} from "../systems/SupportAura";
 
 interface ArcadeShip extends ShipState {
   control: ShipControlState;
@@ -435,6 +440,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.damageThisFrame = false;
     this.handleInput(dt);
     this.updateShips(dt);
+    this.updateAuras(dt);
     this.updateProjectiles(dt);
     this.updateAI(dt);
     this.updateTurrets();
@@ -1008,6 +1014,43 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
       this.tickCloak(ship, deltaMs);
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
+    }
+  }
+
+  /**
+   * Applies support-ship auras for this tick: living support ships regenerate
+   * shields on allied ships inside {@link DEFAULT_AURA_PARAMS} radius. Uses the
+   * shared pure {@link resolveSupportAuras} resolver so gameplay coverage
+   * matches the headless uptime telemetry.
+   *
+   * @param deltaMs - Elapsed simulation time for this tick, in milliseconds.
+   */
+  private updateAuras(deltaMs: number): void {
+    const snapshot: AuraShip[] = [];
+    for (const ship of this.ships.values()) {
+      snapshot.push({
+        id: ship.id,
+        x: ship.x,
+        y: ship.y,
+        faction: ship.faction,
+        role: ship.role,
+        hull: ship.hull,
+        shields: ship.shields,
+        maxShields: ship.maxShields,
+      });
+    }
+
+    const { shieldGain } = resolveSupportAuras(
+      snapshot,
+      deltaMs,
+      DEFAULT_AURA_PARAMS,
+    );
+    if (shieldGain.size === 0) return;
+
+    for (const [id, gain] of shieldGain) {
+      const ship = this.ships.get(id);
+      if (!ship) continue;
+      ship.shields = Math.min(ship.maxShields, ship.shields + gain);
     }
   }
 

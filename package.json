@@ -18,6 +18,8 @@
     "analyze:telemetry": "tsx scripts/analyze_telemetry.ts",
     "telemetry:weapons": "tsx scripts/weapon_telemetry.ts",
     "telemetry:ships": "tsx scripts/ship_efficiency.ts",
+    "telemetry:hitrate": "tsx scripts/arcade_hitrate.ts",
+    "telemetry:aura": "tsx scripts/aura_uptime.ts",
     "sentinel": "tsx scripts/sentinel.ts",
     "verify:loop": "tsx scripts/verify_loop.ts",
     "start:server": "tsx scripts/p2p_server.ts"
