@@ -1,120 +1,48 @@
 /**
- * Support-ship auras — one unique power per faction.
+ * Support-ship auras — one unique power per faction, projected by class.
  *
  * Pure, framework-free logic shared by the arcade scene (per-frame effect
- * application) and headless coverage telemetry. A support-role ship projects a
- * circular aura whose EFFECT depends on its faction, echoing the support
- * archetypes of X-Wing: The Miniatures Game (coordinate, reinforce, regen).
+ * application) and headless coverage telemetry. Aura data, class-based scaling,
+ * and projection eligibility live in {@link ./aura/FactionAuras}; this module
+ * resolves the active buffs each tick and answers coverage queries.
  *
  * Design intent:
  * - Each faction gets a distinct effect tied to its playstyle, so support ships
  *   are worth fielding in mid-sized squads (~4-6 ships) and scale into epic.
- * - Radii are deliberately modest: the aura rewards keeping formation, not
- *   parking one ship in the middle of the map. Shield regen is the most
- *   powerful effect, so it is the slowest and has the smallest radius.
+ * - Radius and magnitude scale with hull class: capitals project a broad gentle
+ *   field, heroes a tight full-strength one, so the aura rewards formation
+ *   rather than parking one ship in the middle of the map.
  */
 
 import type { FactionId } from "../config";
-import type { ShipRole } from "../core/types";
+import {
+  FACTION_AURAS,
+  MIN_DAMAGE_TAKEN_MULTIPLIER,
+  MAX_STRESS_RELIEF_TIERS,
+  SWARM_EVADE_CAP,
+  projectionScaleFor,
+  type AuraShip,
+  type FactionAura,
+} from "./aura/FactionAuras";
 
-/** Minimal ship shape needed to resolve auras (no Phaser/runtime coupling). */
-export interface AuraShip {
-  readonly id: string;
-  readonly x: number;
-  readonly y: number;
-  readonly faction: FactionId;
-  readonly role: ShipRole;
-  readonly hull: number;
-  readonly shields: number;
-  readonly maxShields: number;
-}
-
-/** The distinct effect a faction aura applies to covered allies. */
-export type AuraEffectType =
-  | "damage" // flat bonus to outgoing damage
-  | "damage_reduction" // flat fraction of incoming damage removed
-  | "swarm_evade" // incoming-damage reduction scaling with nearby swarm size
-  | "stress_relief" // maneuvers count as N difficulty tiers easier
-  | "shield_regen"; // slow shield regeneration (rate per second)
-
-/** A faction's signature aura definition. */
-export interface FactionAura {
-  readonly id: string;
-  readonly name: string;
-  readonly faction: FactionId;
-  readonly effect: AuraEffectType;
-  /** Coverage radius in pixels. */
-  readonly radius: number;
-  /** Effect strength; units depend on {@link effect}. */
-  readonly magnitude: number;
-  readonly description: string;
-}
-
-/** Per-ally reduction added by each nearby swarm member (synthetic). */
-export const SWARM_EVADE_PER_ALLY = 0.06;
-/** Maximum incoming-damage reduction the swarm aura can reach. */
-export const SWARM_EVADE_CAP = 0.3;
-/** Floor on the incoming-damage multiplier so stacked auras never invulnerable. */
-export const MIN_DAMAGE_TAKEN_MULTIPLIER = 0.5;
-/** Maximum number of stress-relief tiers a ship can benefit from at once. */
-export const MAX_STRESS_RELIEF_TIERS = 2;
-
-/**
- * The signature aura for each faction, tuned to its playstyle.
- *
- * - Terran Hegemony (elite/formation): coordinated offense.
- * - Free Confederation (balanced/versatile): reliable damage mitigation.
- * - Synthetic Collective (swarm/drones): mitigation that grows with the swarm.
- * - Void Corsairs (fast raiders): stress-free aggressive maneuvering.
- * - Ascendant Empire (heavy shields/support): slow, powerful shield regen.
- */
-export const FACTION_AURAS: Record<FactionId, FactionAura> = {
-  terran_hegemony: {
-    id: "coordinated_fire",
-    name: "Coordinated Fire",
-    faction: "terran_hegemony",
-    effect: "damage",
-    radius: 260,
-    magnitude: 1,
-    description: "Allied ships in formation deal +1 damage.",
-  },
-  free_confederation: {
-    id: "rallying_banner",
-    name: "Rallying Banner",
-    faction: "free_confederation",
-    effect: "damage_reduction",
-    radius: 280,
-    magnitude: 0.2,
-    description: "Allied ships take 20% less damage.",
-  },
-  synthetic_collective: {
-    id: "hive_resilience",
-    name: "Hive Resilience",
-    faction: "synthetic_collective",
-    effect: "swarm_evade",
-    radius: 340,
-    magnitude: SWARM_EVADE_PER_ALLY,
-    description: "Allies take less damage, scaling with nearby swarm size.",
-  },
-  void_corsairs: {
-    id: "raiders_cadence",
-    name: "Raider's Cadence",
-    faction: "void_corsairs",
-    effect: "stress_relief",
-    radius: 300,
-    magnitude: 1,
-    description: "Allied maneuvers build stress one tier slower.",
-  },
-  ascendant_empire: {
-    id: "aegis_field",
-    name: "Aegis Field",
-    faction: "ascendant_empire",
-    effect: "shield_regen",
-    radius: 220,
-    magnitude: 0.2,
-    description: "Allied ships slowly regenerate shields (0.2/s).",
-  },
-};
+export {
+  FACTION_AURAS,
+  SWARM_EVADE_PER_ALLY,
+  SWARM_EVADE_CAP,
+  MIN_DAMAGE_TAKEN_MULTIPLIER,
+  MAX_STRESS_RELIEF_TIERS,
+  SIZE_RADIUS_MULTIPLIER,
+  SIZE_MAGNITUDE_MULTIPLIER,
+  HERO_RADIUS_SCALE,
+  HERO_MAGNITUDE_SCALE,
+  AURA_GRANTING_CREW,
+  projectionScaleFor,
+  type AuraShip,
+  type AuraEffectType,
+  type FactionAura,
+  type ProjectionKind,
+  type ProjectionScale,
+} from "./aura/FactionAuras";
 
 /** Combined aura effect a single ship receives this tick. */
 export interface ActiveAura {
@@ -151,6 +79,9 @@ interface SourceInfo {
   readonly faction: FactionId;
   readonly radiusSquared: number;
   readonly aura: FactionAura;
+  /** Faction magnitude after class-based scaling. */
+  readonly magnitude: number;
+  /** Precomputed swarm reduction (0 for non-swarm auras). */
   readonly swarmReduction: number;
 }
 
@@ -199,21 +130,24 @@ function countAlliesWithin(
 }
 
 /**
- * Build per-source aura info, precomputing swarm reduction where relevant.
+ * Build per-source aura info, applying class scaling and swarm precomputation.
  * @param ships - All ships in play.
- * @returns One entry per living support ship.
+ * @returns One entry per living aura projector.
  */
 function buildSources(ships: ReadonlyArray<AuraShip>): SourceInfo[] {
   const sources: SourceInfo[] = [];
   for (const ship of ships) {
-    if (ship.role !== "support" || ship.hull <= 0) continue;
+    const projection = projectionScaleFor(ship);
+    if (projection === null) continue;
     const aura = FACTION_AURAS[ship.faction];
-    const radiusSquared = aura.radius * aura.radius;
+    const radius = aura.radius * projection.radiusScale;
+    const radiusSquared = radius * radius;
+    const magnitude = aura.magnitude * projection.magnitudeScale;
     const swarmReduction =
       aura.effect === "swarm_evade"
         ? Math.min(
             SWARM_EVADE_CAP,
-            aura.magnitude * countAlliesWithin(ship, ships, radiusSquared),
+            magnitude * countAlliesWithin(ship, ships, radiusSquared),
           )
         : 0;
     sources.push({
@@ -223,6 +157,7 @@ function buildSources(ships: ReadonlyArray<AuraShip>): SourceInfo[] {
       faction: ship.faction,
       radiusSquared,
       aura,
+      magnitude,
       swarmReduction,
     });
   }
@@ -236,17 +171,17 @@ function buildSources(ships: ReadonlyArray<AuraShip>): SourceInfo[] {
  * @returns The updated combined aura.
  */
 function accumulate(acc: ActiveAura, source: SourceInfo): ActiveAura {
-  const { aura, swarmReduction } = source;
+  const { aura, magnitude, swarmReduction } = source;
   let damageBonus = acc.damageBonus;
   let damageTakenMultiplier = acc.damageTakenMultiplier;
   let stressReliefTiers = acc.stressReliefTiers;
   let shieldRegenPerSecond = acc.shieldRegenPerSecond;
   switch (aura.effect) {
     case "damage":
-      damageBonus += aura.magnitude;
+      damageBonus += Math.round(magnitude);
       break;
     case "damage_reduction":
-      damageTakenMultiplier *= 1 - aura.magnitude;
+      damageTakenMultiplier *= 1 - magnitude;
       break;
     case "swarm_evade":
       damageTakenMultiplier *= 1 - swarmReduction;
@@ -254,11 +189,11 @@ function accumulate(acc: ActiveAura, source: SourceInfo): ActiveAura {
     case "stress_relief":
       stressReliefTiers = Math.min(
         MAX_STRESS_RELIEF_TIERS,
-        stressReliefTiers + aura.magnitude,
+        stressReliefTiers + Math.round(magnitude),
       );
       break;
     case "shield_regen":
-      shieldRegenPerSecond += aura.magnitude;
+      shieldRegenPerSecond += magnitude;
       break;
   }
   return {
@@ -314,7 +249,7 @@ export function resolveSupportAuras(
 
 /**
  * Coverage-only helper: allies within a fixed radius of any same-faction
- * support ship. Used by radius-sweep telemetry, independent of faction auras.
+ * aura projector. Used by radius-sweep telemetry, independent of scaling.
  *
  * @param ships - All ships in play.
  * @param radius - Coverage radius in pixels.
@@ -325,7 +260,7 @@ export function alliesCoveredWithinRadius(
   radius: number,
 ): ReadonlySet<string> {
   const radiusSquared = radius * radius;
-  const sources = ships.filter((s) => s.role === "support" && s.hull > 0);
+  const sources = ships.filter((s) => projectionScaleFor(s) !== null);
   const covered = new Set<string>();
   for (const ally of ships) {
     if (ally.hull <= 0) continue;

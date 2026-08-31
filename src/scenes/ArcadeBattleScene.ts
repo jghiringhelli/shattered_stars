@@ -1059,12 +1059,17 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private updateAuras(deltaMs: number): void {
     const snapshot: AuraShip[] = [];
     for (const ship of this.ships.values()) {
+      const size =
+        getShipDefinition(ship.definitionId)?.baseStats.size ?? "small";
       snapshot.push({
         id: ship.id,
         x: ship.x,
         y: ship.y,
         faction: ship.faction,
         role: ship.role,
+        size,
+        isUnique: false,
+        equippedUpgrades: [],
         hull: ship.hull,
         shields: ship.shields,
         maxShields: ship.maxShields,

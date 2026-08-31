@@ -2,10 +2,14 @@ import { describe, it, expect } from "vitest";
 import {
   resolveSupportAuras,
   alliesCoveredWithinRadius,
+  projectionScaleFor,
   FACTION_AURAS,
   SWARM_EVADE_PER_ALLY,
   SWARM_EVADE_CAP,
   MIN_DAMAGE_TAKEN_MULTIPLIER,
+  SIZE_RADIUS_MULTIPLIER,
+  HERO_RADIUS_SCALE,
+  AURA_GRANTING_CREW,
   type AuraShip,
 } from "../../../src/systems/SupportAura";
 
@@ -21,6 +25,9 @@ function ship(over: Partial<AuraShip>): AuraShip {
     y: 0,
     faction: "terran_hegemony",
     role: "heavy_fighter",
+    size: "medium",
+    isUnique: false,
+    equippedUpgrades: [],
     hull: 4,
     shields: 0,
     maxShields: 4,
@@ -230,5 +237,106 @@ describe("alliesCoveredWithinRadius", () => {
     const covered = alliesCoveredWithinRadius(ships, 200);
     expect(covered.has("near")).toBe(true);
     expect(covered.has("far")).toBe(false);
+  });
+});
+
+describe("projectionScaleFor", () => {
+  it("returns null for a plain fighter with no projecting trait", () => {
+    expect(projectionScaleFor(ship({ role: "heavy_fighter" }))).toBeNull();
+  });
+
+  it("classifies each projector kind by priority", () => {
+    expect(projectionScaleFor(ship({ role: "support" }))!.kind).toBe("support");
+    expect(projectionScaleFor(ship({ role: "capital" }))!.kind).toBe("capital");
+    expect(
+      projectionScaleFor(ship({ role: "heavy_fighter", isUnique: true }))!.kind,
+    ).toBe("hero");
+    expect(
+      projectionScaleFor(
+        ship({ role: "heavy_fighter", equippedUpgrades: ["tactical_officer"] }),
+      )!.kind,
+    ).toBe("crew");
+  });
+
+  it("treats a dead ship as a non-projector", () => {
+    expect(projectionScaleFor(ship({ role: "support", hull: 0 }))).toBeNull();
+  });
+});
+
+describe("class-based aura scaling", () => {
+  const base = FACTION_AURAS.terran_hegemony.radius;
+
+  it("a larger hull projects a wider aura than a medium one", () => {
+    const beyondMedium = base + 40; // outside 260, inside 260 * 1.4
+    const medium = resolveSupportAuras([
+      ship({ id: "sup", role: "support", size: "medium", x: 0, y: 0 }),
+      ship({ id: "ally", x: beyondMedium, y: 0 }),
+    ]);
+    const large = resolveSupportAuras([
+      ship({ id: "sup", role: "support", size: "large", x: 0, y: 0 }),
+      ship({ id: "ally", x: beyondMedium, y: 0 }),
+    ]);
+    expect(medium.coveredShipIds.has("ally")).toBe(false);
+    expect(large.coveredShipIds.has("ally")).toBe(true);
+  });
+
+  it("a capital projects a broad field at reduced magnitude", () => {
+    const reach = base * SIZE_RADIUS_MULTIPLIER.huge - 20;
+    const { buffs } = resolveSupportAuras([
+      ship({
+        id: "cap",
+        role: "capital",
+        size: "huge",
+        faction: "free_confederation",
+        x: 0,
+        y: 0,
+      }),
+      ship({ id: "ally", faction: "free_confederation", x: reach, y: 0 }),
+    ]);
+    const mult = buffs.get("ally")!.damageTakenMultiplier;
+    // Huge damping (0.6) softens the 20% cut to ~12%.
+    expect(mult).toBeCloseTo(1 - 0.2 * 0.6, 5);
+    expect(mult).toBeGreaterThan(0.8);
+  });
+
+  it("a hero projects a small full-strength aura", () => {
+    const inside = base * HERO_RADIUS_SCALE - 20;
+    const outside = base * HERO_RADIUS_SCALE + 40;
+    const covered = resolveSupportAuras([
+      ship({ id: "ace", role: "heavy_fighter", isUnique: true, x: 0, y: 0 }),
+      ship({ id: "near", x: inside, y: 0 }),
+      ship({ id: "far", x: outside, y: 0 }),
+    ]).coveredShipIds;
+    expect(covered.has("near")).toBe(true);
+    expect(covered.has("far")).toBe(false);
+  });
+
+  it("a hero keeps full damage magnitude despite the small radius", () => {
+    const { buffs } = resolveSupportAuras([
+      ship({ id: "ace", role: "heavy_fighter", isUnique: true, x: 0, y: 0 }),
+      ship({ id: "ally", x: 50, y: 0 }),
+    ]);
+    expect(buffs.get("ally")!.damageBonus).toBe(
+      FACTION_AURAS.terran_hegemony.magnitude,
+    );
+  });
+
+  it("a coordinator crew grants an aura to a non-support ship", () => {
+    const withCrew = resolveSupportAuras([
+      ship({
+        id: "gunship",
+        role: "gunship",
+        equippedUpgrades: [...AURA_GRANTING_CREW],
+        x: 0,
+        y: 0,
+      }),
+      ship({ id: "ally", x: 100, y: 0 }),
+    ]);
+    const withoutCrew = resolveSupportAuras([
+      ship({ id: "gunship", role: "gunship", x: 0, y: 0 }),
+      ship({ id: "ally", x: 100, y: 0 }),
+    ]);
+    expect(withCrew.coveredShipIds.has("ally")).toBe(true);
+    expect(withoutCrew.coveredShipIds.has("ally")).toBe(false);
   });
 });
