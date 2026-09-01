@@ -82,6 +82,8 @@ interface BossShip {
   maxTotalHull: number;
   shields: number;
   maxShields: number;
+  /** Flat damage reduction applied to every incoming hit before shields/hull. */
+  armor: number;
   phase: 1 | 2 | 3;
   abilities: BossAbility[];
   abilityCooldowns: Map<string, number>;
@@ -126,6 +128,8 @@ const BOSS_DEFINITIONS: Record<
     name: string;
     totalHull: number;
     shields: number;
+    /** Flat damage reduction applied to every incoming hit before shields/hull. */
+    armor: number;
     sections: Array<{
       name: string;
       hull: number;
@@ -141,6 +145,7 @@ const BOSS_DEFINITIONS: Record<
     name: "Hegemony Battlecruiser",
     totalHull: 180,
     shields: 40,
+    armor: 3,
     sections: [
       {
         name: "Fore",
@@ -165,6 +170,7 @@ const BOSS_DEFINITIONS: Record<
     name: "Freedom Corvette",
     totalHull: 150,
     shields: 30,
+    armor: 3,
     sections: [
       {
         name: "Fore",
@@ -197,6 +203,7 @@ const BOSS_DEFINITIONS: Record<
     name: "Collective Mothership",
     totalHull: 140,
     shields: 50,
+    armor: 3,
     sections: [
       {
         name: "Core",
@@ -221,6 +228,7 @@ const BOSS_DEFINITIONS: Record<
     name: "Pirate Mothership",
     totalHull: 140,
     shields: 25,
+    armor: 3,
     sections: [
       {
         name: "Weapons Bay",
@@ -245,6 +253,7 @@ const BOSS_DEFINITIONS: Record<
     name: "Ascendant Dreadnought",
     totalHull: 200,
     shields: 60,
+    armor: 3,
     sections: [
       {
         name: "Bio Core",
@@ -785,6 +794,7 @@ export class EpicBattleScene extends Phaser.Scene {
       maxTotalHull: sections.reduce((sum, s) => sum + s.maxHull, 0),
       shields: Math.floor(bossDef.shields * diffMultiplier),
       maxShields: Math.floor(bossDef.shields * diffMultiplier),
+      armor: bossDef.armor,
       phase: 1,
       abilities: this.getBossAbilities(),
       abilityCooldowns: new Map(),
@@ -1219,7 +1229,10 @@ export class EpicBattleScene extends Phaser.Scene {
     const hit = Math.random() < hitChance;
 
     if (hit) {
-      let damage = attacker.combatStats.attackDice;
+      let damage = Math.max(
+        1,
+        attacker.combatStats.attackDice - this.boss.armor,
+      );
 
       // Damage shields first
       if (this.boss.shields > 0) {

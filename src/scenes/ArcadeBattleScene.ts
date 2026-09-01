@@ -1497,12 +1497,15 @@ export class ArcadeBattleScene extends Phaser.Scene {
           const rawDamage = ship.isCloaked
             ? Math.max(1, Math.floor(proj.damage / 2))
             : proj.damage;
+          const armor =
+            getShipDefinition(ship.definitionId)?.baseStats.armor ?? 0;
+          const armoredDamage = Math.max(1, rawDamage - armor);
           const mitigation =
             this.activeAuras.get(ship.id)?.damageTakenMultiplier ?? 1;
           const damage =
             mitigation < 1
-              ? Math.max(1, Math.round(rawDamage * mitigation))
-              : rawDamage;
+              ? Math.max(1, Math.round(armoredDamage * mitigation))
+              : armoredDamage;
           ship.isCloaked = false;
           ship.cloakTimer = 0;
 

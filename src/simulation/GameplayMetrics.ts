@@ -61,11 +61,7 @@ export interface PacingMetrics {
 }
 
 export type PacingRating =
-  | "frantic"
-  | "fast"
-  | "balanced"
-  | "deliberate"
-  | "slow";
+  "frantic" | "fast" | "balanced" | "deliberate" | "slow";
 
 export interface SkillExpressionMetrics {
   /** How much positioning matters (0-1) */
@@ -96,11 +92,7 @@ export interface SkillBreakdown {
 }
 
 export type SkillRating =
-  | "chess"
-  | "tactical"
-  | "balanced"
-  | "accessible"
-  | "casual";
+  "chess" | "tactical" | "balanced" | "accessible" | "casual";
 
 export interface FunFactorMetrics {
   /** Can losing side come back? (0-1) */
@@ -118,11 +110,7 @@ export interface FunFactorMetrics {
 }
 
 export type FunRating =
-  | "excellent"
-  | "good"
-  | "decent"
-  | "mixed"
-  | "needs_work";
+  "excellent" | "good" | "decent" | "mixed" | "needs_work";
 
 export interface GameplayFeelReport {
   ttk: TTKMetrics;
@@ -225,13 +213,18 @@ export class GameplayMetricsAnalyzer {
   }
 
   /**
-   * Analyze Time-to-Kill metrics
+   * Analyze Time-to-Kill metrics.
+   * Capital ships are excluded: they are intentionally boss-tier (tripled
+   * hull/shields + flat armor) and would skew the "typical" TTK this metric
+   * is meant to represent.
    */
   analyzeTTK(): TTKMetrics {
     const shipBreakdown = new Map<string, ShipTTKData>();
     const allTTKs: number[] = [];
 
-    const ships = Object.values(SHIP_DEFINITIONS);
+    const ships = Object.values(SHIP_DEFINITIONS).filter(
+      (s) => s.role !== "capital",
+    );
 
     for (const ship of ships) {
       const combatStats = getModeCombatStats(ship.id, this.mode);

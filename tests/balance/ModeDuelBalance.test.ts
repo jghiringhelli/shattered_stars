@@ -40,12 +40,24 @@ const MIRROR_SHIPS: readonly string[] = [
 
 const MODES: readonly DuelMode[] = ["arcade", "continuous"] as const;
 
+/**
+ * Capital ships are intentionally boss-tier (tripled hull/shields + flat
+ * armor damage reduction) so a lone capital survives a swarm — a mirror duel
+ * between two identical capitals legitimately needs far more turns to
+ * resolve than a fighter mirror. Verified: 100 turns never resolves,
+ * 300 always does (see chat/session history for the probe).
+ */
+const MAX_TURNS_OVERRIDE: Readonly<Record<string, number>> = {
+  ascendant_bastion: 300,
+};
+
 describe.each(MODES)("Combat model in '%s' mode", (mode) => {
   describe.each(MIRROR_SHIPS)("mirror duel: %s", (shipId) => {
     const outcome = runDuel([shipId], [shipId], {
       mode,
       battles: BATTLES,
       seed: SEED,
+      maxTurns: MAX_TURNS_OVERRIDE[shipId] ?? 100,
     });
 
     it("splits close to 50/50 (no mover advantage)", () => {

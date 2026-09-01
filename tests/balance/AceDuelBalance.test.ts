@@ -39,6 +39,14 @@ describe("Ace Duel preset structure", () => {
 
 describe("Ace Duel matchup balance (headless, seeded)", () => {
   const outcomes = new Map<string, DuelOutcome>();
+  /**
+   * Capital ships are intentionally boss-tier (tripled hull/shields + flat
+   * armor damage reduction), so a duel between two capitals legitimately
+   * needs far more turns to resolve than a fighter duel.
+   */
+  const MAX_TURNS_OVERRIDE: Readonly<Record<string, number>> = {
+    gunship_duel: 300,
+  };
   for (const matchup of ACE_MATCHUPS) {
     outcomes.set(
       matchup.id,
@@ -46,6 +54,7 @@ describe("Ace Duel matchup balance (headless, seeded)", () => {
         mode: "continuous",
         battles: BATTLES,
         seed: SEED,
+        maxTurns: MAX_TURNS_OVERRIDE[matchup.id],
       }),
     );
   }

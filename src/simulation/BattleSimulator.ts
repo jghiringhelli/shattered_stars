@@ -71,6 +71,8 @@ interface SimShip {
   maxHull: number;
   shields: number;
   maxShields: number;
+  /** Flat damage reduction applied to every incoming hit before shields/hull. */
+  armor: number;
   pilotSkill: number;
   combatStats: ModeCombatStats;
   currentSpeed: number;
@@ -384,6 +386,7 @@ export class BattleSimulator {
     };
     let maxHull = def.baseStats.hull;
     let maxShields = def.baseStats.shields;
+    const armor = def.baseStats.armor ?? 0;
 
     // Apply upgrade bonuses from loadout
     let ordnanceCharges = 0;
@@ -437,6 +440,7 @@ export class BattleSimulator {
       maxHull,
       shields: maxShields,
       maxShields,
+      armor,
       pilotSkill,
       combatStats,
       currentSpeed: 2,
@@ -690,7 +694,7 @@ export class BattleSimulator {
     const hit = this.rng() < hitChance;
 
     if (hit) {
-      const damage = baseAttackDice;
+      const damage = Math.max(1, baseAttackDice - target.armor);
       let remainingDamage = damage;
       if (target.shields > 0) {
         const shieldDamage = Math.min(target.shields, remainingDamage);

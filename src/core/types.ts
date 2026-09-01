@@ -2,41 +2,43 @@
  * Core type definitions shared across the game
  */
 
-import type { FactionId, ShipSize } from '../config';
+import type { FactionId, ShipSize } from "../config";
 
 // ============================================
 // Ship Types
 // ============================================
 
 export type ShipRole =
-  | 'light_fighter'
-  | 'heavy_fighter'
-  | 'interceptor'
-  | 'bomber'
-  | 'support'
-  | 'gunship'
-  | 'capital';
+  | "light_fighter"
+  | "heavy_fighter"
+  | "interceptor"
+  | "bomber"
+  | "support"
+  | "gunship"
+  | "capital";
 
 export type ActionType =
-  | 'focus'
-  | 'evade'
-  | 'target_lock'
-  | 'barrel_roll'
-  | 'boost'
-  | 'coordinate'
-  | 'jam'
-  | 'cloak'
-  | 'slam'
-  | 'calculate'
-  | 'reinforce'
-  | 'rotate_arc'
-  | 'reload';
+  | "focus"
+  | "evade"
+  | "target_lock"
+  | "barrel_roll"
+  | "boost"
+  | "coordinate"
+  | "jam"
+  | "cloak"
+  | "slam"
+  | "calculate"
+  | "reinforce"
+  | "rotate_arc"
+  | "reload";
 
 export interface ShipStats {
   readonly hull: number;
   readonly shields: number;
   readonly attack: number;
   readonly agility: number;
+  /** Flat damage reduction applied to every incoming hit before shields/hull (boss-tier capitals). */
+  readonly armor?: number;
   readonly speed: { readonly min: number; readonly max: number };
   readonly size: ShipSize;
   readonly actions: readonly ActionType[];
@@ -58,18 +60,18 @@ export interface ShipDefinition {
 // ============================================
 
 export type ManeuverDirection =
-  | 'straight'
-  | 'bank_left'
-  | 'bank_right'
-  | 'turn_left'
-  | 'turn_right'
-  | 'kturn'
-  | 'segnor_left'
-  | 'segnor_right'
-  | 'tallon_left'
-  | 'tallon_right';
+  | "straight"
+  | "bank_left"
+  | "bank_right"
+  | "turn_left"
+  | "turn_right"
+  | "kturn"
+  | "segnor_left"
+  | "segnor_right"
+  | "tallon_left"
+  | "tallon_right";
 
-export type ManeuverDifficulty = 'green' | 'white' | 'red';
+export type ManeuverDifficulty = "green" | "white" | "red";
 
 export interface ManeuverDefinition {
   readonly direction: ManeuverDirection;
@@ -94,8 +96,8 @@ export interface ManeuverResult {
 // Combat Types
 // ============================================
 
-export type AttackDiceFace = 'hit' | 'critical' | 'focus' | 'blank';
-export type DefenseDiceFace = 'evade' | 'focus' | 'blank';
+export type AttackDiceFace = "hit" | "critical" | "focus" | "blank";
+export type DefenseDiceFace = "evade" | "focus" | "blank";
 
 export interface AttackResult {
   readonly attackRoll: readonly AttackDiceFace[];
@@ -115,7 +117,7 @@ export interface ShipState {
   readonly id: string;
   readonly definitionId: string;
   readonly faction: FactionId;
-  readonly owner: 'player' | 'ai';
+  readonly owner: "player" | "ai";
 
   // Position & orientation
   x: number;
@@ -141,7 +143,7 @@ export interface ShipState {
   maneuverProgress: number; // 0-1
 
   // Mobile arc (for ships with rotate_arc action)
-  mobileArcDirection: 'front' | 'rear' | 'left' | 'right';
+  mobileArcDirection: "front" | "rear" | "left" | "right";
 
   // Charges (for weapons/abilities that need reloading)
   charges: number;
@@ -153,19 +155,19 @@ export interface ShipState {
 // ============================================
 
 export type GameEventType =
-  | 'SHIP_SPAWNED'
-  | 'SHIP_DESTROYED'
-  | 'SHIP_DAMAGED'
-  | 'SHIP_MOVED'
-  | 'MANEUVER_STARTED'
-  | 'MANEUVER_COMPLETED'
-  | 'ATTACK_DECLARED'
-  | 'ATTACK_RESOLVED'
-  | 'ACTION_PERFORMED'
-  | 'TURN_STARTED'
-  | 'TURN_ENDED'
-  | 'BATTLE_STARTED'
-  | 'BATTLE_ENDED';
+  | "SHIP_SPAWNED"
+  | "SHIP_DESTROYED"
+  | "SHIP_DAMAGED"
+  | "SHIP_MOVED"
+  | "MANEUVER_STARTED"
+  | "MANEUVER_COMPLETED"
+  | "ATTACK_DECLARED"
+  | "ATTACK_RESOLVED"
+  | "ACTION_PERFORMED"
+  | "TURN_STARTED"
+  | "TURN_ENDED"
+  | "BATTLE_STARTED"
+  | "BATTLE_ENDED";
 
 export interface GameEvent {
   readonly type: GameEventType;

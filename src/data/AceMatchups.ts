@@ -97,7 +97,7 @@ export const ACE_MATCHUPS: readonly AceMatchup[] = [
     side1: {
       name: "Collective Prime Node",
       faction: "synthetic_collective",
-      ships: ["synth_devastator"],
+      ships: ["synth_conduit"],
       abilities: ["networked_aim", "predatory_instinct"],
     },
     side2: {

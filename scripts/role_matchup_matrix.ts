@@ -78,9 +78,11 @@ function main(): void {
   );
   printSquadSizes();
 
+  // 400: capital ships are boss-tier (tripled hull/shields + armor) and need
+  // far more turns than fighters to resolve decisively.
   const results = runRoleMatchupMatrix(ALL_ROLES, budget, battles, 42, {
     mode,
-    maxTurns: 150,
+    maxTurns: 400,
   });
   printPairResults(results);
 
