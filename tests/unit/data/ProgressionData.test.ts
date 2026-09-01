@@ -13,6 +13,8 @@ import {
   isShipUnlocked,
   nextRoleTier,
   lockReason,
+  STARTER_SHIP_IDS,
+  isStarterPick,
   type ProgressionState,
 } from "../../../src/data/ProgressionData";
 import {
@@ -142,5 +144,30 @@ describe("PRG-7 lock reasons explain the requirement", () => {
   it("nextRoleTier returns null only when fully unlocked", () => {
     expect(nextRoleTier("terran_hegemony", 0)).not.toBeNull();
     expect(nextRoleTier("terran_hegemony", 1_000_000)).toBeNull();
+  });
+});
+
+describe("Starter ship recommendations", () => {
+  it("names exactly one starter ship per starting faction", () => {
+    for (const faction of STARTING_FACTIONS) {
+      expect(STARTER_SHIP_IDS[faction]).toBeDefined();
+    }
+  });
+
+  it("every starter ship is a real, 0-XP-unlocked ship of its faction", () => {
+    const zeroXp = state({ totalXp: 0 });
+    for (const [faction, shipId] of Object.entries(STARTER_SHIP_IDS)) {
+      const def = SHIP_DEFINITIONS[shipId!];
+      expect(def, `${shipId} should exist`).toBeDefined();
+      expect(def!.faction).toBe(faction);
+      expect(isShipUnlocked(def!, zeroXp)).toBe(true);
+    }
+  });
+
+  it("isStarterPick is true only for the designated ships", () => {
+    for (const shipId of Object.values(STARTER_SHIP_IDS)) {
+      expect(isStarterPick(shipId!)).toBe(true);
+    }
+    expect(isStarterPick("not_a_real_ship_id")).toBe(false);
   });
 });

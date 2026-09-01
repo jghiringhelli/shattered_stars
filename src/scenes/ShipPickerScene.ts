@@ -102,6 +102,64 @@ export class ShipPickerScene extends Phaser.Scene {
     this.refreshRoster();
     this.addActionButtons(w / 2, h - 38);
     this.input.keyboard!.on("keydown-ESC", () => this.finish());
+    this.maybeShowWelcomeBanner(w, h);
+  }
+
+  /** One-time explainer for a brand-new (0 XP) profile: why most rows look locked. */
+  private maybeShowWelcomeBanner(w: number, h: number): void {
+    if (PlayerProfileManager.getActive().totalXp > 0) return;
+
+    const bannerW = 460;
+    const bannerH = 190;
+    const x = w / 2 - bannerW / 2;
+    const y = h / 2 - bannerH / 2;
+    const overlay = this.add.container(0, 0).setDepth(300);
+
+    const dim = this.add.graphics();
+    dim.fillStyle(0x000000, 0.55);
+    dim.fillRect(0, 0, w, h);
+    overlay.add(dim);
+
+    const panel = this.add.graphics();
+    panel.fillStyle(0x0d1525, 1);
+    panel.fillRoundedRect(x, y, bannerW, bannerH, 10);
+    panel.lineStyle(2, 0xffd76a, 0.8);
+    panel.strokeRoundedRect(x, y, bannerW, bannerH, 10);
+    overlay.add(panel);
+
+    overlay.add(
+      this.add
+        .text(w / 2, y + 24, "WELCOME, COMMANDER", {
+          font: "bold 15px Arial",
+          color: "#ffd76a",
+        })
+        .setOrigin(0.5),
+    );
+    overlay.add(
+      this.add
+        .text(
+          w / 2,
+          y + 56,
+          "Your fleet grows as you play. You start with a small roster of\n" +
+            "workhorses and light fighters — the \u2605 STARTER ship is a solid\n" +
+            "first pick. Win battles to earn XP and unlock aces, gunships,\n" +
+            "support ships, more factions, and eventually capital ships.",
+          { font: "12px Arial", color: "#aac4dd", align: "center" },
+        )
+        .setOrigin(0.5, 0),
+    );
+
+    const btn = this.add
+      .text(w / 2, y + bannerH - 26, "GOT IT", {
+        font: "bold 13px Arial",
+        color: "#0d1525",
+        backgroundColor: "#ffd76a",
+        padding: { x: 16, y: 6 },
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    btn.on("pointerdown", () => overlay.destroy());
+    overlay.add(btn);
   }
 
   private factionLabel(): string {
@@ -148,6 +206,26 @@ export class ShipPickerScene extends Phaser.Scene {
     const g = this.add.graphics();
     g.lineStyle(2, fCol, 0.25);
     g.strokeRoundedRect(CAT_X, 98, CAT_W, 570, 10);
+
+    this.buildUnlockedToggle();
+  }
+
+  /** Small checkbox letting a new player hide the (often numerous) still-locked rows. */
+  private buildUnlockedToggle(): void {
+    let showOnlyUnlocked = false;
+    const label = this.add
+      .text(CAT_X + 4, 82, "\u2610 Show only unlocked ships", {
+        font: "12px Arial",
+        color: "#88aacc",
+      })
+      .setInteractive({ useHandCursor: true });
+    label.on("pointerdown", () => {
+      showOnlyUnlocked = !showOnlyUnlocked;
+      label.setText(
+        `${showOnlyUnlocked ? "\u2611" : "\u2610"} Show only unlocked ships`,
+      );
+      this.catalogPanel.setShowOnlyUnlocked(showOnlyUnlocked);
+    });
   }
 
   private buildRosterPanel(): void {

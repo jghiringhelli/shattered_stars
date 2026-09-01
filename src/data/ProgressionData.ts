@@ -164,3 +164,15 @@ export function lockReason(
   );
   return tier ? `Reach ${tier.minXp} XP (${tier.label})` : "Locked";
 }
+
+/** One beginner-friendly, always-unlocked-at-0-XP ship per starting faction. */
+export const STARTER_SHIP_IDS: Partial<Record<FactionId, string>> = {
+  terran_hegemony: "terran_gladius",
+  free_confederation: "confed_falcon",
+  void_corsairs: "corsair_fang",
+};
+
+/** True when this ship is the recommended first pick for its faction. */
+export function isStarterPick(shipId: string): boolean {
+  return Object.values(STARTER_SHIP_IDS).includes(shipId);
+}

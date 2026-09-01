@@ -11,6 +11,7 @@ import type { ShipDefinition } from "../../core/types";
 import { FACTION_COLORS } from "../../config";
 import type { FactionId } from "../../config";
 import { getShipLoadouts } from "../../data/ShipLoadouts";
+import { isStarterPick } from "../../data/ProgressionData";
 import { ShipTooltip } from "./ShipTooltip";
 import { CatalogScroll } from "./CatalogScroll";
 import { CatalogStaging } from "./CatalogStaging";
@@ -61,6 +62,7 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
   private readonly scroll: CatalogScroll;
   private readonly staging: CatalogStaging;
   private scrollWired = false;
+  private showOnlyUnlocked = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -106,6 +108,12 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
     super.destroy();
   }
 
+  /** Filters the grid down to unlocked ships only (for a less overwhelming new-player view). */
+  setShowOnlyUnlocked(value: boolean): void {
+    this.showOnlyUnlocked = value;
+    this.render();
+  }
+
   private drawBackground(): void {
     const fCol = FACTION_COLORS[this.factionId];
     const g = this.scene.add.graphics();
@@ -117,7 +125,10 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
   }
 
   private drawGrid(): void {
-    const sorted = [...this.ships].sort(
+    const visible = this.showOnlyUnlocked
+      ? this.ships.filter((s) => !this.gating.lockedShipIds.has(s.id))
+      : this.ships;
+    const sorted = [...visible].sort(
       (a, b) => (ROLE_SORT[a.role] ?? 9) - (ROLE_SORT[b.role] ?? 9),
     );
     sorted.forEach((def, i) => {
@@ -148,10 +159,15 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
     isSel: boolean,
     locked: boolean,
   ): Phaser.GameObjects.GameObject[] {
+    const starter = !locked && isStarterPick(def.id);
     const bg = this.scene.add.graphics();
     bg.fillStyle(locked ? 0x0b0f16 : isSel ? 0x0e2618 : 0x111a28, 1);
     bg.fillRoundedRect(x, y, COL_W - 8, ROW_H, 5);
-    bg.lineStyle(1, locked ? 0x2a2f38 : isSel ? 0x44ff88 : 0x223040, 1);
+    bg.lineStyle(
+      1,
+      locked ? 0x2a2f38 : isSel ? 0x44ff88 : starter ? 0xd7a83a : 0x223040,
+      1,
+    );
     bg.strokeRoundedRect(x, y, COL_W - 8, ROW_H, 5);
     const spriteKey = this.scene.textures.exists(def.spriteKey)
       ? def.spriteKey
@@ -160,6 +176,7 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
       .image(x + 18, y + ROW_H / 2, spriteKey)
       .setDisplaySize(32, 32)
       .setAlpha(locked ? 0.35 : 1);
+    if (starter) sprite.setTint(0xffe6a3);
     const nameT = this.scene.add.text(x + 38, y + 6, def.name, {
       font: `bold 12px Arial`,
       color: locked ? "#5a6472" : isSel ? "#88ffcc" : "#d8ecff",
@@ -189,16 +206,21 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
   ): Phaser.GameObjects.Text[] {
     const tagObjs: Phaser.GameObjects.Text[] = [];
     let tagX = x + 38 + 72;
-    for (const tag of secondaryTags(def)) {
+    const starter = isStarterPick(def.id);
+    const tags = starter
+      ? ["\u2605 STARTER", ...secondaryTags(def)]
+      : secondaryTags(def);
+    tags.forEach((tag, i) => {
+      const isStarterTag = starter && i === 0;
       const tObj = this.scene.add.text(tagX, y + 24, tag, {
         font: "8px Arial",
-        color: "#446688",
-        backgroundColor: "#0a1520",
+        color: isStarterTag ? "#ffd76a" : "#446688",
+        backgroundColor: isStarterTag ? "#3a2c0a" : "#0a1520",
         padding: { x: 3, y: 1 },
       });
       tagObjs.push(tObj);
       tagX += (tObj.width ?? 40) + 4;
-    }
+    });
     return tagObjs;
   }
 
