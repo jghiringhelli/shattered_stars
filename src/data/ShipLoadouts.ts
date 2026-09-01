@@ -112,12 +112,20 @@ export const SHIP_SLOTS: Record<string, ShipSlotConfig> = {
   // Gunships
   terran_bastion: {
     shipId: "terran_bastion",
-    slots: ["turret", "cannon", "gunner", "crew", "modification"],
+    slots: ["turret", "cannon", "missile", "gunner", "crew", "modification"],
     charges: 2,
   },
   terran_bulwark: {
     shipId: "terran_bulwark",
-    slots: ["turret", "turret", "cannon", "gunner", "crew", "modification"],
+    slots: [
+      "turret",
+      "turret",
+      "cannon",
+      "missile",
+      "gunner",
+      "crew",
+      "modification",
+    ],
     charges: 3,
   },
   terran_vindicator: {
@@ -250,12 +258,28 @@ export const SHIP_SLOTS: Record<string, ShipSlotConfig> = {
   // Gunships
   confed_phoenix: {
     shipId: "confed_phoenix",
-    slots: ["talent", "turret", "cannon", "crew", "gunner", "modification"],
+    slots: [
+      "talent",
+      "turret",
+      "cannon",
+      "missile",
+      "crew",
+      "gunner",
+      "modification",
+    ],
     charges: 2,
   },
   confed_thunderbird: {
     shipId: "confed_thunderbird",
-    slots: ["turret", "turret", "cannon", "gunner", "crew", "modification"],
+    slots: [
+      "turret",
+      "turret",
+      "cannon",
+      "missile",
+      "gunner",
+      "crew",
+      "modification",
+    ],
     charges: 3,
   },
   confed_harrier: {
@@ -401,12 +425,12 @@ export const SHIP_SLOTS: Record<string, ShipSlotConfig> = {
   // Gunships
   synth_devastator: {
     shipId: "synth_devastator",
-    slots: ["turret", "cannon", "cannon", "sensor", "modification"],
+    slots: ["turret", "cannon", "cannon", "missile", "sensor", "modification"],
     charges: 2,
   },
   synth_eradicator: {
     shipId: "synth_eradicator",
-    slots: ["turret", "turret", "cannon", "sensor", "modification"],
+    slots: ["turret", "turret", "cannon", "missile", "sensor", "modification"],
     charges: 3,
   },
 
@@ -545,6 +569,7 @@ export const SHIP_SLOTS: Record<string, ShipSlotConfig> = {
       "turret",
       "turret",
       "cannon",
+      "missile",
       "gunner",
       "crew",
       "modification",
@@ -553,12 +578,20 @@ export const SHIP_SLOTS: Record<string, ShipSlotConfig> = {
   },
   corsair_pillager: {
     shipId: "corsair_pillager",
-    slots: ["turret", "turret", "cannon", "gunner", "crew", "modification"],
+    slots: [
+      "turret",
+      "turret",
+      "cannon",
+      "missile",
+      "gunner",
+      "crew",
+      "modification",
+    ],
     charges: 3,
   },
   corsair_ravager: {
     shipId: "corsair_ravager",
-    slots: ["turret", "cannon", "cannon", "gunner", "modification"],
+    slots: ["turret", "cannon", "cannon", "missile", "gunner", "modification"],
     charges: 2,
   },
 
@@ -683,6 +716,7 @@ export const SHIP_SLOTS: Record<string, ShipSlotConfig> = {
       "turret",
       "cannon",
       "cannon",
+      "missile",
       "crew",
       "gunner",
       "modification",
@@ -692,12 +726,20 @@ export const SHIP_SLOTS: Record<string, ShipSlotConfig> = {
   },
   ascendant_wrath: {
     shipId: "ascendant_wrath",
-    slots: ["turret", "cannon", "cannon", "gunner", "modification"],
+    slots: ["turret", "cannon", "cannon", "missile", "gunner", "modification"],
     charges: 2,
   },
   ascendant_judgment: {
     shipId: "ascendant_judgment",
-    slots: ["turret", "turret", "cannon", "gunner", "crew", "modification"],
+    slots: [
+      "turret",
+      "turret",
+      "cannon",
+      "missile",
+      "gunner",
+      "crew",
+      "modification",
+    ],
     charges: 3,
   },
 
