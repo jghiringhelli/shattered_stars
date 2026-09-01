@@ -122,6 +122,10 @@ export class DogfightScene extends Phaser.Scene {
   private scoreText!: Phaser.GameObjects.Text;
   private setupContainer!: Phaser.GameObjects.Container;
 
+  // Player input
+  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private fireKey!: Phaser.Input.Keyboard.Key;
+
   constructor() {
     super({ key: "DogfightScene" });
   }
@@ -635,7 +639,7 @@ export class DogfightScene extends Phaser.Scene {
       .text(
         this.scale.width / 2,
         this.scale.height - 25,
-        "Arrow keys: Move | ESC: Pause",
+        "UP/DOWN: Speed | LEFT/RIGHT: Turn | SPACE: Fire | ESC: Pause",
         {
           font: "14px monospace",
           color: "#666666",
@@ -671,6 +675,11 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   private setupInput(): void {
+    this.cursors = this.input.keyboard!.createCursorKeys();
+    this.fireKey = this.input.keyboard!.addKey(
+      Phaser.Input.Keyboard.KeyCodes.SPACE,
+    );
+
     this.input.keyboard!.on("keydown-ESC", () => {
       this.isPaused = !this.isPaused;
     });
@@ -848,6 +857,9 @@ export class DogfightScene extends Phaser.Scene {
       ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
 
       if (ship.weaponCooldown <= 0) {
+        // Player ships only fire while the trigger is held; AI fires on sight.
+        if (ship.owner === "player" && !this.fireKey.isDown) continue;
+
         const target = this.findTarget(ship);
         if (target) {
           this.fireAt(ship, target);
@@ -1011,40 +1023,45 @@ export class DogfightScene extends Phaser.Scene {
       }
     }
 
-    // Simple player AI for now
+    // Player ships respond to real keyboard input (see applyPlayerControl).
     for (const shipId of this.playerShipIds) {
       const ship = this.ships.get(shipId);
       if (!ship || ship.hull <= 0) continue;
+      this.applyPlayerControl(ship);
+    }
+  }
 
-      const target = this.ships.get(this.enemyShipIds[0] ?? "");
-      if (!target || target.hull <= 0) continue;
+  /**
+   * Picks the player ship's next maneuver from its dial based on held keys.
+   * UP/DOWN ramp speed through the dial's available speeds; LEFT/RIGHT bank
+   * at the current speed (falling back to any available speed for that
+   * direction); no input holds a straight maneuver.
+   */
+  private applyPlayerControl(ship: DogfightShip): void {
+    const dial = getShipDial(ship.definitionId);
+    const speeds = [...new Set(dial.map((m) => m.speed))].sort((a, b) => a - b);
 
-      const angleDiff = headingDiffToTarget(
-        ship.x,
-        ship.y,
-        ship.angle,
-        target.x,
-        target.y,
-      );
+    let desiredSpeed = ship.currentSpeed;
+    if (this.cursors.up.isDown) {
+      desiredSpeed = speeds.find((s) => s > desiredSpeed) ?? desiredSpeed;
+    } else if (this.cursors.down.isDown) {
+      desiredSpeed =
+        [...speeds].reverse().find((s) => s < desiredSpeed) ?? desiredSpeed;
+    }
 
-      const dial = getShipDial(ship.definitionId);
+    let direction: ManeuverDirection = "straight";
+    if (this.cursors.left.isDown) direction = "bank_left";
+    else if (this.cursors.right.isDown) direction = "bank_right";
 
-      if (Math.abs(angleDiff) < 20) {
-        ship.currentManeuverDir = "straight";
-        ship.currentSpeed = 2;
-      } else if (angleDiff > 0) {
-        const turn = dial.find((m) => m.direction === "bank_right");
-        if (turn) {
-          ship.currentManeuverDir = "bank_right";
-          ship.currentSpeed = turn.speed;
-        }
-      } else {
-        const turn = dial.find((m) => m.direction === "bank_left");
-        if (turn) {
-          ship.currentManeuverDir = "bank_left";
-          ship.currentSpeed = turn.speed;
-        }
-      }
+    const chosen =
+      dial.find((m) => m.direction === direction && m.speed === desiredSpeed) ??
+      dial.find((m) => m.direction === direction) ??
+      dial.find((m) => m.direction === "straight") ??
+      dial[0];
+
+    if (chosen) {
+      ship.currentManeuverDir = chosen.direction;
+      ship.currentSpeed = chosen.speed;
     }
   }
 
