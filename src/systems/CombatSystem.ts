@@ -4,10 +4,14 @@
  * Based on X-Wing Miniatures combat mechanics
  */
 
-import type { RandomGenerator } from '../utils/random';
-import { getDefaultRng } from '../utils/random';
-import type { AttackDiceFace, DefenseDiceFace, AttackResult } from '../core/types';
-import { clampWithWarning } from '../core/errors';
+import type { RandomGenerator } from "../utils/random";
+import { getDefaultRng } from "../utils/random";
+import type {
+  AttackDiceFace,
+  DefenseDiceFace,
+  AttackResult,
+} from "../core/types";
+import { clampWithWarning } from "../core/errors";
 
 // ============================================
 // Constants for bounds checking
@@ -27,14 +31,14 @@ const MAX_HULL = 99;
  * hit: 3/8, critical: 1/8, focus: 2/8, blank: 2/8
  */
 export const ATTACK_DICE_FACES: readonly AttackDiceFace[] = [
-  'hit',
-  'hit',
-  'hit',
-  'critical',
-  'focus',
-  'focus',
-  'blank',
-  'blank',
+  "hit",
+  "hit",
+  "hit",
+  "critical",
+  "focus",
+  "focus",
+  "blank",
+  "blank",
 ];
 
 /**
@@ -42,14 +46,14 @@ export const ATTACK_DICE_FACES: readonly AttackDiceFace[] = [
  * evade: 3/8, focus: 2/8, blank: 3/8
  */
 export const DEFENSE_DICE_FACES: readonly DefenseDiceFace[] = [
-  'evade',
-  'evade',
-  'evade',
-  'focus',
-  'focus',
-  'blank',
-  'blank',
-  'blank',
+  "evade",
+  "evade",
+  "evade",
+  "focus",
+  "focus",
+  "blank",
+  "blank",
+  "blank",
 ];
 
 // ============================================
@@ -65,14 +69,14 @@ export const DEFENSE_DICE_FACES: readonly DefenseDiceFace[] = [
  */
 export function rollAttackDice(
   count: number,
-  rng: RandomGenerator = getDefaultRng()
+  rng: RandomGenerator = getDefaultRng(),
 ): AttackDiceFace[] {
   // Bounds check: clamp dice count to valid range
   const safeCount = clampWithWarning(
     Math.floor(count),
     MIN_DICE_COUNT,
     MAX_DICE_COUNT,
-    { valueName: 'attackDiceCount' }
+    { valueName: "attackDiceCount" },
   );
 
   const results: AttackDiceFace[] = [];
@@ -92,14 +96,14 @@ export function rollAttackDice(
  */
 export function rollDefenseDice(
   count: number,
-  rng: RandomGenerator = getDefaultRng()
+  rng: RandomGenerator = getDefaultRng(),
 ): DefenseDiceFace[] {
   // Bounds check: clamp dice count to valid range
   const safeCount = clampWithWarning(
     Math.floor(count),
     MIN_DICE_COUNT,
     MAX_DICE_COUNT,
-    { valueName: 'defenseDiceCount' }
+    { valueName: "defenseDiceCount" },
   );
 
   const results: DefenseDiceFace[] = [];
@@ -118,14 +122,16 @@ export function rollDefenseDice(
  * Convert focus results to hits on attack dice
  */
 export function convertAttackFocus(dice: AttackDiceFace[]): AttackDiceFace[] {
-  return dice.map((face) => (face === 'focus' ? 'hit' : face));
+  return dice.map((face) => (face === "focus" ? "hit" : face));
 }
 
 /**
  * Convert focus results to evades on defense dice
  */
-export function convertDefenseFocus(dice: DefenseDiceFace[]): DefenseDiceFace[] {
-  return dice.map((face) => (face === 'focus' ? 'evade' : face));
+export function convertDefenseFocus(
+  dice: DefenseDiceFace[],
+): DefenseDiceFace[] {
+  return dice.map((face) => (face === "focus" ? "evade" : face));
 }
 
 /**
@@ -138,10 +144,10 @@ export function countAttackFaces(dice: readonly AttackDiceFace[]): {
   blank: number;
 } {
   return {
-    hits: dice.filter((f) => f === 'hit').length,
-    crits: dice.filter((f) => f === 'critical').length,
-    focus: dice.filter((f) => f === 'focus').length,
-    blank: dice.filter((f) => f === 'blank').length,
+    hits: dice.filter((f) => f === "hit").length,
+    crits: dice.filter((f) => f === "critical").length,
+    focus: dice.filter((f) => f === "focus").length,
+    blank: dice.filter((f) => f === "blank").length,
   };
 }
 
@@ -154,9 +160,9 @@ export function countDefenseFaces(dice: readonly DefenseDiceFace[]): {
   blank: number;
 } {
   return {
-    evades: dice.filter((f) => f === 'evade').length,
-    focus: dice.filter((f) => f === 'focus').length,
-    blank: dice.filter((f) => f === 'blank').length,
+    evades: dice.filter((f) => f === "evade").length,
+    focus: dice.filter((f) => f === "focus").length,
+    blank: dice.filter((f) => f === "blank").length,
   };
 }
 
@@ -177,6 +183,8 @@ export interface AttackContext {
   readonly defenderIsReinforced?: boolean;
   readonly defenderShields: number;
   readonly defenderHull: number;
+  /** Flat hull-damage reduction per attack (capital ships). Chip damage still gets through. */
+  readonly defenderArmor?: number;
 
   // Range modifiers
   readonly range: 1 | 2 | 3;
@@ -204,7 +212,7 @@ export interface ResolvedAttack {
  */
 export function resolveAttack(
   context: AttackContext,
-  rng: RandomGenerator = getDefaultRng()
+  rng: RandomGenerator = getDefaultRng(),
 ): ResolvedAttack {
   // Calculate dice counts with range modifiers
   let attackDiceCount = context.attackDice;
@@ -229,7 +237,7 @@ export function resolveAttack(
   // Target lock allows rerolling blanks (we'll reroll all blanks for simplicity)
   if (context.attackerHasTargetLock) {
     modifiedAttack = modifiedAttack.map((face) =>
-      face === 'blank' ? (rng.pick(ATTACK_DICE_FACES) ?? 'blank') : face
+      face === "blank" ? (rng.pick(ATTACK_DICE_FACES) ?? "blank") : face,
     );
   }
 
@@ -248,12 +256,12 @@ export function resolveAttack(
 
   // Evade token adds one evade result
   if (context.defenderHasEvadeToken) {
-    modifiedDefense.push('evade');
+    modifiedDefense.push("evade");
   }
 
   // Reinforce token adds one evade result (bonus defense die)
   if (context.defenderIsReinforced) {
-    modifiedDefense.push('evade');
+    modifiedDefense.push("evade");
   }
 
   // Count results
@@ -286,14 +294,11 @@ export function resolveAttack(
     context.defenderShields,
     0,
     MAX_SHIELDS,
-    { valueName: 'defenderShields' }
+    { valueName: "defenderShields" },
   );
-  let remainingHull = clampWithWarning(
-    context.defenderHull,
-    0,
-    MAX_HULL,
-    { valueName: 'defenderHull' }
-  );
+  let remainingHull = clampWithWarning(context.defenderHull, 0, MAX_HULL, {
+    valueName: "defenderHull",
+  });
 
   // Apply regular hits to shields first
   const hitsToShields = Math.min(hitsLanded, remainingShields);
@@ -306,6 +311,13 @@ export function resolveAttack(
   // Crits always go to hull
   hullDamage += critsLanded;
   remainingHull -= critsLanded;
+
+  // Armor reduces hull damage per attack but never fully blocks it
+  if (hullDamage > 0 && context.defenderArmor) {
+    const reduced = Math.max(1, hullDamage - context.defenderArmor);
+    remainingHull += hullDamage - reduced;
+    hullDamage = reduced;
+  }
 
   // Check destruction
   const shipDestroyed = remainingHull <= 0;
@@ -337,7 +349,7 @@ export function resolveAttack(
  */
 export function calculateExpectedDamage(
   attackDice: number,
-  defenseDice: number
+  defenseDice: number,
 ): number {
   // Attack: 3/8 hit + 1/8 crit = 4/8 = 0.5 damage per die
   // Defense: 3/8 evade = 0.375 cancels per die
@@ -350,9 +362,6 @@ export function calculateExpectedDamage(
  * Check if an attack is possible (target in range and arc)
  * This is a simplified check - full implementation in TargetingSystem
  */
-export function canAttack(
-  range: 1 | 2 | 3 | null,
-  isInArc: boolean
-): boolean {
+export function canAttack(range: 1 | 2 | 3 | null, isInArc: boolean): boolean {
   return range !== null && isInArc;
 }

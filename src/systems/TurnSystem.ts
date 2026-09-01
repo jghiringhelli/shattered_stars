@@ -4,20 +4,21 @@
  * Based on X-Wing Miniatures turn sequence
  */
 
-import type { ShipState, ManeuverDefinition } from '../core/types';
-import { resolveManeuver, generateManeuverPath } from './MovementSystem';
-import { applyManeuverStress, clearRoundTokens } from './ActionsSystem';
+import type { ShipState, ManeuverDefinition } from "../core/types";
+import { resolveManeuver, generateManeuverPath } from "./MovementSystem";
+import { applyManeuverStress, clearRoundTokens } from "./ActionsSystem";
+import { isEnginesOffline } from "./CapitalSystems";
 
 // ============================================
 // Phase Definitions
 // ============================================
 
 export type TurnPhase =
-  | 'planning' // Players select maneuvers
-  | 'system' // System phase (decloak, etc.)
-  | 'activation' // Ships move and perform actions
-  | 'engagement' // Combat
-  | 'end'; // Cleanup
+  | "planning" // Players select maneuvers
+  | "system" // System phase (decloak, etc.)
+  | "activation" // Ships move and perform actions
+  | "engagement" // Combat
+  | "end"; // Cleanup
 
 export interface PhaseDefinition {
   readonly phase: TurnPhase;
@@ -28,33 +29,33 @@ export interface PhaseDefinition {
 
 export const PHASE_ORDER: PhaseDefinition[] = [
   {
-    phase: 'planning',
-    name: 'Planning Phase',
-    description: 'All players secretly select maneuvers for their ships',
+    phase: "planning",
+    name: "Planning Phase",
+    description: "All players secretly select maneuvers for their ships",
     order: 0,
   },
   {
-    phase: 'system',
-    name: 'System Phase',
-    description: 'Special abilities trigger (decloak, SLAM setup, etc.)',
+    phase: "system",
+    name: "System Phase",
+    description: "Special abilities trigger (decloak, SLAM setup, etc.)",
     order: 1,
   },
   {
-    phase: 'activation',
-    name: 'Activation Phase',
-    description: 'Ships reveal maneuvers, move, and perform actions',
+    phase: "activation",
+    name: "Activation Phase",
+    description: "Ships reveal maneuvers, move, and perform actions",
     order: 2,
   },
   {
-    phase: 'engagement',
-    name: 'Engagement Phase',
-    description: 'Ships attack enemies in arc and range',
+    phase: "engagement",
+    name: "Engagement Phase",
+    description: "Ships attack enemies in arc and range",
     order: 3,
   },
   {
-    phase: 'end',
-    name: 'End Phase',
-    description: 'Cleanup tokens, check victory conditions',
+    phase: "end",
+    name: "End Phase",
+    description: "Cleanup tokens, check victory conditions",
     order: 4,
   },
 ];
@@ -85,7 +86,7 @@ export interface TurnState {
 export function createInitialTurnState(): TurnState {
   return {
     turnNumber: 1,
-    currentPhase: 'planning',
+    currentPhase: "planning",
     phaseStep: 0,
     activatedShips: new Set(),
     attackedShips: new Set(),
@@ -112,7 +113,7 @@ export interface ShipInitiative {
  */
 export function getActivationOrder(
   ships: readonly ShipState[],
-  getInitiative: (ship: ShipState) => number
+  getInitiative: (ship: ShipState) => number,
 ): string[] {
   return [...ships]
     .sort((a, b) => {
@@ -130,7 +131,7 @@ export function getActivationOrder(
  */
 export function getEngagementOrder(
   ships: readonly ShipState[],
-  getInitiative: (ship: ShipState) => number
+  getInitiative: (ship: ShipState) => number,
 ): string[] {
   return [...ships]
     .sort((a, b) => {
@@ -153,14 +154,14 @@ export function getNextPhase(current: TurnPhase): TurnPhase {
   const currentIndex = PHASE_ORDER.findIndex((p) => p.phase === current);
   const nextIndex = (currentIndex + 1) % PHASE_ORDER.length;
   const nextPhase = PHASE_ORDER[nextIndex];
-  return nextPhase ? nextPhase.phase : 'planning';
+  return nextPhase ? nextPhase.phase : "planning";
 }
 
 /**
  * Check if we're at the end of the turn (end phase complete)
  */
 export function isTurnComplete(state: TurnState): boolean {
-  return state.currentPhase === 'end' && state.phaseStep > 0;
+  return state.currentPhase === "end" && state.phaseStep > 0;
 }
 
 /**
@@ -168,7 +169,7 @@ export function isTurnComplete(state: TurnState): boolean {
  */
 export function advancePhase(state: TurnState): TurnState {
   const nextPhase = getNextPhase(state.currentPhase);
-  const isNewTurn = nextPhase === 'planning';
+  const isNewTurn = nextPhase === "planning";
 
   return {
     ...state,
@@ -177,7 +178,7 @@ export function advancePhase(state: TurnState): TurnState {
     turnNumber: isNewTurn ? state.turnNumber + 1 : state.turnNumber,
     activatedShips: isNewTurn ? new Set() : state.activatedShips,
     attackedShips: isNewTurn ? new Set() : state.attackedShips,
-    waitingForInput: nextPhase === 'planning',
+    waitingForInput: nextPhase === "planning",
     activeShipId: null,
   };
 }
@@ -192,7 +193,7 @@ export function advancePhase(state: TurnState): TurnState {
 export function setPlannedManeuver(
   state: TurnState,
   shipId: string,
-  maneuver: ManeuverDefinition
+  maneuver: ManeuverDefinition,
 ): TurnState {
   const newPlanned = new Map(state.plannedManeuvers);
   newPlanned.set(shipId, maneuver);
@@ -208,7 +209,7 @@ export function setPlannedManeuver(
  */
 export function isPlannningComplete(
   state: TurnState,
-  shipIds: readonly string[]
+  shipIds: readonly string[],
 ): boolean {
   return shipIds.every((id) => state.plannedManeuvers.has(id));
 }
@@ -218,7 +219,7 @@ export function isPlannningComplete(
  */
 export function getShipsNeedingPlanning(
   state: TurnState,
-  shipIds: readonly string[]
+  shipIds: readonly string[],
 ): string[] {
   return shipIds.filter((id) => !state.plannedManeuvers.has(id));
 }
@@ -240,7 +241,7 @@ export interface ActivationResult {
  */
 export function executeActivation(
   ship: ShipState,
-  maneuver: ManeuverDefinition
+  maneuver: ManeuverDefinition,
 ): ActivationResult {
   // Generate movement path
   const path = generateManeuverPath(ship.x, ship.y, ship.angle, maneuver);
@@ -265,17 +266,22 @@ export function executeActivation(
 }
 
 /**
- * Apply activation result to ship state
+ * Apply activation result to ship state.
+ * A capital ship with disabled engines is immobilized — it keeps its planned
+ * maneuver's stress change but never actually moves.
  */
 export function applyActivation(
   ship: ShipState,
-  result: ActivationResult
+  result: ActivationResult,
 ): ShipState {
+  const enginesOffline =
+    !!ship.capitalSystems && isEnginesOffline(ship.capitalSystems);
+
   return {
     ...ship,
-    x: result.newPosition.x,
-    y: result.newPosition.y,
-    angle: result.newPosition.angle,
+    x: enginesOffline ? ship.x : result.newPosition.x,
+    y: enginesOffline ? ship.y : result.newPosition.y,
+    angle: enginesOffline ? ship.angle : result.newPosition.angle,
     isStressed: result.stressChange.isStressed,
     currentManeuver: null,
     maneuverProgress: 0,
@@ -299,7 +305,10 @@ export function markShipActivated(state: TurnState, shipId: string): TurnState {
 /**
  * Set the currently activating ship
  */
-export function setActiveShip(state: TurnState, shipId: string | null): TurnState {
+export function setActiveShip(
+  state: TurnState,
+  shipId: string | null,
+): TurnState {
   return {
     ...state,
     activeShipId: shipId,
@@ -312,7 +321,7 @@ export function setActiveShip(state: TurnState, shipId: string | null): TurnStat
  */
 export function isActivationComplete(
   state: TurnState,
-  shipIds: readonly string[]
+  shipIds: readonly string[],
 ): boolean {
   return shipIds.every((id) => state.activatedShips.has(id));
 }
@@ -322,7 +331,7 @@ export function isActivationComplete(
  */
 export function getNextShipToActivate(
   state: TurnState,
-  activationOrder: readonly string[]
+  activationOrder: readonly string[],
 ): string | null {
   for (const id of activationOrder) {
     if (!state.activatedShips.has(id)) {
@@ -361,7 +370,7 @@ export function canShipAttack(state: TurnState, shipId: string): boolean {
  */
 export function isEngagementComplete(
   state: TurnState,
-  shipIds: readonly string[]
+  shipIds: readonly string[],
 ): boolean {
   return shipIds.every((id) => state.attackedShips.has(id));
 }
@@ -371,7 +380,7 @@ export function isEngagementComplete(
  */
 export function getNextShipToEngage(
   state: TurnState,
-  engagementOrder: readonly string[]
+  engagementOrder: readonly string[],
 ): string | null {
   for (const id of engagementOrder) {
     if (!state.attackedShips.has(id)) {
@@ -396,7 +405,9 @@ export function processEndPhase(ship: ShipState): ShipState {
 /**
  * Process end phase for all ships
  */
-export function processEndPhaseForAll(ships: readonly ShipState[]): ShipState[] {
+export function processEndPhaseForAll(
+  ships: readonly ShipState[],
+): ShipState[] {
   return ships.map(processEndPhase);
 }
 
@@ -406,7 +417,7 @@ export function processEndPhaseForAll(ships: readonly ShipState[]): ShipState[] 
 
 export interface VictoryState {
   readonly isComplete: boolean;
-  readonly winner: 'player' | 'ai' | 'draw' | null;
+  readonly winner: "player" | "ai" | "draw" | null;
   readonly reason: string;
 }
 
@@ -416,21 +427,17 @@ export interface VictoryState {
 export function checkVictory(
   ships: readonly ShipState[],
   turnNumber: number,
-  maxTurns: number = 12
+  maxTurns: number = 12,
 ): VictoryState {
-  const playerShips = ships.filter(
-    (s) => s.owner === 'player' && s.hull > 0
-  );
-  const aiShips = ships.filter(
-    (s) => s.owner === 'ai' && s.hull > 0
-  );
+  const playerShips = ships.filter((s) => s.owner === "player" && s.hull > 0);
+  const aiShips = ships.filter((s) => s.owner === "ai" && s.hull > 0);
 
   // All enemy ships destroyed
   if (aiShips.length === 0 && playerShips.length > 0) {
     return {
       isComplete: true,
-      winner: 'player',
-      reason: 'All enemy ships destroyed',
+      winner: "player",
+      reason: "All enemy ships destroyed",
     };
   }
 
@@ -438,8 +445,8 @@ export function checkVictory(
   if (playerShips.length === 0 && aiShips.length > 0) {
     return {
       isComplete: true,
-      winner: 'ai',
-      reason: 'All player ships destroyed',
+      winner: "ai",
+      reason: "All player ships destroyed",
     };
   }
 
@@ -447,34 +454,37 @@ export function checkVictory(
   if (playerShips.length === 0 && aiShips.length === 0) {
     return {
       isComplete: true,
-      winner: 'draw',
-      reason: 'Mutual destruction',
+      winner: "draw",
+      reason: "Mutual destruction",
     };
   }
 
   // Turn limit reached
   if (turnNumber >= maxTurns) {
     // Winner by points (simplified: more remaining hull)
-    const playerHull = playerShips.reduce((sum, s) => sum + s.hull + s.shields, 0);
+    const playerHull = playerShips.reduce(
+      (sum, s) => sum + s.hull + s.shields,
+      0,
+    );
     const aiHull = aiShips.reduce((sum, s) => sum + s.hull + s.shields, 0);
 
     if (playerHull > aiHull) {
       return {
         isComplete: true,
-        winner: 'player',
-        reason: 'Turn limit - Player has more remaining hull',
+        winner: "player",
+        reason: "Turn limit - Player has more remaining hull",
       };
     } else if (aiHull > playerHull) {
       return {
         isComplete: true,
-        winner: 'ai',
-        reason: 'Turn limit - AI has more remaining hull',
+        winner: "ai",
+        reason: "Turn limit - AI has more remaining hull",
       };
     } else {
       return {
         isComplete: true,
-        winner: 'draw',
-        reason: 'Turn limit - Draw',
+        winner: "draw",
+        reason: "Turn limit - Draw",
       };
     }
   }
@@ -483,7 +493,7 @@ export function checkVictory(
   return {
     isComplete: false,
     winner: null,
-    reason: '',
+    reason: "",
   };
 }
 
@@ -505,7 +515,7 @@ export interface TurnSummary {
 export function createTurnSummary(
   turnNumber: number,
   beforeShips: readonly ShipState[],
-  afterShips: readonly ShipState[]
+  afterShips: readonly ShipState[],
 ): TurnSummary {
   const destroyed: string[] = [];
   let damageDealt = 0;
@@ -523,7 +533,7 @@ export function createTurnSummary(
       const shieldLoss = before.shields - after.shields;
       const totalLoss = Math.max(0, hullLoss) + Math.max(0, shieldLoss);
 
-      if (before.owner === 'ai') {
+      if (before.owner === "ai") {
         damageDealt += totalLoss;
       } else {
         damageReceived += totalLoss;

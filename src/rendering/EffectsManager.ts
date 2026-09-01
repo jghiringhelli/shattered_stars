@@ -9,11 +9,11 @@
  * - Screen shake
  */
 
-import Phaser from 'phaser';
-import type { FactionId } from '../config';
-import { FACTION_COLORS } from '../config';
-import { audioManager } from '../audio/AudioManager';
-import type { EffectSettings } from '../systems/PerformanceSystem';
+import Phaser from "phaser";
+import type { FactionId } from "../config";
+import { FACTION_COLORS } from "../config";
+import { audioManager } from "../audio/AudioManager";
+import type { EffectSettings } from "../systems/PerformanceSystem";
 
 // Faction-specific effect colors
 const FACTION_LASER_COLORS: Record<FactionId, number> = {
@@ -81,7 +81,10 @@ export class EffectsManager {
    * Apply user preferences from SettingsScene.
    * @param settings - User preferences (cameraShake, showDamageNumbers)
    */
-  setUserSettings(settings: { showDamageNumbers: boolean; cameraShake: boolean }): void {
+  setUserSettings(settings: {
+    showDamageNumbers: boolean;
+    cameraShake: boolean;
+  }): void {
     this.damageNumbersEnabled = settings.showDamageNumbers;
     this.cameraShakeEnabled = settings.cameraShake;
   }
@@ -93,7 +96,11 @@ export class EffectsManager {
   /**
    * Register a ship for engine trail rendering
    */
-  registerEngineTrail(shipId: string, faction: FactionId, speed: number = 2): void {
+  registerEngineTrail(
+    shipId: string,
+    faction: FactionId,
+    speed: number = 2,
+  ): void {
     if (!this.engineTrailsEnabled) return;
     const maxPoints = 15 + speed * 5; // Longer trails for faster ships
 
@@ -109,12 +116,17 @@ export class EffectsManager {
   /**
    * Update engine trail position
    */
-  updateTrailPosition(shipId: string, x: number, y: number, angle: number): void {
+  updateTrailPosition(
+    shipId: string,
+    x: number,
+    y: number,
+    angle: number,
+  ): void {
     const trail = this.engineTrails.get(shipId);
     if (!trail) return;
 
     // Calculate engine position (behind the ship)
-    const angleRad = (angle - 90) * Math.PI / 180;
+    const angleRad = ((angle - 90) * Math.PI) / 180;
     const offsetDistance = 15; // Distance behind ship center
     const engineX = x - Math.cos(angleRad) * offsetDistance;
     const engineY = y - Math.sin(angleRad) * offsetDistance;
@@ -187,10 +199,10 @@ export class EffectsManager {
     toX: number,
     toY: number,
     faction: FactionId,
-    hit: boolean
+    hit: boolean,
   ): void {
     // Play laser sound
-    audioManager.playSound('laser_fire', hit ? 0.8 : 0.5);
+    audioManager.playSound("laser_fire", hit ? 0.8 : 0.5);
 
     const color = FACTION_LASER_COLORS[faction];
     const graphics = this.scene.add.graphics();
@@ -240,10 +252,10 @@ export class EffectsManager {
     fromY: number,
     toX: number,
     toY: number,
-    duration: number = 500
+    duration: number = 500,
   ): void {
     // Play missile launch sound
-    audioManager.playSound('missile_launch', 0.7);
+    audioManager.playSound("missile_launch", 0.7);
 
     const missile = this.scene.add.graphics();
     missile.setDepth(15);
@@ -265,7 +277,7 @@ export class EffectsManager {
       x: toX,
       y: toY,
       duration,
-      ease: 'Quad.in',
+      ease: "Quad.in",
       onUpdate: () => {
         // Add smoke trail
         const smoke = this.scene.add.graphics();
@@ -282,7 +294,7 @@ export class EffectsManager {
       },
       onComplete: () => {
         missile.destroy();
-        this.createExplosion(toX, toY, 'medium');
+        this.createExplosion(toX, toY, "medium");
       },
     });
   }
@@ -296,7 +308,7 @@ export class EffectsManager {
    */
   shieldImpact(x: number, y: number, angle: number, faction: FactionId): void {
     // Play shield hit sound
-    audioManager.playSound('shield_hit', 0.6);
+    audioManager.playSound("shield_hit", 0.6);
 
     const graphics = this.scene.add.graphics();
     graphics.setDepth(20);
@@ -349,9 +361,18 @@ export class EffectsManager {
   /**
    * Create explosion effect
    */
-  createExplosion(x: number, y: number, size: 'small' | 'medium' | 'large'): void {
+  createExplosion(
+    x: number,
+    y: number,
+    size: "small" | "medium" | "large",
+  ): void {
     // Play explosion sound based on size
-    const soundType = size === 'small' ? 'explosion_small' : size === 'medium' ? 'explosion_medium' : 'explosion_large';
+    const soundType =
+      size === "small"
+        ? "explosion_small"
+        : size === "medium"
+          ? "explosion_medium"
+          : "explosion_large";
     audioManager.playSound(soundType, 0.8);
 
     const rawConfig = {
@@ -359,7 +380,13 @@ export class EffectsManager {
       medium: { particles: 15, radius: 60, duration: 500 },
       large: { particles: 25, radius: 100, duration: 700 },
     }[size];
-    const config = { ...rawConfig, particles: Math.max(1, Math.round(rawConfig.particles * this.particleMultiplier)) };
+    const config = {
+      ...rawConfig,
+      particles: Math.max(
+        1,
+        Math.round(rawConfig.particles * this.particleMultiplier),
+      ),
+    };
 
     const colors = [0xff4400, 0xff8800, 0xffaa00, 0xffff00];
 
@@ -388,7 +415,7 @@ export class EffectsManager {
       scaleX: config.radius / 10,
       scaleY: config.radius / 10,
       duration: config.duration,
-      ease: 'Quad.out',
+      ease: "Quad.out",
       onComplete: () => ring.destroy(),
     });
 
@@ -397,7 +424,7 @@ export class EffectsManager {
       const angle = (i / config.particles) * Math.PI * 2 + Math.random() * 0.5;
       const speed = config.radius * (0.5 + Math.random() * 0.5);
       const color = Phaser.Math.RND.pick(colors);
-      const particleSize = 2 + Math.random() * (size === 'large' ? 6 : 4);
+      const particleSize = 2 + Math.random() * (size === "large" ? 6 : 4);
 
       const particle = this.scene.add.graphics();
       particle.setDepth(23);
@@ -413,7 +440,7 @@ export class EffectsManager {
         scaleX: 0.2,
         scaleY: 0.2,
         duration: config.duration * (0.7 + Math.random() * 0.6),
-        ease: 'Quad.out',
+        ease: "Quad.out",
         onComplete: () => particle.destroy(),
       });
     }
@@ -424,7 +451,10 @@ export class EffectsManager {
       smoke.setDepth(22);
       smoke.fillStyle(0x333333, 0.4);
       smoke.fillCircle(0, 0, 5 + Math.random() * 10);
-      smoke.setPosition(x + (Math.random() - 0.5) * 20, y + (Math.random() - 0.5) * 20);
+      smoke.setPosition(
+        x + (Math.random() - 0.5) * 20,
+        y + (Math.random() - 0.5) * 20,
+      );
 
       this.scene.tweens.add({
         targets: smoke,
@@ -434,16 +464,16 @@ export class EffectsManager {
         scaleY: 3,
         duration: config.duration * 1.5,
         delay: Math.random() * 200,
-        ease: 'Quad.out',
+        ease: "Quad.out",
         onComplete: () => smoke.destroy(),
       });
     }
 
     // Screen shake for large explosions
     if (this.cameraShakeEnabled) {
-      if (size === 'large') {
+      if (size === "large") {
         this.scene.cameras.main.shake(200, 0.01);
-      } else if (size === 'medium') {
+      } else if (size === "medium") {
         this.scene.cameras.main.shake(100, 0.005);
       }
     }
@@ -456,12 +486,17 @@ export class EffectsManager {
   /**
    * Show floating damage number
    */
-  showDamageNumber(x: number, y: number, damage: number, isCritical: boolean = false): void {
+  showDamageNumber(
+    x: number,
+    y: number,
+    damage: number,
+    isCritical: boolean = false,
+  ): void {
     if (!this.damageNumbersEnabled) return;
     const text = this.scene.add.text(x, y, `-${damage}`, {
-      font: isCritical ? 'bold 24px monospace' : 'bold 18px monospace',
-      color: isCritical ? '#ff0000' : '#ff6644',
-      stroke: '#000000',
+      font: isCritical ? "bold 24px monospace" : "bold 18px monospace",
+      color: isCritical ? "#ff0000" : "#ff6644",
+      stroke: "#000000",
       strokeThickness: 3,
     });
     text.setOrigin(0.5, 0.5);
@@ -478,20 +513,49 @@ export class EffectsManager {
       alpha: 0,
       scale: isCritical ? 1.3 : 1,
       duration: 800,
-      ease: 'Quad.out',
+      ease: "Quad.out",
       onComplete: () => text.destroy(),
+    });
+  }
+
+  /**
+   * Show a floating status label (e.g. "ENGINES DISABLED!") — always shown,
+   * not gated behind the damage-numbers preference since it's status info.
+   */
+  showFloatingText(x: number, y: number, text: string, color: string): void {
+    const label = this.scene.add.text(x, y, text, {
+      font: "bold 18px Arial",
+      color,
+      stroke: "#000000",
+      strokeThickness: 3,
+    });
+    label.setOrigin(0.5, 0.5);
+    label.setDepth(50);
+
+    this.scene.tweens.add({
+      targets: label,
+      y: y - 60,
+      alpha: 0,
+      duration: 900,
+      ease: "Power2",
+      onComplete: () => label.destroy(),
     });
   }
 
   /**
    * Show healing/shield restore number
    */
-  showHealNumber(x: number, y: number, amount: number, isShield: boolean = false): void {
+  showHealNumber(
+    x: number,
+    y: number,
+    amount: number,
+    isShield: boolean = false,
+  ): void {
     if (!this.damageNumbersEnabled) return;
     const text = this.scene.add.text(x, y, `+${amount}`, {
-      font: 'bold 16px monospace',
-      color: isShield ? '#00aaff' : '#44ff44',
-      stroke: '#000000',
+      font: "bold 16px monospace",
+      color: isShield ? "#00aaff" : "#44ff44",
+      stroke: "#000000",
       strokeThickness: 2,
     });
     text.setOrigin(0.5, 0.5);
@@ -502,7 +566,7 @@ export class EffectsManager {
       y: y - 30,
       alpha: 0,
       duration: 600,
-      ease: 'Quad.out',
+      ease: "Quad.out",
       onComplete: () => text.destroy(),
     });
   }
@@ -514,7 +578,12 @@ export class EffectsManager {
   /**
    * Show kill notification
    */
-  showKillNotification(killerName: string, victimName: string, x: number, y: number): void {
+  showKillNotification(
+    killerName: string,
+    victimName: string,
+    x: number,
+    y: number,
+  ): void {
     const container = this.scene.add.container(x, y);
     container.setDepth(100);
     container.setScrollFactor(0);
@@ -526,10 +595,15 @@ export class EffectsManager {
     container.add(bg);
 
     // Text
-    const text = this.scene.add.text(0, 0, `${killerName} destroyed ${victimName}`, {
-      font: 'bold 14px monospace',
-      color: '#ff8844',
-    });
+    const text = this.scene.add.text(
+      0,
+      0,
+      `${killerName} destroyed ${victimName}`,
+      {
+        font: "bold 14px monospace",
+        color: "#ff8844",
+      },
+    );
     text.setOrigin(0.5, 0.5);
     container.add(text);
 
@@ -542,7 +616,7 @@ export class EffectsManager {
       alpha: 1,
       scale: 1,
       duration: 200,
-      ease: 'Back.out',
+      ease: "Back.out",
       onComplete: () => {
         this.scene.time.delayedCall(2000, () => {
           this.scene.tweens.add({

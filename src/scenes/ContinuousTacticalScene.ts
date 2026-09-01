@@ -72,6 +72,14 @@ import {
   formatMatchClock,
   type MatchTimerState,
 } from "../systems/arena/MatchTimer";
+import {
+  applyCapitalSystemDamage,
+  createCapitalSystems,
+  isEnginesOffline,
+  sumSystemsHull,
+  turretDamageMultiplier,
+  SYSTEM_LABELS,
+} from "../systems/CapitalSystems";
 
 interface TacticalShip extends ShipState, ContinuousShip {
   pilotSkill: number;
@@ -374,6 +382,11 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     } else if (target.owner === "ai") {
       damage = getModifiedDamage(damage, this.aiDifficulty, false);
     }
+    if (attacker.capitalSystems) {
+      damage = Math.round(
+        damage * turretDamageMultiplier(attacker.capitalSystems),
+      );
+    }
 
     let shieldDamage = 0;
     if (target.shields > 0) {
@@ -381,6 +394,18 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       target.shields -= shieldDamage;
       const hullDamage = damage - shieldDamage;
       if (hullDamage > 0) target.hull = Math.max(0, target.hull - hullDamage);
+    } else if (target.capitalSystems) {
+      const result = applyCapitalSystemDamage(target.capitalSystems, damage);
+      target.capitalSystems = result.systems;
+      target.hull = sumSystemsHull(result.systems);
+      if (result.justDisabled && result.hitSystemId) {
+        this.effectsManager.showFloatingText(
+          target.x,
+          target.y - 45,
+          `${SYSTEM_LABELS[result.hitSystemId]} DISABLED!`,
+          "#ff8800",
+        );
+      }
     } else {
       target.hull = Math.max(0, target.hull - damage);
     }
@@ -414,6 +439,8 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   protected override runManeuverStep(): void {
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
+      if (ship.capitalSystems && isEnginesOffline(ship.capitalSystems))
+        continue;
 
       const template = getManeuverTemplate(
         ship.currentManeuverDir,
@@ -675,6 +702,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     pilotSkill: number,
   ): TacticalShip {
     const combatStats = getModeCombatStats(defId, "continuous");
+    const isCapital = getShipDefinition(defId)?.role === "capital";
 
     return {
       id,
@@ -707,6 +735,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       targetAngle: angle,
       weaponCooldown: 0,
       stressTokens: 0,
+      capitalSystems: isCapital ? createCapitalSystems(combatStats.hull) : null,
     };
   }
 

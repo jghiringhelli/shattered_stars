@@ -148,6 +148,10 @@ export interface ShipState {
   // Charges (for weapons/abilities that need reloading)
   charges: number;
   maxCharges: number;
+
+  /** Present only for capital-role ships; tracks engines/turrets/bridge damage. */
+  capitalSystems?:
+    import("../systems/CapitalSystems").CapitalSystemsState | null;
 }
 
 // ============================================

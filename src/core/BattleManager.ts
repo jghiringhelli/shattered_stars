@@ -36,6 +36,13 @@ import {
   tightenBelt,
   type BeltConfig,
 } from "../systems/arena/ArenaBoundary";
+import {
+  applyCapitalSystemDamage,
+  createCapitalSystems,
+  sumSystemsHull,
+  turretDamageMultiplier,
+  SYSTEM_LABELS,
+} from "../systems/CapitalSystems";
 
 // ============================================
 // Battle State
@@ -110,6 +117,7 @@ export class BattleManager {
 
       const hullBonus = config.playerStatBonuses?.hull ?? 0;
       const shieldBonus = config.playerStatBonuses?.shields ?? 0;
+      const playerHull = def.baseStats.hull + hullBonus;
       const ship: ShipState = {
         id: `player_${shipIndex++}`,
         definitionId: defId,
@@ -118,8 +126,8 @@ export class BattleManager {
         x: playerStartX + i * playerSpacing,
         y: playerStartY,
         angle: 0, // Facing up
-        hull: def.baseStats.hull + hullBonus,
-        maxHull: def.baseStats.hull + hullBonus,
+        hull: playerHull,
+        maxHull: playerHull,
         shields: def.baseStats.shields + shieldBonus,
         maxShields: def.baseStats.shields + shieldBonus,
         isStressed: false,
@@ -132,6 +140,8 @@ export class BattleManager {
         mobileArcDirection: "front",
         charges: 0,
         maxCharges: 0,
+        capitalSystems:
+          def.role === "capital" ? createCapitalSystems(playerHull) : null,
       };
       ships.set(ship.id, ship);
     }
@@ -169,6 +179,10 @@ export class BattleManager {
         mobileArcDirection: "front",
         charges: 0,
         maxCharges: 0,
+        capitalSystems:
+          def.role === "capital"
+            ? createCapitalSystems(def.baseStats.hull)
+            : null,
       };
       ships.set(ship.id, ship);
     }
@@ -612,8 +626,18 @@ export class BattleManager {
     const info = getTargetInfo(attacker, target);
     if (!info.canAttackPrimary || info.range === null) return;
 
+    const attackDice = attacker.capitalSystems
+      ? Math.max(
+          1,
+          Math.round(
+            attackerDef.baseStats.attack *
+              turretDamageMultiplier(attacker.capitalSystems),
+          ),
+        )
+      : attackerDef.baseStats.attack;
+
     const context: AttackContext = {
-      attackDice: attackerDef.baseStats.attack,
+      attackDice,
       attackerHasFocus: attacker.hasFocus,
       attackerHasTargetLock: attacker.hasTargetLock === target.id,
       defenseDice: targetDef.baseStats.agility,
@@ -621,18 +645,36 @@ export class BattleManager {
       defenderHasEvadeToken: target.hasEvade,
       defenderShields: target.shields,
       defenderHull: target.hull,
+      defenderArmor: targetDef.baseStats.armor ?? 0,
       range: info.range,
     };
 
     const result = resolveAttack(context, this.rng);
 
-    // Apply damage
+    // Apply damage — capital-role defenders route post-shield hull damage
+    // through their engines/turrets/bridge subsystems instead of a flat pool.
     const ships = new Map(this.state.ships);
-    const updatedTarget: ShipState = {
+    let updatedTarget: ShipState = {
       ...target,
       shields: Math.max(0, target.shields - result.shieldDamage),
       hull: Math.max(0, target.hull - result.hullDamage),
     };
+    if (target.capitalSystems && result.hullDamage > 0) {
+      const damageResult = applyCapitalSystemDamage(
+        target.capitalSystems,
+        result.hullDamage,
+      );
+      updatedTarget = {
+        ...updatedTarget,
+        capitalSystems: damageResult.systems,
+        hull: sumSystemsHull(damageResult.systems),
+      };
+      if (damageResult.justDisabled && damageResult.hitSystemId) {
+        this.log(
+          `${target.id}: ${SYSTEM_LABELS[damageResult.hitSystemId]} DISABLED!`,
+        );
+      }
+    }
     ships.set(target.id, updatedTarget);
 
     // Spend tokens

@@ -31,6 +31,13 @@ import {
   evaluateQuality,
   type PerformanceState,
 } from "../systems/PerformanceSystem";
+import {
+  applyCapitalSystemDamage,
+  isEnginesOffline,
+  sumSystemsHull,
+  SYSTEM_LABELS,
+  type CapitalSystemsState,
+} from "../systems/CapitalSystems";
 
 /** Minimum ship data required by the shared combat loop. */
 export interface ContinuousShip {
@@ -52,6 +59,8 @@ export interface ContinuousShip {
   targetAngle: number;
   weaponCooldown: number;
   combatStats: ModeCombatStats;
+  /** Present only for capital-role ships; null/undefined for everything else. */
+  capitalSystems?: CapitalSystemsState | null;
 }
 
 /** Minimal sprite container shape used by the base scene. */
@@ -139,6 +148,8 @@ export abstract class ContinuousBaseScene<
   protected runManeuverStep(): void {
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
+      if (ship.capitalSystems && isEnginesOffline(ship.capitalSystems))
+        continue;
       const template = getManeuverTemplate(
         ship.currentManeuverDir,
         ship.currentSpeed,
@@ -175,7 +186,21 @@ export abstract class ContinuousBaseScene<
       damage -= absorbed;
     }
     if (damage > 0) {
-      target.hull = Math.max(0, target.hull - damage);
+      if (target.capitalSystems) {
+        const result = applyCapitalSystemDamage(target.capitalSystems, damage);
+        target.capitalSystems = result.systems;
+        target.hull = sumSystemsHull(result.systems);
+        if (result.justDisabled && result.hitSystemId) {
+          this.effectsManager.showFloatingText(
+            target.x,
+            target.y - 45,
+            `${SYSTEM_LABELS[result.hitSystemId]} DISABLED!`,
+            "#ff8800",
+          );
+        }
+      } else {
+        target.hull = Math.max(0, target.hull - damage);
+      }
     }
     this.healthBars.get(target.id)?.update(target.hull, target.shields);
     if (target.hull <= 0) {

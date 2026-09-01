@@ -46,6 +46,14 @@ import {
 } from "../systems/PerformanceSystem";
 import { findClosestEnemy as battleFindClosestEnemy } from "../systems/BattleHelpers";
 import type { ManeuverDirection } from "../core/types";
+import {
+  applyCapitalSystemDamage,
+  createCapitalSystems,
+  isEnginesOffline,
+  sumSystemsHull,
+  SYSTEM_LABELS,
+  type CapitalSystemsState,
+} from "../systems/CapitalSystems";
 import { SurvivalRunController } from "../systems/survival/SurvivalRunController";
 import {
   SurvivalChoicePanel,
@@ -100,6 +108,8 @@ interface SurvivalShip {
   targetY: number;
   targetAngle: number;
   weaponCooldown: number;
+  /** Present only for boss-tier ships — Survival's closest analog to a capital. */
+  capitalSystems?: CapitalSystemsState | null;
 }
 
 interface ShipSprite extends Phaser.GameObjects.Container {
@@ -468,6 +478,8 @@ export class SurvivalScene extends Phaser.Scene {
       ...ship.combatStats,
       attackDice: ship.combatStats.attackDice + Math.floor(multiplier / 2),
     };
+    // Boss-tier ships get capital-style engines/turrets/bridge subsystems.
+    ship.capitalSystems = createCapitalSystems(ship.maxHull);
     this.ships.set(id, ship);
     this.enemyShipIds.push(id);
     this.createShipSprite(ship, false, true);
@@ -875,6 +887,8 @@ export class SurvivalScene extends Phaser.Scene {
   private processManeuvers(): void {
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
+      if (ship.capitalSystems && isEnginesOffline(ship.capitalSystems))
+        continue;
 
       const template = getManeuverTemplate(
         ship.currentManeuverDir,
@@ -1005,7 +1019,24 @@ export class SurvivalScene extends Phaser.Scene {
         damage -= shieldDmg;
       }
       if (damage > 0) {
-        target.hull = Math.max(0, target.hull - damage);
+        if (target.capitalSystems) {
+          const result = applyCapitalSystemDamage(
+            target.capitalSystems,
+            damage,
+          );
+          target.capitalSystems = result.systems;
+          target.hull = sumSystemsHull(result.systems);
+          if (result.justDisabled && result.hitSystemId) {
+            this.effectsManager.showFloatingText(
+              target.x,
+              target.y - 45,
+              `${SYSTEM_LABELS[result.hitSystemId]} DISABLED!`,
+              "#ff8800",
+            );
+          }
+        } else {
+          target.hull = Math.max(0, target.hull - damage);
+        }
       }
 
       this.effectsManager.fireLaser(
