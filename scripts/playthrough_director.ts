@@ -129,7 +129,7 @@ function buildReport(
   };
 }
 
-/** Boots a mode, lets it run unattended (AI-driven), and takes start/end vision checkpoints. */
+/** Boots a mode and either pilots its drill (if any) or watches it run unattended (AI-driven). */
 async function runModeScenario(
   browser: Browser,
   s: ModeScenario,
@@ -141,18 +141,31 @@ async function runModeScenario(
     return emptyReport(s, [...errors, "scene did not start"]);
   }
 
+  if (s.postStartMethod) {
+    await page.evaluate(
+      ({ key, method }: { key: string; method: string }) => {
+        const scene = (window as any).game?.scene.getScene(key) as any;
+        scene?.[method]?.();
+      },
+      { key: s.sceneKey, method: s.postStartMethod },
+    );
+  }
+
   const findings: VisionFinding[] = [];
   const shotStart = await takeShot(page, OUT_DIR, `${s.mode}-start`);
   const startFinding = await analyzeScreenshot(shotStart, `${s.mode} start`);
   if (startFinding) findings.push(startFinding);
 
   const shipsVia = s.shipsVia ?? "ships";
-  const frames = await recordTelemetry(
-    page,
-    s.sceneKey,
-    shipsVia,
-    s.durationMs,
-  );
+  const frames = s.drill
+    ? await runDrillWithTelemetry(
+        page,
+        s.drill,
+        s.sceneKey,
+        shipsVia,
+        Date.now(),
+      )
+    : await recordTelemetry(page, s.sceneKey, shipsVia, s.durationMs);
 
   const shotEnd = await takeShot(page, OUT_DIR, `${s.mode}-end`);
   const endFinding = await analyzeScreenshot(shotEnd, `${s.mode} end`);

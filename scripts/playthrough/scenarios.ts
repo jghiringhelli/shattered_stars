@@ -6,7 +6,7 @@
 
 import type { Page } from "playwright";
 import { waitForScene } from "../vqa_helpers";
-import { STRESS_DRILL } from "./drills";
+import { STRESS_DRILL, COMBAT_DRILL } from "./drills";
 import type { ArchetypeRole, ModeScenario, StartSpec } from "./types";
 
 const TWO_V_TWO: Record<string, unknown> = {
@@ -97,7 +97,8 @@ export const MODE_SCENARIOS: readonly ModeScenario[] = [
     mode: "survival",
     sceneKey: "SurvivalScene",
     start: { via: "init", data: { factionId: "free_confederation" } },
-    durationMs: 15_000,
+    durationMs: 20_000,
+    drill: COMBAT_DRILL,
   },
   {
     mode: "campaign",
@@ -115,6 +116,14 @@ export const MODE_SCENARIOS: readonly ModeScenario[] = [
     sceneKey: "ArcadeBattleScene",
     start: { via: "registry", battleConfig: EPIC_4V4 },
     durationMs: 15_000,
+  },
+  {
+    mode: "dogfight",
+    sceneKey: "DogfightScene",
+    start: { via: "init", data: {} },
+    durationMs: 20_000,
+    postStartMethod: "startMatch",
+    drill: COMBAT_DRILL,
   },
   {
     mode: "online",

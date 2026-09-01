@@ -43,6 +43,25 @@ export const STRESS_DRILL: ArchetypeDrill = {
   steps: Array.from({ length: REPEAT_COUNT }, () => AGGRESSIVE_REP).flat(),
 };
 
+/** One repetition: bank, fire, bank the other way, fire, boost, fire — real dogfighting. */
+const COMBAT_REP: readonly DrillStep[] = [
+  step("ArrowLeft", 300, 100),
+  step("Space", 150, 150),
+  step("ArrowRight", 300, 100),
+  step("Space", 150, 150),
+  step("ArrowUp", 60, 80),
+  step("ArrowUp", 60, 300),
+  step("Space", 150, 150),
+];
+
+const COMBAT_REPEAT_COUNT = 6;
+
+/** Player-piloted combat drill for modes without a squad builder (Dogfight, Survival). */
+export const COMBAT_DRILL: ArchetypeDrill = {
+  name: "player_combat",
+  steps: Array.from({ length: COMBAT_REPEAT_COUNT }, () => COMBAT_REP).flat(),
+};
+
 const KEY_CODES: Record<string, number> = {
   ArrowUp: 38,
   ArrowDown: 40,
