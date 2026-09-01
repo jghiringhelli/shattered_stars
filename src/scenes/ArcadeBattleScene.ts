@@ -86,6 +86,17 @@ import {
   type FactionId,
 } from "../config";
 import { HealthBar } from "../ui/HealthBar";
+import { CapitalSystemsIndicator } from "../ui/CapitalSystemsIndicator";
+import {
+  createCapitalSystems,
+  applyCapitalSystemDamage,
+  isEnginesOffline,
+  isBridgeOffline,
+  turretDamageMultiplier,
+  sumSystemsHull,
+  SYSTEM_LABELS,
+  type CapitalSystemsState,
+} from "../systems/CapitalSystems";
 import {
   buildFrameCache,
   type FrameCache,
@@ -159,6 +170,8 @@ interface ArcadeShip extends ShipState {
   wingLeaderId: string | null;
   /** Index into WING_SLOTS (0 = port, 1 = starboard). */
   wingSlotIndex: number;
+  /** Subsystem damage state (engines/turrets/bridge) — only set for capital-role ships. */
+  capitalSystems: CapitalSystemsState | null;
 }
 
 interface ShipSprite extends Phaser.GameObjects.Container {
@@ -204,6 +217,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private projectileSprites: Map<string, Phaser.GameObjects.Graphics> =
     new Map();
   private healthBars: Map<string, HealthBar> = new Map();
+  private capitalIndicators: Map<string, CapitalSystemsIndicator> = new Map();
   private minimap: Minimap | undefined;
   private cameraShakeEnabled = true;
   private damageNumbersEnabled = true;
@@ -420,6 +434,16 @@ export class ArcadeBattleScene extends Phaser.Scene {
         currentShields: ship.shields,
       });
       this.healthBars.set(id, healthBar);
+
+      if (ship.capitalSystems) {
+        const indicator = new CapitalSystemsIndicator(
+          this,
+          ship.x,
+          ship.y - 42,
+        );
+        indicator.update(ship.capitalSystems);
+        this.capitalIndicators.set(id, indicator);
+      }
     }
   }
 
@@ -1005,36 +1029,42 @@ export class ArcadeBattleScene extends Phaser.Scene {
       tickOrdnanceCooldowns(ship.ordnanceSlots, deltaMs);
       if (ship.turretSlot) tickTurretCooldown(ship.turretSlot, deltaMs);
 
-      // Update maneuver — discrete cycle, always executing
-      const { control, position, cycleComplete } = updateManeuver(
-        ship.control,
-        deltaMs,
-      );
-      ship.control = control;
+      // Dead in the water: a disabled engines system halts all movement.
+      const enginesOffline =
+        ship.capitalSystems != null && isEnginesOffline(ship.capitalSystems);
 
-      if (position) {
-        ship.x = position.x;
-        ship.y = position.y;
-        ship.angle = position.angle;
-      }
-
-      if (cycleComplete) {
-        // Classify completed maneuver for stress, then start next cycle
-        const dir = ship.control.currentManeuver ?? "straight";
-        const dialDir = dir.includes("turn")
-          ? "turn_left"
-          : dir.includes("bank")
-            ? "bank_left"
-            : "straight";
-        const difficulty = lookupDialDifficulty(
-          dialDir,
-          ship.control.speed,
-          ship.shipDial,
+      if (!enginesOffline) {
+        // Update maneuver — discrete cycle, always executing
+        const { control, position, cycleComplete } = updateManeuver(
+          ship.control,
+          deltaMs,
         );
-        const relief = this.activeAuras.get(ship.id)?.stressReliefTiers ?? 0;
-        const eased = easeDifficulty(difficulty, relief);
-        ship.stress = updateStress(ship.stress, eased, CYCLE_DURATION_MS);
-        ship.control = advanceCycle(ship, ship.control);
+        ship.control = control;
+
+        if (position) {
+          ship.x = position.x;
+          ship.y = position.y;
+          ship.angle = position.angle;
+        }
+
+        if (cycleComplete) {
+          // Classify completed maneuver for stress, then start next cycle
+          const dir = ship.control.currentManeuver ?? "straight";
+          const dialDir = dir.includes("turn")
+            ? "turn_left"
+            : dir.includes("bank")
+              ? "bank_left"
+              : "straight";
+          const difficulty = lookupDialDifficulty(
+            dialDir,
+            ship.control.speed,
+            ship.shipDial,
+          );
+          const relief = this.activeAuras.get(ship.id)?.stressReliefTiers ?? 0;
+          const eased = easeDifficulty(difficulty, relief);
+          ship.stress = updateStress(ship.stress, eased, CYCLE_DURATION_MS);
+          ship.control = advanceCycle(ship, ship.control);
+        }
       }
 
       // Wrap around battlefield
@@ -1073,6 +1103,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
         hull: ship.hull,
         shields: ship.shields,
         maxShields: ship.maxShields,
+        systemsOnline: ship.capitalSystems
+          ? !isBridgeOffline(ship.capitalSystems)
+          : true,
       });
     }
 
@@ -1511,6 +1544,22 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
           if (ship.shields > 0) {
             ship.shields = Math.max(0, ship.shields - damage);
+          } else if (ship.capitalSystems) {
+            const result = applyCapitalSystemDamage(
+              ship.capitalSystems,
+              damage,
+            );
+            ship.capitalSystems = result.systems;
+            ship.hull = sumSystemsHull(result.systems);
+            this.damageThisFrame = true;
+            if (result.justDisabled && result.hitSystemId) {
+              this.showFloatingText(
+                ship.x,
+                ship.y - 45,
+                `${SYSTEM_LABELS[result.hitSystemId]} DISABLED!`,
+                "#ff8800",
+              );
+            }
           } else {
             ship.hull = Math.max(0, ship.hull - damage);
             this.damageThisFrame = true;
@@ -1807,6 +1856,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
       cloakTimer: 0,
       wingLeaderId: null,
       wingSlotIndex: 0,
+      capitalSystems:
+        def?.role === "capital" ? createCapitalSystems(baseShip.hull) : null,
     };
 
     return ship;
@@ -1911,6 +1962,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
           healthBar.destroy();
           this.healthBars.delete(id);
         }
+
+        // Clean up capital systems indicator
+        const indicator = this.capitalIndicators.get(id);
+        if (indicator) {
+          indicator.destroy();
+          this.capitalIndicators.delete(id);
+        }
         continue;
       }
 
@@ -1928,6 +1986,15 @@ export class ArcadeBattleScene extends Phaser.Scene {
       if (healthBar) {
         healthBar.setPosition(ship.x, ship.y - 30);
         healthBar.update(ship.hull, ship.shields);
+      }
+
+      // Update capital systems indicator position and state
+      if (ship.capitalSystems) {
+        const indicator = this.capitalIndicators.get(id);
+        if (indicator) {
+          indicator.setPosition(ship.x, ship.y - 42);
+          indicator.update(ship.capitalSystems);
+        }
       }
 
       // Thruster intensity based on speed
@@ -2544,13 +2611,20 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
     const rad = (ship.turretSlot.turretFacing - 90) * (Math.PI / 180);
     const auraBonus = this.activeAuras.get(ship.id)?.damageBonus ?? 0;
+    const systemsMultiplier = ship.capitalSystems
+      ? turretDamageMultiplier(ship.capitalSystems)
+      : 1;
+    const damage = Math.max(
+      1,
+      Math.round((ship.turretSlot.damage + auraBonus) * systemsMultiplier),
+    );
     const proj = createProjectile(
       ship.x + Math.cos(rad) * 20,
       ship.y + Math.sin(rad) * 20,
       ship.turretSlot.turretFacing,
       ship.id,
       ship.faction,
-      ship.turretSlot.damage + auraBonus,
+      damage,
     );
     this.projectiles.push(proj);
 

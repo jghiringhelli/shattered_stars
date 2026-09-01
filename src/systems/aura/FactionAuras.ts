@@ -34,6 +34,8 @@ export interface AuraShip {
   readonly hull: number;
   readonly shields: number;
   readonly maxShields: number;
+  /** False when a disabled subsystem (e.g. a capital's bridge) blocks projection. Defaults to online. */
+  readonly systemsOnline?: boolean;
 }
 
 /** The distinct effect a faction aura applies to covered allies. */
@@ -178,6 +180,7 @@ export interface ProjectionScale {
  */
 export function projectionScaleFor(ship: AuraShip): ProjectionScale | null {
   if (ship.hull <= 0) return null;
+  if (ship.systemsOnline === false) return null;
   if (ship.role === "capital") {
     return {
       kind: "capital",
