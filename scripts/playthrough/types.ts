@@ -88,6 +88,8 @@ export interface ModeReport {
   readonly consoleErrors: readonly string[];
   readonly visionFindings: readonly VisionFinding[];
   readonly finalVerdict: string | null;
+  /** Elapsed ms until matchCompleteAccessor fired, or null if it never did within the session. */
+  readonly matchDurationMs: number | null;
 }
 
 /** How a scenario boots its scene — mirrors verify_loop.ts's StartSpec. */
@@ -106,4 +108,6 @@ export interface ModeScenario {
   readonly drill?: ArchetypeDrill;
   /** Method to call on the scene right after boot, to bypass a setup screen (e.g. "startMatch"). */
   readonly postStartMethod?: string;
+  /** Boolean scene property polled to timestamp match completion (e.g. "matchComplete"). */
+  readonly matchCompleteAccessor?: string;
 }

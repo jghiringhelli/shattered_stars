@@ -124,6 +124,7 @@ export const MODE_SCENARIOS: readonly ModeScenario[] = [
     durationMs: 20_000,
     postStartMethod: "startMatch",
     drill: COMBAT_DRILL,
+    matchCompleteAccessor: "matchComplete",
   },
   {
     mode: "online",
