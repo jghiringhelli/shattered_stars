@@ -1,13 +1,16 @@
 /**
  * Event-driven vision analysis — cost-optimized: screenshots are sent to
- * Claude Vision only at flagged checkpoints (mode transition, kill, stress
- * spike, drill end, one random sample per minute), never per-frame, and each
- * call returns structured JSON so results aggregate without extra LLM calls.
+ * Claude only at flagged checkpoints (mode transition, kill, stress spike,
+ * drill end, one random sample per minute), never per-frame, and each call
+ * returns structured JSON so results aggregate without extra LLM calls.
+ * Every call tries the `claude` CLI first (reuses the user's own login, no
+ * ANTHROPIC_API_KEY management); the direct Vision API is only a fallback.
  * One additional text-only call synthesizes the final per-mode verdict.
  */
 
 import * as fs from "fs";
 import { callVision } from "../vqa_helpers";
+import { callClaudeCliText, callClaudeCliVision } from "./claudeCli";
 import type { VisionFinding } from "./types";
 
 const RUBRIC_PROMPT = `You are QA-testing a space-combat arcade game (Shattered Stars, X-Wing-miniatures-inspired). Look at this screenshot and reply with ONLY minified JSON, no prose, no markdown fences, matching exactly this shape:
@@ -19,13 +22,23 @@ function stripFences(text: string): string {
   return m ? m[0] : text;
 }
 
-/** Sends one screenshot to Claude Vision with the structured QA rubric. */
+/**
+ * Sends one screenshot to Claude for the structured QA rubric. Tries the
+ * `claude` CLI first (no key management, uses the user's own login); falls
+ * back to the direct Vision API only if the CLI is unavailable and
+ * ANTHROPIC_API_KEY is set.
+ */
 export async function analyzeScreenshot(
   screenshotPath: string,
   context: string,
 ): Promise<VisionFinding | null> {
-  if (!process.env["ANTHROPIC_API_KEY"]) return null;
-  const raw = await callVision(screenshotPath, RUBRIC_PROMPT);
+  const cliText = callClaudeCliVision(RUBRIC_PROMPT, screenshotPath);
+  const raw =
+    cliText ??
+    (process.env["ANTHROPIC_API_KEY"]
+      ? await callVision(screenshotPath, RUBRIC_PROMPT)
+      : null);
+  if (raw == null) return null;
   try {
     const parsed = JSON.parse(stripFences(raw)) as Omit<
       VisionFinding,
@@ -40,10 +53,17 @@ export async function analyzeScreenshot(
   }
 }
 
-/** Text-only Claude call (no image) for the one-per-mode closing synthesis. */
+/**
+ * Text-only prompt for the one-per-mode closing synthesis. Tries the `claude`
+ * CLI first, falls back to the direct Messages API only if the CLI is
+ * unavailable and ANTHROPIC_API_KEY is set.
+ */
 async function callTextSynthesis(prompt: string): Promise<string> {
+  const cliText = callClaudeCliText(prompt);
+  if (cliText != null) return cliText;
   const apiKey = process.env["ANTHROPIC_API_KEY"];
-  if (!apiKey) return "(skipped — ANTHROPIC_API_KEY not set)";
+  if (!apiKey)
+    return "(skipped — claude CLI unavailable/not logged in, and ANTHROPIC_API_KEY not set)";
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
