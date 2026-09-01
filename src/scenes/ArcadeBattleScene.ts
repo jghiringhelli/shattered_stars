@@ -1843,6 +1843,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
         baseShip,
         SHIP_SIZES[def?.baseStats.size ?? "small"] ?? 32,
         getMovementProfile(defId),
+        def?.baseStats.speed ?? { min: 1, max: 5 },
       ),
       targetId: null,
       aiDecisionTimer: 0, // fire immediately on first update

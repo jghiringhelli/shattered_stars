@@ -61,16 +61,21 @@ export interface ShipControlState {
  * @param ship            - Ship whose position/angle seeds the first path.
  * @param baseSize        - Ship base size in pixels (from SHIP_SIZES[size]).
  * @param movementProfile - "fighter" (default) or "capital" (boat easing).
+ * @param speedBounds     - Ship's actual speed.min/max (from ShipDefinition.baseStats);
+ *                          defaults to the generic 1-5 fighter range when omitted.
  */
 export function createControlState(
   ship: ShipState,
   baseSize: number = 0,
   movementProfile: MovementProfile = "fighter",
+  speedBounds: { min: number; max: number } = { min: 1, max: 5 },
 ): ShipControlState {
+  const minSpeed = speedBounds.min;
+  const maxSpeed = speedBounds.max;
   const base: ShipControlState = {
-    speed: 3,
-    maxSpeed: 5,
-    minSpeed: 1,
+    speed: Math.min(Math.max(3, minSpeed), maxSpeed),
+    maxSpeed,
+    minSpeed,
     baseSize,
     movementProfile,
     currentManeuver: null,
