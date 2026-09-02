@@ -12,6 +12,7 @@
 import Phaser from "phaser";
 import { createHoverButton } from "../ui/ButtonFactory";
 import { ShipStatCard } from "../ui/ShipStatCard";
+import { PauseMenu } from "../ui/PauseMenu";
 import type { FactionId } from "../config";
 import { BATTLEFIELD_SIZE, FACTION_COLORS, SHIP_SIZES } from "../config";
 import {
@@ -333,7 +334,8 @@ export class EpicBattleScene extends Phaser.Scene {
   // UI
   private phaseText!: Phaser.GameObjects.Text;
   private bossHealthBar!: Phaser.GameObjects.Graphics;
-  private setupContainer!: Phaser.GameObjects.Container;
+  private setupObjects: Phaser.GameObjects.GameObject[] = [];
+  private pauseMenu!: PauseMenu;
 
   constructor() {
     super({ key: "EpicBattleScene" });
@@ -365,7 +367,9 @@ export class EpicBattleScene extends Phaser.Scene {
     this.showSetupScreen();
 
     this.cameras.main.centerOn(BATTLEFIELD_SIZE / 2, BATTLEFIELD_SIZE / 2);
-    this.cameras.main.setZoom(0.7);
+    // Zoom is applied only once the battle starts (startBattle()) — a camera
+    // zoom != 1.0 while scrollFactor(0) setup UI is showing breaks Phaser's
+    // pointer hit-testing for that UI, even though it renders in the right spot.
   }
 
   private resetState(): void {
@@ -393,17 +397,15 @@ export class EpicBattleScene extends Phaser.Scene {
 
   private showSetupScreen(): void {
     const centerX = this.scale.width / 2;
-    const centerY = this.scale.height / 2;
 
-    this.setupContainer = this.add.container(0, 0);
-    this.setupContainer.setScrollFactor(0);
-    this.setupContainer.setDepth(2000);
+    this.setupObjects.forEach((o) => o.destroy());
+    this.setupObjects = [];
 
     // Background
     const bg = this.add.graphics();
     bg.fillStyle(0x000000, 0.9);
     bg.fillRect(0, 0, this.scale.width, this.scale.height);
-    this.setupContainer.add(bg);
+    this.track(bg);
 
     // Title — positioned near the very top to avoid blank gap
     const title = this.add
@@ -412,7 +414,7 @@ export class EpicBattleScene extends Phaser.Scene {
         color: "#ff6644",
       })
       .setOrigin(0.5);
-    this.setupContainer.add(title);
+    this.track(title);
 
     const subtitle = this.add
       .text(centerX, 70, "Destroy the enemy capital ship", {
@@ -420,7 +422,7 @@ export class EpicBattleScene extends Phaser.Scene {
         color: "#aaaaaa",
       })
       .setOrigin(0.5);
-    this.setupContainer.add(subtitle);
+    this.track(subtitle);
 
     // Boss selection
     const bossLabel = this.add
@@ -429,7 +431,7 @@ export class EpicBattleScene extends Phaser.Scene {
         color: "#ffffff",
       })
       .setOrigin(0.5);
-    this.setupContainer.add(bossLabel);
+    this.track(bossLabel);
 
     const factions: FactionId[] = [
       "terran_hegemony",
@@ -458,7 +460,7 @@ export class EpicBattleScene extends Phaser.Scene {
           this.showSetupScreen();
         },
       );
-      this.setupContainer.add(btn);
+      this.track(btn);
       yPos += 45;
     });
 
@@ -469,7 +471,7 @@ export class EpicBattleScene extends Phaser.Scene {
         color: "#ffffff",
       })
       .setOrigin(0.5);
-    this.setupContainer.add(diffLabel);
+    this.track(diffLabel);
 
     const difficulties: Array<{
       id: "easy" | "medium" | "hard" | "mythic";
@@ -494,7 +496,7 @@ export class EpicBattleScene extends Phaser.Scene {
           this.showSetupScreen();
         },
       );
-      this.setupContainer.add(btn);
+      this.track(btn);
       yPos += 45;
     });
 
@@ -517,7 +519,7 @@ export class EpicBattleScene extends Phaser.Scene {
         },
       )
       .setOrigin(0.5);
-    this.setupContainer.add(info);
+    this.track(info);
 
     // Start button
     const startBtn = createHoverButton(
@@ -535,7 +537,7 @@ export class EpicBattleScene extends Phaser.Scene {
       },
       () => this.startBattle(),
     );
-    this.setupContainer.add(startBtn);
+    this.track(startBtn);
 
     // Back button
     const backBtn = this.add
@@ -551,7 +553,22 @@ export class EpicBattleScene extends Phaser.Scene {
       this.scene.start("MainMenuScene");
     });
 
-    this.setupContainer.add(backBtn);
+    this.track(backBtn);
+  }
+
+  /**
+   * Tracks a setup-screen object for later cleanup, forcing its own
+   * scrollFactor(0)/depth so it hit-tests correctly regardless of camera
+   * zoom (see the reparenting/zoom note in showSetupScreen's caller).
+   */
+  private track(obj: Phaser.GameObjects.GameObject): void {
+    const withTransform = obj as unknown as {
+      setScrollFactor?: (x: number) => unknown;
+      setDepth?: (d: number) => unknown;
+    };
+    withTransform.setScrollFactor?.(0);
+    withTransform.setDepth?.(2000);
+    this.setupObjects.push(obj);
   }
 
   private createSelectionButton(
@@ -586,7 +603,8 @@ export class EpicBattleScene extends Phaser.Scene {
 
     const hitArea = this.add
       .rectangle(0, 0, 240, 36)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ useHandCursor: true })
+      .setScrollFactor(0);
     container.add(hitArea);
 
     hitArea.on("pointerdown", onClick);
@@ -595,13 +613,16 @@ export class EpicBattleScene extends Phaser.Scene {
   }
 
   private startBattle(): void {
-    this.setupContainer.destroy();
+    this.setupObjects.forEach((o) => o.destroy());
+    this.setupObjects = [];
     this.isSetupPhase = false;
+    this.cameras.main.setZoom(0.7);
 
     audioManager.playMusic("combat_high");
 
     this.createHUD();
     this.setupInput();
+    this.createPauseMenu();
     this.spawnBoss();
     this.spawnPlayerSquad();
     this.spawnEscorts();
@@ -748,7 +769,7 @@ export class EpicBattleScene extends Phaser.Scene {
 
   private setupInput(): void {
     this.input.keyboard!.on("keydown-ESC", () => {
-      this.isPaused = !this.isPaused;
+      this.togglePause();
     });
 
     this.input.on(
@@ -763,6 +784,39 @@ export class EpicBattleScene extends Phaser.Scene {
         this.cameras.main.setZoom(Phaser.Math.Clamp(zoom, 0.4, 1.5));
       },
     );
+  }
+
+  private createPauseMenu(): void {
+    this.pauseMenu = new PauseMenu({
+      scene: this,
+      onResume: () => {
+        this.isPaused = false;
+      },
+      onRestart: () => {
+        this.scene.restart();
+      },
+      onSettings: () => {
+        this.scene.launch("SettingsScene", { returnScene: "EpicBattleScene" });
+      },
+      onQuit: () => {
+        this.scene.start("MainMenuScene");
+      },
+    });
+  }
+
+  /**
+   * ESC previously just flipped `isPaused` with no visual feedback or way
+   * back to the menu — the freeze looked like a bug. Zoom is reset to 1.0
+   * first for the same scrollFactor(0)-vs-zoom hit-testing reason as the
+   * setup/end screens.
+   */
+  private togglePause(): void {
+    if (this.isSetupPhase || this.gameResult !== "none") return;
+    this.isPaused = !this.isPaused;
+    if (this.isPaused) {
+      this.cameras.main.setZoom(1.0);
+      this.pauseMenu.show();
+    }
   }
 
   private spawnBoss(): void {
@@ -1717,6 +1771,10 @@ export class EpicBattleScene extends Phaser.Scene {
   }
 
   private createEndButtons(x: number, y: number): void {
+    // Same scrollFactor(0)-vs-zoom hit-test issue as the setup screen — the
+    // mouse wheel can leave zoom far from 1.0 by the time the match ends.
+    this.cameras.main.setZoom(1.0);
+
     const retryBtn = this.add
       .text(x - 100, y, "RETRY", {
         font: "bold 24px Arial",

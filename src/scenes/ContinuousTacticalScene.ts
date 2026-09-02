@@ -1027,7 +1027,13 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   private togglePause(): void {
     this.isPaused = !this.isPaused;
     this.instructionText.setColor(this.isPaused ? "#ff4444" : "#888888");
-    if (this.isPaused && this.pauseMenu) this.pauseMenu.show();
+    if (this.isPaused && this.pauseMenu) {
+      // Same scrollFactor(0)-vs-zoom hit-test issue seen elsewhere in this
+      // codebase: a GameObject with scrollFactor(0) is not correctly
+      // hit-tested by Phaser's pointer input when the camera zoom != 1.0.
+      this.cameras.main.setZoom(1.0);
+      this.pauseMenu.show();
+    }
   }
 
   // ──────────────────────────────────────────────

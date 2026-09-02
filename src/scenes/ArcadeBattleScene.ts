@@ -627,6 +627,11 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   private showPauseOverlay(): void {
+    // Same scrollFactor(0)-vs-zoom hit-test issue seen elsewhere in this
+    // codebase: a GameObject with scrollFactor(0) is not correctly hit-tested
+    // by Phaser's pointer input when the camera zoom != 1.0.
+    this.cameras.main.setZoom(1.0);
+
     const cx = this.scale.width / 2;
     const cy = this.scale.height / 2;
     this.pauseOverlay = this.add
@@ -683,7 +688,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
         padding: { x: 22, y: 10 },
       })
       .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ useHandCursor: true })
+      .setScrollFactor(0);
     resumeBtn.on("pointerover", () => resumeBtn.setColor("#ffffff"));
     resumeBtn.on("pointerout", () => resumeBtn.setColor("#44ff88"));
     resumeBtn.on("pointerdown", () => {
@@ -701,7 +707,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
         padding: { x: 22, y: 8 },
       })
       .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ useHandCursor: true })
+      .setScrollFactor(0);
     settingsBtn.on("pointerover", () => settingsBtn.setColor("#ffffff"));
     settingsBtn.on("pointerout", () => settingsBtn.setColor("#88aaff"));
     settingsBtn.on("pointerdown", () => {
@@ -717,7 +724,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
         padding: { x: 18, y: 8 },
       })
       .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ useHandCursor: true })
+      .setScrollFactor(0);
     quitBtn.on("pointerover", () => quitBtn.setColor("#ffffff"));
     quitBtn.on("pointerout", () => quitBtn.setColor("#ff5555"));
     quitBtn.on("pointerdown", () => this.scene.start("MainMenuScene"));
@@ -3062,6 +3070,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   private showEndScreen(victory: boolean): void {
+    // Same scrollFactor(0)-vs-zoom hit-test issue as the pause overlay — the
+    // dynamic speed-based zoom can be far from 1.0 when the match ends.
+    this.cameras.main.setZoom(1.0);
     this.awardProgressionXp(victory);
     // Hide player flight-stats HUD — irrelevant (and misleading) on the end screen
     this.hullText.setVisible(false);

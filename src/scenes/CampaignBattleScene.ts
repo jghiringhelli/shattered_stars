@@ -570,6 +570,11 @@ export class CampaignBattleScene extends Phaser.Scene {
     saveData: CampaignSaveData,
     failReason?: string,
   ): void {
+    // Same scrollFactor(0)-vs-zoom hit-test issue seen elsewhere in this
+    // codebase: a GameObject with scrollFactor(0) is not correctly hit-tested
+    // by Phaser's pointer input when the camera zoom != 1.0.
+    this.cameras.main.setZoom(1.0);
+
     // Dim the battlefield
     const dimmer = this.add.graphics();
     dimmer.fillStyle(0x000000, 0.7);
@@ -700,52 +705,51 @@ export class CampaignBattleScene extends Phaser.Scene {
       panel.add(tipText);
     }
 
-    // Buttons
-    const buttonY = 140;
+    // Buttons — created directly on the scene (not reparented into `panel`)
+    // because Phaser's pointer input silently breaks hit-testing when an
+    // already-`setInteractive()` Container is added into another Container
+    // afterward (verified in DogfightScene/AceDuelScene).
+    const buttonY = centerY + 140;
+    const resultButtons: Phaser.GameObjects.Container[] = [];
 
     if (victory) {
       // Continue button
-      const continueBtn = this.createResultButton(
-        0,
-        buttonY,
-        "CONTINUE",
-        0x44aa44,
-        () => {
+      resultButtons.push(
+        this.createResultButton(centerX, buttonY, "CONTINUE", 0x44aa44, () => {
           this.scene.start("CampaignScene", { factionId: this.factionId });
-        },
+        }),
       );
-      panel.add(continueBtn);
     } else {
       // Retry button
-      const retryBtn = this.createResultButton(
-        -80,
-        buttonY,
-        "RETRY",
-        0xaa8844,
-        () => {
-          this.scene.restart();
-        },
+      resultButtons.push(
+        this.createResultButton(
+          centerX - 80,
+          buttonY,
+          "RETRY",
+          0xaa8844,
+          () => {
+            this.scene.restart();
+          },
+        ),
       );
-      panel.add(retryBtn);
 
       // Quit button
-      const quitBtn = this.createResultButton(
-        80,
-        buttonY,
-        "QUIT",
-        0x666666,
-        () => {
+      resultButtons.push(
+        this.createResultButton(centerX + 80, buttonY, "QUIT", 0x666666, () => {
           this.scene.start("CampaignScene", { factionId: this.factionId });
-        },
+        }),
       );
-      panel.add(quitBtn);
     }
 
     // Animate in
     panel.setScale(0.5);
     panel.setAlpha(0);
+    resultButtons.forEach((btn) => {
+      btn.setScale(0.5);
+      btn.setAlpha(0);
+    });
     this.tweens.add({
-      targets: panel,
+      targets: [panel, ...resultButtons],
       scale: 1,
       alpha: 1,
       duration: 300,
@@ -777,6 +781,8 @@ export class CampaignBattleScene extends Phaser.Scene {
 
     container.setSize(120, 40);
     container.setInteractive({ useHandCursor: true });
+    container.setScrollFactor(0);
+    container.setDepth(2001);
 
     container.on("pointerover", () => {
       bg.clear();
@@ -934,6 +940,10 @@ export class CampaignBattleScene extends Phaser.Scene {
     }
 
     this.isPaused = true;
+    // Same scrollFactor(0)-vs-zoom hit-test issue seen elsewhere in this
+    // codebase: a GameObject with scrollFactor(0) is not correctly hit-tested
+    // by Phaser's pointer input when the camera zoom != 1.0.
+    this.cameras.main.setZoom(1.0);
     const cx = this.scale.width / 2;
     const cy = this.scale.height / 2;
 
@@ -978,7 +988,8 @@ export class CampaignBattleScene extends Phaser.Scene {
     );
     const resumeHit = this.add
       .rectangle(0, 0, 200, 44, 0, 0)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ useHandCursor: true })
+      .setScrollFactor(0);
     resumeHit.on("pointerdown", () => {
       this.isPaused = false;
       this.pauseOverlay?.destroy();
@@ -1003,7 +1014,8 @@ export class CampaignBattleScene extends Phaser.Scene {
     );
     const quitHit = this.add
       .rectangle(0, 0, 200, 44, 0, 0)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ useHandCursor: true })
+      .setScrollFactor(0);
     quitHit.on("pointerdown", () => {
       this.scene.start("CampaignScene", { factionId: this.factionId });
     });
