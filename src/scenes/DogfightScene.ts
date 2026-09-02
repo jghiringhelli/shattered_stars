@@ -112,6 +112,10 @@ export class DogfightScene extends Phaser.Scene {
   private maneuverInterval = 300;
   private lastSecondTime = 0;
 
+  // Camera follow (manual — toroid wrap makes Phaser's startFollow jump at the seam)
+  private cameraVirtualX = BATTLEFIELD_SIZE / 2;
+  private cameraVirtualY = BATTLEFIELD_SIZE / 2;
+
   // Effects
   private effectsManager!: EffectsManager;
   private background!: ParallaxBackground;
@@ -133,7 +137,7 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setBounds(0, 0, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
+    // No setBounds — camera is driven manually for seamless toroid wrapping (see updateCameraFollow).
     this.cameras.main.setBackgroundColor(0x050510);
 
     audioManager.initialize();
@@ -540,6 +544,17 @@ export class DogfightScene extends Phaser.Scene {
     );
 
     this.showRoundStart();
+
+    const playerSprite = this.shipSprites.get(this.playerShipIds[0] ?? "");
+    if (playerSprite) {
+      this.cameraVirtualX = playerSprite.x;
+      this.cameraVirtualY = playerSprite.y;
+      const zoom = this.cameras.main.zoom;
+      this.cameras.main.setScroll(
+        this.cameraVirtualX - this.scale.width / (2 * zoom),
+        this.cameraVirtualY - this.scale.height / (2 * zoom),
+      );
+    }
   }
 
   private showRoundStart(): void {
@@ -614,7 +629,41 @@ export class DogfightScene extends Phaser.Scene {
     this.processCombat(delta);
     this.updateAI();
     this.updateSprites();
+    this.updateCameraFollow();
     this.checkRoundEnd();
+  }
+
+  /**
+   * Manually follows the player ship with toroid-aware shortest-path lerp
+   * (mirrors ArcadeBattleScene.updateCameraFollow) so the camera doesn't stay
+   * pinned to the battlefield center while the ship flies away.
+   */
+  private updateCameraFollow(): void {
+    const ship = this.ships.get(this.playerShipIds[0] ?? "");
+    if (!ship) return;
+
+    let dx = ship.x - this.cameraVirtualX;
+    let dy = ship.y - this.cameraVirtualY;
+    if (dx > BATTLEFIELD_SIZE / 2) dx -= BATTLEFIELD_SIZE;
+    if (dx < -BATTLEFIELD_SIZE / 2) dx += BATTLEFIELD_SIZE;
+    if (dy > BATTLEFIELD_SIZE / 2) dy -= BATTLEFIELD_SIZE;
+    if (dy < -BATTLEFIELD_SIZE / 2) dy += BATTLEFIELD_SIZE;
+
+    const lerp = 0.09;
+    this.cameraVirtualX += dx * lerp;
+    this.cameraVirtualY += dy * lerp;
+    this.cameraVirtualX =
+      ((this.cameraVirtualX % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
+      BATTLEFIELD_SIZE;
+    this.cameraVirtualY =
+      ((this.cameraVirtualY % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
+      BATTLEFIELD_SIZE;
+
+    const zoom = this.cameras.main.zoom;
+    this.cameras.main.setScroll(
+      this.cameraVirtualX - this.scale.width / (2 * zoom),
+      this.cameraVirtualY - this.scale.height / (2 * zoom),
+    );
   }
 
   private createHUD(): void {
