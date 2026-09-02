@@ -33,6 +33,8 @@ interface Scenario {
   readonly expected?: number;
   /** Where live ships live: scene.ships (default) or the campaign battle manager. */
   readonly shipsVia?: "ships" | "battleManager";
+  /** Scene method to call right after boot (e.g. Dogfight's setup screen needs startMatch()). */
+  readonly postStartMethod?: string;
 }
 
 /** How a scenario boots its scene at the game's boundary. */
@@ -126,6 +128,15 @@ const SCENARIOS: Scenario[] = [
       arg: "free_confederation",
     },
   },
+  {
+    name: "dogfight-1v1",
+    sceneKey: "DogfightScene",
+    requiresPlayer: true,
+    runMs: 3_000,
+    expected: 2,
+    start: { via: "init", data: {} },
+    postStartMethod: "startMatch",
+  },
 ];
 
 /** COLLAPSE: stop active scenes and boot the target scene by its start strategy. */
@@ -152,6 +163,17 @@ async function collapse(page: Page, s: Scenario): Promise<boolean> {
   );
   try {
     await waitForScene(page, s.sceneKey, 15_000);
+    if (s.postStartMethod) {
+      await page.evaluate(
+        (spec: { sceneKey: string; method: string }) => {
+          const scene = (window as any).game?.scene.getScene(
+            spec.sceneKey,
+          ) as any;
+          scene?.[spec.method]?.();
+        },
+        { sceneKey: s.sceneKey, method: s.postStartMethod },
+      );
+    }
     return true;
   } catch {
     return false;

@@ -62,6 +62,7 @@ import {
 import type { Power } from "../data/survival/powers";
 import type { HangarOption } from "../data/survival/hangar";
 import type { EscortOption } from "../data/survival/escorts";
+import { ShipTelemetry } from "../debug/ShipTelemetry";
 
 /** Default starting ship for each faction in Survival mode. */
 const FACTION_STARTER_SHIPS: Record<FactionId, string> = {
@@ -156,6 +157,7 @@ export class SurvivalScene extends Phaser.Scene {
   private effectsManager!: EffectsManager;
   private background!: ParallaxBackground;
   private performanceState: PerformanceState = createPerformanceState();
+  private telemetry: ShipTelemetry | null = null;
 
   constructor() {
     super({ key: "SurvivalScene" });
@@ -193,6 +195,14 @@ export class SurvivalScene extends Phaser.Scene {
     this.resetState();
     this.createHUD();
     this.setupInput();
+
+    if (ShipTelemetry.isEnabled()) {
+      this.telemetry = new ShipTelemetry();
+      this.telemetry.start();
+      (
+        window as unknown as { __shipTelemetry: ShipTelemetry }
+      ).__shipTelemetry = this.telemetry;
+    }
 
     this.cameras.main.centerOn(BATTLEFIELD_SIZE / 2, BATTLEFIELD_SIZE / 2);
     this.cameras.main.setZoom(0.9);
@@ -928,6 +938,7 @@ export class SurvivalScene extends Phaser.Scene {
         sprite.setPosition(ship.x, ship.y);
         sprite.setAngle(ship.angle);
       }
+      this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
   }
 

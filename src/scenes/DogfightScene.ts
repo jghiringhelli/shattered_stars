@@ -40,6 +40,7 @@ import {
   type PerformanceState,
 } from "../systems/PerformanceSystem";
 import type { ManeuverDirection } from "../core/types";
+import { ShipTelemetry } from "../debug/ShipTelemetry";
 import {
   createSideScore,
   creditKill,
@@ -115,6 +116,7 @@ export class DogfightScene extends Phaser.Scene {
   private effectsManager!: EffectsManager;
   private background!: ParallaxBackground;
   private performanceState: PerformanceState = createPerformanceState();
+  private telemetry: ShipTelemetry | null = null;
 
   // UI
   private roundText!: Phaser.GameObjects.Text;
@@ -154,6 +156,14 @@ export class DogfightScene extends Phaser.Scene {
 
     this.resetMatchState();
     this.showSetupScreen();
+
+    if (ShipTelemetry.isEnabled()) {
+      this.telemetry = new ShipTelemetry();
+      this.telemetry.start();
+      (
+        window as unknown as { __shipTelemetry: ShipTelemetry }
+      ).__shipTelemetry = this.telemetry;
+    }
 
     this.cameras.main.centerOn(BATTLEFIELD_SIZE / 2, BATTLEFIELD_SIZE / 2);
     // Tighter zoom for dogfight
@@ -847,6 +857,7 @@ export class DogfightScene extends Phaser.Scene {
         sprite.setPosition(ship.x, ship.y);
         sprite.setAngle(ship.angle);
       }
+      this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
   }
 

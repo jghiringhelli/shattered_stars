@@ -72,15 +72,25 @@ via one of three start strategies: `registry` (set `battleConfig`, then `scene.s
 `init` (`scene.start(key, data)`), or `hook` (call a DEV-only `window.__verify*` function
 that assembles config from game modules — see `src/debug/verifyHooks.ts`). Scenarios with a
 fixed roster set `expected`; dynamic-spawn modes omit it and INV-1 becomes "≥1 ship".
+A scenario may also set `postStartMethod` — a scene method called once right after boot,
+for scenes whose `create()` shows a setup screen instead of starting play directly
+(e.g. Dogfight's ship/format picker) rather than starting an active match.
 
 - **arcade-2v2** — ArcadeBattleScene (registry), 2 player + 2 AI, 3s. Core real-time smoke.
 - **continuous-2v2** — ContinuousTacticalScene (registry), 2 player + 2 AI, 3s.
 - **survival-solo** — SurvivalScene (init `{factionId}`), dynamic roster, 3.5s. Wave spawn.
 - **campaign-mission1** — CampaignBattleScene (hook `__verifyStartCampaign`), mission 1 with
   a fresh save; ships read from the battle manager state, 2.5s.
+- **dogfight-1v1** — DogfightScene (init `{}` + `postStartMethod: "startMatch"` to skip the
+  setup screen), 1 player + 1 AI, 3s.
 
 Not yet covered (UI-driven setup screens — need button-clicking or a start hook):
-EpicBattleScene, DogfightScene, AceDuelScene.
+EpicBattleScene, AceDuelScene.
+
+`ShipTelemetry` (INV-5's data source) is wired into ArcadeBattleScene, ContinuousTacticalScene,
+SurvivalScene, and DogfightScene — every real-time scene the loop drives. CampaignBattleScene
+is turn-based (discrete per-turn moves, not per-frame), so INV-5 legitimately reports 0
+samples there; that is not a gap.
 
 ## Running
 

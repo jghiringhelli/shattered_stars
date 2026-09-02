@@ -1,20 +1,34 @@
 # Status.md
 
-## Last Updated: 2026-06-09 (session 3 — GS verify loop + XP progression + deploy prep)
+## Last Updated: 2026-09-02 (harness correction session)
 ## Session Summary
-Applied the Generative Specification (GS) method. Built the phase-collapse verify loop
-(scripts/verify_loop.ts + docs/specs/verify-loop.md, `npm run verify:loop`): COLLAPSE →
-RECOVER → VERIFY (INV-1..6 MUST, INV-6b/6c/7 SHOULD) → REGENERATE; live run PASS.
-Added global XP progression: ProgressionData.ts (pure) + PlayerProfile.ts + 24 unit tests +
-progression.md + ADR-0002. Seed profiles: player-default, dev-unlock-all, and graded
-test profiles (novice/veteran/admiral). XP-gated the ship picker (locked rows dimmed with
-lock badge + reason). ArcadeBattleScene now awards XP on battle end (kills*perKill + win/loss
-bonus), closing the play→earn→unlock loop. BootScene honors `?profile=<id>` for testing.
-Asset audit: 101 ships, only 1 missing encyclopedia art (synth_gestalt) — added `--id`
-filter to generate_ship_art.py + documented one-command remedy (SD queue port 8010 required).
-Prepared manual GitHub Pages deploy (.github/workflows/pages.yml, workflow_dispatch only,
-does NOT auto-publish) + docs/DEPLOY.md. Build verified (exit 0, relative asset URLs).
-0 TypeScript errors throughout.
+This file had drifted badly — last real update was 2026-06-09 while many sessions of
+real work (capital subsystem damage, gunship ordnance fix, Dogfight player controls,
+commander crew role, role matchup matrix, beginner-aid UX, etc.) landed without a
+Status.md update. Flagging that drift here rather than reconstructing history we
+can't verify — the git log is the source of truth for what changed between
+2026-06-09 and today; this file resumes accurate tracking from today forward.
+
+This session (per the GS/harness discipline — see docs/specs/verify-loop.md):
+- Reviewed the project's existing GS-style harness (`CLAUDE.md` sentinel,
+  `docs/spec-map.md` routing index, `.claude/hooks/` pre-commit gates,
+  `scripts/verify_loop.ts` collapse→recover→verify→regenerate loop) against the
+  published Generative Specification methodology (pragmaworks.dev) — it already
+  closely matches the brownfield process; no wholesale rebuild needed.
+- Found and fixed two real harness gaps: `ShipTelemetry` (INV-5 no-teleport data
+  source) was only wired into ArcadeBattleScene/ContinuousTacticalScene —
+  `survival-solo` was silently reporting 0 telemetry samples. Wired it into
+  SurvivalScene and DogfightScene too.
+- DogfightScene had zero verify-loop coverage (its `create()` only shows a setup
+  screen). Added a `postStartMethod` mechanism to `scripts/verify_loop.ts` so a
+  scenario can call a scene method (`startMatch()`) right after boot, and added
+  the `dogfight-1v1` scenario. Full loop now: 5/5 scenarios PASS.
+- Corrected `docs/specs/verify-loop.md` and this file's stale test counts
+  (1717 unit → 2078; 183/11 e2e → 216/20 e2e).
+
+Current test counts (verified this session): 2078 unit tests (`npm test -- --run`,
+79 files), 216 e2e tests (`npx playwright test --list`, 20 spec files).
+
 
 ## Project Structure
 ```
@@ -32,8 +46,8 @@ src/
 public/
   assets/ships/   Ship sprites across 5 factions (SD-generated, ADD blend mode)
 tests/
-  unit/           1717 tests, 82%+ line coverage
-  e2e/            183/183 Playwright tests passing (11 spec files)
+  unit/           2078 tests, 79 files
+  e2e/            216 Playwright tests (20 spec files)
   balance/        Balance analysis suite
   simulation/     ArcadeMovementSim — all 101 ships × all dial maneuvers
 scripts/
@@ -69,7 +83,10 @@ scripts/
 | E2E tests: stress + cloak | ✅ Done | arcade_systems.spec.ts — 6 new tests for stress HUD + cloak alpha |
 
 ## Known Bugs
-- None currently tracked.
+- This table (and the Balance Results / Roadmap / ADR Log sections below) predate the
+  2026-09-02 drift noted above — treat as historical, not current. Known live issues as
+  of this session: Dogfight's camera is fixed (doesn't follow the ship, so a match can
+  drift ships off-screen over time).
 
 ## Balance Results (2026-06-09, 300 battles/matchup, upgraded sim — action tokens + ordnance + stealth, spawn-side randomized)
 
