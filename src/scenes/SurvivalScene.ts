@@ -153,6 +153,14 @@ export class SurvivalScene extends Phaser.Scene {
   private lastManeuverTime = 0;
   private maneuverInterval = 300;
 
+  // Player input
+  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private fireKey!: Phaser.Input.Keyboard.Key;
+
+  // Camera follow (manual — toroid wrap makes Phaser's startFollow jump at the seam)
+  private cameraVirtualX = BATTLEFIELD_SIZE / 2;
+  private cameraVirtualY = BATTLEFIELD_SIZE / 2;
+
   // Effects
   private effectsManager!: EffectsManager;
   private background!: ParallaxBackground;
@@ -168,7 +176,7 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setBounds(0, 0, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
+    // No setBounds — camera is driven manually for seamless toroid wrapping (see updateCameraFollow).
     this.cameras.main.setBackgroundColor(0x050510);
 
     audioManager.initialize();
@@ -265,7 +273,41 @@ export class SurvivalScene extends Phaser.Scene {
     this.applyBeltDamage(delta);
     this.updateAI();
     this.updateSprites();
+    this.updateCameraFollow();
     this.checkWaveComplete();
+  }
+
+  /**
+   * Manually follows the flagship with toroid-aware shortest-path lerp
+   * (mirrors ArcadeBattleScene/DogfightScene) so the camera doesn't stay
+   * pinned to the battlefield center while the ship flies away.
+   */
+  private updateCameraFollow(): void {
+    const ship = this.ships.get(this.playerShipIds[0] ?? "");
+    if (!ship) return;
+
+    let dx = ship.x - this.cameraVirtualX;
+    let dy = ship.y - this.cameraVirtualY;
+    if (dx > BATTLEFIELD_SIZE / 2) dx -= BATTLEFIELD_SIZE;
+    if (dx < -BATTLEFIELD_SIZE / 2) dx += BATTLEFIELD_SIZE;
+    if (dy > BATTLEFIELD_SIZE / 2) dy -= BATTLEFIELD_SIZE;
+    if (dy < -BATTLEFIELD_SIZE / 2) dy += BATTLEFIELD_SIZE;
+
+    const lerp = 0.09;
+    this.cameraVirtualX += dx * lerp;
+    this.cameraVirtualY += dy * lerp;
+    this.cameraVirtualX =
+      ((this.cameraVirtualX % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
+      BATTLEFIELD_SIZE;
+    this.cameraVirtualY =
+      ((this.cameraVirtualY % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
+      BATTLEFIELD_SIZE;
+
+    const zoom = this.cameras.main.zoom;
+    this.cameras.main.setScroll(
+      this.cameraVirtualX - this.scale.width / (2 * zoom),
+      this.cameraVirtualY - this.scale.height / (2 * zoom),
+    );
   }
 
   private createHUD(): void {
@@ -298,7 +340,7 @@ export class SurvivalScene extends Phaser.Scene {
       .text(
         this.scale.width / 2,
         this.scale.height - 30,
-        "Arrow keys: Move | ESC: Pause",
+        "UP/DOWN: Speed | LEFT/RIGHT: Turn | SPACE: Fire | ESC: Pause",
         {
           font: "14px monospace",
           color: "#666666",
@@ -310,6 +352,11 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   private setupInput(): void {
+    this.cursors = this.input.keyboard!.createCursorKeys();
+    this.fireKey = this.input.keyboard!.addKey(
+      Phaser.Input.Keyboard.KeyCodes.SPACE,
+    );
+
     this.input.keyboard!.on("keydown-ESC", () => {
       if (this.isChoicePhase) return;
       this.isPaused = !this.isPaused;
@@ -945,6 +992,7 @@ export class SurvivalScene extends Phaser.Scene {
   private processCombat(delta: number): void {
     const { fireRate, shieldRegen } = this.run.bonuses;
     const playerCooldownMod = Math.max(0.5, 1 - fireRate);
+    const flagshipId = this.playerShipIds[0] ?? "";
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
 
@@ -957,6 +1005,9 @@ export class SurvivalScene extends Phaser.Scene {
       ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
 
       if (ship.weaponCooldown <= 0) {
+        // The flagship only fires while the trigger is held; escorts/AI fire on sight.
+        if (ship.id === flagshipId && !this.fireKey.isDown) continue;
+
         const target = this.findTarget(ship);
         if (target) {
           this.fireAt(ship, target);
@@ -1146,8 +1197,8 @@ export class SurvivalScene extends Phaser.Scene {
       }
     }
 
-    // Player ships also use simple AI if not controlled
-    for (const shipId of this.playerShipIds) {
+    // Escorts (all player ships past the flagship) keep simple seek-AI.
+    for (const shipId of this.playerShipIds.slice(1)) {
       const ship = this.ships.get(shipId);
       if (!ship || ship.hull <= 0) continue;
 
@@ -1180,6 +1231,46 @@ export class SurvivalScene extends Phaser.Scene {
           ship.currentSpeed = turn.speed;
         }
       }
+    }
+
+    // The flagship (first player ship) responds to real keyboard input.
+    const flagship = this.ships.get(this.playerShipIds[0] ?? "");
+    if (flagship && flagship.hull > 0) {
+      this.applyPlayerControl(flagship);
+    }
+  }
+
+  /**
+   * Picks the flagship's next maneuver from its dial based on held keys.
+   * UP/DOWN ramp speed through the dial's available speeds; LEFT/RIGHT bank
+   * at the current speed (falling back to any available speed for that
+   * direction); no input holds a straight maneuver.
+   */
+  private applyPlayerControl(ship: SurvivalShip): void {
+    const dial = getShipDial(ship.definitionId);
+    const speeds = [...new Set(dial.map((m) => m.speed))].sort((a, b) => a - b);
+
+    let desiredSpeed = ship.currentSpeed;
+    if (this.cursors.up.isDown) {
+      desiredSpeed = speeds.find((s) => s > desiredSpeed) ?? desiredSpeed;
+    } else if (this.cursors.down.isDown) {
+      desiredSpeed =
+        [...speeds].reverse().find((s) => s < desiredSpeed) ?? desiredSpeed;
+    }
+
+    let direction: ManeuverDirection = "straight";
+    if (this.cursors.left.isDown) direction = "bank_left";
+    else if (this.cursors.right.isDown) direction = "bank_right";
+
+    const chosen =
+      dial.find((m) => m.direction === direction && m.speed === desiredSpeed) ??
+      dial.find((m) => m.direction === direction) ??
+      dial.find((m) => m.direction === "straight") ??
+      dial[0];
+
+    if (chosen) {
+      ship.currentManeuverDir = chosen.direction;
+      ship.currentSpeed = chosen.speed;
     }
   }
 
