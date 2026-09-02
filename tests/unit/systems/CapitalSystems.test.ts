@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   createCapitalSystems,
   applyCapitalSystemDamage,
+  repairCapitalSystem,
+  mostDamagedSystem,
   sumSystemsHull,
   isEnginesOffline,
   isBridgeOffline,
@@ -118,5 +120,49 @@ describe("CapitalSystems", () => {
     expect(turretDamageMultiplier(disabledTurrets)).toBe(
       TURRET_DISABLED_MULTIPLIER,
     );
+  });
+
+  describe("repairCapitalSystem", () => {
+    it("restores hull up to the system's max", () => {
+      let systems = createCapitalSystems(100);
+      systems = applyCapitalSystemDamage(systems, 20, sequenceRng([0])).systems;
+      expect(systems.engines.hull).toBe(5);
+      systems = repairCapitalSystem(systems, "engines", 100);
+      expect(systems.engines.hull).toBe(systems.engines.maxHull);
+    });
+
+    it("brings a disabled system back online once hull is restored above 0", () => {
+      let systems = createCapitalSystems(100);
+      systems = applyCapitalSystemDamage(
+        systems,
+        999,
+        sequenceRng([0]),
+      ).systems;
+      expect(isEnginesOffline(systems)).toBe(true);
+      systems = repairCapitalSystem(systems, "engines", 5);
+      expect(isEnginesOffline(systems)).toBe(false);
+    });
+
+    it("leaves other systems untouched", () => {
+      const systems = createCapitalSystems(100);
+      const repaired = repairCapitalSystem(systems, "engines", 10);
+      expect(repaired.turrets).toEqual(systems.turrets);
+      expect(repaired.bridge).toEqual(systems.bridge);
+    });
+  });
+
+  describe("mostDamagedSystem", () => {
+    it("returns the system with the lowest remaining hull fraction", () => {
+      let systems = createCapitalSystems(100);
+      systems = applyCapitalSystemDamage(systems, 30, sequenceRng([0])).systems; // hits engines
+      expect(mostDamagedSystem(systems)).toBe("engines");
+    });
+
+    it("defaults sensibly when every system is at full health", () => {
+      const systems = createCapitalSystems(100);
+      expect(["engines", "turrets", "bridge"]).toContain(
+        mostDamagedSystem(systems),
+      );
+    });
   });
 });

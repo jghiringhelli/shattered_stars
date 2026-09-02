@@ -117,6 +117,32 @@ export function applyCapitalSystemDamage(
   };
 }
 
+/** Restores hull to one system, bringing it back online if it clears 0. Used by commander repair orders. */
+export function repairCapitalSystem(
+  systems: CapitalSystemsState,
+  id: CapitalSystemId,
+  amount: number,
+): CapitalSystemsState {
+  const current = systems[id];
+  const newHull = Math.min(current.maxHull, current.hull + amount);
+  return {
+    ...systems,
+    [id]: { ...current, hull: newHull, disabled: newHull <= 0 },
+  };
+}
+
+/** The system with the lowest remaining hull fraction — repair priority target. */
+export function mostDamagedSystem(
+  systems: CapitalSystemsState,
+): CapitalSystemId {
+  return SYSTEM_IDS.reduce((worst, id) =>
+    systems[id].hull / systems[id].maxHull <
+    systems[worst].hull / systems[worst].maxHull
+      ? id
+      : worst,
+  );
+}
+
 export function isEnginesOffline(systems: CapitalSystemsState): boolean {
   return systems.engines.disabled;
 }

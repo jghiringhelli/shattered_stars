@@ -90,6 +90,8 @@ import { CapitalSystemsIndicator } from "../ui/CapitalSystemsIndicator";
 import {
   createCapitalSystems,
   applyCapitalSystemDamage,
+  repairCapitalSystem,
+  mostDamagedSystem,
   isEnginesOffline,
   isBridgeOffline,
   turretDamageMultiplier,
@@ -97,6 +99,34 @@ import {
   SYSTEM_LABELS,
   type CapitalSystemsState,
 } from "../systems/CapitalSystems";
+import {
+  type CrewRole,
+  type CommanderOrders,
+  getAvailableCrewRoles,
+  nextCrewRole,
+  createCommanderOrders,
+  issueConcentrateFire,
+  concentrateFireMultiplier,
+  nextPowerFocus,
+  redirectPower,
+  isPowerFocused,
+  canRedirectPower,
+  startCharging,
+  tickMainBeam,
+  isMainBeamReady,
+  resetMainBeam,
+  canFireMainBeam,
+  canEmergencyRepair,
+  MAIN_BEAM_DAMAGE,
+  MAIN_BEAM_COOLDOWN_MS,
+  POWER_REDIRECT_COOLDOWN_MS,
+  POWER_REDIRECT_TURRET_MULTIPLIER,
+  POWER_REDIRECT_ENGINE_REPAIR_PER_SEC,
+  POWER_REDIRECT_SHIELD_REGEN_PER_SEC,
+  EMERGENCY_REPAIR_COOLDOWN_MS,
+  EMERGENCY_REPAIR_SHIELD_AMOUNT,
+  EMERGENCY_REPAIR_HULL_AMOUNT,
+} from "../systems/ShipCrew";
 import {
   buildFrameCache,
   type FrameCache,
@@ -150,8 +180,8 @@ interface ArcadeShip extends ShipState {
   ordnanceSlots: ArcadeOrdnanceSlot[];
   /** Turret slot if the ship has a turret upgrade equipped. */
   turretSlot: ArcadeTurretSlot | null;
-  /** 'pilot' flies the ship; 'gunner' controls the turret (large/huge only). */
-  crewMode: "pilot" | "gunner";
+  /** 'pilot' flies the ship; 'gunner' controls the turret; 'commander' issues ship orders (capital only). */
+  crewMode: CrewRole;
   /**
    * Maximum angular velocity in degrees/second derived from the ship's
    * size × role handling profile (same data that drives the turn-based game).
@@ -172,6 +202,8 @@ interface ArcadeShip extends ShipState {
   wingSlotIndex: number;
   /** Subsystem damage state (engines/turrets/bridge) — only set for capital-role ships. */
   capitalSystems: CapitalSystemsState | null;
+  /** Commander order state (concentrate fire/power redirect/main beam/repair) — only set for capital-role ships. */
+  commanderOrders: CommanderOrders | null;
 }
 
 interface ShipSprite extends Phaser.GameObjects.Container {
@@ -255,6 +287,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
     g: Phaser.Input.Keyboard.Key;
     c: Phaser.Input.Keyboard.Key;
     t: Phaser.Input.Keyboard.Key;
+    one: Phaser.Input.Keyboard.Key;
+    two: Phaser.Input.Keyboard.Key;
+    three: Phaser.Input.Keyboard.Key;
+    four: Phaser.Input.Keyboard.Key;
   };
 
   // HUD
@@ -566,6 +602,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
       g: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.G),
       c: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.C),
       t: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.T),
+      one: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ONE),
+      two: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.TWO),
+      three: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.THREE),
+      four: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR),
     };
 
     // Prevent Tab from moving browser focus away from the canvas
@@ -708,7 +748,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
       ["SPACE", "Fire selected weapon"],
       ["SHIFT+SPACE", "Deploy bomb backward"],
       ["TAB", "Cycle weapon"],
-      ["G", "Gunner mode (large)"],
+      ["G", "Cycle crew role (pilot/gunner/commander)"],
+      ["1-4", "Commander orders (capital only)"],
       ["ESC", "Pause / resume"],
     ];
 
@@ -805,12 +846,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
     // Special maneuvers and actions from gesture events
     this.processGestureActions(ship, actions);
 
-    // Gunner mode toggle (large/huge only)
+    // Crew role cycle: pilot -> gunner (large/huge with a turret) -> commander (capital only)
     if (Phaser.Input.Keyboard.JustDown(this.keys.g)) {
-      const sz = getShipDefinition(ship.definitionId)?.baseStats.size;
-      if (ship.turretSlot && (sz === "large" || sz === "huge")) {
-        ship.crewMode = ship.crewMode === "pilot" ? "gunner" : "pilot";
-      }
+      const def = getShipDefinition(ship.definitionId);
+      const sz = def?.baseStats.size;
+      const hasTurret = !!ship.turretSlot && (sz === "large" || sz === "huge");
+      const isCapital = def?.role === "capital";
+      const roles = getAvailableCrewRoles(hasTurret, isCapital);
+      ship.crewMode = nextCrewRole(ship.crewMode, roles);
     }
 
     // Cloak toggle (C key) — 8-second invisibility; breaks on firing
@@ -821,6 +864,11 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
     if (ship.crewMode === "gunner") {
       this.handleGunnerInput(ship, deltaMs / 1000);
+      return;
+    }
+
+    if (ship.crewMode === "commander") {
+      this.handleCommanderInput(ship, deltaMs);
       return;
     }
 
@@ -1535,10 +1583,23 @@ export class ArcadeBattleScene extends Phaser.Scene {
           const armoredDamage = Math.max(1, rawDamage - armor);
           const mitigation =
             this.activeAuras.get(ship.id)?.damageTakenMultiplier ?? 1;
+          const attackerOrders = this.ships.get(proj.ownerId)?.commanderOrders;
+          const concentrateMultiplier = attackerOrders
+            ? concentrateFireMultiplier(
+                attackerOrders.concentrateFire,
+                ship.id,
+                this.time.now,
+              )
+            : 1;
           const damage =
             mitigation < 1
-              ? Math.max(1, Math.round(armoredDamage * mitigation))
-              : armoredDamage;
+              ? Math.max(
+                  1,
+                  Math.round(
+                    armoredDamage * mitigation * concentrateMultiplier,
+                  ),
+                )
+              : Math.round(armoredDamage * concentrateMultiplier);
           ship.isCloaked = false;
           ship.cloakTimer = 0;
 
@@ -1859,6 +1920,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       wingSlotIndex: 0,
       capitalSystems:
         def?.role === "capital" ? createCapitalSystems(baseShip.hull) : null,
+      commanderOrders: def?.role === "capital" ? createCommanderOrders() : null,
     };
 
     return ship;
@@ -2172,7 +2234,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
       "Z    K-Turn",
       "TAB  Weapon",
       "SPC  Fire",
-      "G    Gunner",
+      "G    Crew Role",
+      "1-4  Commander Orders",
       "ESC  Pause",
     ];
     const cx = this.scale.width - 10;
@@ -2222,6 +2285,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
         `BOOST: ${(ship.control.boostCooldown / 1000).toFixed(1)}s`,
       );
     }
+    if (ship.crewMode === "commander" && ship.commanderOrders) {
+      cooldowns.push(...this.commanderOrderStatus(ship.commanderOrders));
+    }
     this.cooldownText.setText(cooldowns.join(" | "));
 
     // Hull color
@@ -2232,7 +2298,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
     this.updateTurnIndicator();
     this.updateWeaponSelectorHUD(ship);
-    this.crewModeText.setVisible(ship.crewMode === "gunner");
+    this.crewModeText.setVisible(
+      ship.crewMode === "gunner" || ship.crewMode === "commander",
+    );
+    if (ship.crewMode === "gunner") {
+      this.crewModeText.setText("◎ GUNNER MODE").setColor("#ffaa00");
+    } else if (ship.crewMode === "commander") {
+      this.crewModeText.setText("★ COMMANDER MODE").setColor("#00ccff");
+    }
     this.updateStressHUD(ship);
     this.updateTeamHUD();
   }
@@ -2615,9 +2688,22 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const systemsMultiplier = ship.capitalSystems
       ? turretDamageMultiplier(ship.capitalSystems)
       : 1;
+    const powerMultiplier =
+      ship.commanderOrders &&
+      isPowerFocused(
+        ship.commanderOrders.powerRedirect,
+        "turrets",
+        this.time.now,
+      )
+        ? POWER_REDIRECT_TURRET_MULTIPLIER
+        : 1;
     const damage = Math.max(
       1,
-      Math.round((ship.turretSlot.damage + auraBonus) * systemsMultiplier),
+      Math.round(
+        (ship.turretSlot.damage + auraBonus) *
+          systemsMultiplier *
+          powerMultiplier,
+      ),
     );
     const proj = createProjectile(
       ship.x + Math.cos(rad) * 20,
@@ -2660,6 +2746,181 @@ export class ArcadeBattleScene extends Phaser.Scene {
     if (this.framesAlive > 5 && this.keys.space.isDown) {
       this.fireTurretShot(ship);
     }
+  }
+
+  /**
+   * Handles commander orders (capital ships only): concentrate fire [1],
+   * redirect power [2], charge/fire the main beam [3], emergency repair [4].
+   * The commander doesn't fly or gun — the ship's turret keeps auto-firing
+   * and its last-set maneuver keeps running while orders are issued.
+   *
+   * @param ship - The player ship.
+   * @param deltaMs - Frame time in milliseconds.
+   */
+  private handleCommanderInput(ship: ArcadeShip, deltaMs: number): void {
+    const orders = ship.commanderOrders;
+    if (!orders || !this.frameCache) return;
+    const now = this.time.now;
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.one)) {
+      const target = this.findNearestEnemy(ship);
+      if (target) {
+        orders.concentrateFire = issueConcentrateFire(target.id, now);
+        this.showFloatingText(
+          ship.x,
+          ship.y - 45,
+          "CONCENTRATE FIRE!",
+          "#ffcc00",
+        );
+      }
+    }
+
+    if (
+      Phaser.Input.Keyboard.JustDown(this.keys.two) &&
+      canRedirectPower(orders.lastPowerRedirectAt, now)
+    ) {
+      const focus = nextPowerFocus(orders.powerRedirect?.focus ?? null);
+      orders.powerRedirect = redirectPower(focus, now);
+      orders.lastPowerRedirectAt = now;
+      this.showFloatingText(
+        ship.x,
+        ship.y - 45,
+        `POWER TO ${focus.toUpperCase()}!`,
+        "#00ccff",
+      );
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.keys.three)) {
+      orders.mainBeam = startCharging(orders.mainBeam);
+    }
+    if (orders.mainBeam.charging) {
+      orders.mainBeam = tickMainBeam(orders.mainBeam, deltaMs);
+      if (isMainBeamReady(orders.mainBeam)) {
+        this.fireMainBeam(ship);
+        orders.mainBeam = resetMainBeam();
+        orders.lastMainBeamFiredAt = now;
+      }
+    }
+
+    if (
+      Phaser.Input.Keyboard.JustDown(this.keys.four) &&
+      canEmergencyRepair(orders.lastEmergencyRepairAt, now) &&
+      ship.capitalSystems
+    ) {
+      ship.shields = Math.min(
+        ship.maxShields,
+        ship.shields + EMERGENCY_REPAIR_SHIELD_AMOUNT,
+      );
+      const worst = mostDamagedSystem(ship.capitalSystems);
+      ship.capitalSystems = repairCapitalSystem(
+        ship.capitalSystems,
+        worst,
+        EMERGENCY_REPAIR_HULL_AMOUNT,
+      );
+      ship.hull = sumSystemsHull(ship.capitalSystems);
+      orders.lastEmergencyRepairAt = now;
+      this.showFloatingText(
+        ship.x,
+        ship.y - 45,
+        "REPAIR CREWS ACTIVE",
+        "#44ff88",
+      );
+    }
+
+    // Passive effects while power stays focused on a system
+    if (ship.capitalSystems) {
+      if (isPowerFocused(orders.powerRedirect, "engines", now)) {
+        ship.capitalSystems = repairCapitalSystem(
+          ship.capitalSystems,
+          "engines",
+          (POWER_REDIRECT_ENGINE_REPAIR_PER_SEC * deltaMs) / 1000,
+        );
+        ship.hull = sumSystemsHull(ship.capitalSystems);
+      }
+      if (isPowerFocused(orders.powerRedirect, "shields", now)) {
+        ship.shields = Math.min(
+          ship.maxShields,
+          ship.shields + (POWER_REDIRECT_SHIELD_REGEN_PER_SEC * deltaMs) / 1000,
+        );
+      }
+    }
+  }
+
+  /** Nearest living enemy within this ship's turret range (falls back to any range if unarmed). */
+  private findNearestEnemy(ship: ArcadeShip): ArcadeShip | null {
+    if (!this.frameCache) return null;
+    const maxRange = ship.turretSlot?.range ?? Infinity;
+    let nearest: ArcadeShip | null = null;
+    let nearestDist = maxRange;
+    for (const view of this.frameCache.aliveEnemiesOf(ship.faction)) {
+      const dist = distance(ship.x, ship.y, view.x, view.y);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearest = this.ships.get(view.id) ?? null;
+      }
+    }
+    return nearest;
+  }
+
+  /**
+   * Fires the commander's charged main beam: one heavy hit along the ship's
+   * forward facing.
+   *
+   * @param ship - The commanding player's ship.
+   */
+  private fireMainBeam(ship: ArcadeShip): void {
+    const rad = (ship.angle - 90) * (Math.PI / 180);
+    const proj = createProjectile(
+      ship.x + Math.cos(rad) * 20,
+      ship.y + Math.sin(rad) * 20,
+      ship.angle,
+      ship.id,
+      ship.faction,
+      MAIN_BEAM_DAMAGE,
+    );
+    this.projectiles.push(proj);
+
+    const sprite = this.add.graphics();
+    sprite.fillStyle(0xffffff, 1);
+    sprite.fillCircle(0, 0, 7);
+    sprite.setPosition(proj.x, proj.y);
+    sprite.setDepth(5);
+    this.projectileSprites.set(proj.id, sprite);
+
+    this.showFloatingText(ship.x, ship.y - 45, "MAIN BEAM FIRED!", "#ffffff");
+  }
+
+  /** HUD strings for the commander's order cooldowns/charge state. */
+  private commanderOrderStatus(orders: CommanderOrders): string[] {
+    const now = this.time.now;
+    const status: string[] = [];
+    if (orders.mainBeam.charging) {
+      const pct = Math.round((orders.mainBeam.chargeMs / 1000) * 100);
+      status.push(`BEAM CHARGING: ${pct}%`);
+    } else if (!canFireMainBeam(orders.lastMainBeamFiredAt, now)) {
+      status.push(
+        `BEAM: ${Math.ceil(
+          (orders.lastMainBeamFiredAt + MAIN_BEAM_COOLDOWN_MS - now) / 1000,
+        )}s`,
+      );
+    }
+    if (!canRedirectPower(orders.lastPowerRedirectAt, now)) {
+      status.push(
+        `POWER: ${Math.ceil(
+          (orders.lastPowerRedirectAt + POWER_REDIRECT_COOLDOWN_MS - now) /
+            1000,
+        )}s`,
+      );
+    }
+    if (!canEmergencyRepair(orders.lastEmergencyRepairAt, now)) {
+      status.push(
+        `REPAIR: ${Math.ceil(
+          (orders.lastEmergencyRepairAt + EMERGENCY_REPAIR_COOLDOWN_MS - now) /
+            1000,
+        )}s`,
+      );
+    }
+    return status;
   }
 
   /**
