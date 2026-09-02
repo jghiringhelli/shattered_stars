@@ -137,8 +137,7 @@ export class MainMenuScene extends Phaser.Scene {
       },
       {
         label: "SURVIVAL",
-        action: () =>
-          this.scene.start("SquadBuilderScene", { initialMode: "survival" }),
+        action: () => this.scene.start("SurvivalSetupScene"),
       },
       {
         label: "EPIC FORMAT",

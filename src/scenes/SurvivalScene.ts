@@ -82,6 +82,21 @@ const FACTION_STARTER_SHIPS: Record<FactionId, string> = {
   ascendant_empire: "ascendant_herald",
 };
 
+/**
+ * The 2 flagship choices offered on the Survival setup screen for each
+ * faction — one nimble/high-agility pick, one tankier pick. No squad
+ * builder, no loadouts: pick a faction, pick one of these, go. Escorts
+ * (recruited during the run) always use FACTION_STARTER_SHIPS regardless of
+ * this choice — see reconcileEscorts().
+ */
+export const SURVIVAL_STARTER_CHOICES: Record<FactionId, readonly string[]> = {
+  terran_hegemony: ["terran_viper", "terran_raptor"],
+  free_confederation: ["confed_wasp", "confed_sparrow"],
+  synthetic_collective: ["synth_scout_drone", "synth_drone"],
+  void_corsairs: ["corsair_fang", "corsair_blade"],
+  ascendant_empire: ["ascendant_herald", "ascendant_seraph"],
+};
+
 /** Maximum ships (flagship + escorts) the player fleet may field. */
 const MAX_FLEET = 6;
 
@@ -175,13 +190,16 @@ export class SurvivalScene extends Phaser.Scene {
   private background!: ParallaxBackground;
   private performanceState: PerformanceState = createPerformanceState();
   private telemetry: ShipTelemetry | null = null;
+  /** Flagship override from the setup screen; falls back to the faction default. */
+  private starterShipId: string | null = null;
 
   constructor() {
     super({ key: "SurvivalScene" });
   }
 
-  init(data: { factionId?: FactionId }): void {
+  init(data: { factionId?: FactionId; shipId?: string }): void {
     if (data?.factionId) this.playerFaction = data.factionId;
+    this.starterShipId = data?.shipId ?? null;
   }
 
   create(): void {
@@ -249,9 +267,9 @@ export class SurvivalScene extends Phaser.Scene {
     this.enemyShipIds = [];
     this.escortShipIds.clear();
 
-    // Spawn initial player ship based on chosen faction
+    // Spawn initial player ship based on chosen faction (+ optional flagship choice)
     this.spawnPlayerShip(
-      FACTION_STARTER_SHIPS[this.playerFaction],
+      this.starterShipId ?? FACTION_STARTER_SHIPS[this.playerFaction],
       BATTLEFIELD_SIZE / 2,
       BATTLEFIELD_SIZE / 2 + 100,
     );

@@ -8,6 +8,7 @@ import { CreditsScene } from "./scenes/CreditsScene";
 import { LobbyScene } from "./scenes/LobbyScene";
 import { ContinuousTacticalScene } from "./scenes/ContinuousTacticalScene";
 import { SurvivalScene } from "./scenes/SurvivalScene";
+import { SurvivalSetupScene } from "./scenes/SurvivalSetupScene";
 import { EpicBattleScene } from "./scenes/EpicBattleScene";
 import { DogfightScene } from "./scenes/DogfightScene";
 import { AceDuelScene } from "./scenes/AceDuelScene";
@@ -37,6 +38,7 @@ const config: Phaser.Types.Core.GameConfig = {
     LobbyScene,
     ContinuousTacticalScene,
     SurvivalScene,
+    SurvivalSetupScene,
     EpicBattleScene,
     DogfightScene,
     AceDuelScene,
