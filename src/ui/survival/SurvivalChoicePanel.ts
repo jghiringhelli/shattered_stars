@@ -138,7 +138,8 @@ export class SurvivalChoicePanel {
   ): Phaser.GameObjects.Rectangle {
     const hit = this.scene.add
       .rectangle(0, 0, CARD_WIDTH, CARD_HEIGHT)
-      .setInteractive({ useHandCursor: true });
+      .setInteractive({ useHandCursor: true })
+      .setScrollFactor(0);
     hit.on("pointerover", () => this.paintCard(bg, HOVER_FILL));
     hit.on("pointerout", () => this.paintCard(bg, IDLE_FILL));
     hit.on("pointerdown", () => {

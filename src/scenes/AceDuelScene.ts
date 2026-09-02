@@ -38,6 +38,7 @@ import {
 import type { ManeuverDirection } from "../core/types";
 import { PILOT_ABILITIES } from "../systems/PilotAbilities";
 import { ACE_MATCHUPS, type AceMatchup } from "../data/AceMatchups";
+import { PauseMenu } from "../ui/PauseMenu";
 import {
   createSideScore,
   creditKill,
@@ -178,6 +179,15 @@ export class AceDuelScene extends Phaser.Scene {
   private lastManeuverTime = 0;
   private maneuverInterval = 300;
 
+  // Player input
+  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private fireKey!: Phaser.Input.Keyboard.Key;
+  private pauseMenu!: PauseMenu;
+
+  // Camera follow (manual — toroid wrap makes Phaser's startFollow jump at the seam)
+  private cameraVirtualX = BATTLEFIELD_SIZE / 2;
+  private cameraVirtualY = BATTLEFIELD_SIZE / 2;
+
   // Effects
   private effectsManager!: EffectsManager;
   private background!: ParallaxBackground;
@@ -186,7 +196,8 @@ export class AceDuelScene extends Phaser.Scene {
   // UI
   private roundText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
-  private setupContainer!: Phaser.GameObjects.Container;
+  /** Setup-screen objects, tracked individually — see track()'s doc comment for why. */
+  private setupObjects: Phaser.GameObjects.GameObject[] = [];
 
   // Completion tracking
   private completedMatchups: Set<string> = new Set();
@@ -267,18 +278,28 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   private showSetupScreen(): void {
-    const centerX = this.scale.width / 2;
-    const centerY = this.scale.height / 2;
+    // Destroy any previous setup-screen objects. Buttons are NOT reparented
+    // into a shared container — see track()'s doc comment for why (same
+    // fix as DogfightScene's setup screen).
+    this.setupObjects.forEach((o) => o.destroy());
+    this.setupObjects = [];
 
-    this.setupContainer = this.add.container(0, 0);
-    this.setupContainer.setScrollFactor(0);
-    this.setupContainer.setDepth(2000);
+    const centerX = this.scale.width / 2;
+
+    if (this.textures.exists("tex_menu_bg")) {
+      const bgImage = this.add
+        .image(centerX, this.scale.height / 2, "tex_menu_bg")
+        .setDisplaySize(this.scale.width, this.scale.height)
+        .setScrollFactor(0)
+        .setDepth(1999);
+      this.setupObjects.push(bgImage);
+    }
 
     // Background
     const bg = this.add.graphics();
-    bg.fillStyle(0x000000, 0.92);
+    bg.fillStyle(0x000000, 0.6);
     bg.fillRect(0, 0, this.scale.width, this.scale.height);
-    this.setupContainer.add(bg);
+    this.track(bg);
 
     // Title
     const title = this.add
@@ -287,7 +308,7 @@ export class AceDuelScene extends Phaser.Scene {
         color: "#ffdd00",
       })
       .setOrigin(0.5);
-    this.setupContainer.add(title);
+    this.track(title);
 
     const subtitle = this.add
       .text(centerX, 80, "Legendary Matchups", {
@@ -295,7 +316,7 @@ export class AceDuelScene extends Phaser.Scene {
         color: "#aaaaaa",
       })
       .setOrigin(0.5);
-    this.setupContainer.add(subtitle);
+    this.track(subtitle);
 
     // Matchup selection
     let yPos = 130;
@@ -314,7 +335,7 @@ export class AceDuelScene extends Phaser.Scene {
           this.showSetupScreen();
         },
       );
-      this.setupContainer.add(btn);
+      this.track(btn);
       yPos += 55;
     });
 
@@ -323,7 +344,7 @@ export class AceDuelScene extends Phaser.Scene {
     const detailsBg = this.add.graphics();
     detailsBg.fillStyle(0x112233, 0.9);
     detailsBg.fillRoundedRect(centerX - 300, detailsY - 10, 600, 100, 8);
-    this.setupContainer.add(detailsBg);
+    this.track(detailsBg);
 
     const flavorText = this.add
       .text(centerX, detailsY + 10, `"${this.selectedMatchup.flavorText}"`, {
@@ -333,7 +354,7 @@ export class AceDuelScene extends Phaser.Scene {
         align: "center",
       })
       .setOrigin(0.5, 0);
-    this.setupContainer.add(flavorText);
+    this.track(flavorText);
 
     // Side selection
     const sideY = detailsY + 70;
@@ -351,7 +372,7 @@ export class AceDuelScene extends Phaser.Scene {
         this.showSetupScreen();
       },
     );
-    this.setupContainer.add(side1Btn);
+    this.track(side1Btn);
 
     const vsText = this.add
       .text(centerX, sideY, "VS", {
@@ -359,7 +380,7 @@ export class AceDuelScene extends Phaser.Scene {
         color: "#666666",
       })
       .setOrigin(0.5);
-    this.setupContainer.add(vsText);
+    this.track(vsText);
 
     const side2Btn = this.createSideButton(
       centerX + 150,
@@ -372,7 +393,7 @@ export class AceDuelScene extends Phaser.Scene {
         this.showSetupScreen();
       },
     );
-    this.setupContainer.add(side2Btn);
+    this.track(side2Btn);
 
     // Ability chips under each side
     const abilityY = sideY + 30;
@@ -396,7 +417,7 @@ export class AceDuelScene extends Phaser.Scene {
             })
             .setOrigin(0.5);
           chip.add([chipBg, chipTxt]);
-          this.setupContainer.add(chip);
+          this.track(chip);
         });
       },
     );
@@ -409,7 +430,7 @@ export class AceDuelScene extends Phaser.Scene {
         color: "#888888",
       })
       .setOrigin(0.5);
-    this.setupContainer.add(diffLabel);
+    this.track(diffLabel);
 
     const difficulties: Array<"easy" | "normal" | "hard" | "brutal"> = [
       "easy",
@@ -428,7 +449,7 @@ export class AceDuelScene extends Phaser.Scene {
           this.showSetupScreen();
         },
       );
-      this.setupContainer.add(btn);
+      this.track(btn);
     });
 
     // Start button
@@ -447,7 +468,7 @@ export class AceDuelScene extends Phaser.Scene {
       },
       () => this.startDuel(),
     );
-    this.setupContainer.add(startBtn);
+    this.track(startBtn);
 
     // Back button
     const backBtn = this.add
@@ -463,7 +484,7 @@ export class AceDuelScene extends Phaser.Scene {
       this.scene.start("MainMenuScene");
     });
 
-    this.setupContainer.add(backBtn);
+    this.track(backBtn);
 
     // Completion counter
     const completed = this.completedMatchups.size;
@@ -474,7 +495,26 @@ export class AceDuelScene extends Phaser.Scene {
         color: completed === total ? "#44ff44" : "#888888",
       })
       .setOrigin(1, 0.5);
-    this.setupContainer.add(completionText);
+    this.track(completionText);
+  }
+
+  /**
+   * Registers a setup-screen object for fixed-position rendering and later
+   * cleanup. Objects are kept as direct scene children (never reparented
+   * into a shared container) and get their own scrollFactor(0) — both were
+   * found to independently break real pointer-click hit-testing on the
+   * identical DogfightScene setup screen (reparenting an already-interactive
+   * Container into another Container, and relying on an ancestor's
+   * scrollFactor(0) instead of the object's own).
+   */
+  private track(obj: Phaser.GameObjects.GameObject): void {
+    const withTransform = obj as unknown as {
+      setScrollFactor?: (x: number) => unknown;
+      setDepth?: (d: number) => unknown;
+    };
+    withTransform.setScrollFactor?.(0);
+    withTransform.setDepth?.(2000);
+    this.setupObjects.push(obj);
   }
 
   private createMatchupButton(
@@ -628,7 +668,8 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   private startDuel(): void {
-    this.setupContainer.destroy();
+    this.setupObjects.forEach((o) => o.destroy());
+    this.setupObjects = [];
     this.isSetupPhase = false;
 
     audioManager.playMusic("combat_high");
@@ -686,6 +727,17 @@ export class AceDuelScene extends Phaser.Scene {
     });
 
     this.showRoundStart();
+
+    const playerSprite = this.shipSprites.get(`side${this.playerSide}_0`);
+    if (playerSprite) {
+      this.cameraVirtualX = playerSprite.x;
+      this.cameraVirtualY = playerSprite.y;
+      const zoom = this.cameras.main.zoom;
+      this.cameras.main.setScroll(
+        this.cameraVirtualX - this.scale.width / (2 * zoom),
+        this.cameraVirtualY - this.scale.height / (2 * zoom),
+      );
+    }
   }
 
   private showRoundStart(): void {
@@ -764,7 +816,41 @@ export class AceDuelScene extends Phaser.Scene {
     this.processCombat(delta);
     this.updateAI();
     this.updateSprites();
+    this.updateCameraFollow();
     this.checkRoundEnd();
+  }
+
+  /**
+   * Manually follows the player's flagship with toroid-aware shortest-path
+   * lerp (mirrors ArcadeBattleScene/DogfightScene) so the camera doesn't
+   * stay pinned to the battlefield center while ships fly around.
+   */
+  private updateCameraFollow(): void {
+    const ship = this.ships.get(`side${this.playerSide}_0`);
+    if (!ship) return;
+
+    let dx = ship.x - this.cameraVirtualX;
+    let dy = ship.y - this.cameraVirtualY;
+    if (dx > BATTLEFIELD_SIZE / 2) dx -= BATTLEFIELD_SIZE;
+    if (dx < -BATTLEFIELD_SIZE / 2) dx += BATTLEFIELD_SIZE;
+    if (dy > BATTLEFIELD_SIZE / 2) dy -= BATTLEFIELD_SIZE;
+    if (dy < -BATTLEFIELD_SIZE / 2) dy += BATTLEFIELD_SIZE;
+
+    const lerp = 0.09;
+    this.cameraVirtualX += dx * lerp;
+    this.cameraVirtualY += dy * lerp;
+    this.cameraVirtualX =
+      ((this.cameraVirtualX % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
+      BATTLEFIELD_SIZE;
+    this.cameraVirtualY =
+      ((this.cameraVirtualY % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
+      BATTLEFIELD_SIZE;
+
+    const zoom = this.cameras.main.zoom;
+    this.cameras.main.setScroll(
+      this.cameraVirtualX - this.scale.width / (2 * zoom),
+      this.cameraVirtualY - this.scale.height / (2 * zoom),
+    );
   }
 
   private createHUD(): void {
@@ -830,7 +916,7 @@ export class AceDuelScene extends Phaser.Scene {
       .text(
         this.scale.width / 2,
         this.scale.height - 25,
-        "Scroll: Zoom | ESC: Pause",
+        "UP/DOWN: Speed | LEFT/RIGHT: Turn | SPACE: Fire | Scroll: Zoom | ESC: Pause",
         {
           font: "14px monospace",
           color: "#666666",
@@ -846,9 +932,13 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   private setupInput(): void {
-    this.input.keyboard!.on("keydown-ESC", () => {
-      this.isPaused = !this.isPaused;
-    });
+    this.cursors = this.input.keyboard!.createCursorKeys();
+    this.fireKey = this.input.keyboard!.addKey(
+      Phaser.Input.Keyboard.KeyCodes.SPACE,
+    );
+
+    this.createPauseMenu();
+    this.input.keyboard!.on("keydown-ESC", () => this.togglePause());
 
     this.input.on(
       "wheel",
@@ -862,6 +952,40 @@ export class AceDuelScene extends Phaser.Scene {
         this.cameras.main.setZoom(Phaser.Math.Clamp(zoom, 0.7, 1.5));
       },
     );
+  }
+
+  private createPauseMenu(): void {
+    this.pauseMenu = new PauseMenu({
+      scene: this,
+      onResume: () => {
+        this.isPaused = false;
+      },
+      onRestart: () => {
+        this.scene.restart();
+      },
+      onSettings: () => {
+        this.scene.launch("SettingsScene", { returnScene: "AceDuelScene" });
+      },
+      onQuit: () => {
+        this.scene.start("MainMenuScene");
+      },
+    });
+  }
+
+  /**
+   * ESC previously just flipped `isPaused` with no visual feedback and no
+   * way back to the menu. Now it shows a real pause overlay, resetting
+   * zoom to 1.0 first — Phaser's hit-testing for scrollFactor(0) UI does
+   * not correctly ignore camera zoom (see DogfightScene for the full
+   * writeup of this bug).
+   */
+  private togglePause(): void {
+    if (this.isSetupPhase || this.matchComplete) return;
+    this.isPaused = !this.isPaused;
+    if (this.isPaused) {
+      this.cameras.main.setZoom(1.0);
+      this.pauseMenu.show();
+    }
   }
 
   private spawnShip(
@@ -1011,12 +1135,16 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   private processCombat(delta: number): void {
+    const flagshipId = `side${this.playerSide}_0`;
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
 
       ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
 
       if (ship.weaponCooldown <= 0) {
+        // The flagship only fires while the trigger is held; escorts/AI fire on sight.
+        if (ship.id === flagshipId && !this.fireKey.isDown) continue;
+
         const target = this.findTarget(ship);
         if (target) {
           this.fireAt(ship, target);
@@ -1124,8 +1252,10 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   private updateAI(): void {
+    const flagshipId = `side${this.playerSide}_0`;
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
+      if (ship.id === flagshipId) continue;
 
       // Find enemy ships
       const enemyIds = this.side1ShipIds.includes(ship.id)
@@ -1167,7 +1297,7 @@ export class AceDuelScene extends Phaser.Scene {
       const dial = getShipDial(ship.definitionId);
 
       // AI decision quality based on ownership and difficulty
-      let optimalChance = 0.8; // Default for player ships (simple AI)
+      let optimalChance = 0.8; // Default for player-side escorts (simple AI)
       if (ship.owner === "ai") {
         optimalChance = { easy: 0.5, normal: 0.7, hard: 0.9, brutal: 1 }[
           this.difficulty
@@ -1205,6 +1335,45 @@ export class AceDuelScene extends Phaser.Scene {
           ship.currentSpeed = chosen.speed;
         }
       }
+    }
+
+    const flagship = this.ships.get(flagshipId);
+    if (flagship && flagship.hull > 0) {
+      this.applyPlayerControl(flagship);
+    }
+  }
+
+  /**
+   * Picks the flagship's next maneuver from its dial based on held keys.
+   * UP/DOWN ramp speed through the dial's available speeds; LEFT/RIGHT bank
+   * at the current speed (falling back to any available speed for that
+   * direction); no input holds a straight maneuver.
+   */
+  private applyPlayerControl(ship: AceDuelShip): void {
+    const dial = getShipDial(ship.definitionId);
+    const speeds = [...new Set(dial.map((m) => m.speed))].sort((a, b) => a - b);
+
+    let desiredSpeed = ship.currentSpeed;
+    if (this.cursors.up.isDown) {
+      desiredSpeed = speeds.find((s) => s > desiredSpeed) ?? desiredSpeed;
+    } else if (this.cursors.down.isDown) {
+      desiredSpeed =
+        [...speeds].reverse().find((s) => s < desiredSpeed) ?? desiredSpeed;
+    }
+
+    let direction: ManeuverDirection = "straight";
+    if (this.cursors.left.isDown) direction = "bank_left";
+    else if (this.cursors.right.isDown) direction = "bank_right";
+
+    const chosen =
+      dial.find((m) => m.direction === direction && m.speed === desiredSpeed) ??
+      dial.find((m) => m.direction === direction) ??
+      dial.find((m) => m.direction === "straight") ??
+      dial[0];
+
+    if (chosen) {
+      ship.currentManeuverDir = chosen.direction;
+      ship.currentSpeed = chosen.speed;
     }
   }
 
@@ -1290,6 +1459,9 @@ export class AceDuelScene extends Phaser.Scene {
 
   private endMatch(): void {
     this.matchComplete = true;
+    // Same scrollFactor(0)-vs-zoom hit-test issue as the setup screen — the
+    // player may have zoomed with the mouse wheel during the match.
+    this.cameras.main.setZoom(1.0);
 
     const playerWins = this.playerSide === 1 ? this.side1Wins : this.side2Wins;
     const enemyWins = this.playerSide === 1 ? this.side2Wins : this.side1Wins;

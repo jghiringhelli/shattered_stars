@@ -163,6 +163,8 @@ export class SurvivalScene extends Phaser.Scene {
   private isWaveActive = false;
   private isPaused = false;
   private isChoicePhase = false;
+  /** Zoom to restore when a choice panel closes — see showDraft()/showHangar(). */
+  private preChoiceZoom = 1;
 
   // Progression — single source of truth for pacing, drafts and bonuses.
   private run!: SurvivalRunController;
@@ -628,6 +630,8 @@ export class SurvivalScene extends Phaser.Scene {
 
   private showDraft(): void {
     this.isChoicePhase = true;
+    this.preChoiceZoom = this.cameras.main.zoom;
+    this.cameras.main.setZoom(1.0);
     const powers = this.run.draft();
     const cards: ChoiceCard[] = powers.map((p) => ({
       icon: p.icon,
@@ -648,6 +652,8 @@ export class SurvivalScene extends Phaser.Scene {
 
   private showHangar(): void {
     this.isChoicePhase = true;
+    this.preChoiceZoom = this.cameras.main.zoom;
+    this.cameras.main.setZoom(1.0);
     const options = this.run.hangar();
     const cards: ChoiceCard[] = options.map((o) => ({
       icon: o.icon,
@@ -692,6 +698,7 @@ export class SurvivalScene extends Phaser.Scene {
 
   private endChoicePhase(): void {
     this.isChoicePhase = false;
+    this.cameras.main.setZoom(this.preChoiceZoom);
     this.startNextWave();
   }
 
