@@ -151,9 +151,14 @@ const MODE_BASE_STATS: Record<GameMode, ModeBaseStats> = {
   },
   survival: {
     // Endless waves — ships must survive multiple engagements.
-    // Same combat speed as continuous but durability tuned so even tiny
-    // light fighters reach hull ≥ 3 (hullMod 0.8 × 1.2 × base ≥ 3).
-    hullMultiplier: 1.2,
+    // hullMultiplier 1.2 left the two base-hull-2 light-fighter starters
+    // (terran_stiletto, synth_scout_drone) at hull 2 (round(2*1.2*0.8)=2),
+    // one shy of the "hull >= 3" durability this mode was designed for —
+    // that's 3 raw hit points against wave 1's 3 enemies converging on a
+    // lone flagship. Raised to 1.6 so every light-fighter starter clears
+    // hull >= 3 (round(2*1.6*0.8)=3); found via a live self-play death at
+    // Wave 1 with a real player-piloted flagship (see Status.md).
+    hullMultiplier: 1.6,
     shieldMultiplier: 0.9,
     attackBase: 1.5, // Same damage tempo as continuous
     agilityBase: 1.2,

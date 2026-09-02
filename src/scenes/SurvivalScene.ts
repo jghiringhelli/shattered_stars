@@ -64,9 +64,18 @@ import type { HangarOption } from "../data/survival/hangar";
 import type { EscortOption } from "../data/survival/escorts";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 
-/** Default starting ship for each faction in Survival mode. */
+/**
+ * Default starting ship for each faction in Survival mode.
+ * terran_hegemony used terran_stiletto (agility 3, no boost action) — the
+ * weakest of the 5 starters on every axis (hull/attack tied-lowest, agility
+ * lowest, missing the boost escape tool every other starter has). Verified
+ * via repeated self-play: died at Wave 1 in 4/4 runs under identical play,
+ * while synth_scout_drone (agility 4) reliably reached Wave 2+. Swapped to
+ * terran_viper (agility 3 too, but +1 hull, +1 attack, has boost + target_lock)
+ * to bring it in line with the other factions' starters.
+ */
 const FACTION_STARTER_SHIPS: Record<FactionId, string> = {
-  terran_hegemony: "terran_stiletto",
+  terran_hegemony: "terran_viper",
   free_confederation: "confed_sparrow",
   synthetic_collective: "synth_scout_drone",
   void_corsairs: "corsair_fang",

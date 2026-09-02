@@ -63,6 +63,11 @@ export class PauseMenu extends Phaser.GameObjects.Container {
     this.panel.add(title);
 
     // Menu items
+    // Each button gets its own scrollFactor(0) explicitly — Phaser's pointer
+    // hit-testing does not correctly inherit scrollFactor from an ancestor
+    // container when the camera is scrolled/zoomed, so relying only on this
+    // container's own setScrollFactor(0) below silently breaks clicks on the
+    // nested buttons (verified live).
     const btnConfig = {
       width: 240,
       height: 50,
@@ -70,55 +75,55 @@ export class PauseMenu extends Phaser.GameObjects.Container {
       font: "bold 24px Arial",
       hoverScale: 1.05 as const,
     };
-    this.panel.add(
-      createHoverButton(
-        config.scene,
-        0,
-        -60,
-        { ...btnConfig, color: 0x227722, label: "RESUME" },
-        () => {
-          this.hide();
-          this.onResume();
-        },
-      ),
-    );
-    this.panel.add(
-      createHoverButton(
-        config.scene,
-        0,
-        20,
-        { ...btnConfig, color: 0x666622, label: "RESTART" },
-        () => {
-          this.onRestart();
-        },
-      ),
-    );
-    this.panel.add(
-      createHoverButton(
-        config.scene,
-        0,
-        100,
-        { ...btnConfig, color: 0x224466, label: "SETTINGS" },
-        () => {
-          this.onSettings();
-        },
-      ),
-    );
-    this.panel.add(
-      createHoverButton(
-        config.scene,
-        0,
-        180,
-        { ...btnConfig, color: 0x662222, label: "QUIT TO MENU" },
-        () => {
-          this.onQuit();
-        },
-      ),
-    );
+    const resumeBtn = createHoverButton(
+      config.scene,
+      0,
+      -60,
+      { ...btnConfig, color: 0x227722, label: "RESUME" },
+      () => {
+        this.hide();
+        this.onResume();
+      },
+    ).setScrollFactor(0);
+    this.panel.add(resumeBtn);
+
+    const restartBtn = createHoverButton(
+      config.scene,
+      0,
+      20,
+      { ...btnConfig, color: 0x666622, label: "RESTART" },
+      () => {
+        this.onRestart();
+      },
+    ).setScrollFactor(0);
+    this.panel.add(restartBtn);
+
+    const settingsBtn = createHoverButton(
+      config.scene,
+      0,
+      100,
+      { ...btnConfig, color: 0x224466, label: "SETTINGS" },
+      () => {
+        this.onSettings();
+      },
+    ).setScrollFactor(0);
+    this.panel.add(settingsBtn);
+
+    const quitBtn = createHoverButton(
+      config.scene,
+      0,
+      180,
+      { ...btnConfig, color: 0x662222, label: "QUIT TO MENU" },
+      () => {
+        this.onQuit();
+      },
+    ).setScrollFactor(0);
+    this.panel.add(quitBtn);
 
     // Set depth and scroll factor
     this.setDepth(2000);
     this.setScrollFactor(0);
+    this.panel.setScrollFactor(0);
 
     // Add to scene
     config.scene.add.existing(this);

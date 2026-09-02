@@ -41,6 +41,7 @@ import {
 } from "../systems/PerformanceSystem";
 import type { ManeuverDirection } from "../core/types";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
+import { PauseMenu } from "../ui/PauseMenu";
 import {
   createSideScore,
   creditKill,
@@ -126,7 +127,9 @@ export class DogfightScene extends Phaser.Scene {
   private roundText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
-  private setupContainer!: Phaser.GameObjects.Container;
+  /** Setup-screen objects, tracked individually — see track()'s doc comment for why. */
+  private setupObjects: Phaser.GameObjects.GameObject[] = [];
+  private pauseMenu!: PauseMenu;
 
   // Player input
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -169,9 +172,12 @@ export class DogfightScene extends Phaser.Scene {
       ).__shipTelemetry = this.telemetry;
     }
 
+    // Zoom is applied once the round actually starts (see startNextRound) —
+    // Phaser's hit-testing for scrollFactor(0) UI does not correctly ignore
+    // camera zoom, so any non-1.0 zoom while the setup screen's buttons are
+    // shown makes every button unclickable (verified live: resetting zoom to
+    // 1.0 was the only change that made a real mouse click register).
     this.cameras.main.centerOn(BATTLEFIELD_SIZE / 2, BATTLEFIELD_SIZE / 2);
-    // Tighter zoom for dogfight
-    this.cameras.main.setZoom(1.1);
   }
 
   private resetMatchState(): void {
@@ -198,18 +204,19 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   private showSetupScreen(): void {
-    const centerX = this.scale.width / 2;
-    const centerY = this.scale.height / 2;
+    // Destroy any previous setup-screen objects. Buttons are NOT reparented
+    // into a shared container (see setupObjects doc comment) — track and
+    // destroy them individually instead.
+    this.setupObjects.forEach((o) => o.destroy());
+    this.setupObjects = [];
 
-    this.setupContainer = this.add.container(0, 0);
-    this.setupContainer.setScrollFactor(0);
-    this.setupContainer.setDepth(2000);
+    const centerX = this.scale.width / 2;
 
     // Background
     const bg = this.add.graphics();
     bg.fillStyle(0x000000, 0.9);
     bg.fillRect(0, 0, this.scale.width, this.scale.height);
-    this.setupContainer.add(bg);
+    this.track(bg);
 
     // Title
     const title = this.add
@@ -218,7 +225,7 @@ export class DogfightScene extends Phaser.Scene {
         color: "#ff8844",
       })
       .setOrigin(0.5);
-    this.setupContainer.add(title);
+    this.track(title);
 
     const subtitle = this.add
       .text(centerX, 95, "1v1 Quick Duels", {
@@ -226,7 +233,7 @@ export class DogfightScene extends Phaser.Scene {
         color: "#aaaaaa",
       })
       .setOrigin(0.5);
-    this.setupContainer.add(subtitle);
+    this.track(subtitle);
 
     // Format selection
     const formatLabel = this.add
@@ -235,7 +242,7 @@ export class DogfightScene extends Phaser.Scene {
         color: "#ffffff",
       })
       .setOrigin(0.5);
-    this.setupContainer.add(formatLabel);
+    this.track(formatLabel);
 
     const formats: Array<{ id: MatchFormat; name: string }> = [
       { id: "best_of_3", name: "Best of 3" },
@@ -253,7 +260,7 @@ export class DogfightScene extends Phaser.Scene {
           this.showSetupScreen();
         },
       );
-      this.setupContainer.add(btn);
+      this.track(btn);
     });
 
     // Ship selection - Player
@@ -263,7 +270,7 @@ export class DogfightScene extends Phaser.Scene {
         color: "#44ff44",
       })
       .setOrigin(0.5);
-    this.setupContainer.add(playerLabel);
+    this.track(playerLabel);
 
     const playerShips = getShipsByFaction(this.playerFaction);
     let yPos = 280;
@@ -278,7 +285,7 @@ export class DogfightScene extends Phaser.Scene {
           this.showSetupScreen();
         },
       );
-      this.setupContainer.add(btn);
+      this.track(btn);
       yPos += 40;
     });
 
@@ -289,7 +296,7 @@ export class DogfightScene extends Phaser.Scene {
         color: "#ff4444",
       })
       .setOrigin(0.5);
-    this.setupContainer.add(enemyLabel);
+    this.track(enemyLabel);
 
     const enemyShips = getShipsByFaction(this.enemyFaction);
     yPos = 280;
@@ -304,7 +311,7 @@ export class DogfightScene extends Phaser.Scene {
           this.showSetupScreen();
         },
       );
-      this.setupContainer.add(btn);
+      this.track(btn);
       yPos += 40;
     });
 
@@ -331,7 +338,7 @@ export class DogfightScene extends Phaser.Scene {
         color: "#888888",
       })
       .setOrigin(0.5);
-    this.setupContainer.add(playerFactionLabel);
+    this.track(playerFactionLabel);
 
     factions.forEach((faction, i) => {
       const btn = this.createSmallButton(
@@ -346,7 +353,7 @@ export class DogfightScene extends Phaser.Scene {
           this.showSetupScreen();
         },
       );
-      this.setupContainer.add(btn);
+      this.track(btn);
     });
 
     // Enemy faction
@@ -356,7 +363,7 @@ export class DogfightScene extends Phaser.Scene {
         color: "#888888",
       })
       .setOrigin(0.5);
-    this.setupContainer.add(enemyFactionLabel);
+    this.track(enemyFactionLabel);
 
     factions.forEach((faction, i) => {
       const btn = this.createSmallButton(
@@ -371,7 +378,7 @@ export class DogfightScene extends Phaser.Scene {
           this.showSetupScreen();
         },
       );
-      this.setupContainer.add(btn);
+      this.track(btn);
     });
 
     // Difficulty
@@ -381,7 +388,7 @@ export class DogfightScene extends Phaser.Scene {
         color: "#888888",
       })
       .setOrigin(0.5);
-    this.setupContainer.add(diffLabel);
+    this.track(diffLabel);
 
     const difficulties: Array<"easy" | "normal" | "hard" | "brutal"> = [
       "easy",
@@ -400,7 +407,7 @@ export class DogfightScene extends Phaser.Scene {
           this.showSetupScreen();
         },
       );
-      this.setupContainer.add(btn);
+      this.track(btn);
     });
 
     // Start button
@@ -419,7 +426,7 @@ export class DogfightScene extends Phaser.Scene {
       },
       () => this.startMatch(),
     );
-    this.setupContainer.add(startBtn);
+    this.track(startBtn);
 
     // Back button
     const backBtn = this.add
@@ -435,7 +442,27 @@ export class DogfightScene extends Phaser.Scene {
       this.scene.start("MainMenuScene");
     });
 
-    this.setupContainer.add(backBtn);
+    this.track(backBtn);
+  }
+
+  /**
+   * Registers a setup-screen object for fixed-position rendering and later
+   * cleanup. Objects are kept as direct scene children (never reparented
+   * into a shared container) — reparenting an already-interactive Container
+   * into another Container was found to silently break real pointer-click
+   * hit-testing (verified live: emitting "pointerdown" directly on the
+   * button still worked, but an actual mouse click at the same screen
+   * coordinates did not) even though the identical pattern works fine for
+   * top-level containers (compare MainMenuScene's menu buttons).
+   */
+  private track(obj: Phaser.GameObjects.GameObject): void {
+    const withTransform = obj as unknown as {
+      setScrollFactor?: (x: number) => unknown;
+      setDepth?: (d: number) => unknown;
+    };
+    withTransform.setScrollFactor?.(0);
+    withTransform.setDepth?.(2000);
+    this.setupObjects.push(obj);
   }
 
   private createSelectionButton(
@@ -504,7 +531,8 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   private startMatch(): void {
-    this.setupContainer.destroy();
+    this.setupObjects.forEach((o) => o.destroy());
+    this.setupObjects = [];
     this.isSetupPhase = false;
 
     audioManager.playMusic("combat_high");
@@ -545,6 +573,8 @@ export class DogfightScene extends Phaser.Scene {
 
     this.showRoundStart();
 
+    // Tighter zoom for dogfight — applied here, not at setup-screen time (see create()).
+    this.cameras.main.setZoom(1.1);
     const playerSprite = this.shipSprites.get(this.playerShipIds[0] ?? "");
     if (playerSprite) {
       this.cameraVirtualX = playerSprite.x;
@@ -739,9 +769,8 @@ export class DogfightScene extends Phaser.Scene {
       Phaser.Input.Keyboard.KeyCodes.SPACE,
     );
 
-    this.input.keyboard!.on("keydown-ESC", () => {
-      this.isPaused = !this.isPaused;
-    });
+    this.createPauseMenu();
+    this.input.keyboard!.on("keydown-ESC", () => this.togglePause());
 
     this.input.on(
       "wheel",
@@ -755,6 +784,39 @@ export class DogfightScene extends Phaser.Scene {
         this.cameras.main.setZoom(Phaser.Math.Clamp(zoom, 0.8, 2));
       },
     );
+  }
+
+  private createPauseMenu(): void {
+    this.pauseMenu = new PauseMenu({
+      scene: this,
+      onResume: () => {
+        this.isPaused = false;
+      },
+      onRestart: () => {
+        this.scene.restart();
+      },
+      onSettings: () => {
+        this.scene.launch("SettingsScene", { returnScene: "DogfightScene" });
+      },
+      onQuit: () => {
+        this.scene.start("MainMenuScene");
+      },
+    });
+  }
+
+  /**
+   * ESC previously just flipped `isPaused` with no visual feedback and no
+   * way back to the menu — the freeze looked like a bug. Now it shows a
+   * real pause overlay (RESUME/RESTART/SETTINGS/QUIT), resetting zoom to 1.0
+   * first for the same hit-testing reason as the setup/end-match screens.
+   */
+  private togglePause(): void {
+    if (this.isSetupPhase || this.matchComplete) return;
+    this.isPaused = !this.isPaused;
+    if (this.isPaused) {
+      this.cameras.main.setZoom(1.0);
+      this.pauseMenu.show();
+    }
   }
 
   private spawnShip(
@@ -1204,6 +1266,10 @@ export class DogfightScene extends Phaser.Scene {
 
   private endMatch(): void {
     this.matchComplete = true;
+    // Same scrollFactor(0)-vs-zoom hit-test issue as the setup screen — the
+    // player may have zoomed with the mouse wheel during the match, which
+    // would make REMATCH/MENU unclickable below if left as-is.
+    this.cameras.main.setZoom(1.0);
 
     const centerX = this.scale.width / 2;
     const centerY = this.scale.height / 2;
