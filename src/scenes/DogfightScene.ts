@@ -212,9 +212,21 @@ export class DogfightScene extends Phaser.Scene {
 
     const centerX = this.scale.width / 2;
 
+    // Textured background image — drawn above the space parallax layer
+    // (which renders at a higher depth than TexturedPanel's default -1)
+    // but below every setup-screen control.
+    if (this.textures.exists("tex_menu_bg")) {
+      const bgImage = this.add
+        .image(centerX, this.scale.height / 2, "tex_menu_bg")
+        .setDisplaySize(this.scale.width, this.scale.height)
+        .setScrollFactor(0)
+        .setDepth(1999);
+      this.setupObjects.push(bgImage);
+    }
+
     // Background
     const bg = this.add.graphics();
-    bg.fillStyle(0x000000, 0.9);
+    bg.fillStyle(0x000000, 0.55);
     bg.fillRect(0, 0, this.scale.width, this.scale.height);
     this.track(bg);
 
