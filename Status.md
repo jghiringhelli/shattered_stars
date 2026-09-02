@@ -25,6 +25,18 @@ This session (per the GS/harness discipline — see docs/specs/verify-loop.md):
   the `dogfight-1v1` scenario. Full loop now: 5/5 scenarios PASS.
 - Corrected `docs/specs/verify-loop.md` and this file's stale test counts
   (1717 unit → 2078; 183/11 e2e → 216/20 e2e).
+- **Critical finding from playing Dogfight/Survival with the corrected harness**: both
+  scenes' HUD promised "Arrow keys: Move" but the player ship was 100% AI-piloted
+  (Dogfight already fixed in a prior session; Survival's `updateAI()` had a
+  `// Player ships also use simple AI if not controlled` block with no actual input
+  path — the flagship could not be steered or fire manually at all). Verified impact:
+  a scripted playthrough died at Wave 1 / Score 0 in ~20s before the fix; after wiring
+  real keyboard control (UP/DOWN speed, LEFT/RIGHT bank, SPACE to fire — same scheme as
+  Dogfight) the same script survived Wave 1, scored 100, and reached Wave 2.
+- Fixed: SurvivalScene flagship now takes real player input (escorts keep seek-AI);
+  both DogfightScene and SurvivalScene cameras now follow the player ship (manual
+  toroid-aware lerp, matching ArcadeBattleScene) instead of staying fixed at the
+  battlefield center.
 
 Current test counts (verified this session): 2078 unit tests (`npm test -- --run`,
 79 files), 216 e2e tests (`npx playwright test --list`, 20 spec files).
@@ -85,8 +97,8 @@ scripts/
 ## Known Bugs
 - This table (and the Balance Results / Roadmap / ADR Log sections below) predate the
   2026-09-02 drift noted above — treat as historical, not current. Known live issues as
-  of this session: Dogfight's camera is fixed (doesn't follow the ship, so a match can
-  drift ships off-screen over time).
+  of this session: none blocking for Dogfight/Survival after the control + camera fixes
+  above; wave-difficulty/balance tuning for Survival not yet re-validated post-fix.
 
 ## Balance Results (2026-06-09, 300 battles/matchup, upgraded sim — action tokens + ordnance + stealth, spawn-side randomized)
 
