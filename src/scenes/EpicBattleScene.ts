@@ -13,6 +13,8 @@ import Phaser from "phaser";
 import { createHoverButton } from "../ui/ButtonFactory";
 import { ShipStatCard } from "../ui/ShipStatCard";
 import { PauseMenu } from "../ui/PauseMenu";
+import { InputManager } from "../input/InputManager";
+import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import type { FactionId } from "../config";
 import { BATTLEFIELD_SIZE, FACTION_COLORS, SHIP_SIZES } from "../config";
 import {
@@ -336,9 +338,16 @@ export class EpicBattleScene extends Phaser.Scene {
   private bossHealthBar!: Phaser.GameObjects.Graphics;
   private setupObjects: Phaser.GameObjects.GameObject[] = [];
   private pauseMenu!: PauseMenu;
+  private inputSubscriptionIds: number[] = [];
 
   constructor() {
     super({ key: "EpicBattleScene" });
+  }
+
+  shutdown(): void {
+    this.inputSubscriptionIds.forEach((id) => InputManager.off(id));
+    this.inputSubscriptionIds = [];
+    teardownSceneInput();
   }
 
   create(): void {
@@ -629,6 +638,7 @@ export class EpicBattleScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    InputManager.update();
     if (this.isSetupPhase || this.isPaused || this.gameResult !== "none")
       return;
     this.performanceState = updateFPS(this.performanceState, delta);
@@ -692,7 +702,7 @@ export class EpicBattleScene extends Phaser.Scene {
       .text(
         this.scale.width / 2,
         this.scale.height - 30,
-        "Scroll: Zoom | ESC: Pause",
+        "UP/DOWN: Speed | LEFT/RIGHT: Turn | Weapon autofires | Scroll: Zoom | ESC: Pause",
         {
           font: "14px monospace",
           color: "#666666",
@@ -768,9 +778,10 @@ export class EpicBattleScene extends Phaser.Scene {
   }
 
   private setupInput(): void {
-    this.input.keyboard!.on("keydown-ESC", () => {
-      this.togglePause();
-    });
+    setupSceneInput(this);
+    this.inputSubscriptionIds.push(
+      InputManager.on("PAUSE", () => this.togglePause()),
+    );
 
     this.input.on(
       "wheel",
@@ -1502,8 +1513,11 @@ export class EpicBattleScene extends Phaser.Scene {
       }
     }
 
-    // Player ship AI - attack boss or escorts
+    // Escort ships in the player squad (everything but the flagship) fly
+    // on AI toward the boss/escorts, same as before.
+    const flagshipId = this.playerShipIds[0] ?? "";
     for (const playerId of this.playerShipIds) {
+      if (playerId === flagshipId) continue;
       const ship = this.ships.get(playerId);
       if (!ship || ship.hull <= 0) continue;
 
@@ -1545,6 +1559,46 @@ export class EpicBattleScene extends Phaser.Scene {
           ship.currentSpeed = turn.speed;
         }
       }
+    }
+
+    const flagship = this.ships.get(flagshipId);
+    if (flagship && flagship.hull > 0) {
+      this.applyPlayerControl(flagship);
+    }
+  }
+
+  /**
+   * Picks the flagship's next maneuver from its dial based on held intents
+   * (keyboard/gamepad/touch, normalized through InputManager). UP/DOWN ramp
+   * speed through the dial's available speeds; LEFT/RIGHT bank at the
+   * current speed (falling back to any available speed for that
+   * direction); no input holds a straight maneuver.
+   */
+  private applyPlayerControl(ship: EpicShip): void {
+    const dial = getShipDial(ship.definitionId);
+    const speeds = [...new Set(dial.map((m) => m.speed))].sort((a, b) => a - b);
+
+    let desiredSpeed = ship.currentSpeed;
+    if (InputManager.isHeld("THRUST_UP")) {
+      desiredSpeed = speeds.find((s) => s > desiredSpeed) ?? desiredSpeed;
+    } else if (InputManager.isHeld("THRUST_DOWN")) {
+      desiredSpeed =
+        [...speeds].reverse().find((s) => s < desiredSpeed) ?? desiredSpeed;
+    }
+
+    let direction: ManeuverDirection = "straight";
+    if (InputManager.isHeld("STEER_LEFT")) direction = "bank_left";
+    else if (InputManager.isHeld("STEER_RIGHT")) direction = "bank_right";
+
+    const chosen =
+      dial.find((m) => m.direction === direction && m.speed === desiredSpeed) ??
+      dial.find((m) => m.direction === direction) ??
+      dial.find((m) => m.direction === "straight") ??
+      dial[0];
+
+    if (chosen) {
+      ship.currentManeuverDir = chosen.direction;
+      ship.currentSpeed = chosen.speed;
     }
   }
 
