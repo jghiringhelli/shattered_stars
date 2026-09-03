@@ -53,6 +53,7 @@ export const DEFAULT_KEYBOARD_BINDINGS: readonly KeyboardBinding[] = [
   // Other
   { key: "P", intent: "PAUSE" },
   { key: "ESC", intent: "PAUSE" },
+  { key: "SPACE", intent: "PAUSE" },
   { key: "F", intent: "FOCUS_SELECTED" },
   { key: "HOME", intent: "RESET_CAMERA" },
 ];

@@ -35,6 +35,8 @@ import { distributeMissionXp } from "../systems/CampaignPilotManager";
 import { CAMPAIGN_PILOTS } from "../data/PilotData";
 import { audioManager } from "../audio/AudioManager";
 import { renderBattleStarfield } from "../rendering/Starfield";
+import { InputManager } from "../input/InputManager";
+import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import type { BeltConfig } from "../systems/arena/ArenaBoundary";
 
 /** Battle center for campaign missions (camera and starting formations). */
@@ -74,7 +76,7 @@ interface SceneData {
 export class CampaignBattleScene extends Phaser.Scene {
   private shipSprites: Map<string, ShipSprite> = new Map();
   private battleManager!: BattleManager;
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private inputSubscriptionIds: number[] = [];
 
   // Mission state
   private factionId!: FactionId;
@@ -136,6 +138,12 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.missionFailed = false;
     this.pendingEnemySpawns = [];
     this.shipSprites.clear();
+  }
+
+  shutdown(): void {
+    this.inputSubscriptionIds.forEach((id) => InputManager.off(id));
+    this.inputSubscriptionIds = [];
+    teardownSceneInput();
   }
 
   create(): void {
@@ -242,6 +250,7 @@ export class CampaignBattleScene extends Phaser.Scene {
   }
 
   update(_time: number): void {
+    InputManager.update();
     if (this.missionComplete || this.missionFailed || this.isPaused) return;
 
     this.handleInput();
@@ -902,7 +911,7 @@ export class CampaignBattleScene extends Phaser.Scene {
   }
 
   private setupInput(): void {
-    this.cursors = this.input.keyboard!.createCursorKeys();
+    setupSceneInput(this);
 
     this.input.on(
       "wheel",
@@ -923,11 +932,13 @@ export class CampaignBattleScene extends Phaser.Scene {
     );
 
     // Escape to pause/quit
-    this.input.keyboard!.on("keydown-ESC", () => {
-      if (!this.missionComplete && !this.missionFailed) {
-        this.showPauseMenu();
-      }
-    });
+    this.inputSubscriptionIds.push(
+      InputManager.on("PAUSE", () => {
+        if (!this.missionComplete && !this.missionFailed) {
+          this.showPauseMenu();
+        }
+      }),
+    );
   }
 
   private showPauseMenu(): void {
@@ -1027,10 +1038,10 @@ export class CampaignBattleScene extends Phaser.Scene {
     const camera = this.cameras.main;
     const cameraSpeed = 8 / camera.zoom;
 
-    if (this.cursors.left.isDown) camera.scrollX -= cameraSpeed;
-    if (this.cursors.right.isDown) camera.scrollX += cameraSpeed;
-    if (this.cursors.up.isDown) camera.scrollY -= cameraSpeed;
-    if (this.cursors.down.isDown) camera.scrollY += cameraSpeed;
+    if (InputManager.isHeld("PAN_LEFT")) camera.scrollX -= cameraSpeed;
+    if (InputManager.isHeld("PAN_RIGHT")) camera.scrollX += cameraSpeed;
+    if (InputManager.isHeld("PAN_UP")) camera.scrollY -= cameraSpeed;
+    if (InputManager.isHeld("PAN_DOWN")) camera.scrollY += cameraSpeed;
   }
 
   private createHUD(): void {
