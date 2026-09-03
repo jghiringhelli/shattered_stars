@@ -8,30 +8,50 @@
 // ============================================
 
 export type ActionIntent =
-  // Navigation
-  | 'PAN_UP'
-  | 'PAN_DOWN'
-  | 'PAN_LEFT'
-  | 'PAN_RIGHT'
-  | 'ZOOM_IN'
-  | 'ZOOM_OUT'
+  // Navigation (tactical/campaign camera + selection)
+  | "PAN_UP"
+  | "PAN_DOWN"
+  | "PAN_LEFT"
+  | "PAN_RIGHT"
+  | "ZOOM_IN"
+  | "ZOOM_OUT"
   // Selection
-  | 'SELECT'
-  | 'CONFIRM'
-  | 'CANCEL'
-  | 'CYCLE_NEXT'
-  | 'CYCLE_PREV'
-  // Gameplay
-  | 'SELECT_MANEUVER_1'
-  | 'SELECT_MANEUVER_2'
-  | 'SELECT_MANEUVER_3'
-  | 'SELECT_MANEUVER_4'
-  | 'SELECT_MANEUVER_5'
-  | 'EXECUTE_ACTION'
-  | 'PAUSE'
+  | "SELECT"
+  | "CONFIRM"
+  | "CANCEL"
+  | "CYCLE_NEXT"
+  | "CYCLE_PREV"
+  // Tactical maneuver dial
+  | "SELECT_MANEUVER_1"
+  | "SELECT_MANEUVER_2"
+  | "SELECT_MANEUVER_3"
+  | "SELECT_MANEUVER_4"
+  | "SELECT_MANEUVER_5"
+  | "EXECUTE_ACTION"
+  | "PAUSE"
   // Camera
-  | 'FOCUS_SELECTED'
-  | 'RESET_CAMERA';
+  | "FOCUS_SELECTED"
+  | "RESET_CAMERA"
+  // Continuous flight — steering/throttle (held, digital or analog `value`)
+  | "STEER_LEFT"
+  | "STEER_RIGHT"
+  | "THRUST_UP"
+  | "THRUST_DOWN"
+  // Continuous flight — weapons. Primary fires automatically every cycle
+  // (no intent needed); FIRE_SECONDARY triggers ordnance/special weapons.
+  | "FIRE_SECONDARY"
+  | "WEAPON_CYCLE"
+  // Continuous flight — special maneuvers (double-tap on touch/keyboard)
+  | "BOOST"
+  | "KTURN"
+  | "BARREL_ROLL"
+  // Continuous flight — advanced (large/capital ships)
+  | "CREW_CYCLE"
+  | "CLOAK"
+  | "COMMANDER_ORDER_1"
+  | "COMMANDER_ORDER_2"
+  | "COMMANDER_ORDER_3"
+  | "COMMANDER_ORDER_4";
 
 // ============================================
 // Input Events
@@ -46,15 +66,15 @@ export interface InputEvent {
 }
 
 export type InputSource =
-  | 'keyboard'
-  | 'mouse'
-  | 'gamepad'
-  | 'touch'
-  | 'joystick'
-  | 'ar_gesture'
-  | 'ar_gaze'
-  | 'ar_head'
-  | 'voice';
+  | "keyboard"
+  | "mouse"
+  | "gamepad"
+  | "touch"
+  | "joystick"
+  | "ar_gesture"
+  | "ar_gaze"
+  | "ar_head"
+  | "voice";
 
 // ============================================
 // Input Bindings
@@ -73,14 +93,20 @@ export interface KeyboardBinding {
 export interface GamepadBinding {
   readonly button?: number; // Button index
   readonly axis?: number; // Axis index
-  readonly axisDirection?: 'positive' | 'negative';
+  readonly axisDirection?: "positive" | "negative";
   readonly intent: ActionIntent;
   readonly deadzone?: number;
 }
 
 export interface MouseBinding {
-  readonly button?: 'left' | 'right' | 'middle';
-  readonly wheel?: 'up' | 'down';
+  readonly button?: "left" | "right" | "middle";
+  readonly wheel?: "up" | "down";
+  readonly intent: ActionIntent;
+}
+
+/** A gesture-zone action on touch: tap fires once, doubleTap needs two taps within a short window, hold fires while held. */
+export interface TouchBinding {
+  readonly gesture: "tap" | "doubleTap" | "hold";
   readonly intent: ActionIntent;
 }
 
@@ -113,6 +139,7 @@ export interface InputProfile {
   readonly keyboard: readonly KeyboardBinding[];
   readonly gamepad: readonly GamepadBinding[];
   readonly mouse: readonly MouseBinding[];
+  readonly touch: readonly TouchBinding[];
   readonly sensitivity: {
     readonly camera: number;
     readonly zoom: number;

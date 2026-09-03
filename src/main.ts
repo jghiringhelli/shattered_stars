@@ -57,6 +57,10 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: false,
     },
   },
+  // 3 concurrent pointers: mouse + two simultaneous touches (dual-stick flight controls).
+  input: {
+    activePointers: 3,
+  },
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,

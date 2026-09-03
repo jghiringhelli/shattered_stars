@@ -9,14 +9,14 @@ import type {
   InputEvent,
   InputProfile,
   InputSource,
-} from './InputTypes';
-import { DEFAULT_INPUT_PROFILE } from './DefaultBindings';
+} from "./InputTypes";
+import { DEFAULT_INPUT_PROFILE } from "./DefaultBindings";
 
 type IntentCallback = (event: InputEvent) => void;
 
 interface IntentSubscription {
   readonly id: number;
-  readonly intent: ActionIntent | '*';
+  readonly intent: ActionIntent | "*";
   readonly callback: IntentCallback;
 }
 
@@ -34,7 +34,9 @@ class InputManagerClass {
    */
   registerAdapter(adapter: InputAdapter): void {
     if (this.adapters.has(adapter.source)) {
-      console.warn(`InputManager: Replacing existing adapter for ${adapter.source}`);
+      console.warn(
+        `InputManager: Replacing existing adapter for ${adapter.source}`,
+      );
       this.adapters.get(adapter.source)?.destroy();
     }
 
@@ -67,7 +69,7 @@ class InputManagerClass {
    */
   onAny(callback: IntentCallback): number {
     const id = this.nextId++;
-    this.subscriptions.push({ id, intent: '*', callback });
+    this.subscriptions.push({ id, intent: "*", callback });
     return id;
   }
 
@@ -154,11 +156,14 @@ class InputManagerClass {
 
   private dispatch(event: InputEvent): void {
     for (const sub of this.subscriptions) {
-      if (sub.intent === event.intent || sub.intent === '*') {
+      if (sub.intent === event.intent || sub.intent === "*") {
         try {
           sub.callback(event);
         } catch (error) {
-          console.error(`InputManager: Error in callback for ${event.intent}:`, error);
+          console.error(
+            `InputManager: Error in callback for ${event.intent}:`,
+            error,
+          );
         }
       }
     }

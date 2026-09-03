@@ -43,6 +43,8 @@ import type { ManeuverDirection } from "../core/types";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { PauseMenu } from "../ui/PauseMenu";
 import { networkService } from "../services/NetworkService";
+import { InputManager } from "../input/InputManager";
+import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import {
   random,
   setDefaultRng,
@@ -137,10 +139,8 @@ export class DogfightScene extends Phaser.Scene {
   /** Setup-screen objects, tracked individually — see track()'s doc comment for why. */
   private setupObjects: Phaser.GameObjects.GameObject[] = [];
   private pauseMenu!: PauseMenu;
-
-  // Player input
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private fireKey!: Phaser.Input.Keyboard.Key;
+  /** InputManager.on() subscription ids, unsubscribed in shutdown() to avoid duplicate callbacks after scene.restart(). */
+  private inputSubscriptionIds: number[] = [];
 
   // Online multiplayer (networked 1v1 — see setupNetworking()/onRemoteAction()).
   // Each client is authoritative for its own ship's input and for combat
@@ -231,6 +231,9 @@ export class DogfightScene extends Phaser.Scene {
 
   /** Unregisters network listeners and resets the shared RNG so a fixed battle seed never leaks into whatever plays next. */
   shutdown(): void {
+    this.inputSubscriptionIds.forEach((id) => InputManager.off(id));
+    this.inputSubscriptionIds = [];
+    teardownSceneInput();
     if (this.isOnlineMode) {
       networkService.off("game_action", this.onRemoteAction, this);
       networkService.off(
@@ -740,6 +743,7 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    InputManager.update();
     if (this.isSetupPhase || this.isPaused || this.matchComplete) return;
     this.performanceState = updateFPS(this.performanceState, delta);
     this.performanceState = evaluateQuality(this.performanceState, time);
@@ -851,7 +855,7 @@ export class DogfightScene extends Phaser.Scene {
       .text(
         this.scale.width / 2,
         this.scale.height - 25,
-        "UP/DOWN: Speed | LEFT/RIGHT: Turn | SPACE: Fire | ESC: Pause",
+        "UP/DOWN: Speed | LEFT/RIGHT: Turn | Weapon autofires | ESC: Pause",
         {
           font: "14px monospace",
           color: "#666666",
@@ -887,13 +891,11 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   private setupInput(): void {
-    this.cursors = this.input.keyboard!.createCursorKeys();
-    this.fireKey = this.input.keyboard!.addKey(
-      Phaser.Input.Keyboard.KeyCodes.SPACE,
-    );
-
+    setupSceneInput(this);
     this.createPauseMenu();
-    this.input.keyboard!.on("keydown-ESC", () => this.togglePause());
+    this.inputSubscriptionIds.push(
+      InputManager.on("PAUSE", () => this.togglePause()),
+    );
 
     this.input.on(
       "wheel",
@@ -1105,7 +1107,7 @@ export class DogfightScene extends Phaser.Scene {
       if (!ship || ship.hull <= 0) return;
 
       ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
-      if (ship.weaponCooldown <= 0 && this.fireKey.isDown) {
+      if (ship.weaponCooldown <= 0) {
         const target = this.findTarget(ship);
         if (target) {
           this.fireAt(ship, target);
@@ -1121,9 +1123,7 @@ export class DogfightScene extends Phaser.Scene {
       ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
 
       if (ship.weaponCooldown <= 0) {
-        // Player ships only fire while the trigger is held; AI fires on sight.
-        if (ship.owner === "player" && !this.fireKey.isDown) continue;
-
+        // Primary weapon always autofires once in range/arc — player and AI alike.
         const target = this.findTarget(ship);
         if (target) {
           this.fireAt(ship, target);
@@ -1319,26 +1319,28 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   /**
-   * Picks the player ship's next maneuver from its dial based on held keys.
-   * UP/DOWN ramp speed through the dial's available speeds; LEFT/RIGHT bank
-   * at the current speed (falling back to any available speed for that
-   * direction); no input holds a straight maneuver.
+   * Picks the player ship's next maneuver from its dial based on held
+   * intents (keyboard arrows, gamepad stick, or the touch movement stick —
+   * all normalized through InputManager). UP/DOWN ramp speed through the
+   * dial's available speeds; LEFT/RIGHT bank at the current speed (falling
+   * back to any available speed for that direction); no input holds a
+   * straight maneuver.
    */
   private applyPlayerControl(ship: DogfightShip): void {
     const dial = getShipDial(ship.definitionId);
     const speeds = [...new Set(dial.map((m) => m.speed))].sort((a, b) => a - b);
 
     let desiredSpeed = ship.currentSpeed;
-    if (this.cursors.up.isDown) {
+    if (InputManager.isHeld("THRUST_UP")) {
       desiredSpeed = speeds.find((s) => s > desiredSpeed) ?? desiredSpeed;
-    } else if (this.cursors.down.isDown) {
+    } else if (InputManager.isHeld("THRUST_DOWN")) {
       desiredSpeed =
         [...speeds].reverse().find((s) => s < desiredSpeed) ?? desiredSpeed;
     }
 
     let direction: ManeuverDirection = "straight";
-    if (this.cursors.left.isDown) direction = "bank_left";
-    else if (this.cursors.right.isDown) direction = "bank_right";
+    if (InputManager.isHeld("STEER_LEFT")) direction = "bank_left";
+    else if (InputManager.isHeld("STEER_RIGHT")) direction = "bank_right";
 
     const chosen =
       dial.find((m) => m.direction === direction && m.speed === desiredSpeed) ??
