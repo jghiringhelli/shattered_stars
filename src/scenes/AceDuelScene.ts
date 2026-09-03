@@ -39,6 +39,8 @@ import type { ManeuverDirection } from "../core/types";
 import { PILOT_ABILITIES } from "../systems/PilotAbilities";
 import { ACE_MATCHUPS, type AceMatchup } from "../data/AceMatchups";
 import { PauseMenu } from "../ui/PauseMenu";
+import { InputManager } from "../input/InputManager";
+import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import {
   createSideScore,
   creditKill,
@@ -179,10 +181,9 @@ export class AceDuelScene extends Phaser.Scene {
   private lastManeuverTime = 0;
   private maneuverInterval = 300;
 
-  // Player input
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private fireKey!: Phaser.Input.Keyboard.Key;
+  // Player input (routed through InputManager — see setupInput())
   private pauseMenu!: PauseMenu;
+  private inputSubscriptionIds: number[] = [];
 
   // Camera follow (manual — toroid wrap makes Phaser's startFollow jump at the seam)
   private cameraVirtualX = BATTLEFIELD_SIZE / 2;
@@ -253,6 +254,12 @@ export class AceDuelScene extends Phaser.Scene {
       "shattered_stars_ace_duel",
       JSON.stringify(Array.from(this.completedMatchups)),
     );
+  }
+
+  shutdown(): void {
+    this.inputSubscriptionIds.forEach((id) => InputManager.off(id));
+    this.inputSubscriptionIds = [];
+    teardownSceneInput();
   }
 
   private resetMatchState(): void {
@@ -770,6 +777,7 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    InputManager.update();
     if (this.isSetupPhase || this.isPaused || this.matchComplete) return;
     this.performanceState = updateFPS(this.performanceState, delta);
     this.performanceState = evaluateQuality(this.performanceState, time);
@@ -916,7 +924,7 @@ export class AceDuelScene extends Phaser.Scene {
       .text(
         this.scale.width / 2,
         this.scale.height - 25,
-        "UP/DOWN: Speed | LEFT/RIGHT: Turn | SPACE: Fire | Scroll: Zoom | ESC: Pause",
+        "UP/DOWN: Speed | LEFT/RIGHT: Turn | Weapon autofires | Scroll: Zoom | ESC: Pause",
         {
           font: "14px monospace",
           color: "#666666",
@@ -932,13 +940,11 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   private setupInput(): void {
-    this.cursors = this.input.keyboard!.createCursorKeys();
-    this.fireKey = this.input.keyboard!.addKey(
-      Phaser.Input.Keyboard.KeyCodes.SPACE,
-    );
-
+    setupSceneInput(this);
     this.createPauseMenu();
-    this.input.keyboard!.on("keydown-ESC", () => this.togglePause());
+    this.inputSubscriptionIds.push(
+      InputManager.on("PAUSE", () => this.togglePause()),
+    );
 
     this.input.on(
       "wheel",
@@ -1135,16 +1141,13 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   private processCombat(delta: number): void {
-    const flagshipId = `side${this.playerSide}_0`;
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
 
       ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
 
       if (ship.weaponCooldown <= 0) {
-        // The flagship only fires while the trigger is held; escorts/AI fire on sight.
-        if (ship.id === flagshipId && !this.fireKey.isDown) continue;
-
+        // Primary weapon always autofires once in range/arc — flagship, escorts, and AI alike.
         const target = this.findTarget(ship);
         if (target) {
           this.fireAt(ship, target);
@@ -1354,16 +1357,16 @@ export class AceDuelScene extends Phaser.Scene {
     const speeds = [...new Set(dial.map((m) => m.speed))].sort((a, b) => a - b);
 
     let desiredSpeed = ship.currentSpeed;
-    if (this.cursors.up.isDown) {
+    if (InputManager.isHeld("THRUST_UP")) {
       desiredSpeed = speeds.find((s) => s > desiredSpeed) ?? desiredSpeed;
-    } else if (this.cursors.down.isDown) {
+    } else if (InputManager.isHeld("THRUST_DOWN")) {
       desiredSpeed =
         [...speeds].reverse().find((s) => s < desiredSpeed) ?? desiredSpeed;
     }
 
     let direction: ManeuverDirection = "straight";
-    if (this.cursors.left.isDown) direction = "bank_left";
-    else if (this.cursors.right.isDown) direction = "bank_right";
+    if (InputManager.isHeld("STEER_LEFT")) direction = "bank_left";
+    else if (InputManager.isHeld("STEER_RIGHT")) direction = "bank_right";
 
     const chosen =
       dial.find((m) => m.direction === direction && m.speed === desiredSpeed) ??

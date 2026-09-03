@@ -63,6 +63,9 @@ import type { Power } from "../data/survival/powers";
 import type { HangarOption } from "../data/survival/hangar";
 import type { EscortOption } from "../data/survival/escorts";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
+import { PauseMenu } from "../ui/PauseMenu";
+import { InputManager } from "../input/InputManager";
+import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 
 /**
  * Default starting ship for each faction in Survival mode.
@@ -179,9 +182,9 @@ export class SurvivalScene extends Phaser.Scene {
   private lastManeuverTime = 0;
   private maneuverInterval = 300;
 
-  // Player input
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private fireKey!: Phaser.Input.Keyboard.Key;
+  // Player input (routed through InputManager — see setupInput())
+  private pauseMenu!: PauseMenu;
+  private inputSubscriptionIds: number[] = [];
 
   // Camera follow (manual — toroid wrap makes Phaser's startFollow jump at the seam)
   private cameraVirtualX = BATTLEFIELD_SIZE / 2;
@@ -249,6 +252,12 @@ export class SurvivalScene extends Phaser.Scene {
     this.time.delayedCall(2000, () => this.startNextWave());
   }
 
+  shutdown(): void {
+    this.inputSubscriptionIds.forEach((id) => InputManager.off(id));
+    this.inputSubscriptionIds = [];
+    teardownSceneInput();
+  }
+
   private resetState(): void {
     this.wave = 0;
     this.score = 0;
@@ -283,6 +292,7 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    InputManager.update();
     if (this.isPaused || this.isChoicePhase) return;
     this.performanceState = updateFPS(this.performanceState, delta);
     this.performanceState = evaluateQuality(this.performanceState, time);
@@ -381,20 +391,11 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   private setupInput(): void {
-    this.cursors = this.input.keyboard!.createCursorKeys();
-    this.fireKey = this.input.keyboard!.addKey(
-      Phaser.Input.Keyboard.KeyCodes.SPACE,
+    setupSceneInput(this);
+    this.createPauseMenu();
+    this.inputSubscriptionIds.push(
+      InputManager.on("PAUSE", () => this.togglePause()),
     );
-
-    this.input.keyboard!.on("keydown-ESC", () => {
-      if (this.isChoicePhase) return;
-      this.isPaused = !this.isPaused;
-      if (this.isPaused) {
-        this.showMessage("PAUSED", "Press ESC to resume");
-      } else {
-        this.messageText.setAlpha(0);
-      }
-    });
 
     this.input.on(
       "wheel",
@@ -408,6 +409,39 @@ export class SurvivalScene extends Phaser.Scene {
         this.cameras.main.setZoom(Phaser.Math.Clamp(zoom, 0.5, 2));
       },
     );
+  }
+
+  private createPauseMenu(): void {
+    this.pauseMenu = new PauseMenu({
+      scene: this,
+      onResume: () => {
+        this.isPaused = false;
+      },
+      onRestart: () => {
+        this.scene.restart();
+      },
+      onSettings: () => {
+        this.scene.launch("SettingsScene", { returnScene: "SurvivalScene" });
+      },
+      onQuit: () => {
+        this.scene.start("MainMenuScene");
+      },
+    });
+  }
+
+  /**
+   * ESC previously just showed a "PAUSED" text with no real menu — same
+   * looks-like-a-freeze bug fixed elsewhere this session. Zoom resets to
+   * 1.0 first for the scrollFactor(0)-vs-zoom hit-test reason documented in
+   * DogfightScene.
+   */
+  private togglePause(): void {
+    if (this.isChoicePhase) return;
+    this.isPaused = !this.isPaused;
+    if (this.isPaused) {
+      this.cameras.main.setZoom(1.0);
+      this.pauseMenu.show();
+    }
   }
 
   private showMessage(title: string, subtitle: string): void {
@@ -1026,7 +1060,6 @@ export class SurvivalScene extends Phaser.Scene {
   private processCombat(delta: number): void {
     const { fireRate, shieldRegen } = this.run.bonuses;
     const playerCooldownMod = Math.max(0.5, 1 - fireRate);
-    const flagshipId = this.playerShipIds[0] ?? "";
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
 
@@ -1039,9 +1072,7 @@ export class SurvivalScene extends Phaser.Scene {
       ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
 
       if (ship.weaponCooldown <= 0) {
-        // The flagship only fires while the trigger is held; escorts/AI fire on sight.
-        if (ship.id === flagshipId && !this.fireKey.isDown) continue;
-
+        // Primary weapon always autofires once in range/arc — flagship, escorts, and AI alike.
         const target = this.findTarget(ship);
         if (target) {
           this.fireAt(ship, target);
@@ -1285,16 +1316,16 @@ export class SurvivalScene extends Phaser.Scene {
     const speeds = [...new Set(dial.map((m) => m.speed))].sort((a, b) => a - b);
 
     let desiredSpeed = ship.currentSpeed;
-    if (this.cursors.up.isDown) {
+    if (InputManager.isHeld("THRUST_UP")) {
       desiredSpeed = speeds.find((s) => s > desiredSpeed) ?? desiredSpeed;
-    } else if (this.cursors.down.isDown) {
+    } else if (InputManager.isHeld("THRUST_DOWN")) {
       desiredSpeed =
         [...speeds].reverse().find((s) => s < desiredSpeed) ?? desiredSpeed;
     }
 
     let direction: ManeuverDirection = "straight";
-    if (this.cursors.left.isDown) direction = "bank_left";
-    else if (this.cursors.right.isDown) direction = "bank_right";
+    if (InputManager.isHeld("STEER_LEFT")) direction = "bank_left";
+    else if (InputManager.isHeld("STEER_RIGHT")) direction = "bank_right";
 
     const chosen =
       dial.find((m) => m.direction === direction && m.speed === desiredSpeed) ??

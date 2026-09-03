@@ -34,6 +34,7 @@ export class KeyboardAdapter implements InputAdapter {
   private shiftKey: Phaser.Input.Keyboard.Key | null = null;
   private ctrlKey: Phaser.Input.Keyboard.Key | null = null;
   private altKey: Phaser.Input.Keyboard.Key | null = null;
+  private prevDownState: Map<string, boolean> = new Map();
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -75,15 +76,22 @@ export class KeyboardAdapter implements InputAdapter {
     const ctrlDown = this.ctrlKey?.isDown ?? false;
     const altDown = this.altKey?.isDown ?? false;
 
+    // Track "just pressed" per physical key ourselves instead of using
+    // Phaser.Input.Keyboard.JustDown(): that helper CONSUMES key._justDown
+    // on the first check, so a second binding sharing the same physical key
+    // (e.g. ESC -> CANCEL and ESC -> PAUSE) would never see it fire.
+    const currentDownState = new Map<string, boolean>();
+    for (const [code, key] of this.keys) currentDownState.set(code, key.isDown);
+
     for (const binding of this.bindings) {
       const key = this.keys.get(binding.key);
       if (!key) continue;
       if (!this.modifiersMatch(binding, shiftDown, ctrlDown, altDown)) continue;
 
       const isHeldIntent = HELD_INTENTS.has(binding.intent);
-      const triggered = isHeldIntent
-        ? key.isDown
-        : Phaser.Input.Keyboard.JustDown(key);
+      const isDown = currentDownState.get(binding.key) ?? false;
+      const wasDown = this.prevDownState.get(binding.key) ?? false;
+      const triggered = isHeldIntent ? isDown : isDown && !wasDown;
       if (!triggered) continue;
 
       events.push({
@@ -94,6 +102,7 @@ export class KeyboardAdapter implements InputAdapter {
       });
     }
 
+    this.prevDownState = currentDownState;
     return events;
   }
 
