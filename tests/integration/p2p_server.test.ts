@@ -167,6 +167,16 @@ describe("P2P Server — protocol integration", () => {
     const room = (msg.payload as any).room;
     expect(room.name).toBe("TestRoom");
     expect(room.playerCount).toBe(1);
+
+    // Regression: the client's self-generated playerId never matches the
+    // server's connection-assigned id, so identity checks like
+    // `player.id === localId` silently failed against a real server until
+    // room_created/room_joined started echoing back the server's own id.
+    const yourPlayerId = (msg.payload as any).yourPlayerId;
+    expect(yourPlayerId).toBeTruthy();
+    expect(room.hostId).toBe(yourPlayerId);
+    expect(room.players[0].id).toBe(yourPlayerId);
+
     host.close();
   });
 
@@ -187,6 +197,13 @@ describe("P2P Server — protocol integration", () => {
 
     expect((joined.payload as any).room.playerCount).toBe(2);
     expect(hostJoin.payload).toBeDefined();
+
+    const guestPlayerId = (joined.payload as any).yourPlayerId;
+    expect(guestPlayerId).toBeTruthy();
+    const guestEntry = (joined.payload as any).room.players.find(
+      (p: any) => p.id === guestPlayerId,
+    );
+    expect(guestEntry).toBeDefined();
 
     host.close();
     guest.close();

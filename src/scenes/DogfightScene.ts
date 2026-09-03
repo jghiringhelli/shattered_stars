@@ -42,6 +42,13 @@ import {
 import type { ManeuverDirection } from "../core/types";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { PauseMenu } from "../ui/PauseMenu";
+import { networkService } from "../services/NetworkService";
+import {
+  random,
+  setDefaultRng,
+  createSeededRng,
+  createRng,
+} from "../utils/random";
 import {
   createSideScore,
   creditKill,
@@ -135,8 +142,41 @@ export class DogfightScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private fireKey!: Phaser.Input.Keyboard.Key;
 
+  // Online multiplayer (networked 1v1 — see setupNetworking()/onRemoteAction()).
+  // Each client is authoritative for its own ship's input and for combat
+  // rolls it initiates as attacker; the opponent's ship is driven entirely
+  // by network messages instead of local AI/RNG.
+  private isOnlineMode = false;
+  private onlineSeed = 0;
+  private lastSentManeuver: { dir: ManeuverDirection; speed: number } | null =
+    null;
+
   constructor() {
     super({ key: "DogfightScene" });
+  }
+
+  /**
+   * Receives online-match config from LobbyScene's `scene.start("DogfightScene", data)`.
+   * Absent/undefined `isOnlineMode` means a normal local match — every field
+   * keeps its class-level default in that case.
+   */
+  init(
+    data: {
+      isOnlineMode?: boolean;
+      seed?: number;
+      localFactionId?: FactionId;
+      localShipId?: string;
+      opponentFactionId?: FactionId;
+      opponentShipId?: string;
+    } = {},
+  ): void {
+    if (!data.isOnlineMode) return;
+    this.isOnlineMode = true;
+    this.onlineSeed = data.seed ?? 0;
+    this.playerFaction = data.localFactionId ?? this.playerFaction;
+    this.playerShipId = data.localShipId ?? this.playerShipId;
+    this.enemyFaction = data.opponentFactionId ?? this.enemyFaction;
+    this.enemyShipId = data.opponentShipId ?? this.enemyShipId;
   }
 
   create(): void {
@@ -162,7 +202,16 @@ export class DogfightScene extends Phaser.Scene {
     this.background.startShootingStars();
 
     this.resetMatchState();
-    this.showSetupScreen();
+
+    if (this.isOnlineMode) {
+      // Both players already picked faction/ship in the lobby — skip the
+      // local setup screen and seed the shared RNG for deterministic rolls.
+      setDefaultRng(createSeededRng(this.onlineSeed));
+      this.setupNetworking();
+      this.startMatch();
+    } else {
+      this.showSetupScreen();
+    }
 
     if (ShipTelemetry.isEnabled()) {
       this.telemetry = new ShipTelemetry();
@@ -178,6 +227,68 @@ export class DogfightScene extends Phaser.Scene {
     // shown makes every button unclickable (verified live: resetting zoom to
     // 1.0 was the only change that made a real mouse click register).
     this.cameras.main.centerOn(BATTLEFIELD_SIZE / 2, BATTLEFIELD_SIZE / 2);
+  }
+
+  /** Unregisters network listeners and resets the shared RNG so a fixed battle seed never leaks into whatever plays next. */
+  shutdown(): void {
+    if (this.isOnlineMode) {
+      networkService.off("game_action", this.onRemoteAction, this);
+      networkService.off(
+        "player_disconnected",
+        this.onOpponentDisconnected,
+        this,
+      );
+      setDefaultRng(createRng());
+    }
+  }
+
+  private setupNetworking(): void {
+    networkService.on("game_action", this.onRemoteAction, this);
+    networkService.on("player_disconnected", this.onOpponentDisconnected, this);
+  }
+
+  private onOpponentDisconnected(): void {
+    if (this.matchComplete) return;
+    this.matchComplete = true;
+    this.showRoundResult("OPPONENT DISCONNECTED", "#ff8844");
+  }
+
+  /**
+   * Applies state received from the opponent's client. Maneuver messages
+   * describe the SENDER's own ship and are always applied to the local
+   * `enemyShipIds[0]` slot (which represents the opponent regardless of
+   * which faction/ship they picked). `combat_result` carries the outcome
+   * of a roll the opponent already computed as attacker — applied directly
+   * instead of re-rolling locally, since two clients rolling independent
+   * dice for the same shot could disagree and desync hull/shield state.
+   */
+  private onRemoteAction(payload: unknown): void {
+    if (!this.isOnlineMode) return;
+    const msg = payload as { type: string; data?: Record<string, unknown> };
+
+    switch (msg.type) {
+      case "maneuver": {
+        const opponent = this.ships.get(this.enemyShipIds[0] ?? "");
+        if (!opponent) return;
+        const dir = msg.data?.dir as ManeuverDirection | undefined;
+        const speed = msg.data?.speed as number | undefined;
+        if (dir) opponent.currentManeuverDir = dir;
+        if (typeof speed === "number") opponent.currentSpeed = speed;
+        break;
+      }
+      case "combat_result": {
+        const localShip = this.ships.get(this.playerShipIds[0] ?? "");
+        const hullAfter = msg.data?.hullAfter as number | undefined;
+        const shieldsAfter = msg.data?.shieldsAfter as number | undefined;
+        if (localShip && typeof hullAfter === "number") {
+          localShip.hull = hullAfter;
+          localShip.shields = shieldsAfter ?? localShip.shields;
+          const healthBar = this.healthBars.get(localShip.id);
+          healthBar?.update(localShip.hull, localShip.shields);
+        }
+        break;
+      }
+    }
   }
 
   private resetMatchState(): void {
@@ -985,6 +1096,25 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   private processCombat(delta: number): void {
+    if (this.isOnlineMode) {
+      // Only the local ship's cooldown/firing is simulated here — the
+      // opponent's ship is authoritative on their own client, and its
+      // attack outcomes arrive via the `combat_result` network message
+      // instead of being independently re-rolled (see onRemoteAction()).
+      const ship = this.ships.get(this.playerShipIds[0] ?? "");
+      if (!ship || ship.hull <= 0) return;
+
+      ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
+      if (ship.weaponCooldown <= 0 && this.fireKey.isDown) {
+        const target = this.findTarget(ship);
+        if (target) {
+          this.fireAt(ship, target);
+          ship.weaponCooldown = ship.combatStats.weaponCooldown;
+        }
+      }
+      return;
+    }
+
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
 
@@ -1048,7 +1178,7 @@ export class DogfightScene extends Phaser.Scene {
       hitChance *= diffMod;
     }
 
-    const hit = Math.random() < hitChance;
+    const hit = random.chance(hitChance);
 
     if (hit) {
       let damage = attacker.combatStats.attackDice;
@@ -1097,9 +1227,32 @@ export class DogfightScene extends Phaser.Scene {
         false,
       );
     }
+
+    // In online mode only the local ship ever reaches fireAt() as attacker
+    // (see processCombat()) — relay the authoritative result so the
+    // opponent's client updates its own copy of this ship instead of
+    // independently rolling dice for the same shot.
+    if (this.isOnlineMode && attacker.id === (this.playerShipIds[0] ?? "")) {
+      networkService.sendGameAction({
+        type: "combat_result",
+        data: { hit, hullAfter: target.hull, shieldsAfter: target.shields },
+      });
+    }
   }
 
   private updateAI(): void {
+    // In online mode the opponent's ship is a human on the other client,
+    // driven entirely by onRemoteAction() — running local AI on it too
+    // would fight the network-received maneuver every frame.
+    if (this.isOnlineMode) {
+      for (const shipId of this.playerShipIds) {
+        const ship = this.ships.get(shipId);
+        if (!ship || ship.hull <= 0) continue;
+        this.applyPlayerControl(ship);
+      }
+      return;
+    }
+
     for (const shipId of this.enemyShipIds) {
       const ship = this.ships.get(shipId);
       if (!ship || ship.hull <= 0) continue;
@@ -1122,7 +1275,7 @@ export class DogfightScene extends Phaser.Scene {
         this.difficulty
       ];
 
-      if (Math.random() < optimalChance) {
+      if (random.chance(optimalChance)) {
         // Optimal decision
         if (Math.abs(angleDiff) < 15) {
           ship.currentManeuverDir = "straight";
@@ -1149,7 +1302,7 @@ export class DogfightScene extends Phaser.Scene {
         const maneuvers = dial.filter((m) =>
           ["straight", "bank_left", "bank_right"].includes(m.direction),
         );
-        const chosen = maneuvers[Math.floor(Math.random() * maneuvers.length)];
+        const chosen = random.pick(maneuvers);
         if (chosen) {
           ship.currentManeuverDir = chosen.direction;
           ship.currentSpeed = chosen.speed;
@@ -1196,7 +1349,22 @@ export class DogfightScene extends Phaser.Scene {
     if (chosen) {
       ship.currentManeuverDir = chosen.direction;
       ship.currentSpeed = chosen.speed;
+      this.sendManeuverIfChanged(chosen.direction, chosen.speed);
     }
+  }
+
+  /** Sends a maneuver update only when it changed, to avoid flooding the socket every frame. */
+  private sendManeuverIfChanged(dir: ManeuverDirection, speed: number): void {
+    if (!this.isOnlineMode) return;
+    if (
+      this.lastSentManeuver &&
+      this.lastSentManeuver.dir === dir &&
+      this.lastSentManeuver.speed === speed
+    ) {
+      return;
+    }
+    this.lastSentManeuver = { dir, speed };
+    networkService.sendGameAction({ type: "maneuver", data: { dir, speed } });
   }
 
   private updateSprites(): void {

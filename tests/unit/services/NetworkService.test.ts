@@ -5,10 +5,10 @@
  * We mock Phaser to avoid a full browser/renderer setup in Node.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // Minimal Phaser EventEmitter mock so NetworkService can extend it
-vi.mock('phaser', () => {
+vi.mock("phaser", () => {
   class EventEmitter {
     private _listeners: Map<string, Array<(data: unknown) => void>> = new Map();
 
@@ -20,17 +20,23 @@ vi.mock('phaser', () => {
 
     off(event: string, fn: (data: unknown) => void): this {
       const fns = this._listeners.get(event) ?? [];
-      this._listeners.set(event, fns.filter(f => f !== fn));
+      this._listeners.set(
+        event,
+        fns.filter((f) => f !== fn),
+      );
       return this;
     }
 
     emit(event: string, data?: unknown): boolean {
       const fns = this._listeners.get(event) ?? [];
-      fns.forEach(fn => fn(data));
+      fns.forEach((fn) => fn(data));
       return fns.length > 0;
     }
 
-    removeAllListeners(): this { this._listeners.clear(); return this; }
+    removeAllListeners(): this {
+      this._listeners.clear();
+      return this;
+    }
   }
 
   return {
@@ -41,7 +47,7 @@ vi.mock('phaser', () => {
 });
 
 // Import after mock is registered
-const { NetworkService } = await import('../../../src/services/NetworkService');
+const { NetworkService } = await import("../../../src/services/NetworkService");
 
 // Access the singleton instance and reset it between tests
 function getService() {
@@ -49,24 +55,26 @@ function getService() {
   return NetworkService.getInstance();
 }
 
-describe('NetworkService — battle seed tracking', () => {
+describe("NetworkService — battle seed tracking", () => {
   beforeEach(() => {
     // Reset singleton so each test starts fresh
     (NetworkService as unknown as { instance: unknown }).instance = null;
   });
 
-  it('returns null for getCurrentBattleSeed() before any game_start', () => {
+  it("returns null for getCurrentBattleSeed() before any game_start", () => {
     const service = getService();
     expect(service.getCurrentBattleSeed()).toBeNull();
   });
 
-  it('stores seed when game_start message is received', () => {
+  it("stores seed when game_start message is received", () => {
     const service = getService();
     const SEED = 98765;
 
     // Simulate receiving a game_start message from the server
-    (service as unknown as { handleMessage: (m: unknown) => void }).handleMessage({
-      type: 'game_start',
+    (
+      service as unknown as { handleMessage: (m: unknown) => void }
+    ).handleMessage({
+      type: "game_start",
       payload: { seed: SEED },
       timestamp: Date.now(),
     });
@@ -74,17 +82,21 @@ describe('NetworkService — battle seed tracking', () => {
     expect(service.getCurrentBattleSeed()).toBe(SEED);
   });
 
-  it('overwrites previous seed on a new game_start', () => {
+  it("overwrites previous seed on a new game_start", () => {
     const service = getService();
 
-    (service as unknown as { handleMessage: (m: unknown) => void }).handleMessage({
-      type: 'game_start',
+    (
+      service as unknown as { handleMessage: (m: unknown) => void }
+    ).handleMessage({
+      type: "game_start",
       payload: { seed: 111 },
       timestamp: Date.now(),
     });
 
-    (service as unknown as { handleMessage: (m: unknown) => void }).handleMessage({
-      type: 'game_start',
+    (
+      service as unknown as { handleMessage: (m: unknown) => void }
+    ).handleMessage({
+      type: "game_start",
       payload: { seed: 222 },
       timestamp: Date.now(),
     });
@@ -92,19 +104,23 @@ describe('NetworkService — battle seed tracking', () => {
     expect(service.getCurrentBattleSeed()).toBe(222);
   });
 
-  it('ignores game_start messages without a seed field', () => {
+  it("ignores game_start messages without a seed field", () => {
     const service = getService();
 
     // First set a valid seed
-    (service as unknown as { handleMessage: (m: unknown) => void }).handleMessage({
-      type: 'game_start',
+    (
+      service as unknown as { handleMessage: (m: unknown) => void }
+    ).handleMessage({
+      type: "game_start",
       payload: { seed: 555 },
       timestamp: Date.now(),
     });
 
     // Then receive a malformed game_start with no seed
-    (service as unknown as { handleMessage: (m: unknown) => void }).handleMessage({
-      type: 'game_start',
+    (
+      service as unknown as { handleMessage: (m: unknown) => void }
+    ).handleMessage({
+      type: "game_start",
       payload: {},
       timestamp: Date.now(),
     });
@@ -113,13 +129,15 @@ describe('NetworkService — battle seed tracking', () => {
     expect(service.getCurrentBattleSeed()).toBe(555);
   });
 
-  it('emits game_start event so LobbyScene can react', () => {
+  it("emits game_start event so LobbyScene can react", () => {
     const service = getService();
     const listener = vi.fn();
-    service.on('game_start', listener);
+    service.on("game_start", listener);
 
-    (service as unknown as { handleMessage: (m: unknown) => void }).handleMessage({
-      type: 'game_start',
+    (
+      service as unknown as { handleMessage: (m: unknown) => void }
+    ).handleMessage({
+      type: "game_start",
       payload: { seed: 42 },
       timestamp: Date.now(),
     });
@@ -127,10 +145,72 @@ describe('NetworkService — battle seed tracking', () => {
     expect(listener).toHaveBeenCalledWith({ seed: 42 });
   });
 
-  it('connect() with no URL sets local mode', async () => {
+  it("connect() with no URL sets local mode", async () => {
     const service = getService();
     const result = await service.connect();
     expect(result).toBe(true);
     expect(service.isInLocalMode()).toBe(true);
+  });
+
+  it("adopts the server-assigned player ID from room_created", () => {
+    const service = getService();
+    const selfGeneratedId = service.getPlayerId();
+
+    (
+      service as unknown as { handleMessage: (m: unknown) => void }
+    ).handleMessage({
+      type: "room_created",
+      payload: {
+        room: {
+          id: "room_1",
+          name: "Test",
+          hostId: "server_player_9",
+          players: [],
+        },
+        yourPlayerId: "server_player_9",
+      },
+      timestamp: Date.now(),
+    });
+
+    // The client's own self-generated id never matches what the server
+    // assigns for that connection — without adopting it, every later
+    // `player.id === localId` identity check (e.g. LobbyScene picking out
+    // "self" from the room roster) would silently fail against a real server.
+    expect(service.getPlayerId()).not.toBe(selfGeneratedId);
+    expect(service.getPlayerId()).toBe("server_player_9");
+  });
+
+  it("adopts the server-assigned player ID from room_joined", () => {
+    const service = getService();
+
+    (
+      service as unknown as { handleMessage: (m: unknown) => void }
+    ).handleMessage({
+      type: "room_joined",
+      payload: {
+        room: { id: "room_2", name: "Test", hostId: "host_id", players: [] },
+        yourPlayerId: "server_player_guest",
+      },
+      timestamp: Date.now(),
+    });
+
+    expect(service.getPlayerId()).toBe("server_player_guest");
+  });
+
+  it("ignores room_created/room_joined messages without yourPlayerId", () => {
+    const service = getService();
+    const selfGeneratedId = service.getPlayerId();
+
+    (
+      service as unknown as { handleMessage: (m: unknown) => void }
+    ).handleMessage({
+      type: "room_created",
+      payload: {
+        room: { id: "room_3", name: "Test", hostId: "x", players: [] },
+      },
+      timestamp: Date.now(),
+    });
+
+    expect(service.getPlayerId()).toBe(selfGeneratedId);
   });
 });

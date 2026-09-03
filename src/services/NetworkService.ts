@@ -14,7 +14,12 @@ export type NetworkMessageType =
   | "create_room"
   | "join_room"
   | "leave_room"
+  | "room_created"
+  | "room_joined"
+  | "room_left"
   | "room_update"
+  | "player_joined"
+  | "player_left"
   | "player_ready"
   | "select_faction"
   | "game_start"
@@ -44,7 +49,7 @@ export interface RoomInfo {
   hostName: string;
   playerCount: number;
   maxPlayers: number;
-  gameMode: "arcade" | "continuous";
+  gameMode: "arcade" | "continuous" | "dogfight";
   isStarted: boolean;
 }
 
@@ -229,6 +234,19 @@ export class NetworkService extends Phaser.Events.EventEmitter {
       }
     }
 
+    // Adopt the server's connection-assigned player ID. The client's own
+    // self-generated `playerId` (used only for the outgoing `senderId`
+    // field) never matches the server's ID for that same connection, so
+    // every `p.id === localId` identity check elsewhere would silently fail
+    // against a real server (found via live 2-client testing — game_start
+    // fired but startMultiplayerGame() couldn't find "self" in the roster).
+    if (message.type === "room_created" || message.type === "room_joined") {
+      const payload = message.payload as { yourPlayerId?: string };
+      if (payload.yourPlayerId) {
+        this.playerId = payload.yourPlayerId;
+      }
+    }
+
     // Emit event for this message type
     this.emit(message.type, message.payload);
 
@@ -339,7 +357,7 @@ export class NetworkService extends Phaser.Events.EventEmitter {
       hostName: this.playerName,
       playerCount: 1,
       maxPlayers: data.maxPlayers,
-      gameMode: data.gameMode as "arcade" | "continuous",
+      gameMode: data.gameMode as "arcade" | "continuous" | "dogfight",
       isStarted: false,
     };
 
@@ -520,7 +538,7 @@ export class NetworkService extends Phaser.Events.EventEmitter {
   createRoom(
     name: string,
     maxPlayers: number,
-    gameMode: "arcade" | "continuous",
+    gameMode: "arcade" | "continuous" | "dogfight",
   ): void {
     this.send({
       type: "create_room",

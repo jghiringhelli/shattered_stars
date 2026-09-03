@@ -33,7 +33,7 @@ interface RoomState {
   hostId: string;
   maxPlayers: number;
   players: Map<string, PlayerState>;
-  gameMode: "turn_based" | "continuous";
+  gameMode: "turn_based" | "continuous" | "dogfight";
   isStarted: boolean;
   battleSeed: number; // Deterministic RNG seed for all clients
   createdAt: number;
@@ -125,7 +125,7 @@ function createRoom(data: {
     hostId: data.hostId,
     maxPlayers: cappedMax,
     players: new Map(),
-    gameMode: data.gameMode as "turn_based" | "continuous",
+    gameMode: data.gameMode as "turn_based" | "continuous" | "dogfight",
     isStarted: false,
     battleSeed: generateSeed(),
     createdAt: Date.now(),
@@ -226,7 +226,7 @@ function handleMessage(player: PlayerState, message: NetworkMessage): void {
 
       sendToPlayer(player, {
         type: "room_created",
-        payload: { room: getRoomStatus(room) },
+        payload: { room: getRoomStatus(room), yourPlayerId: player.id },
         timestamp: Date.now(),
       });
 
@@ -256,7 +256,7 @@ function handleMessage(player: PlayerState, message: NetworkMessage): void {
 
       sendToPlayer(player, {
         type: "room_joined",
-        payload: { room: getRoomStatus(room) },
+        payload: { room: getRoomStatus(room), yourPlayerId: player.id },
         timestamp: Date.now(),
       });
 

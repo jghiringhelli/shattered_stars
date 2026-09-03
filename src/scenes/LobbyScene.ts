@@ -142,10 +142,26 @@ export class LobbyScene extends Phaser.Scene {
     this.statusText.setText("Left room");
   }
 
+  /**
+   * The real p2p server sends `room_update`'s payload as the room's own
+   * fields at the top level (with a nested `players` array) — NOT the
+   * `{ room, players }` shape local-simulation mode uses. Destructuring
+   * `.room` off the real payload silently produced `undefined`, wiping out
+   * `currentRoom` right after `room_created` set it (found via live 2-client
+   * testing against the real server; local-sim-only testing never caught it
+   * since `broadcastRoomUpdate()` always used the wrapped shape).
+   */
   private onRoomUpdate(data: unknown): void {
-    const { room, players } = data as { room: RoomInfo; players: PlayerInfo[] };
-    this.currentRoom = room;
-    this.players = players;
+    const payload = data as
+      | { room: RoomInfo; players: PlayerInfo[] }
+      | (RoomInfo & { players: PlayerInfo[] });
+    if ("room" in payload) {
+      this.currentRoom = payload.room;
+      this.players = payload.players;
+    } else {
+      this.currentRoom = payload;
+      this.players = payload.players;
+    }
     this.updateRoomView();
   }
 
@@ -312,6 +328,16 @@ export class LobbyScene extends Phaser.Scene {
         })
         .setOrigin(0.5),
     );
+
+    const dogfightBtn = this.createButton(
+      this.scale.width / 2 - 400,
+      120,
+      "1v1 DOGFIGHT",
+      () => {
+        this.createDogfightRoom();
+      },
+    );
+    this.roomListContainer.add(dogfightBtn);
 
     const createBtn = this.createButton(
       this.scale.width / 2 - 240,
@@ -744,6 +770,12 @@ export class LobbyScene extends Phaser.Scene {
     networkService.createRoom(name, 4, "arcade");
   }
 
+  /** Create a dedicated 2-player room for a networked 1v1 Dogfight match. */
+  private createDogfightRoom(): void {
+    const name = `Duel ${Math.floor(Math.random() * 1000)}`;
+    networkService.createRoom(name, 2, "dogfight");
+  }
+
   /** Prompt the user for a server URL and reconnect in online mode. */
   private promptOnlineConnect(): void {
     const url = window.prompt(
@@ -807,8 +839,7 @@ export class LobbyScene extends Phaser.Scene {
       (currentIndex + 1) % ALL_FACTIONS.length
     ] as FactionId;
     const onlineSquad = this.registry.get("onlineSquad") as
-      | string[]
-      | undefined;
+      string[] | undefined;
     networkService.selectFaction(nextFaction, onlineSquad ?? []);
   }
 
@@ -845,14 +876,20 @@ export class LobbyScene extends Phaser.Scene {
         ships: undefined as string[] | undefined,
       }));
 
+    const resolvedSeed =
+      seed ?? networkService.getCurrentBattleSeed() ?? undefined;
+
+    if (this.currentRoom.gameMode === "dogfight") {
+      this.startDogfightDuel(localId, sources, resolvedSeed, isOnlineMode);
+      return;
+    }
+
     const factions = sources.map((p) => ({
       factionId: (p.factionId ?? "free_confederation") as FactionId,
       controller: (p.id === localId ? "player" : "ai") as "player" | "ai",
       ships: this.resolveShips(p.factionId, p.ships),
     }));
 
-    const resolvedSeed =
-      seed ?? networkService.getCurrentBattleSeed() ?? undefined;
     this.registry.set("battleConfig", {
       factions,
       gameMode: this.currentRoom.gameMode,
@@ -863,6 +900,44 @@ export class LobbyScene extends Phaser.Scene {
     });
 
     this.scene.start("ArcadeBattleScene");
+  }
+
+  /**
+   * Route a 2-player "dogfight" room into DogfightScene's networked mode.
+   * Unlike ArcadeBattleScene (registry-driven), DogfightScene receives its
+   * online config directly as scene init data.
+   */
+  private startDogfightDuel(
+    localId: string,
+    sources: Array<{
+      id: string;
+      factionId: string | null;
+      ships?: string[] | undefined;
+    }>,
+    seed: number | undefined,
+    isOnlineMode: boolean,
+  ): void {
+    const local = sources.find((p) => p.id === localId);
+    const opponent = sources.find((p) => p.id !== localId);
+    if (!local || !opponent) return;
+
+    const localFactionId = (local.factionId ??
+      "free_confederation") as FactionId;
+    const opponentFactionId = (opponent.factionId ??
+      "terran_hegemony") as FactionId;
+
+    this.scene.start("DogfightScene", {
+      isOnlineMode,
+      seed: seed ?? 0,
+      localFactionId,
+      localShipId:
+        this.resolveShips(local.factionId, local.ships)[0] ??
+        this.getDefaultShipsForFaction(localFactionId)[0],
+      opponentFactionId,
+      opponentShipId:
+        this.resolveShips(opponent.factionId, opponent.ships)[0] ??
+        this.getDefaultShipsForFaction(opponentFactionId)[0],
+    });
   }
 
   /**
