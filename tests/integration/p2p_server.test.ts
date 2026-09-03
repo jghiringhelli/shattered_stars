@@ -450,6 +450,21 @@ describe("P2P Server — protocol integration", () => {
     const guestClaim = await guest.waitFor("ship_claimed", 3_000);
     expect((guestClaim.payload as any).shipId).toBe("ship_terran_0");
 
+    // Claiming must actually grant control: a claimed-but-not-owned ship
+    // would otherwise be silently rejected by game_action's actor check.
+    lateJoiner.send("game_action", {
+      shipId: "ship_terran_0",
+      maneuver: "straight",
+    });
+    const relayedAction = await host.waitFor("game_action", 3_000);
+    expect((relayedAction.payload as any).shipId).toBe("ship_terran_0");
+
+    // A second player trying to claim the same ship must be rejected —
+    // otherwise two players could each believe they control it.
+    guest.send("claim_ship", { shipId: "ship_terran_0" });
+    const rejection = await guest.waitFor("error", 3_000);
+    expect((rejection.payload as any).message).toMatch(/already claimed/i);
+
     host.close();
     guest.close();
     lateJoiner.close();

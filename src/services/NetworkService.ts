@@ -265,8 +265,28 @@ export class NetworkService extends Phaser.Events.EventEmitter {
     if (this.isLocalMode) {
       // Process locally
       this.processLocalMessage(fullMessage);
-    } else if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      return;
+    }
+
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      const reason = this.socket
+        ? `socket readyState=${this.socket.readyState}`
+        : "no socket";
+      console.error(
+        `[NetworkService] Dropped message type=${message.type}: ${reason}`,
+      );
+      this.emit("send_failed", { type: message.type, reason });
+      return;
+    }
+
+    try {
       this.socket.send(JSON.stringify(fullMessage));
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e);
+      console.error(
+        `[NetworkService] Send threw for type=${message.type}: ${reason}`,
+      );
+      this.emit("send_failed", { type: message.type, reason });
     }
   }
 
