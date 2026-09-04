@@ -40,6 +40,9 @@ import {
   playBarrelRollLean,
   spawnKturnAfterimage,
 } from "../arcade/ArcadeFX";
+import { InputManager } from "../input/InputManager";
+import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
+import type { ActionIntent } from "../input/InputTypes";
 import {
   extractOrdnanceSlots,
   tickOrdnanceCooldowns,
@@ -272,26 +275,35 @@ export class ArcadeBattleScene extends Phaser.Scene {
     }
     return out;
   }
-  private keys!: {
-    up: Phaser.Input.Keyboard.Key;
-    down: Phaser.Input.Keyboard.Key;
-    left: Phaser.Input.Keyboard.Key;
-    right: Phaser.Input.Keyboard.Key;
-    space: Phaser.Input.Keyboard.Key;
-    z: Phaser.Input.Keyboard.Key;
-    q: Phaser.Input.Keyboard.Key;
-    e: Phaser.Input.Keyboard.Key;
-    shift: Phaser.Input.Keyboard.Key;
-    ctrl: Phaser.Input.Keyboard.Key;
-    tab: Phaser.Input.Keyboard.Key;
-    g: Phaser.Input.Keyboard.Key;
-    c: Phaser.Input.Keyboard.Key;
-    t: Phaser.Input.Keyboard.Key;
-    one: Phaser.Input.Keyboard.Key;
-    two: Phaser.Input.Keyboard.Key;
-    three: Phaser.Input.Keyboard.Key;
-    four: Phaser.Input.Keyboard.Key;
-  };
+  /**
+   * Edge-triggered intents (KTURN, SHARP_TURN_*, SEGNOR_*, TALLON_*,
+   * CREW_CYCLE, CLOAK, WEAPON_CYCLE, FIRE_SECONDARY, COMMANDER_ORDER_*, plus
+   * a manual rising-edge for THRUST_UP/DOWN) queued here by an onAny()
+   * subscriber and drained via consumeEdge() — mirrors the old
+   * Phaser.Input.Keyboard.JustDown() checks without depending on Phaser's
+   * own consuming JustDown (see KeyboardAdapter's shared-key bugfix notes).
+   */
+  private pendingEdgeIntents: Set<ActionIntent> = new Set();
+  private readonly trackedEdgeIntents: ReadonlySet<ActionIntent> = new Set([
+    "KTURN",
+    "SHARP_TURN_LEFT",
+    "SHARP_TURN_RIGHT",
+    "SEGNOR_LEFT",
+    "SEGNOR_RIGHT",
+    "TALLON_LEFT",
+    "TALLON_RIGHT",
+    "CREW_CYCLE",
+    "CLOAK",
+    "WEAPON_CYCLE",
+    "FIRE_SECONDARY",
+    "COMMANDER_ORDER_1",
+    "COMMANDER_ORDER_2",
+    "COMMANDER_ORDER_3",
+    "COMMANDER_ORDER_4",
+  ]);
+  private prevThrustUpHeld = false;
+  private prevThrustDownHeld = false;
+  private inputSubscriptionIds: number[] = [];
 
   // HUD
   private speedText!: Phaser.GameObjects.Text;
@@ -366,6 +378,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   constructor() {
     super({ key: "ArcadeBattleScene" });
+  }
+
+  shutdown(): void {
+    this.inputSubscriptionIds.forEach((id) => InputManager.off(id));
+    this.inputSubscriptionIds = [];
+    this.pendingEdgeIntents.clear();
+    teardownSceneInput();
   }
 
   preload(): void {
@@ -494,11 +513,26 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   update(time: number): void {
+    InputManager.update();
     const deltaMs = time - this.lastTime;
     this.lastTime = time;
 
     if (deltaMs <= 0) return;
     if (this.isPaused || this.gameEnded) return;
+
+    // THRUST_UP/DOWN are HELD intents (continuous, for other scenes'
+    // free-flying) — this scene wants a single discrete speed step per
+    // press, so it does its own rising-edge detection on top of isHeld(),
+    // queued the same way as the other edge-triggered actions.
+    const thrustUpHeld = InputManager.isHeld("THRUST_UP");
+    if (thrustUpHeld && !this.prevThrustUpHeld)
+      this.pendingEdgeIntents.add("THRUST_UP");
+    this.prevThrustUpHeld = thrustUpHeld;
+
+    const thrustDownHeld = InputManager.isHeld("THRUST_DOWN");
+    if (thrustDownHeld && !this.prevThrustDownHeld)
+      this.pendingEdgeIntents.add("THRUST_DOWN");
+    this.prevThrustDownHeld = thrustDownHeld;
 
     // Clamp to prevent spiral-of-death on tab-switch or long pause
     this.accumulator += Math.min(deltaMs, 250);
@@ -587,43 +621,39 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   private setupInput(): void {
-    this.keys = {
-      up: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
-      down: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN),
-      left: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
-      right: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
-      space: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
-      z: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.Z),
-      q: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.Q),
-      e: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E),
-      shift: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
-      ctrl: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL),
-      tab: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.TAB),
-      g: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.G),
-      c: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.C),
-      t: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.T),
-      one: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ONE),
-      two: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.TWO),
-      three: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.THREE),
-      four: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.FOUR),
-    };
+    setupSceneInput(this);
+    this.inputSubscriptionIds.push(
+      InputManager.onAny((event) => {
+        if (this.trackedEdgeIntents.has(event.intent)) {
+          this.pendingEdgeIntents.add(event.intent);
+        }
+      }),
+    );
+    this.inputSubscriptionIds.push(
+      InputManager.on("PAUSE", () => {
+        if (this.gameEnded) return;
+        if (this.isPaused) {
+          this.isPaused = false;
+          this.pauseOverlay?.destroy();
+          this.pauseOverlay = null;
+        } else {
+          this.isPaused = true;
+          this.showPauseOverlay();
+        }
+      }),
+    );
 
     // Prevent Tab from moving browser focus away from the canvas
     this.input.keyboard!.on("keydown-TAB", (e: KeyboardEvent) =>
       e.preventDefault(),
     );
+  }
 
-    this.input.keyboard!.on("keydown-ESC", () => {
-      if (this.gameEnded) return;
-      if (this.isPaused) {
-        this.isPaused = false;
-        this.pauseOverlay?.destroy();
-        this.pauseOverlay = null;
-      } else {
-        this.isPaused = true;
-        this.showPauseOverlay();
-      }
-    });
+  /** Drains a queued edge-triggered intent, returning whether it fired since the last check. */
+  private consumeEdge(intent: ActionIntent): boolean {
+    const had = this.pendingEdgeIntents.has(intent);
+    this.pendingEdgeIntents.delete(intent);
+    return had;
   }
 
   private showPauseOverlay(): void {
@@ -753,7 +783,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       ["↓↓  double", "K-Turn (alt to Z)"],
       ["← + →  chord", "Barrel roll"],
       ["Z", "K-Turn (flip)"],
-      ["SPACE", "Fire selected weapon"],
+      ["(auto)", "Selected weapon fires on its own"],
       ["SHIFT+SPACE", "Deploy bomb backward"],
       ["TAB", "Cycle weapon"],
       ["G", "Cycle crew role (pilot/gunner/commander)"],
@@ -788,18 +818,18 @@ export class ArcadeBattleScene extends Phaser.Scene {
     if (!ship || ship.hull <= 0) return;
 
     // Speed control (discrete steps, X-Wing style)
-    if (Phaser.Input.Keyboard.JustDown(this.keys.up))
+    if (this.consumeEdge("THRUST_UP"))
       ship.control = processCommand(ship, ship.control, "thrust_increase");
-    if (Phaser.Input.Keyboard.JustDown(this.keys.down))
+    if (this.consumeEdge("THRUST_DOWN"))
       ship.control = processCommand(ship, ship.control, "thrust_decrease");
 
     // Gesture state machine: hold-duration banking vs turning, double-taps, chords
     const { state: newGestureState, actions } = updateGestures({
       state: this.gestureState,
-      leftDown: this.keys.left.isDown,
-      rightDown: this.keys.right.isDown,
-      upDown: this.keys.up.isDown,
-      downDown: this.keys.down.isDown,
+      leftDown: InputManager.isHeld("STEER_LEFT"),
+      rightDown: InputManager.isHeld("STEER_RIGHT"),
+      upDown: InputManager.isHeld("THRUST_UP"),
+      downDown: InputManager.isHeld("THRUST_DOWN"),
       nowMs: this.time.now,
       deltaMs,
       allowChordBarrelRoll: this.allowChordBarrelRoll,
@@ -809,10 +839,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
     // Queue next maneuver from held direction keys (bank by default; turn after hold)
     this.queueDirectionFromKeys(ship);
 
-    // K-turn: explicit Z key or double-tap DOWN
+    // K-turn: explicit Z key/gamepad/touch or double-tap DOWN
     const kturnRequested =
-      Phaser.Input.Keyboard.JustDown(this.keys.z) ||
-      actions.includes("kturn_gesture");
+      this.consumeEdge("KTURN") || actions.includes("kturn_gesture");
     if (kturnRequested && !ship.stress.isStressed) {
       const def = getShipDefinition(ship.definitionId);
       const size = SHIP_SIZES[def?.baseStats.size ?? "small"] ?? 18;
@@ -823,30 +852,27 @@ export class ArcadeBattleScene extends Phaser.Scene {
     }
 
     // Discrete sharp turns: Q = left, E = right.
-    if (!this.keys.shift.isDown && Phaser.Input.Keyboard.JustDown(this.keys.q))
+    if (this.consumeEdge("SHARP_TURN_LEFT"))
       this.executeDiscreteTurn(ship, "turn_left");
-    if (!this.keys.shift.isDown && Phaser.Input.Keyboard.JustDown(this.keys.e))
+    if (this.consumeEdge("SHARP_TURN_RIGHT"))
       this.executeDiscreteTurn(ship, "turn_right");
 
     // Segnor loop: Shift+Q = left, Shift+E = right
-    if (this.keys.shift.isDown && Phaser.Input.Keyboard.JustDown(this.keys.q)) {
+    if (this.consumeEdge("SEGNOR_LEFT")) {
       ship.control = processCommand(ship, ship.control, "segnor_left");
       ship.stress = applyKturnStress(ship.stress);
     }
-    if (this.keys.shift.isDown && Phaser.Input.Keyboard.JustDown(this.keys.e)) {
+    if (this.consumeEdge("SEGNOR_RIGHT")) {
       ship.control = processCommand(ship, ship.control, "segnor_right");
       ship.stress = applyKturnStress(ship.stress);
     }
 
     // Tallon roll: T = left, Shift+T = right
-    if (
-      !this.keys.shift.isDown &&
-      Phaser.Input.Keyboard.JustDown(this.keys.t)
-    ) {
+    if (this.consumeEdge("TALLON_LEFT")) {
       ship.control = processCommand(ship, ship.control, "tallon_left");
       ship.stress = applyKturnStress(ship.stress);
     }
-    if (this.keys.shift.isDown && Phaser.Input.Keyboard.JustDown(this.keys.t)) {
+    if (this.consumeEdge("TALLON_RIGHT")) {
       ship.control = processCommand(ship, ship.control, "tallon_right");
       ship.stress = applyKturnStress(ship.stress);
     }
@@ -855,7 +881,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.processGestureActions(ship, actions);
 
     // Crew role cycle: pilot -> gunner (large/huge with a turret) -> commander (capital only)
-    if (Phaser.Input.Keyboard.JustDown(this.keys.g)) {
+    if (this.consumeEdge("CREW_CYCLE")) {
       const def = getShipDefinition(ship.definitionId);
       const sz = def?.baseStats.size;
       const hasTurret = !!ship.turretSlot && (sz === "large" || sz === "huge");
@@ -865,7 +891,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     }
 
     // Cloak toggle (C key) — 8-second invisibility; breaks on firing
-    if (Phaser.Input.Keyboard.JustDown(this.keys.c) && !ship.isCloaked) {
+    if (this.consumeEdge("CLOAK") && !ship.isCloaked) {
       ship.isCloaked = true;
       ship.cloakTimer = 8;
     }
@@ -880,19 +906,15 @@ export class ArcadeBattleScene extends Phaser.Scene {
       return;
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.tab))
-      this.selectNextWeapon(ship);
+    if (this.consumeEdge("WEAPON_CYCLE")) this.selectNextWeapon(ship);
 
-    // SHIFT+SPACE = deploy bomb backward; SPACE alone = fire selected weapon
+    // SHIFT+SPACE deploys a bomb; the selected weapon (laser or ordnance)
+    // always autofires on its own cooldown/charges — no button needed.
     if (this.framesAlive > 5) {
-      if (
-        this.keys.shift.isDown &&
-        Phaser.Input.Keyboard.JustDown(this.keys.space)
-      ) {
+      if (this.consumeEdge("FIRE_SECONDARY")) {
         this.deployBomb(ship);
-      } else if (this.keys.space.isDown) {
-        this.fireSelectedWeapon(ship);
       }
+      this.fireSelectedWeapon(ship);
     }
   }
 
@@ -901,8 +923,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
    * Hard-turn action from gesture state upgrades bank → turn.
    */
   private queueDirectionFromKeys(ship: ArcadeShip): void {
-    const left = this.keys.left.isDown;
-    const right = this.keys.right.isDown;
+    const left = InputManager.isHeld("STEER_LEFT");
+    const right = InputManager.isHeld("STEER_RIGHT");
     const { actions } = updateGestures({
       state: this.gestureState,
       leftDown: left,
@@ -2736,7 +2758,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   /**
    * Handles turret controls when the player is in gunner mode.
-   * Left/right rotate the turret aim; SPACE fires it.
+   * Left/right rotate the turret aim; it autofires like every other
+   * weapon in this game once a target is in arc/range.
    *
    * @param ship - The player ship.
    * @param dt - Frame time in seconds.
@@ -2744,14 +2767,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private handleGunnerInput(ship: ArcadeShip, dt: number): void {
     if (!ship.turretSlot) return;
     const TURN_RATE = 180; // degrees per second
-    if (this.keys.left.isDown) {
+    if (InputManager.isHeld("STEER_LEFT")) {
       ship.turretSlot.turretFacing =
         (ship.turretSlot.turretFacing - TURN_RATE * dt + 360) % 360;
-    } else if (this.keys.right.isDown) {
+    } else if (InputManager.isHeld("STEER_RIGHT")) {
       ship.turretSlot.turretFacing =
         (ship.turretSlot.turretFacing + TURN_RATE * dt + 360) % 360;
     }
-    if (this.framesAlive > 5 && this.keys.space.isDown) {
+    if (this.framesAlive > 5) {
       this.fireTurretShot(ship);
     }
   }
@@ -2770,7 +2793,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     if (!orders || !this.frameCache) return;
     const now = this.time.now;
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.one)) {
+    if (this.consumeEdge("COMMANDER_ORDER_1")) {
       const target = this.findNearestEnemy(ship);
       if (target) {
         orders.concentrateFire = issueConcentrateFire(target.id, now);
@@ -2784,7 +2807,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     }
 
     if (
-      Phaser.Input.Keyboard.JustDown(this.keys.two) &&
+      this.consumeEdge("COMMANDER_ORDER_2") &&
       canRedirectPower(orders.lastPowerRedirectAt, now)
     ) {
       const focus = nextPowerFocus(orders.powerRedirect?.focus ?? null);
@@ -2798,7 +2821,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       );
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.keys.three)) {
+    if (this.consumeEdge("COMMANDER_ORDER_3")) {
       orders.mainBeam = startCharging(orders.mainBeam);
     }
     if (orders.mainBeam.charging) {
@@ -2811,7 +2834,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     }
 
     if (
-      Phaser.Input.Keyboard.JustDown(this.keys.four) &&
+      this.consumeEdge("COMMANDER_ORDER_4") &&
       canEmergencyRepair(orders.lastEmergencyRepairAt, now) &&
       ship.capitalSystems
     ) {

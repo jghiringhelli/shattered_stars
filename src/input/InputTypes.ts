@@ -45,6 +45,14 @@ export type ActionIntent =
   | "BOOST"
   | "KTURN"
   | "BARREL_ROLL"
+  // Continuous flight — discrete precision maneuvers (ArcadeBattleScene's
+  // richer gesture/stress model; unbound in the simpler dial-based scenes)
+  | "SHARP_TURN_LEFT"
+  | "SHARP_TURN_RIGHT"
+  | "SEGNOR_LEFT"
+  | "SEGNOR_RIGHT"
+  | "TALLON_LEFT"
+  | "TALLON_RIGHT"
   // Continuous flight — advanced (large/capital ships)
   | "CREW_CYCLE"
   | "CLOAK"

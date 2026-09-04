@@ -44,12 +44,20 @@ export const DEFAULT_KEYBOARD_BINDINGS: readonly KeyboardBinding[] = [
   { key: "TWO", intent: "COMMANDER_ORDER_2" },
   { key: "THREE", intent: "COMMANDER_ORDER_3" },
   { key: "FOUR", intent: "COMMANDER_ORDER_4" },
-  // Flight weapons — primary always autofires, SPACE now triggers secondary/ordnance
-  { key: "SPACE", intent: "FIRE_SECONDARY" },
+  // Flight weapons — primary always autofires; SHIFT+SPACE triggers
+  // secondary/ordnance (bomb deploy in ArcadeBattleScene).
+  { key: "SPACE", intent: "FIRE_SECONDARY", modifiers: { shift: true } },
   { key: "TAB", intent: "WEAPON_CYCLE" },
   // Flight advanced (large/capital ships)
   { key: "G", intent: "CREW_CYCLE" },
   { key: "C", intent: "CLOAK" },
+  { key: "Z", intent: "KTURN" },
+  { key: "Q", intent: "SHARP_TURN_LEFT" },
+  { key: "E", intent: "SHARP_TURN_RIGHT" },
+  { key: "Q", intent: "SEGNOR_LEFT", modifiers: { shift: true } },
+  { key: "E", intent: "SEGNOR_RIGHT", modifiers: { shift: true } },
+  { key: "T", intent: "TALLON_LEFT" },
+  { key: "T", intent: "TALLON_RIGHT", modifiers: { shift: true } },
   // Other
   { key: "P", intent: "PAUSE" },
   { key: "ESC", intent: "PAUSE" },
