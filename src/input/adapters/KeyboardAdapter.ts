@@ -34,7 +34,12 @@ export class KeyboardAdapter implements InputAdapter {
   private shiftKey: Phaser.Input.Keyboard.Key | null = null;
   private ctrlKey: Phaser.Input.Keyboard.Key | null = null;
   private altKey: Phaser.Input.Keyboard.Key | null = null;
-  private prevDownState: Map<string, boolean> = new Map();
+  // Set by a real 'down' event listener (fires the instant the browser
+  // keydown happens) rather than sampled from key.isDown once per frame —
+  // a keydown+keyup pair that both land between two polls (e.g. a fast
+  // programmatic press, or a slow frame) would otherwise never be seen as
+  // "down" at poll time and the edge would be silently dropped.
+  private pendingKeyDown: Map<string, boolean> = new Map();
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -54,7 +59,10 @@ export class KeyboardAdapter implements InputAdapter {
       const code = (
         Phaser.Input.Keyboard.KeyCodes as unknown as Record<string, number>
       )[binding.key];
-      if (code !== undefined) this.keys.set(binding.key, keyboard.addKey(code));
+      if (code === undefined) continue;
+      const key = keyboard.addKey(code);
+      key.on("down", () => this.pendingKeyDown.set(binding.key, true));
+      this.keys.set(binding.key, key);
     }
   }
 
@@ -62,6 +70,7 @@ export class KeyboardAdapter implements InputAdapter {
     const keyboard = this.scene.input.keyboard;
     for (const key of this.keys.values()) keyboard?.removeKey(key);
     this.keys.clear();
+    this.pendingKeyDown.clear();
   }
 
   isAvailable(): boolean {
@@ -76,12 +85,7 @@ export class KeyboardAdapter implements InputAdapter {
     const ctrlDown = this.ctrlKey?.isDown ?? false;
     const altDown = this.altKey?.isDown ?? false;
 
-    // Track "just pressed" per physical key ourselves instead of using
-    // Phaser.Input.Keyboard.JustDown(): that helper CONSUMES key._justDown
-    // on the first check, so a second binding sharing the same physical key
-    // (e.g. ESC -> CANCEL and ESC -> PAUSE) would never see it fire.
-    const currentDownState = new Map<string, boolean>();
-    for (const [code, key] of this.keys) currentDownState.set(code, key.isDown);
+    const consumedKeys = new Set<string>();
 
     for (const binding of this.bindings) {
       const key = this.keys.get(binding.key);
@@ -89,10 +93,11 @@ export class KeyboardAdapter implements InputAdapter {
       if (!this.modifiersMatch(binding, shiftDown, ctrlDown, altDown)) continue;
 
       const isHeldIntent = HELD_INTENTS.has(binding.intent);
-      const isDown = currentDownState.get(binding.key) ?? false;
-      const wasDown = this.prevDownState.get(binding.key) ?? false;
-      const triggered = isHeldIntent ? isDown : isDown && !wasDown;
+      const triggered = isHeldIntent
+        ? key.isDown
+        : (this.pendingKeyDown.get(binding.key) ?? false);
       if (!triggered) continue;
+      if (!isHeldIntent) consumedKeys.add(binding.key);
 
       events.push({
         intent: binding.intent,
@@ -102,7 +107,7 @@ export class KeyboardAdapter implements InputAdapter {
       });
     }
 
-    this.prevDownState = currentDownState;
+    for (const key of consumedKeys) this.pendingKeyDown.set(key, false);
     return events;
   }
 

@@ -55,6 +55,8 @@ interface KeyboardBinding {
 
 interface FakeKey {
   isDown: boolean;
+  on: (event: string, cb: () => void) => void;
+  _downCallbacks: Array<() => void>;
 }
 
 function makeFakeScene(): {
@@ -63,7 +65,16 @@ function makeFakeScene(): {
 } {
   const keysByCode = new Map<number, FakeKey>();
   const addKey = vi.fn((code: number) => {
-    if (!keysByCode.has(code)) keysByCode.set(code, { isDown: false });
+    if (!keysByCode.has(code)) {
+      const key: FakeKey = {
+        isDown: false,
+        _downCallbacks: [],
+        on(event: string, cb: () => void) {
+          if (event === "down") key._downCallbacks.push(cb);
+        },
+      };
+      keysByCode.set(code, key);
+    }
     return keysByCode.get(code);
   });
 
@@ -78,10 +89,19 @@ function makeFakeScene(): {
 
   return {
     scene,
+    // Mirrors a real browser keydown: fires registered 'down' callbacks on
+    // the false->true transition, exactly once per transition — regardless
+    // of whether the key is set back to false before the next poll(), which
+    // is the whole point of the event-driven pendingKeyDown mechanism.
     setKeyDown: (name: keyof typeof KeyCodes, down: boolean) => {
       const code = KeyCodes[name];
       const key = keysByCode.get(code);
-      if (key) key.isDown = down;
+      if (!key) return;
+      const wasDown = key.isDown;
+      key.isDown = down;
+      if (down && !wasDown) {
+        for (const cb of key._downCallbacks) cb();
+      }
     },
   };
 }
@@ -157,5 +177,21 @@ describe("KeyboardAdapter", () => {
     setKeyDown("SHIFT", true);
     setKeyDown("TAB", true);
     expect(adapter.poll().map((e) => e.intent)).toEqual(["CYCLE_PREV"]);
+  });
+
+  it("regression: a keydown+keyup that both happen between two polls still fires the edge intent", () => {
+    // Reproduces a real e2e failure: Playwright's page.keyboard.press() (and a
+    // slow/dropped frame in general) can complete a full keydown+keyup cycle
+    // before the next poll() runs. Sampling key.isDown once per poll would see
+    // it back at false and silently drop the press — this only works because
+    // KeyboardAdapter now latches on the actual 'down' event instead.
+    const bindings: KeyboardBinding[] = [{ key: "ESC", intent: "PAUSE" }];
+    const adapter = new KeyboardAdapter(scene, bindings);
+    adapter.init();
+
+    setKeyDown("ESC", true);
+    setKeyDown("ESC", false); // both happen before poll() ever runs
+    expect(adapter.poll().map((e) => e.intent)).toEqual(["PAUSE"]);
+    expect(adapter.poll()).toEqual([]);
   });
 });

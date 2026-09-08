@@ -270,10 +270,13 @@ export class TouchFlightControls extends Phaser.GameObjects.Container {
   }
 
   destroy(fromScene?: boolean): void {
-    this.scene.input.off("pointerdown", this.onPointerDown, this);
-    this.scene.input.off("pointermove", this.onPointerMove, this);
-    this.scene.input.off("pointerup", this.onPointerUp, this);
-    this.scene.input.off("pointerupoutside", this.onPointerUp, this);
+    // Optional chaining: when destroyed as part of a full scene teardown
+    // (fromScene=true), Phaser may have already torn down the scene's own
+    // input plugin before this container's destroy() runs.
+    this.scene?.input?.off("pointerdown", this.onPointerDown, this);
+    this.scene?.input?.off("pointermove", this.onPointerMove, this);
+    this.scene?.input?.off("pointerup", this.onPointerUp, this);
+    this.scene?.input?.off("pointerupoutside", this.onPointerUp, this);
     this.pendingSingleTapTimer?.remove();
     super.destroy(fromScene);
   }
