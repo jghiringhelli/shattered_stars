@@ -87,4 +87,14 @@ if (import.meta.env.DEV) {
   window.game = game;
   window.networkService = NetworkService.getInstance();
   void import("./debug/verifyHooks").then((m) => m.installVerifyHooks(game));
+  void import("./debug/SessionLogger").then(({ SessionLogger }) => {
+    if (!SessionLogger.isEnabled()) return;
+    const logger = new SessionLogger();
+    logger.start();
+    (
+      window as unknown as {
+        __sessionLogger: InstanceType<typeof SessionLogger>;
+      }
+    ).__sessionLogger = logger;
+  });
 }
