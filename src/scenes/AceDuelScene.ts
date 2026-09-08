@@ -13,6 +13,7 @@
 import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
 import { createHoverButton, createToggleButton } from "../ui/ButtonFactory";
+import { quickTipLine } from "../ui/ControlsReference";
 import type { FactionId } from "../config";
 import { BATTLEFIELD_SIZE, FACTION_COLORS, SHIP_SIZES } from "../config";
 import { getShipDefinition, getShipDial } from "../data/ShipDefinitions";
@@ -476,6 +477,21 @@ export class AceDuelScene extends Phaser.Scene {
       () => this.startDuel(),
     );
     this.track(startBtn);
+
+    const tip = this.add
+      .text(
+        centerX,
+        this.scale.height - 14,
+        quickTipLine([
+          { label: "Steer", intents: ["STEER_LEFT", "STEER_RIGHT"] },
+          { label: "Throttle", intents: ["THRUST_UP", "THRUST_DOWN"] },
+          { label: "Weapon", intents: [] },
+          { label: "Pause", intents: ["PAUSE"] },
+        ]),
+        { font: "12px Arial", color: "#6688aa" },
+      )
+      .setOrigin(0.5);
+    this.track(tip);
 
     // Back button
     const backBtn = this.add

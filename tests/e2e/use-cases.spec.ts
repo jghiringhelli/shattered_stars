@@ -24,6 +24,7 @@ import {
 test.describe("UC-1: Main menu → all destinations", () => {
   const destinations: [string, string][] = [
     ["SETTINGS", "SettingsScene"],
+    ["CONTROLS", "ControlsScene"],
     ["ENCYCLOPEDIA", "EncyclopediaScene"],
     ["CREDITS", "CreditsScene"],
     // DOGFIGHT excluded: ESC in DogfightScene toggles pause, not return-to-menu

@@ -154,6 +154,10 @@ export class MainMenuScene extends Phaser.Scene {
       },
       { label: "SETTINGS", action: () => this.scene.start("SettingsScene") },
       {
+        label: "CONTROLS",
+        action: () => this.scene.start("ControlsScene"),
+      },
+      {
         label: "ENCYCLOPEDIA",
         action: () => this.scene.start("EncyclopediaScene"),
       },

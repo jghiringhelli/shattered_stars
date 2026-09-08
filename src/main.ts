@@ -18,6 +18,8 @@ import { DebriefScene } from "./scenes/DebriefScene";
 import { ArcadeBattleScene } from "./scenes/ArcadeBattleScene";
 import { EncyclopediaScene } from "./scenes/EncyclopediaScene";
 import { ShipPickerScene } from "./scenes/ShipPickerScene";
+import { ControlsScene } from "./scenes/ControlsScene";
+import { initTutorialOverlay } from "./ui/TutorialOverlay";
 
 const forceCanvas =
   typeof window !== "undefined" &&
@@ -48,6 +50,7 @@ const config: Phaser.Types.Core.GameConfig = {
     ArcadeBattleScene,
     EncyclopediaScene,
     ShipPickerScene,
+    ControlsScene,
   ],
   physics: {
     // We don't use physics - movement is chart-based
@@ -75,6 +78,7 @@ const config: Phaser.Types.Core.GameConfig = {
 };
 
 const game = new Phaser.Game(config);
+initTutorialOverlay();
 
 // Expose for debugging and E2E testing in non-production builds
 declare global {

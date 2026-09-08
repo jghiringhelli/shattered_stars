@@ -11,6 +11,7 @@ import Phaser from "phaser";
 import { createHoverButton, createToggleButton } from "../ui/ButtonFactory";
 import { addSceneBackground, addSceneTitleFrame } from "../ui/TexturedPanel";
 import { renderMenuStarfield } from "../rendering/Starfield";
+import { quickTipLine } from "../ui/ControlsReference";
 import { FACTION_COLORS, type FactionId } from "../config";
 import { getShipDefinition } from "../data/ShipDefinitions";
 import { SURVIVAL_STARTER_CHOICES } from "./SurvivalScene";
@@ -240,6 +241,22 @@ export class SurvivalSetupScene extends Phaser.Scene {
       },
     ).setScrollFactor(0);
     btn.setDepth(10);
+
+    this.add
+      .text(
+        centerX,
+        this.scale.height - 14,
+        quickTipLine([
+          { label: "Steer", intents: ["STEER_LEFT", "STEER_RIGHT"] },
+          { label: "Throttle", intents: ["THRUST_UP", "THRUST_DOWN"] },
+          { label: "Weapon", intents: [] },
+          { label: "Pause", intents: ["PAUSE"] },
+        ]),
+        { font: "12px Arial", color: "#6688aa" },
+      )
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(10);
   }
 
   private createBackButton(): void {
