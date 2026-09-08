@@ -286,6 +286,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private pendingEdgeIntents: Set<ActionIntent> = new Set();
   private readonly trackedEdgeIntents: ReadonlySet<ActionIntent> = new Set([
     "KTURN",
+    "BOOST",
     "SHARP_TURN_LEFT",
     "SHARP_TURN_RIGHT",
     "SEGNOR_LEFT",
@@ -877,8 +878,15 @@ export class ArcadeBattleScene extends Phaser.Scene {
       ship.stress = applyKturnStress(ship.stress);
     }
 
-    // Special maneuvers and actions from gesture events
-    this.processGestureActions(ship, actions);
+    // Special maneuvers and actions from gesture events. BOOST also arrives
+    // as a discrete intent (touch double-tap-up) alongside the keyboard-native
+    // hold-duration gesture, so merge both into one action list.
+    const boostFromIntent = this.consumeEdge("BOOST");
+    const gestureActions =
+      boostFromIntent && !actions.includes("boost")
+        ? [...actions, "boost" as GestureAction]
+        : actions;
+    this.processGestureActions(ship, gestureActions);
 
     // Crew role cycle: pilot -> gunner (large/huge with a turret) -> commander (capital only)
     if (this.consumeEdge("CREW_CYCLE")) {
@@ -1454,7 +1462,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
    */
   private fireSelectedWeapon(ship: ArcadeShip): void {
     if (this.selectedWeaponSlot < 0) {
-      if (canFire(ship.control)) {
+      // Cloaked ships hold laser fire — autofiring the laser would decloak
+      // them the instant cloak activates, since firing always breaks cloak.
+      if (canFire(ship.control) && !ship.isCloaked) {
         ship.control = processCommand(ship, ship.control, "fire");
         this.fireWeapon(ship);
       }
@@ -1478,9 +1488,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
       }
     }
 
-    // Nothing ready — fall back to laser
+    // Nothing ready — fall back to laser (still holds fire while cloaked)
     this.selectedWeaponSlot = -1;
-    if (canFire(ship.control)) {
+    if (canFire(ship.control) && !ship.isCloaked) {
       ship.control = processCommand(ship, ship.control, "fire");
       this.fireWeapon(ship);
     }

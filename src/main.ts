@@ -58,8 +58,11 @@ const config: Phaser.Types.Core.GameConfig = {
     },
   },
   // 3 concurrent pointers: mouse + two simultaneous touches (dual-stick flight controls).
+  // gamepad: true — Phaser's gamepad plugin defaults to OFF; without this, GamepadAdapter's
+  // scene.input.gamepad is always undefined and every gamepad binding is silently dead.
   input: {
     activePointers: 3,
+    gamepad: true,
   },
   scale: {
     mode: Phaser.Scale.FIT,
