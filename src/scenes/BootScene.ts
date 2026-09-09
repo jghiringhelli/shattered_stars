@@ -60,6 +60,9 @@ export class BootScene extends Phaser.Scene {
     // Load SD-generated StarCraft-inspired UI textures (fail-silent if not generated)
     this.loadUiTextures();
 
+    // Load SD-generated painted space backgrounds (fail-silent if not generated)
+    this.loadBackgroundTextures();
+
     // Fallback: generate portrait_command programmatically if PNG not found
     this.registerPortraitFallback();
   }
@@ -244,6 +247,30 @@ export class BootScene extends Phaser.Scene {
     this.load.image("tex_divider", `${base}/ui_divider.png`);
     this.load.image("tex_btn_normal", `${base}/ui_button_normal.png`);
     this.load.image("tex_btn_selected", `${base}/ui_button_selected.png`);
+  }
+
+  /**
+   * Load SD-generated painted space backgrounds (nebulae/planets/galaxy/starfield)
+   * from public/assets/backgrounds/. Missing files fail silently — Phaser skips
+   * 404s without error, so scenes can fall back to the procedural starfield.
+   * Generate these with: python scripts/generate_backgrounds.py
+   */
+  private loadBackgroundTextures(): void {
+    const base = "assets/backgrounds";
+    const ids = [
+      "nebula_blue",
+      "nebula_purple",
+      "nebula_teal",
+      "nebula_crimson",
+      "planet_rocky",
+      "planet_gas_giant",
+      "planet_ice",
+      "starfield_deep",
+      "galaxy_spiral",
+    ];
+    for (const id of ids) {
+      this.load.image(`bg_${id}`, `${base}/${id}.png`);
+    }
   }
 
   /**

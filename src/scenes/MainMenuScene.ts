@@ -19,6 +19,7 @@ import {
   createTexturedPanel,
   addSceneBackground,
   addSceneTitleFrame,
+  addPaintedSpaceBackground,
 } from "../ui/TexturedPanel";
 import { renderMenuStarfield } from "../rendering/Starfield";
 
@@ -40,6 +41,7 @@ export class MainMenuScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(0x050510);
     this.texturesAvailable = this.textures.exists("tex_btn_normal");
 
+    addPaintedSpaceBackground(this, "nebula_purple");
     addSceneBackground(this);
 
     // Defer AudioContext creation until the first user gesture (Chrome autoplay policy).

@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import Phaser from "phaser";
 
 /** Configuration for a textured panel container. */
 export interface TexturedPanelOptions {
@@ -40,7 +40,11 @@ export function createTexturedPanel(
   options: TexturedPanelOptions,
 ): Phaser.GameObjects.Container {
   const {
-    x, y, width, height, textureKey,
+    x,
+    y,
+    width,
+    height,
+    textureKey,
     alpha = 1,
     fallbackColor = 0x112233,
     fallbackAlpha = 0.6,
@@ -50,7 +54,10 @@ export function createTexturedPanel(
   const container = scene.add.container(x, y);
 
   if (scene.textures.exists(textureKey)) {
-    const img = scene.add.image(0, 0, textureKey).setDisplaySize(width, height).setAlpha(alpha);
+    const img = scene.add
+      .image(0, 0, textureKey)
+      .setDisplaySize(width, height)
+      .setAlpha(alpha);
     container.add(img);
   } else {
     const g = scene.add.graphics();
@@ -69,9 +76,35 @@ export function createTexturedPanel(
  * @param scene - The Phaser scene to add the image into.
  */
 export function addSceneBackground(scene: Phaser.Scene): void {
-  if (!scene.textures.exists('tex_menu_bg')) return;
+  if (!scene.textures.exists("tex_menu_bg")) return;
   const { width, height } = scene.scale;
-  scene.add.image(width / 2, height / 2, 'tex_menu_bg').setDisplaySize(width, height).setDepth(-1);
+  scene.add
+    .image(width / 2, height / 2, "tex_menu_bg")
+    .setDisplaySize(width, height)
+    .setDepth(-1);
+}
+
+/**
+ * Add a painted space background (nebula/planet/galaxy — see
+ * scripts/generate_backgrounds.py) at depth −2, behind everything else
+ * including `tex_menu_bg`. Silently skips when the texture is absent, so
+ * scenes always fall back cleanly to their procedural starfield.
+ *
+ * @param scene     - The Phaser scene to add the image into.
+ * @param textureId - One of the ids in BootScene's loadBackgroundTextures
+ *                    (without the `bg_` prefix), e.g. "nebula_purple".
+ */
+export function addPaintedSpaceBackground(
+  scene: Phaser.Scene,
+  textureId: string,
+): void {
+  const key = `bg_${textureId}`;
+  if (!scene.textures.exists(key)) return;
+  const { width, height } = scene.scale;
+  scene.add
+    .image(scene.scale.width / 2, scene.scale.height / 2, key)
+    .setDisplaySize(width, height)
+    .setDepth(-2);
 }
 
 /**
@@ -82,9 +115,13 @@ export function addSceneBackground(scene: Phaser.Scene): void {
  * @param centerY    - Vertical center of the banner in scene coordinates.
  * @param bannerHeight - Display height of the banner in pixels.
  */
-export function addSceneTitleFrame(scene: Phaser.Scene, centerY: number, bannerHeight: number): void {
-  if (!scene.textures.exists('tex_title_frame')) return;
-  scene.add.image(scene.scale.width / 2, centerY, 'tex_title_frame')
+export function addSceneTitleFrame(
+  scene: Phaser.Scene,
+  centerY: number,
+  bannerHeight: number,
+): void {
+  if (!scene.textures.exists("tex_title_frame")) return;
+  scene.add
+    .image(scene.scale.width / 2, centerY, "tex_title_frame")
     .setDisplaySize(scene.scale.width, bannerHeight);
 }
-

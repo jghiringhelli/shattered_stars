@@ -7,6 +7,7 @@
 
 import Phaser from "phaser";
 import { renderMenuStarfield } from "../rendering/Starfield";
+import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import {
   CONTROL_GROUPS,
   keyboardLabelFor,
@@ -28,6 +29,7 @@ export class ControlsScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor(0x050510);
+    addPaintedSpaceBackground(this, "starfield_deep");
     renderMenuStarfield(this, { starCount: 100, alphaRange: [0.2, 0.6] });
 
     this.createHeader();
