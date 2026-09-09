@@ -90,13 +90,23 @@ export function addSceneBackground(scene: Phaser.Scene): void {
  * including `tex_menu_bg`. Silently skips when the texture is absent, so
  * scenes always fall back cleanly to their procedural starfield.
  *
- * @param scene     - The Phaser scene to add the image into.
- * @param textureId - One of the ids in BootScene's loadBackgroundTextures
- *                    (without the `bg_` prefix), e.g. "nebula_purple".
+ * @param scene        - The Phaser scene to add the image into.
+ * @param textureId    - One of the ids in BootScene's loadBackgroundTextures
+ *                       (without the `bg_` prefix), e.g. "nebula_purple".
+ * @param scrollFactor - 1 (default) for static menu scenes where the image is
+ *                       positioned once and never needs to track the camera.
+ *                       Pass 0 for battle scenes with a panning/zooming camera
+ *                       so the backdrop stays fixed behind the world-space
+ *                       starfield instead of scrolling out of view.
+ * @param alpha        - Image opacity (default 1). Lower for text-dense UI
+ *                       screens where a fully bright nebula would compete
+ *                       with readability.
  */
 export function addPaintedSpaceBackground(
   scene: Phaser.Scene,
   textureId: string,
+  scrollFactor = 1,
+  alpha = 1,
 ): void {
   const key = `bg_${textureId}`;
   if (!scene.textures.exists(key)) return;
@@ -104,6 +114,8 @@ export function addPaintedSpaceBackground(
   scene.add
     .image(scene.scale.width / 2, scene.scale.height / 2, key)
     .setDisplaySize(width, height)
+    .setScrollFactor(scrollFactor)
+    .setAlpha(alpha)
     .setDepth(-2);
 }
 

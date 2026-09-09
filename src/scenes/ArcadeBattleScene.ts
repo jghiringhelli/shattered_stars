@@ -165,6 +165,7 @@ import { Minimap, type MinimapShip } from "../ui/Minimap";
 import { renderBattleStarfield } from "../rendering/Starfield";
 import { applyLoadoutEffects } from "../systems/BattleHelpers";
 import { audioManager } from "../audio/AudioManager";
+import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import { getHandlingProfile } from "../systems/FlightControlSystem";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import {
@@ -440,6 +441,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     // No setBounds — we manage the camera manually for seamless toroid wrapping.
     this.cameras.main.setBackgroundColor(0x050510);
     this.cameras.main.setZoom(1.0);
+    addPaintedSpaceBackground(this, "galaxy_spiral", 0);
 
     this.createStarfield();
     this.setupInput();

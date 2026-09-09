@@ -21,6 +21,7 @@ import {
   type PlayerInfo,
 } from "../services/NetworkService";
 import type { BattleSnapshot } from "../multiplayer/BattleStateSerializer";
+import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 
 const FACTION_NAMES: Record<FactionId, string> = {
   terran_hegemony: "Terran Hegemony",
@@ -66,6 +67,7 @@ export class LobbyScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor(0x0a0a1a);
+    addPaintedSpaceBackground(this, "nebula_teal");
     this.createHeader();
     this.createRoomBrowser();
     this.createRoomView();

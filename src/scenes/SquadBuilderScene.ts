@@ -21,6 +21,7 @@ import { FormatPanel } from "../ui/squad/FormatPanel";
 import type { FormatPanelState } from "../ui/squad/FormatPanel";
 import { SquadListPanel } from "../ui/squad/SquadListPanel";
 import { flashText } from "../ui/textFlash";
+import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 
 type ShipsPickedEvent = {
   slotIndex: number;
@@ -76,6 +77,7 @@ export class SquadBuilderScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor(0x080c14);
+    addPaintedSpaceBackground(this, "nebula_crimson", 1, 0.45);
     this.buildDefaultSquads();
     this.createTitle();
     this.createBackButton();

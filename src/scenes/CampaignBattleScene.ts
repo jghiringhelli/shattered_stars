@@ -34,6 +34,7 @@ import { CampaignSaveManager } from "../systems/CampaignSaveManager";
 import { distributeMissionXp } from "../systems/CampaignPilotManager";
 import { CAMPAIGN_PILOTS } from "../data/PilotData";
 import { audioManager } from "../audio/AudioManager";
+import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import { renderBattleStarfield } from "../rendering/Starfield";
 import { InputManager } from "../input/InputManager";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
@@ -150,6 +151,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     // Set up the battlefield
     this.cameras.main.setBounds(0, 0, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
     this.cameras.main.setBackgroundColor(0x0a0a1a);
+    addPaintedSpaceBackground(this, "planet_gas_giant", 0);
 
     this.createStarfield();
     this.createBattlefieldGrid();

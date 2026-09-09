@@ -50,6 +50,7 @@ import { EffectsManager } from "../rendering/EffectsManager";
 import { renderBattleStarfield } from "../rendering/Starfield";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
+import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import { createPerformanceState } from "../systems/PerformanceSystem";
 import {
   findClosestEnemy as battleFindClosestEnemy,
@@ -153,6 +154,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   create(): void {
     this.cameras.main.setBounds(0, 0, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
     this.cameras.main.setBackgroundColor(0x050510);
+    addPaintedSpaceBackground(this, "nebula_blue", 0);
 
     audioManager.initialize();
     audioManager.playMusic("combat_medium");

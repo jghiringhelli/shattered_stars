@@ -30,6 +30,7 @@ import { HealthBar } from "../ui/HealthBar";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
+import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import {
   createPerformanceState,
   updateFPS,
@@ -211,6 +212,7 @@ export class AceDuelScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBounds(0, 0, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
     this.cameras.main.setBackgroundColor(0x050510);
+    addPaintedSpaceBackground(this, "nebula_crimson", 0);
 
     audioManager.initialize();
 

@@ -38,6 +38,7 @@ import { EffectsManager } from "../rendering/EffectsManager";
 import { headingDiffToTarget } from "../systems/MovementSystem";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
+import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import {
   createPerformanceState,
   updateFPS,
@@ -210,6 +211,7 @@ export class SurvivalScene extends Phaser.Scene {
   create(): void {
     // No setBounds — camera is driven manually for seamless toroid wrapping (see updateCameraFollow).
     this.cameras.main.setBackgroundColor(0x050510);
+    addPaintedSpaceBackground(this, "starfield_deep", 0);
 
     audioManager.initialize();
     audioManager.playMusic("combat_medium");

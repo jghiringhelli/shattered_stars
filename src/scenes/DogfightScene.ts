@@ -34,6 +34,7 @@ import { EffectsManager } from "../rendering/EffectsManager";
 import { headingDiffToTarget } from "../systems/MovementSystem";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
+import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import {
   createPerformanceState,
   updateFPS,
@@ -183,6 +184,7 @@ export class DogfightScene extends Phaser.Scene {
   create(): void {
     // No setBounds — camera is driven manually for seamless toroid wrapping (see updateCameraFollow).
     this.cameras.main.setBackgroundColor(0x050510);
+    addPaintedSpaceBackground(this, "nebula_purple", 0);
 
     audioManager.initialize();
 
