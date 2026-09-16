@@ -102,6 +102,20 @@ function nextAction(state: TreeState): void {
     console.log(
       "    -> commit with a conventional message; hooks enforce the rest.",
     );
+    if (state.dirty.length > 15) {
+      console.log(
+        `  ⚠ ${state.dirty.length} dirty files — do NOT squash into one commit.`,
+      );
+      console.log(
+        "    Split into ATOMIC commits, one logical change per commit",
+      );
+      console.log(
+        "    (per CLAUDE.md's Commit Protocol). Group by feature/concern,",
+      );
+      console.log(
+        "    commit each group separately, don't wait until end-of-session.",
+      );
+    }
   } else {
     console.log("  Working tree clean. Pick the next bound prompt:");
     console.log(
