@@ -9,6 +9,7 @@
 
 import Phaser from "phaser";
 import type { SquadEntry, GameMode } from "../../core/squadTypes";
+import { autoFillSquad } from "../../core/squadTypes";
 import {
   makeSquad,
   MULTI_TEAM_MODES,
@@ -23,7 +24,6 @@ import {
   SHIP_ROW_H,
   MAX_SHOWN_SHIPS,
 } from "./SquadCard";
-import { getShipsByFaction } from "../../data/ShipDefinitions";
 
 const PANEL_X = 320;
 const PANEL_Y = 68;
@@ -357,22 +357,6 @@ export class SquadListPanel extends Phaser.Events.EventEmitter {
   }
 
   private autoFill(squad: SquadEntry): void {
-    if (!squad.factionId) return;
-    const ships = getShipsByFaction(squad.factionId)
-      .filter(
-        (s) =>
-          this.config.gameMode === "epic" ||
-          (s.role !== "capital" && s.baseStats.size !== "huge"),
-      )
-      .sort((a, b) => b.baseStats.pointCost - a.baseStats.pointCost);
-    squad.ships = [];
-    squad.pointsUsed = 0;
-    for (const ship of ships) {
-      if (squad.ships.length >= 6) break;
-      if (squad.pointsUsed + ship.baseStats.pointCost > this.config.pointLimit)
-        continue;
-      squad.ships.push(ship.id);
-      squad.pointsUsed += ship.baseStats.pointCost;
-    }
+    autoFillSquad(squad, this.config.gameMode, this.config.pointLimit);
   }
 }

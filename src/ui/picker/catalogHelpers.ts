@@ -3,12 +3,42 @@
  * Shared between ShipCatalogPanel (tooltip) and CatalogStaging (loadout area).
  */
 
+import Phaser from "phaser";
 import { UPGRADE_DEFINITIONS } from "../../systems/UpgradeSystem";
 import type { ShipDefinition } from "../../core/types";
 import type { LoadoutBonuses } from "./types";
 
 export const CAT_X = 60;
 export const CAT_W = 440;
+
+/**
+ * Adds an image scaled to FIT (preserve aspect ratio) within a maxW × maxH
+ * box, centered at (cx, cy) — never stretches/distorts the source texture,
+ * unlike `setDisplaySize(w, h)` with a fixed box of a different ratio.
+ *
+ * @param scene - Owning scene.
+ * @param key - Texture key (must already be loaded).
+ * @param cx - Box center X.
+ * @param cy - Box center Y.
+ * @param maxW - Box width.
+ * @param maxH - Box height.
+ */
+export function addContainedImage(
+  scene: Phaser.Scene,
+  key: string,
+  cx: number,
+  cy: number,
+  maxW: number,
+  maxH: number,
+): Phaser.GameObjects.Image {
+  const src = scene.textures.get(key).getSourceImage();
+  const srcW = "width" in src ? src.width : maxW;
+  const srcH = "height" in src ? src.height : maxH;
+  const scale = Math.min(maxW / srcW, maxH / srcH);
+  return scene.add
+    .image(cx, cy, key)
+    .setDisplaySize(srcW * scale, srcH * scale);
+}
 
 /** Maps an action key to a human-readable in-game label. */
 export function formatActionName(action: string): string {

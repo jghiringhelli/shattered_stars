@@ -10,17 +10,11 @@ import Phaser from "phaser";
 import type { ShipDefinition } from "../../core/types";
 import { FACTION_COLORS } from "../../config";
 import type { FactionId } from "../../config";
-import { getShipLoadouts } from "../../data/ShipLoadouts";
 import { isStarterPick } from "../../data/ProgressionData";
-import { ShipTooltip } from "./ShipTooltip";
+import { ShipDetailPanel } from "./ShipDetailPanel";
 import { CatalogScroll } from "./CatalogScroll";
 import { CatalogStaging } from "./CatalogStaging";
-import {
-  computeLoadoutBonuses,
-  secondaryTags,
-  CAT_X,
-  CAT_W,
-} from "./catalogHelpers";
+import { secondaryTags, CAT_X, CAT_W } from "./catalogHelpers";
 import type { LoadoutBonuses } from "./types";
 
 export type { LoadoutBonuses };
@@ -47,18 +41,17 @@ const ROLE_SORT: Record<string, number> = {
   capital: 6,
 };
 
-const TOP_Y = 98;
-const PANEL_H = 570;
+const DEFAULT_TOP_Y = 98;
+const DEFAULT_PANEL_H = 570;
 const COL_W = CAT_W / 2;
 const ROW_H = 50;
 const ROW_GAP = 4;
 const GRID_ROWS = 7;
-const STAGE_TOP = TOP_Y + 10 + GRID_ROWS * (ROW_H + ROW_GAP);
 
 export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
   private container!: Phaser.GameObjects.Container;
   private gridContainer!: Phaser.GameObjects.Container;
-  private readonly tooltip: ShipTooltip;
+  private readonly detailPanel: ShipDetailPanel;
   private readonly scroll: CatalogScroll;
   private readonly staging: CatalogStaging;
   private scrollWired = false;
@@ -69,25 +62,29 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
     private readonly ships: ShipDefinition[],
     private readonly factionId: FactionId,
     private readonly gating: CatalogGating = NO_GATING,
+    confirmLabel = "ADD",
+    private readonly topY = DEFAULT_TOP_Y,
+    private readonly panelH = DEFAULT_PANEL_H,
   ) {
     super();
-    this.tooltip = new ShipTooltip(scene);
+    this.detailPanel = new ShipDetailPanel(scene);
     const gridClipH = GRID_ROWS * (ROW_H + ROW_GAP);
     this.scroll = new CatalogScroll({
       clipX: CAT_X,
-      clipY: TOP_Y + 10,
+      clipY: this.topY + 10,
       clipW: CAT_W,
       clipH: gridClipH,
     });
-    this.staging = new CatalogStaging(scene, ships);
+    this.staging = new CatalogStaging(scene, ships, confirmLabel);
     this.staging.on("addInstance", (e: unknown) => this.emit("addInstance", e));
     this.staging.on("requestRender", () => this.render());
   }
 
   render(): void {
     this.container?.destroy();
+    this.gridContainer?.destroy();
     this.container = this.scene.add.container(0, 0);
-    this.gridContainer = this.scene.add.container(0, TOP_Y + 10);
+    this.gridContainer = this.scene.add.container(0, this.topY + 10);
     this.drawBackground();
     this.drawGrid();
     this.scroll.applyMask(this.scene, this.gridContainer);
@@ -96,15 +93,28 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
       this.scroll.setupWheel(this.scene, this.gridContainer);
       this.scrollWired = true;
     }
-    const stageH = PANEL_H - (STAGE_TOP - TOP_Y) - 8;
-    this.staging.render(this.container, STAGE_TOP, stageH);
+    const stageTop = this.topY + 10 + GRID_ROWS * (ROW_H + ROW_GAP);
+    const stageH = this.panelH - (stageTop - this.topY) - 8;
+    this.staging.render(this.container, stageTop, stageH);
+
+    const detailX = CAT_X + CAT_W + 24;
+    const detailW = this.scene.scale.width - detailX - 40;
+    this.detailPanel.render(
+      this.ships,
+      this.staging,
+      detailX,
+      this.topY,
+      Math.max(320, detailW),
+      this.panelH,
+    );
   }
 
   destroy(): void {
-    this.tooltip.destroy();
+    this.detailPanel.destroy();
     this.scroll.destroy();
     this.staging.destroy();
     this.container?.destroy();
+    this.gridContainer?.destroy();
     super.destroy();
   }
 
@@ -118,9 +128,9 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
     const fCol = FACTION_COLORS[this.factionId];
     const g = this.scene.add.graphics();
     g.fillStyle(0x0d1525, 1);
-    g.fillRoundedRect(CAT_X, TOP_Y, CAT_W, PANEL_H, 10);
+    g.fillRoundedRect(CAT_X, this.topY, CAT_W, this.panelH, 10);
     g.lineStyle(2, fCol, 0.7);
-    g.strokeRoundedRect(CAT_X, TOP_Y, CAT_W, PANEL_H, 10);
+    g.strokeRoundedRect(CAT_X, this.topY, CAT_W, this.panelH, 10);
     this.container.add(g);
   }
 
@@ -253,14 +263,6 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
       this.staging.selectShip(def.id);
       this.render();
     });
-    hit.on("pointerover", () => {
-      const selLd = getShipLoadouts(def.id).find(
-        (l) => l.id === this.staging.getSelectedLoadoutId(),
-      );
-      const b = computeLoadoutBonuses(selLd?.upgrades ?? []);
-      this.tooltip.show(def, CAT_X + CAT_W + 8, this.gridContainer.y + y, b);
-    });
-    hit.on("pointerout", () => this.tooltip.hide());
     return hit;
   }
 }

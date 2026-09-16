@@ -14,13 +14,17 @@ import {
   type GameMode,
   type SquadEntry,
   makeSquad,
+  autoFillSquad,
+  pickOpponentFaction,
   MULTI_TEAM_MODES,
 } from "../core/squadTypes";
 import type { AIDifficultyLevel } from "../ai/AIDifficulty";
 import { FormatPanel } from "../ui/squad/FormatPanel";
 import type { FormatPanelState } from "../ui/squad/FormatPanel";
 import { SquadListPanel } from "../ui/squad/SquadListPanel";
+import { SimpleSquadFlow } from "../ui/squad/SimpleSquadFlow";
 import { flashText } from "../ui/textFlash";
+import { shake } from "../ui/UIJuice";
 import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 
 type ShipsPickedEvent = {
@@ -46,6 +50,11 @@ export class SquadBuilderScene extends Phaser.Scene {
   /** Exposed for E2E tests */
   public squadListPanel!: SquadListPanel;
   private instructionText!: Phaser.GameObjects.Text;
+  /** Exposed for E2E tests — easy single-ship flow is the default for Skirmish. */
+  public simpleMode = true;
+  private simpleFlow: SimpleSquadFlow | null = null;
+  private bottomBarObjects: Phaser.GameObjects.GameObject[] = [];
+  private modeToggleText!: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: "SquadBuilderScene" });
@@ -73,6 +82,9 @@ export class SquadBuilderScene extends Phaser.Scene {
       this.gameMode = data.initialMode as GameMode;
     }
     this.pointLimit = this.gameMode === "epic" ? 400 : 200;
+    // Simple mode only fits a single-ship, single-squad flow — other formats
+    // (multi-squad epic, online, continuous) need the advanced builder.
+    this.simpleMode = this.gameMode === "arcade";
   }
 
   create(): void {
@@ -81,10 +93,88 @@ export class SquadBuilderScene extends Phaser.Scene {
     this.buildDefaultSquads();
     this.createTitle();
     this.createBackButton();
-    this.buildPanels();
-    this.createBottomBar();
+    this.createModeToggle();
+    this.renderBuilderMode();
     this.setupInput();
     this.listenForShipsPicked();
+  }
+
+  /** Shows the simple single-ship flow or the advanced multi-squad builder, per simpleMode. */
+  private renderBuilderMode(): void {
+    this.simpleFlow?.destroy();
+    this.simpleFlow = null;
+    this.formatPanel?.destroy();
+    this.squadListPanel?.destroy();
+    this.bottomBarObjects.forEach((o) => o.destroy());
+    this.bottomBarObjects = [];
+
+    if (this.simpleMode) {
+      this.instructionText.setText(
+        "Pick a faction, a ship, and a payload \u2014 the battle starts as soon as you launch",
+      );
+      this.buildSimpleFlow();
+    } else {
+      this.instructionText.setText(
+        "Use team chips (T1\u2013T4) to set sides \u00b7 Tap card header to edit ships \u00b7 Auto-Fill to build squads automatically",
+      );
+      this.buildPanels();
+      this.createBottomBar();
+    }
+  }
+
+  /** Faction → ship → payload → launch, for players who just want to play. */
+  private buildSimpleFlow(): void {
+    const playerSquad = this.squads[0];
+    const startFaction = playerSquad?.factionId ?? "terran_hegemony";
+    this.simpleFlow = new SimpleSquadFlow(this, startFaction);
+    this.simpleFlow.on(
+      "start",
+      (e: {
+        factionId: FactionId;
+        shipId: string;
+        loadoutId: string | null;
+      }) => {
+        const def = SHIP_DEFINITIONS[e.shipId];
+        this.squads[0] = {
+          teamId: 1,
+          factionId: e.factionId,
+          controller: "player",
+          ships: [e.shipId],
+          loadoutChoices: e.loadoutId ? { "0": e.loadoutId } : {},
+          pointsUsed: def?.baseStats.pointCost ?? 0,
+        };
+        const opponent = makeSquad(2, 0, "ai");
+        opponent.factionId = pickOpponentFaction(e.factionId);
+        autoFillSquad(opponent, this.gameMode, this.pointLimit);
+        this.squads[1] = opponent;
+        this.startBattle();
+      },
+    );
+    this.simpleFlow.render();
+  }
+
+  /** Small always-visible link to switch between the simple flow and the full builder. */
+  private createModeToggle(): void {
+    this.modeToggleText = this.add
+      .text(
+        this.scale.width - 18,
+        36,
+        this.simpleMode ? "ADVANCED ▸" : "◂ SIMPLE",
+        { font: "13px Arial", color: "#556677" },
+      )
+      .setOrigin(1, 0.5)
+      .setInteractive({ useHandCursor: true });
+    this.modeToggleText.on("pointerover", () =>
+      this.modeToggleText.setColor("#88aacc"),
+    );
+    this.modeToggleText.on("pointerout", () =>
+      this.modeToggleText.setColor("#556677"),
+    );
+    this.modeToggleText.on("pointerdown", () => {
+      this.simpleMode = !this.simpleMode;
+      this.modeToggleText.setText(this.simpleMode ? "ADVANCED ▸" : "◂ SIMPLE");
+      this.renderBuilderMode();
+    });
   }
 
   private buildDefaultSquads(): void {
@@ -154,6 +244,7 @@ export class SquadBuilderScene extends Phaser.Scene {
           message: "Minimum 2 squads required",
           color: "#ff8844",
         });
+        shake(this, this.instructionText);
         return;
       }
       this.squads.splice(e.squadIdx, 1);
@@ -166,6 +257,7 @@ export class SquadBuilderScene extends Phaser.Scene {
           message: "Minimum 2 teams required",
           color: "#ff8844",
         });
+        shake(this, this.instructionText);
         return;
       }
       this.squads = this.squads.filter((s) => s.teamId !== teamId);
@@ -245,53 +337,59 @@ export class SquadBuilderScene extends Phaser.Scene {
   private createBottomBar(): void {
     const cx = this.scale.width / 2;
     const y = this.scale.height - 52;
-    createHoverButton(
-      this,
-      cx - 175,
-      y,
-      {
-        width: 150,
-        height: 38,
-        color: 0x1a3322,
-        hoverColor: 0x2a5533,
-        label: "AUTO-FILL ALL",
-        font: "13px Arial",
-        textColor: "#77cc88",
-      },
-      () => {
-        this.squadListPanel.autoFillAll();
-        this.squadListPanel.render();
-      },
+    this.bottomBarObjects.push(
+      createHoverButton(
+        this,
+        cx - 175,
+        y,
+        {
+          width: 150,
+          height: 38,
+          color: 0x1a3322,
+          hoverColor: 0x2a5533,
+          label: "AUTO-FILL ALL",
+          font: "13px Arial",
+          textColor: "#77cc88",
+        },
+        () => {
+          this.squadListPanel.autoFillAll();
+          this.squadListPanel.render();
+        },
+      ),
     );
-    createHoverButton(
-      this,
-      cx,
-      y,
-      {
-        width: 130,
-        height: 38,
-        color: 0x2a1a33,
-        hoverColor: 0x4a2a55,
-        label: "RANDOMIZE",
-        font: "13px Arial",
-        textColor: "#aa77cc",
-      },
-      () => this.randomizeAll(),
+    this.bottomBarObjects.push(
+      createHoverButton(
+        this,
+        cx,
+        y,
+        {
+          width: 130,
+          height: 38,
+          color: 0x2a1a33,
+          hoverColor: 0x4a2a55,
+          label: "RANDOMIZE",
+          font: "13px Arial",
+          textColor: "#aa77cc",
+        },
+        () => this.randomizeAll(),
+      ),
     );
-    createHoverButton(
-      this,
-      cx + 165,
-      y,
-      {
-        width: 150,
-        height: 38,
-        color: 0x1a3311,
-        hoverColor: 0x2a5522,
-        label: "START BATTLE",
-        font: "bold 14px Arial",
-        textColor: "#88ee88",
-      },
-      () => this.startBattle(),
+    this.bottomBarObjects.push(
+      createHoverButton(
+        this,
+        cx + 165,
+        y,
+        {
+          width: 150,
+          height: 38,
+          color: 0x1a3311,
+          hoverColor: 0x2a5522,
+          label: "START BATTLE",
+          font: "bold 14px Arial",
+          textColor: "#88ee88",
+        },
+        () => this.startBattle(),
+      ),
     );
   }
 
@@ -325,6 +423,7 @@ export class SquadBuilderScene extends Phaser.Scene {
         message: "Select a faction first (click the faction button)",
         color: "#ffaa44",
       });
+      shake(this, this.instructionText);
       return;
     }
     this.scene.launch("ShipPickerScene", {
@@ -365,13 +464,7 @@ export class SquadBuilderScene extends Phaser.Scene {
         color: "#ff5544",
         durationMs: 3000,
       });
-      this.tweens.add({
-        targets: this.instructionText,
-        scaleX: 1.12,
-        scaleY: 1.12,
-        yoyo: true,
-        duration: 200,
-      });
+      shake(this, this.instructionText);
       return;
     }
     if (this.squads.some((s) => !s.factionId || s.ships.length === 0)) {
@@ -380,13 +473,7 @@ export class SquadBuilderScene extends Phaser.Scene {
         color: "#ff5544",
         durationMs: 3000,
       });
-      this.tweens.add({
-        targets: this.instructionText,
-        scaleX: 1.12,
-        scaleY: 1.12,
-        yoyo: true,
-        duration: 200,
-      });
+      shake(this, this.instructionText);
       return;
     }
     const factions = this.squads.map((squad) => ({

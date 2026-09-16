@@ -5,6 +5,7 @@
 
 import type { FactionId } from "../config";
 import type { AIDifficultyLevel } from "../ai/AIDifficulty";
+import { getShipsByFaction } from "../data/ShipDefinitions";
 
 export type GameMode = "arcade" | "continuous" | "survival" | "online" | "epic";
 
@@ -79,6 +80,19 @@ export function makeSquad(
 }
 
 /**
+ * Picks a faction different from the player's for a quick AI-opponent squad
+ * (used by the simple flow so single-ship matches aren't mirror battles by
+ * default). Deterministic — cycles to the next faction in roster order.
+ *
+ * @param playerFaction - The faction the player just chose.
+ */
+export function pickOpponentFaction(playerFaction: FactionId): FactionId {
+  const idx = ALL_FACTIONS.indexOf(playerFaction);
+  const nextIdx = (idx + 1) % ALL_FACTIONS.length;
+  return ALL_FACTIONS[nextIdx] as FactionId;
+}
+
+/**
  * Derive a human-readable battle format label from the current squad list.
  * Counts squads per team, sorts descending, joins with 'v'.
  *
@@ -92,4 +106,36 @@ export function computeFormatLabel(squads: SquadEntry[]): string {
   }
   if (teamCounts.size === 0) return "—";
   return [...teamCounts.values()].sort((a, b) => b - a).join("v");
+}
+
+/**
+ * Greedily fills a squad's ships (by point cost, highest first) up to the
+ * point limit for its faction. Shared by SquadListPanel (advanced builder)
+ * and the simple flow's AI-opponent auto-fill so both use identical logic.
+ *
+ * @param squad - Squad to fill in place (mutates .ships and .pointsUsed).
+ * @param gameMode - Capital ships are only allowed in "epic" mode.
+ * @param pointLimit - Maximum total point cost for the squad.
+ */
+export function autoFillSquad(
+  squad: SquadEntry,
+  gameMode: GameMode,
+  pointLimit: number,
+): void {
+  if (!squad.factionId) return;
+  const ships = getShipsByFaction(squad.factionId)
+    .filter(
+      (s) =>
+        gameMode === "epic" ||
+        (s.role !== "capital" && s.baseStats.size !== "huge"),
+    )
+    .sort((a, b) => b.baseStats.pointCost - a.baseStats.pointCost);
+  squad.ships = [];
+  squad.pointsUsed = 0;
+  for (const ship of ships) {
+    if (squad.ships.length >= 6) break;
+    if (squad.pointsUsed + ship.baseStats.pointCost > pointLimit) continue;
+    squad.ships.push(ship.id);
+    squad.pointsUsed += ship.baseStats.pointCost;
+  }
 }
