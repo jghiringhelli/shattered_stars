@@ -8,35 +8,84 @@
  * - Volume controls and settings persistence
  */
 
-import Phaser from 'phaser';
+import Phaser from "phaser";
+import type { FactionId } from "../config";
 
 // Sound effect types
 export type SoundEffectType =
-  | 'laser_fire'
-  | 'missile_launch'
-  | 'explosion_small'
-  | 'explosion_medium'
-  | 'explosion_large'
-  | 'shield_hit'
-  | 'hull_hit'
-  | 'engine_thrust'
-  | 'ui_click'
-  | 'ui_hover'
-  | 'ui_select'
-  | 'ui_back'
-  | 'powerup'
-  | 'alert'
-  | 'victory'
-  | 'defeat';
+  | "laser_fire"
+  | "missile_launch"
+  | "explosion_small"
+  | "explosion_medium"
+  | "explosion_large"
+  | "shield_hit"
+  | "hull_hit"
+  | "engine_thrust"
+  | "ui_click"
+  | "ui_hover"
+  | "ui_select"
+  | "ui_back"
+  | "powerup"
+  | "alert"
+  | "victory"
+  | "defeat";
 
-// Music tracks
+// Music tracks — generic legacy names + Harmonia faction IDs.
+// Any string listed here can be passed to playMusic(). If a matching mp3
+// exists under public/assets/audio/music/<id>.mp3 it will be loaded and
+// looped; otherwise falls back to the procedural synth (legacy names only).
 export type MusicTrack =
-  | 'menu_theme'
-  | 'combat_low'
-  | 'combat_medium'
-  | 'combat_high'
-  | 'victory_sting'
-  | 'defeat_sting';
+  | "menu_theme"
+  | "combat_low"
+  | "combat_medium"
+  | "combat_high"
+  | "victory_sting"
+  | "defeat_sting"
+  // Harmonia faction tracks — see docs/SUNO_PROMPTS.md
+  | "menu_main"
+  | "heg_tactical"
+  | "heg_combat"
+  | "heg_boss"
+  | "heg_victory"
+  | "heg_defeat"
+  | "conf_tactical"
+  | "conf_combat"
+  | "conf_boss"
+  | "conf_victory"
+  | "conf_defeat"
+  | "syn_tactical"
+  | "syn_combat"
+  | "syn_boss"
+  | "syn_awakening"
+  | "cors_tactical"
+  | "cors_combat"
+  | "cors_boss"
+  | "cors_heist"
+  | "asc_tactical"
+  | "asc_combat"
+  | "asc_boss"
+  | "asc_prophecy"
+  | "void_encounter"
+  | "void_nexus_discovery"
+  | "void_campaign_credits"
+  | "victory_common"
+  | "defeat_common"
+  | "arcade_action"
+  | "tactical_planning"
+  | "survival_ramp"
+  | "campaign_briefing";
+
+/** Battle music phase — maps to Harmonia's per-faction track naming (`<prefix>_<phase>`). */
+export type BattleMusicPhase = "tactical" | "combat" | "boss";
+
+/** Harmonia track-id prefix per faction — factions without one fall back to the generic combat_* tracks. */
+const FACTION_MUSIC_PREFIX: Partial<Record<FactionId, string>> = {
+  terran_hegemony: "heg",
+  free_confederation: "conf",
+  synthetic_collective: "syn",
+  void_corsairs: "cors",
+  ascendant_empire: "asc",
+};
 
 interface AudioSettings {
   masterVolume: number;
@@ -80,6 +129,12 @@ export class AudioManager {
 
   // Sound effect cache
   private soundBuffers: Map<SoundEffectType, AudioBuffer> = new Map();
+  // File-based music buffers cached after first fetch/decode
+  private musicBuffers: Map<string, AudioBuffer> = new Map();
+  // Tracks known to have no mp3 file (avoid retrying failed fetches)
+  private missingMusicFiles: Set<string> = new Set();
+  // Fires on real-file playback so the caller can toggle procedural fallbacks
+  private static readonly MUSIC_URL_PREFIX = "assets/audio/music/";
 
   private constructor() {
     this.loadSettings();
@@ -99,12 +154,18 @@ export class AudioManager {
     if (this.context) return;
 
     try {
-      this.context = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      this.context = new (
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext
+      )();
 
       // Create gain nodes for volume control
       this.masterGain = this.context.createGain();
       this.masterGain.connect(this.context.destination);
-      this.masterGain.gain.value = this.settings.muted ? 0 : this.settings.masterVolume;
+      this.masterGain.gain.value = this.settings.muted
+        ? 0
+        : this.settings.masterVolume;
 
       this.sfxGain = this.context.createGain();
       this.sfxGain.connect(this.masterGain);
@@ -114,9 +175,9 @@ export class AudioManager {
       this.musicGain.connect(this.masterGain);
       this.musicGain.gain.value = this.settings.musicVolume;
 
-      console.log('[AudioManager] Initialized');
+      console.log("[AudioManager] Initialized");
     } catch (e) {
-      console.warn('[AudioManager] Failed to initialize:', e);
+      console.warn("[AudioManager] Failed to initialize:", e);
     }
   }
 
@@ -124,7 +185,7 @@ export class AudioManager {
    * Resume audio context if suspended (required for Chrome autoplay policy)
    */
   async resume(): Promise<void> {
-    if (this.context?.state === 'suspended') {
+    if (this.context?.state === "suspended") {
       await this.context.resume();
     }
   }
@@ -155,7 +216,7 @@ export class AudioManager {
     y: number,
     listenerX: number,
     listenerY: number,
-    volume: number = 1
+    volume: number = 1,
   ): void {
     // Calculate distance-based attenuation
     const distance = Math.sqrt((x - listenerX) ** 2 + (y - listenerY) ** 2);
@@ -174,97 +235,97 @@ export class AudioManager {
       laser_fire: {
         frequency: 800,
         duration: 0.15,
-        type: 'sawtooth',
+        type: "sawtooth",
         attack: 0.01,
         decay: 0.05,
         sustain: 0.3,
         release: 0.09,
         detune: -200,
         filterFreq: 2000,
-        filterType: 'lowpass',
+        filterType: "lowpass",
       },
       missile_launch: {
         frequency: 200,
         duration: 0.4,
-        type: 'sawtooth',
+        type: "sawtooth",
         attack: 0.02,
         decay: 0.1,
         sustain: 0.5,
         release: 0.28,
         filterFreq: 800,
-        filterType: 'lowpass',
+        filterType: "lowpass",
       },
       explosion_small: {
         frequency: 100,
         duration: 0.3,
-        type: 'sawtooth',
+        type: "sawtooth",
         attack: 0.01,
         decay: 0.15,
         sustain: 0.2,
         release: 0.14,
         filterFreq: 400,
-        filterType: 'lowpass',
+        filterType: "lowpass",
       },
       explosion_medium: {
         frequency: 60,
         duration: 0.5,
-        type: 'sawtooth',
+        type: "sawtooth",
         attack: 0.01,
         decay: 0.2,
         sustain: 0.3,
         release: 0.29,
         filterFreq: 300,
-        filterType: 'lowpass',
+        filterType: "lowpass",
       },
       explosion_large: {
         frequency: 40,
         duration: 0.8,
-        type: 'sawtooth',
+        type: "sawtooth",
         attack: 0.01,
         decay: 0.3,
         sustain: 0.4,
         release: 0.49,
         filterFreq: 200,
-        filterType: 'lowpass',
+        filterType: "lowpass",
       },
       shield_hit: {
         frequency: 1200,
         duration: 0.2,
-        type: 'sine',
+        type: "sine",
         attack: 0.01,
         decay: 0.05,
         sustain: 0.5,
         release: 0.14,
         detune: 100,
         filterFreq: 3000,
-        filterType: 'bandpass',
+        filterType: "bandpass",
       },
       hull_hit: {
         frequency: 150,
         duration: 0.15,
-        type: 'square',
+        type: "square",
         attack: 0.01,
         decay: 0.05,
         sustain: 0.3,
         release: 0.09,
         filterFreq: 500,
-        filterType: 'lowpass',
+        filterType: "lowpass",
       },
       engine_thrust: {
         frequency: 80,
         duration: 0.1,
-        type: 'sawtooth',
+        type: "sawtooth",
         attack: 0.02,
         decay: 0.03,
         sustain: 0.7,
         release: 0.05,
         filterFreq: 300,
-        filterType: 'lowpass',
+        filterType: "lowpass",
       },
       ui_click: {
         frequency: 600,
         duration: 0.08,
-        type: 'sine',
+        type: "sine",
         attack: 0.005,
         decay: 0.02,
         sustain: 0.3,
@@ -273,7 +334,7 @@ export class AudioManager {
       ui_hover: {
         frequency: 800,
         duration: 0.05,
-        type: 'sine',
+        type: "sine",
         attack: 0.005,
         decay: 0.015,
         sustain: 0.2,
@@ -282,7 +343,7 @@ export class AudioManager {
       ui_select: {
         frequency: 1000,
         duration: 0.12,
-        type: 'sine',
+        type: "sine",
         attack: 0.01,
         decay: 0.03,
         sustain: 0.5,
@@ -291,7 +352,7 @@ export class AudioManager {
       ui_back: {
         frequency: 400,
         duration: 0.1,
-        type: 'sine',
+        type: "sine",
         attack: 0.005,
         decay: 0.02,
         sustain: 0.3,
@@ -300,7 +361,7 @@ export class AudioManager {
       powerup: {
         frequency: 440,
         duration: 0.3,
-        type: 'sine',
+        type: "sine",
         attack: 0.02,
         decay: 0.1,
         sustain: 0.5,
@@ -310,7 +371,7 @@ export class AudioManager {
       alert: {
         frequency: 880,
         duration: 0.2,
-        type: 'square',
+        type: "square",
         attack: 0.01,
         decay: 0.05,
         sustain: 0.5,
@@ -319,7 +380,7 @@ export class AudioManager {
       victory: {
         frequency: 523.25, // C5
         duration: 0.8,
-        type: 'sine',
+        type: "sine",
         attack: 0.05,
         decay: 0.2,
         sustain: 0.6,
@@ -328,7 +389,7 @@ export class AudioManager {
       defeat: {
         frequency: 196, // G3
         duration: 1.0,
-        type: 'sine',
+        type: "sine",
         attack: 0.05,
         decay: 0.3,
         sustain: 0.4,
@@ -339,7 +400,11 @@ export class AudioManager {
     return params[type] || null;
   }
 
-  private playProceduralSound(params: SoundParams, volume: number, pan: number): void {
+  private playProceduralSound(
+    params: SoundParams,
+    volume: number,
+    pan: number,
+  ): void {
     if (!this.context || !this.sfxGain) return;
 
     const now = this.context.currentTime;
@@ -356,7 +421,10 @@ export class AudioManager {
     const envelope = this.context.createGain();
     envelope.gain.setValueAtTime(0, now);
     envelope.gain.linearRampToValueAtTime(volume, now + params.attack);
-    envelope.gain.linearRampToValueAtTime(volume * params.sustain, now + params.attack + params.decay);
+    envelope.gain.linearRampToValueAtTime(
+      volume * params.sustain,
+      now + params.attack + params.decay,
+    );
     envelope.gain.linearRampToValueAtTime(0, now + params.duration);
 
     // Create filter if specified
@@ -384,7 +452,7 @@ export class AudioManager {
     oscillator.stop(now + params.duration);
 
     // Add noise layer for explosions
-    if (params.type === 'sawtooth' && params.frequency < 150) {
+    if (params.type === "sawtooth" && params.frequency < 150) {
       this.addNoiseLayer(params.duration, volume * 0.5, pan);
     }
   }
@@ -396,7 +464,11 @@ export class AudioManager {
 
     // Create noise buffer
     const bufferSize = this.context.sampleRate * duration;
-    const noiseBuffer = this.context.createBuffer(1, bufferSize, this.context.sampleRate);
+    const noiseBuffer = this.context.createBuffer(
+      1,
+      bufferSize,
+      this.context.sampleRate,
+    );
     const output = noiseBuffer.getChannelData(0);
 
     for (let i = 0; i < bufferSize; i++) {
@@ -408,7 +480,7 @@ export class AudioManager {
 
     // Filter the noise
     const filter = this.context.createBiquadFilter();
-    filter.type = 'lowpass';
+    filter.type = "lowpass";
     filter.frequency.value = 400;
 
     // Envelope
@@ -435,17 +507,101 @@ export class AudioManager {
   // ==========================================
 
   /**
-   * Play background music
+   * Play background music. Attempts to load an mp3 from
+   * public/assets/audio/music/<track>.mp3 first; on 404 or decode failure,
+   * falls back to the procedural synth (only for legacy generic names).
    */
   playMusic(track: MusicTrack): void {
     if (!this.context || !this.musicGain) return;
 
-    // Stop current music
     this.stopMusic();
-
-    // Generate procedural music based on track
     this.currentMusicTrack = track;
-    this.startProceduralMusic(track);
+
+    if (this.missingMusicFiles.has(track)) {
+      this.startProceduralMusic(track);
+      return;
+    }
+
+    const cached = this.musicBuffers.get(track);
+    if (cached) {
+      this.playBufferLooped(cached, track);
+      return;
+    }
+
+    this.loadAndPlayMusicFile(track);
+  }
+
+  /**
+   * Play the faction-flavored battle track for the given phase (tactical/
+   * combat/boss), falling back to the generic combat_* tracks for factions
+   * without their own Harmonia catalogue entry.
+   */
+  playFactionMusic(
+    factionId: FactionId,
+    phase: BattleMusicPhase = "combat",
+  ): void {
+    const prefix = FACTION_MUSIC_PREFIX[factionId];
+    if (!prefix) {
+      const fallback: MusicTrack =
+        phase === "boss"
+          ? "combat_high"
+          : phase === "tactical"
+            ? "combat_low"
+            : "combat_medium";
+      this.playMusic(fallback);
+      return;
+    }
+    this.playMusic(`${prefix}_${phase}` as MusicTrack);
+  }
+
+  /**
+   * Play the faction-flavored victory/defeat stinger, falling back to the
+   * shared common sting for factions without their own.
+   */
+  playFactionStinger(
+    factionId: FactionId,
+    outcome: "victory" | "defeat",
+  ): void {
+    const prefix = FACTION_MUSIC_PREFIX[factionId];
+    if (prefix === "heg" || prefix === "conf") {
+      this.playMusic(`${prefix}_${outcome}` as MusicTrack);
+      return;
+    }
+    this.playMusic(outcome === "victory" ? "victory_common" : "defeat_common");
+  }
+
+  private loadAndPlayMusicFile(track: MusicTrack): void {
+    const url = `${AudioManager.MUSIC_URL_PREFIX}${track}.mp3`;
+    fetch(url)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.arrayBuffer();
+      })
+      .then((buf) => this.context!.decodeAudioData(buf))
+      .then((audioBuf) => {
+        this.musicBuffers.set(track, audioBuf);
+        // Only play if this is still the current track (user may have switched)
+        if (this.currentMusicTrack === track) {
+          this.playBufferLooped(audioBuf, track);
+        }
+      })
+      .catch(() => {
+        this.missingMusicFiles.add(track);
+        if (this.currentMusicTrack === track) {
+          this.startProceduralMusic(track);
+        }
+      });
+  }
+
+  private playBufferLooped(buffer: AudioBuffer, track: MusicTrack): void {
+    if (!this.context || !this.musicGain) return;
+    const source = this.context.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.connect(this.musicGain);
+    source.start(0);
+    this.currentMusicSource = source;
+    this.currentMusicTrack = track;
   }
 
   /**
@@ -480,20 +636,55 @@ export class AudioManager {
     this.playMusicLoop(params);
   }
 
-  private getMusicParams(track: MusicTrack): { baseFreq: number; tempo: number; intensity: number } | null {
-    const params: Record<MusicTrack, { baseFreq: number; tempo: number; intensity: number }> = {
+  private getMusicParams(
+    track: MusicTrack,
+  ): { baseFreq: number; tempo: number; intensity: number } | null {
+    const params: Partial<
+      Record<MusicTrack, { baseFreq: number; tempo: number; intensity: number }>
+    > = {
       menu_theme: { baseFreq: 110, tempo: 0.5, intensity: 0.3 },
       combat_low: { baseFreq: 82.41, tempo: 0.8, intensity: 0.4 },
       combat_medium: { baseFreq: 110, tempo: 1.0, intensity: 0.6 },
       combat_high: { baseFreq: 146.83, tempo: 1.2, intensity: 0.8 },
       victory_sting: { baseFreq: 261.63, tempo: 0.5, intensity: 0.7 },
       defeat_sting: { baseFreq: 98, tempo: 0.3, intensity: 0.5 },
+      // Faction battle tracks — procedural stand-ins until Harmonia mp3s are
+      // generated; each faction gets a distinct base pitch/tempo character
+      // (disciplined/measured, scrappy/fast, mechanical, aggressive, ethereal).
+      heg_tactical: { baseFreq: 110, tempo: 0.6, intensity: 0.35 },
+      heg_combat: { baseFreq: 130.81, tempo: 1.0, intensity: 0.65 },
+      heg_boss: { baseFreq: 164.81, tempo: 1.2, intensity: 0.85 },
+      heg_victory: { baseFreq: 261.63, tempo: 0.5, intensity: 0.7 },
+      heg_defeat: { baseFreq: 98, tempo: 0.3, intensity: 0.5 },
+      conf_tactical: { baseFreq: 98, tempo: 0.7, intensity: 0.35 },
+      conf_combat: { baseFreq: 116.54, tempo: 1.15, intensity: 0.65 },
+      conf_boss: { baseFreq: 146.83, tempo: 1.3, intensity: 0.85 },
+      conf_victory: { baseFreq: 246.94, tempo: 0.55, intensity: 0.7 },
+      conf_defeat: { baseFreq: 92, tempo: 0.3, intensity: 0.5 },
+      syn_tactical: { baseFreq: 220, tempo: 0.9, intensity: 0.3 },
+      syn_combat: { baseFreq: 220, tempo: 1.3, intensity: 0.7 },
+      syn_boss: { baseFreq: 277.18, tempo: 1.4, intensity: 0.9 },
+      syn_awakening: { baseFreq: 196, tempo: 0.4, intensity: 0.4 },
+      cors_tactical: { baseFreq: 87.31, tempo: 0.8, intensity: 0.4 },
+      cors_combat: { baseFreq: 103.83, tempo: 1.25, intensity: 0.75 },
+      cors_boss: { baseFreq: 130.81, tempo: 1.45, intensity: 0.9 },
+      cors_heist: { baseFreq: 116.54, tempo: 1.0, intensity: 0.5 },
+      asc_tactical: { baseFreq: 174.61, tempo: 0.4, intensity: 0.25 },
+      asc_combat: { baseFreq: 196, tempo: 0.7, intensity: 0.55 },
+      asc_boss: { baseFreq: 220, tempo: 0.85, intensity: 0.75 },
+      asc_prophecy: { baseFreq: 174.61, tempo: 0.35, intensity: 0.3 },
+      victory_common: { baseFreq: 261.63, tempo: 0.5, intensity: 0.7 },
+      defeat_common: { baseFreq: 98, tempo: 0.3, intensity: 0.5 },
     };
 
-    return params[track] || null;
+    return params[track] ?? null;
   }
 
-  private playMusicLoop(params: { baseFreq: number; tempo: number; intensity: number }): void {
+  private playMusicLoop(params: {
+    baseFreq: number;
+    tempo: number;
+    intensity: number;
+  }): void {
     if (!this.context || !this.musicGain || !this.currentMusicTrack) return;
 
     const now = this.context.currentTime;
@@ -504,13 +695,16 @@ export class AudioManager {
 
     notes.forEach((freq, i) => {
       const osc = this.context!.createOscillator();
-      osc.type = 'sine';
+      osc.type = "sine";
       osc.frequency.value = freq;
 
       const gain = this.context!.createGain();
       gain.gain.setValueAtTime(0, now);
       gain.gain.linearRampToValueAtTime(0.1 * params.intensity, now + 0.5);
-      gain.gain.linearRampToValueAtTime(0.05 * params.intensity, now + beatDuration * 4 - 0.5);
+      gain.gain.linearRampToValueAtTime(
+        0.05 * params.intensity,
+        now + beatDuration * 4 - 0.5,
+      );
       gain.gain.linearRampToValueAtTime(0, now + beatDuration * 4);
 
       osc.connect(gain);
@@ -561,7 +755,9 @@ export class AudioManager {
   toggleMute(): void {
     this.settings.muted = !this.settings.muted;
     if (this.masterGain) {
-      this.masterGain.gain.value = this.settings.muted ? 0 : this.settings.masterVolume;
+      this.masterGain.gain.value = this.settings.muted
+        ? 0
+        : this.settings.masterVolume;
     }
     this.saveSettings();
   }
@@ -588,20 +784,20 @@ export class AudioManager {
 
   private loadSettings(): void {
     try {
-      const saved = localStorage.getItem('audio_settings');
+      const saved = localStorage.getItem("audio_settings");
       if (saved) {
         this.settings = { ...this.settings, ...JSON.parse(saved) };
       }
     } catch (e) {
-      console.warn('[AudioManager] Failed to load settings');
+      console.warn("[AudioManager] Failed to load settings");
     }
   }
 
   private saveSettings(): void {
     try {
-      localStorage.setItem('audio_settings', JSON.stringify(this.settings));
+      localStorage.setItem("audio_settings", JSON.stringify(this.settings));
     } catch (e) {
-      console.warn('[AudioManager] Failed to save settings');
+      console.warn("[AudioManager] Failed to save settings");
     }
   }
 }
