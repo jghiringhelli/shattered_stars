@@ -12,7 +12,8 @@
  *   parentContainer.add(btn)         // inside another container
  */
 
-import Phaser from 'phaser';
+import Phaser from "phaser";
+import { tweenScale, punch } from "./UIJuice";
 
 /** Configuration for {@link createHoverButton}. */
 export interface HoverButtonConfig {
@@ -54,16 +55,26 @@ export function createHoverButton(
   onClick: () => void,
 ): Phaser.GameObjects.Container {
   const {
-    width, height, radius = 8, color, label,
-    font = 'bold 18px Arial', textColor = '#ffffff', hoverScale = 1,
+    width,
+    height,
+    radius = 8,
+    color,
+    label,
+    font = "bold 18px Arial",
+    textColor = "#ffffff",
+    hoverScale = 1,
   } = config;
-  const hoverColor = config.hoverColor ?? Phaser.Display.Color.ValueToColor(color).lighten(20).color;
+  const hoverColor =
+    config.hoverColor ??
+    Phaser.Display.Color.ValueToColor(color).lighten(20).color;
   const halfW = width / 2;
   const halfH = height / 2;
 
   const container = scene.add.container(x, y);
   const bg = scene.add.graphics();
-  const text = scene.add.text(0, 0, label, { font, color: textColor }).setOrigin(0.5);
+  const text = scene.add
+    .text(0, 0, label, { font, color: textColor })
+    .setOrigin(0.5);
   container.add([bg, text]);
 
   const draw = (hover: boolean): void => {
@@ -77,9 +88,18 @@ export function createHoverButton(
     new Phaser.Geom.Rectangle(-halfW, -halfH, width, height),
     Phaser.Geom.Rectangle.Contains,
   );
-  container.on('pointerover', () => { draw(true); text.setScale(hoverScale); });
-  container.on('pointerout',  () => { draw(false); text.setScale(1); });
-  container.on('pointerdown', onClick);
+  container.on("pointerover", () => {
+    draw(true);
+    tweenScale(scene, text, hoverScale);
+  });
+  container.on("pointerout", () => {
+    draw(false);
+    tweenScale(scene, text, 1);
+  });
+  container.on("pointerdown", () => {
+    punch(scene, container, { scale: 1.06, durationMs: 140 });
+    onClick();
+  });
 
   return container;
 }
@@ -127,8 +147,14 @@ export function createToggleButton(
   onClick: () => void,
 ): Phaser.GameObjects.Container {
   const {
-    width, height, radius = 4, selectedColor, normalColor,
-    strokeColor = 0x66aaff, font = '10px Arial', selectedFont = 'bold 10px Arial',
+    width,
+    height,
+    radius = 4,
+    selectedColor,
+    normalColor,
+    strokeColor = 0x66aaff,
+    font = "10px Arial",
+    selectedFont = "bold 10px Arial",
   } = config;
   const halfW = width / 2;
   const halfH = height / 2;
@@ -143,12 +169,20 @@ export function createToggleButton(
   }
 
   const text = scene.add
-    .text(0, 0, label, { font: selected ? selectedFont : font, color: selected ? '#44ffaa' : '#666666' })
+    .text(0, 0, label, {
+      font: selected ? selectedFont : font,
+      color: selected ? "#44ffaa" : "#666666",
+    })
     .setOrigin(0.5);
 
-  const hitArea = scene.add.rectangle(0, 0, width, height).setInteractive({ useHandCursor: true });
+  const hitArea = scene.add
+    .rectangle(0, 0, width, height)
+    .setInteractive({ useHandCursor: true });
   container.add([bg, text, hitArea]);
-  hitArea.on('pointerdown', onClick);
+  hitArea.on("pointerdown", () => {
+    punch(scene, container, { scale: 1.1, durationMs: 160 });
+    onClick();
+  });
 
   return container;
 }

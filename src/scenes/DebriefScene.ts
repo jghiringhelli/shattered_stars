@@ -9,14 +9,26 @@
  * Triggered by CampaignBattleScene after victory.
  */
 
-import Phaser from 'phaser';
-import type { FactionId } from '../config';
-import { FACTION_COLORS } from '../config';
-import type { CampaignMission, DebriefLine, EvolutionOption } from '../data/CampaignData';
-import type { CampaignSaveData, CampaignPilotState } from '../systems/CampaignSaveManager';
-import { CampaignSaveManager } from '../systems/CampaignSaveManager';
-import { applyEvolution, getPilotDefinition, XP_THRESHOLDS } from '../systems/CampaignPilotManager';
-import type { LevelUpEvent } from '../systems/CampaignPilotManager';
+import Phaser from "phaser";
+import type { FactionId } from "../config";
+import { FACTION_COLORS } from "../config";
+import type {
+  CampaignMission,
+  DebriefLine,
+  EvolutionOption,
+} from "../data/CampaignData";
+import type {
+  CampaignSaveData,
+  CampaignPilotState,
+} from "../systems/CampaignSaveManager";
+import { CampaignSaveManager } from "../systems/CampaignSaveManager";
+import {
+  applyEvolution,
+  getPilotDefinition,
+  XP_THRESHOLDS,
+} from "../systems/CampaignPilotManager";
+import type { LevelUpEvent } from "../systems/CampaignPilotManager";
+import { fadeInScene } from "../ui/TexturedPanel";
 
 // ============================================
 // Scene Input Data
@@ -36,27 +48,27 @@ interface DebriefSceneData {
 }
 
 type DebriefState =
-  | 'dialogue_typing'
-  | 'dialogue_waiting'
-  | 'stats_animating'
-  | 'stats_waiting'
-  | 'evolution'
-  | 'transitioning';
+  | "dialogue_typing"
+  | "dialogue_waiting"
+  | "stats_animating"
+  | "stats_waiting"
+  | "evolution"
+  | "transitioning";
 
 const TYPEWRITER_INTERVAL_MS = 28;
 
 // Mood border colors
 const MOOD_COLORS: Record<string, number> = {
-  neutral:  0x334455,
-  proud:    0xffcc00,
-  solemn:   0x4488cc,
-  urgent:   0xffaa00,
-  grim:     0x882222,
+  neutral: 0x334455,
+  proud: 0xffcc00,
+  solemn: 0x4488cc,
+  urgent: 0xffaa00,
+  grim: 0x882222,
 };
 
 export class DebriefScene extends Phaser.Scene {
   private data_!: DebriefSceneData;
-  private state: DebriefState = 'dialogue_typing';
+  private state: DebriefState = "dialogue_typing";
 
   // Dialogue
   private lines: DebriefLine[] = [];
@@ -64,7 +76,7 @@ export class DebriefScene extends Phaser.Scene {
   private charIndex: number = 0;
   private typewriterTimer: Phaser.Time.TimerEvent | undefined = undefined;
   private talkTimer: Phaser.Time.TimerEvent | undefined = undefined;
-  private currentPortraitTex: string = 'portrait_command';
+  private currentPortraitTex: string = "portrait_command";
 
   // UI objects
   private bg!: Phaser.GameObjects.Graphics;
@@ -86,15 +98,16 @@ export class DebriefScene extends Phaser.Scene {
   private spaceKey?: Phaser.Input.Keyboard.Key;
 
   constructor() {
-    super({ key: 'DebriefScene' });
+    super({ key: "DebriefScene" });
   }
 
   create(data: DebriefSceneData): void {
+    fadeInScene(this);
     this.data_ = data;
     this.lines = [...(data.mission.debrief ?? [])];
     this.lineIndex = 0;
     this.charIndex = 0;
-    this.state = 'dialogue_typing';
+    this.state = "dialogue_typing";
 
     const factionColor = FACTION_COLORS[data.factionId] ?? 0x334466;
 
@@ -106,15 +119,17 @@ export class DebriefScene extends Phaser.Scene {
 
     // Input: space bar
     if (this.input.keyboard) {
-      this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+      this.spaceKey = this.input.keyboard.addKey(
+        Phaser.Input.Keyboard.KeyCodes.SPACE,
+      );
     }
 
     // Input: click anywhere
-    this.input.on('pointerdown', this.handleInput, this);
+    this.input.on("pointerdown", this.handleInput, this);
 
     if (this.lines.length === 0) {
       // No debrief text — go straight to stats
-      this.state = 'stats_animating';
+      this.state = "stats_animating";
       this.showStatsPanel();
     } else {
       this.showLine(0);
@@ -133,13 +148,13 @@ export class DebriefScene extends Phaser.Scene {
 
   private handleInput(): void {
     switch (this.state) {
-      case 'dialogue_typing':
+      case "dialogue_typing":
         this.skipTyping();
         break;
-      case 'dialogue_waiting':
+      case "dialogue_waiting":
         this.advanceLine();
         break;
-      case 'stats_waiting':
+      case "stats_waiting":
         this.proceedFromStats();
         break;
       default:
@@ -159,7 +174,7 @@ export class DebriefScene extends Phaser.Scene {
 
     // Subtle star field (static dots)
     this.bg.fillStyle(0xffffff, 0.5);
-    const rng = new Phaser.Math.RandomDataGenerator(['debrief_stars']);
+    const rng = new Phaser.Math.RandomDataGenerator(["debrief_stars"]);
     for (let i = 0; i < 80; i++) {
       const sx = rng.integerInRange(0, this.scale.width);
       const sy = rng.integerInRange(0, 500);
@@ -178,11 +193,19 @@ export class DebriefScene extends Phaser.Scene {
     this.topBar.fillStyle(0x000000, 0.4);
     this.topBar.fillRect(0, 48, this.scale.width, 2);
 
-    this.topBarText = this.add.text(
-      640, 24,
-      `MISSION ${mission.missionNumber}: ${mission.title.toUpperCase()}`,
-      { fontSize: '18px', fontFamily: 'monospace', color: '#ffffff', fontStyle: 'bold' }
-    ).setOrigin(0.5, 0.5);
+    this.topBarText = this.add
+      .text(
+        640,
+        24,
+        `MISSION ${mission.missionNumber}: ${mission.title.toUpperCase()}`,
+        {
+          fontSize: "18px",
+          fontFamily: "monospace",
+          color: "#ffffff",
+          fontStyle: "bold",
+        },
+      )
+      .setOrigin(0.5, 0.5);
   }
 
   // ============================================
@@ -192,7 +215,7 @@ export class DebriefScene extends Phaser.Scene {
   private createDialogueArea(factionColor: number): void {
     const portraitX = 40;
     const portraitY = 90;
-    const portraitW = 85;  // 2:3 ratio to match 512×768 source images
+    const portraitW = 85; // 2:3 ratio to match 512×768 source images
     const portraitH = 128;
     const textBoxX = portraitX + portraitW + 18;
     const textBoxY = portraitY - 8;
@@ -202,10 +225,19 @@ export class DebriefScene extends Phaser.Scene {
     // Portrait border
     this.portraitBorder = this.add.graphics();
     this.portraitBorder.lineStyle(3, factionColor, 1);
-    this.portraitBorder.strokeRect(portraitX - 3, portraitY - 3, portraitW + 6, portraitH + 6);
+    this.portraitBorder.strokeRect(
+      portraitX - 3,
+      portraitY - 3,
+      portraitW + 6,
+      portraitH + 6,
+    );
 
     // Portrait image (will update per line)
-    this.portraitImage = this.add.image(portraitX + portraitW / 2, portraitY + portraitH / 2, 'portrait_command');
+    this.portraitImage = this.add.image(
+      portraitX + portraitW / 2,
+      portraitY + portraitH / 2,
+      "portrait_command",
+    );
     this.portraitImage.setDisplaySize(portraitW, portraitH);
 
     // CRT scanline overlay — clipped to portrait bounds, scrolls downward
@@ -217,8 +249,12 @@ export class DebriefScene extends Phaser.Scene {
     this.portraitScanlines = this.add.graphics();
     this.portraitScanlines.setMask(scanMask);
     const scanSpacing = 4;
-    for (let sy = -scanSpacing; sy < portraitH + scanSpacing * 2; sy += scanSpacing) {
-      this.portraitScanlines.fillStyle(0x000000, 0.20);
+    for (
+      let sy = -scanSpacing;
+      sy < portraitH + scanSpacing * 2;
+      sy += scanSpacing
+    ) {
+      this.portraitScanlines.fillStyle(0x000000, 0.2);
       this.portraitScanlines.fillRect(portraitX, portraitY + sy, portraitW, 1);
     }
     this.tweens.add({
@@ -226,8 +262,10 @@ export class DebriefScene extends Phaser.Scene {
       y: scanSpacing,
       duration: 200,
       repeat: -1,
-      ease: 'Linear',
-      onRepeat: () => { this.portraitScanlines.y = 0; },
+      ease: "Linear",
+      onRepeat: () => {
+        this.portraitScanlines.y = 0;
+      },
     });
 
     // Flash overlay for speaker-change transition
@@ -237,45 +275,51 @@ export class DebriefScene extends Phaser.Scene {
     this.portraitFlash.setAlpha(0);
 
     // Speaker name label
-    this.speakerText = this.add.text(
-      portraitX, portraitY - 22,
-      '',
-      { fontSize: '13px', fontFamily: 'monospace', color: '#aabbcc', fontStyle: 'bold' }
-    );
+    this.speakerText = this.add.text(portraitX, portraitY - 22, "", {
+      fontSize: "13px",
+      fontFamily: "monospace",
+      color: "#aabbcc",
+      fontStyle: "bold",
+    });
 
     // Dialogue text box background
     this.dialogueBox = this.add.graphics();
     this.dialogueBox.fillStyle(0x000d1e, 0.88);
     this.dialogueBox.fillRoundedRect(textBoxX, textBoxY, textBoxW, textBoxH, 6);
     this.dialogueBox.lineStyle(1, 0x1a3a5a, 1);
-    this.dialogueBox.strokeRoundedRect(textBoxX, textBoxY, textBoxW, textBoxH, 6);
+    this.dialogueBox.strokeRoundedRect(
+      textBoxX,
+      textBoxY,
+      textBoxW,
+      textBoxH,
+      6,
+    );
 
     // Dialogue text
-    this.dialogueText = this.add.text(
-      textBoxX + 16, textBoxY + 14,
-      '',
-      {
-        fontSize: '16px',
-        fontFamily: 'monospace',
-        color: '#ddeeff',
-        wordWrap: { width: textBoxW - 32 },
-        lineSpacing: 4,
-      }
-    );
+    this.dialogueText = this.add.text(textBoxX + 16, textBoxY + 14, "", {
+      fontSize: "16px",
+      fontFamily: "monospace",
+      color: "#ddeeff",
+      wordWrap: { width: textBoxW - 32 },
+      lineSpacing: 4,
+    });
 
     // Line counter
     this.lineCounterText = this.add.text(
-      textBoxX + 16, textBoxY + textBoxH + 8,
-      '',
-      { fontSize: '12px', fontFamily: 'monospace', color: '#556677' }
+      textBoxX + 16,
+      textBoxY + textBoxH + 8,
+      "",
+      { fontSize: "12px", fontFamily: "monospace", color: "#556677" },
     );
 
     // Click / Space prompt
-    this.promptText = this.add.text(
-      1250, textBoxY + textBoxH + 8,
-      'CLICK OR SPACE TO CONTINUE',
-      { fontSize: '11px', fontFamily: 'monospace', color: '#445566' }
-    ).setOrigin(1, 0);
+    this.promptText = this.add
+      .text(1250, textBoxY + textBoxH + 8, "CLICK OR SPACE TO CONTINUE", {
+        fontSize: "11px",
+        fontFamily: "monospace",
+        color: "#445566",
+      })
+      .setOrigin(1, 0);
   }
 
   // ============================================
@@ -284,7 +328,7 @@ export class DebriefScene extends Phaser.Scene {
 
   private showLine(index: number): void {
     if (index >= this.lines.length) {
-      this.state = 'stats_animating';
+      this.state = "stats_animating";
       this.hideDialogueUI();
       this.showStatsPanel();
       return;
@@ -293,14 +337,16 @@ export class DebriefScene extends Phaser.Scene {
     const line = this.lines[index]!;
     this.lineIndex = index;
     this.charIndex = 0;
-    this.state = 'dialogue_typing';
+    this.state = "dialogue_typing";
 
     // Update portrait with flash if speaker changed
     const textureKey = line.portraitKey;
-    const tex = this.textures.exists(textureKey) ? textureKey : 'portrait_command';
+    const tex = this.textures.exists(textureKey)
+      ? textureKey
+      : "portrait_command";
     const prevTex = this.portraitImage.texture.key;
-    const hasTalkFrame = this.textures.get(tex).has('talk');
-    this.portraitImage.setTexture(tex, hasTalkFrame ? 'base' : undefined);
+    const hasTalkFrame = this.textures.get(tex).has("talk");
+    this.portraitImage.setTexture(tex, hasTalkFrame ? "base" : undefined);
     this.currentPortraitTex = tex;
 
     if (tex !== prevTex) {
@@ -311,7 +357,7 @@ export class DebriefScene extends Phaser.Scene {
         targets: this.portraitFlash,
         alpha: 0,
         duration: 280,
-        ease: 'Cubic.easeOut',
+        ease: "Cubic.easeOut",
       });
     }
 
@@ -325,8 +371,8 @@ export class DebriefScene extends Phaser.Scene {
         delay: 120,
         loop: true,
         callback: () => {
-          const onBase = this.portraitImage.frame.name === 'base';
-          this.portraitImage.setFrame(onBase ? 'talk' : 'base');
+          const onBase = this.portraitImage.frame.name === "base";
+          this.portraitImage.setFrame(onBase ? "talk" : "base");
         },
       });
     }
@@ -335,16 +381,17 @@ export class DebriefScene extends Phaser.Scene {
     this.speakerText.setText(line.speaker);
 
     // Update portrait border color by mood
-    const moodColor = MOOD_COLORS[line.mood ?? 'neutral'] ?? MOOD_COLORS['neutral']!;
+    const moodColor =
+      MOOD_COLORS[line.mood ?? "neutral"] ?? MOOD_COLORS["neutral"]!;
     this.portraitBorder.clear();
     this.portraitBorder.lineStyle(3, moodColor, 1);
-    this.portraitBorder.strokeRect(37, 87, 91, 134);  // 85+6 wide, 128+6 tall
+    this.portraitBorder.strokeRect(37, 87, 91, 134); // 85+6 wide, 128+6 tall
 
     // Update line counter
     this.lineCounterText.setText(`[${index + 1}/${this.lines.length}]`);
 
     // Clear text and start typewriter
-    this.dialogueText.setText('');
+    this.dialogueText.setText("");
 
     if (this.typewriterTimer) {
       this.typewriterTimer.remove();
@@ -358,7 +405,7 @@ export class DebriefScene extends Phaser.Scene {
         this.dialogueText.setText(line.text.slice(0, this.charIndex));
         if (this.charIndex >= line.text.length) {
           this.stopTalkAnimation();
-          this.state = 'dialogue_waiting';
+          this.state = "dialogue_waiting";
           this.promptText.setAlpha(1);
           this.blinkPrompt();
         }
@@ -375,7 +422,7 @@ export class DebriefScene extends Phaser.Scene {
       this.dialogueText.setText(line.text);
     }
     this.stopTalkAnimation();
-    this.state = 'dialogue_waiting';
+    this.state = "dialogue_waiting";
     this.promptText.setAlpha(1);
   }
 
@@ -384,8 +431,8 @@ export class DebriefScene extends Phaser.Scene {
       this.talkTimer.remove();
       this.talkTimer = undefined;
     }
-    if (this.textures.get(this.currentPortraitTex).has('talk')) {
-      this.portraitImage.setFrame('base');
+    if (this.textures.get(this.currentPortraitTex).has("talk")) {
+      this.portraitImage.setFrame("base");
     }
   }
 
@@ -402,7 +449,7 @@ export class DebriefScene extends Phaser.Scene {
       duration: 600,
       yoyo: true,
       repeat: -1,
-      ease: 'Sine.easeInOut',
+      ease: "Sine.easeInOut",
     });
   }
 
@@ -437,8 +484,16 @@ export class DebriefScene extends Phaser.Scene {
     this.statsContainer.removeAll(true);
     this.statsContainer.setVisible(true);
 
-    const { mission, xpEarned, creditsEarned, kills, shipsLost,
-            preMissionSave, updatedSave, levelUpEvents } = this.data_;
+    const {
+      mission,
+      xpEarned,
+      creditsEarned,
+      kills,
+      shipsLost,
+      preMissionSave,
+      updatedSave,
+      levelUpEvents,
+    } = this.data_;
 
     const panelY = 70;
     const cardH = 500;
@@ -450,27 +505,38 @@ export class DebriefScene extends Phaser.Scene {
     leftG.lineStyle(1, 0x1a3a5a, 1);
     leftG.strokeRoundedRect(40, panelY, 560, cardH, 8);
 
-    const missionLabel = this.add.text(
-      320, panelY + 20, 'MISSION RESULTS',
-      { fontSize: '20px', fontFamily: 'monospace', color: '#aaddff', fontStyle: 'bold' }
-    ).setOrigin(0.5, 0);
+    const missionLabel = this.add
+      .text(320, panelY + 20, "MISSION RESULTS", {
+        fontSize: "20px",
+        fontFamily: "monospace",
+        color: "#aaddff",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5, 0);
 
     const resultItems = [
-      { label: 'ENEMY SHIPS DESTROYED', value: `${kills}` },
-      { label: 'SHIPS LOST', value: `${shipsLost}` },
-      { label: 'XP EARNED', value: `+${xpEarned}` },
-      { label: 'CREDITS EARNED', value: `+${creditsEarned}` },
+      { label: "ENEMY SHIPS DESTROYED", value: `${kills}` },
+      { label: "SHIPS LOST", value: `${shipsLost}` },
+      { label: "XP EARNED", value: `+${xpEarned}` },
+      { label: "CREDITS EARNED", value: `+${creditsEarned}` },
     ];
 
     const resultTexts: Phaser.GameObjects.Text[] = [];
     resultItems.forEach((item, i) => {
       const y = panelY + 70 + i * 60;
       const labelText = this.add.text(60, y, item.label, {
-        fontSize: '14px', fontFamily: 'monospace', color: '#556677',
+        fontSize: "14px",
+        fontFamily: "monospace",
+        color: "#556677",
       });
-      const valueText = this.add.text(585, y, item.value, {
-        fontSize: '18px', fontFamily: 'monospace', color: '#ffffff', fontStyle: 'bold',
-      }).setOrigin(1, 0);
+      const valueText = this.add
+        .text(585, y, item.value, {
+          fontSize: "18px",
+          fontFamily: "monospace",
+          color: "#ffffff",
+          fontStyle: "bold",
+        })
+        .setOrigin(1, 0);
       resultTexts.push(labelText, valueText);
     });
 
@@ -483,26 +549,39 @@ export class DebriefScene extends Phaser.Scene {
     rightG.lineStyle(1, 0x1a3a5a, 1);
     rightG.strokeRoundedRect(680, panelY, 560, cardH, 8);
 
-    const pilotLabel = this.add.text(
-      960, panelY + 20, 'PILOT PROGRESSION',
-      { fontSize: '20px', fontFamily: 'monospace', color: '#aaddff', fontStyle: 'bold' }
-    ).setOrigin(0.5, 0);
+    const pilotLabel = this.add
+      .text(960, panelY + 20, "PILOT PROGRESSION", {
+        fontSize: "20px",
+        fontFamily: "monospace",
+        color: "#aaddff",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5, 0);
 
     const pilotTexts: Phaser.GameObjects.GameObject[] = [];
     const pilots = updatedSave.campaignPilots;
 
     pilots.forEach((pilot, i) => {
       const def = getPilotDefinition(this.data_.factionId, pilot.pilotId);
-      const pilotName = def ? (def.callsign ?? def.displayName) : pilot.pilotId.toUpperCase();
+      const pilotName = def
+        ? (def.callsign ?? def.displayName)
+        : pilot.pilotId.toUpperCase();
       const py = panelY + 75 + i * 140;
 
       const nameText = this.add.text(700, py, pilotName, {
-        fontSize: '15px', fontFamily: 'monospace', color: '#ddeeff', fontStyle: 'bold',
+        fontSize: "15px",
+        fontFamily: "monospace",
+        color: "#ddeeff",
+        fontStyle: "bold",
       });
 
-      const skillText = this.add.text(1225, py, `SKILL ${pilot.pilotSkill}`, {
-        fontSize: '14px', fontFamily: 'monospace', color: '#aabbcc',
-      }).setOrigin(1, 0);
+      const skillText = this.add
+        .text(1225, py, `SKILL ${pilot.pilotSkill}`, {
+          fontSize: "14px",
+          fontFamily: "monospace",
+          color: "#aabbcc",
+        })
+        .setOrigin(1, 0);
 
       // Ship thumbnail (44×44) — right side of row
       const shipKey = `ship_${pilot.currentShipId}`;
@@ -521,7 +600,9 @@ export class DebriefScene extends Phaser.Scene {
       barBgG.fillRoundedRect(700, py + 24, 460, 14, 4);
 
       // XP bar fill — calculate from pre-mission XP
-      const prePilot = preMissionSave.campaignPilots.find((p) => p.pilotId === pilot.pilotId);
+      const prePilot = preMissionSave.campaignPilots.find(
+        (p) => p.pilotId === pilot.pilotId,
+      );
       const preXp = prePilot?.xp ?? 0;
       const skill = pilot.pilotSkill;
       const levelStart = XP_THRESHOLDS[skill] ?? 0;
@@ -529,15 +610,19 @@ export class DebriefScene extends Phaser.Scene {
       const levelRange = levelEnd - levelStart;
       const postXp = pilot.xp;
 
-      const preRatio = levelRange > 0 ? Math.min(1, (preXp - levelStart) / levelRange) : 1;
-      const postRatio = levelRange > 0 ? Math.min(1, (postXp - levelStart) / levelRange) : 1;
+      const preRatio =
+        levelRange > 0 ? Math.min(1, (preXp - levelStart) / levelRange) : 1;
+      const postRatio =
+        levelRange > 0 ? Math.min(1, (postXp - levelStart) / levelRange) : 1;
 
       const barFillG = this.add.graphics();
       barFillG.fillStyle(0x2266aa, 1);
       barFillG.fillRoundedRect(700, py + 24, 460 * preRatio, 14, 4);
 
       const xpText = this.add.text(700, py + 44, `${preXp} XP`, {
-        fontSize: '12px', fontFamily: 'monospace', color: '#445566',
+        fontSize: "12px",
+        fontFamily: "monospace",
+        color: "#445566",
       });
 
       const extras: Phaser.GameObjects.GameObject[] = [shipBorder];
@@ -550,14 +635,16 @@ export class DebriefScene extends Phaser.Scene {
         from: preRatio,
         to: postRatio,
         duration: 1200,
-        ease: 'Cubic.easeOut',
+        ease: "Cubic.easeOut",
         delay: i * 200,
         onUpdate: (tween) => {
           const ratio = tween.getValue() ?? 0;
           barFillG.clear();
           barFillG.fillStyle(0x2266aa, 1);
           barFillG.fillRoundedRect(700, py + 24, 460 * ratio, 14, 4);
-          xpText.setText(`${Math.floor(preXp + (postXp - preXp) * (tween.progress))} XP`);
+          xpText.setText(
+            `${Math.floor(preXp + (postXp - preXp) * tween.progress)} XP`,
+          );
         },
         onComplete: () => {
           xpText.setText(`${postXp} XP`);
@@ -569,18 +656,20 @@ export class DebriefScene extends Phaser.Scene {
     this.statsContainer.add([rightG, pilotLabel, ...pilotTexts]);
 
     // CONTINUE button
-    const continueBtn = this.add.text(
-      640, panelY + cardH + 24, '[ CONTINUE ]',
-      {
-        fontSize: '18px', fontFamily: 'monospace', color: '#7799bb',
-        fontStyle: 'bold',
-      }
-    ).setOrigin(0.5, 0).setInteractive({ useHandCursor: true });
+    const continueBtn = this.add
+      .text(640, panelY + cardH + 24, "[ CONTINUE ]", {
+        fontSize: "18px",
+        fontFamily: "monospace",
+        color: "#7799bb",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5, 0)
+      .setInteractive({ useHandCursor: true });
 
-    continueBtn.on('pointerover', () => continueBtn.setColor('#aaddff'));
-    continueBtn.on('pointerout', () => continueBtn.setColor('#7799bb'));
-    continueBtn.on('pointerdown', () => {
-      if (this.state === 'stats_waiting') {
+    continueBtn.on("pointerover", () => continueBtn.setColor("#aaddff"));
+    continueBtn.on("pointerout", () => continueBtn.setColor("#7799bb"));
+    continueBtn.on("pointerdown", () => {
+      if (this.state === "stats_waiting") {
         this.proceedFromStats();
       }
     });
@@ -590,7 +679,7 @@ export class DebriefScene extends Phaser.Scene {
     // Set state after XP animations complete
     const maxDelay = (pilots.length - 1) * 200 + 1400;
     this.time.delayedCall(maxDelay, () => {
-      this.state = 'stats_waiting';
+      this.state = "stats_waiting";
     });
   }
 
@@ -598,15 +687,21 @@ export class DebriefScene extends Phaser.Scene {
     pilot: CampaignPilotState,
     levelUpEvents: LevelUpEvent[],
     rowY: number,
-    container: Phaser.GameObjects.GameObject[]
+    container: Phaser.GameObjects.GameObject[],
   ): void {
     const events = levelUpEvents.filter((e) => e.pilotId === pilot.pilotId);
     if (events.length === 0) return;
 
     const levelUpText = this.add.text(
-      700, rowY + 62,
-      `★ LEVEL UP!  Skill ${pilot.pilotSkill}  —  New: ${events.map((e) => e.newAbilityId.replace(/_/g, ' ').toUpperCase()).join(', ')}`,
-      { fontSize: '13px', fontFamily: 'monospace', color: '#ffcc00', fontStyle: 'bold' }
+      700,
+      rowY + 62,
+      `★ LEVEL UP!  Skill ${pilot.pilotSkill}  —  New: ${events.map((e) => e.newAbilityId.replace(/_/g, " ").toUpperCase()).join(", ")}`,
+      {
+        fontSize: "13px",
+        fontFamily: "monospace",
+        color: "#ffcc00",
+        fontStyle: "bold",
+      },
     );
 
     container.push(levelUpText);
@@ -618,7 +713,7 @@ export class DebriefScene extends Phaser.Scene {
       duration: 700,
       yoyo: true,
       repeat: 3,
-      ease: 'Sine.easeInOut',
+      ease: "Sine.easeInOut",
     });
   }
 
@@ -646,20 +741,31 @@ export class DebriefScene extends Phaser.Scene {
     overlay.fillRect(0, 0, this.scale.width, this.scale.height);
 
     // Title
-    const titleText = this.add.text(
-      640, 40, 'CHOOSE YOUR DESTINY',
-      { fontSize: '24px', fontFamily: 'monospace', color: '#aaddff', fontStyle: 'bold' }
-    ).setOrigin(0.5, 0);
+    const titleText = this.add
+      .text(640, 40, "CHOOSE YOUR DESTINY", {
+        fontSize: "24px",
+        fontFamily: "monospace",
+        color: "#aaddff",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5, 0);
 
-    const promptTxt = this.add.text(
-      640, 82, choice.promptText,
-      { fontSize: '14px', fontFamily: 'monospace', color: '#778899', wordWrap: { width: 900 } }
-    ).setOrigin(0.5, 0);
+    const promptTxt = this.add
+      .text(640, 82, choice.promptText, {
+        fontSize: "14px",
+        fontFamily: "monospace",
+        color: "#778899",
+        wordWrap: { width: 900 },
+      })
+      .setOrigin(0.5, 0);
 
-    const warningText = this.add.text(
-      640, 680, '⚠ THIS CHOICE IS PERMANENT',
-      { fontSize: '13px', fontFamily: 'monospace', color: '#aa4444' }
-    ).setOrigin(0.5, 0.5);
+    const warningText = this.add
+      .text(640, 680, "⚠ THIS CHOICE IS PERMANENT", {
+        fontSize: "13px",
+        fontFamily: "monospace",
+        color: "#aa4444",
+      })
+      .setOrigin(0.5, 0.5);
 
     this.evolutionContainer.add([overlay, titleText, promptTxt, warningText]);
 
@@ -676,7 +782,7 @@ export class DebriefScene extends Phaser.Scene {
     x: number,
     y: number,
     factionColor: number,
-    save: CampaignSaveData
+    save: CampaignSaveData,
   ): void {
     const cardW = 540;
     const cardH = 460;
@@ -691,74 +797,114 @@ export class DebriefScene extends Phaser.Scene {
     headerG.fillStyle(factionColor, 0.25);
     headerG.fillRoundedRect(x, y, cardW, 48, { tl: 10, tr: 10, bl: 0, br: 0 });
 
-    const labelText = this.add.text(
-      x + cardW / 2, y + 24, option.label,
-      { fontSize: '18px', fontFamily: 'monospace', color: '#ffffff', fontStyle: 'bold' }
-    ).setOrigin(0.5, 0.5);
+    const labelText = this.add
+      .text(x + cardW / 2, y + 24, option.label, {
+        fontSize: "18px",
+        fontFamily: "monospace",
+        color: "#ffffff",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5, 0.5);
 
-    const descText = this.add.text(
-      x + 20, y + 60, option.description,
-      { fontSize: '14px', fontFamily: 'monospace', color: '#99bbdd', wordWrap: { width: cardW - 40 }, lineSpacing: 3 }
-    );
+    const descText = this.add.text(x + 20, y + 60, option.description, {
+      fontSize: "14px",
+      fontFamily: "monospace",
+      color: "#99bbdd",
+      wordWrap: { width: cardW - 40 },
+      lineSpacing: 3,
+    });
 
     const bonusList = Object.entries(option.statBonuses)
       .filter(([, v]) => v !== undefined && v !== 0)
       .map(([k, v]) => `  +${v} ${k.toUpperCase()}`)
-      .join('\n');
+      .join("\n");
     const bonusText = this.add.text(
-      x + 20, y + 160,
-      bonusList.length > 0 ? `STAT BONUSES:\n${bonusList}` : 'STAT BONUSES: None',
-      { fontSize: '13px', fontFamily: 'monospace', color: '#66cc88', lineSpacing: 4 }
+      x + 20,
+      y + 160,
+      bonusList.length > 0
+        ? `STAT BONUSES:\n${bonusList}`
+        : "STAT BONUSES: None",
+      {
+        fontSize: "13px",
+        fontFamily: "monospace",
+        color: "#66cc88",
+        lineSpacing: 4,
+      },
     );
 
     const abilityLabel = this.add.text(
-      x + 20, y + 270,
-      `GRANTS ABILITY:\n  ${option.grantAbilityId.replace(/_/g, ' ').toUpperCase()}`,
-      { fontSize: '13px', fontFamily: 'monospace', color: '#ffcc44', lineSpacing: 4 }
-    );
-
-    const flavorText = this.add.text(
-      x + 20, y + 340,
-      option.flavorText,
+      x + 20,
+      y + 270,
+      `GRANTS ABILITY:\n  ${option.grantAbilityId.replace(/_/g, " ").toUpperCase()}`,
       {
-        fontSize: '12px', fontFamily: 'monospace', color: '#445566',
-        wordWrap: { width: cardW - 40 }, fontStyle: 'italic',
-      }
+        fontSize: "13px",
+        fontFamily: "monospace",
+        color: "#ffcc44",
+        lineSpacing: 4,
+      },
     );
 
-    const chooseBtn = this.add.text(
-      x + cardW / 2, y + cardH - 28, '[ SELECT ]',
-      { fontSize: '16px', fontFamily: 'monospace', color: '#7799bb', fontStyle: 'bold' }
-    ).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
+    const flavorText = this.add.text(x + 20, y + 340, option.flavorText, {
+      fontSize: "12px",
+      fontFamily: "monospace",
+      color: "#445566",
+      wordWrap: { width: cardW - 40 },
+      fontStyle: "italic",
+    });
 
-    chooseBtn.on('pointerover', () => {
-      chooseBtn.setColor('#aaddff');
+    const chooseBtn = this.add
+      .text(x + cardW / 2, y + cardH - 28, "[ SELECT ]", {
+        fontSize: "16px",
+        fontFamily: "monospace",
+        color: "#7799bb",
+        fontStyle: "bold",
+      })
+      .setOrigin(0.5, 0.5)
+      .setInteractive({ useHandCursor: true });
+
+    chooseBtn.on("pointerover", () => {
+      chooseBtn.setColor("#aaddff");
       this.tweens.add({ targets: cardG, alpha: 0.95, duration: 100 });
     });
-    chooseBtn.on('pointerout', () => {
-      chooseBtn.setColor('#7799bb');
+    chooseBtn.on("pointerout", () => {
+      chooseBtn.setColor("#7799bb");
     });
-    chooseBtn.on('pointerdown', () => {
-      if (this.state !== 'evolution') return;
+    chooseBtn.on("pointerdown", () => {
+      if (this.state !== "evolution") return;
       this.applyEvolutionChoice(option, save);
     });
 
-    this.evolutionContainer.add([cardG, headerG, labelText, descText, bonusText, abilityLabel, flavorText, chooseBtn]);
+    this.evolutionContainer.add([
+      cardG,
+      headerG,
+      labelText,
+      descText,
+      bonusText,
+      abilityLabel,
+      flavorText,
+      chooseBtn,
+    ]);
   }
 
-  private applyEvolutionChoice(option: EvolutionOption, save: CampaignSaveData): void {
-    this.state = 'transitioning';
+  private applyEvolutionChoice(
+    option: EvolutionOption,
+    save: CampaignSaveData,
+  ): void {
+    this.state = "transitioning";
 
     // Find protagonist and apply evolution
     const updatedPilots = save.campaignPilots.map((pilot) => {
       const def = getPilotDefinition(this.data_.factionId, pilot.pilotId);
-      if (def?.role === 'protagonist') {
+      if (def?.role === "protagonist") {
         return applyEvolution(pilot, option);
       }
       return pilot;
     });
 
-    const finalSave = CampaignSaveManager.applyEvolutionChoice(save, updatedPilots);
+    const finalSave = CampaignSaveManager.applyEvolutionChoice(
+      save,
+      updatedPilots,
+    );
     void finalSave; // save is applied to localStorage by applyEvolutionChoice
 
     this.transitionToCampaign();
@@ -775,23 +921,32 @@ export class DebriefScene extends Phaser.Scene {
       mission.evolutionChoice
         ? p.evolutionChoiceIds.includes(mission.evolutionChoice.optionA.id) ||
           p.evolutionChoiceIds.includes(mission.evolutionChoice.optionB.id)
-        : false
+        : false,
     );
 
     if (hasEvolution && !alreadyChosen) {
-      this.state = 'evolution';
+      this.state = "evolution";
       this.showEvolutionPanel();
     } else {
-      this.state = 'transitioning';
+      this.state = "transitioning";
       this.transitionToCampaign();
     }
   }
 
   private transitionToCampaign(): void {
-    this.cameras.main.fade(600, 0, 0, 0, false, (_cam: Phaser.Cameras.Scene2D.Camera, progress: number) => {
-      if (progress === 1) {
-        this.scene.start('CampaignScene', { factionId: this.data_.factionId });
-      }
-    });
+    this.cameras.main.fade(
+      600,
+      0,
+      0,
+      0,
+      false,
+      (_cam: Phaser.Cameras.Scene2D.Camera, progress: number) => {
+        if (progress === 1) {
+          this.scene.start("CampaignScene", {
+            factionId: this.data_.factionId,
+          });
+        }
+      },
+    );
   }
 }

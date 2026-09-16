@@ -1,5 +1,18 @@
 import Phaser from "phaser";
 
+/**
+ * Fade the scene's camera in from black. Cheap, self-contained (doesn't
+ * delay create() logic), used by addSceneBackground()/addPaintedSpaceBackground()
+ * so every scene that decorates itself with either gets a smooth arrival for
+ * free instead of a hard instant cut. Safe to call more than once per scene.
+ *
+ * @param scene - The Phaser scene to fade in.
+ * @param durationMs - Fade duration in ms (default 200).
+ */
+export function fadeInScene(scene: Phaser.Scene, durationMs = 200): void {
+  scene.cameras.main.fadeIn(durationMs, 0, 0, 0);
+}
+
 /** Configuration for a textured panel container. */
 export interface TexturedPanelOptions {
   /** Horizontal center in local parent coordinates. */
@@ -76,6 +89,7 @@ export function createTexturedPanel(
  * @param scene - The Phaser scene to add the image into.
  */
 export function addSceneBackground(scene: Phaser.Scene): void {
+  fadeInScene(scene);
   if (!scene.textures.exists("tex_menu_bg")) return;
   const { width, height } = scene.scale;
   scene.add
@@ -108,6 +122,7 @@ export function addPaintedSpaceBackground(
   scrollFactor = 1,
   alpha = 1,
 ): void {
+  fadeInScene(scene);
   const key = `bg_${textureId}`;
   if (!scene.textures.exists(key)) return;
   const { width, height } = scene.scale;

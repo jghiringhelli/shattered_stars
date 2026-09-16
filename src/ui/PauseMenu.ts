@@ -7,6 +7,7 @@
 
 import Phaser from "phaser";
 import { createHoverButton } from "./ButtonFactory";
+import { showConfirmDialog } from "./ConfirmDialog";
 
 export interface PauseMenuConfig {
   scene: Phaser.Scene;
@@ -115,7 +116,11 @@ export class PauseMenu extends Phaser.GameObjects.Container {
       180,
       { ...btnConfig, color: 0x662222, label: "QUIT TO MENU" },
       () => {
-        this.onQuit();
+        showConfirmDialog({
+          scene: config.scene,
+          message: "Quit to menu? Battle progress will be lost.",
+          onConfirm: () => this.onQuit(),
+        });
       },
     ).setScrollFactor(0);
     this.panel.add(quitBtn);

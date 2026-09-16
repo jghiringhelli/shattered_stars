@@ -15,6 +15,7 @@ import {
   MENU_BUTTON_HEIGHT,
   MENU_BUTTON_RADIUS,
 } from "../ui/MenuSelection";
+import { punch } from "../ui/UIJuice";
 import {
   createTexturedPanel,
   addSceneBackground,
@@ -183,6 +184,7 @@ export class MainMenuScene extends Phaser.Scene {
     separator.lineBetween(centerX - 120, separatorY, centerX + 120, separatorY);
 
     applyMenuSelection(
+      this,
       this.menuItems,
       this.selectedIndex,
       this.texturesAvailable,
@@ -244,6 +246,7 @@ export class MainMenuScene extends Phaser.Scene {
     container.on("pointerover", () => {
       this.selectedIndex = this.menuItems.indexOf(container);
       applyMenuSelection(
+        this,
         this.menuItems,
         this.selectedIndex,
         this.texturesAvailable,
@@ -263,6 +266,7 @@ export class MainMenuScene extends Phaser.Scene {
       } while (!this.menuItems[this.selectedIndex]?.getData("enabled"));
       audioManager.playSound("ui_hover", 0.5);
       applyMenuSelection(
+        this,
         this.menuItems,
         this.selectedIndex,
         this.texturesAvailable,
@@ -275,6 +279,7 @@ export class MainMenuScene extends Phaser.Scene {
       } while (!this.menuItems[this.selectedIndex]?.getData("enabled"));
       audioManager.playSound("ui_hover", 0.5);
       applyMenuSelection(
+        this,
         this.menuItems,
         this.selectedIndex,
         this.texturesAvailable,
@@ -296,6 +301,7 @@ export class MainMenuScene extends Phaser.Scene {
 
     audioManager.playSound("ui_select", 0.7);
     this.cameras.main.flash(100, 68, 170, 255, false);
+    punch(this, item, { scale: 1.12, durationMs: 180 });
     (item.getData("action") as () => void)();
   }
 }
