@@ -11,10 +11,11 @@
 
 import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
+import { addShipVisual } from "../rendering/ShipVisual";
 import { createHoverButton, createToggleButton } from "../ui/ButtonFactory";
 import { quickTipLine } from "../ui/ControlsReference";
 import type { FactionId } from "../config";
-import { BATTLEFIELD_SIZE, FACTION_COLORS, SHIP_SIZES } from "../config";
+import { BATTLEFIELD_SIZE, SHIP_SIZES } from "../config";
 import {
   getShipDefinition,
   getShipsByFaction,
@@ -138,6 +139,7 @@ export class DogfightScene extends Phaser.Scene {
   private roundText!: Phaser.GameObjects.Text;
   private timerText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
+  private controlsHintText!: Phaser.GameObjects.Text;
   /** Setup-screen objects, tracked individually — see track()'s doc comment for why. */
   private setupObjects: Phaser.GameObjects.GameObject[] = [];
   private pauseMenu!: PauseMenu;
@@ -679,7 +681,7 @@ export class DogfightScene extends Phaser.Scene {
     this.setupObjects = [];
     this.isSetupPhase = false;
 
-    audioManager.playMusic("combat_high");
+    audioManager.playFactionMusic(this.playerFaction, "combat");
 
     this.createHUD();
     this.setupInput();
@@ -869,7 +871,7 @@ export class DogfightScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(1000);
 
-    this.add
+    this.controlsHintText = this.add
       .text(
         this.scale.width / 2,
         this.scale.height - 25,
@@ -1013,38 +1015,17 @@ export class DogfightScene extends Phaser.Scene {
     ) as unknown as ShipSprite;
     container.shipId = ship.id;
 
-    const color = FACTION_COLORS[ship.faction] ?? 0xffffff;
     const shipDef = getShipDefinition(ship.definitionId);
     const sizeName = shipDef?.baseStats.size ?? "medium";
     const size = SHIP_SIZES[sizeName] ?? SHIP_SIZES.medium;
 
-    const indivKey = `ship_${ship.definitionId}`;
-    const bootKey = `ship_${ship.faction}_${sizeName}`;
-    const textureKey = this.textures.exists(indivKey)
-      ? indivKey
-      : this.textures.exists(bootKey)
-        ? bootKey
-        : null;
-
-    if (textureKey) {
-      const img = this.add.image(0, 0, textureKey);
-      img.setDisplaySize(size * 1.8, size * 1.8);
-      img.setBlendMode(Phaser.BlendModes.ADD);
-      container.add(img);
-    } else {
-      const body = this.add.graphics();
-      body.fillStyle(color, 1);
-      body.beginPath();
-      body.moveTo(0, -size / 2);
-      body.lineTo(-size / 3, size / 2);
-      body.lineTo(0, size / 3);
-      body.lineTo(size / 3, size / 2);
-      body.closePath();
-      body.fillPath();
-      body.lineStyle(2, 0xffffff, 0.9);
-      body.strokePath();
-      container.add(body);
-    }
+    addShipVisual(this, container, {
+      definitionId: ship.definitionId,
+      faction: ship.faction,
+      fallbackSizeName: sizeName,
+      size,
+      isPlayer: ship.owner === "player",
+    });
 
     container.setAngle(ship.angle);
     container.setDepth(10);
@@ -1205,8 +1186,10 @@ export class DogfightScene extends Phaser.Scene {
         const shieldDmg = Math.min(target.shields, damage);
         target.shields -= shieldDmg;
         damage -= shieldDmg;
+        audioManager.playSound("shield_hit", 0.4);
       }
       if (damage > 0) {
+        audioManager.playSound("hull_hit", 0.4);
         const wasAlive = target.hull > 0;
         target.hull = Math.max(0, target.hull - damage);
         if (wasAlive && target.hull <= 0) {
@@ -1470,6 +1453,11 @@ export class DogfightScene extends Phaser.Scene {
     // player may have zoomed with the mouse wheel during the match, which
     // would make REMATCH/MENU unclickable below if left as-is.
     this.cameras.main.setZoom(1.0);
+    // Hide the in-battle HUD — previously bled through the semi-transparent overlay.
+    this.roundText.setVisible(false);
+    this.timerText.setVisible(false);
+    this.scoreText.setVisible(false);
+    this.controlsHintText.setVisible(false);
 
     const centerX = this.scale.width / 2;
     const centerY = this.scale.height / 2;
@@ -1483,6 +1471,10 @@ export class DogfightScene extends Phaser.Scene {
     const playerWon = this.playerWins > this.enemyWins;
     const title = playerWon ? "MATCH WON!" : "MATCH LOST";
     const color = playerWon ? "#44ff44" : "#ff4444";
+    audioManager.playFactionStinger(
+      this.playerFaction,
+      playerWon ? "victory" : "defeat",
+    );
 
     this.add
       .text(centerX, centerY - 80, title, {

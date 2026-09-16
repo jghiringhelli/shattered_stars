@@ -25,6 +25,7 @@ import { findClosestEnemy } from "../systems/BattleHelpers";
 import { HealthBar } from "../ui/HealthBar";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
+import { audioManager } from "../audio/AudioManager";
 import {
   createPerformanceState,
   updateFPS,
@@ -184,8 +185,10 @@ export abstract class ContinuousBaseScene<
       const absorbed = Math.min(target.shields, damage);
       target.shields -= absorbed;
       damage -= absorbed;
+      audioManager.playSound("shield_hit", 0.4);
     }
     if (damage > 0) {
+      audioManager.playSound("hull_hit", 0.4);
       if (target.capitalSystems) {
         const result = applyCapitalSystemDamage(target.capitalSystems, damage);
         target.capitalSystems = result.systems;

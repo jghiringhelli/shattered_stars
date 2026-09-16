@@ -5,6 +5,8 @@
 
 import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
+import { addShipVisual } from "../rendering/ShipVisual";
+import { showConfirmDialog } from "../ui/ConfirmDialog";
 import type { ShipState } from "../core/types";
 import {
   createControlState,
@@ -262,6 +264,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   /** Per-tick support-aura buffs keyed by ship id (recomputed in updateAuras). */
   private activeAuras: ReadonlyMap<string, ActiveAura> = new Map();
+  /** Tracks whether the player's ship was under a support aura last tick (rising-edge SFX cue). */
+  private playerWasAuraCovered = false;
 
   private playerShipId: string | null = null;
 
@@ -376,6 +380,12 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private ordnanceHudTexts: Phaser.GameObjects.Text[] = [];
   /** -1 = primary laser; 0/1/2 = ordnance slot index */
   private selectedWeaponSlot = -1;
+  /** Backdrop panels for the top-left stats, score, timer, and controls
+   * reminder, plus the reminder's text lines — hidden alongside their
+   * content on the end screen. */
+  private hudBackgroundPanels: Array<
+    Phaser.GameObjects.Graphics | Phaser.GameObjects.Text
+  > = [];
   private crewModeText!: Phaser.GameObjects.Text;
 
   constructor() {
@@ -449,6 +459,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.spawnShips();
     this.createHealthBars();
     if (showMinimap) this.createMinimap();
+    audioManager.playFactionMusic(this.playerFaction, "combat");
 
     if (ShipTelemetry.isEnabled()) {
       this.telemetry = new ShipTelemetry();
@@ -513,6 +524,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
       width: 150,
       height: 150,
     });
+    const mapLabel = this.add
+      .text(this.scale.width - 160, this.scale.height - 176, "MAP", {
+        font: "bold 12px monospace",
+        color: "#5a7a9a",
+      })
+      .setScrollFactor(0)
+      .setDepth(1000);
+    this.hudBackgroundPanels.push(mapLabel);
   }
 
   update(time: number): void {
@@ -761,7 +780,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
       .setScrollFactor(0);
     quitBtn.on("pointerover", () => quitBtn.setColor("#ffffff"));
     quitBtn.on("pointerout", () => quitBtn.setColor("#ff5555"));
-    quitBtn.on("pointerdown", () => this.scene.start("MainMenuScene"));
+    quitBtn.on("pointerdown", () => {
+      showConfirmDialog({
+        scene: this,
+        message: "Quit to menu? Battle progress will be lost.",
+        onConfirm: () => this.scene.start("MainMenuScene"),
+      });
+    });
     this.pauseOverlay.add(quitBtn);
 
     // — Right column: controls reference —
@@ -1114,7 +1139,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
       // Update cooldowns
       ship.control = updateCooldowns(ship.control, deltaMs);
+      const wasReady = ship.ordnanceSlots.map(canFireOrdnance);
       tickOrdnanceCooldowns(ship.ordnanceSlots, deltaMs);
+      if (ship.id === this.playerShipId) {
+        const becameReady = ship.ordnanceSlots.some(
+          (slot, i) => !wasReady[i] && canFireOrdnance(slot),
+        );
+        if (becameReady) audioManager.playSound("powerup", 0.3);
+      }
       if (ship.turretSlot) tickTurretCooldown(ship.turretSlot, deltaMs);
 
       // Dead in the water: a disabled engines system halts all movement.
@@ -1197,8 +1229,16 @@ export class ArcadeBattleScene extends Phaser.Scene {
       });
     }
 
-    const { buffs } = resolveSupportAuras(snapshot);
+    const { buffs, coveredShipIds } = resolveSupportAuras(snapshot);
     this.activeAuras = buffs;
+
+    const playerCovered = this.playerShipId
+      ? coveredShipIds.has(this.playerShipId)
+      : false;
+    if (playerCovered && !this.playerWasAuraCovered) {
+      audioManager.playSound("powerup", 0.35);
+    }
+    this.playerWasAuraCovered = playerCovered;
 
     for (const [id, aura] of buffs) {
       if (aura.shieldRegenPerSecond <= 0) continue;
@@ -1647,6 +1687,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
           if (ship.shields > 0) {
             ship.shields = Math.max(0, ship.shields - damage);
+            audioManager.playSound("shield_hit", 0.4);
           } else if (ship.capitalSystems) {
             const result = applyCapitalSystemDamage(
               ship.capitalSystems,
@@ -1655,6 +1696,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
             ship.capitalSystems = result.systems;
             ship.hull = sumSystemsHull(result.systems);
             this.damageThisFrame = true;
+            audioManager.playSound("hull_hit", 0.4);
             if (result.justDisabled && result.hitSystemId) {
               this.showFloatingText(
                 ship.x,
@@ -1666,6 +1708,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
           } else {
             ship.hull = Math.max(0, ship.hull - damage);
             this.damageThisFrame = true;
+            audioManager.playSound("hull_hit", 0.4);
           }
 
           if (this.damageNumbersEnabled) {
@@ -1975,7 +2018,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
     ) as unknown as ShipSprite;
     container.shipId = ship.id;
 
-    const color = FACTION_COLORS[ship.faction as FactionId] ?? 0xffffff;
     const shipDef = getShipDefinition(ship.definitionId);
     const baseSize = SHIP_SIZES[shipDef?.baseStats.size ?? "small"];
     const size = ship.owner === "player" ? baseSize * 1.2 : baseSize;
@@ -1988,59 +2030,15 @@ export class ArcadeBattleScene extends Phaser.Scene {
     container.thruster = thruster;
 
     // Ship body — use individual PNG if loaded; fall back to faction/size placeholder from BootScene
-    const spriteKey = `ship_${ship.definitionId}`;
-    const fallbackKey = `ship_${ship.faction}_${shipDef?.baseStats.size ?? "small"}`;
-    const textureKey = this.textures.exists(spriteKey)
-      ? spriteKey
-      : this.textures.exists(fallbackKey)
-        ? fallbackKey
-        : null;
-    let body: Phaser.GameObjects.Graphics;
-    if (textureKey) {
-      const img = this.add.image(0, 0, textureKey);
-      img.setDisplaySize(size * 1.8, size * 1.8);
-      // ADD blend mode renders dark backgrounds as transparent
-      img.setBlendMode(Phaser.BlendModes.ADD);
-      container.add(img);
-
-      // Faction-colored identification ring — thick for player, thinner for AI
-      const ring = this.add.graphics();
-      const ringAlpha = ship.owner === "player" ? 1.0 : 0.75;
-      const ringThick = ship.owner === "player" ? 3 : 2;
-      ring.lineStyle(ringThick + 2, 0x000000, 0.6);
-      ring.strokeCircle(0, 0, size * 1.05);
-      ring.lineStyle(ringThick, color, ringAlpha);
-      ring.strokeCircle(0, 0, size * 1.05);
-      if (ship.owner === "player") {
-        ring.lineStyle(1, 0xffffff, 0.35);
-        ring.strokeCircle(0, 0, size * 1.25);
-      }
-      container.add(ring);
-      container.ring = ring; // stored for per-frame stress pulse
-
-      body = this.add.graphics(); // invisible placeholder for hull ref
-    } else {
-      body = this.add.graphics();
-      body.fillStyle(color, 1);
-      body.beginPath();
-      body.moveTo(0, -size / 2);
-      body.lineTo(-size / 3, size / 2);
-      body.lineTo(0, size / 3);
-      body.lineTo(size / 3, size / 2);
-      body.closePath();
-      body.fillPath();
-
-      // Faction-colored ring on fallback triangles too
-      body.lineStyle(3, color, 0.9);
-      body.strokeCircle(0, 0, size * 0.9);
-      if (ship.owner === "player") {
-        body.lineStyle(1, 0xffffff, 0.5);
-        body.strokeCircle(0, 0, size * 1.1);
-      }
-      container.add(body);
-    }
-
-    container.hull = body;
+    const visual = addShipVisual(this, container, {
+      definitionId: ship.definitionId,
+      faction: ship.faction as FactionId,
+      fallbackSizeName: shipDef?.baseStats.size ?? "small",
+      size,
+      isPlayer: ship.owner === "player",
+    });
+    if (visual.ring) container.ring = visual.ring; // stored for per-frame stress pulse
+    container.hull = visual.hull;
     container.setAngle(ship.angle);
     container.setDepth(10);
     container.setSize(size * 2, size * 2);
@@ -2151,6 +2149,15 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private createHUD(): void {
     const style = { font: "bold 16px monospace", color: "#ffffff" };
 
+    // Backdrop panel for the top-left stat cluster (speed/hull/shields/cooldowns/
+    // maneuver/stress) — previously bare text floating over the game world.
+    const statPanelBg = this.add.graphics().setScrollFactor(0).setDepth(999);
+    statPanelBg.fillStyle(0x000000, 0.45);
+    statPanelBg.fillRoundedRect(4, 4, 190, 172, 6);
+    statPanelBg.lineStyle(1, 0x2a3a4a, 0.8);
+    statPanelBg.strokeRoundedRect(4, 4, 190, 172, 6);
+    this.hudBackgroundPanels.push(statPanelBg);
+
     this.speedText = this.add
       .text(10, 10, "SPEED: 3", style)
       .setScrollFactor(0)
@@ -2171,11 +2178,28 @@ export class ArcadeBattleScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(1000);
 
+    // SCORE sits under the match timer (top-center) — top-right is reserved
+    // for the per-team status panel drawn by updateTeamHUD(), which can grow
+    // tall with more factions and must not collide with a fixed HUD element.
+    const scoreBg = this.add.graphics().setScrollFactor(0).setDepth(999);
+    scoreBg.fillStyle(0x000000, 0.45);
+    scoreBg.fillRoundedRect(this.scale.width / 2 - 60, 44, 120, 26, 6);
+    scoreBg.lineStyle(1, 0x2a3a4a, 0.8);
+    scoreBg.strokeRoundedRect(this.scale.width / 2 - 60, 44, 120, 26, 6);
+    this.hudBackgroundPanels.push(scoreBg);
+
     this.scoreText = this.add
-      .text(this.scale.width - 10, 10, "SCORE: 0", style)
-      .setOrigin(1, 0)
+      .text(this.scale.width / 2, 49, "SCORE: 0", style)
+      .setOrigin(0.5, 0)
       .setScrollFactor(0)
       .setDepth(1000);
+
+    const timerBg = this.add.graphics().setScrollFactor(0).setDepth(999);
+    timerBg.fillStyle(0x000000, 0.45);
+    timerBg.fillRoundedRect(this.scale.width / 2 - 60, 4, 120, 36, 6);
+    timerBg.lineStyle(1, 0x2a3a4a, 0.8);
+    timerBg.strokeRoundedRect(this.scale.width / 2 - 60, 4, 120, 36, 6);
+    this.hudBackgroundPanels.push(timerBg);
 
     this.matchTimerText = this.add
       .text(
@@ -2243,7 +2267,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.turnGauge = this.add.graphics().setScrollFactor(0).setDepth(1000);
 
     this.crewModeText = this.add
-      .text(this.scale.width / 2, 55, "◎ GUNNER MODE", {
+      .text(this.scale.width / 2, 76, "◎ GUNNER MODE", {
         font: "bold 16px monospace",
         color: "#ffaa00",
       })
@@ -2268,35 +2292,37 @@ export class ArcadeBattleScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(1000);
 
-    // Controls reminder — bottom-right corner, semi-transparent
+    // Controls reminder — bottom-left corner, semi-transparent
     const controlsLines = [
       "↑↓  Speed",
       "←→  Turn",
       "Q/E Sharp Turn",
+      "Shift+Q/E Segnor",
+      "T/Shift+T Tallon",
+      "Hold ←→ Barrel Roll",
+      "2x Tap ↑ Boost",
       "Z    K-Turn",
+      "C    Cloak",
       "TAB  Weapon",
       "SPC  Fire",
       "G    Crew Role",
       "1-4  Commander Orders",
       "ESC  Pause",
     ];
-    const cx = this.scale.width - 10;
+    // Bottom-LEFT (not bottom-right, which is reserved for the minimap).
+    const cx = 10;
     let cy = this.scale.height - 10 - controlsLines.length * 17;
     const cBg = this.add.graphics().setScrollFactor(0).setDepth(999);
     cBg.fillStyle(0x000000, 0.45);
-    cBg.fillRoundedRect(
-      cx - 108,
-      cy - 6,
-      112,
-      controlsLines.length * 17 + 10,
-      5,
-    );
+    cBg.fillRoundedRect(cx - 4, cy - 6, 150, controlsLines.length * 17 + 10, 5);
+    this.hudBackgroundPanels.push(cBg);
     for (const line of controlsLines) {
-      this.add
+      const t = this.add
         .text(cx, cy, line, { font: "12px monospace", color: "#999999" })
-        .setOrigin(1, 0)
+        .setOrigin(0, 0)
         .setScrollFactor(0)
         .setDepth(1000);
+      this.hudBackgroundPanels.push(t);
       cy += 17;
     }
   }
@@ -2372,6 +2398,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
     // One text per entry: index 0 = laser, 1..n = ordnance slots
     const totalEntries = 1 + ship.ordnanceSlots.length;
     if (this.ordnanceHudTexts.length === 0) {
+      const panelTop = this.scale.height - 40 - (totalEntries - 1) * 26 - 24;
+      const panelH = (totalEntries - 1) * 26 + 30;
+      const bg = this.add.graphics().setScrollFactor(0).setDepth(999);
+      bg.fillStyle(0x000000, 0.45);
+      bg.fillRoundedRect(this.scale.width - 152, panelTop, 142, panelH, 6);
+      bg.lineStyle(1, 0x2a3a4a, 0.8);
+      bg.strokeRoundedRect(this.scale.width - 152, panelTop, 142, panelH, 6);
+      this.hudBackgroundPanels.push(bg);
       for (let i = 0; i < totalEntries; i++) {
         const t = this.add
           .text(
@@ -3108,6 +3142,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
     // Same scrollFactor(0)-vs-zoom hit-test issue as the pause overlay — the
     // dynamic speed-based zoom can be far from 1.0 when the match ends.
     this.cameras.main.setZoom(1.0);
+    audioManager.playFactionStinger(
+      this.playerFaction,
+      victory ? "victory" : "defeat",
+    );
     this.awardProgressionXp(victory);
     // Hide player flight-stats HUD — irrelevant (and misleading) on the end screen
     this.hullText.setVisible(false);
@@ -3123,6 +3161,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
     for (const t of this.ordnanceHudTexts) t.setVisible(false);
     this.fleeWarningText?.setVisible(false);
     this.fleeArrow?.setVisible(false);
+    // Score/timer are restated on the end screen itself; stress bar, minimap,
+    // and the controls reminder are just clutter bleeding through the overlay.
+    this.scoreText.setVisible(false);
+    this.matchTimerText?.setVisible(false);
+    this.stressBarGraphics.setVisible(false);
+    this.stressLevelText.setVisible(false);
+    this.minimap?.setVisible(false);
+    for (const o of this.hudBackgroundPanels) o.setVisible(false);
 
     const cx = this.scale.width / 2;
     const cy = this.scale.height / 2;

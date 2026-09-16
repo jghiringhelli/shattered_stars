@@ -14,6 +14,7 @@ import { renderMenuStarfield } from "../rendering/Starfield";
 import { quickTipLine } from "../ui/ControlsReference";
 import { FACTION_COLORS, type FactionId } from "../config";
 import { getShipDefinition } from "../data/ShipDefinitions";
+import { getRoleProsCons } from "../data/ShipRoleProfiles";
 import { SURVIVAL_STARTER_CHOICES } from "./SurvivalScene";
 
 const FACTION_ORDER: readonly FactionId[] = [
@@ -128,7 +129,7 @@ export class SurvivalSetupScene extends Phaser.Scene {
 
     const choices = SURVIVAL_STARTER_CHOICES[this.selectedFaction];
     const cardWidth = 320;
-    const cardHeight = 180;
+    const cardHeight = 210;
     const gap = 40;
     const totalWidth = choices.length * cardWidth + (choices.length - 1) * gap;
     const startX = centerX - totalWidth / 2 + cardWidth / 2;
@@ -199,14 +200,33 @@ export class SurvivalSetupScene extends Phaser.Scene {
 
     const desc = this.add
       .text(x, y - halfH + 110, def.description, {
-        font: "12px Arial",
-        color: "#888899",
+        font: "11px Arial",
+        color: "#666677",
         wordWrap: { width: width - 30 },
         align: "center",
       })
       .setOrigin(0.5, 0)
       .setScrollFactor(0);
     this.shipCardObjects.push(desc);
+
+    const { pros, cons } = getRoleProsCons(def.role);
+    const prosText = this.add
+      .text(x - halfW + 16, y - halfH + 150, `+ ${pros}`, {
+        font: "12px Arial",
+        color: "#66ff88",
+        wordWrap: { width: width - 32 },
+      })
+      .setScrollFactor(0);
+    this.shipCardObjects.push(prosText);
+
+    const consText = this.add
+      .text(x - halfW + 16, y - halfH + 174, `\u2212 ${cons}`, {
+        font: "12px Arial",
+        color: "#ff8866",
+        wordWrap: { width: width - 32 },
+      })
+      .setScrollFactor(0);
+    this.shipCardObjects.push(consText);
 
     const hit = this.add
       .rectangle(x, y, width, height, 0x000000, 0)

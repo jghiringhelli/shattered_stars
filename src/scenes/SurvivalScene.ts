@@ -12,8 +12,9 @@
 
 import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
+import { addShipVisual } from "../rendering/ShipVisual";
 import type { FactionId } from "../config";
-import { BATTLEFIELD_SIZE, FACTION_COLORS, SHIP_SIZES } from "../config";
+import { BATTLEFIELD_SIZE, SHIP_SIZES } from "../config";
 import {
   getShipDefinition,
   getShipsByFaction,
@@ -177,6 +178,7 @@ export class SurvivalScene extends Phaser.Scene {
   // UI
   private waveText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
+  private controlsHintText!: Phaser.GameObjects.Text;
   private messageText!: Phaser.GameObjects.Text;
 
   // Timing
@@ -214,7 +216,7 @@ export class SurvivalScene extends Phaser.Scene {
     addPaintedSpaceBackground(this, "starfield_deep", 0);
 
     audioManager.initialize();
-    audioManager.playMusic("combat_medium");
+    audioManager.playFactionMusic(this.playerFaction, "combat");
 
     this.effectsManager = new EffectsManager(this);
     const savedSettings = this.registry.get("settings") as
@@ -377,7 +379,7 @@ export class SurvivalScene extends Phaser.Scene {
       .setDepth(1001)
       .setAlpha(0);
 
-    this.add
+    this.controlsHintText = this.add
       .text(
         this.scale.width / 2,
         this.scale.height - 30,
@@ -778,10 +780,15 @@ export class SurvivalScene extends Phaser.Scene {
 
   private gameOver(): void {
     this.isPaused = true;
+    audioManager.playFactionStinger(this.playerFaction, "defeat");
 
     // Kill any in-progress wave announcement tween so it doesn't bleed through the overlay
     this.tweens.killTweensOf(this.messageText);
     this.messageText.setAlpha(0);
+    // Hide the in-battle HUD — previously bled through the semi-transparent overlay.
+    this.waveText.setVisible(false);
+    this.scoreText.setVisible(false);
+    this.controlsHintText.setVisible(false);
 
     const centerX = this.scale.width / 2;
     const centerY = this.scale.height / 2;
@@ -948,7 +955,6 @@ export class SurvivalScene extends Phaser.Scene {
     ) as unknown as ShipSprite;
     container.shipId = ship.id;
 
-    const color = FACTION_COLORS[ship.faction] ?? 0xffffff;
     let size: number = SHIP_SIZES.small;
 
     // Boss ships are larger
@@ -958,22 +964,9 @@ export class SurvivalScene extends Phaser.Scene {
       size = SHIP_SIZES.medium;
     }
 
-    const body = this.add.graphics();
-    body.fillStyle(color, 1);
-    body.fillTriangle(0, -size / 2, -size / 3, size / 2, size / 3, size / 2);
+    const shipDef = getShipDefinition(ship.definitionId);
 
-    // Elite ships have golden outline
-    if (isElite) {
-      body.lineStyle(3, 0xffdd00, 1);
-    } else if (isBoss) {
-      // Boss ships have red outline
-      body.lineStyle(4, 0xff4444, 1);
-    } else {
-      body.lineStyle(2, 0xffffff, 0.8);
-    }
-    body.strokeTriangle(0, -size / 2, -size / 3, size / 2, size / 3, size / 2);
-
-    // Add glow for elite/boss
+    // Glow for elite/boss sits behind the ship visual.
     if (isElite || isBoss) {
       const glowColor = isBoss ? 0xff4444 : 0xffdd00;
       const glow = this.add.graphics();
@@ -982,7 +975,21 @@ export class SurvivalScene extends Phaser.Scene {
       container.add(glow);
     }
 
-    container.add(body);
+    addShipVisual(this, container, {
+      definitionId: ship.definitionId,
+      faction: ship.faction,
+      fallbackSizeName: shipDef?.baseStats.size ?? "small",
+      size,
+      isPlayer: ship.owner === "player",
+    });
+
+    // Elite ships have a golden outline ring; boss ships have a red one, drawn on top.
+    if (isElite || isBoss) {
+      const outline = this.add.graphics();
+      outline.lineStyle(isBoss ? 4 : 3, isBoss ? 0xff4444 : 0xffdd00, 1);
+      outline.strokeCircle(0, 0, size * 1.1);
+      container.add(outline);
+    }
 
     container.setAngle(ship.angle);
     container.setDepth(isBoss ? 15 : 10);
@@ -1146,8 +1153,10 @@ export class SurvivalScene extends Phaser.Scene {
         const shieldDmg = Math.min(target.shields, damage);
         target.shields -= shieldDmg;
         damage -= shieldDmg;
+        audioManager.playSound("shield_hit", 0.4);
       }
       if (damage > 0) {
+        audioManager.playSound("hull_hit", 0.4);
         if (target.capitalSystems) {
           const result = applyCapitalSystemDamage(
             target.capitalSystems,

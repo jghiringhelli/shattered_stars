@@ -1306,10 +1306,12 @@ export class EpicBattleScene extends Phaser.Scene {
         const shieldDmg = Math.min(this.boss.shields, damage);
         this.boss.shields -= shieldDmg;
         damage -= shieldDmg;
+        audioManager.playSound("shield_hit", 0.4);
       }
 
       // Then damage a random active section
       if (damage > 0) {
+        audioManager.playSound("hull_hit", 0.4);
         const activeSections = this.boss.sections.filter(
           (s) => !s.isDisabled && s.hull > 0,
         );
@@ -1406,9 +1408,11 @@ export class EpicBattleScene extends Phaser.Scene {
       const shieldDmg = Math.min(ship.shields, damage);
       ship.shields -= shieldDmg;
       damage -= shieldDmg;
+      audioManager.playSound("shield_hit", 0.4);
     }
 
     if (damage > 0) {
+      audioManager.playSound("hull_hit", 0.4);
       ship.hull = Math.max(0, ship.hull - damage);
     }
 

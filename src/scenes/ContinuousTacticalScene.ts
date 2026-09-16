@@ -16,13 +16,14 @@
 
 import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
+import { addShipVisual } from "../rendering/ShipVisual";
 import type {
   ShipState,
   ManeuverDefinition,
   ManeuverDirection,
 } from "../core/types";
 import type { FactionId } from "../config";
-import { BATTLEFIELD_SIZE, FACTION_COLORS, SHIP_SIZES } from "../config";
+import { BATTLEFIELD_SIZE, SHIP_SIZES } from "../config";
 import { getShipDefinition, getShipDial } from "../data/ShipDefinitions";
 import {
   getModeCombatStats,
@@ -112,6 +113,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   private playerShipIds: string[] = [];
   private enemyShipIds: string[] = [];
   private aiDifficulty: AIDifficultyLevel = "normal";
+  private playerFaction: FactionId = "free_confederation";
 
   private selectedShipId: string | null = null;
   private selectedManeuverDir: ManeuverDirection = "straight";
@@ -122,6 +124,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   private speedText!: Phaser.GameObjects.Text;
   private maneuverText!: Phaser.GameObjects.Text;
   private instructionText!: Phaser.GameObjects.Text;
+  private hudTitleText!: Phaser.GameObjects.Text;
   private dialGraphics!: Phaser.GameObjects.Graphics;
   private pauseMenu: PauseMenu | null = null;
 
@@ -157,7 +160,6 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     addPaintedSpaceBackground(this, "nebula_blue", 0);
 
     audioManager.initialize();
-    audioManager.playMusic("combat_medium");
 
     this.effectsManager = new EffectsManager(this);
     const savedSettings = this.registry.get("settings") as
@@ -410,11 +412,15 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       shieldDamage = Math.min(target.shields, damage);
       target.shields -= shieldDamage;
       const hullDamage = damage - shieldDamage;
-      if (hullDamage > 0) target.hull = Math.max(0, target.hull - hullDamage);
+      if (hullDamage > 0) {
+        target.hull = Math.max(0, target.hull - hullDamage);
+        audioManager.playSound("hull_hit", 0.4);
+      }
     } else if (target.capitalSystems) {
       const result = applyCapitalSystemDamage(target.capitalSystems, damage);
       target.capitalSystems = result.systems;
       target.hull = sumSystemsHull(result.systems);
+      audioManager.playSound("hull_hit", 0.4);
       if (result.justDisabled && result.hitSystemId) {
         this.effectsManager.showFloatingText(
           target.x,
@@ -425,6 +431,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       }
     } else {
       target.hull = Math.max(0, target.hull - damage);
+      audioManager.playSound("hull_hit", 0.4);
     }
 
     if (attacker.owner === "player") {
@@ -585,6 +592,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     } else {
       this.spawnDefaultShips();
     }
+    audioManager.playFactionMusic(this.playerFaction, "tactical");
 
     for (const ship of this.ships.values()) {
       this.createShipSprite(ship);
@@ -636,6 +644,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
         );
 
         if (faction.controller === "player") {
+          this.playerFaction = faction.factionId;
           this.playerShipIds.push(ship.id);
         } else {
           this.enemyShipIds.push(ship.id);
@@ -763,7 +772,6 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     ) as unknown as ShipSprite;
     container.shipId = ship.id;
 
-    const color = FACTION_COLORS[ship.faction as FactionId] ?? 0xffffff;
     const shipDef = getShipDefinition(ship.definitionId);
     const size = SHIP_SIZES[shipDef?.baseStats.size ?? "small"];
 
@@ -773,17 +781,13 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     container.add(thruster);
     container.thruster = thruster;
 
-    const body = this.add.graphics();
-    body.fillStyle(color, 1);
-    body.beginPath();
-    body.moveTo(0, -size / 2);
-    body.lineTo(-size / 3, size / 2);
-    body.lineTo(0, size / 3);
-    body.lineTo(size / 3, size / 2);
-    body.closePath();
-    body.fillPath();
-    body.lineStyle(2, 0xffffff, 0.8);
-    body.strokePath();
+    const visual = addShipVisual(this, container, {
+      definitionId: ship.definitionId,
+      faction: ship.faction as FactionId,
+      fallbackSizeName: shipDef?.baseStats.size ?? "small",
+      size,
+      isPlayer: ship.owner === "player",
+    });
 
     const skillText = this.add.text(0, -size / 2 - 12, `${ship.pilotSkill}`, {
       fontSize: "12px",
@@ -805,8 +809,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     container.add(speedIndicator);
     container.speedIndicator = speedIndicator;
 
-    container.add(body);
-    container.shipBody = body;
+    container.shipBody = visual.hull;
     container.setAngle(ship.angle);
     container.setDepth(10);
 
@@ -853,7 +856,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   private createHUD(): void {
     const style = { font: "bold 18px monospace", color: "#ffffff" };
 
-    this.add
+    this.hudTitleText = this.add
       .text(this.scale.width / 2, 20, "TACTICAL COMBAT", {
         font: "bold 24px monospace",
         color: "#00ff88",
@@ -1177,7 +1180,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
 
   private updateSpriteHighlights(): void {
     for (const [id, sprite] of this.shipSprites) {
-      sprite.shipBody.setAlpha(id === this.selectedShipId ? 1 : 0.8);
+      sprite.setAlpha(id === this.selectedShipId ? 1 : 0.8);
       const ship = this.ships.get(id);
       if (ship) sprite.speedIndicator.setText(`S${ship.currentSpeed}`);
       const thrusterAlpha = ship ? 0.3 + ship.currentSpeed * 0.15 : 0.3;
@@ -1202,6 +1205,17 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
 
   private showGameOver(isPlayerVictory: boolean, winner: string): void {
     this.isPaused = true;
+    audioManager.playFactionStinger(
+      this.playerFaction,
+      isPlayerVictory ? "victory" : "defeat",
+    );
+    // Hide the in-battle HUD — previously bled through the semi-transparent overlay.
+    this.hudTitleText.setVisible(false);
+    this.speedText.setVisible(false);
+    this.maneuverText.setVisible(false);
+    this.instructionText.setVisible(false);
+    this.timerText?.setVisible(false);
+    this.minimap?.setVisible(false);
     new GameOverScreen({
       scene: this,
       stats: {

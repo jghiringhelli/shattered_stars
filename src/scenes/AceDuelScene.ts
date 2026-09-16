@@ -12,6 +12,7 @@
 
 import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
+import { addShipVisual } from "../rendering/ShipVisual";
 import { createHoverButton, createToggleButton } from "../ui/ButtonFactory";
 import { quickTipLine } from "../ui/ControlsReference";
 import type { FactionId } from "../config";
@@ -199,6 +200,11 @@ export class AceDuelScene extends Phaser.Scene {
   // UI
   private roundText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
+  /** Matchup name, side-faction indicators, controls hint — hidden alongside
+   * roundText/timerText/scoreText on the end screen. */
+  private battleHudExtras: Array<
+    Phaser.GameObjects.Text | Phaser.GameObjects.Graphics
+  > = [];
   /** Setup-screen objects, tracked individually — see track()'s doc comment for why. */
   private setupObjects: Phaser.GameObjects.GameObject[] = [];
 
@@ -697,7 +703,12 @@ export class AceDuelScene extends Phaser.Scene {
     this.setupObjects = [];
     this.isSetupPhase = false;
 
-    audioManager.playMusic("combat_high");
+    audioManager.playFactionMusic(
+      this.playerSide === 1
+        ? this.selectedMatchup.side1.faction
+        : this.selectedMatchup.side2.faction,
+      "combat",
+    );
 
     this.createHUD();
     this.setupInput();
@@ -906,7 +917,7 @@ export class AceDuelScene extends Phaser.Scene {
       .setDepth(1000);
 
     // Show matchup name
-    this.add
+    const matchupNameText = this.add
       .text(this.scale.width / 2, 60, this.selectedMatchup.name, {
         font: "18px Arial",
         color: "#888888",
@@ -914,6 +925,7 @@ export class AceDuelScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(1000);
+    this.battleHudExtras.push(matchupNameText);
 
     this.scoreText = this.add
       .text(this.scale.width / 2, 90, "0 - 0", {
@@ -932,13 +944,15 @@ export class AceDuelScene extends Phaser.Scene {
     side1Indicator.fillStyle(side1Color, 1);
     side1Indicator.fillCircle(this.scale.width / 2 - 60, 90, 10);
     side1Indicator.setScrollFactor(0).setDepth(1000);
+    this.battleHudExtras.push(side1Indicator);
 
     const side2Indicator = this.add.graphics();
     side2Indicator.fillStyle(side2Color, 1);
     side2Indicator.fillCircle(this.scale.width / 2 + 60, 90, 10);
     side2Indicator.setScrollFactor(0).setDepth(1000);
+    this.battleHudExtras.push(side2Indicator);
 
-    this.add
+    const controlsHint = this.add
       .text(
         this.scale.width / 2,
         this.scale.height - 25,
@@ -951,6 +965,7 @@ export class AceDuelScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setScrollFactor(0)
       .setDepth(1000);
+    this.battleHudExtras.push(controlsHint);
   }
 
   private updateScoreDisplay(): void {
@@ -1066,21 +1081,16 @@ export class AceDuelScene extends Phaser.Scene {
     ) as unknown as ShipSprite;
     container.shipId = ship.id;
 
-    const color = FACTION_COLORS[ship.faction] ?? 0xffffff;
     const size = SHIP_SIZES.medium;
+    const shipDef = getShipDefinition(ship.definitionId);
 
-    const body = this.add.graphics();
-    body.fillStyle(color, 1);
-    body.beginPath();
-    body.moveTo(0, -size / 2);
-    body.lineTo(-size / 3, size / 2);
-    body.lineTo(0, size / 3);
-    body.lineTo(size / 3, size / 2);
-    body.closePath();
-    body.fillPath();
-    body.lineStyle(2, 0xffffff, 0.9);
-    body.strokePath();
-    container.add(body);
+    addShipVisual(this, container, {
+      definitionId: ship.definitionId,
+      faction: ship.faction,
+      fallbackSizeName: shipDef?.baseStats.size ?? "medium",
+      size,
+      isPlayer: ship.owner === "player",
+    });
 
     container.setAngle(ship.angle);
     container.setDepth(10);
@@ -1236,8 +1246,10 @@ export class AceDuelScene extends Phaser.Scene {
         const shieldDmg = Math.min(target.shields, damage);
         target.shields -= shieldDmg;
         damage -= shieldDmg;
+        audioManager.playSound("shield_hit", 0.4);
       }
       if (damage > 0) {
+        audioManager.playSound("hull_hit", 0.4);
         const wasAlive = target.hull > 0;
         target.hull = Math.max(0, target.hull - damage);
         if (wasAlive && target.hull <= 0) {
@@ -1483,10 +1495,25 @@ export class AceDuelScene extends Phaser.Scene {
     // Same scrollFactor(0)-vs-zoom hit-test issue as the setup screen — the
     // player may have zoomed with the mouse wheel during the match.
     this.cameras.main.setZoom(1.0);
+    // Hide the in-battle HUD — previously bled through the semi-transparent overlay.
+    this.roundText.setVisible(false);
+    this.timerText?.setVisible(false);
+    this.scoreText.setVisible(false);
+    for (const o of this.battleHudExtras) o.setVisible(false);
 
     const playerWins = this.playerSide === 1 ? this.side1Wins : this.side2Wins;
     const enemyWins = this.playerSide === 1 ? this.side2Wins : this.side1Wins;
     const playerWon = playerWins > enemyWins;
+    const playerMatchupFaction =
+      this.playerSide === 1
+        ? this.selectedMatchup.side1?.faction
+        : this.selectedMatchup.side2?.faction;
+    if (playerMatchupFaction) {
+      audioManager.playFactionStinger(
+        playerMatchupFaction,
+        playerWon ? "victory" : "defeat",
+      );
+    }
 
     // Mark matchup as completed
     if (playerWon) {
