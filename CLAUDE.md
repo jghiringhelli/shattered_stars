@@ -437,7 +437,7 @@ When I correct your output, record the correction pattern here so you don't repe
 
 ## Project Overview
 
-Shattered Stars is a Phaser 3 tactical space combat game inspired by X-Wing Miniatures Game (TMG). It features multiple game modes (arcade, turn-based tactical, continuous tactical, campaign) with X-Wing style combat mechanics including dice rolling, actions, maneuvers, and upgrade cards.
+Shattered Stars is a Phaser 3 tactical space combat game inspired by X-Wing Miniatures Game (TMG). It features multiple real-time arcade game modes (skirmish, survival, continuous tactical, dogfight, ace duel, campaign) with X-Wing-inspired ship dials, actions, and upgrade cards. All combat is real-time — the old discrete turn-based engine (BattleManager/TurnSystem) was removed; Campaign now runs on the same real-time flight/combat model as every other mode.
 
 
 ## Tech Stack

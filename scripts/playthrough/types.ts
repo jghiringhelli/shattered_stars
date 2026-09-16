@@ -103,7 +103,6 @@ export interface ModeScenario {
   readonly sceneKey: string;
   readonly start: StartSpec;
   readonly durationMs: number;
-  readonly shipsVia?: "ships" | "battleManager";
   readonly playerShipRole?: ArchetypeRole;
   readonly drill?: ArchetypeDrill;
   /** Method to call on the scene right after boot, to bypass a setup screen (e.g. "startMatch"). */

@@ -27,33 +27,26 @@ interface RawShip {
 export async function sampleShips(
   page: Page,
   sceneKey: string,
-  shipsVia: "ships" | "battleManager",
   startMs: number,
 ): Promise<TelemetryFrame[]> {
-  const raw = (await page.evaluate(
-    (arg: { key: string; via: string }) => {
-      const scene = (window as any).game?.scene.getScene(arg.key) as any;
-      const map =
-        arg.via === "battleManager"
-          ? scene?.battleManager?.getState?.().ships
-          : scene?.ships;
-      const src = map ? Array.from(map.values()) : [];
-      return src.map((sh: any) => ({
-        shipId: sh.id,
-        owner: sh.owner,
-        x: sh.x,
-        y: sh.y,
-        angle: sh.angle,
-        hull: sh.hull,
-        maxHull: sh.maxHull ?? sh.hull,
-        speed: sh.control?.speed ?? 0,
-        stressLevel: sh.stress?.level ?? 0,
-        isStressed: sh.stress?.isStressed ?? false,
-        maneuver: sh.control?.currentManeuver ?? null,
-      }));
-    },
-    { key: sceneKey, via: shipsVia },
-  )) as RawShip[];
+  const raw = (await page.evaluate((key: string) => {
+    const scene = (window as any).game?.scene.getScene(key) as any;
+    const map = scene?.ships;
+    const src = map ? Array.from(map.values()) : [];
+    return src.map((sh: any) => ({
+      shipId: sh.id,
+      owner: sh.owner,
+      x: sh.x,
+      y: sh.y,
+      angle: sh.angle,
+      hull: sh.hull,
+      maxHull: sh.maxHull ?? sh.hull,
+      speed: sh.control?.speed ?? 0,
+      stressLevel: sh.stress?.level ?? 0,
+      isStressed: sh.stress?.isStressed ?? false,
+      maneuver: sh.control?.currentManeuver ?? null,
+    }));
+  }, sceneKey)) as RawShip[];
   const tMs = Date.now() - startMs;
   return raw.map((r) => ({ ...r, tMs }));
 }
@@ -62,14 +55,13 @@ export async function sampleShips(
 export async function recordTelemetry(
   page: Page,
   sceneKey: string,
-  shipsVia: "ships" | "battleManager",
   durationMs: number,
   intervalMs = 250,
 ): Promise<TelemetryFrame[]> {
   const startMs = Date.now();
   const frames: TelemetryFrame[] = [];
   while (Date.now() - startMs < durationMs) {
-    frames.push(...(await sampleShips(page, sceneKey, shipsVia, startMs)));
+    frames.push(...(await sampleShips(page, sceneKey, startMs)));
     await page.waitForTimeout(intervalMs);
   }
   return frames;

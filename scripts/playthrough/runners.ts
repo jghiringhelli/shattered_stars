@@ -183,16 +183,9 @@ export async function runModeScenario(
   const startFinding = await analyzeScreenshot(shotStart, `${s.mode} start`);
   if (startFinding) findings.push(startFinding);
 
-  const shipsVia = s.shipsVia ?? "ships";
   const frames = s.drill
-    ? await runDrillWithTelemetry(
-        page,
-        s.drill,
-        s.sceneKey,
-        shipsVia,
-        Date.now(),
-      )
-    : await recordTelemetry(page, s.sceneKey, shipsVia, s.durationMs);
+    ? await runDrillWithTelemetry(page, s.drill, s.sceneKey, Date.now())
+    : await recordTelemetry(page, s.sceneKey, s.durationMs);
 
   const matchDurationMs = await matchWatch;
   await dismissWatch;

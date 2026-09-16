@@ -31,8 +31,6 @@ interface Scenario {
   readonly start: StartSpec;
   /** Exact expected ship count. Omit for dynamic-spawn modes (INV-1 becomes >=1). */
   readonly expected?: number;
-  /** Where live ships live: scene.ships (default) or the campaign battle manager. */
-  readonly shipsVia?: "ships" | "battleManager";
   /** Scene method to call right after boot (e.g. Dogfight's setup screen needs startMatch()). */
   readonly postStartMethod?: string;
 }
@@ -121,7 +119,6 @@ const SCENARIOS: Scenario[] = [
     sceneKey: "CampaignBattleScene",
     requiresPlayer: true,
     runMs: 2_500,
-    shipsVia: "battleManager",
     start: {
       via: "hook",
       hook: "__verifyStartCampaign",
@@ -187,27 +184,20 @@ async function recover(
   errors: string[],
 ): Promise<Capture> {
   await page.waitForTimeout(s.runMs);
-  const via = s.shipsVia ?? "ships";
-  const ships = (await page.evaluate(
-    (arg: { key: string; via: string }) => {
-      const scene = (window as any).game?.scene.getScene(arg.key) as any;
-      const map =
-        arg.via === "battleManager"
-          ? scene?.battleManager?.getState?.().ships
-          : scene?.ships;
-      const src = map ? Array.from(map.values()) : [];
-      return src.map((sh: any) => ({
-        id: sh.id,
-        owner: sh.owner,
-        x: sh.x,
-        y: sh.y,
-        angle: sh.angle,
-        hull: sh.hull,
-        maxHull: sh.maxHull ?? sh.hull,
-      }));
-    },
-    { key: s.sceneKey, via },
-  )) as Ship[];
+  const ships = (await page.evaluate((key: string) => {
+    const scene = (window as any).game?.scene.getScene(key) as any;
+    const map = scene?.ships;
+    const src = map ? Array.from(map.values()) : [];
+    return src.map((sh: any) => ({
+      id: sh.id,
+      owner: sh.owner,
+      x: sh.x,
+      y: sh.y,
+      angle: sh.angle,
+      hull: sh.hull,
+      maxHull: sh.maxHull ?? sh.hull,
+    }));
+  }, s.sceneKey)) as Ship[];
   const projectiles = (await page.evaluate((key: string) => {
     const scene = (window as any).game?.scene.getScene(key) as any;
     return scene?.projectiles?.length ?? 0;

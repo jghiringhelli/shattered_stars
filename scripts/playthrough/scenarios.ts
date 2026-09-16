@@ -109,7 +109,6 @@ export const MODE_SCENARIOS: readonly ModeScenario[] = [
       arg: "free_confederation",
     },
     durationMs: 12_000,
-    shipsVia: "battleManager",
   },
   {
     mode: "epic",

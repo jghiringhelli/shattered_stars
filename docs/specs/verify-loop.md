@@ -88,9 +88,9 @@ Not yet covered (UI-driven setup screens — need button-clicking or a start hoo
 EpicBattleScene, AceDuelScene.
 
 `ShipTelemetry` (INV-5's data source) is wired into ArcadeBattleScene, ContinuousTacticalScene,
-SurvivalScene, and DogfightScene — every real-time scene the loop drives. CampaignBattleScene
-is turn-based (discrete per-turn moves, not per-frame), so INV-5 legitimately reports 0
-samples there; that is not a gap.
+SurvivalScene, DogfightScene, and CampaignBattleScene — every real-time scene the loop drives.
+Campaign moved off its old turn-based engine (BattleManager/TurnSystem, removed) onto the same
+real-time combat model as the other modes, so INV-5 now gets samples there too.
 
 ## Running
 

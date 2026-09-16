@@ -123,14 +123,13 @@ export async function runDrillWithTelemetry(
   page: Page,
   drill: ArchetypeDrill,
   sceneKey: string,
-  shipsVia: "ships" | "battleManager",
   startMs: number,
 ): Promise<TelemetryFrame[]> {
   const frames: TelemetryFrame[] = [];
   for (const s of drill.steps) {
     await tapKey(page, s.key, s.shift, s.downMs);
     if (s.waitAfterMs > 0) await page.waitForTimeout(s.waitAfterMs);
-    frames.push(...(await sampleShips(page, sceneKey, shipsVia, startMs)));
+    frames.push(...(await sampleShips(page, sceneKey, startMs)));
   }
   return frames;
 }
