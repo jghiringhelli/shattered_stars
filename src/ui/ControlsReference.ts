@@ -139,6 +139,14 @@ const TOUCH_SPECIAL_LABELS: Partial<Record<ActionIntent, string>> = {
   KTURN: "Double-tap stick down",
 };
 
+/** BOOST/BARREL_ROLL have no direct KeyboardBinding entry — they're produced
+ * by ArcadeInputGestures.ts's hold/double-tap/chord state machine on the
+ * same steer/thrust keys, not a dedicated key. See keyboardLabelFor(). */
+const KEYBOARD_SPECIAL_LABELS: Partial<Record<ActionIntent, string>> = {
+  BOOST: "Double-tap ↑",
+  BARREL_ROLL: "Hold ← + →",
+};
+
 const TOUCH_GESTURE_NAMES: Record<string, string> = {
   tap: "Tap action zone",
   doubleTap: "Double-tap action zone",
@@ -164,10 +172,14 @@ function formatKeyboardBinding(binding: KeyboardBinding): string {
 
 export function keyboardLabelFor(intents: readonly ActionIntent[]): string {
   if (intents.length === 0) return "Automatic";
-  const labels = DEFAULT_KEYBOARD_BINDINGS.filter((b) =>
-    intents.includes(b.intent),
-  ).map(formatKeyboardBinding);
-  return uniqueJoin(labels);
+  const labels = intents.map((intent) => {
+    if (KEYBOARD_SPECIAL_LABELS[intent])
+      return KEYBOARD_SPECIAL_LABELS[intent]!;
+    return DEFAULT_KEYBOARD_BINDINGS.filter((b) => b.intent === intent).map(
+      formatKeyboardBinding,
+    );
+  });
+  return uniqueJoin(labels.flat());
 }
 
 export function gamepadLabelFor(intents: readonly ActionIntent[]): string {

@@ -18,7 +18,13 @@ const QUICK_TIPS: ReadonlyArray<{
   { label: "Steer", intents: ["STEER_LEFT", "STEER_RIGHT"] },
   { label: "Throttle Up / Down", intents: ["THRUST_UP", "THRUST_DOWN"] },
   { label: "Primary Weapon", intents: [] },
+  { label: "Fire Secondary / Ordnance", intents: ["FIRE_SECONDARY"] },
+  { label: "Switch Weapon", intents: ["WEAPON_CYCLE"] },
   { label: "Boost Dash", intents: ["BOOST"] },
+  { label: "Barrel Roll", intents: ["BARREL_ROLL"] },
+  { label: "K-Turn (U-turn)", intents: ["KTURN"] },
+  { label: "Segnor Loop", intents: ["SEGNOR_LEFT", "SEGNOR_RIGHT"] },
+  { label: "Tallon Roll", intents: ["TALLON_LEFT", "TALLON_RIGHT"] },
   { label: "Pause", intents: ["PAUSE"] },
 ];
 
@@ -49,16 +55,25 @@ export function initTutorialOverlay(): void {
     tipsList.appendChild(li);
   }
 
-  const dismiss = (): void => {
-    localStorage.setItem(SEEN_KEY, "1");
-    overlay.classList.add("hidden");
-    window.removeEventListener("keydown", onKeydown);
-  };
-  const onKeydown = (e: KeyboardEvent): void => {
-    if (e.key === "Escape" || e.key === "Enter") dismiss();
-  };
-
-  dismissBtn.addEventListener("click", dismiss);
+  dismissBtn.addEventListener("click", hideTutorialOverlay);
   window.addEventListener("keydown", onKeydown);
   overlay.classList.remove("hidden");
+}
+
+function onKeydown(e: KeyboardEvent): void {
+  if (e.key === "Escape" || e.key === "Enter") hideTutorialOverlay();
+}
+
+/**
+ * Hides the overlay and marks it as seen, so it never reappears — called
+ * either by the player dismissing it, or automatically once asset loading
+ * finishes (BootScene), whichever happens first.
+ */
+export function hideTutorialOverlay(): void {
+  if (typeof window === "undefined" || typeof localStorage === "undefined") {
+    return;
+  }
+  localStorage.setItem(SEEN_KEY, "1");
+  document.getElementById("tutorial-overlay")?.classList.add("hidden");
+  window.removeEventListener("keydown", onKeydown);
 }

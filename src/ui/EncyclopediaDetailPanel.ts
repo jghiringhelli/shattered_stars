@@ -5,19 +5,20 @@
  * lore text, role badge, and five normalized stat bars for the selected ship.
  */
 
-import Phaser from 'phaser';
-import type { EncyclopediaEntry } from '../data/ShipEncyclopedia';
-import { getShipDefinition } from '../data/ShipDefinitions';
-import { FACTION_COLORS } from '../config';
+import Phaser from "phaser";
+import type { EncyclopediaEntry } from "../data/ShipEncyclopedia";
+import { getShipDefinition } from "../data/ShipDefinitions";
+import { FACTION_COLORS } from "../config";
+import { addContainedImage } from "./picker/catalogHelpers";
 
 const ART_H = 280;
 
 const STAT_META: Array<{ key: string; label: string; color: number }> = [
-  { key: 'speed', label: 'SPEED', color: 0x00ccff },
-  { key: 'maneuverability', label: 'MANEUVER', color: 0x44ff88 },
-  { key: 'attack', label: 'ATTACK', color: 0xff4444 },
-  { key: 'defense', label: 'DEFENSE', color: 0x4488ff },
-  { key: 'payload', label: 'PAYLOAD', color: 0xff8800 },
+  { key: "speed", label: "SPEED", color: 0x00ccff },
+  { key: "maneuverability", label: "MANEUVER", color: 0x44ff88 },
+  { key: "attack", label: "ATTACK", color: 0xff4444 },
+  { key: "defense", label: "DEFENSE", color: 0x4488ff },
+  { key: "payload", label: "PAYLOAD", color: 0xff8800 },
 ];
 
 const ROLE_COLORS: Record<string, number> = {
@@ -74,46 +75,55 @@ export class EncyclopediaDetailPanel {
     this.artPlaceholder.fillStyle(0x0d1525, 1);
     this.artPlaceholder.fillRect(x, y, w, ART_H);
     this.artPlaceholderLabel = scene.add
-      .text(x + w / 2, y + ART_H / 2, '', { font: '13px Arial', color: '#445566' })
+      .text(x + w / 2, y + ART_H / 2, "", {
+        font: "13px Arial",
+        color: "#445566",
+      })
       .setOrigin(0.5);
 
     // Name
     const textY = y + ART_H + 16;
-    this.nameText = scene.add.text(x + w / 2, textY, '', {
-      font: 'bold 28px Arial',
-      color: '#ddeeff',
-    }).setOrigin(0.5, 0);
+    this.nameText = scene.add
+      .text(x + w / 2, textY, "", {
+        font: "bold 28px Arial",
+        color: "#ddeeff",
+      })
+      .setOrigin(0.5, 0);
 
     // Role badge
     const badgeY = textY + 42;
     this.roleBadge = scene.add.graphics();
-    this.roleText = scene.add.text(x + w / 2, badgeY + 11, '', {
-      font: '12px Arial',
-      color: '#ffffff',
-    }).setOrigin(0.5);
+    this.roleText = scene.add
+      .text(x + w / 2, badgeY + 11, "", {
+        font: "12px Arial",
+        color: "#ffffff",
+      })
+      .setOrigin(0.5);
 
     // Lore
-    this.loreText = scene.add.text(x + 20, badgeY + 34, '', {
-      font: '15px Arial',
-      color: '#8899bb',
+    this.loreText = scene.add.text(x + 20, badgeY + 34, "", {
+      font: "15px Arial",
+      color: "#8899bb",
       wordWrap: { width: w - 40 },
       lineSpacing: 4,
     });
 
     // Stats section
     const statsY = badgeY + 100;
-    scene.add.text(x + 12, statsY - 22, 'COMBAT STATS', {
-      font: 'bold 12px Arial',
-      color: '#445566',
+    scene.add.text(x + 12, statsY - 22, "COMBAT STATS", {
+      font: "bold 12px Arial",
+      color: "#445566",
     });
     const divider = scene.add.graphics();
     divider.lineStyle(1, 0x1a2a44, 1);
     divider.lineBetween(x + 12, statsY - 6, x + w - 12, statsY - 6);
     this.buildStatBars(statsY);
-    this.scaleNote = scene.add.text(x + w - 12, statsY + STAT_META.length * 30 + 4, '', {
-      font: '11px Arial',
-      color: '#334455',
-    }).setOrigin(1, 0);
+    this.scaleNote = scene.add
+      .text(x + w - 12, statsY + STAT_META.length * 30 + 4, "", {
+        font: "11px Arial",
+        color: "#334455",
+      })
+      .setOrigin(1, 0);
   }
 
   private buildStatBars(startY: number): void {
@@ -123,7 +133,10 @@ export class EncyclopediaDetailPanel {
       const y = startY + i * 30;
       this.barYs.push(y);
 
-      scene.add.text(x + 12, y + 2, label, { font: '11px Arial', color: '#6677aa' });
+      scene.add.text(x + 12, y + 2, label, {
+        font: "11px Arial",
+        color: "#6677aa",
+      });
 
       const track = scene.add.graphics();
       track.fillStyle(0x111828, 1);
@@ -133,7 +146,10 @@ export class EncyclopediaDetailPanel {
       this.statFills.push(fill);
 
       this.statNums.push(
-        scene.add.text(barX + barW + 10, y + 2, '', { font: 'bold 12px Arial', color: '#aabbcc' }),
+        scene.add.text(barX + barW + 10, y + 2, "", {
+          font: "bold 12px Arial",
+          color: "#aabbcc",
+        }),
       );
 
       // Subtle tick marks for scale reference
@@ -165,15 +181,23 @@ export class EncyclopediaDetailPanel {
     this.artPlaceholder.fillRect(x, y, w, ART_H);
 
     if (scene.textures.exists(entry.artKey)) {
-      this.artImage = scene.add.image(x + w / 2, y + ART_H / 2, entry.artKey);
-      this.artImage.setDisplaySize(w, ART_H);
-      this.artPlaceholderLabel.setText('');
+      this.artImage = addContainedImage(
+        scene,
+        entry.artKey,
+        x + w / 2,
+        y + ART_H / 2,
+        w,
+        ART_H,
+      );
+      this.artPlaceholderLabel.setText("");
     } else {
       const def = getShipDefinition(entry.shipId);
       const col = def ? FACTION_COLORS[def.faction] : 0x222244;
       this.artPlaceholder.lineStyle(1, col, 0.4);
       this.artPlaceholder.strokeRect(x + 1, y + 1, w - 2, ART_H - 2);
-      this.artPlaceholderLabel.setText('[ Art not generated — run scripts/generate_ship_art.py ]');
+      this.artPlaceholderLabel.setText(
+        "[ Art not generated — run scripts/generate_ship_art.py ]",
+      );
     }
   }
 
@@ -182,8 +206,8 @@ export class EncyclopediaDetailPanel {
     const def = getShipDefinition(entry.shipId);
     this.nameText.setText(def?.name ?? entry.shipId);
 
-    const role = def?.role ?? '';
-    const roleLabel = role.replace(/_/g, ' ').toUpperCase();
+    const role = def?.role ?? "";
+    const roleLabel = role.replace(/_/g, " ").toUpperCase();
     const roleColor = ROLE_COLORS[role] ?? 0x888888;
     const lw = roleLabel.length * 8 + 24;
     const badgeY = y + ART_H + 16 + 42;
@@ -206,14 +230,19 @@ export class EncyclopediaDetailPanel {
     vals.forEach((val, i) => {
       const color = STAT_META[i]!.color;
       const barY = this.barYs[i]!;
-      const fillW = Math.max(6, Math.round((val / entry.stats.maxStat) * this.barW));
+      const fillW = Math.max(
+        6,
+        Math.round((val / entry.stats.maxStat) * this.barW),
+      );
       this.statFills[i]!.clear();
       this.statFills[i]!.fillStyle(color, 1);
       this.statFills[i]!.fillRoundedRect(this.barX, barY, fillW, 18, 5);
       this.statNums[i]!.setText(`${val} / ${entry.stats.maxStat}`);
     });
     this.scaleNote.setText(
-      entry.stats.maxStat === 10 ? '★ Capital scale (1-10)' : 'Standard scale (1-5)',
+      entry.stats.maxStat === 10
+        ? "★ Capital scale (1-10)"
+        : "Standard scale (1-5)",
     );
   }
 }

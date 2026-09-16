@@ -25,11 +25,29 @@ export class TouchAdapter implements InputAdapter {
   ) {}
 
   init(): void {
-    if (!this.scene.sys.game.device.input.touch) return;
+    if (!this.isTouchPrimaryDevice()) return;
     this.controls = new TouchFlightControls({
       scene: this.scene,
       touchBindings: this.touchBindings,
     });
+  }
+
+  /**
+   * Many desktops/laptops report touch capability (hybrid touchscreens) but
+   * are driven by mouse+keyboard — only show the on-screen overlay on
+   * devices where touch is the PRIMARY pointer (phones/tablets), which the
+   * `(hover: none)` media feature reliably distinguishes from a machine that
+   * also has a mouse/trackpad.
+   */
+  private isTouchPrimaryDevice(): boolean {
+    if (!this.scene.sys.game.device.input.touch) return false;
+    if (
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
+    ) {
+      return true;
+    }
+    return window.matchMedia("(hover: none) and (pointer: coarse)").matches;
   }
 
   destroy(): void {
