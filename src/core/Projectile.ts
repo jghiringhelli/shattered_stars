@@ -111,14 +111,23 @@ export function checkProjectileHit(
   targetY: number,
   targetRadius: number,
   targetFaction: string,
+  worldSize?: number,
 ): boolean {
   // Don't hit own faction
   if (projectile.ownerFaction === targetFaction) return false;
 
-  // Simple circle collision
-  const dx = projectile.x - targetX;
-  const dy = projectile.y - targetY;
-  const dist = Math.sqrt(dx * dx + dy * dy);
+  let dx = projectile.x - targetX;
+  let dy = projectile.y - targetY;
 
+  // Torus wrap for hit-testing across the map seam
+  if (worldSize !== undefined) {
+    const half = worldSize / 2;
+    if (dx > half) dx -= worldSize;
+    else if (dx < -half) dx += worldSize;
+    if (dy > half) dy -= worldSize;
+    else if (dy < -half) dy += worldSize;
+  }
+
+  const dist = Math.sqrt(dx * dx + dy * dy);
   return dist < targetRadius + 5; // 5 = projectile radius
 }

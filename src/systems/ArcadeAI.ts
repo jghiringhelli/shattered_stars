@@ -24,6 +24,7 @@ import {
   ENGAGE_RADIUS,
   WING_SLOTS,
 } from "../ai/FormationAI";
+import { torusDelta, torusDistance } from "../core/Torus";
 
 // ============================================
 // Tuning constants
@@ -115,9 +116,16 @@ export interface AIDecision {
 // Internal helpers
 // ============================================
 
-/** Signed angle from point A to point B in degrees (0 = up/north). */
-function headingToward(ax: number, ay: number, bx: number, by: number): number {
-  return ((Math.atan2(by - ay, bx - ax) * 180) / Math.PI + 90 + 360) % 360;
+/** Signed angle from point A to point B in degrees, torus-aware. */
+function headingToward(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  worldSize: number,
+): number {
+  const { dx, dy } = torusDelta(ax, ay, bx, by, worldSize);
+  return ((Math.atan2(dy, dx) * 180) / Math.PI + 90 + 360) % 360;
 }
 
 /** Signed shortest-path difference: result in [-180, 180]. */
@@ -147,6 +155,7 @@ export function selectAITarget(
   ship: AIShipView,
   allies: readonly AIShipView[],
   enemies: readonly AIShipView[],
+  worldSize: number,
 ): AIShipView | null {
   const liveEnemies = enemies.filter((e) => e.hull > 0);
   if (liveEnemies.length === 0) return null;
@@ -160,9 +169,7 @@ export function selectAITarget(
 
     for (const ally of protectedAllies) {
       for (const enemy of liveEnemies) {
-        const dx = enemy.x - ally.x;
-        const dy = enemy.y - ally.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dist = torusDistance(ally.x, ally.y, enemy.x, enemy.y, worldSize);
         if (dist < PROTECT_RADIUS && dist < closestThreatDist) {
           closestThreatDist = dist;
           closestThreat = enemy;
@@ -175,9 +182,7 @@ export function selectAITarget(
   let nearest: AIShipView | null = null;
   let nearestDist = Infinity;
   for (const enemy of liveEnemies) {
-    const dx = enemy.x - ship.x;
-    const dy = enemy.y - ship.y;
-    const d = Math.sqrt(dx * dx + dy * dy);
+    const d = torusDistance(ship.x, ship.y, enemy.x, enemy.y, worldSize);
     if (d < nearestDist) {
       nearestDist = d;
       nearest = enemy;
@@ -203,8 +208,9 @@ function turnToward(
   aimX: number,
   aimY: number,
   deltaMs: number,
+  worldSize: number,
 ): number {
-  const desiredHeading = headingToward(ship.x, ship.y, aimX, aimY);
+  const desiredHeading = headingToward(ship.x, ship.y, aimX, aimY, worldSize);
   const diff = signedDiff(ship.angle, desiredHeading);
   const maxTurn = ship.maxAngularVelocity * (deltaMs / 1000);
   return Math.max(-maxTurn, Math.min(maxTurn, diff));
@@ -223,9 +229,9 @@ function computeTurnDelta(
   ship: AIShipView,
   target: AIShipView,
   deltaMs: number,
+  worldSize: number,
 ): number {
-  const dx = target.x - ship.x;
-  const dy = target.y - ship.y;
+  const { dx, dy } = torusDelta(ship.x, ship.y, target.x, target.y, worldSize);
   const dist = Math.sqrt(dx * dx + dy * dy);
 
   // 6 o'clock offset: 200 px directly behind target
@@ -237,7 +243,7 @@ function computeTurnDelta(
   const aimX = target.x + (sixOclockX - target.x) * ambushBlend;
   const aimY = target.y + (sixOclockY - target.y) * ambushBlend;
 
-  return turnToward(ship, aimX, aimY, deltaMs);
+  return turnToward(ship, aimX, aimY, deltaMs, worldSize);
 }
 
 /**
@@ -257,6 +263,7 @@ function computeFormationTurn(
   target: AIShipView,
   dist: number,
   deltaMs: number,
+  worldSize: number,
 ): number {
   const slot = WING_SLOTS[ship.wingSlotIndex] ?? WING_SLOTS[0]!;
   const formPos = getFormationTarget(leader.x, leader.y, leader.angle, slot);
@@ -266,7 +273,7 @@ function computeFormationTurn(
     dist,
     ENGAGE_RADIUS,
   );
-  return turnToward(ship, blended.x, blended.y, deltaMs);
+  return turnToward(ship, blended.x, blended.y, deltaMs, worldSize);
 }
 
 /**
@@ -294,15 +301,20 @@ function computeDesiredSpeed(ship: AIShipView, dist: number): number {
 function selectBarrelRollDir(
   ship: AIShipView,
   enemies: readonly AIShipView[],
+  worldSize: number,
 ): "left" | "right" | null {
   for (const enemy of enemies) {
     if (enemy.hull <= 0) continue;
-    const dx = ship.x - enemy.x;
-    const dy = ship.y - enemy.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const dist = torusDistance(ship.x, ship.y, enemy.x, enemy.y, worldSize);
     if (dist > BARREL_ROLL_THREAT_RANGE) continue;
 
-    const enemyFacingUs = headingToward(enemy.x, enemy.y, ship.x, ship.y);
+    const enemyFacingUs = headingToward(
+      enemy.x,
+      enemy.y,
+      ship.x,
+      ship.y,
+      worldSize,
+    );
     if (
       Math.abs(signedDiff(enemy.angle, enemyFacingUs)) > BARREL_ROLL_FACING_ARC
     )
@@ -311,7 +323,7 @@ function selectBarrelRollDir(
     // Roll away from the attacker's relative position
     const relativeBearing = signedDiff(
       ship.angle,
-      headingToward(ship.x, ship.y, enemy.x, enemy.y),
+      headingToward(ship.x, ship.y, enemy.x, enemy.y, worldSize),
     );
     return relativeBearing >= 0 ? "left" : "right";
   }
@@ -338,21 +350,26 @@ export function computeAIDecision(
   allies: readonly AIShipView[],
   enemies: readonly AIShipView[],
   deltaMs: number,
+  worldSize: number,
 ): AIDecision {
-  const dx = target.x - ship.x;
-  const dy = target.y - ship.y;
-  const dist = Math.sqrt(dx * dx + dy * dy);
+  const dist = torusDistance(ship.x, ship.y, target.x, target.y, worldSize);
 
   const leader = ship.wingLeaderId
     ? (allies.find((a) => a.id === ship.wingLeaderId) ?? null)
     : null;
   const turnDelta = leader
-    ? computeFormationTurn(ship, leader, target, dist, deltaMs)
-    : computeTurnDelta(ship, target, deltaMs);
+    ? computeFormationTurn(ship, leader, target, dist, deltaMs, worldSize)
+    : computeTurnDelta(ship, target, deltaMs, worldSize);
 
   const desiredSpeed = computeDesiredSpeed(ship, dist);
 
-  const aimHeading = headingToward(ship.x, ship.y, target.x, target.y);
+  const aimHeading = headingToward(
+    ship.x,
+    ship.y,
+    target.x,
+    target.y,
+    worldSize,
+  );
   const angleDiffToTarget = Math.abs(signedDiff(ship.angle, aimHeading));
 
   const doKturn =
@@ -365,15 +382,15 @@ export function computeAIDecision(
     ship.stress.level < BOOST_MAX_STRESS &&
     ship.control.boostCooldown <= 0;
 
-  const rollDir = selectBarrelRollDir(ship, enemies);
+  const rollDir = selectBarrelRollDir(ship, enemies, worldSize);
   const doBarrelRoll =
     rollDir !== null &&
     ship.control.barrelRollCooldown <= 0 &&
     angleDiffToTarget >= 45;
 
   const firePrimary =
-    angleDiffToTarget < 30 && dist < 400 && canFire(ship.control);
-  const firingOrdnanceSlot = angleDiffToTarget < 45 && dist < 600 ? 0 : -1;
+    angleDiffToTarget < 30 && dist < 1200 && canFire(ship.control);
+  const firingOrdnanceSlot = angleDiffToTarget < 45 && dist < 1500 ? 0 : -1;
 
   return {
     turnDelta,
