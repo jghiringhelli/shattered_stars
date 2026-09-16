@@ -7,6 +7,10 @@ import { FACTION_COLORS, SHIP_SIZES } from "../config";
 import { SHIP_DEFINITIONS } from "../data/ShipDefinitions";
 import { loadPortraitImages } from "./boot/BootPortraitLoader";
 import { PlayerProfileManager } from "../systems/PlayerProfile";
+import {
+  initTutorialOverlay,
+  hideTutorialOverlay,
+} from "../ui/TutorialOverlay";
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -14,6 +18,11 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
+    // Show the first-launch quick-controls overlay while assets load, so it
+    // never blocks or overlaps the main menu — it's dismissed automatically
+    // once loading completes (or by the player, whichever comes first).
+    initTutorialOverlay();
+
     // Show loading progress
     const progressBar = this.add.graphics();
     const progressBox = this.add.graphics();
@@ -43,6 +52,7 @@ export class BootScene extends Phaser.Scene {
       progressBar.destroy();
       progressBox.destroy();
       loadingText.destroy();
+      hideTutorialOverlay();
     });
 
     // Generate placeholder ship textures programmatically
@@ -56,6 +66,12 @@ export class BootScene extends Phaser.Scene {
 
     // Load cinematic art for encyclopedia (768x512 wide landscape per ship)
     this.loadEncyclopediaArt();
+
+    // Load small in-battle ship sprites for every ship (used by all real-time
+    // battle scenes; loading them all at boot means no scene needs its own
+    // per-roster preload() — the texture is already there by the time any
+    // scene starts).
+    this.loadBattleSprites();
 
     // Load SD-generated StarCraft-inspired UI textures (fail-silent if not generated)
     this.loadUiTextures();
@@ -309,6 +325,19 @@ export class BootScene extends Phaser.Scene {
         `ship_art_${id}`,
         `assets/ships/encyclopedia/${faction}/${id}_art.png`,
       );
+    });
+  }
+
+  /**
+   * Load the small in-battle sprite PNG for every ship (missing files are
+   * expected and silently fall back to the faction+size placeholder texture
+   * at render time — see src/rendering/ShipVisual.ts).
+   */
+  private loadBattleSprites(): void {
+    Object.values(SHIP_DEFINITIONS).forEach(({ id, faction }) => {
+      const key = `ship_${id}`;
+      if (this.textures.exists(key)) return;
+      this.load.image(key, `assets/ships/${faction}/${id}.png`);
     });
   }
 }
