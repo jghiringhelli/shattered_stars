@@ -15,6 +15,7 @@ import { ShipStatCard } from "../ui/ShipStatCard";
 import { PauseMenu } from "../ui/PauseMenu";
 import { InputManager } from "../input/InputManager";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
+import { addShipVisual } from "../rendering/ShipVisual";
 import type { FactionId } from "../config";
 import { BATTLEFIELD_SIZE, FACTION_COLORS, SHIP_SIZES } from "../config";
 import {
@@ -337,6 +338,7 @@ export class EpicBattleScene extends Phaser.Scene {
   // UI
   private phaseText!: Phaser.GameObjects.Text;
   private bossHealthBar!: Phaser.GameObjects.Graphics;
+  private controlsHintText!: Phaser.GameObjects.Text;
   private setupObjects: Phaser.GameObjects.GameObject[] = [];
   private pauseMenu!: PauseMenu;
   private inputSubscriptionIds: number[] = [];
@@ -637,6 +639,16 @@ export class EpicBattleScene extends Phaser.Scene {
     this.spawnBoss();
     this.spawnPlayerSquad();
     this.spawnEscorts();
+
+    // The camera never moved off its create()-time center (3000,3000) before
+    // this — the boss spawns at y=200 and the player squad at y=5800 on a
+    // 6000px-tall battlefield, so neither was ever actually visible on
+    // screen. Follow the flagship so the player can see their own ship and
+    // (once they fly toward it) the boss.
+    const flagship = this.shipSprites.get(this.playerShipIds[0] ?? "");
+    if (flagship) {
+      this.cameras.main.startFollow(flagship, true, 0.09, 0.09);
+    }
   }
 
   update(time: number, delta: number): void {
@@ -700,7 +712,7 @@ export class EpicBattleScene extends Phaser.Scene {
     this.bossHealthBar.setDepth(1000);
     this.updateBossHealthBar();
 
-    this.add
+    this.controlsHintText = this.add
       .text(
         this.scale.width / 2,
         this.scale.height - 30,
@@ -1108,22 +1120,16 @@ export class EpicBattleScene extends Phaser.Scene {
     ) as unknown as ShipSprite;
     container.shipId = ship.id;
 
-    const color = FACTION_COLORS[ship.faction] ?? 0xffffff;
     const shipDef = getShipDefinition(ship.definitionId);
     const size = SHIP_SIZES[shipDef?.baseStats.size ?? "small"];
 
-    const body = this.add.graphics();
-    body.fillStyle(color, 1);
-    body.beginPath();
-    body.moveTo(0, -size / 2);
-    body.lineTo(-size / 3, size / 2);
-    body.lineTo(0, size / 3);
-    body.lineTo(size / 3, size / 2);
-    body.closePath();
-    body.fillPath();
-    body.lineStyle(2, 0xffffff, 0.8);
-    body.strokePath();
-    container.add(body);
+    addShipVisual(this, container, {
+      definitionId: ship.definitionId,
+      faction: ship.faction,
+      fallbackSizeName: shipDef?.baseStats.size ?? "small",
+      size,
+      isPlayer: ship.owner === "player",
+    });
 
     container.setAngle(ship.angle);
     container.setDepth(10);
@@ -1736,6 +1742,10 @@ export class EpicBattleScene extends Phaser.Scene {
 
   private showVictoryScreen(): void {
     this.isPaused = true;
+    this.phaseText.setVisible(false);
+    this.timerText?.setVisible(false);
+    this.bossHealthBar.setVisible(false);
+    this.controlsHintText.setVisible(false);
 
     const centerX = this.scale.width / 2;
     const centerY = this.scale.height / 2;
@@ -1796,6 +1806,10 @@ export class EpicBattleScene extends Phaser.Scene {
 
   private showDefeatScreen(): void {
     this.isPaused = true;
+    this.phaseText.setVisible(false);
+    this.timerText?.setVisible(false);
+    this.bossHealthBar.setVisible(false);
+    this.controlsHintText.setVisible(false);
 
     const centerX = this.scale.width / 2;
     const centerY = this.scale.height / 2;
