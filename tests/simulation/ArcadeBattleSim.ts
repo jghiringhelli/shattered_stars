@@ -221,6 +221,7 @@ export function runSimulation(ships: SimShip[], maxMs = 60_000): SimResult {
           aiViews.get(ship.id)!,
           allyViews,
           enemyViews,
+          FIELD_SIZE,
         );
         ship.targetId = picked?.id ?? null;
         ship.aiDecisionTimer = 300 + Math.random() * 200;
@@ -235,6 +236,7 @@ export function runSimulation(ships: SimShip[], maxMs = 60_000): SimResult {
         allyViews,
         enemyViews,
         deltaMs,
+        FIELD_SIZE,
       );
 
       // K-turn: instant 180° flip — sim doesn't track maneuver arc

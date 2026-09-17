@@ -32,6 +32,15 @@ async function openSquadBuilder(page: Page, mode = "SKIRMISH"): Promise<void> {
     },
     { timeout: 10_000 },
   );
+  // This file exercises the advanced multi-squad/team builder UI — arcade
+  // mode now defaults to the simple single-ship flow, so switch out of it.
+  await page.evaluate(() => {
+    const s = (window as any).game.scene.getScene("SquadBuilderScene") as any;
+    if (s?.simpleMode) {
+      s.simpleMode = false;
+      s.renderBuilderMode();
+    }
+  });
 }
 
 /** Recursively collect all Text objects' strings from a Phaser scene. */
@@ -368,9 +377,18 @@ test.describe("SquadBuilderScene — post-battle ship verification", () => {
     expect(playerShips.length).toBeGreaterThan(0);
     expect(aiShips.length).toBeGreaterThan(0);
     expect(playerShips.every((s) => s.faction === "void_corsairs")).toBe(true);
-    expect(aiShips.every((s) => s.faction === "synthetic_collective")).toBe(
+    // ArcadeBattleScene promotes only 1 ship to owner:player and marks the rest
+    // of the player squad as owner:ai wingmen. So AI ships can be either faction —
+    // just verify the enemy faction is represented at all.
+    expect(aiShips.some((s) => s.faction === "synthetic_collective")).toBe(
       true,
     );
+    expect(
+      aiShips.every(
+        (s) =>
+          s.faction === "synthetic_collective" || s.faction === "void_corsairs",
+      ),
+    ).toBe(true);
   });
 
   test("player ship in battle corresponds to the player-controlled slot", async ({

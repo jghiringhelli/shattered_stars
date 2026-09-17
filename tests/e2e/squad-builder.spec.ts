@@ -27,6 +27,15 @@ async function openSquadBuilder(page: Page, mode = "SKIRMISH"): Promise<void> {
     },
     { timeout: 10_000 },
   );
+  // This whole file exercises the advanced multi-squad/team builder — arcade
+  // mode now defaults to the simple single-ship flow, so switch out of it.
+  await page.evaluate(() => {
+    const s = (window as any).game.scene.getScene("SquadBuilderScene") as any;
+    if (s?.simpleMode) {
+      s.simpleMode = false;
+      s.renderBuilderMode();
+    }
+  });
 }
 
 type SquadInfo = {

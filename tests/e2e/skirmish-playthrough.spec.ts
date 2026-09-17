@@ -171,6 +171,15 @@ test.describe("Skirmish playthrough — full run with screenshots + telemetry", 
     );
     // Let layout settle a beat
     await page.waitForTimeout(200);
+    // This test exercises the advanced multi-squad auto-fill flow — arcade
+    // mode now defaults to the simple single-ship flow, so switch out of it.
+    await page.evaluate(() => {
+      const s = (window as any).game.scene.getScene("SquadBuilderScene") as any;
+      if (s?.simpleMode) {
+        s.simpleMode = false;
+        s.renderBuilderMode();
+      }
+    });
     await shot(page, "02_squad_builder_initial");
     stamp("Squad builder opened");
 

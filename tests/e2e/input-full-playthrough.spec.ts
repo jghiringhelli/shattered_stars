@@ -172,7 +172,19 @@ test.describe("ArcadeBattleScene — keyboard playthrough", () => {
     suppressWebGLNoise(page);
     await openArcade(page, CONFED_KESTREL);
     await holdGameKey(page, "Q", 100, { shift: true });
-    await page.waitForTimeout(50);
+    // Poll instead of a blind wait: under parallel-worker CPU contention a
+    // fixed-time wait can land after the ~500ms maneuver cycle already
+    // rolled over and consumed nextManeuver back to null (pure test
+    // flakiness, not an input-wiring bug — confirmed via isolated runs).
+    await page.waitForFunction(
+      () => {
+        const scene = (window as any).game.scene.getScene(
+          "ArcadeBattleScene",
+        ) as any;
+        return scene.ships.get(scene.playerShipId).control.nextManeuver != null;
+      },
+      { timeout: 2_000 },
+    );
     expect((await getPlayerShip(page)).control.nextManeuver).toBe(
       "segnor_left",
     );
@@ -182,7 +194,15 @@ test.describe("ArcadeBattleScene — keyboard playthrough", () => {
     suppressWebGLNoise(page);
     await openArcade(page, CONFED_KESTREL);
     await holdGameKey(page, "T", 100);
-    await page.waitForTimeout(50);
+    await page.waitForFunction(
+      () => {
+        const scene = (window as any).game.scene.getScene(
+          "ArcadeBattleScene",
+        ) as any;
+        return scene.ships.get(scene.playerShipId).control.nextManeuver != null;
+      },
+      { timeout: 2_000 },
+    );
     expect((await getPlayerShip(page)).control.nextManeuver).toBe(
       "tallon_left",
     );

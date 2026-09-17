@@ -42,6 +42,10 @@ async function bootToBattle(page: Page): Promise<void> {
   );
   await page.evaluate(() => {
     const s = (window as any).game.scene.getScene("SquadBuilderScene") as any;
+    if (s?.simpleMode) {
+      s.simpleMode = false;
+      s.renderBuilderMode();
+    }
     s.squadListPanel.autoFillAll();
   });
   await page.waitForTimeout(200);

@@ -74,6 +74,15 @@ test.describe("UC-2: SKIRMISH full flow", () => {
           ?.length > 0,
       { timeout: 10_000 },
     );
+    // This test exercises the advanced multi-squad auto-fill flow — arcade
+    // mode now defaults to the simple single-ship flow, so switch out of it.
+    await page.evaluate(() => {
+      const s = (window as any).game.scene.getScene("SquadBuilderScene") as any;
+      if (s?.simpleMode) {
+        s.simpleMode = false;
+        s.renderBuilderMode();
+      }
+    });
 
     // Step 2: verify auto-fill happened
     const info = await page.evaluate(() => {
