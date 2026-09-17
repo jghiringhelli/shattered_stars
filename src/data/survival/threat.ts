@@ -7,10 +7,10 @@ import { type SurvivalRunState, BRANCHES } from "./model";
 
 /** Coefficients for the threat curve (tuned later via headless sim). */
 export const THREAT_BASE = 3;
-export const THREAT_PER_LEVEL = 1.2;
+export const THREAT_PER_LEVEL = 0.6;
 export const THREAT_PER_INVESTMENT = 0.6;
 export const THREAT_PER_ESCORT = 2;
-export const THREAT_PER_SHIP = 1.5;
+export const THREAT_PER_SHIP = 1;
 
 /** Enemies per threat point, and threat per elite spawn. */
 export const THREAT_PER_ENEMY = 2.5;
