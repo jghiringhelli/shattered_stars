@@ -1,45 +1,47 @@
 # Status.md
 
-## Last Updated: 2026-09-02 (harness correction session)
+## Last Updated: 2026-09-17 (Campaign real-time conversion + SFX/balance session)
 ## Session Summary
-This file had drifted badly — last real update was 2026-06-09 while many sessions of
-real work (capital subsystem damage, gunship ordnance fix, Dogfight player controls,
-commander crew role, role matchup matrix, beginner-aid UX, etc.) landed without a
-Status.md update. Flagging that drift here rather than reconstructing history we
-can't verify — the git log is the source of truth for what changed between
-2026-06-09 and today; this file resumes accurate tracking from today forward.
+Continuation of extensive playthrough-driven QA across all 6 game modes (Skirmish,
+Survival, Epic Format, Dogfight, Ace Duel, Campaign). Highlights:
+- **Campaign's turn-based engine removed entirely.** `src/core/BattleManager.ts` +
+  `src/systems/TurnSystem.ts` deleted; `CampaignBattleScene.ts` rewritten from scratch
+  as a real-time scene (flagship + escort AI, continuous maneuvers, autofire) matching
+  every other mode's combat model — no more mode-switch jarring the player mid-game.
+  Found and fixed 3 real bugs in the old engine before deciding to replace it outright:
+  maneuver buttons unclickable at non-1.0 zoom, turns freezing forever on 0-enemy
+  missions, and the asteroid belt tightening too fast for long survive-type missions.
+- **Audio feedback gaps closed**: `hull_hit` SFX was defined but never played anywhere;
+  `shield_hit` only wired into 1 of 7 combat scenes. Wired both into all real-time
+  scenes' damage code, plus a reused `powerup` cue for ordnance-ready and aura-gained
+  (rising-edge, player-ship-only).
+- **Survival threat curve retuned** (`src/data/survival/threat.ts`): median run length
+  was 4-5 waves (most players died before their first Hangar milestone at wave 5).
+  Softened `THREAT_PER_LEVEL`/`THREAT_PER_SHIP` — median now 6-10 waves depending on
+  build policy, capstones/cross-powers now reachable in a meaningful fraction of runs.
+- **HUD bleed-through fixed** across all 6 modes' end screens (score/timer/minimap/
+  stress bar/controls-hint were never hidden behind the semi-transparent victory/
+  defeat overlay).
+- Fixed a real (not flaky) e2e bug: `game-modes-tour.spec.ts`'s SURVIVAL case was
+  waiting for the wrong scene (`SquadBuilderScene`) — Survival routes through its own
+  `SurvivalSetupScene`.
+- All 6 modes played to completion via real Playwright UI+keyboard simulation this
+  session with zero console/page errors. `npm run build` (production) verified clean.
+- Work was committed retroactively in 13 atomic commits after being left uncommitted
+  for the whole session — `scripts/sentinel.ts` now warns explicitly against
+  squash-committing when >15 files are dirty.
 
-This session (per the GS/harness discipline — see docs/specs/verify-loop.md):
-- Reviewed the project's existing GS-style harness (`CLAUDE.md` sentinel,
-  `docs/spec-map.md` routing index, `.claude/hooks/` pre-commit gates,
-  `scripts/verify_loop.ts` collapse→recover→verify→regenerate loop) against the
-  published Generative Specification methodology (pragmaworks.dev) — it already
-  closely matches the brownfield process; no wholesale rebuild needed.
-- Found and fixed two real harness gaps: `ShipTelemetry` (INV-5 no-teleport data
-  source) was only wired into ArcadeBattleScene/ContinuousTacticalScene —
-  `survival-solo` was silently reporting 0 telemetry samples. Wired it into
-  SurvivalScene and DogfightScene too.
-- DogfightScene had zero verify-loop coverage (its `create()` only shows a setup
-  screen). Added a `postStartMethod` mechanism to `scripts/verify_loop.ts` so a
-  scenario can call a scene method (`startMatch()`) right after boot, and added
-  the `dogfight-1v1` scenario. Full loop now: 5/5 scenarios PASS.
-- Corrected `docs/specs/verify-loop.md` and this file's stale test counts
-  (1717 unit → 2078; 183/11 e2e → 216/20 e2e).
-- **Critical finding from playing Dogfight/Survival with the corrected harness**: both
-  scenes' HUD promised "Arrow keys: Move" but the player ship was 100% AI-piloted
-  (Dogfight already fixed in a prior session; Survival's `updateAI()` had a
-  `// Player ships also use simple AI if not controlled` block with no actual input
-  path — the flagship could not be steered or fire manually at all). Verified impact:
-  a scripted playthrough died at Wave 1 / Score 0 in ~20s before the fix; after wiring
-  real keyboard control (UP/DOWN speed, LEFT/RIGHT bank, SPACE to fire — same scheme as
-  Dogfight) the same script survived Wave 1, scored 100, and reached Wave 2.
-- Fixed: SurvivalScene flagship now takes real player input (escorts keep seek-AI);
-  both DogfightScene and SurvivalScene cameras now follow the player ship (manual
-  toroid-aware lerp, matching ArcadeBattleScene) instead of staying fixed at the
-  battlefield center.
+### Carried over from 2026-09-02 (harness correction session)
+This file had drifted badly before that session too — see git log for anything not
+captured here. That session fixed `ShipTelemetry` wiring gaps (Survival/Dogfight had
+0 samples for verify-loop's INV-5), added a `postStartMethod` mechanism so Dogfight's
+setup-screen boot could be scripted, and gave SurvivalScene's flagship real keyboard
+control (it was silently 100% AI-piloted before, despite the HUD promising "Arrow
+keys: Move").
 
-Current test counts (verified this session): 2078 unit tests (`npm test -- --run`,
-79 files), 216 e2e tests (`npx playwright test --list`, 20 spec files).
+Current test counts (verified 2026-09-17): 2092 unit tests (`npm test -- --run`,
+81 files), 237 e2e tests (`npx playwright test --list`, 21 spec files).
+
 
 
 ## Project Structure
@@ -93,12 +95,25 @@ scripts/
 | Segnor/tallon key bindings | ✅ Done | Shift+Q/E = segnor loop, T/Shift+T = tallon roll |
 | Wingman formation AI | ✅ Done | FormationAI.ts; first 2 allies hold wing slots, blend to combat at 350px |
 | E2E tests: stress + cloak | ✅ Done | arcade_systems.spec.ts — 6 new tests for stress HUD + cloak alpha |
+| Campaign real-time combat | ✅ Done | Turn-based BattleManager/TurnSystem removed; same engine as other modes |
+| Shield/hull/ordnance/aura SFX | ✅ Done | Wired into all 6 combat scenes (AudioManager.ts) |
+| Survival threat curve retune | ✅ Done | Median run length 4-5 → 6-10 waves |
+| Ship art unified (ShipVisual) | ✅ Done | Single renderer for all 6 battle scenes; ShipRenderer.ts deleted |
 
-## Known Bugs
+## Known Bugs / Open Items
 - This table (and the Balance Results / Roadmap / ADR Log sections below) predate the
-  2026-09-02 drift noted above — treat as historical, not current. Known live issues as
-  of this session: none blocking for Dogfight/Survival after the control + camera fixes
-  above; wave-difficulty/balance tuning for Survival not yet re-validated post-fix.
+  2026-09-02 drift noted above — treat as historical, not current.
+- **`EpicBattleScene.ts` is orphaned dead code** — a fully-built standalone boss-raid
+  scene, registered in `main.ts`, with its own tests, but nothing routes to it ("EPIC
+  FORMAT" on the main menu goes through `SquadBuilderScene` → `ArcadeBattleScene`
+  instead). Needs an owner decision: wire it into the menu as a real mode, or delete it.
+- **`tests/balance/BattleSimulator.test.ts` "reasonable draw rates (<90%)"** is
+  genuinely flaky by design (unseeded RNG, small 50-battle samples, already-relaxed
+  threshold per its own TODO comments) — can occasionally fail a commit's test hook.
+  Not touched; needs an intentional balance pass + seeding to fix properly, not a
+  quick patch.
+- `game-modes-tour.spec.ts` SURVIVAL routing bug (was waiting on the wrong scene) —
+  fixed 2026-09-17.
 
 ## Balance Results (2026-06-09, 300 battles/matchup, upgraded sim — action tokens + ordnance + stealth, spawn-side randomized)
 
@@ -134,7 +149,10 @@ VC_200 uses corsair_marauder (atk=4); TH_200 switched to gladius+2×viper compos
 
 ## Current Context
 - Working on: feat/arcade-pivot branch
-- Blocked by: nothing
+- Blocked by: nothing — `npm run build`, `npx tsc --noEmit`, full unit + e2e suites all
+  verified clean 2026-09-17. All 6 game modes played to completion with zero errors.
+- Pending owner decisions: EpicBattleScene.ts fate (wire in or delete), whether to
+  publish (Vercel/GitHub Pages — infra ready, not yet triggered).
 - Next: see Roadmap section below
 
 ## Roadmap
