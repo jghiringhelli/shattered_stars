@@ -183,19 +183,20 @@ export async function holdGameKey(
 // ─────────────────────────────────────────────
 
 // MainMenuScene: startY = 220, spacing = 46, centerX = 640
-// Items (0-indexed): SKIRMISH SURVIVAL EPIC_FORMAT DOGFIGHT ACE_DUEL CAMPAIGN ONLINE SETTINGS CONTROLS ENCYCLOPEDIA CREDITS
+// Items (0-indexed): SKIRMISH SURVIVAL EPIC_FORMAT BOSS_RAID DOGFIGHT ACE_DUEL CAMPAIGN ONLINE SETTINGS CONTROLS ENCYCLOPEDIA CREDITS
 const MENU_POSITIONS: Record<string, number> = {
   SKIRMISH: 0,
   SURVIVAL: 1,
   "EPIC FORMAT": 2,
-  DOGFIGHT: 3,
-  "ACE DUEL": 4,
-  CAMPAIGN: 5,
-  ONLINE: 6,
-  SETTINGS: 7,
-  CONTROLS: 8,
-  ENCYCLOPEDIA: 9,
-  CREDITS: 10,
+  "BOSS RAID": 3,
+  DOGFIGHT: 4,
+  "ACE DUEL": 5,
+  CAMPAIGN: 6,
+  ONLINE: 7,
+  SETTINGS: 8,
+  CONTROLS: 9,
+  ENCYCLOPEDIA: 10,
+  CREDITS: 11,
 };
 
 /** Click a main-menu item by its visible label. */

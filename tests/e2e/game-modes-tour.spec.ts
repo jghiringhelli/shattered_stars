@@ -25,6 +25,7 @@ interface ModeSpec {
     | "SKIRMISH"
     | "SURVIVAL"
     | "EPIC FORMAT"
+    | "BOSS RAID"
     | "DOGFIGHT"
     | "ACE DUEL"
     | "CAMPAIGN";
@@ -33,6 +34,8 @@ interface ModeSpec {
   needsSquadBuilder: boolean;
   /** SURVIVAL routes through its own setup screen (ship/faction pick), not SquadBuilderScene. */
   needsSurvivalSetup?: boolean;
+  /** BOSS RAID shows its own boss/difficulty picker with a "BEGIN ASSAULT" button. */
+  needsEpicSetup?: boolean;
 }
 
 const MODES: readonly ModeSpec[] = [
@@ -54,6 +57,13 @@ const MODES: readonly ModeSpec[] = [
     targetScene: "ArcadeBattleScene",
     minShips: 4,
     needsSquadBuilder: true,
+  },
+  {
+    label: "BOSS RAID",
+    targetScene: "EpicBattleScene",
+    minShips: 2,
+    needsSquadBuilder: false,
+    needsEpicSetup: true,
   },
   {
     label: "DOGFIGHT",
@@ -86,6 +96,28 @@ async function launchSurvivalWithDefaults(page: Page): Promise<void> {
   await page.mouse.click(
     box.x + 640 * (box.width / gw),
     box.y + (gh - 60) * (box.height / gh),
+  );
+}
+
+/** EpicBattleScene's "BEGIN ASSAULT" button — defaults are pre-selected, no clicks needed first. */
+async function launchEpicRaidWithDefaults(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => {
+      const s = (window as unknown as { game: any }).game.scene.getScene(
+        "EpicBattleScene",
+      );
+      return s?.isSetupPhase === true;
+    },
+    { timeout: 10_000 },
+  );
+  const box = (await page.locator("canvas").boundingBox())!;
+  const { gw, gh } = await page.evaluate(() => {
+    const g = (window as unknown as { game: any }).game;
+    return { gw: g.scale.gameSize.width, gh: g.scale.gameSize.height };
+  });
+  await page.mouse.click(
+    box.x + 640 * (box.width / gw),
+    box.y + (gh - 100) * (box.height / gh),
   );
 }
 
@@ -144,6 +176,8 @@ test.describe("Game modes tour — every mode launches a real battle", () => {
         await autoFillAndStartBattle(page);
       } else if (mode.needsSurvivalSetup) {
         await launchSurvivalWithDefaults(page);
+      } else if (mode.needsEpicSetup) {
+        await launchEpicRaidWithDefaults(page);
       }
 
       await waitForScene(page, mode.targetScene, 30_000);

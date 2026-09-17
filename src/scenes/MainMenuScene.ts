@@ -147,6 +147,7 @@ export class MainMenuScene extends Phaser.Scene {
         action: () =>
           this.scene.start("SquadBuilderScene", { initialMode: "epic" }),
       },
+      { label: "BOSS RAID", action: () => this.scene.start("EpicBattleScene") },
       { label: "DOGFIGHT", action: () => this.scene.start("DogfightScene") },
       { label: "ACE DUEL", action: () => this.scene.start("AceDuelScene") },
       { label: "CAMPAIGN", action: () => this.scene.start("CampaignScene") },
@@ -177,8 +178,8 @@ export class MainMenuScene extends Phaser.Scene {
       this.menuItems.push(container);
     });
 
-    // Visual separator between CAMPAIGN and ONLINE (between indices 5 and 6)
-    const separatorY = startY + 5 * spacing + spacing / 2;
+    // Visual separator between CAMPAIGN and ONLINE (between indices 6 and 7)
+    const separatorY = startY + 6 * spacing + spacing / 2;
     const separator = this.add.graphics();
     separator.lineStyle(1, 0x334455, 0.8);
     separator.lineBetween(centerX - 120, separatorY, centerX + 120, separatorY);
