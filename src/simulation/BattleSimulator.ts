@@ -58,6 +58,9 @@ export interface SimulationConfig {
   seed?: number; // Optional deterministic seed for multiplayer
 }
 
+/** Fixed seed shared by balance-test suites so faction/matchup assertions are reproducible. */
+export const BALANCE_TEST_SEED = 42;
+
 // Ship in simulation
 interface SimShip {
   id: string;

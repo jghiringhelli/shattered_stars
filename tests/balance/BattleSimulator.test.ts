@@ -12,6 +12,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import {
   BattleSimulator,
+  BALANCE_TEST_SEED,
   type AggregatedStats,
 } from "../../src/simulation/BattleSimulator";
 import { SHIP_DEFINITIONS } from "../../src/data/ShipDefinitions";
@@ -112,7 +113,15 @@ describe("Faction Balance", () => {
   const matchupResults: Map<string, AggregatedStats> = new Map();
 
   beforeAll(() => {
-    const sim = new BattleSimulator({ verbose: false, maxTurns: 60 });
+    // Seeded so the draw-rate/win-rate assertions below are deterministic —
+    // previously used Math.random(), which could occasionally push a
+    // matchup's draw rate past the (already relaxed) 90% threshold by pure
+    // sampling variance and fail an unrelated commit's test hook.
+    const sim = new BattleSimulator({
+      verbose: false,
+      maxTurns: 60,
+      seed: BALANCE_TEST_SEED,
+    });
 
     // Run all faction matchups
     for (let i = 0; i < factions.length; i++) {
