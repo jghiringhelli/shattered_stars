@@ -1496,9 +1496,9 @@ export class AceDuelScene extends Phaser.Scene {
     // player may have zoomed with the mouse wheel during the match.
     this.cameras.main.setZoom(1.0);
     // Hide the in-battle HUD — previously bled through the semi-transparent overlay.
-    this.roundText.setVisible(false);
+    this.roundText?.setVisible(false);
     this.timerText?.setVisible(false);
-    this.scoreText.setVisible(false);
+    this.scoreText?.setVisible(false);
     for (const o of this.battleHudExtras) o.setVisible(false);
 
     const playerWins = this.playerSide === 1 ? this.side1Wins : this.side2Wins;
