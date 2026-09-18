@@ -54,12 +54,12 @@ test.describe("Main Menu Navigation", () => {
     expect(active).toBe(true);
   });
 
-  test("all 11 menu items are present", async ({ page }) => {
+  test("all 12 menu items are present", async ({ page }) => {
     const count = await page.evaluate(() => {
       const scene = (window as any).game.scene.getScene("MainMenuScene") as any;
       return scene?.menuItems?.length ?? 0;
     });
-    expect(count).toBe(11);
+    expect(count).toBe(12);
   });
 
   // ─── mouse navigation ───────────────────────────────────────────────────
@@ -115,9 +115,9 @@ test.describe("Main Menu Navigation", () => {
 
   // ─── keyboard navigation ─────────────────────────────────────────────────
 
-  test("ArrowDown × 3 + Enter navigates to DOGFIGHT", async ({ page }) => {
-    // SKIRMISH=0, SURVIVAL=1, EPIC BATTLE=2, DOGFIGHT=3
-    for (let i = 0; i < 3; i++) {
+  test("ArrowDown × 4 + Enter navigates to DOGFIGHT", async ({ page }) => {
+    // SKIRMISH=0, SURVIVAL=1, EPIC FORMAT=2, BOSS RAID=3, DOGFIGHT=4
+    for (let i = 0; i < 4; i++) {
       await page.keyboard.press("ArrowDown");
       await page.waitForTimeout(30);
     }
@@ -129,8 +129,8 @@ test.describe("Main Menu Navigation", () => {
     expect(active).toBe(true);
   });
 
-  test("ArrowDown × 7 + Enter navigates to SETTINGS", async ({ page }) => {
-    for (let i = 0; i < 7; i++) {
+  test("ArrowDown × 8 + Enter navigates to SETTINGS", async ({ page }) => {
+    for (let i = 0; i < 8; i++) {
       await page.keyboard.press("ArrowDown");
       await page.waitForTimeout(30);
     }
@@ -142,8 +142,8 @@ test.describe("Main Menu Navigation", () => {
     expect(active).toBe(true);
   });
 
-  test("ArrowDown × 10 + Enter navigates to CREDITS", async ({ page }) => {
-    for (let i = 0; i < 10; i++) {
+  test("ArrowDown × 11 + Enter navigates to CREDITS", async ({ page }) => {
+    for (let i = 0; i < 11; i++) {
       await page.keyboard.press("ArrowDown");
       await page.waitForTimeout(30);
     }
@@ -166,18 +166,18 @@ test.describe("Main Menu Navigation", () => {
   });
 
   test("ArrowUp wraps around from top to bottom item", async ({ page }) => {
-    // At index 0 (SKIRMISH), ArrowUp should wrap to CREDITS (index 10 with 11 items)
+    // At index 0 (SKIRMISH), ArrowUp should wrap to CREDITS (index 11 with 12 items)
     await page.keyboard.press("ArrowUp");
     const selectedIndex = await page.evaluate(() => {
       const scene = (window as any).game.scene.getScene("MainMenuScene") as any;
       return scene?.selectedIndex ?? -1;
     });
-    expect(selectedIndex).toBe(10);
+    expect(selectedIndex).toBe(11);
   });
 
   test("ArrowDown wraps from last item back to first", async ({ page }) => {
-    // Navigate to last item (10 presses: 0→10), then one more wraps to 0
-    for (let i = 0; i < 11; i++) {
+    // Navigate to last item (11 presses: 0→11), then one more wraps to 0
+    for (let i = 0; i < 12; i++) {
       await page.keyboard.press("ArrowDown");
       await page.waitForTimeout(30);
     }

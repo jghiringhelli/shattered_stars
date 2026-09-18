@@ -155,7 +155,7 @@ test.describe("Skirmish playthrough — full run with screenshots + telemetry", 
       return s?.menuItems?.length ?? 0;
     });
     report.push(`- Menu items visible: **${menuItemCount}**`);
-    expect(menuItemCount).toBe(11);
+    expect(menuItemCount).toBe(12);
 
     // ─── Stage 2: Squad builder ─────────────────────────────────────────────
     await clickMenuItem(page, "SKIRMISH");

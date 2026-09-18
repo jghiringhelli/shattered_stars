@@ -182,7 +182,7 @@ export async function holdGameKey(
 // Menu helpers
 // ─────────────────────────────────────────────
 
-// MainMenuScene: startY = 220, spacing = 46, centerX = 640
+// MainMenuScene: startY = 220, spacing = 40, centerX = 640
 // Items (0-indexed): SKIRMISH SURVIVAL EPIC_FORMAT BOSS_RAID DOGFIGHT ACE_DUEL CAMPAIGN ONLINE SETTINGS CONTROLS ENCYCLOPEDIA CREDITS
 const MENU_POSITIONS: Record<string, number> = {
   SKIRMISH: 0,
@@ -206,7 +206,7 @@ export async function clickMenuItem(
 ): Promise<void> {
   const index = MENU_POSITIONS[label];
   if (index === undefined) throw new Error(`Unknown menu label: ${label}`);
-  await clickGameCoord(page, 640, 220 + index * 46);
+  await clickGameCoord(page, 640, 220 + index * 40);
 }
 
 // ─────────────────────────────────────────────

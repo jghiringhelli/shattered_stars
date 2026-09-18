@@ -23,6 +23,7 @@ import {
   addPaintedSpaceBackground,
 } from "../ui/TexturedPanel";
 import { renderMenuStarfield } from "../rendering/Starfield";
+import { openBugReport } from "../utils/BugReport";
 
 const HALF_W = MENU_BUTTON_WIDTH / 2;
 const HALF_H = MENU_BUTTON_HEIGHT / 2;
@@ -123,6 +124,23 @@ export class MainMenuScene extends Phaser.Scene {
         color: "#444444",
       })
       .setOrigin(1, 1);
+
+    // Pointer-only, deliberately outside the keyboard-navigable menuItems array
+    // so it doesn't shift MENU_POSITIONS/ArrowDown-count assumptions in e2e tests.
+    this.add
+      .text(20, this.scale.height - 20, "Report a Bug", {
+        font: "14px monospace",
+        color: "#446688",
+      })
+      .setOrigin(0, 1)
+      .setInteractive({ useHandCursor: true })
+      .on("pointerover", function (this: Phaser.GameObjects.Text) {
+        this.setColor("#88aaff");
+      })
+      .on("pointerout", function (this: Phaser.GameObjects.Text) {
+        this.setColor("#446688");
+      })
+      .on("pointerdown", () => openBugReport({ sceneKey: "MainMenuScene" }));
   }
 
   private createMenuItems(): void {
@@ -130,7 +148,7 @@ export class MainMenuScene extends Phaser.Scene {
     this.selectedIndex = 0;
     const centerX = this.scale.width / 2;
     const startY = 220;
-    const spacing = 46;
+    const spacing = 40;
 
     const items = [
       {
