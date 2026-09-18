@@ -8,6 +8,7 @@
 import Phaser from "phaser";
 import { createHoverButton } from "./ButtonFactory";
 import { showConfirmDialog } from "./ConfirmDialog";
+import { openBugReport } from "../utils/BugReport";
 
 export interface PauseMenuConfig {
   scene: Phaser.Scene;
@@ -49,9 +50,9 @@ export class PauseMenu extends Phaser.GameObjects.Container {
     // Panel background
     const panelBg = config.scene.add.graphics();
     panelBg.fillStyle(0x1a1a2a, 0.95);
-    panelBg.fillRoundedRect(-200, -200, 400, 440, 16);
+    panelBg.fillRoundedRect(-200, -200, 400, 520, 16);
     panelBg.lineStyle(3, 0x4488ff, 1);
-    panelBg.strokeRoundedRect(-200, -200, 400, 440, 16);
+    panelBg.strokeRoundedRect(-200, -200, 400, 520, 16);
     this.panel.add(panelBg);
 
     // Title
@@ -124,6 +125,15 @@ export class PauseMenu extends Phaser.GameObjects.Container {
       },
     ).setScrollFactor(0);
     this.panel.add(quitBtn);
+
+    const reportBugBtn = createHoverButton(
+      config.scene,
+      0,
+      260,
+      { ...btnConfig, color: 0x444444, label: "REPORT BUG" },
+      () => openBugReport({ sceneKey: config.scene.scene.key }),
+    ).setScrollFactor(0);
+    this.panel.add(reportBugBtn);
 
     // Set depth and scroll factor
     this.setDepth(2000);
