@@ -178,6 +178,7 @@ import { Minimap, type MinimapShip } from "../ui/Minimap";
 import { renderBattleStarfield } from "../rendering/Starfield";
 import { applyLoadoutEffects } from "../systems/BattleHelpers";
 import { audioManager } from "../audio/AudioManager";
+import { syncListenerToCamera } from "../audio/CameraListener";
 import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import { getHandlingProfile } from "../systems/FlightControlSystem";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
@@ -547,6 +548,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   update(time: number): void {
     InputManager.update();
+    // Mix every positional sound relative to what the player is
+    // looking at, so a distant firefight sounds distant.
+    syncListenerToCamera(this.cameras.main);
     const deltaMs = time - this.lastTime;
     this.lastTime = time;
 
@@ -1694,7 +1698,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
           if (ship.shields > 0) {
             ship.shields = Math.max(0, ship.shields - damage);
-            audioManager.playSound("shield_hit", 0.4);
+            audioManager.playSoundAt("shield_hit", ship.x, ship.y, 0.4);
           } else if (ship.capitalSystems) {
             const result = applyCapitalSystemDamage(
               ship.capitalSystems,
@@ -1703,7 +1707,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
             ship.capitalSystems = result.systems;
             ship.hull = sumSystemsHull(result.systems);
             this.damageThisFrame = true;
-            audioManager.playSound("hull_hit", 0.4);
+            audioManager.playSoundAt("hull_hit", ship.x, ship.y, 0.4);
             if (result.justDisabled && result.hitSystemId) {
               this.showFloatingText(
                 ship.x,
@@ -1715,7 +1719,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
           } else {
             ship.hull = Math.max(0, ship.hull - damage);
             this.damageThisFrame = true;
-            audioManager.playSound("hull_hit", 0.4);
+            audioManager.playSoundAt("hull_hit", ship.x, ship.y, 0.4);
           }
 
           if (this.damageNumbersEnabled) {

@@ -39,6 +39,7 @@ import { EffectsManager } from "../rendering/EffectsManager";
 import { headingDiffToTarget } from "../systems/MovementSystem";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
+import { syncListenerToCamera } from "../audio/CameraListener";
 import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import {
   createPerformanceState,
@@ -297,6 +298,9 @@ export class SurvivalScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     InputManager.update();
+    // Mix every positional sound relative to what the player is
+    // looking at, so a distant firefight sounds distant.
+    syncListenerToCamera(this.cameras.main);
     if (this.isPaused || this.isChoicePhase) return;
     this.performanceState = updateFPS(this.performanceState, delta);
     this.performanceState = evaluateQuality(this.performanceState, time);
@@ -1153,10 +1157,10 @@ export class SurvivalScene extends Phaser.Scene {
         const shieldDmg = Math.min(target.shields, damage);
         target.shields -= shieldDmg;
         damage -= shieldDmg;
-        audioManager.playSound("shield_hit", 0.4);
+        audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);
       }
       if (damage > 0) {
-        audioManager.playSound("hull_hit", 0.4);
+        audioManager.playSoundAt("hull_hit", target.x, target.y, 0.4);
         if (target.capitalSystems) {
           const result = applyCapitalSystemDamage(
             target.capitalSystems,

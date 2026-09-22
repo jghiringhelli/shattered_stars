@@ -26,6 +26,7 @@ import { HealthBar } from "../ui/HealthBar";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
+import { syncListenerToCamera } from "../audio/CameraListener";
 import {
   createPerformanceState,
   updateFPS,
@@ -185,10 +186,10 @@ export abstract class ContinuousBaseScene<
       const absorbed = Math.min(target.shields, damage);
       target.shields -= absorbed;
       damage -= absorbed;
-      audioManager.playSound("shield_hit", 0.4);
+      audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);
     }
     if (damage > 0) {
-      audioManager.playSound("hull_hit", 0.4);
+      audioManager.playSoundAt("hull_hit", target.x, target.y, 0.4);
       if (target.capitalSystems) {
         const result = applyCapitalSystemDamage(target.capitalSystems, damage);
         target.capitalSystems = result.systems;
@@ -357,6 +358,9 @@ export abstract class ContinuousBaseScene<
   // ──────────────────────────────────────────────
 
   override update(time: number, delta: number): void {
+    // Mix every positional sound relative to what the player is
+    // looking at, so a distant firefight sounds distant.
+    syncListenerToCamera(this.cameras.main);
     if (this.isPaused) return;
 
     this.performanceState = updateFPS(this.performanceState, delta);

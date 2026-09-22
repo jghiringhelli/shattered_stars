@@ -37,6 +37,7 @@ import { EffectsManager } from "../rendering/EffectsManager";
 import { headingDiffToTarget } from "../systems/MovementSystem";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
+import { syncListenerToCamera } from "../audio/CameraListener";
 import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import {
   createPerformanceState,
@@ -653,6 +654,9 @@ export class EpicBattleScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     InputManager.update();
+    // Mix every positional sound relative to what the player is
+    // looking at, so a distant firefight sounds distant.
+    syncListenerToCamera(this.cameras.main);
     if (this.isSetupPhase || this.isPaused || this.gameResult !== "none")
       return;
     this.performanceState = updateFPS(this.performanceState, delta);
@@ -1312,12 +1316,12 @@ export class EpicBattleScene extends Phaser.Scene {
         const shieldDmg = Math.min(this.boss.shields, damage);
         this.boss.shields -= shieldDmg;
         damage -= shieldDmg;
-        audioManager.playSound("shield_hit", 0.4);
+        audioManager.playSoundAt("shield_hit", this.boss.x, this.boss.y, 0.4);
       }
 
       // Then damage a random active section
       if (damage > 0) {
-        audioManager.playSound("hull_hit", 0.4);
+        audioManager.playSoundAt("hull_hit", this.boss.x, this.boss.y, 0.4);
         const activeSections = this.boss.sections.filter(
           (s) => !s.isDisabled && s.hull > 0,
         );
@@ -1414,11 +1418,11 @@ export class EpicBattleScene extends Phaser.Scene {
       const shieldDmg = Math.min(ship.shields, damage);
       ship.shields -= shieldDmg;
       damage -= shieldDmg;
-      audioManager.playSound("shield_hit", 0.4);
+      audioManager.playSoundAt("shield_hit", ship.x, ship.y, 0.4);
     }
 
     if (damage > 0) {
-      audioManager.playSound("hull_hit", 0.4);
+      audioManager.playSoundAt("hull_hit", ship.x, ship.y, 0.4);
       ship.hull = Math.max(0, ship.hull - damage);
     }
 

@@ -201,8 +201,9 @@ export class EffectsManager {
     faction: FactionId,
     hit: boolean,
   ): void {
-    // Play laser sound
-    audioManager.playSound("laser_fire", hit ? 0.8 : 0.5);
+    // Fired from the shooter's position, so a distant exchange sits back in
+    // the mix instead of on top of the player's own guns.
+    audioManager.playSoundAt("laser_fire", fromX, fromY, hit ? 0.8 : 0.5);
 
     const color = FACTION_LASER_COLORS[faction];
     const graphics = this.scene.add.graphics();
@@ -254,8 +255,7 @@ export class EffectsManager {
     toY: number,
     duration: number = 500,
   ): void {
-    // Play missile launch sound
-    audioManager.playSound("missile_launch", 0.7);
+    audioManager.playSoundAt("missile_launch", fromX, fromY, 0.7);
 
     const missile = this.scene.add.graphics();
     missile.setDepth(15);
@@ -307,8 +307,7 @@ export class EffectsManager {
    * Create shield impact effect
    */
   shieldImpact(x: number, y: number, angle: number, faction: FactionId): void {
-    // Play shield hit sound
-    audioManager.playSound("shield_hit", 0.6);
+    audioManager.playSoundAt("shield_hit", x, y, 0.6);
 
     const graphics = this.scene.add.graphics();
     graphics.setDepth(20);
@@ -373,7 +372,7 @@ export class EffectsManager {
         : size === "medium"
           ? "explosion_medium"
           : "explosion_large";
-    audioManager.playSound(soundType, 0.8);
+    audioManager.playSoundAt(soundType, x, y, 0.8);
 
     const rawConfig = {
       small: { particles: 8, radius: 30, duration: 300 },

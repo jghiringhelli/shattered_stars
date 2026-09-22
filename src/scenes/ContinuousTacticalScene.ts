@@ -414,13 +414,13 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       const hullDamage = damage - shieldDamage;
       if (hullDamage > 0) {
         target.hull = Math.max(0, target.hull - hullDamage);
-        audioManager.playSound("hull_hit", 0.4);
+        audioManager.playSoundAt("hull_hit", target.x, target.y, 0.4);
       }
     } else if (target.capitalSystems) {
       const result = applyCapitalSystemDamage(target.capitalSystems, damage);
       target.capitalSystems = result.systems;
       target.hull = sumSystemsHull(result.systems);
-      audioManager.playSound("hull_hit", 0.4);
+      audioManager.playSoundAt("hull_hit", target.x, target.y, 0.4);
       if (result.justDisabled && result.hitSystemId) {
         this.effectsManager.showFloatingText(
           target.x,
@@ -431,7 +431,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       }
     } else {
       target.hull = Math.max(0, target.hull - damage);
-      audioManager.playSound("hull_hit", 0.4);
+      audioManager.playSoundAt("hull_hit", target.x, target.y, 0.4);
     }
 
     if (attacker.owner === "player") {

@@ -8,27 +8,12 @@
  * - Volume controls and settings persistence
  */
 
-import Phaser from "phaser";
 import type { FactionId } from "../config";
+import { VOICE_DESIGNS, type SoundEffectType } from "./SoundDesign";
+import { playVoice } from "./SfxVoice";
+import { attenuationAt, panAt } from "./spatial";
 
-// Sound effect types
-export type SoundEffectType =
-  | "laser_fire"
-  | "missile_launch"
-  | "explosion_small"
-  | "explosion_medium"
-  | "explosion_large"
-  | "shield_hit"
-  | "hull_hit"
-  | "engine_thrust"
-  | "ui_click"
-  | "ui_hover"
-  | "ui_select"
-  | "ui_back"
-  | "powerup"
-  | "alert"
-  | "victory"
-  | "defeat";
+export type { SoundEffectType };
 
 // Music tracks — generic legacy names + Harmonia faction IDs.
 // Any string listed here can be passed to playMusic(). If a matching mp3
@@ -94,19 +79,37 @@ interface AudioSettings {
   muted: boolean;
 }
 
-// Procedural sound parameters
-interface SoundParams {
-  frequency: number;
-  duration: number;
-  type: OscillatorType;
-  attack: number;
-  decay: number;
-  sustain: number;
-  release: number;
-  detune?: number;
-  filterFreq?: number;
-  filterType?: BiquadFilterType;
+/** Where the listener sits in world space, for positional playback. */
+interface ListenerPose {
+  x: number;
+  y: number;
+  /** Distance past which a source is silent. */
+  audibleRadius: number;
+  /** Offset at which a source reaches maximum stereo panning. */
+  panHalfWidth: number;
 }
+
+/**
+ * Default listening field, sized for the arcade battle viewport.
+ *
+ * A source roughly one screen away is already well down in the mix, which is
+ * what makes a distant firefight read as distant.
+ */
+const DEFAULT_LISTENER: ListenerPose = {
+  x: 0,
+  y: 0,
+  audibleRadius: 1800,
+  panHalfWidth: 640,
+};
+
+/**
+ * Shortest gap between two plays of the same effect.
+ *
+ * A dozen ships firing on the same frame used to stack a dozen identical
+ * voices, which sums into a single loud smear rather than reading as gunfire.
+ * Retriggers inside this window are dropped.
+ */
+const RETRIGGER_GAP_MS = 45;
 
 export class AudioManager {
   private static instance: AudioManager | null = null;
@@ -125,14 +128,18 @@ export class AudioManager {
   // Current music state
   private currentMusicSource: AudioBufferSourceNode | null = null;
   private currentMusicTrack: MusicTrack | null = null;
+  /** Pending next bar of the procedural loop, so stopMusic can cancel it. */
+  private musicLoopTimer: ReturnType<typeof setTimeout> | null = null;
   private combatIntensity: number = 0; // 0-1
 
   // Sound effect cache
-  private soundBuffers: Map<SoundEffectType, AudioBuffer> = new Map();
   // File-based music buffers cached after first fetch/decode
   private musicBuffers: Map<string, AudioBuffer> = new Map();
   // Tracks known to have no mp3 file (avoid retrying failed fetches)
   private missingMusicFiles: Set<string> = new Set();
+  // Last time each effect was triggered, for the retrigger guard
+  private lastPlayedAtMs: Map<SoundEffectType, number> = new Map();
+  private listener: ListenerPose = { ...DEFAULT_LISTENER };
   // Fires on real-file playback so the caller can toggle procedural fallbacks
   private static readonly MUSIC_URL_PREFIX = "assets/audio/music/";
 
@@ -195,311 +202,94 @@ export class AudioManager {
   // ==========================================
 
   /**
-   * Play a sound effect
+   * Move the listener, so positional sounds know what "near" means.
+   *
+   * Scenes call this as the camera or player ship moves; everything played
+   * through `playSoundAt` is mixed relative to this point.
+   *
+   * @param x - Listener world X.
+   * @param y - Listener world Y.
    */
-  playSound(type: SoundEffectType, volume: number = 1, pan: number = 0): void {
-    if (!this.context || !this.sfxGain || this.settings.muted) return;
-
-    // Generate the sound procedurally
-    const params = this.getSoundParams(type);
-    if (!params) return;
-
-    this.playProceduralSound(params, volume, pan);
+  setListener(x: number, y: number): void {
+    this.listener.x = x;
+    this.listener.y = y;
   }
 
   /**
-   * Play a positional sound effect (for spatial audio)
+   * Resize the listening field.
+   *
+   * @param audibleRadius - Distance past which a source is silent.
+   * @param panHalfWidth - Offset at which a source is panned as wide as it goes.
+   */
+  setListeningField(audibleRadius: number, panHalfWidth: number): void {
+    this.listener.audibleRadius = audibleRadius;
+    this.listener.panHalfWidth = panHalfWidth;
+  }
+
+  /**
+   * Play a sound effect with no positional treatment.
+   *
+   * @param type - Which effect to play.
+   * @param volume - Peak amplitude in [0, 1].
+   * @param pan - Stereo placement in [-1, 1].
+   */
+  playSound(type: SoundEffectType, volume: number = 1, pan: number = 0): void {
+    if (!this.context || !this.sfxGain || this.settings.muted) return;
+    if (volume <= 0) return;
+    if (this.isRetriggeringTooFast(type)) return;
+
+    const design = VOICE_DESIGNS[type];
+    if (!design) return;
+
+    playVoice(this.context, this.sfxGain, design, volume, pan);
+  }
+
+  /**
+   * Play a sound effect positioned in the world.
+   *
+   * Volume falls off with distance from the listener and the sound is placed
+   * in the stereo field by which side of the listener it happened on, so a
+   * firefight across the map reads as distant instead of sitting on top of
+   * the player's own guns.
+   *
+   * @param type - Which effect to play.
+   * @param x - Source world X.
+   * @param y - Source world Y.
+   * @param volume - Peak amplitude before distance attenuation, in [0, 1].
    */
   playSoundAt(
     type: SoundEffectType,
     x: number,
     y: number,
-    listenerX: number,
-    listenerY: number,
     volume: number = 1,
   ): void {
-    // Calculate distance-based attenuation
-    const distance = Math.sqrt((x - listenerX) ** 2 + (y - listenerY) ** 2);
-    const maxDistance = 1000;
-    const attenuation = Math.max(0, 1 - distance / maxDistance);
+    const offsetX = x - this.listener.x;
+    const offsetY = y - this.listener.y;
+    const distance = Math.hypot(offsetX, offsetY);
+    const attenuation = attenuationAt(distance, this.listener.audibleRadius);
+    if (attenuation <= 0) return;
 
-    // Calculate pan based on relative position
-    const relativeX = x - listenerX;
-    const pan = Math.max(-1, Math.min(1, relativeX / 500));
-
-    this.playSound(type, volume * attenuation, pan);
-  }
-
-  private getSoundParams(type: SoundEffectType): SoundParams | null {
-    const params: Record<SoundEffectType, SoundParams> = {
-      laser_fire: {
-        frequency: 800,
-        duration: 0.15,
-        type: "sawtooth",
-        attack: 0.01,
-        decay: 0.05,
-        sustain: 0.3,
-        release: 0.09,
-        detune: -200,
-        filterFreq: 2000,
-        filterType: "lowpass",
-      },
-      missile_launch: {
-        frequency: 200,
-        duration: 0.4,
-        type: "sawtooth",
-        attack: 0.02,
-        decay: 0.1,
-        sustain: 0.5,
-        release: 0.28,
-        filterFreq: 800,
-        filterType: "lowpass",
-      },
-      explosion_small: {
-        frequency: 100,
-        duration: 0.3,
-        type: "sawtooth",
-        attack: 0.01,
-        decay: 0.15,
-        sustain: 0.2,
-        release: 0.14,
-        filterFreq: 400,
-        filterType: "lowpass",
-      },
-      explosion_medium: {
-        frequency: 60,
-        duration: 0.5,
-        type: "sawtooth",
-        attack: 0.01,
-        decay: 0.2,
-        sustain: 0.3,
-        release: 0.29,
-        filterFreq: 300,
-        filterType: "lowpass",
-      },
-      explosion_large: {
-        frequency: 40,
-        duration: 0.8,
-        type: "sawtooth",
-        attack: 0.01,
-        decay: 0.3,
-        sustain: 0.4,
-        release: 0.49,
-        filterFreq: 200,
-        filterType: "lowpass",
-      },
-      shield_hit: {
-        frequency: 1200,
-        duration: 0.2,
-        type: "sine",
-        attack: 0.01,
-        decay: 0.05,
-        sustain: 0.5,
-        release: 0.14,
-        detune: 100,
-        filterFreq: 3000,
-        filterType: "bandpass",
-      },
-      hull_hit: {
-        frequency: 150,
-        duration: 0.15,
-        type: "square",
-        attack: 0.01,
-        decay: 0.05,
-        sustain: 0.3,
-        release: 0.09,
-        filterFreq: 500,
-        filterType: "lowpass",
-      },
-      engine_thrust: {
-        frequency: 80,
-        duration: 0.1,
-        type: "sawtooth",
-        attack: 0.02,
-        decay: 0.03,
-        sustain: 0.7,
-        release: 0.05,
-        filterFreq: 300,
-        filterType: "lowpass",
-      },
-      ui_click: {
-        frequency: 600,
-        duration: 0.08,
-        type: "sine",
-        attack: 0.005,
-        decay: 0.02,
-        sustain: 0.3,
-        release: 0.055,
-      },
-      ui_hover: {
-        frequency: 800,
-        duration: 0.05,
-        type: "sine",
-        attack: 0.005,
-        decay: 0.015,
-        sustain: 0.2,
-        release: 0.03,
-      },
-      ui_select: {
-        frequency: 1000,
-        duration: 0.12,
-        type: "sine",
-        attack: 0.01,
-        decay: 0.03,
-        sustain: 0.5,
-        release: 0.08,
-      },
-      ui_back: {
-        frequency: 400,
-        duration: 0.1,
-        type: "sine",
-        attack: 0.005,
-        decay: 0.02,
-        sustain: 0.3,
-        release: 0.075,
-      },
-      powerup: {
-        frequency: 440,
-        duration: 0.3,
-        type: "sine",
-        attack: 0.02,
-        decay: 0.1,
-        sustain: 0.5,
-        release: 0.18,
-        detune: 500, // Creates arpeggio effect
-      },
-      alert: {
-        frequency: 880,
-        duration: 0.2,
-        type: "square",
-        attack: 0.01,
-        decay: 0.05,
-        sustain: 0.5,
-        release: 0.14,
-      },
-      victory: {
-        frequency: 523.25, // C5
-        duration: 0.8,
-        type: "sine",
-        attack: 0.05,
-        decay: 0.2,
-        sustain: 0.6,
-        release: 0.55,
-      },
-      defeat: {
-        frequency: 196, // G3
-        duration: 1.0,
-        type: "sine",
-        attack: 0.05,
-        decay: 0.3,
-        sustain: 0.4,
-        release: 0.65,
-      },
-    };
-
-    return params[type] || null;
-  }
-
-  private playProceduralSound(
-    params: SoundParams,
-    volume: number,
-    pan: number,
-  ): void {
-    if (!this.context || !this.sfxGain) return;
-
-    const now = this.context.currentTime;
-
-    // Create oscillator
-    const oscillator = this.context.createOscillator();
-    oscillator.type = params.type;
-    oscillator.frequency.value = params.frequency;
-    if (params.detune) {
-      oscillator.detune.value = params.detune;
-    }
-
-    // Create envelope
-    const envelope = this.context.createGain();
-    envelope.gain.setValueAtTime(0, now);
-    envelope.gain.linearRampToValueAtTime(volume, now + params.attack);
-    envelope.gain.linearRampToValueAtTime(
-      volume * params.sustain,
-      now + params.attack + params.decay,
+    this.playSound(
+      type,
+      volume * attenuation,
+      panAt(offsetX, this.listener.panHalfWidth),
     );
-    envelope.gain.linearRampToValueAtTime(0, now + params.duration);
-
-    // Create filter if specified
-    let lastNode: AudioNode = oscillator;
-    if (params.filterFreq && params.filterType) {
-      const filter = this.context.createBiquadFilter();
-      filter.type = params.filterType;
-      filter.frequency.value = params.filterFreq;
-      filter.Q.value = 1;
-      oscillator.connect(filter);
-      lastNode = filter;
-    }
-
-    // Create panner for stereo positioning
-    const panner = this.context.createStereoPanner();
-    panner.pan.value = pan;
-
-    // Connect nodes
-    lastNode.connect(envelope);
-    envelope.connect(panner);
-    panner.connect(this.sfxGain);
-
-    // Start and stop
-    oscillator.start(now);
-    oscillator.stop(now + params.duration);
-
-    // Add noise layer for explosions
-    if (params.type === "sawtooth" && params.frequency < 150) {
-      this.addNoiseLayer(params.duration, volume * 0.5, pan);
-    }
   }
 
-  private addNoiseLayer(duration: number, volume: number, pan: number): void {
-    if (!this.context || !this.sfxGain) return;
-
-    const now = this.context.currentTime;
-
-    // Create noise buffer
-    const bufferSize = this.context.sampleRate * duration;
-    const noiseBuffer = this.context.createBuffer(
-      1,
-      bufferSize,
-      this.context.sampleRate,
-    );
-    const output = noiseBuffer.getChannelData(0);
-
-    for (let i = 0; i < bufferSize; i++) {
-      output[i] = Math.random() * 2 - 1;
+  /**
+   * Whether this effect fired too recently to be worth triggering again.
+   *
+   * @param type - Effect being requested.
+   * @returns True when the request should be dropped.
+   */
+  private isRetriggeringTooFast(type: SoundEffectType): boolean {
+    const nowMs = this.context!.currentTime * 1000;
+    const previousMs = this.lastPlayedAtMs.get(type);
+    if (previousMs !== undefined && nowMs - previousMs < RETRIGGER_GAP_MS) {
+      return true;
     }
-
-    const noiseSource = this.context.createBufferSource();
-    noiseSource.buffer = noiseBuffer;
-
-    // Filter the noise
-    const filter = this.context.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = 400;
-
-    // Envelope
-    const envelope = this.context.createGain();
-    envelope.gain.setValueAtTime(volume, now);
-    envelope.gain.exponentialRampToValueAtTime(0.01, now + duration);
-
-    // Panner
-    const panner = this.context.createStereoPanner();
-    panner.pan.value = pan;
-
-    // Connect
-    noiseSource.connect(filter);
-    filter.connect(envelope);
-    envelope.connect(panner);
-    panner.connect(this.sfxGain);
-
-    noiseSource.start(now);
-    noiseSource.stop(now + duration);
+    this.lastPlayedAtMs.set(type, nowMs);
+    return false;
   }
 
   // ==========================================
@@ -608,6 +398,13 @@ export class AudioManager {
    * Stop current music
    */
   stopMusic(): void {
+    // Cancel the pending bar before anything else. Without this the callback
+    // survives the switch, sees the *new* track in currentMusicTrack, and
+    // keeps rescheduling the old track's chord alongside it forever.
+    if (this.musicLoopTimer !== null) {
+      clearTimeout(this.musicLoopTimer);
+      this.musicLoopTimer = null;
+    }
     if (this.currentMusicSource) {
       try {
         this.currentMusicSource.stop();
@@ -689,6 +486,7 @@ export class AudioManager {
 
     const now = this.context.currentTime;
     const beatDuration = 60 / (params.tempo * 120); // BPM
+    const barSeconds = beatDuration * 4;
 
     // Play a simple ambient chord
     const notes = [params.baseFreq, params.baseFreq * 1.5, params.baseFreq * 2];
@@ -703,25 +501,24 @@ export class AudioManager {
       gain.gain.linearRampToValueAtTime(0.1 * params.intensity, now + 0.5);
       gain.gain.linearRampToValueAtTime(
         0.05 * params.intensity,
-        now + beatDuration * 4 - 0.5,
+        now + barSeconds - 0.5,
       );
-      gain.gain.linearRampToValueAtTime(0, now + beatDuration * 4);
+      gain.gain.linearRampToValueAtTime(0, now + barSeconds);
 
       osc.connect(gain);
       gain.connect(this.musicGain!);
 
       osc.start(now + i * 0.1);
-      osc.stop(now + beatDuration * 4);
+      osc.stop(now + barSeconds);
     });
 
-    // Schedule next loop
-    const scheduleNext = () => {
-      if (this.currentMusicTrack) {
-        this.playMusicLoop(params);
-      }
-    };
-
-    setTimeout(scheduleNext, beatDuration * 4 * 1000 - 100);
+    // Schedule the next bar exactly at the boundary. Firing 100ms early used
+    // to overlap each bar with the one before it, and the two copies of the
+    // same chord beat against each other.
+    this.musicLoopTimer = setTimeout(() => {
+      this.musicLoopTimer = null;
+      if (this.currentMusicTrack) this.playMusicLoop(params);
+    }, barSeconds * 1000);
   }
 
   // ==========================================

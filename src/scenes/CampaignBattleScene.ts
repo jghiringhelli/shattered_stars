@@ -36,6 +36,7 @@ import { CampaignSaveManager } from "../systems/CampaignSaveManager";
 import { distributeMissionXp } from "../systems/CampaignPilotManager";
 import { CAMPAIGN_PILOTS } from "../data/PilotData";
 import { audioManager } from "../audio/AudioManager";
+import { syncListenerToCamera } from "../audio/CameraListener";
 import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import { renderBattleStarfield } from "../rendering/Starfield";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
@@ -233,6 +234,9 @@ export class CampaignBattleScene extends Phaser.Scene {
 
   update(time: number, delta: number): void {
     InputManager.update();
+    // Mix every positional sound relative to what the player is
+    // looking at, so a distant firefight sounds distant.
+    syncListenerToCamera(this.cameras.main);
     if (this.isPaused || this.missionComplete || this.missionFailed) return;
 
     this.performanceState = updateFPS(this.performanceState, delta);
@@ -821,10 +825,10 @@ export class CampaignBattleScene extends Phaser.Scene {
       const shieldDmg = Math.min(target.shields, damage);
       target.shields -= shieldDmg;
       damage -= shieldDmg;
-      audioManager.playSound("shield_hit", 0.4);
+      audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);
     }
     if (damage > 0) {
-      audioManager.playSound("hull_hit", 0.4);
+      audioManager.playSoundAt("hull_hit", target.x, target.y, 0.4);
       if (target.capitalSystems) {
         const result = applyCapitalSystemDamage(target.capitalSystems, damage);
         target.capitalSystems = result.systems;
