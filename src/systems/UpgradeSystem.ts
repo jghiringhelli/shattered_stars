@@ -501,6 +501,20 @@ export const UPGRADE_DEFINITIONS: Record<string, UpgradeDefinition> = {
     },
   },
 
+  seismic_charge: {
+    id: "seismic_charge",
+    name: "Seismic Charges",
+    slotType: "bomb",
+    description: "Drop device. Destroys obstacles and deals 1 damage nearby",
+    // Mirrors OrdnanceSystem's `seismic_charges` ordnance entry (4pt, 2 charges)
+    // so the same device costs the same however it is equipped.
+    pointCost: 4,
+    creditCost: 200,
+    effects: {
+      chargesAdded: 2,
+    },
+  },
+
   // ============================================
   // TURRETS
   // ============================================

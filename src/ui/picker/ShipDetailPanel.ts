@@ -10,7 +10,10 @@ import Phaser from "phaser";
 import type { ShipDefinition } from "../../core/types";
 import { FACTION_COLORS } from "../../config";
 import { getEncyclopediaEntry } from "../../data/ShipEncyclopedia";
-import { getShipLoadouts } from "../../data/ShipLoadouts";
+import {
+  getShipLoadouts,
+  getEquippableLoadouts,
+} from "../../data/ShipLoadouts";
 import { getLoadoutPlaystyle } from "../../data/ShipRoleProfiles";
 import { ACTION_DEFINITIONS } from "../../systems/ActionsSystem";
 import { punch } from "../UIJuice";
@@ -292,13 +295,13 @@ export class ShipDetailPanel {
       }),
     );
     const btnY = y + 18;
-    const loadouts = getShipLoadouts(def.id);
+    const offered = getEquippableLoadouts(def.id);
     const maxPage = Math.max(
       0,
-      Math.ceil(loadouts.length / LOADOUTS_PER_PAGE) - 1,
+      Math.ceil(offered.length / LOADOUTS_PER_PAGE) - 1,
     );
     const page = Math.min(this.loadoutPage, maxPage);
-    const visible = loadouts.slice(
+    const visible = offered.slice(
       page * LOADOUTS_PER_PAGE,
       (page + 1) * LOADOUTS_PER_PAGE,
     );
@@ -344,7 +347,11 @@ export class ShipDetailPanel {
       );
     }
 
-    const selLd = loadouts.find((l) => l.id === staging.getSelectedLoadoutId());
+    // Resolve against the full catalogue: a squadron preset may have selected a
+    // loadout the button row above does not offer.
+    const selLd = getShipLoadouts(def.id).find(
+      (l) => l.id === staging.getSelectedLoadoutId(),
+    );
     let cy = btnY + LOADOUT_BTN_H + 8;
     const bonuses = computeLoadoutBonuses(selLd?.upgrades ?? []);
     c.add(
