@@ -13,11 +13,9 @@ import {
   applyMenuSelection,
   MENU_BUTTON_WIDTH,
   MENU_BUTTON_HEIGHT,
-  MENU_BUTTON_RADIUS,
 } from "../ui/MenuSelection";
 import { punch } from "../ui/UIJuice";
 import {
-  createTexturedPanel,
   addSceneBackground,
   addSceneTitleFrame,
   addPaintedSpaceBackground,
@@ -33,7 +31,6 @@ export class MainMenuScene extends Phaser.Scene {
   private menuItems: Phaser.GameObjects.Container[] = [];
   private selectedIndex = 0;
   private starfield!: Phaser.GameObjects.Graphics;
-  private texturesAvailable = false;
 
   constructor() {
     super({ key: "MainMenuScene" });
@@ -41,7 +38,6 @@ export class MainMenuScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor(0x050510);
-    this.texturesAvailable = this.textures.exists("tex_btn_normal");
 
     addPaintedSpaceBackground(this, "nebula_purple");
     addSceneBackground(this);
@@ -202,12 +198,7 @@ export class MainMenuScene extends Phaser.Scene {
     separator.lineStyle(1, 0x334455, 0.8);
     separator.lineBetween(centerX - 120, separatorY, centerX + 120, separatorY);
 
-    applyMenuSelection(
-      this,
-      this.menuItems,
-      this.selectedIndex,
-      this.texturesAvailable,
-    );
+    applyMenuSelection(this, this.menuItems, this.selectedIndex);
   }
 
   private createMenuItem(
@@ -218,27 +209,15 @@ export class MainMenuScene extends Phaser.Scene {
   ): Phaser.GameObjects.Container {
     const container = this.add.container(x, y);
 
-    const panel = createTexturedPanel(this, {
-      x: 0,
-      y: 0,
-      width: MENU_BUTTON_WIDTH,
-      height: MENU_BUTTON_HEIGHT,
-      textureKey: "tex_btn_normal",
-      fallbackColor: 0x112233,
-      fallbackAlpha: 0.6,
-      fallbackRadius: MENU_BUTTON_RADIUS,
-    });
-    container.add(panel);
-
-    const glow = this.add.graphics();
-    container.add(glow);
+    const chrome = this.add.graphics();
+    container.add(chrome);
 
     const text = this.add
       .text(0, 0, label, { font: "bold 28px Arial", color: "#ffffff" })
       .setOrigin(0.5);
     container.add(text);
 
-    container.setData("glow", glow);
+    container.setData("chrome", chrome);
     container.setData("text", text);
     container.setData("action", action);
     container.setData("enabled", true);
@@ -264,12 +243,7 @@ export class MainMenuScene extends Phaser.Scene {
     );
     container.on("pointerover", () => {
       this.selectedIndex = this.menuItems.indexOf(container);
-      applyMenuSelection(
-        this,
-        this.menuItems,
-        this.selectedIndex,
-        this.texturesAvailable,
-      );
+      applyMenuSelection(this, this.menuItems, this.selectedIndex);
     });
     container.on("pointerdown", () => {
       this.selectMenuItem();
@@ -284,12 +258,7 @@ export class MainMenuScene extends Phaser.Scene {
           this.menuItems.length;
       } while (!this.menuItems[this.selectedIndex]?.getData("enabled"));
       audioManager.playSound("ui_hover", 0.5);
-      applyMenuSelection(
-        this,
-        this.menuItems,
-        this.selectedIndex,
-        this.texturesAvailable,
-      );
+      applyMenuSelection(this, this.menuItems, this.selectedIndex);
     });
 
     this.input.keyboard!.on("keydown-DOWN", () => {
@@ -297,12 +266,7 @@ export class MainMenuScene extends Phaser.Scene {
         this.selectedIndex = (this.selectedIndex + 1) % this.menuItems.length;
       } while (!this.menuItems[this.selectedIndex]?.getData("enabled"));
       audioManager.playSound("ui_hover", 0.5);
-      applyMenuSelection(
-        this,
-        this.menuItems,
-        this.selectedIndex,
-        this.texturesAvailable,
-      );
+      applyMenuSelection(this, this.menuItems, this.selectedIndex);
     });
 
     this.input.keyboard!.on("keydown-ENTER", () => {

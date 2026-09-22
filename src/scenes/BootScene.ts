@@ -258,11 +258,7 @@ export class BootScene extends Phaser.Scene {
   private loadUiTextures(): void {
     const base = "assets/ui";
     this.load.image("tex_menu_bg", `${base}/ui_menu_bg.png`);
-    this.load.image("tex_panel_bg", `${base}/ui_panel_bg.png`);
     this.load.image("tex_title_frame", `${base}/ui_title_frame.png`);
-    this.load.image("tex_divider", `${base}/ui_divider.png`);
-    this.load.image("tex_btn_normal", `${base}/ui_button_normal.png`);
-    this.load.image("tex_btn_selected", `${base}/ui_button_selected.png`);
   }
 
   /**
