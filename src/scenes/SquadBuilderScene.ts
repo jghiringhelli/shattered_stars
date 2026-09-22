@@ -15,6 +15,7 @@ import {
   type SquadEntry,
   makeSquad,
   autoFillSquad,
+  fillSquadWingmen,
   pickOpponentFaction,
   MULTI_TEAM_MODES,
 } from "../core/squadTypes";
@@ -135,7 +136,7 @@ export class SquadBuilderScene extends Phaser.Scene {
         loadoutId: string | null;
       }) => {
         const def = SHIP_DEFINITIONS[e.shipId];
-        this.squads[0] = {
+        const player: SquadEntry = {
           teamId: 1,
           factionId: e.factionId,
           controller: "player",
@@ -143,6 +144,11 @@ export class SquadBuilderScene extends Phaser.Scene {
           loadoutChoices: e.loadoutId ? { "0": e.loadoutId } : {},
           pointsUsed: def?.baseStats.pointCost ?? 0,
         };
+        // The player flies the ship they picked; the rest of the budget buys
+        // AI wingmen. Without this the launch is one fighter against the
+        // opponent's full auto-filled squad.
+        fillSquadWingmen(player, this.gameMode, this.pointLimit);
+        this.squads[0] = player;
         const opponent = makeSquad(2, 0, "ai");
         opponent.factionId = pickOpponentFaction(e.factionId);
         autoFillSquad(opponent, this.gameMode, this.pointLimit);

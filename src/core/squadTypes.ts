@@ -5,7 +5,7 @@
 
 import type { FactionId } from "../config";
 import type { AIDifficultyLevel } from "../ai/AIDifficulty";
-import { getShipsByFaction } from "../data/ShipDefinitions";
+import { getShipsByFaction, SHIP_DEFINITIONS } from "../data/ShipDefinitions";
 
 export type GameMode = "arcade" | "continuous" | "survival" | "online" | "epic";
 
@@ -109,9 +109,69 @@ export function computeFormatLabel(squads: SquadEntry[]): string {
 }
 
 /**
+ * Maximum ships in one squad. Caps both auto-fill paths so a cheap flagship
+ * can't spawn a swarm the wing-formation spawner has no offsets for.
+ */
+export const MAX_SQUAD_SHIPS = 6;
+
+/**
+ * Ships a squad may recruit, cheapest-last so a greedy pass spends the budget
+ * on the strongest hulls first and uses cheap ships to mop up the remainder.
+ *
+ * @param factionId - Faction to recruit from.
+ * @param gameMode - Capital and huge ships are only allowed in "epic" mode.
+ * @param exclude - Ship ids already in the squad.
+ */
+function recruitableShips(
+  factionId: FactionId,
+  gameMode: GameMode,
+  exclude: readonly string[],
+) {
+  return getShipsByFaction(factionId)
+    .filter(
+      (s) =>
+        gameMode === "epic" ||
+        (s.role !== "capital" && s.baseStats.size !== "huge"),
+    )
+    .filter((s) => !exclude.includes(s.id))
+    .sort((a, b) => b.baseStats.pointCost - a.baseStats.pointCost);
+}
+
+/**
+ * Adds wingmen to a squad up to the point limit, keeping the ships already in
+ * it and recomputing pointsUsed from the final roster.
+ *
+ * The simple Skirmish flow lets the player pick a single flagship. Without
+ * this, that ship launched alone: a 28pt Stiletto against the 198pt three-ship
+ * squad autoFillSquad builds for the AI.
+ *
+ * @param squad - Squad to fill in place (mutates .ships and .pointsUsed).
+ * @param gameMode - Capital ships are only allowed in "epic" mode.
+ * @param pointLimit - Maximum total point cost for the squad.
+ */
+export function fillSquadWingmen(
+  squad: SquadEntry,
+  gameMode: GameMode,
+  pointLimit: number,
+): void {
+  if (!squad.factionId) return;
+  squad.pointsUsed = squad.ships.reduce(
+    (sum, id) => sum + (SHIP_DEFINITIONS[id]?.baseStats.pointCost ?? 0),
+    0,
+  );
+  for (const ship of recruitableShips(squad.factionId, gameMode, squad.ships)) {
+    if (squad.ships.length >= MAX_SQUAD_SHIPS) break;
+    if (squad.pointsUsed + ship.baseStats.pointCost > pointLimit) continue;
+    squad.ships.push(ship.id);
+    squad.pointsUsed += ship.baseStats.pointCost;
+  }
+}
+
+/**
  * Greedily fills a squad's ships (by point cost, highest first) up to the
- * point limit for its faction. Shared by SquadListPanel (advanced builder)
- * and the simple flow's AI-opponent auto-fill so both use identical logic.
+ * point limit for its faction, discarding whatever was there before. Shared by
+ * SquadListPanel (advanced builder) and the simple flow's AI-opponent
+ * auto-fill so both use identical logic.
  *
  * @param squad - Squad to fill in place (mutates .ships and .pointsUsed).
  * @param gameMode - Capital ships are only allowed in "epic" mode.
@@ -122,20 +182,7 @@ export function autoFillSquad(
   gameMode: GameMode,
   pointLimit: number,
 ): void {
-  if (!squad.factionId) return;
-  const ships = getShipsByFaction(squad.factionId)
-    .filter(
-      (s) =>
-        gameMode === "epic" ||
-        (s.role !== "capital" && s.baseStats.size !== "huge"),
-    )
-    .sort((a, b) => b.baseStats.pointCost - a.baseStats.pointCost);
   squad.ships = [];
   squad.pointsUsed = 0;
-  for (const ship of ships) {
-    if (squad.ships.length >= 6) break;
-    if (squad.pointsUsed + ship.baseStats.pointCost > pointLimit) continue;
-    squad.ships.push(ship.id);
-    squad.pointsUsed += ship.baseStats.pointCost;
-  }
+  fillSquadWingmen(squad, gameMode, pointLimit);
 }
