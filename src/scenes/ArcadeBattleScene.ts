@@ -42,6 +42,12 @@ import {
   playBarrelRollLean,
   spawnKturnAfterimage,
 } from "../arcade/ArcadeFX";
+import {
+  drawEnergyBolt,
+  drawEnergyOrb,
+  CANNON_BOLT_LENGTH_PX,
+  CANNON_BOLT_WIDTH_PX,
+} from "../rendering/BoltRenderer";
 import { InputManager } from "../input/InputManager";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import type { ActionIntent } from "../input/InputTypes";
@@ -1128,11 +1134,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.projectiles.push(proj);
     consumeOrdnanceCharge(slot);
     const sprite = this.add.graphics();
-    sprite.fillStyle(
-      ship.faction === this.playerFaction ? 0xffcc00 : 0xaaff00,
-      1,
-    );
-    sprite.fillCircle(0, 0, 4);
+    drawEnergyOrb(sprite, {
+      color: ship.faction === this.playerFaction ? 0xffcc00 : 0xaaff00,
+      radius: 4,
+    });
     sprite.setPosition(proj.x, proj.y);
     sprite.setDepth(5);
     this.projectileSprites.set(proj.id, sprite);
@@ -1562,11 +1567,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
     this.projectiles.push(proj);
 
-    // Create sprite — a prominent elongated bolt aligned with travel direction
+    // Create sprite — a rounded, rimmed bolt aligned with travel direction
     const sprite = this.add.graphics();
-    const boltColor = ship.faction === this.playerFaction ? 0xff8800 : 0x00ff88;
-    sprite.fillStyle(boltColor, 1);
-    sprite.fillRect(-5, -17, 10, 34); // 10×34 bolt, centered
+    drawEnergyBolt(sprite, {
+      color: ship.faction === this.playerFaction ? 0xff8800 : 0x00ff88,
+      length: CANNON_BOLT_LENGTH_PX,
+      width: CANNON_BOLT_WIDTH_PX,
+    });
     sprite.setPosition(proj.x, proj.y);
     sprite.setAngle(proj.angle);
     sprite.setDepth(5);
@@ -1626,8 +1633,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const isPlayerFaction = ship.faction === this.playerFaction;
     const missileColor = isPlayerFaction ? 0xff6600 : 0xff2200;
     const bombColor = isPlayerFaction ? 0xffcc00 : 0xaaff00;
-    sprite.fillStyle(slot.isHoming ? missileColor : bombColor, 1);
-    sprite.fillCircle(0, 0, slot.ordnanceClass === "torpedo" ? 5 : 4);
+    drawEnergyOrb(sprite, {
+      color: slot.isHoming ? missileColor : bombColor,
+      radius: slot.ordnanceClass === "torpedo" ? 5 : 4,
+    });
     sprite.setPosition(proj.x, proj.y);
     sprite.setDepth(5);
     this.projectileSprites.set(proj.id, sprite);
@@ -2794,11 +2803,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.projectiles.push(proj);
 
     const sprite = this.add.graphics();
-    sprite.fillStyle(
-      ship.faction === this.playerFaction ? 0x00ffff : 0xff00ff,
-      1,
-    );
-    sprite.fillCircle(0, 0, 3);
+    drawEnergyOrb(sprite, {
+      color: ship.faction === this.playerFaction ? 0x00ffff : 0xff00ff,
+      radius: 3,
+    });
     sprite.setPosition(proj.x, proj.y);
     sprite.setDepth(5);
     this.projectileSprites.set(proj.id, sprite);
@@ -2960,8 +2968,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.projectiles.push(proj);
 
     const sprite = this.add.graphics();
-    sprite.fillStyle(0xffffff, 1);
-    sprite.fillCircle(0, 0, 7);
+    drawEnergyOrb(sprite, { color: 0x99ddff, radius: 7 });
     sprite.setPosition(proj.x, proj.y);
     sprite.setDepth(5);
     this.projectileSprites.set(proj.id, sprite);
