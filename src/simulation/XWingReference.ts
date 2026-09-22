@@ -10,7 +10,11 @@
 
 import { SPEED_SCALE_FACTOR, SHIP_SIZES, type ShipSize } from "../config";
 import { resolveManeuver } from "../systems/MovementSystem";
-import type { ManeuverDirection, ManeuverDifficulty } from "../core/types";
+import type {
+  ManeuverDirection,
+  DialManeuverDirection,
+  ManeuverDifficulty,
+} from "../core/types";
 
 /** Canonical scale: pixels per millimetre, anchored by the straight templates. */
 export const PX_PER_MM = 1;
@@ -28,19 +32,38 @@ export const XWING_BASE_MM: Readonly<
 };
 
 /** Facing change (degrees) per maneuver direction, per X-Wing 2.0 rules. */
-export const XWING_FACING_CHANGE: Readonly<Record<ManeuverDirection, number>> =
-  {
-    straight: 0,
-    bank_left: -45,
-    bank_right: 45,
-    turn_left: -90,
-    turn_right: 90,
-    kturn: 180,
-    segnor_left: -135,
-    segnor_right: 135,
-    tallon_left: -180,
-    tallon_right: 180,
-  };
+export const XWING_FACING_CHANGE: Readonly<
+  Record<DialManeuverDirection, number>
+> = {
+  straight: 0,
+  bank_left: -45,
+  bank_right: 45,
+  turn_left: -90,
+  turn_right: 90,
+  kturn: 180,
+  segnor_left: -135,
+  segnor_right: 135,
+  tallon_left: -180,
+  tallon_right: 180,
+};
+
+/**
+ * The maneuver directions the X-Wing fidelity gates apply to.
+ *
+ * Derived from {@link XWING_FACING_CHANGE} so it stays exhaustive over the
+ * dial. Arcade-only templates (drift_*) are deliberately excluded: they have
+ * no X-Wing counterpart, so holding them to X-Wing facing-change rules would
+ * be meaningless. Every *dial* maneuver remains gated.
+ */
+export const DIAL_DIRECTIONS: readonly DialManeuverDirection[] = Object.keys(
+  XWING_FACING_CHANGE,
+) as DialManeuverDirection[];
+
+/** Templates that exist for arcade feel only and are outside the X-Wing gates. */
+export const NON_DIAL_DIRECTIONS: readonly ManeuverDirection[] = [
+  "drift_left",
+  "drift_right",
+];
 
 /** True circular-arc chord unit vectors (screen coords, forward = −Y). */
 export const TRUE_ARC_CHORD = {

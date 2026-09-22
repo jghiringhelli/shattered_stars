@@ -59,7 +59,11 @@ export interface ShipDefinition {
 // Movement Types
 // ============================================
 
-export type ManeuverDirection =
+/**
+ * The maneuvers printed on an X-Wing ship dial. These are the only directions
+ * a dial entry may use, and the only ones with official facing-change rules.
+ */
+export type DialManeuverDirection =
   | "straight"
   | "bank_left"
   | "bank_right"
@@ -70,6 +74,20 @@ export type ManeuverDirection =
   | "segnor_right"
   | "tallon_left"
   | "tallon_right";
+
+/**
+ * Every maneuver the movement system can execute: the dial maneuvers plus
+ * arcade-only templates that have no dial equivalent.
+ */
+export type ManeuverDirection =
+  | DialManeuverDirection
+  /**
+   * Sustained shallow turn. Not an X-Wing dial maneuver — this is the arcade
+   * "held steering key" template, gentle enough that holding it flies a wide
+   * arc across the map instead of a tight closed orbit.
+   */
+  | "drift_left"
+  | "drift_right";
 
 export type ManeuverDifficulty = "green" | "white" | "red";
 

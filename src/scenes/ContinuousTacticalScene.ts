@@ -1076,6 +1076,8 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   private updateHUD(): void {
     const dirNames: Record<ManeuverDirection, string> = {
       straight: "STRAIGHT",
+      drift_left: "TURNING LEFT",
+      drift_right: "TURNING RIGHT",
       bank_left: "BANK LEFT",
       bank_right: "BANK RIGHT",
       turn_left: "TURN LEFT",
@@ -1107,7 +1109,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     this.dialGraphics.fillStyle(0x000000, 0.6);
     this.dialGraphics.fillCircle(cx, cy, radius + 10);
 
-    const positions: Record<ManeuverDirection, { angle: number }> = {
+    const positions: Partial<Record<ManeuverDirection, { angle: number }>> = {
       turn_left: { angle: -90 },
       bank_left: { angle: -45 },
       straight: { angle: 0 },

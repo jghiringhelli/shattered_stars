@@ -16,6 +16,16 @@ export const LOGIC_DELTA = 1000 / LOGIC_FPS; // ~16.67ms per tick
 // Movement
 export const SPEED_SCALE_FACTOR = 40; // Pixels per speed unit (template unit length)
 export const CYCLE_DURATION_MS = 500; // Fixed duration of every maneuver cycle
+/**
+ * Heading change per cycle for a sustained (held-key) arcade turn.
+ *
+ * Deliberately far shallower than the 45° bank / 90° turn dial maneuvers: a
+ * held key re-queues the same maneuver every cycle, so a dial-strength turn
+ * closes a full circle in 4–8 cycles and the ship never leaves its spawn area.
+ * At 30°/cycle a full circle takes 12 cycles (6 s) and spans ~530 px, so
+ * holding a direction reads as a wide banking arc that still crosses the map.
+ */
+export const SUSTAINED_TURN_DEGREES_PER_CYCLE = 30;
 export const MANEUVER_DURATION_BASE = 500; // ms for speed 1
 export const MANEUVER_DURATION_SCALE = 0.15; // Faster speeds are quicker
 

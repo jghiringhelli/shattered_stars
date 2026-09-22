@@ -101,6 +101,9 @@ export function createControlState(
 export type FlightCommand =
   | "thrust_increase"
   | "thrust_decrease"
+  /** Sustained shallow turn — what a held steering key queues. */
+  | "drift_left"
+  | "drift_right"
   | "turn_left"
   | "turn_right"
   | "bank_left"
@@ -302,7 +305,7 @@ export function useBoost(control: ShipControlState): ShipControlState {
 // Helpers
 // ============================================
 
-function getManeuverDifficulty(
+export function getManeuverDifficulty(
   direction: ManeuverDirection,
   speed: number,
 ): "green" | "white" | "red" {
@@ -311,6 +314,11 @@ function getManeuverDifficulty(
     return "red";
   if ((direction === "turn_left" || direction === "turn_right") && speed >= 3)
     return "red";
+  // A sustained shallow turn is the arcade equivalent of holding course, so it
+  // drains stress at low speed exactly like flying straight. Classifying it as
+  // a dial turn would mean a held steering key pinned stress at maximum.
+  if (direction === "drift_left" || direction === "drift_right")
+    return speed <= 2 ? "green" : "white";
   if (direction === "straight" && speed <= 2) return "green";
   return "white";
 }
@@ -345,6 +353,10 @@ export function processCommand(
       };
 
     // Standard direction queues — take effect next cycle
+    case "drift_left":
+      return { ...control, nextManeuver: "drift_left" };
+    case "drift_right":
+      return { ...control, nextManeuver: "drift_right" };
     case "turn_left":
       return { ...control, nextManeuver: "turn_left" };
     case "turn_right":

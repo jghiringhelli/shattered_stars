@@ -20,14 +20,29 @@ import {
   XWING_FACING_CHANGE,
   XWING_BASE_MM,
   TRUE_ARC_CHORD,
+  DIAL_DIRECTIONS,
+  NON_DIAL_DIRECTIONS,
 } from "../../../src/simulation/XWingReference";
 import type { ManeuverDirection } from "../../../src/core/types";
 
 const SIZES = ["tiny", "small", "medium", "large", "huge"] as const;
 const SPEEDS = [1, 2, 3, 4, 5] as const;
-const DIRECTIONS = Object.keys(MANEUVER_TEMPLATES) as ManeuverDirection[];
+/**
+ * The X-Wing gates apply to dial maneuvers. Arcade-only templates (drift_*)
+ * have no X-Wing counterpart; the test below pins that they are the *only*
+ * exclusions, so a future template cannot silently escape these gates.
+ */
+const DIRECTIONS = DIAL_DIRECTIONS;
 
 describe("X-Wing telemetry reference — MUST gates", () => {
+  it("MOV-0: every movement template is either gated as a dial maneuver or explicitly excluded", () => {
+    const templates = Object.keys(MANEUVER_TEMPLATES).sort();
+    const accounted = [...DIAL_DIRECTIONS, ...NON_DIAL_DIRECTIONS].sort();
+    expect(accounted).toEqual(templates);
+    // The exclusion list is arcade-feel templates only — nothing from the dial.
+    expect(NON_DIAL_DIRECTIONS).toEqual(["drift_left", "drift_right"]);
+  });
+
   it("MOV-1: straight displacement equals speed*40 + baseSize for all speeds/sizes", () => {
     for (const size of SIZES) {
       for (const speed of SPEEDS) {

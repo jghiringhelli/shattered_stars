@@ -10,7 +10,10 @@ import type {
   ManeuverDifficulty,
   ManeuverResult,
 } from "../core/types";
-import { SPEED_SCALE_FACTOR } from "../config";
+import {
+  SPEED_SCALE_FACTOR,
+  SUSTAINED_TURN_DEGREES_PER_CYCLE,
+} from "../config";
 import type { MovementProfile } from "../data/ShipDefinitions";
 
 // ============================================
@@ -42,6 +45,21 @@ export const MANEUVER_TEMPLATES: Record<ManeuverDirection, ManeuverTemplate> = {
     deltaY: -1, // Forward (up on screen)
     deltaAngle: 0,
     pathType: "straight",
+  },
+  // Sustained shallow turn used by held arcade steering. The displacement
+  // vector is offset by half the turn angle (15°) so the arc is tangent to
+  // both the entry and exit headings, matching how turn_* is built.
+  drift_left: {
+    deltaX: -0.2588,
+    deltaY: -0.9659,
+    deltaAngle: -SUSTAINED_TURN_DEGREES_PER_CYCLE,
+    pathType: "curve",
+  },
+  drift_right: {
+    deltaX: 0.2588,
+    deltaY: -0.9659,
+    deltaAngle: SUSTAINED_TURN_DEGREES_PER_CYCLE,
+    pathType: "curve",
   },
   bank_left: {
     deltaX: -0.5,

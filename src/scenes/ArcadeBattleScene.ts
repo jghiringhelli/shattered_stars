@@ -84,6 +84,11 @@ import {
   findBestTurnSpeed,
 } from "../arcade/ArcadeStress";
 import {
+  resolveSteeringManeuver,
+  resolveAiSteeringManeuver,
+  type SteerInput,
+} from "../arcade/SteeringIntent";
+import {
   BATTLEFIELD_SIZE,
   CYCLE_DURATION_MS,
   FACTION_COLORS,
@@ -954,8 +959,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   /**
-   * Queues bank or turn for the next cycle based on held direction keys.
-   * Hard-turn action from gesture state upgrades bank → turn.
+   * Queues the sustained steering maneuver for the next cycle from held keys.
+   * A plain hold drifts; the hard-turn gesture upgrades to a 90° dial turn.
    */
   private queueDirectionFromKeys(ship: ArcadeShip): void {
     const left = InputManager.isHeld("STEER_LEFT");
@@ -970,32 +975,32 @@ export class ArcadeBattleScene extends Phaser.Scene {
       deltaMs: 0,
       allowChordBarrelRoll: false,
     });
-    const hardLeft = actions.includes("hard_turn_left");
-    const hardRight = actions.includes("hard_turn_right");
 
-    if (left && !right) {
+    const input: SteerInput =
+      left && !right ? "left" : right && !left ? "right" : "none";
+    const hardTurn = actions.includes(
+      input === "left" ? "hard_turn_left" : "hard_turn_right",
+    );
+    const queued = resolveSteeringManeuver(input, hardTurn);
+
+    if (queued) {
       ship.control = processCommand(
         ship,
         ship.control,
-        hardLeft ? "turn_left" : "bank_left",
+        queued as FlightCommand,
       );
-    } else if (right && !left) {
-      ship.control = processCommand(
-        ship,
-        ship.control,
-        hardRight ? "turn_right" : "bank_right",
-      );
-    } else if (!left && !right) {
-      // No direction held — default straight next cycle
-      if (
-        !ship.control.nextManeuver ||
-        ship.control.nextManeuver === "bank_left" ||
-        ship.control.nextManeuver === "bank_right" ||
-        ship.control.nextManeuver === "turn_left" ||
-        ship.control.nextManeuver === "turn_right"
-      ) {
-        ship.control = { ...ship.control, nextManeuver: null };
-      }
+      return;
+    }
+
+    // No direction held — fall back to straight next cycle, but leave special
+    // maneuvers (K-turn, Tallon, Segnor, barrel roll) queued by gestures alone.
+    if (
+      ship.control.nextManeuver === null ||
+      ship.control.nextManeuver.startsWith("drift") ||
+      ship.control.nextManeuver.startsWith("bank") ||
+      ship.control.nextManeuver.startsWith("turn")
+    ) {
+      ship.control = { ...ship.control, nextManeuver: null };
     }
   }
 
@@ -1430,23 +1435,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const maxTurn = ship.maxAngularVelocity * (deltaMs / 1000);
     const turn = decision.turnDelta;
     const ratio = maxTurn > 0 ? Math.abs(turn) / maxTurn : 0;
-    if (ratio >= 0.65) {
-      const dir: FlightCommand = turn < 0 ? "turn_left" : "turn_right";
-      ship.control = processCommand(ship, ship.control, dir);
-    } else if (ratio >= 0.1) {
-      let dir: FlightCommand = turn < 0 ? "bank_left" : "bank_right";
-      // Stressed AI falls back from turn → bank (already bank here, but guard for completeness)
-      ship.control = processCommand(ship, ship.control, dir);
-    } else {
-      // Straight — clear any queued direction so default 'straight' applies
-      if (
-        ship.control.nextManeuver === "turn_left" ||
-        ship.control.nextManeuver === "turn_right" ||
-        ship.control.nextManeuver === "bank_left" ||
-        ship.control.nextManeuver === "bank_right"
-      ) {
-        ship.control = { ...ship.control, nextManeuver: null };
-      }
+    // Negative turnDelta steers left; resolveAiSteeringManeuver takes positive = left.
+    const steer = resolveAiSteeringManeuver(turn < 0 ? ratio : -ratio);
+    if (steer) {
+      ship.control = processCommand(ship, ship.control, steer as FlightCommand);
+    } else if (ship.control.nextManeuver !== null) {
+      // On course — clear any queued direction so the default 'straight' applies.
+      ship.control = { ...ship.control, nextManeuver: null };
     }
     // Stressed AI: downgrade queued turn → bank
     if (ship.stress.isStressed) {
@@ -1456,11 +1451,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
         ship.control = { ...ship.control, nextManeuver: "bank_right" };
     }
 
-    // Adjust speed toward desired (one step at a time)
-    if (decision.desiredSpeed > ship.control.speed) {
-      ship.control = processCommand(ship, ship.control, "thrust_increase");
-    } else if (decision.desiredSpeed < ship.control.speed) {
-      ship.control = processCommand(ship, ship.control, "thrust_decrease");
+    // Adjust speed toward desired, one step per cycle. Stepping every frame
+    // slammed speed to an extreme within a few frames of the AI deciding.
+    if (ship.control.maneuverProgress === 0) {
+      if (decision.desiredSpeed > ship.control.speed) {
+        ship.control = processCommand(ship, ship.control, "thrust_increase");
+      } else if (decision.desiredSpeed < ship.control.speed) {
+        ship.control = processCommand(ship, ship.control, "thrust_decrease");
+      }
     }
 
     // Primary fire
@@ -2558,6 +2556,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
     let label: string;
     if (display === "straight") {
       label = "STRAIGHT";
+    } else if (display === "drift_left") {
+      label = "◄ TURNING";
+    } else if (display === "drift_right") {
+      label = "TURNING ►";
     } else if (display === "bank_left") {
       label = "◄ BANK";
     } else if (display === "bank_right") {
