@@ -7,7 +7,7 @@
  * centralizing it means every mode shows real ship art, not a bare triangle.
  */
 
-import Phaser from "phaser";
+import type Phaser from "phaser";
 import { FACTION_COLORS } from "../config";
 import type { FactionId, ShipSize } from "../config";
 
@@ -51,8 +51,8 @@ export function addShipVisual(
   if (textureKey) {
     const img = scene.add.image(0, 0, textureKey);
     img.setDisplaySize(size * 1.8, size * 1.8);
-    // ADD blend mode renders the art's near-black background as transparent.
-    img.setBlendMode(Phaser.BlendModes.ADD);
+    // Composited normally: the art carries a real alpha channel, so the ship
+    // occludes what it flies over instead of being added to it.
     container.add(img);
 
     const ring = scene.add.graphics();
