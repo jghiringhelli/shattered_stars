@@ -23,6 +23,7 @@ npm-debug.log*
 # Environment
 .env
 .env.local
+comfyui.config
 
 # Temporary
 *.tmp

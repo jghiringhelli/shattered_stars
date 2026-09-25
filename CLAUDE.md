@@ -610,6 +610,18 @@ Use `submit_and_start_worker(jobs)` from other scripts.
 - `public/sprites/ui/` — interface elements
 
 
+### ComfyUI (remote, RTX 5070)
+
+A second art-generation node runs ComfyUI on another PC on the LAN, behind a
+Caddy reverse proxy with HTTP basic auth.
+
+- **URL**: `http://192.168.4.21:8188`
+- **Auth**: HTTP basic (user/password) — credentials are in `comfyui.config`
+  at the repo root (gitignored, not checked in; ask the user if it's missing).
+- Treat this the same as Forge: prefer routing through a shared queue if/when
+  one exists for it. Until then, calls go directly to the endpoint above.
+
+
 ## Music Generation — Harmonia
 
 **Harmonia** is the local music production service for this project. It is running and fully configured.
