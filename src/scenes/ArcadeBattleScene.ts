@@ -6,6 +6,12 @@
 import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
 import { addShipVisual } from "../rendering/ShipVisual";
+import {
+  INITIAL_BANK_STATE,
+  updateBankState,
+  bankSquashFor,
+  type BankState,
+} from "../rendering/ShipBanking";
 import { showConfirmDialog } from "../ui/ConfirmDialog";
 import type { ShipState } from "../core/types";
 import {
@@ -231,6 +237,12 @@ interface ShipSprite extends Phaser.GameObjects.Container {
   healthBar?: HealthBar;
   /** Faction-colored identification ring — alpha is modulated when pilot is stressed. */
   ring?: Phaser.GameObjects.Graphics;
+  /** Ship art image, when loaded — squashed/stretched by the banking effect on hard turns. */
+  image?: Phaser.GameObjects.Image | null;
+  /** Image's base scale (from setDisplaySize) that banking must multiply, not overwrite. */
+  imageBaseScaleX?: number;
+  imageBaseScaleY?: number;
+  bankState: BankState;
 }
 
 /** Maneuver difficulty ordered from most to least stressful. */
@@ -580,7 +592,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     }
 
     // Render-only updates: every real frame (not fixed-step)
-    this.updateSprites();
+    this.updateSprites(deltaMs);
     this.updateHUD();
     this.updateCameraFollow();
   }
@@ -2050,6 +2062,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
     });
     if (visual.ring) container.ring = visual.ring; // stored for per-frame stress pulse
     container.hull = visual.hull;
+    container.image = visual.image;
+    container.imageBaseScaleX = visual.image?.scaleX ?? 1;
+    container.imageBaseScaleY = visual.image?.scaleY ?? 1;
+    container.bankState = { ...INITIAL_BANK_STATE, lastAngle: ship.angle };
     container.setAngle(ship.angle);
     container.setDepth(10);
     container.setSize(size * 2, size * 2);
@@ -2059,7 +2075,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.shipSprites.set(ship.id, container);
   }
 
-  private updateSprites(): void {
+  private updateSprites(deltaMs: number): void {
     for (const [id, sprite] of this.shipSprites) {
       const ship = this.ships.get(id);
 
@@ -2090,6 +2106,22 @@ export class ArcadeBattleScene extends Phaser.Scene {
       sprite.x = ship.x;
       sprite.y = ship.y;
       sprite.angle = ship.angle;
+
+      // Bank into hard turns: squash the ship art horizontally and stretch
+      // it vertically in proportion to turn rate, purely a visual "juice"
+      // effect layered on top of the container's heading rotation.
+      if (sprite.image) {
+        sprite.bankState = updateBankState(
+          sprite.bankState,
+          ship.angle,
+          deltaMs / 1000,
+        );
+        const { scaleX, scaleY } = bankSquashFor(sprite.bankState);
+        sprite.image.setScale(
+          (sprite.imageBaseScaleX ?? 1) * scaleX,
+          (sprite.imageBaseScaleY ?? 1) * scaleY,
+        );
+      }
 
       // Cloaked ships: nearly invisible to enemies, dimmed for the owning player
       const isPlayer = ship.id === this.playerShipId;

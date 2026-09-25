@@ -13,6 +13,12 @@
 import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
 import { addShipVisual } from "../rendering/ShipVisual";
+import {
+  INITIAL_BANK_STATE,
+  updateBankState,
+  bankSquashFor,
+  type BankState,
+} from "../rendering/ShipBanking";
 import type { FactionId } from "../config";
 import { BATTLEFIELD_SIZE, SHIP_SIZES } from "../config";
 import {
@@ -145,6 +151,12 @@ interface SurvivalShip {
 
 interface ShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
+  /** Ship art image, when loaded — squashed/stretched by the banking effect on hard turns. */
+  image?: Phaser.GameObjects.Image | null;
+  /** Image's base scale (from setDisplaySize) that banking must multiply, not overwrite. */
+  imageBaseScaleX?: number;
+  imageBaseScaleY?: number;
+  bankState: BankState;
 }
 
 export class SurvivalScene extends Phaser.Scene {
@@ -979,13 +991,17 @@ export class SurvivalScene extends Phaser.Scene {
       container.add(glow);
     }
 
-    addShipVisual(this, container, {
+    const visual = addShipVisual(this, container, {
       definitionId: ship.definitionId,
       faction: ship.faction,
       fallbackSizeName: shipDef?.baseStats.size ?? "small",
       size,
       isPlayer: ship.owner === "player",
     });
+    container.image = visual.image;
+    container.imageBaseScaleX = visual.image?.scaleX ?? 1;
+    container.imageBaseScaleY = visual.image?.scaleY ?? 1;
+    container.bankState = { ...INITIAL_BANK_STATE, lastAngle: ship.angle };
 
     // Elite ships have a golden outline ring; boss ships have a red one, drawn on top.
     if (isElite || isBoss) {
@@ -1065,6 +1081,19 @@ export class SurvivalScene extends Phaser.Scene {
       if (sprite) {
         sprite.setPosition(ship.x, ship.y);
         sprite.setAngle(ship.angle);
+
+        if (sprite.image) {
+          sprite.bankState = updateBankState(
+            sprite.bankState,
+            ship.angle,
+            delta / 1000,
+          );
+          const { scaleX, scaleY } = bankSquashFor(sprite.bankState);
+          sprite.image.setScale(
+            (sprite.imageBaseScaleX ?? 1) * scaleX,
+            (sprite.imageBaseScaleY ?? 1) * scaleY,
+          );
+        }
       }
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
