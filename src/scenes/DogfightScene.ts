@@ -12,6 +12,7 @@
 import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
 import { addShipVisual } from "../rendering/ShipVisual";
+import { maneuverLerpAlpha } from "../rendering/ManeuverInterpolation";
 import { createHoverButton, createToggleButton } from "../ui/ButtonFactory";
 import { quickTipLine } from "../ui/ControlsReference";
 import type { FactionId } from "../config";
@@ -113,7 +114,7 @@ export class DogfightScene extends Phaser.Scene {
   private playerFaction: FactionId = "free_confederation";
   private enemyFaction: FactionId = "terran_hegemony";
   private playerShipId = "confed_falcon";
-  private enemyShipId = "heg_raptor";
+  private enemyShipId = "terran_raptor";
   private difficulty: "easy" | "normal" | "hard" | "brutal" = "normal";
 
   // Game state
@@ -1071,18 +1072,18 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   private interpolatePositions(delta: number): void {
-    const t = Math.min(1, delta / 280);
+    const t = maneuverLerpAlpha(delta, 280, 3);
 
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
 
-      ship.x = Phaser.Math.Linear(ship.x, ship.targetX, t * 3);
-      ship.y = Phaser.Math.Linear(ship.y, ship.targetY, t * 3);
+      ship.x = Phaser.Math.Linear(ship.x, ship.targetX, t);
+      ship.y = Phaser.Math.Linear(ship.y, ship.targetY, t);
 
       let angleDiff = ship.targetAngle - ship.angle;
       if (angleDiff > 180) angleDiff -= 360;
       if (angleDiff < -180) angleDiff += 360;
-      ship.angle += angleDiff * t * 3;
+      ship.angle += angleDiff * t;
       ship.angle = ((ship.angle % 360) + 360) % 360;
 
       // Wrap around

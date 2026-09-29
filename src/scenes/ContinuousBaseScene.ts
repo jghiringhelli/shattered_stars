@@ -13,6 +13,7 @@ import Phaser from "phaser";
 import type { ManeuverDirection } from "../core/types";
 import { BATTLEFIELD_SIZE } from "../config";
 import type { FactionId } from "../config";
+import { maneuverLerpAlpha } from "../rendering/ManeuverInterpolation";
 import { type ModeCombatStats } from "../data/ModeBalancing";
 import { calculateHitChance } from "../data/ModeBalancing";
 import {
@@ -250,7 +251,7 @@ export abstract class ContinuousBaseScene<
 
   /** Lerp all ship positions toward their targets and wrap at battlefield edge. */
   protected interpolatePositions(delta: number): void {
-    const t = Math.min(1, delta / MANEUVER_ANIMATION_DURATION) * 3;
+    const t = maneuverLerpAlpha(delta, MANEUVER_ANIMATION_DURATION, 3);
 
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
