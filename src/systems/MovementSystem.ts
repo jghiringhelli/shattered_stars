@@ -31,6 +31,12 @@ interface ManeuverTemplate {
   readonly deltaY: number;
   /** Angle change in degrees (negative = left turn, positive = right turn) */
   readonly deltaAngle: number;
+  /**
+   * Heading swept along the template's circular arc (degrees, signed). The
+   * chord (deltaX, deltaY) sits at arcAngle / 2. Any facing change beyond the
+   * arc (K-turn, Segnor, Tallon) is a flip performed while flying the arc.
+   */
+  readonly arcAngle: number;
   /** Path type for animation */
   readonly pathType: "straight" | "curve" | "kturn" | "segnor" | "tallon";
 }
@@ -44,6 +50,7 @@ export const MANEUVER_TEMPLATES: Record<ManeuverDirection, ManeuverTemplate> = {
     deltaX: 0,
     deltaY: -1, // Forward (up on screen)
     deltaAngle: 0,
+    arcAngle: 0,
     pathType: "straight",
   },
   // Sustained shallow turn used by held arcade steering. The displacement
@@ -53,68 +60,82 @@ export const MANEUVER_TEMPLATES: Record<ManeuverDirection, ManeuverTemplate> = {
     deltaX: -0.2588,
     deltaY: -0.9659,
     deltaAngle: -SUSTAINED_TURN_DEGREES_PER_CYCLE,
+    arcAngle: -SUSTAINED_TURN_DEGREES_PER_CYCLE,
     pathType: "curve",
   },
   drift_right: {
     deltaX: 0.2588,
     deltaY: -0.9659,
     deltaAngle: SUSTAINED_TURN_DEGREES_PER_CYCLE,
+    arcAngle: SUSTAINED_TURN_DEGREES_PER_CYCLE,
     pathType: "curve",
   },
+  // True circular arcs: a 45° bank's chord sits at 22.5°, a 90° turn's at 45°.
   bank_left: {
-    deltaX: -0.5,
-    deltaY: -0.866, // cos(30°) ≈ 0.866
+    deltaX: -Math.sin(Math.PI / 8),
+    deltaY: -Math.cos(Math.PI / 8),
     deltaAngle: -45,
+    arcAngle: -45,
     pathType: "curve",
   },
   bank_right: {
-    deltaX: 0.5,
-    deltaY: -0.866,
+    deltaX: Math.sin(Math.PI / 8),
+    deltaY: -Math.cos(Math.PI / 8),
     deltaAngle: 45,
+    arcAngle: 45,
     pathType: "curve",
   },
   turn_left: {
-    deltaX: -0.707, // sin(45°)
-    deltaY: -0.707, // cos(45°)
+    deltaX: -Math.SQRT1_2,
+    deltaY: -Math.SQRT1_2,
     deltaAngle: -90,
+    arcAngle: -90,
     pathType: "curve",
   },
   turn_right: {
-    deltaX: 0.707,
-    deltaY: -0.707,
+    deltaX: Math.SQRT1_2,
+    deltaY: -Math.SQRT1_2,
     deltaAngle: 90,
+    arcAngle: 90,
     pathType: "curve",
   },
   kturn: {
     deltaX: 0,
     deltaY: -1,
     deltaAngle: 180,
+    arcAngle: 0,
     pathType: "kturn",
   },
-  // Segnor's Loop: fly the bank, then rotate 180°. A left loop ends at
-  // −45° + 180° = +135°, nose pointing back toward where the ship came from.
+  // Segnor's Loop: fly the bank, then rotate 180° — carried on in the same
+  // direction as the bank, like a loop. A left loop ends at −45° − 180° =
+  // −225° ≡ +135°, nose pointing back toward where the ship came from.
   segnor_left: {
-    deltaX: -0.5,
-    deltaY: -0.866,
-    deltaAngle: 135,
+    deltaX: -Math.sin(Math.PI / 8),
+    deltaY: -Math.cos(Math.PI / 8),
+    deltaAngle: -225,
+    arcAngle: -45,
     pathType: "segnor",
   },
   segnor_right: {
-    deltaX: 0.5,
-    deltaY: -0.866,
-    deltaAngle: -135,
+    deltaX: Math.sin(Math.PI / 8),
+    deltaY: -Math.cos(Math.PI / 8),
+    deltaAngle: 225,
+    arcAngle: 45,
     pathType: "segnor",
   },
+  // Tallon Roll: fly the turn, then rotate a further 90° toward the turn.
   tallon_left: {
-    deltaX: -0.707,
-    deltaY: -0.707,
-    deltaAngle: -180, // Turn path but end facing back
+    deltaX: -Math.SQRT1_2,
+    deltaY: -Math.SQRT1_2,
+    deltaAngle: -180,
+    arcAngle: -90,
     pathType: "tallon",
   },
   tallon_right: {
-    deltaX: 0.707,
-    deltaY: -0.707,
+    deltaX: Math.SQRT1_2,
+    deltaY: -Math.SQRT1_2,
     deltaAngle: 180,
+    arcAngle: 90,
     pathType: "tallon",
   },
 };
@@ -206,7 +227,42 @@ export function resolveManeuver(
 }
 
 /**
- * Generate intermediate path points for smooth animation.
+ * Point on a maneuver's arc, in the ship's local frame (x right, y forward
+ * negative), after sweeping a fraction of its arc.
+ *
+ * A circular arc that turns the heading by θ and whose chord has length L has
+ * radius L / (2·sin(|θ|/2)); a point swept by φ sits at
+ * (r·(1 − cos φ), −r·sin φ). With θ = 0 the arc degenerates to a straight line.
+ *
+ * @param arcAngle - Heading swept over the whole arc (deg, signed).
+ * @param length - Chord length (px).
+ * @param u - Fraction of the arc swept, 0–1.
+ * @returns Local offset from the start position.
+ */
+export function arcPoint(
+  arcAngle: number,
+  length: number,
+  u: number,
+): { x: number; y: number } {
+  if (arcAngle === 0) return { x: 0, y: -length * u };
+  const theta = degToRad(Math.abs(arcAngle));
+  const radius = length / (2 * Math.sin(theta / 2));
+  const phi = theta * u;
+  const side = Math.sign(arcAngle);
+  return { x: side * radius * (1 - Math.cos(phi)), y: -radius * Math.sin(phi) };
+}
+
+/**
+ * Generate the per-cycle path a ship flies, sampled for animation.
+ *
+ * Every template is flown along its true circular arc with the nose tangent to
+ * the arc, so in real time a 90° turn sweeps 180°/s on a tight radius and a
+ * 45° bank 90°/s on a radius about twice as wide. K-turn, Segnor and Tallon
+ * add their extra rotation progressively while the ship keeps moving, so it
+ * never spins in place.
+ *
+ * Fighters fly the arc at a constant rate; capital ships ease in (t²) like a
+ * heavy hull committing to the turn.
  *
  * @param startX    - Starting X position
  * @param startY    - Starting Y position
@@ -214,7 +270,7 @@ export function resolveManeuver(
  * @param maneuver  - The maneuver to execute
  * @param numPoints - Number of intermediate waypoints (default 10)
  * @param baseSize  - Ship base size in pixels (see resolveManeuver)
- * @param profile   - Movement profile: "fighter" (default) or "capital" (boat easing)
+ * @param profile   - Movement profile: "fighter" (default) or "capital" (ease-in)
  * @returns Array of {x, y, angle} points from start to end
  */
 export function generateManeuverPath(
@@ -234,55 +290,28 @@ export function generateManeuverPath(
     baseSize,
   );
   const template = MANEUVER_TEMPLATES[maneuver.direction];
+  const length = Math.hypot(result.targetX - startX, result.targetY - startY);
+  const flip = template.deltaAngle - template.arcAngle;
   const points: Array<{ x: number; y: number; angle: number }> = [];
 
   for (let i = 0; i <= numPoints; i++) {
-    const t = i / numPoints; // 0 to 1
-
-    if (template.pathType === "straight") {
-      // Linear interpolation for straight moves
-      points.push({
-        x: startX + (result.targetX - startX) * t,
-        y: startY + (result.targetY - startY) * t,
-        angle: startAngle, // Angle stays constant for straight
-      });
-    } else if (
-      template.pathType === "curve" ||
-      template.pathType === "segnor" ||
-      template.pathType === "tallon"
-    ) {
-      // Capital ships: quadratic ease-in (committed turn, no snap)
-      // Fighter ships: smoothstep position, linear angle (unchanged)
-      const easeT = profile === "capital" ? t * t : t * t * (3 - 2 * t);
-      const angleT = profile === "capital" ? t * t : t;
-      points.push({
-        x: startX + (result.targetX - startX) * easeT,
-        y: startY + (result.targetY - startY) * easeT,
-        angle: normalizeAngle(startAngle + template.deltaAngle * angleT),
-      });
-    } else {
-      // K-turn: move straight forward, then flip 180° at the end.
-      if (profile === "capital") {
-        // Capital: gradual rotation across full cycle (no late snap)
-        const movePhase = Math.min(t * 1.5, 1);
-        const rotatePhase = t * t;
-        points.push({
-          x: startX + (result.targetX - startX) * movePhase,
-          y: startY + (result.targetY - startY) * movePhase,
-          angle: normalizeAngle(startAngle + 180 * rotatePhase),
-        });
-      } else {
-        const movePhase = Math.min(t * 1.5, 1);
-        const rotatePhase = Math.max((t - 0.6) * 2.5, 0);
-        points.push({
-          x: startX + (result.targetX - startX) * movePhase,
-          y: startY + (result.targetY - startY) * movePhase,
-          angle: normalizeAngle(startAngle + 180 * rotatePhase),
-        });
-      }
-    }
+    const t = i / numPoints;
+    const u = profile === "capital" ? t * t : t;
+    const local = arcPoint(template.arcAngle, length, u);
+    const world = rotatePoint(local.x, local.y, startAngle);
+    points.push({
+      x: startX + world.x,
+      y: startY + world.y,
+      angle: normalizeAngle(startAngle + template.arcAngle * u + flip * u),
+    });
   }
 
+  // Land exactly on the resolved target (no floating-point drift).
+  points[numPoints] = {
+    x: result.targetX,
+    y: result.targetY,
+    angle: result.targetAngle,
+  };
   return points;
 }
 

@@ -73,3 +73,107 @@ export function resolveAiSteeringManeuver(
     return isLeft ? "bank_left" : "bank_right";
   return isLeft ? "drift_left" : "drift_right";
 }
+
+// ============================================
+// Player steering: tap = drift, hold = one bank, then drift
+// ============================================
+
+/** How long a key must be held before it commits a 45° bank instead of a drift (ms). */
+export const BANK_HOLD_MS = 150;
+
+/** What the player's steering keys have been doing. */
+export interface HeldSteering {
+  /** Direction currently held. */
+  readonly side: SteerInput;
+  /** How long that direction has been held (ms). */
+  readonly heldMs: number;
+  /** Cycles committed since the key went down. */
+  readonly cyclesSincePress: number;
+  /** Banks already flown during this hold. */
+  readonly banksFlown: number;
+  /** A tap released before any cycle committed — still owed one drift. */
+  readonly tap: SteerInput;
+}
+
+/** No steering input. */
+export const IDLE_STEERING: HeldSteering = {
+  side: "none",
+  heldMs: 0,
+  cyclesSincePress: 0,
+  banksFlown: 0,
+  tap: "none",
+};
+
+/**
+ * Track the steering keys for one frame.
+ *
+ * @param state - Steering state before the frame.
+ * @param input - Direction held this frame.
+ * @param deltaMs - Frame length (ms).
+ * @returns Steering state after the frame.
+ */
+export function updateHeldSteering(
+  state: HeldSteering,
+  input: SteerInput,
+  deltaMs: number,
+): HeldSteering {
+  if (input === state.side) {
+    return input === "none"
+      ? state
+      : { ...state, heldMs: state.heldMs + deltaMs };
+  }
+  // Released (or switched) before any cycle committed: that was a tap.
+  const tap =
+    state.side !== "none" && state.cyclesSincePress === 0
+      ? state.side
+      : state.tap;
+  return { side: input, heldMs: 0, cyclesSincePress: 0, banksFlown: 0, tap };
+}
+
+/**
+ * Record that a maneuver cycle committed for the player's ship.
+ *
+ * @param state - Steering state.
+ * @param committed - The maneuver that just started.
+ * @returns Steering state with the hold's progress advanced.
+ */
+export function onSteeringCycleCommitted(
+  state: HeldSteering,
+  committed: ManeuverDirection,
+): HeldSteering {
+  return {
+    ...state,
+    cyclesSincePress: state.side === "none" ? 0 : state.cyclesSincePress + 1,
+    banksFlown: committed.startsWith("bank")
+      ? state.banksFlown + 1
+      : state.banksFlown,
+    tap: "none",
+  };
+}
+
+/**
+ * The maneuver the player's steering should queue for the next cycle.
+ *
+ * - Hard-turn gesture → 90° turn.
+ * - Held long enough, no bank flown yet this hold → 45° bank.
+ * - Otherwise held → 30° drift (keeps advancing, never orbits).
+ * - A tap released before the cycle committed → one drift.
+ *
+ * @param state - Steering state.
+ * @param hardTurn - True when the gesture system reported a hard turn.
+ * @returns The maneuver to queue, or null to fall back to straight.
+ */
+export function steeringQueue(
+  state: HeldSteering,
+  hardTurn: boolean,
+): ManeuverDirection | null {
+  if (state.side === "none") {
+    return state.tap === "none"
+      ? null
+      : resolveSteeringManeuver(state.tap, false);
+  }
+  if (!hardTurn && state.banksFlown === 0 && state.heldMs >= BANK_HOLD_MS) {
+    return state.side === "left" ? "bank_left" : "bank_right";
+  }
+  return resolveSteeringManeuver(state.side, hardTurn);
+}

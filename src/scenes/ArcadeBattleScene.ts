@@ -111,7 +111,11 @@ import {
   findBestTurnSpeed,
 } from "../arcade/ArcadeStress";
 import {
-  resolveSteeringManeuver,
+  updateHeldSteering,
+  onSteeringCycleCommitted,
+  steeringQueue,
+  IDLE_STEERING,
+  type HeldSteering,
   resolveAiSteeringManeuver,
   type SteerInput,
 } from "../arcade/SteeringIntent";
@@ -408,6 +412,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   /** Gesture state machine — tracks tap timing, hold duration, chord detection. */
   private gestureState: GestureState = INITIAL_GESTURE_STATE;
+  /** Player steering-key history: tap vs hold, banks flown this hold. */
+  private steering: HeldSteering = IDLE_STEERING;
   /**
    * When true, pressing left+right simultaneously triggers a barrel roll.
    * Read from settings on create(); exposed as a toggle for accessibility / mobile.
@@ -859,10 +865,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
     const controls: [string, string][] = [
       ["↑ / ↓", "Speed up / down"],
-      ["← / →  (tap)", "Bank (short = safe)"],
-      ["← / →  (hold)", "Turn (red if held)"],
-      ["Q / E", "Sharp turn (auto-speed)"],
-      ["Shift+Q/E", "Segnor loop (270° reverse)"],
+      ["← / →  (tap)", "Drift 30° (fine correction)"],
+      ["← / →  (hold)", "Bank 45°, then drift"],
+      ["Q / E", "Hard turn 90° (auto-speed)"],
+      ["Shift+Q/E", "Segnor loop (bank + flip)"],
       ["T / Shift+T", "Tallon roll (L / R)"],
       ["↑↑  double", "Boost dash (3s CD)"],
       ["↓↓  double", "K-Turn (alt to Z)"],
@@ -921,8 +927,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
     });
     this.gestureState = newGestureState;
 
-    // Queue next maneuver from held direction keys (bank by default; turn after hold)
-    this.queueDirectionFromKeys(ship);
+    // Queue next maneuver from the steering keys (tap = drift, hold = one bank
+    // then drift, hard-turn gesture = 90° turn)
+    this.queueDirectionFromKeys(ship, deltaMs);
 
     // K-turn: explicit Z key/gamepad/touch or double-tap DOWN
     const kturnRequested =
@@ -1011,10 +1018,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   /**
-   * Queues the sustained steering maneuver for the next cycle from held keys.
-   * A plain hold drifts; the hard-turn gesture upgrades to a 90° dial turn.
+   * Queues the steering maneuver for the next cycle from the steering keys:
+   * a tap queues one 30° drift, a hold commits one 45° bank and then drifts
+   * (so a held key never orbits), and the hard-turn gesture queues a 90° turn.
+   *
+   * @param ship - The player ship.
+   * @param deltaMs - Frame length (ms), for hold timing.
    */
-  private queueDirectionFromKeys(ship: ArcadeShip): void {
+  private queueDirectionFromKeys(ship: ArcadeShip, deltaMs: number): void {
     const left = InputManager.isHeld("STEER_LEFT");
     const right = InputManager.isHeld("STEER_RIGHT");
     const { actions } = updateGestures({
@@ -1033,7 +1044,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const hardTurn = actions.includes(
       input === "left" ? "hard_turn_left" : "hard_turn_right",
     );
-    const queued = resolveSteeringManeuver(input, hardTurn);
+    this.steering = updateHeldSteering(this.steering, input, deltaMs);
+    const queued = steeringQueue(this.steering, hardTurn);
 
     if (queued) {
       ship.control = processCommand(
@@ -1211,6 +1223,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
         ship.y = state.y;
         ship.angle = state.angle;
         ship.control = state.control;
+
+        if (completed && ship.id === this.playerShipId) {
+          this.steering = onSteeringCycleCommitted(
+            this.steering,
+            state.control.currentManeuver ?? "straight",
+          );
+        }
 
         if (completed) {
           // Classify the completed maneuver for stress

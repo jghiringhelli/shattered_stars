@@ -85,9 +85,14 @@ At S = 1 px/mm the reference base sizes are small 40 px, medium 60 px, large 80 
 - **MOV-4 (MUST)** — Per-cycle displacement MUST be constant across cycles for a
   fixed (speed, direction, baseSize); no acceleration/tunneling. Cycle duration MUST
   be `CYCLE_DURATION_MS = 500`.
-- **MOV-5 (SHOULD)** — The bank chord unit vector SHOULD equal `(±0.3827, −0.9239)`
-  (true 45° arc). **KNOWN DEVIATION:** the current template uses `(±0.5, −0.866)`
-  (30° chord), making banks ~13 mm wider laterally at speed 1. Tracked by ADR-0001.
+- **MOV-5 (MUST)** — The bank chord unit vector MUST equal `(±0.3827, −0.9239)`
+  (true 45° arc). *(Resolved 2026-10: banks previously used a 30° chord.)*
+- **MOV-15 (MUST)** — During a cycle the ship MUST ride the template's true
+  circular arc with its nose tangent to it. A 90° turn sweeps 180°/s on radius
+  L/√2; a 45° bank sweeps 90°/s on radius L/(2·sin 22.5°) ≈ 1.31·L. K-turn,
+  Segnor and Tallon add their extra rotation progressively, in the arc's
+  direction, while the ship keeps moving. Fighters fly the arc at a constant
+  rate; capitals ease in (t²).
 - **MOV-6 (SHOULD)** — Ship base sizes SHOULD use S = 1 px/mm (small 40, medium 60,
   large 80). **KNOWN DEVIATION:** `SHIP_SIZES` uses small 32, medium 48, large 64
   (S = 0.8 px/mm on bases while templates use S = 1.0). Ships therefore travel ~25%

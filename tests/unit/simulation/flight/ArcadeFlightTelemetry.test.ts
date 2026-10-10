@@ -13,13 +13,10 @@
 import { describe, it, expect } from "vitest";
 import {
   SHIP_DEFINITIONS,
+  getMovementProfile,
   getShipDial,
 } from "../../../../src/data/ShipDefinitions";
-import {
-  BATTLEFIELD_SIZE,
-  CYCLE_DURATION_MS,
-  SHIP_SIZES,
-} from "../../../../src/config";
+import { BATTLEFIELD_SIZE, CYCLE_DURATION_MS } from "../../../../src/config";
 import { BOOST_DISTANCE_PX } from "../../../../src/arcade/ArcadeInputGestures";
 import {
   ARCADE_FIXED_TICK_MS,
@@ -28,6 +25,7 @@ import {
 } from "../../../../src/simulation/flight/ArcadeFlightRecorder";
 import {
   headingDelta,
+  predictArcPose,
   predictBarrelRoll,
   predictFlight,
   translate,
@@ -103,6 +101,66 @@ describe("arcade flight — every ship flies every dial maneuver to the X-Wing p
       expect(failures).toEqual([]);
     });
   }
+});
+
+describe("arcade flight — mid-cycle the ship rides the template's arc", () => {
+  /** Mid-cycle tolerance (px): waypoint interpolation error on tight arcs. */
+  const MID_TOL = 1;
+
+  for (const shipId of SHIP_IDS) {
+    it(`${shipId} stays on the arc, nose tangent, through every tick`, () => {
+      const capital = getMovementProfile(shipId) === "capital";
+      const failures = getShipDial(shipId)
+        .filter((m) => m.direction !== "straight")
+        .flatMap((m) => {
+          const step = { direction: m.direction, speed: m.speed };
+          const record = flyArcadeShip(shipId, [step], { start: START });
+          return record.samples
+            .filter((s) => s.tMs < CYCLE_DURATION_MS)
+            .flatMap((s) => {
+              const t = s.tMs / CYCLE_DURATION_MS;
+              const want = predictArcPose(
+                START,
+                step,
+                record.baseSize,
+                capital ? t * t : t,
+              );
+              const posErr = Math.hypot(s.x - want.x, s.y - want.y);
+              const angErr = Math.abs(headingDelta(s.angle, want.angle));
+              return posErr > MID_TOL || angErr > 0.5
+                ? [
+                    `${m.direction} ${m.speed} @${s.tMs.toFixed(0)}ms: off by ${posErr.toFixed(2)}px / ${angErr.toFixed(2)}°`,
+                  ]
+                : [];
+            });
+        });
+      expect(failures).toEqual([]);
+    });
+  }
+
+  it("a hard turn sweeps twice the heading of a bank in the same cycle, on a tighter radius", () => {
+    const turn = flyArcadeShip(
+      "terran_viper",
+      [{ direction: "turn_right", speed: 2 }],
+      {
+        start: { x: 3000, y: 3000, angle: 0 },
+      },
+    );
+    const bank = flyArcadeShip(
+      "terran_viper",
+      [{ direction: "bank_right", speed: 2 }],
+      {
+        start: { x: 3000, y: 3000, angle: 0 },
+      },
+    );
+    const half = (r: FlightRecord) =>
+      r.samples.find((s) => s.tMs >= CYCLE_DURATION_MS / 2)!;
+    expect(half(turn).angle).toBeCloseTo(2 * half(bank).angle, 0);
+    // Same chord length, but the turn ends further to the side: tighter radius.
+    expect(turn.cyclePoses[0]!.x - 3000).toBeGreaterThan(
+      bank.cyclePoses[0]!.x - 3000,
+    );
+  });
 });
 
 describe("arcade flight — mixed plans and closed loops", () => {

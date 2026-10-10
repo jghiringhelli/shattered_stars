@@ -2,8 +2,8 @@
  * Gate: X-Wing 2.0 geometric fidelity of per-cycle movement.
  *
  * Verifies the MUST obligations in docs/specs/telemetry-xwing-reference.md against
- * the game's own resolveManeuver. SHOULD deviations (MOV-5, MOV-6) are locked to
- * their current values and tracked by ADR-0001 so an accidental change trips this gate.
+ * the game's own resolveManeuver. The remaining SHOULD deviation (MOV-6) is locked
+ * to its current value and tracked by ADR-0001 so an accidental change trips this gate.
  */
 
 import { describe, it, expect } from "vitest";
@@ -79,6 +79,14 @@ describe("X-Wing telemetry reference — MUST gates", () => {
     expect(right.chordUnit.x).toBeGreaterThan(0);
   });
 
+  it("MOV-5: 45-degree bank chord is a true circular eighth-arc (22.5 degrees)", () => {
+    for (const direction of ["bank_left", "bank_right"] as const) {
+      const bank = measureManeuver(direction, 1, "small");
+      expect(Math.abs(bank.chordUnit.x)).toBeCloseTo(TRUE_ARC_CHORD.bank.x, 3);
+      expect(bank.chordUnit.y).toBeCloseTo(TRUE_ARC_CHORD.bank.y, 3);
+    }
+  });
+
   it("MOV-4: displacement is deterministic per (speed,dir,size) and cycle is 500ms", () => {
     expect(CYCLE_DURATION_MS).toBe(500);
     for (const direction of DIRECTIONS) {
@@ -91,21 +99,6 @@ describe("X-Wing telemetry reference — MUST gates", () => {
 });
 
 describe("X-Wing telemetry reference — SHOULD deviations (tracked by ADR-0001)", () => {
-  it("MOV-5: bank chord currently uses a 30-degree chord, not the true 22.5-degree arc", () => {
-    const bank = measureManeuver("bank_right", 1, "small");
-    // Current template: (0.5, -0.866) → 30° chord. Locked so a silent change trips the gate.
-    const chordAngleDeg = normalizeDelta(
-      (Math.atan2(bank.chordUnit.x, -bank.chordUnit.y) * 180) / Math.PI,
-    );
-    expect(chordAngleDeg).toBeCloseTo(30, 1);
-    // ...and it deviates from the true 45°-arc chord (22.5°).
-    const trueAngle =
-      (Math.atan2(TRUE_ARC_CHORD.bank.x, -TRUE_ARC_CHORD.bank.y) * 180) /
-      Math.PI;
-    expect(trueAngle).toBeCloseTo(22.5, 1);
-    expect(Math.abs(chordAngleDeg - trueAngle)).toBeGreaterThan(5);
-  });
-
   it("MOV-6: ship bases use S=0.8 px/mm while templates use S=1.0 px/mm", () => {
     expect(SHIP_SIZES.small / XWING_BASE_MM.small).toBeCloseTo(0.8, 6);
     expect(SHIP_SIZES.medium / XWING_BASE_MM.medium).toBeCloseTo(0.8, 6);

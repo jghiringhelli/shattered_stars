@@ -15,6 +15,11 @@ import {
   resolveSteeringManeuver,
   resolveAiSteeringManeuver,
   SUSTAINED_TURN_DEGREES_PER_CYCLE,
+  BANK_HOLD_MS,
+  IDLE_STEERING,
+  updateHeldSteering,
+  onSteeringCycleCommitted,
+  steeringQueue,
 } from "../../../src/arcade/SteeringIntent";
 import {
   createControlState,
@@ -198,5 +203,63 @@ describe("drift maneuver templates", () => {
   it("point mostly forward so held steering still advances", () => {
     expect(MANEUVER_TEMPLATES.drift_left.deltaY).toBeLessThan(-0.9);
     expect(MANEUVER_TEMPLATES.drift_right.deltaY).toBeLessThan(-0.9);
+  });
+});
+
+describe("player steering — tap drifts, hold banks once, then drifts", () => {
+  const hold = (side: "left" | "right", ms: number, from = IDLE_STEERING) =>
+    updateHeldSteering(updateHeldSteering(from, side, 0), side, ms);
+
+  it("queues nothing with no input and no pending tap", () => {
+    expect(steeringQueue(IDLE_STEERING, false)).toBeNull();
+  });
+
+  it("queues a drift while a press is still shorter than the bank threshold", () => {
+    expect(steeringQueue(hold("left", BANK_HOLD_MS - 1), false)).toBe(
+      "drift_left",
+    );
+  });
+
+  it("queues a 45-degree bank once the key has been held long enough", () => {
+    expect(steeringQueue(hold("right", BANK_HOLD_MS), false)).toBe(
+      "bank_right",
+    );
+  });
+
+  it("drifts after the hold has already flown its bank, so it never orbits", () => {
+    const banked = onSteeringCycleCommitted(hold("left", 600), "bank_left");
+    expect(steeringQueue(updateHeldSteering(banked, "left", 500), false)).toBe(
+      "drift_left",
+    );
+  });
+
+  it("still owes one drift for a tap released before the cycle committed", () => {
+    const tapped = updateHeldSteering(hold("left", 60), "none", 16);
+    expect(steeringQueue(tapped, false)).toBe("drift_left");
+  });
+
+  it("forgets the tap once a cycle has committed it", () => {
+    const tapped = updateHeldSteering(hold("left", 60), "none", 16);
+    expect(
+      steeringQueue(onSteeringCycleCommitted(tapped, "drift_left"), false),
+    ).toBeNull();
+  });
+
+  it("does not treat the release of a long hold as a tap", () => {
+    const held = onSteeringCycleCommitted(hold("left", 600), "bank_left");
+    expect(
+      steeringQueue(updateHeldSteering(held, "none", 16), false),
+    ).toBeNull();
+  });
+
+  it("lets the hard-turn gesture override into a 90-degree turn", () => {
+    expect(steeringQueue(hold("left", 600), true)).toBe("turn_left");
+  });
+
+  it("starts a fresh bank when the player switches sides", () => {
+    const banked = onSteeringCycleCommitted(hold("left", 600), "bank_left");
+    expect(steeringQueue(hold("right", BANK_HOLD_MS, banked), false)).toBe(
+      "bank_right",
+    );
   });
 });

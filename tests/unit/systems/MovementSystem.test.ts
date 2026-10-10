@@ -273,6 +273,31 @@ describe("MovementSystem", () => {
       expect(lastPoint?.x).toBeCloseTo(result.targetX);
       expect(lastPoint?.y).toBeCloseTo(result.targetY);
     });
+
+    it("should keep translating while a k-turn rotates, never freezing in place", () => {
+      const maneuver: ManeuverDefinition = {
+        direction: "kturn",
+        speed: 2,
+        difficulty: "red",
+      };
+
+      const path = generateManeuverPath(0, 0, 0, maneuver, 20, 0, "fighter");
+
+      // Every segment of the path must carry some translation alongside
+      // rotation — a ship that spins in place with zero positional delta
+      // reads as a teleport-and-spin glitch, not a flight maneuver.
+      for (let i = 1; i < path.length; i++) {
+        const prev = path[i - 1]!;
+        const curr = path[i]!;
+        const moved =
+          Math.abs(curr.x - prev.x) > 1e-6 || Math.abs(curr.y - prev.y) > 1e-6;
+        const rotated = Math.abs(curr.angle - prev.angle) > 1e-6;
+
+        if (rotated) {
+          expect(moved).toBe(true);
+        }
+      }
+    });
   });
 
   describe("distance", () => {

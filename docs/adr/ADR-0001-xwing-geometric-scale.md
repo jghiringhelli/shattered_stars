@@ -40,3 +40,11 @@ own footprint than on the tabletop, and banks use a 30° chord instead of the tr
   templates to `SPEED_SCALE_FACTOR = 32` — each a balance-affecting change requiring a
   full `headless_sim.ts --matrix` re-run and visual re-QA before adoption.
 - No production code changes in this ADR; it establishes the reference only.
+
+## Amendment — 2026-10: MOV-5 resolved
+
+Ships now fly their templates along the true circular arc in real time
+(MOV-15), so a bank that turns 45° MUST have its chord at 22.5°. A 30° chord
+cannot be the chord of a tangent 45° arc. The bank template moved to the true
+chord, and MOV-5 is promoted to MUST. MOV-6 (base scale) remains a tracked
+SHOULD.

@@ -9,10 +9,11 @@
  *
  * Rules (docs/specs/telemetry-xwing-reference.md, ADR-0001):
  * - Template length L = speed × SPEED_SCALE_FACTOR + base size; speed 0 = stay put.
- * - Arcs travel along their chord: hard turn chord at 45° (θ/2 of a 90° arc);
- *   bank chord at BANK_CHORD_DEG (MOV-5 documented deviation, ADR-0001).
+ * - Turns and banks are true circular arcs: the chord sits at half the
+ *   heading change (turn 45°, bank 22.5°) and mid-cycle the nose stays
+ *   tangent to the arc.
  * - K-turn: straight template, then rotate 180°.
- * - Segnor's Loop: bank template, then rotate 180° → net facing ±45° + 180°.
+ * - Segnor's Loop: bank template, then rotate 180° the same way → ±225° (≡ ∓135°).
  * - Tallon Roll: turn template, then rotate 90° toward the turn → net ±180°.
  * - Barrel roll: slide sideways one speed-1 template + base, facing unchanged.
  *
@@ -38,11 +39,8 @@ export interface FlightStep {
   readonly speed: number;
 }
 
-/**
- * Bank chord angle from the entry heading. A true 45° arc has a 22.5° chord;
- * the game ships 30° as a documented, accepted deviation (MOV-5, ADR-0001).
- */
-export const BANK_CHORD_DEG = 30;
+/** Bank chord angle from the entry heading: half of a true 45° arc. */
+export const BANK_CHORD_DEG = 22.5;
 
 /** Hard-turn chord angle: half of the 90° facing change (true circular arc). */
 export const TURN_CHORD_DEG = 45;
@@ -54,6 +52,11 @@ interface ManeuverRule {
   readonly facingDeg: number;
 }
 
+/** Heading swept along the arc itself: twice the chord angle. */
+function arcDegOf(rule: ManeuverRule): number {
+  return rule.chordDeg * 2;
+}
+
 /** The X-Wing 2.0 rule for every dial maneuver (plus the arcade drift). */
 export const XWING_RULES: Readonly<Record<ManeuverDirection, ManeuverRule>> = {
   straight: { chordDeg: 0, facingDeg: 0 },
@@ -62,7 +65,7 @@ export const XWING_RULES: Readonly<Record<ManeuverDirection, ManeuverRule>> = {
   turn_left: { chordDeg: -TURN_CHORD_DEG, facingDeg: -90 },
   turn_right: { chordDeg: TURN_CHORD_DEG, facingDeg: 90 },
   kturn: { chordDeg: 0, facingDeg: 180 },
-  segnor_left: { chordDeg: -BANK_CHORD_DEG, facingDeg: -45 + 180 },
+  segnor_left: { chordDeg: -BANK_CHORD_DEG, facingDeg: -45 - 180 },
   segnor_right: { chordDeg: BANK_CHORD_DEG, facingDeg: 45 + 180 },
   tallon_left: { chordDeg: -TURN_CHORD_DEG, facingDeg: -90 - 90 },
   tallon_right: { chordDeg: TURN_CHORD_DEG, facingDeg: 90 + 90 },
@@ -148,6 +151,42 @@ export function predictManeuver(
     templateLength(step.speed, baseSize),
   );
   return { ...moved, angle: normalizeHeading(pose.angle + rule.facingDeg) };
+}
+
+/**
+ * Pose part-way through a maneuver: on the template's circular arc, nose
+ * tangent to it, plus the share of any extra flip (K-turn/Segnor/Tallon).
+ *
+ * @param pose - Pose at the start of the maneuver.
+ * @param step - The maneuver flown.
+ * @param baseSize - Ship base size in px.
+ * @param u - Fraction of the arc swept, 0–1.
+ * @returns The pose at that fraction.
+ */
+export function predictArcPose(
+  pose: Pose,
+  step: FlightStep,
+  baseSize: number,
+  u: number,
+): Pose {
+  const rule = XWING_RULES[step.direction];
+  const arcDeg = arcDegOf(rule);
+  const length = templateLength(step.speed, baseSize);
+  let forward = length * u;
+  let lateral = 0;
+  if (arcDeg !== 0) {
+    const theta = (Math.abs(arcDeg) * Math.PI) / 180;
+    const radius = length / (2 * Math.sin(theta / 2));
+    forward = radius * Math.sin(theta * u);
+    lateral = Math.sign(arcDeg) * radius * (1 - Math.cos(theta * u));
+  }
+  const ahead = translate(pose, 0, forward);
+  const moved = translate(ahead, 90, lateral);
+  return {
+    x: moved.x,
+    y: moved.y,
+    angle: normalizeHeading(pose.angle + rule.facingDeg * u),
+  };
 }
 
 /**

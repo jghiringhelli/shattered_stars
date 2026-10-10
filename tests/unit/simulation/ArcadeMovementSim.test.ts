@@ -360,6 +360,70 @@ describe("ArcadeMovementSim — all ships × all valid dial maneuvers", () => {
       throw new Error(`Path discontinuities:\n${failures.join("\n")}`);
     }
   });
+
+  it("a single large delta (dropped/slow frame) never overshoots the maneuver target", () => {
+    const shipId = "terran_gladius";
+    const def = SHIP_DEFINITIONS[shipId]!;
+    const baseSize = SHIP_SIZES[def.baseStats.size] ?? 32;
+
+    let ship = makeShip(shipId, 3000, 3000, 0);
+    let control = createControlState(ship, baseSize);
+    control = { ...control, speed: 3 };
+    control = startManeuver(ship, control, "bank_right");
+    const target = control.maneuverTarget!;
+
+    // Simulate a stall far longer than the whole cycle (e.g. alt-tab, GC pause).
+    const { position, cycleComplete } = updateManeuver(
+      control,
+      CYCLE_DURATION_MS * 4,
+    );
+
+    expect(cycleComplete).toBe(true);
+    expect(position!.x).toBeCloseTo(target.x, 5);
+    expect(position!.y).toBeCloseTo(target.y, 5);
+    expect(position!.angle).toBeCloseTo(target.angle, 5);
+  });
+
+  it("irregular frame timing reaches the same endpoint as uniform 16ms ticks", () => {
+    const shipId = "terran_gladius";
+    const def = SHIP_DEFINITIONS[shipId]!;
+    const baseSize = SHIP_SIZES[def.baseStats.size] ?? 32;
+
+    function driveToCompletion(ticks: number[]): {
+      x: number;
+      y: number;
+      angle: number;
+    } {
+      const ship = makeShip(shipId, 3000, 3000, 0);
+      let control = createControlState(ship, baseSize);
+      control = { ...control, speed: 3 };
+      control = startManeuver(ship, control, "bank_right");
+
+      let last = { x: ship.x, y: ship.y, angle: ship.angle };
+      let elapsed = 0;
+      for (const tick of ticks) {
+        if (elapsed >= CYCLE_DURATION_MS) break;
+        const { control: nextControl, position } = updateManeuver(
+          control,
+          tick,
+        );
+        control = nextControl;
+        if (position) last = position;
+        elapsed += tick;
+      }
+      return last;
+    }
+
+    const uniform = Array(32).fill(16); // 32 × 16ms ≈ one full cycle
+    const irregular = [200, 16, 300, 16, 16]; // a couple of dropped frames mixed in
+
+    const uniformEnd = driveToCompletion(uniform);
+    const irregularEnd = driveToCompletion(irregular);
+
+    expect(irregularEnd.x).toBeCloseTo(uniformEnd.x, 0);
+    expect(irregularEnd.y).toBeCloseTo(uniformEnd.y, 0);
+    expect(irregularEnd.angle).toBeCloseTo(uniformEnd.angle, 0);
+  });
 });
 
 // ============================================
