@@ -1,17 +1,14 @@
 /**
- * Maneuver Templates
+ * SimManeuvers — the abstract maneuver geometry of the turn-based balance
+ * simulator (BattleSimulator): one template per turn at a flat 60 px per
+ * speed, no base size, inside a 1000 px bounded board.
  *
- * Defines the actual movement geometry for X-Wing style maneuvers.
- * Each template specifies how a ship moves relative to its starting position.
- *
- * In X-Wing Miniatures:
- * - Ships move along fixed templates (straight, bank, turn, etc.)
- * - Speed determines distance traveled
- * - Direction determines the angle change
- * - The ship ends at a specific position/angle relative to start
+ * Simulator-only. The game itself flies the X-Wing cycle engine
+ * (MovementSystem / ArcadeControls / CycleFlight); the balance acceptance
+ * thresholds in tests/balance are calibrated against this geometry.
  */
 
-import type { ManeuverDirection, ManeuverTemplate } from '../core/types';
+import type { ManeuverDirection, ManeuverTemplate } from "../core/types";
 
 // Base movement unit (pixels) - adjust for visual scale
 const BASE_UNIT = 60;
@@ -27,12 +24,12 @@ const BASE_UNIT = 60;
  */
 export function getManeuverTemplate(
   direction: ManeuverDirection,
-  speed: number
+  speed: number,
 ): ManeuverTemplate {
   const distance = speed * BASE_UNIT;
 
   switch (direction) {
-    case 'straight':
+    case "straight":
       // Move forward, no rotation
       return {
         deltaX: 0,
@@ -40,7 +37,7 @@ export function getManeuverTemplate(
         deltaAngle: 0,
       };
 
-    case 'bank_left':
+    case "bank_left":
       // Gentle curve left - 45 degree turn
       // Ship ends up forward-left, facing 45 degrees left
       return {
@@ -49,7 +46,7 @@ export function getManeuverTemplate(
         deltaAngle: -45,
       };
 
-    case 'bank_right':
+    case "bank_right":
       // Gentle curve right - 45 degree turn
       return {
         deltaX: distance * 0.38,
@@ -57,7 +54,7 @@ export function getManeuverTemplate(
         deltaAngle: 45,
       };
 
-    case 'turn_left':
+    case "turn_left":
       // Hard turn left - 90 degree turn
       // Ship ends up roughly at the left, facing left
       return {
@@ -66,7 +63,7 @@ export function getManeuverTemplate(
         deltaAngle: -90,
       };
 
-    case 'turn_right':
+    case "turn_right":
       // Hard turn right - 90 degree turn
       return {
         deltaX: distance * 0.7,
@@ -74,7 +71,7 @@ export function getManeuverTemplate(
         deltaAngle: 90,
       };
 
-    case 'kturn':
+    case "kturn":
       // Koiogran turn - move forward then flip 180
       return {
         deltaX: 0,
@@ -82,7 +79,7 @@ export function getManeuverTemplate(
         deltaAngle: 180,
       };
 
-    case 'segnor_left':
+    case "segnor_left":
       // Segnor's Loop left - bank then flip
       return {
         deltaX: -distance * 0.38,
@@ -90,7 +87,7 @@ export function getManeuverTemplate(
         deltaAngle: -45 + 180, // Bank angle + 180 flip
       };
 
-    case 'segnor_right':
+    case "segnor_right":
       // Segnor's Loop right
       return {
         deltaX: distance * 0.38,
@@ -98,7 +95,7 @@ export function getManeuverTemplate(
         deltaAngle: 45 + 180,
       };
 
-    case 'tallon_left':
+    case "tallon_left":
       // Tallon Roll left - turn then flip
       return {
         deltaX: -distance * 0.7,
@@ -106,7 +103,7 @@ export function getManeuverTemplate(
         deltaAngle: -90 + 180, // Turn angle + 180 flip
       };
 
-    case 'tallon_right':
+    case "tallon_right":
       // Tallon Roll right
       return {
         deltaX: distance * 0.7,
@@ -132,7 +129,7 @@ export function applyManeuver(
   startX: number,
   startY: number,
   startAngle: number,
-  template: ManeuverTemplate
+  template: ManeuverTemplate,
 ): { x: number; y: number; angle: number } {
   // Convert ship's facing angle to radians
   const angleRad = startAngle * (Math.PI / 180);
@@ -168,38 +165,58 @@ export function applyManeuver(
 function arcInterpolateLocal(
   direction: ManeuverDirection,
   template: ManeuverTemplate,
-  t: number
+  t: number,
 ): ManeuverTemplate {
   const arcRadius = (sweepAngle: number): number =>
     Math.abs(template.deltaY) / Math.sin(sweepAngle);
 
   switch (direction) {
-    case 'bank_left':
-    case 'segnor_left': {
+    case "bank_left":
+    case "segnor_left": {
       const R = arcRadius(Math.PI / 4);
       const a = (Math.PI / 4) * t;
-      return { deltaX: -R * (1 - Math.cos(a)), deltaY: -R * Math.sin(a), deltaAngle: template.deltaAngle * t };
+      return {
+        deltaX: -R * (1 - Math.cos(a)),
+        deltaY: -R * Math.sin(a),
+        deltaAngle: template.deltaAngle * t,
+      };
     }
-    case 'bank_right':
-    case 'segnor_right': {
+    case "bank_right":
+    case "segnor_right": {
       const R = arcRadius(Math.PI / 4);
       const a = (Math.PI / 4) * t;
-      return { deltaX: R * (1 - Math.cos(a)), deltaY: -R * Math.sin(a), deltaAngle: template.deltaAngle * t };
+      return {
+        deltaX: R * (1 - Math.cos(a)),
+        deltaY: -R * Math.sin(a),
+        deltaAngle: template.deltaAngle * t,
+      };
     }
-    case 'turn_left':
-    case 'tallon_left': {
+    case "turn_left":
+    case "tallon_left": {
       const R = arcRadius(Math.PI / 2);
       const a = (Math.PI / 2) * t;
-      return { deltaX: -R * (1 - Math.cos(a)), deltaY: -R * Math.sin(a), deltaAngle: template.deltaAngle * t };
+      return {
+        deltaX: -R * (1 - Math.cos(a)),
+        deltaY: -R * Math.sin(a),
+        deltaAngle: template.deltaAngle * t,
+      };
     }
-    case 'turn_right':
-    case 'tallon_right': {
+    case "turn_right":
+    case "tallon_right": {
       const R = arcRadius(Math.PI / 2);
       const a = (Math.PI / 2) * t;
-      return { deltaX: R * (1 - Math.cos(a)), deltaY: -R * Math.sin(a), deltaAngle: template.deltaAngle * t };
+      return {
+        deltaX: R * (1 - Math.cos(a)),
+        deltaY: -R * Math.sin(a),
+        deltaAngle: template.deltaAngle * t,
+      };
     }
     default:
-      return { deltaX: template.deltaX * t, deltaY: template.deltaY * t, deltaAngle: template.deltaAngle * t };
+      return {
+        deltaX: template.deltaX * t,
+        deltaY: template.deltaY * t,
+        deltaAngle: template.deltaAngle * t,
+      };
   }
 }
 
@@ -214,7 +231,7 @@ export function generateManeuverPath(
   startAngle: number,
   direction: ManeuverDirection,
   speed: number,
-  segments: number = 10
+  segments: number = 10,
 ): Array<{ x: number; y: number; angle: number }> {
   const template = getManeuverTemplate(direction, speed);
   const path: Array<{ x: number; y: number; angle: number }> = [];
@@ -237,9 +254,15 @@ export function getManeuverBounds(
   startAngle: number,
   direction: ManeuverDirection,
   speed: number,
-  shipRadius: number = 20
+  shipRadius: number = 20,
 ): { minX: number; minY: number; maxX: number; maxY: number } {
-  const path = generateManeuverPath(startX, startY, startAngle, direction, speed);
+  const path = generateManeuverPath(
+    startX,
+    startY,
+    startAngle,
+    direction,
+    speed,
+  );
 
   let minX = Infinity;
   let minY = Infinity;
@@ -260,7 +283,7 @@ export function getManeuverBounds(
  * Visual representation data for drawing templates on screen
  */
 export interface TemplateVisual {
-  type: 'straight' | 'arc';
+  type: "straight" | "arc";
   startX: number;
   startY: number;
   endX: number;
@@ -272,18 +295,24 @@ export interface TemplateVisual {
 export function getTemplateVisual(
   direction: ManeuverDirection,
   speed: number,
-  difficulty: 'green' | 'white' | 'red'
+  difficulty: "green" | "white" | "red",
 ): TemplateVisual {
   const template = getManeuverTemplate(direction, speed);
 
   const color =
-    difficulty === 'green' ? 0x00ff00 : difficulty === 'red' ? 0xff0000 : 0xffffff;
+    difficulty === "green"
+      ? 0x00ff00
+      : difficulty === "red"
+        ? 0xff0000
+        : 0xffffff;
 
   const isCurved =
-    direction.includes('bank') || direction.includes('turn') || direction.includes('tallon');
+    direction.includes("bank") ||
+    direction.includes("turn") ||
+    direction.includes("tallon");
 
   const visual: TemplateVisual = {
-    type: isCurved ? 'arc' : 'straight',
+    type: isCurved ? "arc" : "straight",
     startX: 0,
     startY: 0,
     endX: template.deltaX,

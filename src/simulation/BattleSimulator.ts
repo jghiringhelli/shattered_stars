@@ -17,10 +17,7 @@ import {
   calculateHitChance,
   type ModeCombatStats,
 } from "../data/ModeBalancing";
-import {
-  applyManeuver,
-  getManeuverTemplate,
-} from "../systems/ManeuverTemplates";
+import { applyManeuver, getManeuverTemplate } from "./SimManeuvers";
 import type { ManeuverDirection } from "../core/types";
 import { getLoadoutById } from "../data/ShipLoadouts";
 import { UPGRADE_DEFINITIONS } from "../systems/UpgradeSystem";
