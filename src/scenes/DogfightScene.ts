@@ -52,6 +52,28 @@ import { planDuelSteer } from "../arcade/systems/AiPursuit";
 import { shiftMotion } from "../arcade/systems/ShipMotion";
 import type { FlightEvent } from "../arcade/systems/PilotFlightTypes";
 import { playFlightEventFx } from "../arcade/ArcadeFX";
+import {
+  assignQuickBuilds,
+  equipFlight,
+  equipQuickBuild,
+  regenerateShields,
+  stressModifiersOf,
+} from "../arcade/systems/QuickBuildEquip";
+import {
+  absorbDamage,
+  combatantOf,
+  resolveDiceAttack,
+} from "../arcade/systems/DiceAttack";
+import {
+  deathBlastTargets,
+  hasWingman,
+  rewardKill,
+} from "../arcade/PilotAbilityCombat";
+import { applyInstantStress } from "../arcade/ArcadeStress";
+import {
+  NEUTRAL_MODIFIERS,
+  type CombatModifiers,
+} from "../core/CombatModifiers";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { PauseMenu } from "../ui/PauseMenu";
 import { networkService } from "../services/NetworkService";
@@ -89,6 +111,12 @@ interface DogfightShip {
   /** True on the frame this ship's maneuver cycle committed. */
   cycleCommitted: boolean;
   weaponCooldown: number;
+  /** Quick build flown (upgrades + pilot), or null for the bare hull. */
+  loadoutId: string | null;
+  /** Real-time effects of the quick build. */
+  modifiers: CombatModifiers;
+  /** Scene time (ms) until which a kill-frenzy ability is active. */
+  frenzyUntilMs: number;
 }
 
 /** A pose on the battlefield. */
@@ -1028,6 +1056,7 @@ export class DogfightScene extends Phaser.Scene {
   ): void {
     const id = `${owner}_0`;
     const combatStats = getModeCombatStats(defId, "continuous");
+    const loadoutId = assignQuickBuilds([defId])[0] ?? null;
 
     const ship: DogfightShip = {
       id,
@@ -1046,7 +1075,12 @@ export class DogfightScene extends Phaser.Scene {
       dial: getShipDial(defId),
       cycleCommitted: false,
       weaponCooldown: 0,
+      loadoutId,
+      modifiers: NEUTRAL_MODIFIERS,
+      frenzyUntilMs: 0,
     };
+    ship.modifiers = equipQuickBuild(ship, loadoutId);
+    ship.flight = equipFlight(ship.flight, ship.modifiers);
 
     this.ships.set(id, ship);
 
@@ -1117,8 +1151,15 @@ export class DogfightScene extends Phaser.Scene {
         worldSize: BATTLEFIELD_SIZE,
         dial: ship.dial,
         cycleMs: CYCLE_DURATION_MS,
+        modifiers: stressModifiersOf(ship.modifiers),
       });
       this.setFlight(ship, tick.state);
+      ship.shields = regenerateShields(
+        ship.shields,
+        ship.maxShields,
+        ship.modifiers,
+        deltaMs,
+      );
       ship.cycleCommitted = tick.completed !== null;
       if (tick.completed && ship.id === playerId) {
         const { control } = tick.state.motion;
@@ -1259,10 +1300,24 @@ export class DogfightScene extends Phaser.Scene {
       hitChance *= diffMod;
     }
 
-    const hit = random.chance(hitChance);
+    const result = resolveDiceAttack({
+      attacker: combatantOf(attacker),
+      target: combatantOf(target),
+      hitChance,
+      baseDamage: attacker.combatStats.attackDice,
+      attackerHasWingman: this.fliesWithWingman(attacker),
+      targetHasWingman: this.fliesWithWingman(target),
+      nowMs: this.time.now,
+      roll: random.next(),
+    });
+    const hit = result.hit;
 
     if (hit) {
-      let damage = attacker.combatStats.attackDice;
+      let damage = result.damage;
+      this.setFlight(target, {
+        ...target.flight,
+        stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
+      });
 
       if (target.shields > 0) {
         const shieldDmg = Math.min(target.shields, damage);
@@ -1275,6 +1330,7 @@ export class DogfightScene extends Phaser.Scene {
         const wasAlive = target.hull > 0;
         target.hull = Math.max(0, target.hull - damage);
         if (wasAlive && target.hull <= 0) {
+          this.resolveAbilityKill(attacker, target);
           if (target.owner === "player") {
             this.enemySideScore = creditKill(
               this.enemySideScore,
@@ -1320,6 +1376,40 @@ export class DogfightScene extends Phaser.Scene {
         type: "combat_result",
         data: { hit, hullAfter: target.hull, shieldsAfter: target.shields },
       });
+    }
+  }
+
+  /**
+   * @param ship - The ship asking.
+   * @returns Whether another living ship of its side flies within wingman range.
+   */
+  private fliesWithWingman(ship: DogfightShip): boolean {
+    const allies = [...this.ships.values()].filter(
+      (other) => other.faction === ship.faction && other.hull > 0,
+    );
+    return hasWingman(ship, allies);
+  }
+
+  /**
+   * Pilot-ability effects of a kill: the killer's reward (shields, frenzy)
+   * and the victim's death blast on enemies nearby.
+   *
+   * @param killer - The ship that made the kill.
+   * @param victim - The ship destroyed.
+   */
+  private resolveAbilityKill(killer: DogfightShip, victim: DogfightShip): void {
+    if (killer.hull > 0) {
+      Object.assign(killer, rewardKill(combatantOf(killer), this.time.now));
+    }
+    const enemies = [...this.ships.values()].filter(
+      (other) => other.faction !== victim.faction && other.hull > 0,
+    );
+    for (const caught of deathBlastTargets(combatantOf(victim), enemies)) {
+      Object.assign(
+        caught,
+        absorbDamage(caught, victim.modifiers.deathBlastDamage),
+      );
+      this.healthBars.get(caught.id)?.update(caught.hull, caught.shields);
     }
   }
 
