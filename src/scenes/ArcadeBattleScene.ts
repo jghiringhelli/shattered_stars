@@ -479,6 +479,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Phaser never calls shutdown() on its own; without this, every restart
+    // stacks another set of input subscriptions.
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     const savedSettings = this.registry.get("settings") as
       | {
           cameraShake: boolean;

@@ -48,6 +48,7 @@ import {
   type CycleFlightState,
 } from "../arcade/systems/CycleFlight";
 import { PlayerFlightPilot } from "../arcade/systems/PlayerFlightPilot";
+import { planDuelSteer } from "../arcade/systems/AiPursuit";
 import { shiftMotion } from "../arcade/systems/ShipMotion";
 import type { FlightEvent } from "../arcade/systems/PilotFlightTypes";
 import { playFlightEventFx } from "../arcade/ArcadeFX";
@@ -89,12 +90,6 @@ interface DogfightShip {
   cycleCommitted: boolean;
   weaponCooldown: number;
 }
-
-/**
- * Heading errors (°) a sloppy AI pilot flies instead of the true one:
- * hold course, or veer one bank's worth either way.
- */
-const SUBOPTIMAL_HEADING_ERRORS_DEG: readonly number[] = [-40, 0, 40];
 
 /** A pose on the battlefield. */
 interface Pose {
@@ -221,6 +216,9 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Phaser never calls shutdown() on its own; without this, every restart
+    // stacks another set of input subscriptions.
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     // No setBounds — camera is driven manually for seamless toroid wrapping (see updateCameraFollow).
     this.cameras.main.setBackgroundColor(0x050510);
     addPaintedSpaceBackground(this, "nebula_purple", 0);
@@ -335,12 +333,26 @@ export class DogfightScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Starts a match from scratch. Phaser reuses this scene object on restart
+   * (REMATCH / RESTART), so everything the previous run left behind is
+   * cleared here; its game objects were already destroyed with the scene.
+   */
   private resetMatchState(): void {
     this.playerWins = 0;
     this.enemyWins = 0;
     this.currentRound = 0;
     this.isRoundActive = false;
     this.matchComplete = false;
+    this.isSetupPhase = true;
+    this.isPaused = false;
+    this.ships.clear();
+    this.shipSprites.clear();
+    this.healthBars.clear();
+    this.playerShipIds = [];
+    this.enemyShipIds = [];
+    this.setupObjects = [];
+    this.lastSentManeuver = null;
   }
 
   private resetRoundState(): void {
@@ -1344,25 +1356,19 @@ export class DogfightScene extends Phaser.Scene {
    * @param target - What it is chasing.
    */
   private steerAi(ship: DogfightShip, target: DogfightShip): void {
-    const optimalChance = { easy: 0.5, normal: 0.7, hard: 0.9, brutal: 1 }[
-      this.difficulty
-    ];
-    const trueError = headingDiffToTarget(
-      ship.x,
-      ship.y,
-      ship.angle,
-      target.x,
-      target.y,
-    );
-    const headingErrorDeg = random.chance(optimalChance)
-      ? trueError
-      : (random.pick(SUBOPTIMAL_HEADING_ERRORS_DEG) ?? 0);
+    const plan = planDuelSteer({
+      ship,
+      target,
+      owner: "ai",
+      difficulty: this.difficulty,
+      random: random.next,
+    });
     const origin = { x: ship.x, y: ship.y, angle: ship.angle };
     const result = steerAiFlight(ship.flight, {
-      headingErrorDeg,
-      desiredSpeed: pursuitSpeed(ship.flight.motion.control, trueError),
+      headingErrorDeg: plan.headingErrorDeg,
+      desiredSpeed: pursuitSpeed(ship.flight.motion.control, plan.trueErrorDeg),
       cycleCommitted: ship.cycleCommitted,
-      allowKTurn: this.difficulty !== "easy",
+      allowKTurn: plan.allowKTurn,
     });
     this.setFlight(ship, result.state);
     this.playFlightEvents(ship, result.events, origin);
