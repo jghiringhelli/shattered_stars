@@ -7,6 +7,9 @@
 import { describe, it, expect } from "vitest";
 import {
   AI_FULL_DEFLECTION_DEG,
+  AI_KTURN_ERROR_DEG,
+  AI_SLOW_TURN_ERROR_DEG,
+  pursuitSpeed,
   createCycleFlight,
   createShipControl,
   steerAiFlight,
@@ -179,7 +182,7 @@ describe("steerAiFlight — response scales with the heading error", () => {
       headingErrorDeg,
       desiredSpeed: null,
       cycleCommitted: false,
-    }).control.nextManeuver;
+    }).state.motion.control.nextManeuver;
 
   it("on course: flies straight", () => {
     expect(steer(0)).toBeNull();
@@ -219,7 +222,7 @@ describe("steerAiFlight — speed", () => {
   const flight = createCycleFlight(SHIP_ID, START);
   const speedAfter = (desiredSpeed: number, cycleCommitted: boolean) =>
     steerAiFlight(flight, { headingErrorDeg: 0, desiredSpeed, cycleCommitted })
-      .control.speed;
+      .state.motion.control.speed;
 
   it("steps one notch toward the wanted speed when a cycle commits", () => {
     expect(speedAfter(flight.motion.control.maxSpeed, true)).toBe(
@@ -231,5 +234,59 @@ describe("steerAiFlight — speed", () => {
     expect(speedAfter(flight.motion.control.maxSpeed, false)).toBe(
       flight.motion.control.speed,
     );
+  });
+});
+
+describe("steerAiFlight — K-turn onto a target behind", () => {
+  const flight = createCycleFlight(SHIP_ID, START);
+  const behind = (state: CycleFlightState, allowKTurn = true) =>
+    steerAiFlight(state, {
+      headingErrorDeg: AI_KTURN_ERROR_DEG + 5,
+      desiredSpeed: null,
+      cycleCommitted: false,
+      allowKTurn,
+    });
+
+  it("queues a K-turn, adds stress and reports it", () => {
+    const result = behind(flight);
+    expect(result.state.motion.control.nextManeuver).toBe("kturn");
+    expect(result.state.stress.level).toBeGreaterThan(0);
+    expect(result.events).toEqual(["kturn"]);
+  });
+
+  it("turns instead when K-turns are not allowed", () => {
+    expect(behind(flight, false).state.motion.control.nextManeuver).toBe(
+      "turn_right",
+    );
+  });
+
+  it("turns instead while the K-turn is on cooldown", () => {
+    const cooling = {
+      ...flight,
+      motion: {
+        ...flight.motion,
+        control: { ...flight.motion.control, kturnCooldown: 1 },
+      },
+    };
+    expect(behind(cooling).events).toEqual([]);
+  });
+
+  it("a stressed pilot does not K-turn", () => {
+    const stressed = { ...flight, stress: { level: 0.8, isStressed: true } };
+    expect(behind(stressed).state.motion.control.nextManeuver).toBe(
+      "bank_right",
+    );
+  });
+});
+
+describe("pursuitSpeed", () => {
+  const bounds = { minSpeed: 1, maxSpeed: 5 };
+
+  it("slows to the minimum to turn tight on a goal well off the nose", () => {
+    expect(pursuitSpeed(bounds, -AI_SLOW_TURN_ERROR_DEG)).toBe(1);
+  });
+
+  it("cruises mid-range when lined up", () => {
+    expect(pursuitSpeed(bounds, 10)).toBe(3);
   });
 });

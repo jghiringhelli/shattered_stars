@@ -44,6 +44,7 @@ import {
   spawnBoostTrail,
   playBarrelRollLean,
   spawnKturnAfterimage,
+  playFlightEventFx,
 } from "../arcade/ArcadeFX";
 import {
   drawEnergyBolt,
@@ -970,7 +971,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   /**
-   * Visual feedback for a flight event, drawn at the pose it started from.
+   * Visual feedback for a player flight event, drawn at the pose it started from.
    *
    * @param ship - The ship that acted.
    * @param event - What happened.
@@ -981,34 +982,15 @@ export class ArcadeBattleScene extends Phaser.Scene {
     event: FlightEvent,
     origin: { x: number; y: number; angle: number },
   ): void {
-    const def = getShipDefinition(ship.definitionId);
-    const size = SHIP_SIZES[def?.baseStats.size ?? "small"] ?? 18;
-    const color = FACTION_COLORS[ship.faction as FactionId] ?? 0xffffff;
-    if (event === "kturn" || event === "segnor" || event === "tallon") {
-      spawnKturnAfterimage(this, origin.x, origin.y, origin.angle, size, color);
-    } else if (event === "barrel_roll") {
-      const sprite = this.shipSprites.get(ship.id);
-      if (sprite) playBarrelRollLean(this, sprite);
-    } else if (event === "boost") {
-      spawnBoostTrail(
-        this,
-        origin.x,
-        origin.y,
-        origin.angle,
-        size,
-        color,
-        BOOST_DISTANCE_PX,
-      );
-      if (this.cameraShakeEnabled) this.cameras.main.shake(80, 0.008);
-      // Brief zoom-out pulse for speed sensation; zoom restores via updateCameraFollow
-      this.tweens.add({
-        targets: this.cameras.main,
-        zoom: this.cameras.main.zoom * 0.88,
-        duration: 120,
-        ease: "Power2.easeIn",
-        yoyo: true,
-      });
-    }
+    playFlightEventFx(this, {
+      event,
+      origin,
+      definitionId: ship.definitionId,
+      faction: ship.faction,
+      sprite: this.shipSprites.get(ship.id),
+      cameraShake: this.cameraShakeEnabled,
+      zoomPulse: true,
+    });
   }
 
   /**

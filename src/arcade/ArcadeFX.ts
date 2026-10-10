@@ -6,6 +6,16 @@
  * graphics objects — the caller doesn't need to manage cleanup.
  */
 
+import { BOOST_DISTANCE_PX } from "./ArcadeInputGestures";
+import type { FlightEvent } from "./systems/PilotFlightTypes";
+import { FACTION_COLORS, SHIP_SIZES, type FactionId } from "../config";
+import { getShipDefinition } from "../data/ShipDefinitions";
+
+/** Sprite radius (px) when a ship's size class is unknown. */
+const FALLBACK_FX_SIZE_PX = 18;
+/** Zoom-out factor of the boost speed pulse. */
+const BOOST_ZOOM_PULSE = 0.88;
+
 // ============================================
 // Internal helpers
 // ============================================
@@ -186,4 +196,67 @@ export function spawnKturnAfterimage(
     ease: "Power2",
     onComplete: () => ring.destroy(),
   });
+}
+
+/** What {@link playFlightEventFx} needs to know about the acting ship. */
+export interface FlightEventFxInput {
+  readonly event: FlightEvent;
+  /** Pose before the action (trails and afterimages start here). */
+  readonly origin: {
+    readonly x: number;
+    readonly y: number;
+    readonly angle: number;
+  };
+  readonly definitionId: string;
+  readonly faction: string;
+  /** The ship's sprite, for the barrel-roll lean. */
+  readonly sprite: Phaser.GameObjects.Container | undefined;
+  /** Shake the camera on a boost (player ship, shake setting on). */
+  readonly cameraShake: boolean;
+  /** Zoom-pulse the camera on a boost for speed sensation (player ship). */
+  readonly zoomPulse: boolean;
+}
+
+/**
+ * Visual feedback for a flight event (K-turn/Segnor/Tallon afterimage,
+ * barrel-roll lean, boost trail). Shared by every cycle-engine scene.
+ *
+ * @param scene - Active Phaser scene.
+ * @param input - The event and the ship that performed it.
+ */
+export function playFlightEventFx(
+  scene: Phaser.Scene,
+  input: FlightEventFxInput,
+): void {
+  const { event, origin } = input;
+  const size =
+    SHIP_SIZES[
+      getShipDefinition(input.definitionId)?.baseStats.size ?? "small"
+    ] ?? FALLBACK_FX_SIZE_PX;
+  const color = FACTION_COLORS[input.faction as FactionId] ?? 0xffffff;
+  if (event === "kturn" || event === "segnor" || event === "tallon") {
+    spawnKturnAfterimage(scene, origin.x, origin.y, origin.angle, size, color);
+  } else if (event === "barrel_roll") {
+    if (input.sprite) playBarrelRollLean(scene, input.sprite);
+  } else if (event === "boost") {
+    spawnBoostTrail(
+      scene,
+      origin.x,
+      origin.y,
+      origin.angle,
+      size,
+      color,
+      BOOST_DISTANCE_PX,
+    );
+    const camera = scene.cameras.main;
+    if (input.cameraShake) camera.shake(80, 0.008);
+    if (!input.zoomPulse) return;
+    scene.tweens.add({
+      targets: camera,
+      zoom: camera.zoom * BOOST_ZOOM_PULSE,
+      duration: 120,
+      ease: "Power2.easeIn",
+      yoyo: true,
+    });
+  }
 }

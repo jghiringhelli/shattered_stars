@@ -12,11 +12,10 @@
 import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
 import { addShipVisual } from "../rendering/ShipVisual";
-import { maneuverLerpAlpha } from "../rendering/ManeuverInterpolation";
 import { createHoverButton, createToggleButton } from "../ui/ButtonFactory";
 import { quickTipLine } from "../ui/ControlsReference";
 import type { FactionId } from "../config";
-import { BATTLEFIELD_SIZE, SHIP_SIZES } from "../config";
+import { BATTLEFIELD_SIZE, CYCLE_DURATION_MS, SHIP_SIZES } from "../config";
 import {
   getShipDefinition,
   getShipsByFaction,
@@ -27,10 +26,6 @@ import {
   calculateHitChance,
   type ModeCombatStats,
 } from "../data/ModeBalancing";
-import {
-  getManeuverTemplate,
-  applyManeuver,
-} from "../systems/ManeuverTemplates";
 import { HealthBar } from "../ui/HealthBar";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { headingDiffToTarget } from "../systems/MovementSystem";
@@ -44,7 +39,18 @@ import {
   evaluateQuality,
   type PerformanceState,
 } from "../systems/PerformanceSystem";
-import type { ManeuverDirection } from "../core/types";
+import type { ManeuverDefinition, ManeuverDirection } from "../core/types";
+import {
+  createCycleFlight,
+  pursuitSpeed,
+  steerAiFlight,
+  tickCycleFlight,
+  type CycleFlightState,
+} from "../arcade/systems/CycleFlight";
+import { PlayerFlightPilot } from "../arcade/systems/PlayerFlightPilot";
+import { shiftMotion } from "../arcade/systems/ShipMotion";
+import type { FlightEvent } from "../arcade/systems/PilotFlightTypes";
+import { playFlightEventFx } from "../arcade/ArcadeFX";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { PauseMenu } from "../ui/PauseMenu";
 import { networkService } from "../services/NetworkService";
@@ -76,12 +82,39 @@ interface DogfightShip {
   shields: number;
   maxShields: number;
   combatStats: ModeCombatStats;
-  currentManeuverDir: ManeuverDirection;
-  currentSpeed: number;
-  targetX: number;
-  targetY: number;
-  targetAngle: number;
+  /** Cycle-engine motion and pilot stress; x/y/angle mirror its pose. */
+  flight: CycleFlightState;
+  dial: readonly ManeuverDefinition[];
+  /** True on the frame this ship's maneuver cycle committed. */
+  cycleCommitted: boolean;
   weaponCooldown: number;
+}
+
+/**
+ * Heading errors (°) a sloppy AI pilot flies instead of the true one:
+ * hold course, or veer one bank's worth either way.
+ */
+const SUBOPTIMAL_HEADING_ERRORS_DEG: readonly number[] = [-40, 0, 40];
+
+/** A pose on the battlefield. */
+interface Pose {
+  readonly x: number;
+  readonly y: number;
+  readonly angle: number;
+}
+
+/**
+ * Shortest signed displacement between two coordinates on the torus.
+ * @param delta - Raw difference (px).
+ * @returns The equivalent difference in [-size/2, size/2).
+ */
+function torusDelta(delta: number): number {
+  const half = BATTLEFIELD_SIZE / 2;
+  return (
+    ((((delta + half) % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
+      BATTLEFIELD_SIZE) -
+    half
+  );
 }
 
 interface ShipSprite extends Phaser.GameObjects.Container {
@@ -123,8 +156,6 @@ export class DogfightScene extends Phaser.Scene {
   private matchComplete = false;
 
   // Timing
-  private lastManeuverTime = 0;
-  private maneuverInterval = 300;
   private lastSecondTime = 0;
 
   // Camera follow (manual — toroid wrap makes Phaser's startFollow jump at the seam)
@@ -136,6 +167,10 @@ export class DogfightScene extends Phaser.Scene {
   private background!: ParallaxBackground;
   private performanceState: PerformanceState = createPerformanceState();
   private telemetry: ShipTelemetry | null = null;
+  private cameraShakeEnabled = true;
+
+  /** The human pilot's flight input (InputManager-driven). */
+  private readonly pilot = new PlayerFlightPilot(InputManager);
 
   // UI
   private roundText!: Phaser.GameObjects.Text;
@@ -196,6 +231,7 @@ export class DogfightScene extends Phaser.Scene {
     const savedSettings = this.registry.get("settings") as
       { cameraShake: boolean; showDamageNumbers: boolean } | undefined;
     if (savedSettings) {
+      this.cameraShakeEnabled = savedSettings.cameraShake;
       this.effectsManager.setUserSettings({
         cameraShake: savedSettings.cameraShake,
         showDamageNumbers: savedSettings.showDamageNumbers,
@@ -241,6 +277,7 @@ export class DogfightScene extends Phaser.Scene {
     this.inputSubscriptionIds.forEach((id) => InputManager.off(id));
     this.inputSubscriptionIds = [];
     teardownSceneInput();
+    this.pilot.detach();
     if (this.isOnlineMode) {
       networkService.off("game_action", this.onRemoteAction, this);
       networkService.off(
@@ -280,10 +317,7 @@ export class DogfightScene extends Phaser.Scene {
       case "maneuver": {
         const opponent = this.ships.get(this.enemyShipIds[0] ?? "");
         if (!opponent) return;
-        const dir = msg.data?.dir as ManeuverDirection | undefined;
-        const speed = msg.data?.speed as number | undefined;
-        if (dir) opponent.currentManeuverDir = dir;
-        if (typeof speed === "number") opponent.currentSpeed = speed;
+        this.applyRemoteManeuver(opponent, msg.data ?? {});
         break;
       }
       case "combat_result": {
@@ -322,6 +356,7 @@ export class DogfightScene extends Phaser.Scene {
     this.playerSideScore = createSideScore();
     this.enemySideScore = createSideScore();
     this.isPaused = false;
+    this.pilot.reset();
   }
 
   private showSetupScreen(): void {
@@ -567,6 +602,12 @@ export class DogfightScene extends Phaser.Scene {
         this.scale.height - 30,
         quickTipLine([
           { label: "Steer", intents: ["STEER_LEFT", "STEER_RIGHT"] },
+          {
+            label: "Hard turn",
+            intents: ["SHARP_TURN_LEFT", "SHARP_TURN_RIGHT"],
+          },
+          { label: "K-turn", intents: ["KTURN"] },
+          { label: "Boost", intents: ["BOOST"] },
           { label: "Throttle", intents: ["THRUST_UP", "THRUST_DOWN"] },
           { label: "Weapon", intents: [] },
           { label: "Pause", intents: ["PAUSE"] },
@@ -802,14 +843,9 @@ export class DogfightScene extends Phaser.Scene {
       }
     }
 
-    if (time - this.lastManeuverTime >= this.maneuverInterval) {
-      this.processManeuvers();
-      this.lastManeuverTime = time;
-    }
-
-    this.interpolatePositions(delta);
+    this.updateAI(time, delta);
+    this.flyShips(delta);
     this.processCombat(delta);
-    this.updateAI();
     this.updateSprites();
     this.updateCameraFollow();
     this.checkRoundEnd();
@@ -880,7 +916,7 @@ export class DogfightScene extends Phaser.Scene {
       .text(
         this.scale.width / 2,
         this.scale.height - 25,
-        "UP/DOWN: Speed | LEFT/RIGHT: Turn | Weapon autofires | ESC: Pause",
+        "UP/DOWN: Speed | LEFT/RIGHT: tap drift, hold bank | Q/E: Hard turn | Weapon autofires | ESC: Pause",
         {
           font: "14px monospace",
           color: "#666666",
@@ -917,6 +953,7 @@ export class DogfightScene extends Phaser.Scene {
 
   private setupInput(): void {
     setupSceneInput(this);
+    this.pilot.attach();
     this.createPauseMenu();
     this.inputSubscriptionIds.push(
       InputManager.on("PAUSE", () => this.togglePause()),
@@ -993,11 +1030,9 @@ export class DogfightScene extends Phaser.Scene {
       shields: combatStats.shields,
       maxShields: combatStats.maxShields,
       combatStats,
-      currentManeuverDir: "straight",
-      currentSpeed: 2,
-      targetX: x,
-      targetY: y,
-      targetAngle: angle,
+      flight: createCycleFlight(defId, { x, y, angle }),
+      dial: getShipDial(defId),
+      cycleCommitted: false,
       weaponCooldown: 0,
     };
 
@@ -1055,49 +1090,79 @@ export class DogfightScene extends Phaser.Scene {
     this.healthBars.set(ship.id, healthBar);
   }
 
-  private processManeuvers(): void {
+  /**
+   * Flies every ship one frame on the X-Wing cycle engine (template arcs,
+   * cycle-boundary commits, stress) and syncs sprites to the new poses.
+   *
+   * @param deltaMs - Frame length (ms).
+   */
+  private flyShips(deltaMs: number): void {
+    const playerId = this.playerShipIds[0];
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
-
-      const template = getManeuverTemplate(
-        ship.currentManeuverDir,
-        ship.currentSpeed,
-      );
-      const result = applyManeuver(ship.x, ship.y, ship.angle, template);
-
-      ship.targetX = result.x;
-      ship.targetY = result.y;
-      ship.targetAngle = result.angle;
+      const tick = tickCycleFlight(ship.flight, {
+        deltaMs,
+        worldSize: BATTLEFIELD_SIZE,
+        dial: ship.dial,
+        cycleMs: CYCLE_DURATION_MS,
+      });
+      this.setFlight(ship, tick.state);
+      ship.cycleCommitted = tick.completed !== null;
+      if (tick.completed && ship.id === playerId) {
+        const { control } = tick.state.motion;
+        this.pilot.onCycleCommitted(control.currentManeuver ?? "straight");
+        this.sendManeuver(
+          control.nextManeuver ?? "straight",
+          control.speed,
+          ship,
+          true,
+        );
+      }
+      this.shipSprites
+        .get(ship.id)
+        ?.setPosition(ship.x, ship.y)
+        .setAngle(ship.angle);
+      this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
   }
 
-  private interpolatePositions(delta: number): void {
-    const t = maneuverLerpAlpha(delta, 280, 3);
+  /**
+   * Stores a ship's new flight state and mirrors its pose onto the record
+   * (combat, AI and camera read x/y/angle).
+   *
+   * @param ship - The ship.
+   * @param flight - Its new flight state.
+   */
+  private setFlight(ship: DogfightShip, flight: CycleFlightState): void {
+    ship.flight = flight;
+    ship.x = flight.motion.x;
+    ship.y = flight.motion.y;
+    ship.angle = flight.motion.angle;
+  }
 
-    for (const ship of this.ships.values()) {
-      if (ship.hull <= 0) continue;
-
-      ship.x = Phaser.Math.Linear(ship.x, ship.targetX, t);
-      ship.y = Phaser.Math.Linear(ship.y, ship.targetY, t);
-
-      let angleDiff = ship.targetAngle - ship.angle;
-      if (angleDiff > 180) angleDiff -= 360;
-      if (angleDiff < -180) angleDiff += 360;
-      ship.angle += angleDiff * t;
-      ship.angle = ((ship.angle % 360) + 360) % 360;
-
-      // Wrap around
-      ship.x =
-        ((ship.x % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
-      ship.y =
-        ((ship.y % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
-
-      const sprite = this.shipSprites.get(ship.id);
-      if (sprite) {
-        sprite.setPosition(ship.x, ship.y);
-        sprite.setAngle(ship.angle);
-      }
-      this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
+  /**
+   * Visual feedback for flight events, drawn from the pose they started at.
+   *
+   * @param ship - The ship that acted.
+   * @param events - What happened this frame.
+   * @param origin - Pose before the actions.
+   */
+  private playFlightEvents(
+    ship: DogfightShip,
+    events: readonly FlightEvent[],
+    origin: Pose,
+  ): void {
+    const isPlayer = ship.owner === "player";
+    for (const event of events) {
+      playFlightEventFx(this, {
+        event,
+        origin,
+        definitionId: ship.definitionId,
+        faction: ship.faction,
+        sprite: this.shipSprites.get(ship.id),
+        cameraShake: isPlayer && this.cameraShakeEnabled,
+        zoomPulse: isPlayer,
+      });
     }
   }
 
@@ -1246,133 +1311,158 @@ export class DogfightScene extends Phaser.Scene {
     }
   }
 
-  private updateAI(): void {
+  /**
+   * Queues every ship's next maneuver: the player's from input, AI ships'
+   * from the heading error to their target.
+   *
+   * @param time - Scene time (ms).
+   * @param delta - Frame length (ms).
+   */
+  private updateAI(time: number, delta: number): void {
+    for (const shipId of this.playerShipIds) {
+      const ship = this.ships.get(shipId);
+      if (ship && ship.hull > 0) this.flyPlayer(ship, time, delta);
+    }
     // In online mode the opponent's ship is a human on the other client,
     // driven entirely by onRemoteAction() — running local AI on it too
     // would fight the network-received maneuver every frame.
-    if (this.isOnlineMode) {
-      for (const shipId of this.playerShipIds) {
-        const ship = this.ships.get(shipId);
-        if (!ship || ship.hull <= 0) continue;
-        this.applyPlayerControl(ship);
-      }
-      return;
-    }
+    if (this.isOnlineMode) return;
 
+    const target = this.ships.get(this.playerShipIds[0] ?? "");
+    if (!target || target.hull <= 0) return;
     for (const shipId of this.enemyShipIds) {
       const ship = this.ships.get(shipId);
-      if (!ship || ship.hull <= 0) continue;
-
-      const target = this.ships.get(this.playerShipIds[0] ?? "");
-      if (!target || target.hull <= 0) continue;
-
-      const angleDiff = headingDiffToTarget(
-        ship.x,
-        ship.y,
-        ship.angle,
-        target.x,
-        target.y,
-      );
-
-      const dial = getShipDial(ship.definitionId);
-
-      // AI decision quality based on difficulty
-      const optimalChance = { easy: 0.5, normal: 0.7, hard: 0.9, brutal: 1 }[
-        this.difficulty
-      ];
-
-      if (random.chance(optimalChance)) {
-        // Optimal decision
-        if (Math.abs(angleDiff) < 15) {
-          ship.currentManeuverDir = "straight";
-          ship.currentSpeed = 2;
-        } else if (angleDiff > 0) {
-          const turn = dial.find(
-            (m) => m.direction === "bank_right" || m.direction === "turn_right",
-          );
-          if (turn) {
-            ship.currentManeuverDir = turn.direction;
-            ship.currentSpeed = turn.speed;
-          }
-        } else {
-          const turn = dial.find(
-            (m) => m.direction === "bank_left" || m.direction === "turn_left",
-          );
-          if (turn) {
-            ship.currentManeuverDir = turn.direction;
-            ship.currentSpeed = turn.speed;
-          }
-        }
-      } else {
-        // Random suboptimal decision
-        const maneuvers = dial.filter((m) =>
-          ["straight", "bank_left", "bank_right"].includes(m.direction),
-        );
-        const chosen = random.pick(maneuvers);
-        if (chosen) {
-          ship.currentManeuverDir = chosen.direction;
-          ship.currentSpeed = chosen.speed;
-        }
-      }
-    }
-
-    // Player ships respond to real keyboard input (see applyPlayerControl).
-    for (const shipId of this.playerShipIds) {
-      const ship = this.ships.get(shipId);
-      if (!ship || ship.hull <= 0) continue;
-      this.applyPlayerControl(ship);
+      if (ship && ship.hull > 0) this.steerAi(ship, target);
     }
   }
 
   /**
-   * Picks the player ship's next maneuver from its dial based on held
-   * intents (keyboard arrows, gamepad stick, or the touch movement stick —
-   * all normalized through InputManager). UP/DOWN ramp speed through the
-   * dial's available speeds; LEFT/RIGHT bank at the current speed (falling
-   * back to any available speed for that direction); no input holds a
-   * straight maneuver.
+   * Steers an AI ship at its target. Difficulty sets how often it flies the
+   * optimal line and whether it may K-turn onto a target behind it.
+   *
+   * @param ship - The AI ship.
+   * @param target - What it is chasing.
    */
-  private applyPlayerControl(ship: DogfightShip): void {
-    const dial = getShipDial(ship.definitionId);
-    const speeds = [...new Set(dial.map((m) => m.speed))].sort((a, b) => a - b);
-
-    let desiredSpeed = ship.currentSpeed;
-    if (InputManager.isHeld("THRUST_UP")) {
-      desiredSpeed = speeds.find((s) => s > desiredSpeed) ?? desiredSpeed;
-    } else if (InputManager.isHeld("THRUST_DOWN")) {
-      desiredSpeed =
-        [...speeds].reverse().find((s) => s < desiredSpeed) ?? desiredSpeed;
-    }
-
-    let direction: ManeuverDirection = "straight";
-    if (InputManager.isHeld("STEER_LEFT")) direction = "bank_left";
-    else if (InputManager.isHeld("STEER_RIGHT")) direction = "bank_right";
-
-    const chosen =
-      dial.find((m) => m.direction === direction && m.speed === desiredSpeed) ??
-      dial.find((m) => m.direction === direction) ??
-      dial.find((m) => m.direction === "straight") ??
-      dial[0];
-
-    if (chosen) {
-      ship.currentManeuverDir = chosen.direction;
-      ship.currentSpeed = chosen.speed;
-      this.sendManeuverIfChanged(chosen.direction, chosen.speed);
-    }
+  private steerAi(ship: DogfightShip, target: DogfightShip): void {
+    const optimalChance = { easy: 0.5, normal: 0.7, hard: 0.9, brutal: 1 }[
+      this.difficulty
+    ];
+    const trueError = headingDiffToTarget(
+      ship.x,
+      ship.y,
+      ship.angle,
+      target.x,
+      target.y,
+    );
+    const headingErrorDeg = random.chance(optimalChance)
+      ? trueError
+      : (random.pick(SUBOPTIMAL_HEADING_ERRORS_DEG) ?? 0);
+    const origin = { x: ship.x, y: ship.y, angle: ship.angle };
+    const result = steerAiFlight(ship.flight, {
+      headingErrorDeg,
+      desiredSpeed: pursuitSpeed(ship.flight.motion.control, trueError),
+      cycleCommitted: ship.cycleCommitted,
+      allowKTurn: this.difficulty !== "easy",
+    });
+    this.setFlight(ship, result.state);
+    this.playFlightEvents(ship, result.events, origin);
   }
 
-  /** Sends a maneuver update only when it changed, to avoid flooding the socket every frame. */
-  private sendManeuverIfChanged(dir: ManeuverDirection, speed: number): void {
-    if (!this.isOnlineMode) return;
-    if (
-      this.lastSentManeuver &&
-      this.lastSentManeuver.dir === dir &&
-      this.lastSentManeuver.speed === speed
-    ) {
-      return;
+  /**
+   * Runs one frame of the player's flight input through the shared pilot
+   * controls (tap = drift, hold = bank, Q/E = hard turn, K-turn, Segnor,
+   * Tallon, boost, barrel roll) and relays the queued maneuver online.
+   *
+   * @param ship - The player ship.
+   * @param time - Scene time (ms).
+   * @param delta - Frame length (ms).
+   */
+  private flyPlayer(ship: DogfightShip, time: number, delta: number): void {
+    const origin = { x: ship.x, y: ship.y, angle: ship.angle };
+    const result = this.pilot.fly({
+      flight: ship.flight,
+      ship: ship.flight.motion,
+      dial: ship.dial,
+      nowMs: time,
+      deltaMs: delta,
+      worldSize: BATTLEFIELD_SIZE,
+    });
+    this.setFlight(ship, { motion: result.motion, stress: result.stress });
+    this.playFlightEvents(ship, result.events, origin);
+    const { control } = result.motion;
+    this.sendManeuver(
+      control.nextManeuver ?? "straight",
+      control.speed,
+      ship,
+      result.events.length > 0,
+    );
+  }
+
+  /**
+   * Mirrors the opponent's queued maneuver and speed and moves their ship to
+   * the pose their client reports (each client is authoritative for its own
+   * ship; the maneuver in progress is carried along, not restarted).
+   *
+   * @param opponent - The local copy of the opponent's ship.
+   * @param data - The maneuver message payload.
+   */
+  private applyRemoteManeuver(
+    opponent: DogfightShip,
+    data: Record<string, unknown>,
+  ): void {
+    let motion = opponent.flight.motion;
+    if (typeof data.x === "number" && typeof data.y === "number") {
+      motion = shiftMotion(
+        motion,
+        torusDelta(data.x - motion.x),
+        torusDelta(data.y - motion.y),
+        BATTLEFIELD_SIZE,
+      );
     }
+    const dir = data.dir as ManeuverDirection | undefined;
+    const speed = data.speed;
+    const control = {
+      ...motion.control,
+      nextManeuver:
+        dir === undefined
+          ? motion.control.nextManeuver
+          : dir === "straight"
+            ? null
+            : dir,
+      speed: typeof speed === "number" ? speed : motion.control.speed,
+    };
+    this.setFlight(opponent, {
+      ...opponent.flight,
+      motion: { ...motion, control },
+    });
+  }
+
+  /**
+   * Relays the local ship's queued maneuver, speed and pose to the opponent
+   * — only when the maneuver changed, an action moved the ship, or a cycle
+   * committed (periodic pose sync), to avoid flooding the socket.
+   *
+   * @param dir - Queued maneuver.
+   * @param speed - Queued speed.
+   * @param ship - The local ship (its pose is sent).
+   * @param force - Send even when the maneuver did not change.
+   */
+  private sendManeuver(
+    dir: ManeuverDirection,
+    speed: number,
+    ship: Pose,
+    force: boolean,
+  ): void {
+    if (!this.isOnlineMode) return;
+    const unchanged =
+      this.lastSentManeuver?.dir === dir &&
+      this.lastSentManeuver.speed === speed;
+    if (unchanged && !force) return;
     this.lastSentManeuver = { dir, speed };
-    networkService.sendGameAction({ type: "maneuver", data: { dir, speed } });
+    networkService.sendGameAction({
+      type: "maneuver",
+      data: { dir, speed, x: ship.x, y: ship.y },
+    });
   }
 
   private updateSprites(): void {

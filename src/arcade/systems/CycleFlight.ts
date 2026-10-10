@@ -13,6 +13,7 @@
  */
 
 import {
+  canKTurn,
   createControlState,
   processCommand,
   updateCooldowns,
@@ -27,6 +28,7 @@ import {
 } from "../../data/ShipDefinitions";
 import {
   accrueCycleStress,
+  applyKturnStress,
   INITIAL_STRESS,
   type StressState,
 } from "../ArcadeStress";
@@ -36,6 +38,7 @@ import {
   type CompletedCycle,
   type MotionState,
 } from "./ShipMotion";
+import type { FlightEvent } from "./PilotFlightTypes";
 
 /** Base size (px) used when a definition has no known size class. */
 const FALLBACK_BASE_SIZE_PX = 32;
@@ -46,6 +49,12 @@ const FALLBACK_BASE_SIZE_PX = 32;
  * through resolveAiSteeringManeuver's thresholds.
  */
 export const AI_FULL_DEFLECTION_DEG = 90;
+
+/** Heading error (°) beyond which a target counts as behind: K-turn to face it. */
+export const AI_KTURN_ERROR_DEG = 150;
+
+/** Heading error (°) beyond which the AI slows down to turn tighter. */
+export const AI_SLOW_TURN_ERROR_DEG = 60;
 
 /** Specials stay queued until they fly; steering never overwrites them. */
 const SPECIAL_MANEUVER = /^(kturn|segnor_|tallon_)/;
@@ -168,24 +177,40 @@ export interface AiSteerOrder {
   readonly desiredSpeed: number | null;
   /** True on the frame a cycle committed — the only time speed may step. */
   readonly cycleCommitted: boolean;
+  /** Whether this pilot may K-turn onto a target behind it. */
+  readonly allowKTurn?: boolean;
+}
+
+/** Result of steering an AI ship for one frame. */
+export interface AiSteerResult {
+  readonly state: CycleFlightState;
+  /** Effects to show (a K-turn afterimage). */
+  readonly events: FlightEvent[];
 }
 
 /**
  * Queue the AI's next maneuver from its heading error: a drift for small
  * errors, a bank for moderate ones and a 90° turn only for large ones (a
- * stressed pilot banks instead of turning). Queued specials are kept.
+ * stressed pilot banks instead of turning). A target behind triggers a
+ * K-turn when allowed, off cooldown and unstressed. Queued specials are kept.
  *
  * @param state - The AI ship's flight state.
  * @param order - Heading error, wanted speed and cycle timing.
- * @returns Motion state with the next maneuver (and speed) queued.
+ * @returns Flight state with the next maneuver (and speed) queued.
  */
 export function steerAiFlight(
   state: CycleFlightState,
   order: AiSteerOrder,
-): MotionState {
+): AiSteerResult {
   const { motion } = state;
   let control = motion.control;
-  if (!SPECIAL_MANEUVER.test(control.nextManeuver ?? "")) {
+  let stress = state.stress;
+  const events: FlightEvent[] = [];
+  if (wantsKTurn(state, order)) {
+    control = processCommand(motion, control, "kturn");
+    stress = applyKturnStress(stress);
+    events.push("kturn");
+  } else if (!SPECIAL_MANEUVER.test(control.nextManeuver ?? "")) {
     const ratio = Math.max(
       -1,
       Math.min(1, -order.headingErrorDeg / AI_FULL_DEFLECTION_DEG),
@@ -193,7 +218,7 @@ export function steerAiFlight(
     const steer = resolveAiSteeringManeuver(ratio);
     control = {
       ...control,
-      nextManeuver: steer ? calmIfStressed(steer, state.stress) : null,
+      nextManeuver: steer ? calmIfStressed(steer, stress) : null,
     };
   }
   if (order.cycleCommitted && order.desiredSpeed !== null) {
@@ -202,7 +227,43 @@ export function steerAiFlight(
     else if (order.desiredSpeed < control.speed)
       control = processCommand(motion, control, "thrust_decrease");
   }
-  return { ...motion, control };
+  return { state: { motion: { ...motion, control }, stress }, events };
+}
+
+/**
+ * Whether the AI should K-turn now: allowed, target behind, unstressed,
+ * off cooldown and no special already queued.
+ * @param state - The AI ship's flight state.
+ * @param order - This frame's order.
+ * @returns True to queue a K-turn.
+ */
+function wantsKTurn(state: CycleFlightState, order: AiSteerOrder): boolean {
+  const { control } = state.motion;
+  return (
+    order.allowKTurn === true &&
+    Math.abs(order.headingErrorDeg) >= AI_KTURN_ERROR_DEG &&
+    !state.stress.isStressed &&
+    canKTurn(control) &&
+    !SPECIAL_MANEUVER.test(control.nextManeuver ?? "")
+  );
+}
+
+/**
+ * Pursuit speed: slow down to turn tight when the goal is well off the nose,
+ * cruise in the middle of the speed range when roughly lined up.
+ *
+ * @param control - The ship's speed bounds.
+ * @param headingErrorDeg - Signed heading error to the goal (°).
+ * @returns The speed the AI should aim for.
+ */
+export function pursuitSpeed(
+  control: Pick<ShipControlState, "minSpeed" | "maxSpeed">,
+  headingErrorDeg: number,
+): number {
+  if (Math.abs(headingErrorDeg) >= AI_SLOW_TURN_ERROR_DEG) {
+    return control.minSpeed;
+  }
+  return Math.ceil((control.minSpeed + control.maxSpeed) / 2);
 }
 
 /**
