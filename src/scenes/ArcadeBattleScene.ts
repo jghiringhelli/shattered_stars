@@ -33,6 +33,8 @@ import {
   updateProjectile,
   isProjectileAlive,
   checkProjectileHit,
+  withOnHit,
+  projectileRawDamage,
   type Projectile,
 } from "../core/Projectile";
 import { consumeOrdnanceCharge } from "../arcade/ArcadeOrdnance";
@@ -58,18 +60,32 @@ import { InputManager } from "../input/InputManager";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import type { ActionIntent } from "../input/InputTypes";
 import {
-  extractOrdnanceSlots,
+  buildOrdnanceSlots,
   tickOrdnanceCooldowns,
   canFireOrdnance,
   type ArcadeOrdnanceSlot,
 } from "../arcade/ArcadeOrdnance";
 import {
-  extractTurretSlot,
+  buildTurretSlot,
   tickTurretCooldown,
   canFireTurret,
   consumeTurretShot,
   type ArcadeTurretSlot,
 } from "../arcade/ArcadeTurret";
+import {
+  loadoutUpgradeIds,
+  resolveUpgradeModifiers,
+  applyControlModifiers,
+  applyOrdnanceModifiers,
+  applyTurretModifiers,
+} from "../arcade/ArcadeUpgradeEffects";
+import {
+  NEUTRAL_MODIFIERS,
+  MIN_DAMAGE_TAKEN_MULTIPLIER,
+  MAX_STRESS_RELIEF_TIERS,
+  laserDamageWithModifiers,
+  type CombatModifiers,
+} from "../core/CombatModifiers";
 import {
   getShipDefinition,
   getShipDial,
@@ -91,6 +107,8 @@ import {
   updateStress,
   applyKturnStress,
   applyBoostStress,
+  applyInstantStress,
+  scaleStressGain,
   stressLevelColor,
   difficultyColor,
   findBestTurnSpeed,
@@ -228,6 +246,10 @@ interface ArcadeShip extends ShipState {
   capitalSystems: CapitalSystemsState | null;
   /** Commander order state (concentrate fire/power redirect/main beam/repair) — only set for capital-role ships. */
   commanderOrders: CommanderOrders | null;
+  /** Upgrade ids equipped by this ship's loadout. */
+  upgradeIds: ReadonlyArray<string>;
+  /** Real-time effects of those upgrades, folded into one sheet. */
+  modifiers: CombatModifiers;
 }
 
 interface ShipSprite extends Phaser.GameObjects.Container {
@@ -244,6 +266,9 @@ interface ShipSprite extends Phaser.GameObjects.Container {
   imageBaseScaleY?: number;
   bankState: BankState;
 }
+
+/** Seconds a cloak lasts before upgrades (Phantom Strike extends it). */
+const BASE_CLOAK_SECONDS = 8;
 
 /** Maneuver difficulty ordered from most to least stressful. */
 const DIFFICULTY_ORDER: readonly ManeuverDifficulty[] = [
@@ -955,7 +980,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     // Cloak toggle (C key) — 8-second invisibility; breaks on firing
     if (this.consumeEdge("CLOAK") && !ship.isCloaked) {
       ship.isCloaked = true;
-      ship.cloakTimer = 8;
+      ship.cloakTimer = BASE_CLOAK_SECONDS + ship.modifiers.cloakDurationBonus;
     }
 
     if (ship.crewMode === "gunner") {
@@ -1135,17 +1160,20 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const slot = ship.ordnanceSlots[slotIdx]!;
     const deployAngle = (ship.angle + 180) % 360;
     const rad = (deployAngle - 90) * (Math.PI / 180);
-    const proj = createProjectile(
-      ship.x + Math.cos(rad) * 20,
-      ship.y + Math.sin(rad) * 20,
-      deployAngle,
-      ship.id,
-      ship.faction,
-      slot.damage,
-      false,
-      null,
-      0,
-      0,
+    const proj = withOnHit(
+      createProjectile(
+        ship.x + Math.cos(rad) * 20,
+        ship.y + Math.sin(rad) * 20,
+        deployAngle,
+        ship.id,
+        ship.faction,
+        slot.damage,
+        false,
+        null,
+        0,
+        0,
+      ),
+      { stressOnHit: slot.stressOnHit, bonusDamageVsUnshielded: 0 },
     );
     this.projectiles.push(proj);
     consumeOrdnanceCharge(slot);
@@ -1206,12 +1234,22 @@ export class ArcadeBattleScene extends Phaser.Scene {
             ship.control.speed,
             ship.shipDial,
           );
-          const relief = this.activeAuras.get(ship.id)?.stressReliefTiers ?? 0;
+          const relief = Math.min(
+            MAX_STRESS_RELIEF_TIERS,
+            (this.activeAuras.get(ship.id)?.stressReliefTiers ?? 0) +
+              ship.modifiers.stressReliefTiers,
+          );
           const eased = easeDifficulty(difficulty, relief);
-          ship.stress = updateStress(ship.stress, eased, CYCLE_DURATION_MS);
+          ship.stress = scaleStressGain(
+            ship.stress,
+            updateStress(ship.stress, eased, CYCLE_DURATION_MS),
+            ship.modifiers.stressRateMultiplier,
+          );
           ship.control = advanceCycle(ship, ship.control);
         }
       }
+
+      this.regenerateUpgradeShields(ship, deltaMs);
 
       // Wrap around battlefield
       ship.x =
@@ -1245,7 +1283,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
         role: ship.role,
         size,
         isUnique: false,
-        equippedUpgrades: [],
+        equippedUpgrades: ship.upgradeIds,
         hull: ship.hull,
         shields: ship.shields,
         maxShields: ship.maxShields,
@@ -1273,6 +1311,22 @@ export class ArcadeBattleScene extends Phaser.Scene {
       const gain = (aura.shieldRegenPerSecond * deltaMs) / 1000;
       ship.shields = Math.min(ship.maxShields, ship.shields + gain);
     }
+  }
+
+  /**
+   * Regenerates shields granted by upgrades (repair astromech, illicit
+   * deflectors). Support-aura regen is applied separately in updateAuras.
+   *
+   * @param ship - Ship to regenerate.
+   * @param deltaMs - Elapsed simulation time for this tick, in milliseconds.
+   */
+  private regenerateUpgradeShields(ship: ArcadeShip, deltaMs: number): void {
+    const rate = ship.modifiers.shieldRegenPerSecond;
+    if (rate <= 0 || ship.shields >= ship.maxShields) return;
+    ship.shields = Math.min(
+      ship.maxShields,
+      ship.shields + (rate * deltaMs) / 1000,
+    );
   }
 
   private tickCloak(ship: ArcadeShip, deltaMs: number): void {
@@ -1567,18 +1621,29 @@ export class ArcadeBattleScene extends Phaser.Scene {
       getShipDefinition(ship.definitionId)?.baseStats.attack ?? 2;
     const stressMult = ship.stress.isStressed ? 0.75 : 1;
     const auraBonus = this.activeAuras.get(ship.id)?.damageBonus ?? 0;
-    const damage =
+    const baseDamage =
       Math.max(1, Math.round(Math.min(baseAttack, 2) * stressMult)) + auraBonus;
+    const damage = laserDamageWithModifiers(
+      baseDamage,
+      ship.modifiers,
+      ship.stress.isStressed,
+    );
     // Spawn projectile from ship nose
     const rad = (ship.angle - 90) * (Math.PI / 180);
     const spawnDist = 20;
-    const proj = createProjectile(
-      ship.x + Math.cos(rad) * spawnDist,
-      ship.y + Math.sin(rad) * spawnDist,
-      ship.angle,
-      ship.id,
-      ship.faction,
-      damage,
+    const proj = withOnHit(
+      createProjectile(
+        ship.x + Math.cos(rad) * spawnDist,
+        ship.y + Math.sin(rad) * spawnDist,
+        ship.angle,
+        ship.id,
+        ship.faction,
+        damage,
+      ),
+      {
+        stressOnHit: ship.modifiers.stressOnHit,
+        bonusDamageVsUnshielded: ship.modifiers.bonusDamageVsUnshielded,
+      },
     );
 
     this.projectiles.push(proj);
@@ -1631,17 +1696,20 @@ export class ArcadeBattleScene extends Phaser.Scene {
     consumeOrdnanceCharge(slot);
 
     const rad = (ship.angle - 90) * (Math.PI / 180);
-    const proj = createProjectile(
-      ship.x + Math.cos(rad) * 20,
-      ship.y + Math.sin(rad) * 20,
-      ship.angle,
-      ship.id,
-      ship.faction,
-      slot.damage,
-      slot.isHoming,
-      bestTarget?.id ?? null,
-      slot.homingTurnRate,
-      slot.homingTurnBudget,
+    const proj = withOnHit(
+      createProjectile(
+        ship.x + Math.cos(rad) * 20,
+        ship.y + Math.sin(rad) * 20,
+        ship.angle,
+        ship.id,
+        ship.faction,
+        slot.damage,
+        slot.isHoming,
+        bestTarget?.id ?? null,
+        slot.homingTurnRate,
+        slot.homingTurnBudget,
+      ),
+      { stressOnHit: slot.stressOnHit, bonusDamageVsUnshielded: 0 },
     );
     this.projectiles.push(proj);
 
@@ -1680,14 +1748,18 @@ export class ArcadeBattleScene extends Phaser.Scene {
           const ship = this.ships.get(view.id)!;
 
           const wasAlive = ship.hull > 0;
+          const hitDamage = projectileRawDamage(proj, ship.shields);
           const rawDamage = ship.isCloaked
-            ? Math.max(1, Math.floor(proj.damage / 2))
-            : proj.damage;
+            ? Math.max(1, Math.floor(hitDamage / 2))
+            : hitDamage;
           const armor =
             getShipDefinition(ship.definitionId)?.baseStats.armor ?? 0;
           const armoredDamage = Math.max(1, rawDamage - armor);
-          const mitigation =
-            this.activeAuras.get(ship.id)?.damageTakenMultiplier ?? 1;
+          const mitigation = Math.max(
+            MIN_DAMAGE_TAKEN_MULTIPLIER,
+            (this.activeAuras.get(ship.id)?.damageTakenMultiplier ?? 1) *
+              ship.modifiers.damageTakenMultiplier,
+          );
           const attackerOrders = this.ships.get(proj.ownerId)?.commanderOrders;
           const concentrateMultiplier = attackerOrders
             ? concentrateFireMultiplier(
@@ -1696,15 +1768,11 @@ export class ArcadeBattleScene extends Phaser.Scene {
                 this.time.now,
               )
             : 1;
-          const damage =
-            mitigation < 1
-              ? Math.max(
-                  1,
-                  Math.round(
-                    armoredDamage * mitigation * concentrateMultiplier,
-                  ),
-                )
-              : Math.round(armoredDamage * concentrateMultiplier);
+          const damage = Math.max(
+            1,
+            Math.round(armoredDamage * mitigation * concentrateMultiplier),
+          );
+          ship.stress = applyInstantStress(ship.stress, proj.stressOnHit ?? 0);
           ship.isCloaked = false;
           ship.cloakTimer = 0;
 
@@ -1830,15 +1898,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       3,
       playerShip.maxShields,
     );
-    applyLoadoutEffects(playerShip, playerSlot.loadoutChoices?.["0"]);
-    playerShip.ordnanceSlots = extractOrdnanceSlots(
-      playerShip.definitionId,
-      playerSlot.loadoutChoices?.["0"] ?? null,
-    );
-    playerShip.turretSlot = extractTurretSlot(
-      playerShip.definitionId,
-      playerSlot.loadoutChoices?.["0"] ?? null,
-    );
+    this.equipLoadout(playerShip, playerSlot.loadoutChoices?.["0"]);
     this.ships.set(playerShip.id, playerShip);
     this.playerShipId = playerShip.id;
 
@@ -1859,15 +1919,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
         BATTLEFIELD_SIZE / 2 + offset.y,
         0,
       );
-      applyLoadoutEffects(ally, playerSlot.loadoutChoices?.[String(i + 1)]);
-      ally.ordnanceSlots = extractOrdnanceSlots(
-        ally.definitionId,
-        playerSlot.loadoutChoices?.[String(i + 1)] ?? null,
-      );
-      ally.turretSlot = extractTurretSlot(
-        ally.definitionId,
-        playerSlot.loadoutChoices?.[String(i + 1)] ?? null,
-      );
+      this.equipLoadout(ally, playerSlot.loadoutChoices?.[String(i + 1)]);
       // Arcade wingman hull floor — glass-cannon light fighters (hull 2) get
       // one-shot by any decent burst. Bumps floor so wingmen survive a hit.
       ally.hull = ally.maxHull = Math.max(4, ally.maxHull);
@@ -1895,19 +1947,36 @@ export class ArcadeBattleScene extends Phaser.Scene {
           BATTLEFIELD_SIZE / 2 + Math.sin(angle) * radius - 1000,
           180,
         );
-        applyLoadoutEffects(enemy, slot.loadoutChoices?.[String(shipIdx)]);
-        enemy.ordnanceSlots = extractOrdnanceSlots(
-          enemy.definitionId,
-          slot.loadoutChoices?.[String(shipIdx)] ?? null,
-        );
-        enemy.turretSlot = extractTurretSlot(
-          enemy.definitionId,
-          slot.loadoutChoices?.[String(shipIdx)] ?? null,
-        );
+        this.equipLoadout(enemy, slot.loadoutChoices?.[String(shipIdx)]);
         this.ships.set(enemy.id, enemy);
         enemyIndex++;
       });
     }
+  }
+
+  /**
+   * Equips a loadout on a freshly created ship: stat bonuses, the real-time
+   * upgrade modifier sheet, upgraded maneuver recharge times, and the
+   * ordnance/turret weapons with their reload modifiers baked in.
+   *
+   * @param ship - The ship to equip (mutated in place, before first update).
+   * @param loadoutId - Chosen loadout id, or undefined for the bare ship.
+   */
+  private equipLoadout(ship: ArcadeShip, loadoutId: string | undefined): void {
+    applyLoadoutEffects(ship, loadoutId);
+    const upgradeIds = loadoutUpgradeIds(ship.definitionId, loadoutId);
+    const modifiers = resolveUpgradeModifiers(upgradeIds);
+    ship.upgradeIds = upgradeIds;
+    ship.modifiers = modifiers;
+    ship.control = applyControlModifiers(ship.control, modifiers);
+    ship.ordnanceSlots = applyOrdnanceModifiers(
+      buildOrdnanceSlots(upgradeIds),
+      modifiers,
+    );
+    ship.turretSlot = applyTurretModifiers(
+      buildTurretSlot(upgradeIds),
+      modifiers,
+    );
   }
 
   private spawnDefaultShips(): void {
@@ -2029,6 +2098,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
       capitalSystems:
         def?.role === "capital" ? createCapitalSystems(baseShip.hull) : null,
       commanderOrders: def?.role === "capital" ? createCommanderOrders() : null,
+      upgradeIds: [],
+      modifiers: NEUTRAL_MODIFIERS,
     };
 
     return ship;
@@ -2828,13 +2899,16 @@ export class ArcadeBattleScene extends Phaser.Scene {
           powerMultiplier,
       ),
     );
-    const proj = createProjectile(
-      ship.x + Math.cos(rad) * 20,
-      ship.y + Math.sin(rad) * 20,
-      ship.turretSlot.turretFacing,
-      ship.id,
-      ship.faction,
-      damage,
+    const proj = withOnHit(
+      createProjectile(
+        ship.x + Math.cos(rad) * 20,
+        ship.y + Math.sin(rad) * 20,
+        ship.turretSlot.turretFacing,
+        ship.id,
+        ship.faction,
+        damage,
+      ),
+      { stressOnHit: ship.turretSlot.stressOnHit, bonusDamageVsUnshielded: 0 },
     );
     this.projectiles.push(proj);
 

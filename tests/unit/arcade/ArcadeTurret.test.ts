@@ -8,6 +8,7 @@ import {
   canFireTurret,
   consumeTurretShot,
   extractTurretSlot,
+  buildTurretSlot,
   type ArcadeTurretSlot,
 } from "../../../src/arcade/ArcadeTurret";
 
@@ -148,5 +149,31 @@ describe("turretFacing", () => {
     const slot = makeSlot({ turretFacing: 0 });
     slot.turretFacing = 270;
     expect(slot.turretFacing).toBe(270);
+  });
+});
+
+// ────────────────────────────────────────────────────────────
+// buildTurretSlot — catalog-driven profiles
+// ────────────────────────────────────────────────────────────
+
+describe("buildTurretSlot", () => {
+  it("returns null when no turret card is equipped", () => {
+    expect(buildTurretSlot(["hull_upgrade"])).toBeNull();
+  });
+
+  it("reads damage, range and rate of fire from the catalog card", () => {
+    expect(buildTurretSlot(["twin_laser_turret"])).toMatchObject({
+      damage: 2,
+      range: 400,
+      cooldownMax: 2000,
+      stressOnHit: 0,
+    });
+  });
+
+  it("makes the ion turret stress its target instead of hitting hard", () => {
+    const ion = buildTurretSlot(["ion_turret"])!;
+    const twin = buildTurretSlot(["twin_laser_turret"])!;
+    expect(ion.stressOnHit).toBeGreaterThan(0);
+    expect(ion.damage).toBeLessThan(twin.damage);
   });
 });

@@ -27,6 +27,50 @@ export interface Projectile {
    * Non-homing projectiles set this to 0.
    */
   homingTurnBudget: number;
+  /** Stress (0–1 scale) added to the pilot this projectile hits. */
+  stressOnHit?: number;
+  /** Extra damage dealt when the target's shields are already down. */
+  bonusDamageVsUnshielded?: number;
+}
+
+/** Secondary on-hit riders a weapon can attach to its projectiles. */
+export interface ProjectileOnHit {
+  readonly stressOnHit: number;
+  readonly bonusDamageVsUnshielded: number;
+}
+
+/**
+ * Attach on-hit riders to a freshly created projectile.
+ *
+ * @param projectile - The projectile to arm.
+ * @param onHit - Riders from the firing weapon and ship upgrades.
+ * @returns A copy of the projectile carrying the riders.
+ */
+export function withOnHit(
+  projectile: Projectile,
+  onHit: ProjectileOnHit,
+): Projectile {
+  return {
+    ...projectile,
+    stressOnHit: onHit.stressOnHit,
+    bonusDamageVsUnshielded: onHit.bonusDamageVsUnshielded,
+  };
+}
+
+/**
+ * Damage a projectile deals to a target, before armour and mitigation.
+ *
+ * @param projectile - The hitting projectile.
+ * @param targetShields - The target's current shields.
+ * @returns Raw damage including the unshielded-target bonus.
+ */
+export function projectileRawDamage(
+  projectile: Projectile,
+  targetShields: number,
+): number {
+  const exposedBonus =
+    targetShields <= 0 ? (projectile.bonusDamageVsUnshielded ?? 0) : 0;
+  return projectile.damage + exposedBonus;
 }
 
 let projectileIdCounter = 0;

@@ -140,6 +140,48 @@ export function updateStress(
 }
 
 /**
+ * Applies an instant stress spike of any size (K-turns, boosts, ion hits).
+ *
+ * @param state - current stress state
+ * @param amount - stress to add on the 0–1 scale
+ * @returns new state with stress elevated and the stressed flag latched
+ */
+export function applyInstantStress(
+  state: StressState,
+  amount: number,
+): StressState {
+  if (amount <= 0) return state;
+  const newLevel = Math.min(1, state.level + amount);
+  return {
+    level: newLevel,
+    isStressed: newLevel >= STRESS_HIGH || state.isStressed,
+  };
+}
+
+/**
+ * Scales the stress a maneuver just added (pilot upgrades make stress build
+ * faster or slower). Stress recovery (a falling level) is never scaled.
+ *
+ * @param previous - stress state before the update
+ * @param next - stress state after the unscaled update
+ * @param multiplier - gain multiplier (<1 = calmer pilot)
+ * @returns state with the gain scaled and hysteresis re-evaluated
+ */
+export function scaleStressGain(
+  previous: StressState,
+  next: StressState,
+  multiplier: number,
+): StressState {
+  const gain = next.level - previous.level;
+  if (gain <= 0 || multiplier === 1) return next;
+  const level = Math.max(0, Math.min(1, previous.level + gain * multiplier));
+  let isStressed = previous.isStressed;
+  if (level >= STRESS_HIGH) isStressed = true;
+  if (level <= STRESS_LOW) isStressed = false;
+  return { level, isStressed };
+}
+
+/**
  * Applies the instant stress spike from a K-turn.
  * Called once when the player triggers the K-turn action.
  *
@@ -147,11 +189,7 @@ export function updateStress(
  * @returns new state with stress elevated by KTURN_STRESS_INSTANT
  */
 export function applyKturnStress(state: StressState): StressState {
-  const newLevel = Math.min(1, state.level + KTURN_STRESS_INSTANT);
-  return {
-    level: newLevel,
-    isStressed: newLevel >= STRESS_HIGH || state.isStressed,
-  };
+  return applyInstantStress(state, KTURN_STRESS_INSTANT);
 }
 
 /**
@@ -162,11 +200,7 @@ export function applyKturnStress(state: StressState): StressState {
  * @returns new state with stress elevated by BOOST_STRESS_INSTANT
  */
 export function applyBoostStress(state: StressState): StressState {
-  const newLevel = Math.min(1, state.level + BOOST_STRESS_INSTANT);
-  return {
-    level: newLevel,
-    isStressed: newLevel >= STRESS_HIGH || state.isStressed,
-  };
+  return applyInstantStress(state, BOOST_STRESS_INSTANT);
 }
 
 // ============================================

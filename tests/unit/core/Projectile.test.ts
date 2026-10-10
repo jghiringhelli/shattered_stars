@@ -8,6 +8,8 @@ import {
   updateProjectile,
   isProjectileAlive,
   checkProjectileHit,
+  withOnHit,
+  projectileRawDamage,
   type Projectile,
 } from "../../../src/core/Projectile";
 
@@ -284,5 +286,32 @@ describe("Projectile", () => {
       );
       expect(largeHit).toBe(true);
     });
+  });
+});
+
+describe("projectile on-hit riders", () => {
+  it("attaches stress and exposed-target bonus without mutating the original", () => {
+    const proj = createProjectile(0, 0, 0, "ship-1", "terran_hegemony", 2);
+    const armed = withOnHit(proj, {
+      stressOnHit: 0.1,
+      bonusDamageVsUnshielded: 1,
+    });
+    expect(armed.stressOnHit).toBe(0.1);
+    expect(armed.bonusDamageVsUnshielded).toBe(1);
+    expect(proj.stressOnHit).toBeUndefined();
+  });
+
+  it("adds the exposed-target bonus only when shields are down", () => {
+    const armed = withOnHit(
+      createProjectile(0, 0, 0, "ship-1", "terran_hegemony", 2),
+      { stressOnHit: 0, bonusDamageVsUnshielded: 1 },
+    );
+    expect(projectileRawDamage(armed, 2)).toBe(2);
+    expect(projectileRawDamage(armed, 0)).toBe(3);
+  });
+
+  it("deals base damage for a projectile without riders", () => {
+    const proj = createProjectile(0, 0, 0, "ship-1", "terran_hegemony", 2);
+    expect(projectileRawDamage(proj, 0)).toBe(2);
   });
 });

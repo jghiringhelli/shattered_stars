@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   extractOrdnanceSlots,
+  buildOrdnanceSlots,
   tickOrdnanceCooldowns,
   canFireOrdnance,
   consumeOrdnanceCharge,
@@ -197,5 +198,62 @@ describe("reloadAllOrdnance", () => {
 
   it("handles an empty slots array gracefully", () => {
     expect(() => reloadAllOrdnance([])).not.toThrow();
+  });
+});
+
+// ─── catalog-driven weapon profiles ─────────────────────────────────────────
+
+describe("buildOrdnanceSlots", () => {
+  it("reads damage, reload and charges from the catalog card", () => {
+    const [slot] = buildOrdnanceSlots(["concussion_missile"]);
+    expect(slot).toMatchObject({
+      ordnanceClass: "missile",
+      damage: 3,
+      cooldownMax: 4000,
+      charges: 3,
+      isHoming: true,
+    });
+  });
+
+  it("makes seeker missiles track harder than concussion missiles", () => {
+    const [seeker] = buildOrdnanceSlots(["seeker_missile"]);
+    const [concussion] = buildOrdnanceSlots(["concussion_missile"]);
+    expect(seeker!.homingTurnBudget).toBeGreaterThan(
+      concussion!.homingTurnBudget,
+    );
+    expect(seeker!.damage).toBeLessThan(concussion!.damage);
+  });
+
+  it("makes ion torpedoes trade damage for stress", () => {
+    const [ion] = buildOrdnanceSlots(["ion_torpedo"]);
+    const [proton] = buildOrdnanceSlots(["proton_torpedo"]);
+    expect(ion!.damage).toBeLessThan(proton!.damage);
+    expect(ion!.stressOnHit).toBeGreaterThan(0);
+    expect(proton!.stressOnHit).toBe(0);
+  });
+
+  it("drops bombs without homing", () => {
+    const [bomb] = buildOrdnanceSlots(["cluster_mine"]);
+    expect(bomb).toMatchObject({
+      ordnanceClass: "bomb",
+      isHoming: false,
+      charges: 3,
+    });
+  });
+
+  it("skips non-ordnance cards and binds at most three slots", () => {
+    const slots = buildOrdnanceSlots([
+      "hull_upgrade",
+      "proton_torpedo",
+      "seeker_missile",
+      "proton_bomb",
+      "concussion_missile",
+    ]);
+    expect(slots.map((s) => s.name)).toEqual([
+      "Proton Torpedoes",
+      "Seeker Missiles",
+      "Proton Bombs",
+    ]);
+    expect(slots.map((s) => s.slotIndex)).toEqual([0, 1, 2]);
   });
 });

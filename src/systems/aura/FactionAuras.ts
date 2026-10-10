@@ -17,6 +17,7 @@
 
 import type { FactionId, ShipSize } from "../../config";
 import type { ShipRole } from "../../core/types";
+import { UPGRADE_CATALOG } from "../../data/upgrades";
 
 /** Minimal ship shape needed to resolve auras (no Phaser/runtime coupling). */
 export interface AuraShip {
@@ -63,10 +64,12 @@ export interface FactionAura {
 export const SWARM_EVADE_PER_ALLY = 0.06;
 /** Maximum incoming-damage reduction the swarm aura can reach. */
 export const SWARM_EVADE_CAP = 0.3;
-/** Floor on the incoming-damage multiplier so stacked auras never invulnerable. */
-export const MIN_DAMAGE_TAKEN_MULTIPLIER = 0.5;
-/** Maximum number of stress-relief tiers a ship can benefit from at once. */
-export const MAX_STRESS_RELIEF_TIERS = 2;
+export {
+  /** Floor on the incoming-damage multiplier so stacked auras never invulnerable. */
+  MIN_DAMAGE_TAKEN_MULTIPLIER,
+  /** Maximum number of stress-relief tiers a ship can benefit from at once. */
+  MAX_STRESS_RELIEF_TIERS,
+} from "../../core/CombatModifiers";
 
 /**
  * Radius multiplier per hull size, applied to a faction's base radius.
@@ -97,10 +100,15 @@ export const HERO_RADIUS_SCALE = 0.65;
 /** Hero auras keep full magnitude — rewarding ordered swarms around an ace. */
 export const HERO_MAGNITUDE_SCALE = 1;
 
-/** Crew upgrade ids that grant a coordinator aura to a non-support ship. */
-export const AURA_GRANTING_CREW: ReadonlySet<string> = new Set([
-  "tactical_officer",
-]);
+/**
+ * Upgrade ids that grant a coordinator aura to a non-support ship — every
+ * catalog card whose real-time effect projects the aura (crew or talent).
+ */
+export const AURA_GRANTING_CREW: ReadonlySet<string> = new Set(
+  Object.values(UPGRADE_CATALOG)
+    .filter((upgrade) => upgrade.realtime?.projectsAura === true)
+    .map((upgrade) => upgrade.id),
+);
 
 /**
  * The signature aura for each faction, tuned to its playstyle.

@@ -22,6 +22,8 @@ export interface ArcadeTurretSlot {
   readonly range: number;
   /** Cooldown between shots in ms */
   readonly cooldownMax: number;
+  /** Stress (0–1 scale) inflicted on the target by each hit. */
+  readonly stressOnHit: number;
   /** Ms remaining until next shot */
   cooldownRemaining: number;
   /**
@@ -31,22 +33,39 @@ export interface ArcadeTurretSlot {
   turretFacing: number;
 }
 
-// ============================================
-// Arcade stats per turret upgrade ID
-// ============================================
-
-const TURRET_PROPS: Readonly<
-  Record<string, Pick<ArcadeTurretSlot, "damage" | "range" | "cooldownMax">>
-> = {
-  light_laser_turret: { damage: 1, range: 350, cooldownMax: 1500 },
-  twin_laser_turret: { damage: 2, range: 400, cooldownMax: 2000 },
-  ion_turret: { damage: 2, range: 300, cooldownMax: 2500 },
-  quad_laser_turret: { damage: 3, range: 350, cooldownMax: 2000 },
-};
+/** Engagement range for a turret card that does not state one, in pixels. */
+const DEFAULT_TURRET_RANGE_PX = 350;
 
 // ============================================
 // Public API
 // ============================================
+
+/**
+ * Build the turret slot from the first turret card in a list of upgrades.
+ *
+ * @param upgradeIds - Equipped upgrade ids, in loadout order.
+ * @returns Ready-to-use turret slot, or null if none equipped.
+ */
+export function buildTurretSlot(
+  upgradeIds: ReadonlyArray<string>,
+): ArcadeTurretSlot | null {
+  for (const upgradeId of upgradeIds) {
+    const upgrade = UPGRADE_DEFINITIONS[upgradeId];
+    if (upgrade?.slotType !== "turret" || !upgrade.weapon) continue;
+    const { weapon } = upgrade;
+    return {
+      definitionId: upgradeId,
+      name: upgrade.name,
+      damage: weapon.damage,
+      range: weapon.rangePx ?? DEFAULT_TURRET_RANGE_PX,
+      cooldownMax: weapon.cooldownMs,
+      stressOnHit: weapon.stressOnHit ?? 0,
+      cooldownRemaining: 0,
+      turretFacing: 0,
+    };
+  }
+  return null;
+}
 
 /**
  * Extract the first turret upgrade from a ship's loadout, if any.
@@ -61,29 +80,9 @@ export function extractTurretSlot(
   loadoutId: string | null | undefined,
 ): ArcadeTurretSlot | null {
   if (!loadoutId) return null;
-
   const loadout = getShipLoadouts(definitionId).find((l) => l.id === loadoutId);
-  if (!loadout) return null;
-
-  for (const upgradeId of loadout.upgrades) {
-    const upg = UPGRADE_DEFINITIONS[upgradeId];
-    if (!upg || upg.slotType !== "turret") continue;
-
-    const props = TURRET_PROPS[upgradeId];
-    if (!props) continue;
-
-    return {
-      definitionId: upgradeId,
-      name: upg.name,
-      ...props,
-      cooldownRemaining: 0,
-      turretFacing: 0,
-    };
-  }
-
-  return null;
+  return loadout ? buildTurretSlot(loadout.upgrades) : null;
 }
-
 /**
  * Advance turret cooldown by deltaMs.
  * Mutates slot in place — called every frame.

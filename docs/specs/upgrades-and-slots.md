@@ -1,0 +1,57 @@
+# Spec — Upgrade catalog, slots and loadouts
+
+Inspired by X-Wing Miniatures (TMG): a fixed-price catalog of upgrade cards
+grouped by category; each ship has a slot bar saying which categories it can
+carry; the player picks predefined loadouts (quick builds), and a loadout's
+price is derived from its contents — never authored.
+
+## 1. Catalog (`src/data/upgrades/`)
+
+Categories (`UpgradeSlotType`): modification, configuration, title, sensor,
+tech, cannon, turret, missile, torpedo, bomb, crew, gunner, astromech,
+talent, illicit. `force_power` is reserved for Ascendant pilot cards.
+
+Every card MUST change real-time combat (tested in `UpgradeCatalog.test.ts`):
+
+| Card kind | Where its effect lives | Read by |
+|---|---|---|
+| Stat cards (hull, shields) | `effects.hullBonus/shieldBonus` | every mode (`applyLoadoutEffects`) |
+| Attack/agility dice | `effects.attackBonus/agilityBonus` | dice-based modes (ModeBalancing) |
+| Behaviour cards | `realtime` → `CombatModifiers` (`src/core/CombatModifiers.ts`) | arcade scene |
+| Turret / ordnance | `weapon` → `WeaponProfile` | `ArcadeTurret`, `ArcadeOrdnance` |
+
+`CombatModifiers` knobs: laser damage (flat, calm-only, vs unshielded), damage
+taken, shield regen, maneuver stress rate and relief tiers, boost / barrel
+roll / K-turn recharge, ordnance reload / charges / homing, turret rate of
+fire, stress inflicted per laser hit, cloak duration, aura projection.
+Stacking: additive bonuses sum, multipliers multiply, then clamp
+(damage taken ≥ 0.5×, recharge ≥ 0.4×, stress rate ≥ 0.5×, relief ≤ 2 tiers).
+
+### Invariants (tested)
+- No two cards in the same slot play identically (no reskins at different prices).
+- Every turret/ordnance card has a weapon profile; ordnance states its charges.
+- Every illicit card pairs its upside with a drawback (stress rate or damage
+  taken above 1×, or a negative stat) and is priced below its clean equivalent.
+- Aura-granting cards are exactly those with `realtime.projectsAura`.
+
+### Price rule (fixed point values)
++1 hull = 3 · +1 shield = 4 · +1 laser damage = 5 (cannon) or 3 with a drawback ·
+40% faster recharge on one maneuver = 3 · 15% less damage taken ≈ 5–6 ·
+aura projection = 4–5 · trade-off configuration = 2 · illicit = clean equivalent − 1.
+
+## 2. Slots (`SHIP_SLOTS` in `src/data/ShipLoadouts.ts`)
+
+`SHIP_SLOTS` is the single source of truth for a ship's slot bar. Same-chassis
+variants across factions are differentiated by their slot bar (plus hull,
+shields, speed, dial and size), not by action lists, which have no real-time
+effect.
+
+Every loadout MUST fit its ship: each upgrade consumes one matching slot
+(duplicates need duplicate slots) and satisfies the card's faction, size and
+role requirements (tested in `ShipLoadouts.test.ts`).
+
+## 3. Loadout price
+
+`loadout.pointCost = ship.baseStats.pointCost + Σ card.pointCost`
+(`src/data/loadoutPricing.ts`). Pilots are folded into loadouts in a later
+phase (pilot = surcharge for initiative + one ability).

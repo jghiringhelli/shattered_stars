@@ -8,6 +8,8 @@ import {
   findBestTurnSpeed,
   updateStress,
   applyKturnStress,
+  applyInstantStress,
+  scaleStressGain,
   classifyManeuver,
   lookupDialDifficulty,
   INITIAL_STRESS,
@@ -208,5 +210,56 @@ describe("applyKturnStress", () => {
     const full = { level: 0.99, isStressed: true };
     const s = applyKturnStress(full);
     expect(s.level).toBe(1);
+  });
+});
+
+// ─── upgrade-driven stress helpers ──────────────────────────────────────────
+
+describe("applyInstantStress", () => {
+  it("adds the given amount of stress", () => {
+    expect(applyInstantStress(INITIAL_STRESS, 0.2).level).toBeCloseTo(0.2);
+  });
+
+  it("latches the stressed flag once the high threshold is crossed", () => {
+    expect(applyInstantStress(INITIAL_STRESS, STRESS_HIGH).isStressed).toBe(
+      true,
+    );
+  });
+
+  it("caps stress at 1", () => {
+    expect(
+      applyInstantStress({ level: 0.9, isStressed: true }, 0.5).level,
+    ).toBe(1);
+  });
+
+  it("ignores zero and negative amounts", () => {
+    const state = { level: 0.4, isStressed: false };
+    expect(applyInstantStress(state, 0)).toBe(state);
+  });
+});
+
+describe("scaleStressGain", () => {
+  it("halves a maneuver's stress gain with a 0.5 multiplier", () => {
+    const before = { level: 0.2, isStressed: false };
+    const after = { level: 0.4, isStressed: false };
+    expect(scaleStressGain(before, after, 0.5).level).toBeCloseTo(0.3);
+  });
+
+  it("amplifies the gain with a drawback multiplier", () => {
+    const before = { level: 0.2, isStressed: false };
+    const after = { level: 0.4, isStressed: false };
+    expect(scaleStressGain(before, after, 1.5).level).toBeCloseTo(0.5);
+  });
+
+  it("never scales stress recovery", () => {
+    const before = { level: 0.5, isStressed: false };
+    const after = { level: 0.3, isStressed: false };
+    expect(scaleStressGain(before, after, 0.5)).toBe(after);
+  });
+
+  it("re-evaluates the stressed threshold after scaling", () => {
+    const before = { level: 0.6, isStressed: false };
+    const after = { level: 0.8, isStressed: true };
+    expect(scaleStressGain(before, after, 0.25).isStressed).toBe(false);
   });
 });
