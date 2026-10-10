@@ -17,7 +17,12 @@ import { InputManager } from "../input/InputManager";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import { addShipVisual } from "../rendering/ShipVisual";
 import type { FactionId } from "../config";
-import { BATTLEFIELD_SIZE, FACTION_COLORS, SHIP_SIZES } from "../config";
+import {
+  BATTLEFIELD_SIZE,
+  CYCLE_DURATION_MS,
+  FACTION_COLORS,
+  SHIP_SIZES,
+} from "../config";
 import {
   getShipDefinition,
   getShipsByFaction,
@@ -28,10 +33,6 @@ import {
   calculateHitChance,
   type ModeCombatStats,
 } from "../data/ModeBalancing";
-import {
-  getManeuverTemplate,
-  applyManeuver,
-} from "../systems/ManeuverTemplates";
 import { HealthBar } from "../ui/HealthBar";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { headingDiffToTarget } from "../systems/MovementSystem";
@@ -45,7 +46,23 @@ import {
   evaluateQuality,
   type PerformanceState,
 } from "../systems/PerformanceSystem";
-import type { ManeuverDirection } from "../core/types";
+import type { ManeuverDefinition } from "../core/types";
+import {
+  createCycleFlight,
+  pursuitSpeed,
+  steerAiFlight,
+  tickCycleFlight,
+  type CycleFlightState,
+} from "../arcade/systems/CycleFlight";
+import { PlayerFlightPilot } from "../arcade/systems/PlayerFlightPilot";
+import type { FlightEvent } from "../arcade/systems/PilotFlightTypes";
+import { playFlightEventFx } from "../arcade/ArcadeFX";
+import { ShipTelemetry } from "../debug/ShipTelemetry";
+import {
+  mayAiKTurn,
+  type EpicAiSide,
+  type EpicDifficulty,
+} from "../arcade/systems/EpicAiFlight";
 import {
   bossPhaseForHullRatio,
   bossBroadsideDamage,
@@ -115,13 +132,26 @@ interface EpicShip {
   shields: number;
   maxShields: number;
   combatStats: ModeCombatStats;
-  currentManeuverDir: ManeuverDirection;
-  currentSpeed: number;
-  targetX: number;
-  targetY: number;
-  targetAngle: number;
+  /** Cycle-engine motion and pilot stress; x/y/angle mirror its pose. */
+  flight: CycleFlightState;
+  dial: readonly ManeuverDefinition[];
+  /** True on the frame this ship's maneuver cycle committed. */
+  cycleCommitted: boolean;
   weaponCooldown: number;
 }
+
+/** A pose on the battlefield. */
+interface Pose {
+  readonly x: number;
+  readonly y: number;
+  readonly angle: number;
+}
+
+/** Where the player's wingmen fly when there is no boss and no escort left. */
+const WINGMAN_FALLBACK_GOAL: Readonly<{ x: number; y: number }> = {
+  x: BATTLEFIELD_SIZE / 2,
+  y: 200,
+};
 
 interface ShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
@@ -303,7 +333,7 @@ export class EpicBattleScene extends Phaser.Scene {
   private bossSprite: Phaser.GameObjects.Container | null = null;
   private bossSectionBars: Map<string, HealthBar> = new Map();
   private selectedBossFaction: FactionId = "terran_hegemony";
-  private difficulty: "easy" | "medium" | "hard" | "mythic" = "medium";
+  private difficulty: EpicDifficulty = "medium";
 
   // Player settings
   private playerFaction: FactionId = "free_confederation";
@@ -326,8 +356,6 @@ export class EpicBattleScene extends Phaser.Scene {
   private enemySideScore: SideScore = createSideScore();
 
   // Timing
-  private lastManeuverTime = 0;
-  private maneuverInterval = 300;
   private lastBossAbilityTime = 0;
   private bossAbilityInterval = 5000;
 
@@ -335,6 +363,13 @@ export class EpicBattleScene extends Phaser.Scene {
   private effectsManager!: EffectsManager;
   private background!: ParallaxBackground;
   private performanceState: PerformanceState = createPerformanceState();
+  private cameraShakeEnabled = true;
+  private telemetry: ShipTelemetry | null = null;
+
+  /** The human pilot's flight input (InputManager-driven) for the flagship. */
+  private readonly pilot = new PlayerFlightPilot(InputManager);
+  /** Ship the pilot last flew; a new flagship starts with fresh input memory. */
+  private pilotedShipId: string | null = null;
 
   // UI
   private phaseText!: Phaser.GameObjects.Text;
@@ -352,9 +387,13 @@ export class EpicBattleScene extends Phaser.Scene {
     this.inputSubscriptionIds.forEach((id) => InputManager.off(id));
     this.inputSubscriptionIds = [];
     teardownSceneInput();
+    this.pilot.detach();
   }
 
   create(): void {
+    // Phaser never calls shutdown() on its own; without this, every restart
+    // stacks another set of input subscriptions.
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.cameras.main.setBounds(0, 0, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
     this.cameras.main.setBackgroundColor(0x050510);
     addPaintedSpaceBackground(this, "galaxy_spiral", 0);
@@ -365,6 +404,7 @@ export class EpicBattleScene extends Phaser.Scene {
     const savedSettings = this.registry.get("settings") as
       { cameraShake: boolean; showDamageNumbers: boolean } | undefined;
     if (savedSettings) {
+      this.cameraShakeEnabled = savedSettings.cameraShake;
       this.effectsManager.setUserSettings({
         cameraShake: savedSettings.cameraShake,
         showDamageNumbers: savedSettings.showDamageNumbers,
@@ -379,6 +419,14 @@ export class EpicBattleScene extends Phaser.Scene {
 
     this.resetState();
     this.showSetupScreen();
+
+    if (ShipTelemetry.isEnabled()) {
+      this.telemetry = new ShipTelemetry();
+      this.telemetry.start();
+      (
+        window as unknown as { __shipTelemetry: ShipTelemetry }
+      ).__shipTelemetry = this.telemetry;
+    }
 
     this.cameras.main.centerOn(BATTLEFIELD_SIZE / 2, BATTLEFIELD_SIZE / 2);
     // Zoom is applied only once the battle starts (startBattle()) — a camera
@@ -407,6 +455,8 @@ export class EpicBattleScene extends Phaser.Scene {
     this.raidTimer = createMatchTimer(EpicBattleScene.RAID_DURATION_MS);
     this.playerSideScore = createSideScore();
     this.enemySideScore = createSideScore();
+    this.pilot.reset();
+    this.pilotedShipId = null;
   }
 
   private showSetupScreen(): void {
@@ -669,15 +719,10 @@ export class EpicBattleScene extends Phaser.Scene {
 
     if (this.updateRaidTimer(delta)) return;
 
-    if (time - this.lastManeuverTime >= this.maneuverInterval) {
-      this.processManeuvers();
-      this.lastManeuverTime = time;
-    }
-
-    this.interpolatePositions(delta);
+    this.updateAI(time, delta);
+    this.flyShips(delta);
     this.processCombat(delta);
     this.processBossAbilities(time);
-    this.updateAI();
     this.updateSprites();
     this.checkVictoryConditions();
   }
@@ -720,7 +765,7 @@ export class EpicBattleScene extends Phaser.Scene {
       .text(
         this.scale.width / 2,
         this.scale.height - 30,
-        "UP/DOWN: Speed | LEFT/RIGHT: Turn | Weapon autofires | Scroll: Zoom | ESC: Pause",
+        "UP/DOWN: Speed | UP x2: Boost | LEFT/RIGHT: tap drift, hold bank | Q/E: Hard turn | Z: K-turn | Weapon autofires | Scroll: Zoom | ESC: Pause",
         {
           font: "14px monospace",
           color: "#666666",
@@ -797,6 +842,7 @@ export class EpicBattleScene extends Phaser.Scene {
 
   private setupInput(): void {
     setupSceneInput(this);
+    this.pilot.attach();
     this.inputSubscriptionIds.push(
       InputManager.on("PAUSE", () => this.togglePause()),
     );
@@ -1108,11 +1154,9 @@ export class EpicBattleScene extends Phaser.Scene {
       shields: combatStats.shields,
       maxShields: combatStats.maxShields,
       combatStats,
-      currentManeuverDir: "straight",
-      currentSpeed: 2,
-      targetX: x,
-      targetY: y,
-      targetAngle: angle,
+      flight: createCycleFlight(defId, { x, y, angle }),
+      dial: getShipDial(defId),
+      cycleCommitted: false,
       weaponCooldown: 0,
     };
   }
@@ -1158,48 +1202,73 @@ export class EpicBattleScene extends Phaser.Scene {
     this.healthBars.set(ship.id, healthBar);
   }
 
-  private processManeuvers(): void {
+  /**
+   * Flies every ship one frame on the X-Wing cycle engine (template arcs,
+   * cycle-boundary commits, stress) and syncs sprites to the new poses.
+   *
+   * @param deltaMs - Frame length (ms).
+   */
+  private flyShips(deltaMs: number): void {
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
-
-      const template = getManeuverTemplate(
-        ship.currentManeuverDir,
-        ship.currentSpeed,
-      );
-      const result = applyManeuver(ship.x, ship.y, ship.angle, template);
-
-      ship.targetX = result.x;
-      ship.targetY = result.y;
-      ship.targetAngle = result.angle;
+      const tick = tickCycleFlight(ship.flight, {
+        deltaMs,
+        worldSize: BATTLEFIELD_SIZE,
+        dial: ship.dial,
+        cycleMs: CYCLE_DURATION_MS,
+      });
+      this.setFlight(ship, tick.state);
+      ship.cycleCommitted = tick.completed !== null;
+      if (tick.completed && ship.id === this.pilotedShipId) {
+        this.pilot.onCycleCommitted(
+          tick.state.motion.control.currentManeuver ?? "straight",
+        );
+      }
+      this.shipSprites
+        .get(ship.id)
+        ?.setPosition(ship.x, ship.y)
+        .setAngle(ship.angle);
+      this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
   }
 
-  private interpolatePositions(delta: number): void {
-    const t = Math.min(1, delta / 280);
+  /**
+   * Stores a ship's new flight state and mirrors its pose onto the record
+   * (combat, AI and camera read x/y/angle).
+   *
+   * @param ship - The ship.
+   * @param flight - Its new flight state.
+   */
+  private setFlight(ship: EpicShip, flight: CycleFlightState): void {
+    ship.flight = flight;
+    ship.x = flight.motion.x;
+    ship.y = flight.motion.y;
+    ship.angle = flight.motion.angle;
+  }
 
-    for (const ship of this.ships.values()) {
-      if (ship.hull <= 0) continue;
-
-      ship.x = Phaser.Math.Linear(ship.x, ship.targetX, t * 3);
-      ship.y = Phaser.Math.Linear(ship.y, ship.targetY, t * 3);
-
-      let angleDiff = ship.targetAngle - ship.angle;
-      if (angleDiff > 180) angleDiff -= 360;
-      if (angleDiff < -180) angleDiff += 360;
-      ship.angle += angleDiff * t * 3;
-      ship.angle = ((ship.angle % 360) + 360) % 360;
-
-      // Wrap around
-      ship.x =
-        ((ship.x % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
-      ship.y =
-        ((ship.y % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
-
-      const sprite = this.shipSprites.get(ship.id);
-      if (sprite) {
-        sprite.setPosition(ship.x, ship.y);
-        sprite.setAngle(ship.angle);
-      }
+  /**
+   * Visual feedback for flight events, drawn from the pose they started at.
+   *
+   * @param ship - The ship that acted.
+   * @param events - What happened this frame.
+   * @param origin - Pose before the actions.
+   */
+  private playFlightEvents(
+    ship: EpicShip,
+    events: readonly FlightEvent[],
+    origin: Pose,
+  ): void {
+    const isPiloted = ship.id === this.pilotedShipId;
+    for (const event of events) {
+      playFlightEventFx(this, {
+        event,
+        origin,
+        definitionId: ship.definitionId,
+        faction: ship.faction,
+        sprite: this.shipSprites.get(ship.id),
+        cameraShake: isPiloted && this.cameraShakeEnabled,
+        zoomPulse: isPiloted,
+      });
     }
   }
 
@@ -1488,134 +1557,106 @@ export class EpicBattleScene extends Phaser.Scene {
     }
   }
 
-  private updateAI(): void {
-    // Escort AI - attack player ships
+  /**
+   * Queues every ship's next maneuver: the flagship's from the player's
+   * input, boss escorts' by pursuing the closest player ship, and the
+   * player's wingmen by attacking the boss (or the closest escort once the
+   * boss is down).
+   *
+   * @param time - Scene time (ms).
+   * @param delta - Frame length (ms).
+   */
+  private updateAI(time: number, delta: number): void {
     for (const escortId of this.escortShipIds) {
       const ship = this.ships.get(escortId);
       if (!ship || ship.hull <= 0) continue;
-
       const target = this.findClosestPlayer(ship);
-      if (!target) continue;
-
-      const angleDiff = headingDiffToTarget(
-        ship.x,
-        ship.y,
-        ship.angle,
-        target.x,
-        target.y,
-      );
-
-      const dial = getShipDial(ship.definitionId);
-
-      if (Math.abs(angleDiff) < 20) {
-        ship.currentManeuverDir = "straight";
-        ship.currentSpeed = 2;
-      } else if (angleDiff > 0) {
-        const turn = dial.find(
-          (m) => m.direction === "bank_right" || m.direction === "turn_right",
-        );
-        if (turn) {
-          ship.currentManeuverDir = turn.direction;
-          ship.currentSpeed = turn.speed;
-        }
-      } else {
-        const turn = dial.find(
-          (m) => m.direction === "bank_left" || m.direction === "turn_left",
-        );
-        if (turn) {
-          ship.currentManeuverDir = turn.direction;
-          ship.currentSpeed = turn.speed;
-        }
-      }
+      if (target) this.steerAi(ship, target, "escort");
     }
 
-    // Escort ships in the player squad (everything but the flagship) fly
-    // on AI toward the boss/escorts, same as before.
-    const flagshipId = this.playerShipIds[0] ?? "";
+    const flagshipId = this.playerShipIds[0];
     for (const playerId of this.playerShipIds) {
       if (playerId === flagshipId) continue;
       const ship = this.ships.get(playerId);
-      if (!ship || ship.hull <= 0) continue;
-
-      // Target boss if it exists, otherwise closest escort
-      let targetX = this.boss?.x ?? BATTLEFIELD_SIZE / 2;
-      let targetY = this.boss?.y ?? 200;
-
-      if (!this.boss || this.boss.totalHull <= 0) {
-        const escort = this.findClosestEscort(ship);
-        if (escort) {
-          targetX = escort.x;
-          targetY = escort.y;
-        }
-      }
-
-      const angleDiff = headingDiffToTarget(
-        ship.x,
-        ship.y,
-        ship.angle,
-        targetX,
-        targetY,
-      );
-
-      const dial = getShipDial(ship.definitionId);
-
-      if (Math.abs(angleDiff) < 25) {
-        ship.currentManeuverDir = "straight";
-        ship.currentSpeed = 2;
-      } else if (angleDiff > 0) {
-        const turn = dial.find((m) => m.direction === "bank_right");
-        if (turn) {
-          ship.currentManeuverDir = "bank_right";
-          ship.currentSpeed = turn.speed;
-        }
-      } else {
-        const turn = dial.find((m) => m.direction === "bank_left");
-        if (turn) {
-          ship.currentManeuverDir = "bank_left";
-          ship.currentSpeed = turn.speed;
-        }
+      if (ship && ship.hull > 0) {
+        this.steerAi(ship, this.wingmanGoal(ship), "wingman");
       }
     }
 
-    const flagship = this.ships.get(flagshipId);
-    if (flagship && flagship.hull > 0) {
-      this.applyPlayerControl(flagship);
-    }
+    const flagship = this.ships.get(flagshipId ?? "");
+    if (flagship && flagship.hull > 0) this.flyPlayer(flagship, time, delta);
   }
 
   /**
-   * Picks the flagship's next maneuver from its dial based on held intents
-   * (keyboard/gamepad/touch, normalized through InputManager). UP/DOWN ramp
-   * speed through the dial's available speeds; LEFT/RIGHT bank at the
-   * current speed (falling back to any available speed for that
-   * direction); no input holds a straight maneuver.
+   * Where a player wingman flies: the boss while it stands, then the closest
+   * escort, then wherever the boss was.
+   *
+   * @param ship - The wingman.
+   * @returns The point it steers toward.
    */
-  private applyPlayerControl(ship: EpicShip): void {
-    const dial = getShipDial(ship.definitionId);
-    const speeds = [...new Set(dial.map((m) => m.speed))].sort((a, b) => a - b);
+  private wingmanGoal(ship: EpicShip): Readonly<{ x: number; y: number }> {
+    if (this.boss && this.boss.totalHull > 0) return this.boss;
+    return this.findClosestEscort(ship) ?? this.boss ?? WINGMAN_FALLBACK_GOAL;
+  }
 
-    let desiredSpeed = ship.currentSpeed;
-    if (InputManager.isHeld("THRUST_UP")) {
-      desiredSpeed = speeds.find((s) => s > desiredSpeed) ?? desiredSpeed;
-    } else if (InputManager.isHeld("THRUST_DOWN")) {
-      desiredSpeed =
-        [...speeds].reverse().find((s) => s < desiredSpeed) ?? desiredSpeed;
+  /**
+   * Steers an AI ship at a goal: drift/bank/turn by heading error, slow down
+   * to turn tight, and K-turn onto a goal behind it when its hull and the
+   * raid difficulty allow (capital hulls never K-turn).
+   *
+   * @param ship - The AI ship.
+   * @param goal - The point it is flying at.
+   * @param side - Boss escort or player wingman.
+   */
+  private steerAi(
+    ship: EpicShip,
+    goal: Readonly<{ x: number; y: number }>,
+    side: EpicAiSide,
+  ): void {
+    const headingErrorDeg = headingDiffToTarget(
+      ship.x,
+      ship.y,
+      ship.angle,
+      goal.x,
+      goal.y,
+    );
+    const origin = { x: ship.x, y: ship.y, angle: ship.angle };
+    const result = steerAiFlight(ship.flight, {
+      headingErrorDeg,
+      desiredSpeed: pursuitSpeed(ship.flight.motion.control, headingErrorDeg),
+      cycleCommitted: ship.cycleCommitted,
+      allowKTurn: mayAiKTurn(ship.definitionId, side, this.difficulty),
+    });
+    this.setFlight(ship, result.state);
+    this.playFlightEvents(ship, result.events, origin);
+  }
+
+  /**
+   * Runs one frame of the player's input on the flagship through the shared
+   * pilot controls (tap = drift, hold = bank, Q/E = hard turn, K-turn,
+   * Segnor, Tallon, boost, barrel roll). A new flagship (the old one fell)
+   * starts with fresh input memory.
+   *
+   * @param ship - The flagship.
+   * @param time - Scene time (ms).
+   * @param delta - Frame length (ms).
+   */
+  private flyPlayer(ship: EpicShip, time: number, delta: number): void {
+    if (ship.id !== this.pilotedShipId) {
+      this.pilot.reset();
+      this.pilotedShipId = ship.id;
     }
-
-    let direction: ManeuverDirection = "straight";
-    if (InputManager.isHeld("STEER_LEFT")) direction = "bank_left";
-    else if (InputManager.isHeld("STEER_RIGHT")) direction = "bank_right";
-
-    const chosen =
-      dial.find((m) => m.direction === direction && m.speed === desiredSpeed) ??
-      dial.find((m) => m.direction === direction) ??
-      dial.find((m) => m.direction === "straight") ??
-      dial[0];
-
-    if (chosen) {
-      ship.currentManeuverDir = chosen.direction;
-      ship.currentSpeed = chosen.speed;
-    }
+    const origin = { x: ship.x, y: ship.y, angle: ship.angle };
+    const result = this.pilot.fly({
+      flight: ship.flight,
+      ship: ship.flight.motion,
+      dial: ship.dial,
+      nowMs: time,
+      deltaMs: delta,
+      worldSize: BATTLEFIELD_SIZE,
+    });
+    this.setFlight(ship, { motion: result.motion, stress: result.stress });
+    this.playFlightEvents(ship, result.events, origin);
   }
 
   private findClosestPlayer(ship: EpicShip): EpicShip | null {

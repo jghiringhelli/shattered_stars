@@ -1,27 +1,32 @@
 /**
  * ContinuousBaseScene — shared update loop for all real-time combat scenes.
  *
- * Handles: maneuver step, position interpolation, weapon cooldown/firing,
- * AI movement decisions, sprite + health-bar repositioning.
+ * Handles: X-Wing cycle-engine flight (template arcs, cycle-boundary commits,
+ * stress), weapon cooldown/firing, AI steering, sprite + health-bar
+ * repositioning.
  *
  * Subclasses implement `onShipDestroyed` and `checkRoundEnd`.
- * Individual hooks (`performAttack`, `pickManeuverForShip`, etc.) can be
+ * Individual hooks (`performAttack`, `steerAiShip`, etc.) can be
  * overridden for scene-specific behaviour.
  */
 
 import Phaser from "phaser";
-import type { ManeuverDirection } from "../core/types";
-import { BATTLEFIELD_SIZE } from "../config";
+import type { ManeuverDefinition } from "../core/types";
+import { BATTLEFIELD_SIZE, CYCLE_DURATION_MS } from "../config";
 import type { FactionId } from "../config";
-import { maneuverLerpAlpha } from "../rendering/ManeuverInterpolation";
 import { type ModeCombatStats } from "../data/ModeBalancing";
 import { calculateHitChance } from "../data/ModeBalancing";
-import {
-  getManeuverTemplate,
-  applyManeuver,
-} from "../systems/ManeuverTemplates";
-import { getShipDial } from "../data/ShipDefinitions";
 import { headingDiffToTarget } from "../systems/MovementSystem";
+import {
+  pursuitSpeed,
+  steerAiFlight,
+  tickCycleFlight,
+  type CycleFlightState,
+} from "../arcade/systems/CycleFlight";
+import { canHullKTurn } from "../arcade/systems/AiPursuit";
+import type { FlightEvent } from "../arcade/systems/PilotFlightTypes";
+import { playFlightEventFx } from "../arcade/ArcadeFX";
+import type { ShipTelemetry } from "../debug/ShipTelemetry";
 import { findClosestEnemy } from "../systems/BattleHelpers";
 import { HealthBar } from "../ui/HealthBar";
 import { EffectsManager } from "../rendering/EffectsManager";
@@ -48,18 +53,21 @@ export interface ContinuousShip {
   readonly definitionId: string;
   readonly faction: FactionId;
   readonly owner: "player" | "ai";
+  /** Mirrors flight.motion.x — write through {@link ContinuousBaseScene.setFlight}. */
   x: number;
+  /** Mirrors flight.motion.y — write through {@link ContinuousBaseScene.setFlight}. */
   y: number;
+  /** Mirrors flight.motion.angle — write through {@link ContinuousBaseScene.setFlight}. */
   angle: number;
   hull: number;
   maxHull: number;
   shields: number;
   maxShields: number;
-  currentManeuverDir: ManeuverDirection;
-  currentSpeed: number;
-  targetX: number;
-  targetY: number;
-  targetAngle: number;
+  /** Cycle-engine motion and pilot stress; x/y/angle mirror its pose. */
+  flight: CycleFlightState;
+  dial: readonly ManeuverDefinition[];
+  /** True on the frame this ship's maneuver cycle committed. */
+  cycleCommitted: boolean;
   weaponCooldown: number;
   combatStats: ModeCombatStats;
   /** Present only for capital-role ships; null/undefined for everything else. */
@@ -71,8 +79,12 @@ export interface BaseShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
 }
 
-/** Default animation duration in ms — slightly under maneuver interval for smoothness. */
-const MANEUVER_ANIMATION_DURATION = 280;
+/** A pose on the battlefield. */
+interface Pose {
+  readonly x: number;
+  readonly y: number;
+  readonly angle: number;
+}
 
 export abstract class ContinuousBaseScene<
   T extends ContinuousShip,
@@ -86,11 +98,12 @@ export abstract class ContinuousBaseScene<
 
   protected isPaused = false;
   protected isActive = false;
-  protected lastManeuverTime = 0;
 
   protected effectsManager!: EffectsManager;
   protected background!: ParallaxBackground;
   protected performanceState: PerformanceState = createPerformanceState();
+  /** Debug pose recorder (?debug=1); sampled every frame by {@link flyShips}. */
+  protected telemetry: ShipTelemetry | null = null;
 
   // ──────────────────────────────────────────────
   // Abstract — each scene must implement these
@@ -114,11 +127,6 @@ export abstract class ContinuousBaseScene<
     return [...this.ships.keys()].filter(
       (id) => this.ships.get(id)?.owner === "ai",
     );
-  }
-
-  /** Milliseconds between maneuver commits. */
-  protected getManeuverInterval(): number {
-    return 300;
   }
 
   /**
@@ -145,33 +153,15 @@ export abstract class ContinuousBaseScene<
   }
 
   /**
-   * Apply maneuver templates for all ships and update interpolation targets.
-   * Override to add per-step effects (e.g. shield regen).
+   * Steer a single AI ship for this frame.
+   * Default: chase the closest enemy along the true heading error.
+   *
+   * @param ship - The AI ship (alive, engines online).
    */
-  protected runManeuverStep(): void {
-    for (const ship of this.ships.values()) {
-      if (ship.hull <= 0) continue;
-      if (ship.capitalSystems && isEnginesOffline(ship.capitalSystems))
-        continue;
-      const template = getManeuverTemplate(
-        ship.currentManeuverDir,
-        ship.currentSpeed,
-      );
-      const result = applyManeuver(ship.x, ship.y, ship.angle, template);
-      ship.targetX = result.x;
-      ship.targetY = result.y;
-      ship.targetAngle = result.angle;
-    }
-  }
-
-  /**
-   * Pick and commit the next maneuver for a single ship.
-   * Default: straight when aligned, bank toward closest enemy otherwise.
-   */
-  protected pickManeuverForShip(ship: T): void {
+  protected steerAiShip(ship: T): void {
     const target = findClosestEnemy<T>(ship, this.ships);
     if (!target) return;
-    this.pickAndSetManeuver(ship, target);
+    this.steerToward(ship, target, this.headingErrorTo(ship, target));
   }
 
   // ──────────────────────────────────────────────
@@ -249,38 +239,59 @@ export abstract class ContinuousBaseScene<
     return best;
   }
 
-  /** Lerp all ship positions toward their targets and wrap at battlefield edge. */
-  protected interpolatePositions(delta: number): void {
-    const t = maneuverLerpAlpha(delta, MANEUVER_ANIMATION_DURATION, 3);
+  /**
+   * Whether a ship can fly this frame: alive with its engines online
+   * (a capital ship with its engines shot out drifts dead in space).
+   *
+   * @param ship - The ship.
+   * @returns True if it flies and steers.
+   */
+  protected canFly(ship: T): boolean {
+    if (ship.hull <= 0) return false;
+    return !(ship.capitalSystems && isEnginesOffline(ship.capitalSystems));
+  }
 
+  /**
+   * Flies every ship one frame on the X-Wing cycle engine (template arcs,
+   * cycle-boundary commits, stress) and syncs sprites and telemetry to the
+   * new poses.
+   *
+   * @param deltaMs - Frame length (ms).
+   */
+  protected flyShips(deltaMs: number): void {
     for (const ship of this.ships.values()) {
-      if (ship.hull <= 0) continue;
-
-      ship.x = Phaser.Math.Linear(ship.x, ship.targetX, t);
-      ship.y = Phaser.Math.Linear(ship.y, ship.targetY, t);
-
-      let angleDiff = ship.targetAngle - ship.angle;
-      if (angleDiff > 180) angleDiff -= 360;
-      if (angleDiff < -180) angleDiff += 360;
-      ship.angle = (((ship.angle + angleDiff * t) % 360) + 360) % 360;
-
-      ship.x =
-        ((ship.x % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
-      ship.y =
-        ((ship.y % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
-      ship.targetX =
-        ((ship.targetX % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
-        BATTLEFIELD_SIZE;
-      ship.targetY =
-        ((ship.targetY % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
-        BATTLEFIELD_SIZE;
-
-      const sprite = this.shipSprites.get(ship.id);
-      if (sprite) {
-        sprite.setPosition(ship.x, ship.y);
-        sprite.setAngle(ship.angle);
+      if (!this.canFly(ship)) {
+        ship.cycleCommitted = false;
+        continue;
       }
+      const tick = tickCycleFlight(ship.flight, {
+        deltaMs,
+        worldSize: BATTLEFIELD_SIZE,
+        dial: ship.dial,
+        cycleMs: CYCLE_DURATION_MS,
+      });
+      this.setFlight(ship, tick.state);
+      ship.cycleCommitted = tick.completed !== null;
+      this.shipSprites
+        .get(ship.id)
+        ?.setPosition(ship.x, ship.y)
+        .setAngle(ship.angle);
+      this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
+  }
+
+  /**
+   * Stores a ship's new flight state and mirrors its pose onto the record
+   * (combat, AI and camera read x/y/angle).
+   *
+   * @param ship - The ship.
+   * @param flight - Its new flight state.
+   */
+  protected setFlight(ship: T, flight: CycleFlightState): void {
+    ship.flight = flight;
+    ship.x = flight.motion.x;
+    ship.y = flight.motion.y;
+    ship.angle = flight.motion.angle;
   }
 
   /** Tick weapon cooldowns and fire at targets when ready. */
@@ -298,51 +309,71 @@ export abstract class ContinuousBaseScene<
     }
   }
 
-  /** Run AI movement decisions for all AI-controlled ships. */
+  /** Steer every AI-controlled ship that can fly this frame. */
   protected updateAI(): void {
     for (const shipId of this.getAIShipIds()) {
       const ship = this.ships.get(shipId);
-      if (!ship || ship.hull <= 0) continue;
-      this.pickManeuverForShip(ship);
+      if (ship && this.canFly(ship)) this.steerAiShip(ship);
     }
   }
 
   /**
-   * Pure heading-diff → maneuver selection.
-   * Picks straight when aligned within 20°, bank/turn in the appropriate direction otherwise.
+   * Signed heading error from a ship's nose to a target.
+   *
+   * @param ship - The steering ship.
+   * @param target - What it is chasing.
+   * @returns Heading error (°): positive = target is to the right.
    */
-  protected pickAndSetManeuver(ship: T, target: T): void {
-    const angleDiff = headingDiffToTarget(
-      ship.x,
-      ship.y,
-      ship.angle,
-      target.x,
-      target.y,
-    );
-    const dial = getShipDial(ship.definitionId);
+  protected headingErrorTo(ship: T, target: T): number {
+    return headingDiffToTarget(ship.x, ship.y, ship.angle, target.x, target.y);
+  }
 
-    if (Math.abs(angleDiff) < 20) {
-      const m = dial.find((d) => d.direction === "straight");
-      if (m) {
-        ship.currentManeuverDir = "straight";
-        ship.currentSpeed = m.speed;
-      }
-    } else if (angleDiff > 0) {
-      const m = dial.find(
-        (d) => d.direction === "bank_right" || d.direction === "turn_right",
-      );
-      if (m) {
-        ship.currentManeuverDir = m.direction;
-        ship.currentSpeed = m.speed;
-      }
-    } else {
-      const m = dial.find(
-        (d) => d.direction === "bank_left" || d.direction === "turn_left",
-      );
-      if (m) {
-        ship.currentManeuverDir = m.direction;
-        ship.currentSpeed = m.speed;
-      }
+  /**
+   * Queues an AI ship's next maneuver on the cycle engine: drift/bank/turn by
+   * heading error, slowing to turn tight, K-turning onto a target behind it
+   * (capital ships never K-turn).
+   *
+   * @param ship - The AI ship.
+   * @param target - What it is chasing (sets its pursuit speed).
+   * @param headingErrorDeg - Heading error it steers by (may be deliberately sloppy).
+   */
+  protected steerToward(ship: T, target: T, headingErrorDeg: number): void {
+    const origin = { x: ship.x, y: ship.y, angle: ship.angle };
+    const result = steerAiFlight(ship.flight, {
+      headingErrorDeg,
+      desiredSpeed: pursuitSpeed(
+        ship.flight.motion.control,
+        this.headingErrorTo(ship, target),
+      ),
+      cycleCommitted: ship.cycleCommitted,
+      allowKTurn: canHullKTurn(ship.definitionId),
+    });
+    this.setFlight(ship, result.state);
+    this.playFlightEvents(ship, result.events, origin);
+  }
+
+  /**
+   * Visual feedback for flight events, drawn from the pose they started at.
+   *
+   * @param ship - The ship that acted.
+   * @param events - What happened this frame.
+   * @param origin - Pose before the actions.
+   */
+  protected playFlightEvents(
+    ship: T,
+    events: readonly FlightEvent[],
+    origin: Pose,
+  ): void {
+    for (const event of events) {
+      playFlightEventFx(this, {
+        event,
+        origin,
+        definitionId: ship.definitionId,
+        faction: ship.faction,
+        sprite: this.shipSprites.get(ship.id),
+        cameraShake: false,
+        zoomPulse: false,
+      });
     }
   }
 
@@ -372,14 +403,9 @@ export abstract class ContinuousBaseScene<
 
     this.background.update();
 
-    if (time - this.lastManeuverTime >= this.getManeuverInterval()) {
-      this.runManeuverStep();
-      this.lastManeuverTime = time;
-    }
-
-    this.interpolatePositions(delta);
-    this.processCombat(delta);
     this.updateAI();
+    this.flyShips(delta);
+    this.processCombat(delta);
     this.updateSpritePositions();
     this.checkRoundEnd();
   }

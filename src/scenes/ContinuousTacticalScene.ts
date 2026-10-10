@@ -1,17 +1,14 @@
 /**
  * Continuous Tactical Battle Scene
  *
- * Hybrid between X-Wing style movement and smooth gameplay:
- * - Ships commit to maneuvers at short intervals (~300ms)
- * - Movement is smoothly animated over each interval
- * - Maneuver templates still determine distance and direction
- * - Ship maneuverability creates meaningful tactical differences
+ * Squad command on the X-Wing cycle engine:
+ * - Every ship flies true template arcs in fixed 500 ms cycles
+ * - The player dials a standing maneuver order (direction + speed) for the
+ *   selected ship; it latches into the engine's queue and flies at the next
+ *   cycle boundary, every cycle, until another is dialed
+ * - Red maneuvers build stress; a stressed pilot's red order is calmed
+ * - The preview shows the rest of the current cycle and the queued order
  * - Combat happens in real-time based on position and arc
- *
- * Key differences from full turn-based:
- * - No discrete planning/activation phases
- * - Ships can change maneuvers at each interval
- * - Faster, more arcade-like feel while maintaining tactical depth
  */
 
 import Phaser from "phaser";
@@ -20,6 +17,7 @@ import { addShipVisual } from "../rendering/ShipVisual";
 import type {
   ShipState,
   ManeuverDefinition,
+  ManeuverDifficulty,
   ManeuverDirection,
 } from "../core/types";
 import type { FactionId } from "../config";
@@ -39,10 +37,16 @@ import {
   shouldPickOptimalTarget,
   shouldPickOptimalManeuver,
 } from "../ai/AIDifficulty";
+import { createCycleFlight } from "../arcade/systems/CycleFlight";
 import {
-  getManeuverTemplate,
-  applyManeuver,
-} from "../systems/ManeuverTemplates";
+  calmOrderIfStressed,
+  chooseAiHeadingError,
+  initialOrder,
+  latchManeuverOrder,
+  nearestDialManeuver,
+  planOrderPreview,
+  type PreviewPose,
+} from "../arcade/systems/TacticalOrders";
 import { HealthBar } from "../ui/HealthBar";
 import { Minimap, type MinimapShip } from "../ui/Minimap";
 import { PauseMenu } from "../ui/PauseMenu";
@@ -79,7 +83,6 @@ import {
 import {
   applyCapitalSystemDamage,
   createCapitalSystems,
-  isEnginesOffline,
   sumSystemsHull,
   turretDamageMultiplier,
   SYSTEM_LABELS,
@@ -87,14 +90,13 @@ import {
 
 interface TacticalShip extends ShipState, ContinuousShip {
   pilotSkill: number;
-  currentManeuverDir: ManeuverDirection;
-  currentSpeed: number;
-  targetX: number;
-  targetY: number;
-  targetAngle: number;
+  /**
+   * Standing maneuver order dialed by the player (player ships only; AI
+   * ships steer by heading error). Latched into the engine queue each frame.
+   */
+  order: ManeuverDefinition;
   combatStats: ModeCombatStats;
   weaponCooldown: number;
-  stressTokens: number;
 }
 
 interface ShipSprite extends Phaser.GameObjects.Container {
@@ -102,6 +104,39 @@ interface ShipSprite extends Phaser.GameObjects.Container {
   shipBody: Phaser.GameObjects.Graphics;
   thruster: Phaser.GameObjects.Graphics;
   speedIndicator: Phaser.GameObjects.Text;
+}
+
+/** Dim line color for the rest of the cycle already in flight. */
+const PREVIEW_REMAINING_COLOR = 0xaaaaaa;
+/** Radius (px) of the ghost ring where the queued order ends. */
+const PREVIEW_GHOST_RADIUS = 15;
+/** Dial color per maneuver difficulty. */
+const DIFFICULTY_HEX: Readonly<Record<ManeuverDifficulty, number>> = {
+  green: 0x44ff44,
+  white: 0xffffff,
+  red: 0xff4444,
+};
+
+/**
+ * Dial color for a maneuver difficulty.
+ * @param difficulty - Green, white or red.
+ * @returns The fill/line color.
+ */
+function difficultyHex(difficulty: ManeuverDifficulty): number {
+  return DIFFICULTY_HEX[difficulty];
+}
+
+/**
+ * Strokes a polyline through a list of poses (current line style).
+ * @param graphics - Target graphics.
+ * @param poses - Points in draw order.
+ */
+function strokePoseLine(
+  graphics: Phaser.GameObjects.Graphics,
+  poses: readonly PreviewPose[],
+): void {
+  if (poses.length < 2) return;
+  graphics.strokePoints(poses.map((p) => ({ x: p.x, y: p.y })));
 }
 
 export class ContinuousTacticalScene extends ContinuousBaseScene<
@@ -116,8 +151,6 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   private playerFaction: FactionId = "free_confederation";
 
   private selectedShipId: string | null = null;
-  private selectedManeuverDir: ManeuverDirection = "straight";
-  private selectedSpeed: number = 2;
 
   private battleStartTime: number = 0;
 
@@ -142,7 +175,6 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   private enemySideScore: SideScore = createSideScore();
 
   private previewGraphics: Phaser.GameObjects.Graphics | null = null;
-  private telemetry: ShipTelemetry | null = null;
   /** Rising-edge tracking so held STEER/THRUST intents still step the dial once per press. */
   private prevSteerLeft = false;
   private prevSteerRight = false;
@@ -155,6 +187,9 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   }
 
   create(): void {
+    // Phaser never calls shutdown() on its own; without this, every restart
+    // stacks another set of input subscriptions.
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.cameras.main.setBounds(0, 0, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
     this.cameras.main.setBackgroundColor(0x050510);
     addPaintedSpaceBackground(this, "nebula_blue", 0);
@@ -199,7 +234,6 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     this.cameras.main.centerOn(BATTLEFIELD_SIZE / 2, BATTLEFIELD_SIZE / 2);
     this.cameras.main.setZoom(0.9);
 
-    this.lastManeuverTime = this.time.now;
     this.battleStartTime = this.time.now;
     this.stats = { shipsDestroyed: 0, shipsLost: 0, damageDealt: 0 };
     this.matchTimer = createMatchTimer(
@@ -245,7 +279,6 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
           ship.y,
           ship.angle,
         );
-        this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
       }
     }
     this.effectsManager.renderTrails();
@@ -460,93 +493,73 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     }
   }
 
-  protected override runManeuverStep(): void {
-    for (const ship of this.ships.values()) {
-      if (ship.hull <= 0) continue;
-      if (ship.capitalSystems && isEnginesOffline(ship.capitalSystems))
-        continue;
-
-      const template = getManeuverTemplate(
-        ship.currentManeuverDir,
-        ship.currentSpeed,
-      );
-      const result = applyManeuver(ship.x, ship.y, ship.angle, template);
-      ship.targetX = result.x;
-      ship.targetY = result.y;
-      ship.targetAngle = result.angle;
-
-      const dial = getShipDial(ship.definitionId);
-      const maneuver = dial.find(
-        (m) =>
-          m.direction === ship.currentManeuverDir &&
-          m.speed === ship.currentSpeed,
-      );
-      if (maneuver?.difficulty === "red") {
-        ship.stressTokens++;
-      } else if (maneuver?.difficulty === "green" && ship.stressTokens > 0) {
-        ship.stressTokens--;
-      }
-
-      if (ship.id === this.selectedShipId && ship.owner === "player") {
-        ship.currentManeuverDir = this.selectedManeuverDir;
-        ship.currentSpeed = this.selectedSpeed;
-      }
+  /** Steers the AI ships, then latches every player ship's standing order. */
+  protected override updateAI(): void {
+    super.updateAI();
+    for (const id of this.playerShipIds) {
+      const ship = this.ships.get(id);
+      if (ship && this.canFly(ship)) this.latchOrder(ship);
     }
   }
 
-  protected override pickManeuverForShip(ship: TacticalShip): void {
-    let target: TacticalShip | null;
-    if (shouldPickOptimalTarget(this.aiDifficulty)) {
-      target = battleFindClosestEnemy(ship, this.ships);
-    } else {
-      const enemies: TacticalShip[] = [];
-      for (const other of this.ships.values()) {
-        if (other.faction !== ship.faction && other.hull > 0)
-          enemies.push(other);
-      }
-      target =
-        enemies.length > 0
-          ? (enemies[Math.floor(Math.random() * enemies.length)] ?? null)
-          : null;
+  /**
+   * Keeps a player ship's standing order queued on the cycle engine (the
+   * engine clears its queue at each commit). A stressed pilot's red order
+   * is calmed first.
+   *
+   * @param ship - A player ship.
+   */
+  private latchOrder(ship: TacticalShip): void {
+    const calmed = calmOrderIfStressed(
+      ship.order,
+      ship.dial,
+      ship.flight.stress.isStressed,
+    );
+    if (calmed !== ship.order) {
+      ship.order = calmed;
+      if (ship.id === this.selectedShipId) this.updateHUD();
     }
+    const { control } = ship.flight.motion;
+    const latched = latchManeuverOrder(control, ship.order);
+    if (latched === control) return;
+    this.setFlight(ship, {
+      ...ship.flight,
+      motion: { ...ship.flight.motion, control: latched },
+    });
+  }
+
+  /**
+   * Steers an AI ship: difficulty decides whether it chases the closest
+   * enemy or a random one, and whether it flies the true heading error or a
+   * sloppy one.
+   *
+   * @param ship - The AI ship.
+   */
+  protected override steerAiShip(ship: TacticalShip): void {
+    const target = this.pickAiTarget(ship);
     if (!target) return;
+    const headingErrorDeg = chooseAiHeadingError(
+      this.headingErrorTo(ship, target),
+      shouldPickOptimalManeuver(this.aiDifficulty),
+      Math.random(),
+    );
+    this.steerToward(ship, target, headingErrorDeg);
+  }
 
-    const dial = getShipDial(ship.definitionId);
-    const available =
-      ship.stressTokens > 0 ? dial.filter((m) => m.difficulty !== "red") : dial;
-
-    if (shouldPickOptimalManeuver(this.aiDifficulty)) {
-      const angleDiff = this.getAngleDiff(ship, target);
-      if (Math.abs(angleDiff) < 20) {
-        const m = available.find((d) => d.direction === "straight");
-        if (m) {
-          ship.currentManeuverDir = "straight";
-          ship.currentSpeed = m.speed;
-        }
-      } else if (angleDiff > 0) {
-        const m = available.find(
-          (d) => d.direction === "bank_right" || d.direction === "turn_right",
-        );
-        if (m) {
-          ship.currentManeuverDir = m.direction;
-          ship.currentSpeed = m.speed;
-        }
-      } else {
-        const m = available.find(
-          (d) => d.direction === "bank_left" || d.direction === "turn_left",
-        );
-        if (m) {
-          ship.currentManeuverDir = m.direction;
-          ship.currentSpeed = m.speed;
-        }
-      }
-    } else {
-      const chosen = available[Math.floor(Math.random() * available.length)];
-      if (chosen) {
-        ship.currentManeuverDir = chosen.direction;
-        ship.currentSpeed = chosen.speed;
-      }
+  /**
+   * The enemy an AI ship chases this frame.
+   *
+   * @param ship - The AI ship.
+   * @returns The closest enemy (optimal) or a random living one.
+   */
+  private pickAiTarget(ship: TacticalShip): TacticalShip | null {
+    if (shouldPickOptimalTarget(this.aiDifficulty)) {
+      return battleFindClosestEnemy(ship, this.ships);
     }
+    const enemies = [...this.ships.values()].filter(
+      (other) => other.faction !== ship.faction && other.hull > 0,
+    );
+    return enemies[Math.floor(Math.random() * enemies.length)] ?? null;
   }
 
   protected override processCombat(delta: number): void {
@@ -635,13 +648,8 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
           3 + Math.floor(Math.random() * 4),
         );
 
-        this.ships.set(ship.id, ship);
+        this.registerShip(ship);
         applyLoadoutEffects(ship, faction.loadoutChoices?.[String(shipIndex)]);
-        this.effectsManager.registerEngineTrail(
-          ship.id,
-          faction.factionId,
-          ship.currentSpeed,
-        );
 
         if (faction.controller === "player") {
           this.playerFaction = faction.factionId;
@@ -667,12 +675,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       0,
       5,
     );
-    this.ships.set(playerShip.id, playerShip);
-    this.effectsManager.registerEngineTrail(
-      playerShip.id,
-      "free_confederation",
-      playerShip.currentSpeed,
-    );
+    this.registerShip(playerShip);
     this.playerShipIds.push(playerShip.id);
 
     for (let i = 0; i < 2; i++) {
@@ -686,12 +689,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
         0,
         3,
       );
-      this.ships.set(ally.id, ally);
-      this.effectsManager.registerEngineTrail(
-        ally.id,
-        "free_confederation",
-        ally.currentSpeed,
-      );
+      this.registerShip(ally);
       this.playerShipIds.push(ally.id);
     }
 
@@ -707,14 +705,23 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
         180,
         i === 1 ? 4 : 2,
       );
-      this.ships.set(enemy.id, enemy);
-      this.effectsManager.registerEngineTrail(
-        enemy.id,
-        "terran_hegemony",
-        enemy.currentSpeed,
-      );
+      this.registerShip(enemy);
       this.enemyShipIds.push(enemy.id);
     }
+  }
+
+  /**
+   * Adds a spawned ship to the battle and gives it an engine trail.
+   *
+   * @param ship - The new ship.
+   */
+  private registerShip(ship: TacticalShip): void {
+    this.ships.set(ship.id, ship);
+    this.effectsManager.registerEngineTrail(
+      ship.id,
+      ship.faction,
+      ship.flight.motion.control.speed,
+    );
   }
 
   private createShip(
@@ -729,15 +736,17 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   ): TacticalShip {
     const combatStats = getModeCombatStats(defId, "continuous");
     const isCapital = getShipDefinition(defId)?.role === "capital";
+    const flight = createCycleFlight(defId, { x, y, angle });
+    const dial = getShipDial(defId);
 
     return {
       id,
       definitionId: defId,
       faction,
       owner,
-      x,
-      y,
-      angle,
+      x: flight.motion.x,
+      y: flight.motion.y,
+      angle: flight.motion.angle,
       hull: combatStats.hull,
       maxHull: combatStats.maxHull,
       shields: combatStats.shields,
@@ -754,13 +763,11 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       maneuverProgress: 0,
       pilotSkill,
       combatStats,
-      currentManeuverDir: "straight",
-      currentSpeed: 2,
-      targetX: x,
-      targetY: y,
-      targetAngle: angle,
+      flight,
+      dial,
+      cycleCommitted: false,
+      order: initialOrder(dial, flight.motion.control.speed),
       weaponCooldown: 0,
-      stressTokens: 0,
       capitalSystems: isCapital ? createCapitalSystems(combatStats.hull) : null,
     };
   }
@@ -799,7 +806,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     const speedIndicator = this.add.text(
       0,
       size / 2 + 10,
-      `S${ship.currentSpeed}`,
+      `S${ship.flight.motion.control.speed}`,
       {
         fontSize: "10px",
         color: "#aaaaaa",
@@ -878,7 +885,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       .text(
         20,
         this.scale.height - 40,
-        "Arrow keys: Change maneuver | W/S: Speed | Click: Select ship | Space: Pause",
+        "LEFT/RIGHT: Dial maneuver | UP/DOWN: Speed | Orders fly next cycle | Click: Select ship | ESC: Pause",
         { font: "14px monospace", color: "#888888" },
       )
       .setScrollFactor(0)
@@ -978,8 +985,6 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     this.selectedShipId = shipId;
     const ship = this.ships.get(shipId);
     if (ship) {
-      this.selectedManeuverDir = ship.currentManeuverDir;
-      this.selectedSpeed = ship.currentSpeed;
       this.updateHUD();
       this.cameras.main.startFollow(
         this.shipSprites.get(shipId) as Phaser.GameObjects.Container,
@@ -990,12 +995,36 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     }
   }
 
-  private changeManeuverDirection(delta: number): void {
-    if (!this.selectedShipId) return;
-    const ship = this.ships.get(this.selectedShipId);
-    if (!ship) return;
+  /**
+   * The selected player ship, if it is still alive.
+   * @returns The ship whose dial the player is setting, or null.
+   */
+  private selectedShip(): TacticalShip | null {
+    const ship = this.ships.get(this.selectedShipId ?? "");
+    return ship && ship.hull > 0 ? ship : null;
+  }
 
-    const dial = getShipDial(ship.definitionId);
+  /**
+   * Sets the selected ship's standing order unless a stressed pilot would
+   * be ordered into a red maneuver. It flies from the next cycle boundary.
+   *
+   * @param ship - The selected ship.
+   * @param order - The dialed maneuver.
+   */
+  private dialOrder(ship: TacticalShip, order: ManeuverDefinition): void {
+    if (ship.flight.stress.isStressed && order.difficulty === "red") return;
+    ship.order = order;
+  }
+
+  /**
+   * Steps the selected ship's dial one notch left/right through
+   * turn/bank/straight, keeping the speed as close as the dial allows.
+   *
+   * @param delta - -1 = one notch left, +1 = one notch right.
+   */
+  private changeManeuverDirection(delta: number): void {
+    const ship = this.selectedShip();
+    if (!ship) return;
     const directions: ManeuverDirection[] = [
       "turn_left",
       "bank_left",
@@ -1003,57 +1032,40 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       "bank_right",
       "turn_right",
     ];
-
-    let currentIdx = directions.indexOf(this.selectedManeuverDir);
-    if (currentIdx === -1) currentIdx = 2;
-
+    const currentIdx = directions.indexOf(ship.order.direction);
+    const fromIdx = currentIdx === -1 ? 2 : currentIdx;
     const newDir =
-      directions[
-        Phaser.Math.Clamp(currentIdx + delta, 0, directions.length - 1)
-      ];
+      directions[Phaser.Math.Clamp(fromIdx + delta, 0, directions.length - 1)];
     if (!newDir) return;
-
-    const available =
-      dial.find(
-        (m) => m.direction === newDir && m.speed === this.selectedSpeed,
-      ) ?? dial.find((m) => m.direction === newDir);
-
-    if (available) {
-      if (ship.stressTokens > 0 && available.difficulty === "red") return;
-      this.selectedManeuverDir = newDir;
-      this.selectedSpeed = available.speed;
-    }
-
+    const dialed = nearestDialManeuver(ship.dial, newDir, ship.order.speed);
+    if (dialed) this.dialOrder(ship, dialed);
     this.updateHUD();
   }
 
+  /**
+   * Steps the selected ship's ordered speed through the speeds its dial
+   * offers for the ordered direction.
+   *
+   * @param delta - +1 = faster, -1 = slower.
+   */
   private changeSpeed(delta: number): void {
-    if (!this.selectedShipId) return;
-    const ship = this.ships.get(this.selectedShipId);
+    const ship = this.selectedShip();
     if (!ship) return;
-
-    const dial = getShipDial(ship.definitionId);
-    const available = dial
-      .filter((m) => m.direction === this.selectedManeuverDir)
-      .map((m) => m.speed)
-      .sort((a, b) => a - b);
-
-    if (available.length === 0) return;
-
-    let currentIdx = available.indexOf(this.selectedSpeed);
-    if (currentIdx === -1) currentIdx = 0;
-
-    const newSpeed =
-      available[Phaser.Math.Clamp(currentIdx + delta, 0, available.length - 1)];
-    if (newSpeed === undefined) return;
-
-    const maneuver = dial.find(
-      (m) => m.direction === this.selectedManeuverDir && m.speed === newSpeed,
-    );
-    if (maneuver && !(ship.stressTokens > 0 && maneuver.difficulty === "red")) {
-      this.selectedSpeed = newSpeed;
-    }
-
+    const { direction, speed } = ship.order;
+    const options = ship.dial
+      .filter((m) => m.direction === direction)
+      .sort((a, b) => a.speed - b.speed);
+    if (options.length === 0) return;
+    const currentIdx = options.findIndex((m) => m.speed === speed);
+    const dialed =
+      options[
+        Phaser.Math.Clamp(
+          Math.max(0, currentIdx) + delta,
+          0,
+          options.length - 1,
+        )
+      ];
+    if (dialed) this.dialOrder(ship, dialed);
     this.updateHUD();
   }
 
@@ -1088,20 +1100,22 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       tallon_left: "TALLON L",
       tallon_right: "TALLON R",
     };
-    this.speedText.setText(`Speed: ${this.selectedSpeed}`);
-    this.maneuverText.setText(
-      `Maneuver: ${dirNames[this.selectedManeuverDir]}`,
-    );
+    const ship = this.selectedShip();
+    if (!ship) {
+      this.dialGraphics.clear();
+      return;
+    }
+    this.speedText.setText(`Speed: ${ship.order.speed}`);
+    this.maneuverText.setText(`Maneuver: ${dirNames[ship.order.direction]}`);
     this.updateDialDisplay();
   }
 
   private updateDialDisplay(): void {
     this.dialGraphics.clear();
-    if (!this.selectedShipId) return;
-    const ship = this.ships.get(this.selectedShipId);
+    const ship = this.selectedShip();
     if (!ship) return;
 
-    const dial = getShipDial(ship.definitionId);
+    const dial = ship.dial;
     const cx = 100;
     const cy = 200;
     const radius = 40;
@@ -1123,70 +1137,57 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     };
 
     for (const m of dial) {
-      if (m.speed !== this.selectedSpeed) continue;
+      if (m.speed !== ship.order.speed) continue;
       const pos = positions[m.direction];
       if (!pos) continue;
 
       const angle = (pos.angle - 90) * Phaser.Math.DEG_TO_RAD;
       const x = cx + Math.cos(angle) * radius;
       const y = cy + Math.sin(angle) * radius;
-      const isSelected = m.direction === this.selectedManeuverDir;
-      const color =
-        m.difficulty === "green"
-          ? 0x44ff44
-          : m.difficulty === "red"
-            ? 0xff4444
-            : 0xffffff;
+      const isSelected = m.direction === ship.order.direction;
+      const color = difficultyHex(m.difficulty);
 
       this.dialGraphics.fillStyle(color, isSelected ? 1 : 0.5);
       this.dialGraphics.fillCircle(x, y, isSelected ? 8 : 5);
     }
   }
 
+  /**
+   * Draws where the selected ship will fly: the rest of the cycle in flight
+   * (dim) then its queued order (dial color) ending in a ghost ring — the
+   * same template geometry the cycle engine flies.
+   */
   private updatePreview(): void {
-    if (this.previewGraphics) {
-      this.previewGraphics.destroy();
-      this.previewGraphics = null;
-    }
-    if (!this.selectedShipId) return;
-    const ship = this.ships.get(this.selectedShipId);
+    this.previewGraphics?.clear();
+    const ship = this.selectedShip();
     if (!ship) return;
-
-    const template = getManeuverTemplate(
-      this.selectedManeuverDir,
-      this.selectedSpeed,
+    if (!this.previewGraphics) {
+      this.previewGraphics = this.add.graphics().setDepth(5);
+    }
+    const preview = planOrderPreview(
+      ship,
+      ship.flight.motion.control,
+      ship.order,
     );
-    const result = applyManeuver(ship.x, ship.y, ship.angle, template);
+    const color = difficultyHex(ship.order.difficulty);
+    const end = preview.queued[preview.queued.length - 1];
 
-    this.previewGraphics = this.add.graphics();
-    this.previewGraphics.setDepth(5);
-
-    const dial = getShipDial(ship.definitionId);
-    const maneuver = dial.find(
-      (m) =>
-        m.direction === this.selectedManeuverDir &&
-        m.speed === this.selectedSpeed,
-    );
-    const color =
-      maneuver?.difficulty === "green"
-        ? 0x44ff44
-        : maneuver?.difficulty === "red"
-          ? 0xff4444
-          : 0xffffff;
-
+    this.previewGraphics.lineStyle(1, PREVIEW_REMAINING_COLOR, 0.35);
+    strokePoseLine(this.previewGraphics, preview.remaining);
     this.previewGraphics.lineStyle(2, color, 0.5);
-    this.previewGraphics.lineBetween(ship.x, ship.y, result.x, result.y);
-    this.previewGraphics.lineStyle(1, color, 0.3);
-    this.previewGraphics.strokeCircle(result.x, result.y, 15);
+    strokePoseLine(this.previewGraphics, preview.queued);
+    if (end) {
+      this.previewGraphics.lineStyle(1, color, 0.3);
+      this.previewGraphics.strokeCircle(end.x, end.y, PREVIEW_GHOST_RADIUS);
+    }
   }
 
   private updateSpriteHighlights(): void {
     for (const [id, sprite] of this.shipSprites) {
       sprite.setAlpha(id === this.selectedShipId ? 1 : 0.8);
-      const ship = this.ships.get(id);
-      if (ship) sprite.speedIndicator.setText(`S${ship.currentSpeed}`);
-      const thrusterAlpha = ship ? 0.3 + ship.currentSpeed * 0.15 : 0.3;
-      sprite.thruster.setAlpha(thrusterAlpha);
+      const speed = this.ships.get(id)?.flight.motion.control.speed;
+      if (speed !== undefined) sprite.speedIndicator.setText(`S${speed}`);
+      sprite.thruster.setAlpha(0.3 + (speed ?? 0) * 0.15);
     }
   }
 
@@ -1235,21 +1236,5 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
         this.scene.start("MainMenuScene");
       },
     });
-  }
-
-  // ──────────────────────────────────────────────
-  // Helpers
-  // ──────────────────────────────────────────────
-
-  /** Returns signed heading difference in degrees from ship's facing to target. */
-  private getAngleDiff(ship: TacticalShip, target: TacticalShip): number {
-    const angleToTarget =
-      Phaser.Math.Angle.Between(ship.x, ship.y, target.x, target.y) *
-      Phaser.Math.RAD_TO_DEG;
-    const shipFacing = ship.angle - 90;
-    let diff = angleToTarget - shipFacing;
-    if (diff > 180) diff -= 360;
-    if (diff < -180) diff += 360;
-    return diff;
   }
 }

@@ -2,8 +2,10 @@
  * Campaign Battle Scene
  *
  * Real-time arcade combat for campaign missions — same flight/combat model as
- * ArcadeBattleScene/DogfightScene/SurvivalScene (continuous maneuvers, autofire,
- * toroidal battlefield). Owns objective tracking, scripted enemy spawns from
+ * DogfightScene/SurvivalScene (X-Wing cycle engine: template arcs committed
+ * each cycle, pilot stress; autofire; toroidal battlefield). The flagship is
+ * flown by the player through the shared pilot controls; escorts and enemies
+ * run the seek AI. Owns objective tracking, scripted enemy spawns from
  * mission data, and the briefing/debrief hand-off. Campaign used to run on a
  * separate discrete turn-based engine (BattleManager/TurnSystem); that engine
  * was removed so every game mode shares one combat model.
@@ -11,20 +13,31 @@
 
 import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
-import { BATTLEFIELD_SIZE, SHIP_SIZES, type FactionId } from "../config";
+import {
+  BATTLEFIELD_SIZE,
+  CYCLE_DURATION_MS,
+  SHIP_SIZES,
+  type FactionId,
+} from "../config";
 import { getShipDefinition, getShipDial } from "../data/ShipDefinitions";
 import {
   getModeCombatStats,
   calculateHitChance,
   type ModeCombatStats,
 } from "../data/ModeBalancing";
-import {
-  getManeuverTemplate,
-  applyManeuver,
-} from "../systems/ManeuverTemplates";
-import { headingDiffToTarget } from "../systems/MovementSystem";
 import { findClosestEnemy } from "../systems/BattleHelpers";
-import type { ManeuverDirection } from "../core/types";
+import type { ManeuverDefinition } from "../core/types";
+import {
+  createCycleFlight,
+  steerAiFlight,
+  tickCycleFlight,
+  type CycleFlightState,
+} from "../arcade/systems/CycleFlight";
+import { PlayerFlightPilot } from "../arcade/systems/PlayerFlightPilot";
+import { wrapCoordinate } from "../arcade/systems/ShipMotion";
+import type { FlightEvent } from "../arcade/systems/PilotFlightTypes";
+import { canHullKTurn, seekSteerOrder } from "../arcade/systems/AiPursuit";
+import { playFlightEventFx } from "../arcade/ArcadeFX";
 import { addShipVisual } from "../rendering/ShipVisual";
 import type {
   CampaignMission,
@@ -77,14 +90,26 @@ interface CampaignShip {
   shields: number;
   maxShields: number;
   combatStats: ModeCombatStats;
-  currentManeuverDir: ManeuverDirection;
-  currentSpeed: number;
-  targetX: number;
-  targetY: number;
-  targetAngle: number;
+  /** Cycle-engine motion and pilot stress; x/y/angle mirror its pose. */
+  flight: CycleFlightState;
+  dial: readonly ManeuverDefinition[];
+  /** True on the frame this ship's maneuver cycle committed. */
+  cycleCommitted: boolean;
+  /** Whether the AI may K-turn this hull (false for capitals). */
+  allowKTurn: boolean;
   weaponCooldown: number;
   /** Present only for boss-tier ships. */
   capitalSystems?: CapitalSystemsState | null;
+}
+
+/** Vertical offset (px) of a ship's health bar above its sprite. */
+const HEALTH_BAR_OFFSET_Y = 40;
+
+/** A pose on the battlefield. */
+interface Pose {
+  readonly x: number;
+  readonly y: number;
+  readonly angle: number;
 }
 
 interface ShipSprite extends Phaser.GameObjects.Container {
@@ -135,10 +160,6 @@ export class CampaignBattleScene extends Phaser.Scene {
   private controlsHintText!: Phaser.GameObjects.Text;
   private messageText!: Phaser.GameObjects.Text;
 
-  // Timing
-  private lastManeuverTime = 0;
-  private maneuverInterval = 300;
-
   // Camera follow (manual — toroid wrap makes Phaser's startFollow jump at the seam)
   private cameraVirtualX = BATTLEFIELD_SIZE / 2;
   private cameraVirtualY = BATTLEFIELD_SIZE / 2;
@@ -147,6 +168,12 @@ export class CampaignBattleScene extends Phaser.Scene {
   private background!: ParallaxBackground;
   private performanceState: PerformanceState = createPerformanceState();
   private telemetry: ShipTelemetry | null = null;
+  private cameraShakeEnabled = true;
+
+  /** The human pilot's flight input (InputManager-driven), flying the flagship. */
+  private readonly pilot = new PlayerFlightPilot(InputManager);
+  /** Ship the pilot flew last frame; input memory resets when the flagship changes. */
+  private pilotedShipId: string | null = null;
 
   constructor() {
     super({ key: "CampaignBattleScene" });
@@ -177,15 +204,21 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.healthBars.clear();
     this.playerShipIds = [];
     this.enemyShipIds = [];
+    this.pilotedShipId = null;
+    this.pilot.reset();
   }
 
   shutdown(): void {
     this.inputSubscriptionIds.forEach((id) => InputManager.off(id));
     this.inputSubscriptionIds = [];
     teardownSceneInput();
+    this.pilot.detach();
   }
 
   create(): void {
+    // Phaser never calls shutdown() on its own; without this, every restart
+    // stacks another set of input subscriptions.
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.cameras.main.setBackgroundColor(0x0a0a1a);
     addPaintedSpaceBackground(this, "planet_gas_giant", 0);
 
@@ -195,6 +228,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     const savedSettings = this.registry.get("settings") as
       { cameraShake: boolean; showDamageNumbers: boolean } | undefined;
     if (savedSettings) {
+      this.cameraShakeEnabled = savedSettings.cameraShake;
       this.effectsManager.setUserSettings({
         cameraShake: savedSettings.cameraShake,
         showDamageNumbers: savedSettings.showDamageNumbers,
@@ -247,14 +281,9 @@ export class CampaignBattleScene extends Phaser.Scene {
 
     this.background.update();
 
-    if (time - this.lastManeuverTime >= this.maneuverInterval) {
-      this.processManeuvers();
-      this.lastManeuverTime = time;
-    }
-
-    this.interpolatePositions(delta);
+    this.updateAI(time, delta);
+    this.flyShips(delta);
     this.processCombat(delta);
-    this.updateAI();
     this.updateCameraFollow();
     this.checkDelayedSpawns();
     this.checkObjectives();
@@ -297,7 +326,7 @@ export class CampaignBattleScene extends Phaser.Scene {
       .text(
         this.scale.width / 2,
         this.scale.height - 30,
-        "UP/DOWN: Speed | LEFT/RIGHT: Turn | SPACE: Fire | ESC: Pause",
+        "UP/DOWN: Speed (x2: Boost) | LEFT/RIGHT: tap drift, hold bank | Q/E: Hard turn | Z: K-turn | Weapons autofire | ESC: Pause",
         { font: "14px monospace", color: "#666666" },
       )
       .setOrigin(0.5)
@@ -356,6 +385,7 @@ export class CampaignBattleScene extends Phaser.Scene {
 
   private setupInput(): void {
     setupSceneInput(this);
+    this.pilot.attach();
     this.createPauseMenu();
     this.inputSubscriptionIds.push(
       InputManager.on("PAUSE", () => this.togglePause()),
@@ -451,15 +481,11 @@ export class CampaignBattleScene extends Phaser.Scene {
     const startX = centerX - ((flagshipCount - 1) * spacing) / 2;
     this.selectedShips.forEach((defId, i) => {
       const id = `player_${i}`;
-      const ship = this.createShip(
-        id,
-        defId,
-        this.factionId,
-        "player",
-        startX + i * spacing,
-        centerY + 220,
-        270,
-      );
+      const ship = this.createShip(id, defId, this.factionId, "player", {
+        x: startX + i * spacing,
+        y: centerY + 220,
+        angle: 270,
+      });
       if (i === 0) this.applyProtagonistBonuses(ship);
       this.ships.set(id, ship);
       this.playerShipIds.push(id);
@@ -500,7 +526,7 @@ export class CampaignBattleScene extends Phaser.Scene {
         const id = `enemy_${Date.now()}_${slot}_${Math.random().toString(36).slice(2, 7)}`;
         const x = startX + slot * spacing;
         const yJitter = y + (Math.random() - 0.5) * 60;
-        this.spawnEnemyShip(id, enemy, x, yJitter, angle);
+        this.spawnEnemyShip(id, enemy, { x, y: yJitter, angle });
         slot++;
       }
     }
@@ -520,29 +546,22 @@ export class CampaignBattleScene extends Phaser.Scene {
       const x = cx + Math.cos(angle) * spawnRadius;
       const y = cy + Math.sin(angle) * spawnRadius;
       const facing = (Phaser.Math.RadToDeg(angle) + 180) % 360;
-      this.spawnEnemyShip(id, enemy, x, y, facing);
+      this.spawnEnemyShip(id, enemy, { x, y, angle: facing });
     }
   }
 
-  private spawnEnemyShip(
-    id: string,
-    enemy: MissionEnemy,
-    x: number,
-    y: number,
-    angle: number,
-  ): void {
+  /**
+   * Spawns one mission enemy (ace/boss stat bumps included) at a pose.
+   *
+   * @param id - Ship id.
+   * @param enemy - Mission enemy entry.
+   * @param spawn - Spawn pose.
+   */
+  private spawnEnemyShip(id: string, enemy: MissionEnemy, spawn: Pose): void {
     const def = getShipDefinition(enemy.shipId);
     if (!def) return;
 
-    const ship = this.createShip(
-      id,
-      enemy.shipId,
-      enemy.faction,
-      "ai",
-      x,
-      y,
-      angle,
-    );
+    const ship = this.createShip(id, enemy.shipId, enemy.faction, "ai", spawn);
     if (enemy.isAce) {
       ship.maxHull = Math.floor(ship.maxHull * 1.5);
       ship.hull = ship.maxHull;
@@ -610,34 +629,47 @@ export class CampaignBattleScene extends Phaser.Scene {
     for (const enemy of toSpawn) this.spawnReinforcements(enemy);
   }
 
+  /**
+   * Builds a ship record flying the cycle engine from its spawn pose
+   * (wrapped onto the toroidal battlefield).
+   *
+   * @param id - Ship id.
+   * @param defId - Ship definition id.
+   * @param faction - Owning faction.
+   * @param owner - Player squad or AI.
+   * @param spawn - Spawn pose (may lie off the battlefield edge).
+   * @returns The new ship record.
+   */
   private createShip(
     id: string,
     defId: string,
     faction: FactionId,
     owner: "player" | "ai",
-    x: number,
-    y: number,
-    angle: number,
+    spawn: Pose,
   ): CampaignShip {
     const combatStats = getModeCombatStats(defId, "continuous");
+    const flight = createCycleFlight(defId, {
+      x: wrapCoordinate(spawn.x, BATTLEFIELD_SIZE),
+      y: wrapCoordinate(spawn.y, BATTLEFIELD_SIZE),
+      angle: spawn.angle,
+    });
     return {
       id,
       definitionId: defId,
       faction,
       owner,
-      x,
-      y,
-      angle,
+      x: flight.motion.x,
+      y: flight.motion.y,
+      angle: flight.motion.angle,
       hull: combatStats.hull,
       maxHull: combatStats.maxHull,
       shields: combatStats.shields,
       maxShields: combatStats.maxShields,
       combatStats,
-      currentManeuverDir: "straight",
-      currentSpeed: 2,
-      targetX: x,
-      targetY: y,
-      targetAngle: angle,
+      flight,
+      dial: getShipDial(defId),
+      cycleCommitted: false,
+      allowKTurn: canHullKTurn(defId),
       weaponCooldown: 0,
     };
   }
@@ -691,7 +723,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     const healthBar = new HealthBar({
       scene: this,
       x: ship.x,
-      y: ship.y - 40,
+      y: ship.y - HEALTH_BAR_OFFSET_Y,
       faction: ship.faction,
       maxHull: ship.maxHull,
       maxShields: ship.maxShields,
@@ -702,60 +734,105 @@ export class CampaignBattleScene extends Phaser.Scene {
   }
 
   // ==========================================
-  // COMBAT
+  // FLIGHT
   // ==========================================
 
-  private processManeuvers(): void {
-    for (const ship of this.ships.values()) {
-      if (ship.hull <= 0) continue;
-      if (ship.capitalSystems && isEnginesOffline(ship.capitalSystems))
-        continue;
-
-      const template = getManeuverTemplate(
-        ship.currentManeuverDir,
-        ship.currentSpeed,
-      );
-      const result = applyManeuver(ship.x, ship.y, ship.angle, template);
-      ship.targetX = result.x;
-      ship.targetY = result.y;
-      ship.targetAngle = result.angle;
-    }
+  /**
+   * Whether a ship flies this frame: alive, and (for boss hulls) with its
+   * engines still online — a crippled capital drifts dead in space.
+   *
+   * @param ship - The ship.
+   * @returns True if the ship's flight should advance.
+   */
+  private canFly(ship: CampaignShip): boolean {
+    if (ship.hull <= 0) return false;
+    return !(ship.capitalSystems && isEnginesOffline(ship.capitalSystems));
   }
 
-  private interpolatePositions(delta: number): void {
-    const t = Math.min(1, delta / 280) * 3;
-
+  /**
+   * Flies every ship one frame on the X-Wing cycle engine (template arcs,
+   * cycle-boundary commits, stress) and syncs sprites to the new poses.
+   *
+   * @param deltaMs - Frame length (ms).
+   */
+  private flyShips(deltaMs: number): void {
     for (const ship of this.ships.values()) {
-      if (ship.hull <= 0) continue;
-
-      ship.x = Phaser.Math.Linear(ship.x, ship.targetX, t);
-      ship.y = Phaser.Math.Linear(ship.y, ship.targetY, t);
-
-      let angleDiff = ship.targetAngle - ship.angle;
-      if (angleDiff > 180) angleDiff -= 360;
-      if (angleDiff < -180) angleDiff += 360;
-      ship.angle = (((ship.angle + angleDiff * t) % 360) + 360) % 360;
-
-      ship.x =
-        ((ship.x % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
-      ship.y =
-        ((ship.y % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
-      ship.targetX =
-        ((ship.targetX % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
-        BATTLEFIELD_SIZE;
-      ship.targetY =
-        ((ship.targetY % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
-        BATTLEFIELD_SIZE;
-
-      const sprite = this.shipSprites.get(ship.id);
-      if (sprite) {
-        sprite.setPosition(ship.x, ship.y);
-        sprite.setAngle(ship.angle);
+      if (!this.canFly(ship)) continue;
+      const tick = tickCycleFlight(ship.flight, {
+        deltaMs,
+        worldSize: BATTLEFIELD_SIZE,
+        dial: ship.dial,
+        cycleMs: CYCLE_DURATION_MS,
+      });
+      this.setFlight(ship, tick.state);
+      ship.cycleCommitted = tick.completed !== null;
+      if (tick.completed && ship.id === this.pilotedShipId) {
+        const { control } = tick.state.motion;
+        this.pilot.onCycleCommitted(control.currentManeuver ?? "straight");
       }
-      this.healthBars.get(ship.id)?.setPosition(ship.x, ship.y - 40);
-      this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
+      this.syncShipVisuals(ship);
     }
   }
+
+  /**
+   * Moves a ship's sprite and health bar to its pose and samples telemetry.
+   *
+   * @param ship - The ship.
+   */
+  private syncShipVisuals(ship: CampaignShip): void {
+    this.shipSprites
+      .get(ship.id)
+      ?.setPosition(ship.x, ship.y)
+      .setAngle(ship.angle);
+    this.healthBars
+      .get(ship.id)
+      ?.setPosition(ship.x, ship.y - HEALTH_BAR_OFFSET_Y);
+    this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
+  }
+
+  /**
+   * Stores a ship's new flight state and mirrors its pose onto the record
+   * (combat, AI and camera read x/y/angle).
+   *
+   * @param ship - The ship.
+   * @param flight - Its new flight state.
+   */
+  private setFlight(ship: CampaignShip, flight: CycleFlightState): void {
+    ship.flight = flight;
+    ship.x = flight.motion.x;
+    ship.y = flight.motion.y;
+    ship.angle = flight.motion.angle;
+  }
+
+  /**
+   * Visual feedback for flight events, drawn from the pose they started at.
+   *
+   * @param ship - The ship that acted.
+   * @param events - What happened this frame.
+   * @param origin - Pose before the actions.
+   */
+  private playFlightEvents(
+    ship: CampaignShip,
+    events: readonly FlightEvent[],
+    origin: Pose,
+  ): void {
+    const isPiloted = ship.id === this.pilotedShipId;
+    for (const event of events) {
+      playFlightEventFx(this, {
+        event,
+        origin,
+        definitionId: ship.definitionId,
+        faction: ship.faction,
+        sprite: this.shipSprites.get(ship.id),
+        cameraShake: isPiloted && this.cameraShakeEnabled,
+        zoomPulse: isPiloted,
+      });
+    }
+  }
+
+  // ==========================================
+  // COMBAT
+  // ==========================================
 
   private processCombat(delta: number): void {
     for (const ship of this.ships.values()) {
@@ -873,93 +950,79 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.enemyShipIds = this.enemyShipIds.filter((id) => id !== shipId);
   }
 
-  private updateAI(): void {
-    for (const shipId of this.enemyShipIds) {
-      const ship = this.ships.get(shipId);
-      if (!ship || ship.hull <= 0) continue;
-      this.pickSeekManeuver(ship);
-    }
-
-    // Escorts (every player ship past the flagship) hold simple seek-AI.
-    for (const shipId of this.playerShipIds.slice(1)) {
-      const ship = this.ships.get(shipId);
-      if (!ship || ship.hull <= 0) continue;
-      this.pickSeekManeuver(ship);
-    }
-
+  /**
+   * Queues every ship's next maneuver: the flagship's from the player's
+   * input, enemies' and escorts' from the seek AI (chase the closest enemy).
+   *
+   * @param time - Scene time (ms).
+   * @param delta - Frame length (ms).
+   */
+  private updateAI(time: number, delta: number): void {
     const flagship = this.ships.get(this.playerShipIds[0] ?? "");
-    if (flagship && flagship.hull > 0) this.applyPlayerControl(flagship);
-  }
-
-  /** Heading-diff → dial maneuver selection, shared by enemies and escorts. */
-  private pickSeekManeuver(ship: CampaignShip): void {
-    const target = findClosestEnemy(ship, this.ships);
-    if (!target) return;
-
-    const angleDiff = headingDiffToTarget(
-      ship.x,
-      ship.y,
-      ship.angle,
-      target.x,
-      target.y,
-    );
-    const dial = getShipDial(ship.definitionId);
-
-    if (Math.abs(angleDiff) < 20) {
-      const m = dial.find((d) => d.direction === "straight");
-      if (m) {
-        ship.currentManeuverDir = "straight";
-        ship.currentSpeed = m.speed;
-      }
-    } else if (angleDiff > 0) {
-      const m = dial.find(
-        (d) => d.direction === "bank_right" || d.direction === "turn_right",
-      );
-      if (m) {
-        ship.currentManeuverDir = m.direction;
-        ship.currentSpeed = m.speed;
-      }
-    } else {
-      const m = dial.find(
-        (d) => d.direction === "bank_left" || d.direction === "turn_left",
-      );
-      if (m) {
-        ship.currentManeuverDir = m.direction;
-        ship.currentSpeed = m.speed;
-      }
+    this.trackPilotedShip(flagship?.id ?? null);
+    for (const ship of this.ships.values()) {
+      if (!this.canFly(ship)) continue;
+      if (ship === flagship) this.flyPlayer(ship, time, delta);
+      else this.steerSeeker(ship);
     }
   }
 
   /**
-   * Picks the flagship's next maneuver from its dial based on held keys.
-   * UP/DOWN ramp speed through the dial's available speeds; LEFT/RIGHT bank
-   * at the current speed; no input holds a straight maneuver.
+   * Hands the pilot controls to the current flagship, forgetting held-input
+   * memory when the flagship changes (the previous one was destroyed).
+   *
+   * @param shipId - The flagship's id, or null when the squad is gone.
    */
-  private applyPlayerControl(ship: CampaignShip): void {
-    const dial = getShipDial(ship.definitionId);
-    const speeds = [...new Set(dial.map((m) => m.speed))].sort((a, b) => a - b);
+  private trackPilotedShip(shipId: string | null): void {
+    if (shipId === this.pilotedShipId) return;
+    this.pilotedShipId = shipId;
+    this.pilot.reset();
+  }
 
-    let desiredSpeed = ship.currentSpeed;
-    if (InputManager.isHeld("THRUST_UP")) {
-      desiredSpeed = speeds.find((s) => s > desiredSpeed) ?? desiredSpeed;
-    } else if (InputManager.isHeld("THRUST_DOWN")) {
-      desiredSpeed =
-        [...speeds].reverse().find((s) => s < desiredSpeed) ?? desiredSpeed;
-    }
+  /**
+   * Steers an AI ship (enemy or escort) at the closest hostile ship.
+   * Capital hulls never K-turn.
+   *
+   * @param ship - The AI-flown ship.
+   */
+  private steerSeeker(ship: CampaignShip): void {
+    const target = findClosestEnemy(ship, this.ships);
+    if (!target) return;
+    const origin = { x: ship.x, y: ship.y, angle: ship.angle };
+    const result = steerAiFlight(
+      ship.flight,
+      seekSteerOrder({
+        flight: ship.flight,
+        target,
+        cycleCommitted: ship.cycleCommitted,
+        allowKTurn: ship.allowKTurn,
+      }),
+    );
+    this.setFlight(ship, result.state);
+    this.playFlightEvents(ship, result.events, origin);
+  }
 
-    let direction: ManeuverDirection = "straight";
-    if (InputManager.isHeld("STEER_LEFT")) direction = "bank_left";
-    else if (InputManager.isHeld("STEER_RIGHT")) direction = "bank_right";
-
-    const match =
-      dial.find((m) => m.direction === direction && m.speed === desiredSpeed) ??
-      dial.find((m) => m.direction === direction) ??
-      dial.find((m) => m.direction === "straight");
-
-    if (match) {
-      ship.currentManeuverDir = match.direction;
-      ship.currentSpeed = match.speed;
-    }
+  /**
+   * Runs one frame of the player's flight input through the shared pilot
+   * controls (tap = drift, hold = bank, Q/E = hard turn, K-turn, Segnor,
+   * Tallon, boost, barrel roll).
+   *
+   * @param ship - The flagship.
+   * @param time - Scene time (ms).
+   * @param delta - Frame length (ms).
+   */
+  private flyPlayer(ship: CampaignShip, time: number, delta: number): void {
+    const origin = { x: ship.x, y: ship.y, angle: ship.angle };
+    const result = this.pilot.fly({
+      flight: ship.flight,
+      ship: ship.flight.motion,
+      dial: ship.dial,
+      nowMs: time,
+      deltaMs: delta,
+      worldSize: BATTLEFIELD_SIZE,
+    });
+    this.setFlight(ship, { motion: result.motion, stress: result.stress });
+    this.playFlightEvents(ship, result.events, origin);
   }
 
   // ==========================================
