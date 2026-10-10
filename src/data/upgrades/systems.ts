@@ -74,12 +74,12 @@ export const CREW_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
     id: "tactical_officer",
     name: "Tactical Officer",
     slotType: "crew",
-    description: "Projects the faction support aura to nearby allies.",
+    description:
+      "Projects the faction support aura to nearby allies (or widens it 25% on ships that already project one).",
     pointCost: 4,
     creditCost: 200,
-    requiredShipSize: ["medium", "large", "huge"],
     effects: { addsActionLinked: { action: "coordinate", linkedTo: "focus" } },
-    realtime: { projectsAura: true },
+    realtime: { projectsAura: true, auraRadiusBonus: 0.25 },
   },
   weapons_engineer: {
     id: "weapons_engineer",

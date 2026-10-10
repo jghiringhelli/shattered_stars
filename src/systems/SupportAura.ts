@@ -20,6 +20,7 @@ import {
   MIN_DAMAGE_TAKEN_MULTIPLIER,
   MAX_STRESS_RELIEF_TIERS,
   SWARM_EVADE_CAP,
+  auraRadiusBonusFor,
   projectionScaleFor,
   type AuraShip,
   type FactionAura,
@@ -130,7 +131,8 @@ function countAlliesWithin(
 }
 
 /**
- * Build per-source aura info, applying class scaling and swarm precomputation.
+ * Build per-source aura info, applying class scaling, command-upgrade radius
+ * bonuses and swarm precomputation.
  * @param ships - All ships in play.
  * @returns One entry per living aura projector.
  */
@@ -140,7 +142,10 @@ function buildSources(ships: ReadonlyArray<AuraShip>): SourceInfo[] {
     const projection = projectionScaleFor(ship);
     if (projection === null) continue;
     const aura = FACTION_AURAS[ship.faction];
-    const radius = aura.radius * projection.radiusScale;
+    const radius =
+      aura.radius *
+      projection.radiusScale *
+      (1 + auraRadiusBonusFor(ship.equippedUpgrades));
     const radiusSquared = radius * radius;
     const magnitude = aura.magnitude * projection.magnitudeScale;
     const swarmReduction =

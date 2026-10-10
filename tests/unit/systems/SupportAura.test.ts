@@ -12,6 +12,7 @@ import {
   AURA_GRANTING_CREW,
   type AuraShip,
 } from "../../../src/systems/SupportAura";
+import { auraRadiusBonusFor } from "../../../src/systems/aura/FactionAuras";
 
 /**
  * Build a ship fixture with sensible defaults.
@@ -338,5 +339,43 @@ describe("class-based aura scaling", () => {
     ]);
     expect(withCrew.coveredShipIds.has("ally")).toBe(true);
     expect(withoutCrew.coveredShipIds.has("ally")).toBe(false);
+  });
+});
+
+describe("command upgrades widen the projected aura", () => {
+  const base = FACTION_AURAS.terran_hegemony.radius;
+
+  it("reaches an ally just past the base radius when the support carries a tactical officer", () => {
+    const ally = ship({ id: "ally", x: base * 1.2, y: 0 });
+    const plain = resolveSupportAuras([
+      ship({ id: "sup", role: "support", x: 0, y: 0 }),
+      ally,
+    ]);
+    const commanded = resolveSupportAuras([
+      ship({
+        id: "sup",
+        role: "support",
+        x: 0,
+        y: 0,
+        equippedUpgrades: ["tactical_officer"],
+      }),
+      ally,
+    ]);
+    expect(plain.coveredShipIds.has("ally")).toBe(false);
+    expect(commanded.coveredShipIds.has("ally")).toBe(true);
+  });
+
+  it("caps stacked command upgrades at +50% radius", () => {
+    expect(
+      auraRadiusBonusFor([
+        "tactical_officer",
+        "coordinated_assault",
+        "tactical_officer",
+      ]),
+    ).toBe(0.5);
+  });
+
+  it("adds nothing for ships without command upgrades", () => {
+    expect(auraRadiusBonusFor(["hull_upgrade"])).toBe(0);
   });
 });

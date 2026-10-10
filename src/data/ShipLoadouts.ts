@@ -1,820 +1,16 @@
 /**
  * Ship Loadouts System
  *
- * Defines upgrade slots and pre-configured builds for each ship.
- * Follows X-Wing TMG Second Edition design philosophy:
- * - Each ship has specific upgrade slots based on role
- * - Pre-built loadouts optimize each ship's strengths
- * - AI enemies and campaign missions use these loadouts
+ * Pre-configured builds for each ship (X-Wing TMG "quick builds"). Every
+ * build must fit its ship's slot bar (src/data/ShipSlots.ts) and its price is
+ * derived from its contents. AI enemies, campaign missions and the ship
+ * picker all use these loadouts.
  */
 
-import type { UpgradeSlotType } from "../systems/UpgradeSystem";
 import type { ShipRole } from "../core/types";
 import { deriveLoadoutCost } from "./loadoutPricing";
 
-// ============================================
-// Ship Upgrade Slot Configurations
-// ============================================
-
-export interface ShipSlotConfig {
-  readonly shipId: string;
-  readonly slots: readonly UpgradeSlotType[];
-  readonly charges?: number; // Base charges for ordnance
-}
-
-/**
- * Upgrade slots for each ship
- * Based on X-Wing 2.0 slot distribution principles
- */
-export const SHIP_SLOTS: Record<string, ShipSlotConfig> = {
-  // ==========================================
-  // TERRAN HEGEMONY (20 ships)
-  // ==========================================
-
-  // Light Fighters
-  terran_viper: {
-    shipId: "terran_viper",
-    slots: ["talent", "missile", "modification", "configuration"],
-  },
-  terran_stiletto: {
-    shipId: "terran_stiletto",
-    slots: ["talent", "modification"],
-  },
-  terran_raptor: {
-    shipId: "terran_raptor",
-    slots: ["talent", "missile", "sensor", "modification"],
-  },
-
-  // Heavy Fighters
-  terran_gladius: {
-    shipId: "terran_gladius",
-    slots: ["talent", "torpedo", "sensor", "modification"],
-  },
-  terran_centurion: {
-    shipId: "terran_centurion",
-    slots: ["talent", "cannon", "sensor", "modification"],
-  },
-  terran_praetorian: {
-    shipId: "terran_praetorian",
-    slots: ["talent", "cannon", "crew", "modification", "configuration"],
-  },
-  terran_legionnaire: {
-    shipId: "terran_legionnaire",
-    slots: ["talent", "missile", "sensor", "modification"],
-  },
-
-  // Bombers
-  terran_hammer: {
-    shipId: "terran_hammer",
-    slots: [
-      "torpedo",
-      "torpedo",
-      "bomb",
-      "gunner",
-      "crew",
-      "modification",
-      "configuration",
-    ],
-    charges: 4,
-  },
-  terran_thunderbolt: {
-    shipId: "terran_thunderbolt",
-    slots: [
-      "torpedo",
-      "torpedo",
-      "bomb",
-      "bomb",
-      "gunner",
-      "crew",
-      "modification",
-    ],
-    charges: 5,
-  },
-  terran_javelin: {
-    shipId: "terran_javelin",
-    slots: ["torpedo", "torpedo", "sensor", "modification"],
-    charges: 3,
-  },
-
-  // Support Ships
-  terran_sentinel: {
-    shipId: "terran_sentinel",
-    slots: ["talent", "crew", "crew", "sensor", "tech", "modification"],
-  },
-  terran_guardian: {
-    shipId: "terran_guardian",
-    slots: ["crew", "crew", "sensor", "tech", "modification"],
-  },
-  terran_harbinger: {
-    shipId: "terran_harbinger",
-    slots: ["talent", "sensor", "tech", "modification"],
-  },
-
-  // Gunships
-  terran_bastion: {
-    shipId: "terran_bastion",
-    slots: ["turret", "cannon", "missile", "gunner", "crew", "modification"],
-    charges: 2,
-  },
-  terran_bulwark: {
-    shipId: "terran_bulwark",
-    slots: [
-      "turret",
-      "turret",
-      "cannon",
-      "missile",
-      "gunner",
-      "crew",
-      "modification",
-    ],
-    charges: 3,
-  },
-  terran_vindicator: {
-    shipId: "terran_vindicator",
-    slots: ["turret", "cannon", "missile", "gunner", "modification"],
-    charges: 2,
-  },
-
-  // Capital Ships
-  terran_imperator: {
-    shipId: "terran_imperator",
-    slots: [
-      "turret",
-      "turret",
-      "cannon",
-      "cannon",
-      "gunner",
-      "crew",
-      "crew",
-      "sensor",
-      "modification",
-      "title",
-    ],
-    charges: 4,
-  },
-  terran_dominator: {
-    shipId: "terran_dominator",
-    slots: [
-      "turret",
-      "cannon",
-      "gunner",
-      "crew",
-      "crew",
-      "crew",
-      "sensor",
-      "modification",
-      "title",
-    ],
-    charges: 3,
-  },
-  terran_executor: {
-    shipId: "terran_executor",
-    slots: [
-      "turret",
-      "turret",
-      "cannon",
-      "gunner",
-      "crew",
-      "modification",
-      "title",
-    ],
-    charges: 3,
-  },
-  terran_consul: {
-    shipId: "terran_consul",
-    slots: [
-      "crew",
-      "crew",
-      "crew",
-      "sensor",
-      "sensor",
-      "tech",
-      "modification",
-      "title",
-    ],
-  },
-
-  // ==========================================
-  // FREE CONFEDERATION (20 ships)
-  // ==========================================
-
-  // Light Fighters
-  confed_sparrow: {
-    shipId: "confed_sparrow",
-    slots: ["talent", "missile", "modification"],
-  },
-  confed_wasp: {
-    shipId: "confed_wasp",
-    slots: ["talent", "modification"],
-  },
-  confed_finch: {
-    shipId: "confed_finch",
-    slots: ["sensor", "modification"],
-  },
-  confed_kestrel: {
-    shipId: "confed_kestrel",
-    slots: ["talent", "missile", "modification", "configuration"],
-  },
-
-  // Heavy Fighters
-  confed_falcon: {
-    shipId: "confed_falcon",
-    slots: ["talent", "torpedo", "astromech", "modification", "configuration"],
-  },
-  confed_hawk: {
-    shipId: "confed_hawk",
-    slots: ["talent", "cannon", "missile", "modification"],
-  },
-  confed_eagle: {
-    shipId: "confed_eagle",
-    slots: ["talent", "torpedo", "sensor", "astromech", "modification"],
-  },
-  confed_condor: {
-    shipId: "confed_condor",
-    slots: ["talent", "cannon", "crew", "modification"],
-  },
-
-  // Stealth Ships
-  confed_raven: {
-    shipId: "confed_raven",
-    slots: ["talent", "tech", "missile", "modification", "configuration"],
-  },
-  confed_owl: {
-    shipId: "confed_owl",
-    slots: ["talent", "tech", "sensor", "modification", "configuration"],
-  },
-
-  // Bombers
-  confed_pelican: {
-    shipId: "confed_pelican",
-    slots: ["torpedo", "bomb", "gunner", "modification"],
-    charges: 3,
-  },
-  confed_albatross: {
-    shipId: "confed_albatross",
-    slots: ["torpedo", "torpedo", "bomb", "gunner", "crew", "modification"],
-    charges: 4,
-  },
-
-  // Gunships
-  confed_phoenix: {
-    shipId: "confed_phoenix",
-    slots: [
-      "talent",
-      "turret",
-      "cannon",
-      "missile",
-      "crew",
-      "gunner",
-      "modification",
-    ],
-    charges: 2,
-  },
-  confed_thunderbird: {
-    shipId: "confed_thunderbird",
-    slots: [
-      "turret",
-      "turret",
-      "cannon",
-      "missile",
-      "gunner",
-      "crew",
-      "modification",
-    ],
-    charges: 3,
-  },
-  confed_harrier: {
-    shipId: "confed_harrier",
-    slots: ["turret", "cannon", "missile", "gunner", "modification"],
-    charges: 2,
-  },
-
-  // Support Ships
-  confed_crane: {
-    shipId: "confed_crane",
-    slots: ["crew", "crew", "sensor", "tech", "modification"],
-  },
-  confed_heron: {
-    shipId: "confed_heron",
-    slots: ["crew", "crew", "sensor", "tech", "modification", "title"],
-  },
-
-  // Capital Ships
-  confed_liberty: {
-    shipId: "confed_liberty",
-    slots: [
-      "turret",
-      "cannon",
-      "gunner",
-      "crew",
-      "crew",
-      "sensor",
-      "modification",
-      "title",
-    ],
-    charges: 3,
-  },
-  confed_independence: {
-    shipId: "confed_independence",
-    slots: [
-      "turret",
-      "gunner",
-      "crew",
-      "crew",
-      "crew",
-      "sensor",
-      "modification",
-      "title",
-    ],
-    charges: 2,
-  },
-  confed_defiance: {
-    shipId: "confed_defiance",
-    slots: [
-      "turret",
-      "turret",
-      "cannon",
-      "gunner",
-      "crew",
-      "modification",
-      "title",
-    ],
-    charges: 3,
-  },
-
-  // ==========================================
-  // SYNTHETIC COLLECTIVE (20 ships)
-  // ==========================================
-
-  // Drones
-  synth_drone: {
-    shipId: "synth_drone",
-    slots: ["cannon", "modification", "configuration"],
-  },
-  synth_scout_drone: {
-    shipId: "synth_scout_drone",
-    slots: ["sensor", "modification"],
-  },
-  synth_heavy_drone: {
-    shipId: "synth_heavy_drone",
-    slots: ["cannon", "sensor", "modification"],
-  },
-  synth_bomber_drone: {
-    shipId: "synth_bomber_drone",
-    slots: ["torpedo", "bomb", "modification"],
-    charges: 2,
-  },
-  synth_interceptor_drone: {
-    shipId: "synth_interceptor_drone",
-    slots: ["cannon", "modification", "configuration"],
-  },
-
-  // Heavy Units
-  synth_hunter: {
-    shipId: "synth_hunter",
-    slots: ["cannon", "sensor", "tech", "modification", "configuration"],
-  },
-  synth_stalker: {
-    shipId: "synth_stalker",
-    slots: ["cannon", "sensor", "modification", "configuration"],
-  },
-  synth_ravager: {
-    shipId: "synth_ravager",
-    slots: ["cannon", "cannon", "sensor", "modification"],
-  },
-  synth_predator: {
-    shipId: "synth_predator",
-    slots: ["cannon", "missile", "sensor", "modification"],
-  },
-
-  // Destroyers
-  synth_destroyer: {
-    shipId: "synth_destroyer",
-    slots: ["torpedo", "torpedo", "cannon", "sensor", "tech", "modification"],
-    charges: 4,
-  },
-  synth_annihilator: {
-    shipId: "synth_annihilator",
-    slots: ["torpedo", "torpedo", "cannon", "cannon", "sensor", "modification"],
-    charges: 5,
-  },
-
-  // Support Nodes
-  synth_carrier: {
-    shipId: "synth_carrier",
-    slots: [
-      "crew",
-      "crew",
-      "gunner",
-      "turret",
-      "sensor",
-      "tech",
-      "modification",
-      "title",
-    ],
-    charges: 3,
-  },
-  synth_relay_node: {
-    shipId: "synth_relay_node",
-    slots: ["sensor", "sensor", "tech", "modification"],
-  },
-  synth_repair_node: {
-    shipId: "synth_repair_node",
-    slots: ["crew", "sensor", "tech", "modification"],
-  },
-
-  // Gunships
-  synth_devastator: {
-    shipId: "synth_devastator",
-    slots: ["turret", "cannon", "cannon", "missile", "sensor", "modification"],
-    charges: 2,
-  },
-  synth_eradicator: {
-    shipId: "synth_eradicator",
-    slots: ["turret", "turret", "cannon", "missile", "sensor", "modification"],
-    charges: 3,
-  },
-
-  // Capital Ships
-  synth_nexus: {
-    shipId: "synth_nexus",
-    slots: [
-      "turret",
-      "cannon",
-      "crew",
-      "crew",
-      "sensor",
-      "sensor",
-      "tech",
-      "modification",
-      "title",
-    ],
-    charges: 4,
-  },
-  synth_overmind: {
-    shipId: "synth_overmind",
-    slots: [
-      "turret",
-      "crew",
-      "crew",
-      "crew",
-      "sensor",
-      "tech",
-      "modification",
-      "title",
-    ],
-    charges: 3,
-  },
-  synth_terminus: {
-    shipId: "synth_terminus",
-    slots: [
-      "turret",
-      "turret",
-      "cannon",
-      "cannon",
-      "sensor",
-      "modification",
-      "title",
-    ],
-    charges: 4,
-  },
-  synth_conduit: {
-    shipId: "synth_conduit",
-    slots: [
-      "turret",
-      "cannon",
-      "sensor",
-      "sensor",
-      "tech",
-      "modification",
-      "title",
-    ],
-    charges: 3,
-  },
-  synth_gestalt: {
-    shipId: "synth_gestalt",
-    slots: [
-      "turret",
-      "turret",
-      "cannon",
-      "cannon",
-      "gunner",
-      "sensor",
-      "modification",
-      "modification",
-      "title",
-    ],
-    charges: 5,
-  },
-
-  // ==========================================
-  // VOID CORSAIRS (20 ships)
-  // ==========================================
-
-  // Interceptors
-  corsair_blade: {
-    shipId: "corsair_blade",
-    slots: ["talent", "missile", "modification", "configuration"],
-  },
-  corsair_fang: {
-    shipId: "corsair_fang",
-    slots: ["talent", "modification", "configuration"],
-  },
-  corsair_talon: {
-    shipId: "corsair_talon",
-    slots: ["talent", "missile", "modification"],
-  },
-  corsair_venom: {
-    shipId: "corsair_venom",
-    slots: ["talent", "modification"],
-  },
-
-  // Heavy Fighters
-  corsair_marauder: {
-    shipId: "corsair_marauder",
-    slots: ["talent", "cannon", "missile", "gunner", "modification"],
-    charges: 2,
-  },
-  corsair_cutlass: {
-    shipId: "corsair_cutlass",
-    slots: ["talent", "cannon", "missile", "modification"],
-  },
-  corsair_scimitar: {
-    shipId: "corsair_scimitar",
-    slots: ["talent", "cannon", "torpedo", "modification"],
-  },
-  corsair_saber: {
-    shipId: "corsair_saber",
-    slots: ["talent", "cannon", "modification", "configuration"],
-  },
-
-  // Stealth Ships
-  corsair_specter: {
-    shipId: "corsair_specter",
-    slots: ["talent", "tech", "crew", "modification", "configuration"],
-  },
-  corsair_phantom: {
-    shipId: "corsair_phantom",
-    slots: ["talent", "tech", "modification", "configuration"],
-  },
-  corsair_shadow: {
-    shipId: "corsair_shadow",
-    slots: ["talent", "tech", "cannon", "modification", "configuration"],
-  },
-
-  // Gunships
-  corsair_reaver: {
-    shipId: "corsair_reaver",
-    slots: [
-      "talent",
-      "turret",
-      "turret",
-      "cannon",
-      "missile",
-      "gunner",
-      "crew",
-      "modification",
-    ],
-    charges: 3,
-  },
-  corsair_pillager: {
-    shipId: "corsair_pillager",
-    slots: [
-      "turret",
-      "turret",
-      "cannon",
-      "missile",
-      "gunner",
-      "crew",
-      "modification",
-    ],
-    charges: 3,
-  },
-  corsair_ravager: {
-    shipId: "corsair_ravager",
-    slots: ["turret", "cannon", "cannon", "missile", "gunner", "modification"],
-    charges: 2,
-  },
-
-  // Bombers
-  corsair_bomber: {
-    shipId: "corsair_bomber",
-    slots: ["torpedo", "bomb", "gunner", "modification"],
-    charges: 3,
-  },
-  corsair_torpedo_boat: {
-    shipId: "corsair_torpedo_boat",
-    slots: ["torpedo", "torpedo", "modification"],
-    charges: 3,
-  },
-
-  // Capital Ships
-  corsair_dreadnought: {
-    shipId: "corsair_dreadnought",
-    slots: [
-      "turret",
-      "turret",
-      "cannon",
-      "cannon",
-      "gunner",
-      "crew",
-      "crew",
-      "modification",
-      "title",
-    ],
-    charges: 4,
-  },
-  corsair_galleon: {
-    shipId: "corsair_galleon",
-    slots: [
-      "turret",
-      "cannon",
-      "gunner",
-      "crew",
-      "crew",
-      "modification",
-      "title",
-    ],
-    charges: 3,
-  },
-  corsair_frigate: {
-    shipId: "corsair_frigate",
-    slots: ["turret", "cannon", "gunner", "crew", "modification", "title"],
-    charges: 2,
-  },
-  corsair_tender: {
-    shipId: "corsair_tender",
-    slots: ["crew", "crew", "sensor", "tech", "modification"],
-  },
-
-  // ==========================================
-  // ASCENDANT EMPIRE (20 ships)
-  // ==========================================
-
-  // Interceptors
-  ascendant_seraph: {
-    shipId: "ascendant_seraph",
-    slots: ["talent", "talent", "sensor", "modification", "configuration"],
-  },
-  ascendant_cherub: {
-    shipId: "ascendant_cherub",
-    slots: ["talent", "modification"],
-  },
-  ascendant_herald: {
-    shipId: "ascendant_herald",
-    slots: ["talent", "sensor", "modification"],
-  },
-  ascendant_virtue: {
-    shipId: "ascendant_virtue",
-    slots: ["talent", "missile", "modification", "configuration"],
-  },
-
-  // Heavy Fighters
-  ascendant_templar: {
-    shipId: "ascendant_templar",
-    slots: ["talent", "torpedo", "cannon", "sensor", "modification"],
-  },
-  ascendant_crusader: {
-    shipId: "ascendant_crusader",
-    slots: ["talent", "cannon", "cannon", "sensor", "modification"],
-  },
-  ascendant_paladin: {
-    shipId: "ascendant_paladin",
-    slots: ["talent", "cannon", "crew", "modification", "configuration"],
-  },
-  ascendant_inquisitor: {
-    shipId: "ascendant_inquisitor",
-    slots: ["talent", "cannon", "tech", "modification"],
-  },
-
-  // Support Ships
-  ascendant_oracle: {
-    shipId: "ascendant_oracle",
-    slots: [
-      "talent",
-      "crew",
-      "crew",
-      "sensor",
-      "tech",
-      "modification",
-      "title",
-    ],
-  },
-  ascendant_prophet: {
-    shipId: "ascendant_prophet",
-    slots: ["crew", "crew", "crew", "sensor", "tech", "modification", "title"],
-  },
-  ascendant_acolyte: {
-    shipId: "ascendant_acolyte",
-    slots: ["crew", "sensor", "tech", "modification"],
-  },
-
-  // Gunships
-  ascendant_avatar: {
-    shipId: "ascendant_avatar",
-    slots: [
-      "talent",
-      "turret",
-      "cannon",
-      "cannon",
-      "missile",
-      "crew",
-      "gunner",
-      "modification",
-      "title",
-    ],
-    charges: 3,
-  },
-  ascendant_wrath: {
-    shipId: "ascendant_wrath",
-    slots: ["turret", "cannon", "cannon", "missile", "gunner", "modification"],
-    charges: 2,
-  },
-  ascendant_judgment: {
-    shipId: "ascendant_judgment",
-    slots: [
-      "turret",
-      "turret",
-      "cannon",
-      "missile",
-      "gunner",
-      "crew",
-      "modification",
-    ],
-    charges: 3,
-  },
-
-  // Bombers
-  ascendant_smiter: {
-    shipId: "ascendant_smiter",
-    slots: ["torpedo", "bomb", "gunner", "modification"],
-    charges: 3,
-  },
-  ascendant_purifier: {
-    shipId: "ascendant_purifier",
-    slots: ["torpedo", "torpedo", "bomb", "gunner", "crew", "modification"],
-    charges: 4,
-  },
-
-  // Capital Ships
-  ascendant_divine: {
-    shipId: "ascendant_divine",
-    slots: [
-      "turret",
-      "turret",
-      "cannon",
-      "cannon",
-      "gunner",
-      "crew",
-      "crew",
-      "sensor",
-      "modification",
-      "title",
-    ],
-    charges: 5,
-  },
-  ascendant_glory: {
-    shipId: "ascendant_glory",
-    slots: [
-      "turret",
-      "turret",
-      "cannon",
-      "gunner",
-      "crew",
-      "crew",
-      "modification",
-      "title",
-    ],
-    charges: 4,
-  },
-  ascendant_sanctum: {
-    shipId: "ascendant_sanctum",
-    slots: [
-      "turret",
-      "cannon",
-      "crew",
-      "crew",
-      "crew",
-      "sensor",
-      "modification",
-      "title",
-    ],
-    charges: 3,
-  },
-  ascendant_bastion: {
-    shipId: "ascendant_bastion",
-    slots: [
-      "turret",
-      "turret",
-      "cannon",
-      "gunner",
-      "crew",
-      "modification",
-      "title",
-    ],
-    charges: 3,
-  },
-};
+export { SHIP_SLOTS, getShipSlots, type ShipSlotConfig } from "./ShipSlots";
 
 // ============================================
 // Pre-Built Loadouts
@@ -941,7 +137,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "gladius_patrol",
       name: "Gladius Patrol",
       shipId: "terran_gladius",
-      upgrades: ["fire_control_system", "hull_upgrade"],
+      upgrades: ["advanced_sensors", "hull_upgrade"],
       description: "Durable patrol fighter for extended operations",
       role: "defense",
     },
@@ -959,7 +155,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "centurion_assault",
       name: "Centurion Assault",
       shipId: "terran_centurion",
-      upgrades: ["heavy_laser_cannon", "fire_control_system"],
+      upgrades: ["heavy_laser_cannon", "advanced_sensors"],
       description: "Heavy assault build",
       role: "offense",
     },
@@ -967,7 +163,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "centurion_defender",
       name: "Centurion Defender",
       shipId: "terran_centurion",
-      upgrades: ["shield_upgrade", "hull_upgrade"],
+      upgrades: ["shield_upgrade", "elusive"],
       description: "Durable defender build",
       role: "defense",
     },
@@ -1013,12 +209,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "hammer_devastator",
       name: "Hammer Devastator",
       shipId: "terran_hammer",
-      upgrades: [
-        "bombardier",
-        "proton_torpedo",
-        "proton_bomb",
-        "veteran_gunner",
-      ],
+      upgrades: ["proton_torpedo", "proton_bomb", "weapons_engineer"],
       description: "Full ordnance bomber for capital ship assault",
       role: "offense",
     },
@@ -1040,7 +231,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
         "proton_torpedo",
         "proton_torpedo",
         "proton_bomb",
-        "veteran_gunner",
+        "weapons_engineer",
       ],
       description: "Heavy siege bomber",
       role: "offense",
@@ -1085,12 +276,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "sentinel_command",
       name: "Sentinel Command",
       shipId: "terran_sentinel",
-      upgrades: [
-        "coordinated_assault",
-        "tactical_officer",
-        "weapons_engineer",
-        "advanced_sensors",
-      ],
+      upgrades: ["coordinated_assault", "tactical_officer", "advanced_sensors"],
       description: "Fleet command ship with full coordination suite",
       role: "support",
     },
@@ -1098,7 +284,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "sentinel_shield",
       name: "Sentinel Shield",
       shipId: "terran_sentinel",
-      upgrades: ["shield_upgrade", "hull_upgrade", "collision_detector"],
+      upgrades: ["shield_upgrade", "collision_detector"],
       description: "Durable support platform for sustained operations",
       role: "defense",
     },
@@ -1108,7 +294,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "guardian_ecm",
       name: "Guardian ECM",
       shipId: "terran_guardian",
-      upgrades: ["tactical_officer", "weapons_engineer", "advanced_sensors"],
+      upgrades: ["tactical_officer", "advanced_sensors"],
       description: "Electronic warfare platform",
       role: "support",
     },
@@ -1126,7 +312,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "harbinger_scout",
       name: "Harbinger Scout",
       shipId: "terran_harbinger",
-      upgrades: ["advanced_sensors", "targeting_computer"],
+      upgrades: ["advanced_sensors", "pattern_analyzer"],
       description: "Reconnaissance build",
       role: "support",
     },
@@ -1134,7 +320,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "harbinger_coordinator",
       name: "Harbinger Coordinator",
       shipId: "terran_harbinger",
-      upgrades: ["coordinated_assault", "tactical_officer", "weapons_engineer"],
+      upgrades: ["coordinated_assault", "pattern_analyzer"],
       description: "Full coordination platform",
       role: "support",
     },
@@ -1216,11 +402,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "imperator_command",
       name: "Imperator Command",
       shipId: "terran_imperator",
-      upgrades: [
-        "twin_laser_turret",
-        "coordinated_assault",
-        "tactical_officer",
-      ],
+      upgrades: ["twin_laser_turret", "tactical_officer"],
       description: "Command ship configuration",
       role: "support",
     },
@@ -1230,12 +412,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "dominator_carrier",
       name: "Dominator Carrier",
       shipId: "terran_dominator",
-      upgrades: [
-        "twin_laser_turret",
-        "coordinated_assault",
-        "tactical_officer",
-        "weapons_engineer",
-      ],
+      upgrades: ["twin_laser_turret", "tactical_officer", "veteran_gunner"],
       description: "Carrier operations build",
       role: "support",
     },
@@ -1271,12 +448,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "consul_command",
       name: "Consul Command",
       shipId: "terran_consul",
-      upgrades: [
-        "coordinated_assault",
-        "tactical_officer",
-        "weapons_engineer",
-        "advanced_sensors",
-      ],
+      upgrades: ["tactical_officer", "advanced_sensors"],
       description: "Fleet command vessel",
       role: "support",
     },
@@ -1284,7 +456,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "consul_coordinator",
       name: "Consul Coordinator",
       shipId: "terran_consul",
-      upgrades: ["coordinated_assault", "tactical_officer"],
+      upgrades: ["tactical_officer"],
       description: "Coordination platform",
       role: "support",
     },
@@ -1450,7 +622,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "hawk_patrol",
       name: "Hawk Patrol",
       shipId: "confed_hawk",
-      upgrades: ["shield_upgrade", "hull_upgrade"],
+      upgrades: ["shield_upgrade", "elusive"],
       description: "Durable patrol fighter",
       role: "defense",
     },
@@ -1486,7 +658,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "condor_escort",
       name: "Condor Escort",
       shipId: "confed_condor",
-      upgrades: ["shield_upgrade", "hull_upgrade"],
+      upgrades: ["shield_upgrade", "elusive"],
       description: "Escort fighter build",
       role: "defense",
     },
@@ -1514,7 +686,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "pelican_bomber",
       name: "Pelican Bomber",
       shipId: "confed_pelican",
-      upgrades: ["proton_torpedo", "proton_bomb", "veteran_gunner"],
+      upgrades: ["proton_torpedo", "proton_bomb"],
       description: "Standard bomber",
       role: "offense",
     },
@@ -1536,7 +708,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
         "proton_torpedo",
         "proton_torpedo",
         "proton_bomb",
-        "veteran_gunner",
+        "weapons_engineer",
       ],
       description: "Heavy siege bomber",
       role: "offense",
@@ -1591,7 +763,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "crane_coordinator",
       name: "Crane Coordinator",
       shipId: "confed_crane",
-      upgrades: ["weapons_engineer", "tactical_officer", "advanced_sensors"],
+      upgrades: ["tactical_officer", "advanced_sensors"],
       description: "Fleet coordination",
       role: "support",
     },
@@ -1599,7 +771,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "crane_support",
       name: "Crane Support",
       shipId: "confed_crane",
-      upgrades: ["shield_upgrade", "hull_upgrade"],
+      upgrades: ["shield_upgrade", "pattern_analyzer"],
       description: "Durable support",
       role: "defense",
     },
@@ -1609,12 +781,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "heron_command",
       name: "Heron Command",
       shipId: "confed_heron",
-      upgrades: [
-        "hull_upgrade",
-        "tactical_officer",
-        "weapons_engineer",
-        "advanced_sensors",
-      ],
+      upgrades: ["hull_upgrade", "tactical_officer", "advanced_sensors"],
       description: "Fleet command ship",
       role: "support",
     },
@@ -1622,7 +789,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "heron_relay",
       name: "Heron Relay",
       shipId: "confed_heron",
-      upgrades: ["advanced_sensors", "targeting_computer"],
+      upgrades: ["advanced_sensors", "pattern_analyzer"],
       description: "Sensor relay",
       role: "support",
     },
@@ -1645,11 +812,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "liberty_command",
       name: "Liberty Command",
       shipId: "confed_liberty",
-      upgrades: [
-        "twin_laser_turret",
-        "coordinated_assault",
-        "tactical_officer",
-      ],
+      upgrades: ["twin_laser_turret", "tactical_officer"],
       description: "Command ship",
       role: "support",
     },
@@ -1659,12 +822,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "independence_carrier",
       name: "Independence Carrier",
       shipId: "confed_independence",
-      upgrades: [
-        "twin_laser_turret",
-        "coordinated_assault",
-        "tactical_officer",
-        "weapons_engineer",
-      ],
+      upgrades: ["twin_laser_turret", "tactical_officer", "veteran_gunner"],
       description: "Carrier operations",
       role: "support",
     },
@@ -1724,11 +882,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "hunter_precision",
       name: "Hunter Precision",
       shipId: "synth_hunter",
-      upgrades: [
-        "heavy_laser_cannon",
-        "fire_control_system",
-        "targeting_computer",
-      ],
+      upgrades: ["heavy_laser_cannon", "advanced_sensors", "pattern_analyzer"],
       description: "Precise targeting with heavy firepower",
       role: "offense",
     },
@@ -1747,13 +901,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "carrier_command",
       name: "Carrier Command Node",
       shipId: "synth_carrier",
-      upgrades: [
-        "coordinated_assault",
-        "tactical_officer",
-        "weapons_engineer",
-        "fire_control_system",
-        "targeting_computer",
-      ],
+      upgrades: ["tactical_officer", "advanced_sensors", "pattern_analyzer"],
       description: "Full coordination suite for drone swarms",
       role: "support",
     },
@@ -1824,7 +972,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "heavy_assault",
       name: "Heavy Assault Drone",
       shipId: "synth_heavy_drone",
-      upgrades: ["heavy_laser_cannon", "fire_control_system"],
+      upgrades: ["heavy_laser_cannon", "advanced_sensors"],
       description: "Heavy assault drone",
       role: "offense",
     },
@@ -1878,11 +1026,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "stalker_hunter",
       name: "Stalker Hunter",
       shipId: "synth_stalker",
-      upgrades: [
-        "heavy_laser_cannon",
-        "fire_control_system",
-        "targeting_computer",
-      ],
+      upgrades: ["heavy_laser_cannon", "advanced_sensors", "pattern_analyzer"],
       description: "Precision hunter",
       role: "offense",
     },
@@ -1967,7 +1111,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "relay_coordinator",
       name: "Relay Coordinator",
       shipId: "synth_relay_node",
-      upgrades: ["coordinated_assault", "tactical_officer", "advanced_sensors"],
+      upgrades: ["advanced_sensors", "collision_detector", "pattern_analyzer"],
       description: "Full network coordination",
       role: "support",
     },
@@ -1975,7 +1119,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "relay_support",
       name: "Relay Support",
       shipId: "synth_relay_node",
-      upgrades: ["tactical_officer", "advanced_sensors"],
+      upgrades: ["shield_upgrade", "advanced_sensors"],
       description: "Enhanced support relay",
       role: "support",
     },
@@ -1993,7 +1137,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "repair_support",
       name: "Repair Support",
       shipId: "synth_repair_node",
-      upgrades: ["tactical_officer", "advanced_sensors", "targeting_computer"],
+      upgrades: ["tactical_officer", "advanced_sensors", "pattern_analyzer"],
       description: "Support node",
       role: "support",
     },
@@ -2055,12 +1199,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "nexus_command",
       name: "Nexus Command",
       shipId: "synth_nexus",
-      upgrades: [
-        "quad_laser_turret",
-        "coordinated_assault",
-        "tactical_officer",
-        "weapons_engineer",
-      ],
+      upgrades: ["quad_laser_turret", "tactical_officer", "veteran_gunner"],
       description: "Fleet command",
       role: "support",
     },
@@ -2078,12 +1217,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "overmind_coordinator",
       name: "Overmind Coordinator",
       shipId: "synth_overmind",
-      upgrades: [
-        "twin_laser_turret",
-        "coordinated_assault",
-        "tactical_officer",
-        "weapons_engineer",
-      ],
+      upgrades: ["twin_laser_turret", "tactical_officer", "veteran_gunner"],
       description: "Swarm coordination",
       role: "support",
     },
@@ -2114,7 +1248,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "terminus_assault",
       name: "Terminus Assault",
       shipId: "synth_terminus",
-      upgrades: ["twin_laser_turret", "heavy_laser_cannon", "veteran_gunner"],
+      upgrades: ["twin_laser_turret", "heavy_laser_cannon"],
       description: "Assault capital",
       role: "offense",
     },
@@ -2127,8 +1261,8 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       upgrades: [
         "quad_laser_turret",
         "heavy_laser_cannon",
-        "veteran_gunner",
-        "fire_control_system",
+        "skilled_gunner",
+        "advanced_sensors",
       ],
       description: "Maximum convergence — all systems unified",
       role: "offense",
@@ -2147,12 +1281,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "conduit_relay",
       name: "Conduit Relay",
       shipId: "synth_conduit",
-      upgrades: [
-        "twin_laser_turret",
-        "coordinated_assault",
-        "advanced_sensors",
-        "targeting_computer",
-      ],
+      upgrades: ["twin_laser_turret", "advanced_sensors", "pattern_analyzer"],
       description: "Network relay",
       role: "support",
     },
@@ -2175,7 +1304,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "blade_raider",
       name: "Blade Raider",
       shipId: "corsair_blade",
-      upgrades: ["hull_upgrade", "concussion_missile", "engine_upgrade"],
+      upgrades: ["predator", "concussion_missile", "engine_upgrade"],
       description: "Hit-and-run striker with reinforced hull",
       role: "offense",
     },
@@ -2194,12 +1323,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "marauder_assault",
       name: "Marauder Assault",
       shipId: "corsair_marauder",
-      upgrades: [
-        "predator",
-        "heavy_laser_cannon",
-        "seeker_missile",
-        "veteran_gunner",
-      ],
+      upgrades: ["predator", "heavy_laser_cannon", "seeker_missile"],
       description: "Heavy assault with sustained firepower",
       role: "offense",
     },
@@ -2234,7 +1358,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "specter_assassin",
       name: "Specter Assassin",
       shipId: "corsair_specter",
-      upgrades: ["predator", "stealth_device", "targeting_computer"],
+      upgrades: ["predator", "stealth_device", "pattern_analyzer"],
       description: "Silent assassin with precise targeting",
       role: "offense",
     },
@@ -2352,7 +1476,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "cutlass_brawler",
       name: "Cutlass Brawler",
       shipId: "corsair_cutlass",
-      upgrades: ["shield_upgrade", "hull_upgrade"],
+      upgrades: ["hull_upgrade", "heavy_laser_cannon"],
       description: "Close range brawler",
       role: "defense",
     },
@@ -2398,7 +1522,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "phantom_assassin",
       name: "Phantom Assassin",
       shipId: "corsair_phantom",
-      upgrades: ["phantom_strike", "stealth_device", "targeting_computer"],
+      upgrades: ["phantom_strike", "stealth_device", "pattern_analyzer"],
       description: "Silent assassin",
       role: "offense",
     },
@@ -2454,20 +1578,20 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
   ],
   corsair_ravager: [
     {
-      id: "ravager_assault",
+      id: "corsair_ravager_assault",
       name: "Ravager Assault",
       shipId: "corsair_ravager",
       upgrades: [
         "twin_laser_turret",
         "heavy_laser_cannon",
         "heavy_laser_cannon",
-        "veteran_gunner",
+        "skilled_gunner",
       ],
       description: "Assault gunship",
       role: "offense",
     },
     {
-      id: "ravager_ion",
+      id: "corsair_ravager_ion",
       name: "Ravager Ion",
       shipId: "corsair_ravager",
       upgrades: ["ion_turret", "ion_cannon", "hull_upgrade"],
@@ -2480,7 +1604,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "bomber_raider",
       name: "Bomber Raider",
       shipId: "corsair_bomber",
-      upgrades: ["proton_torpedo", "proton_bomb", "veteran_gunner"],
+      upgrades: ["proton_torpedo", "proton_bomb"],
       description: "Raider bomber",
       role: "offense",
     },
@@ -2581,7 +1705,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "tender_support",
       name: "Tender Support",
       shipId: "corsair_tender",
-      upgrades: ["weapons_engineer", "tactical_officer", "advanced_sensors"],
+      upgrades: ["tactical_officer", "advanced_sensors"],
       description: "Fleet support",
       role: "support",
     },
@@ -2641,7 +1765,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "templar_guardian",
       name: "Templar Guardian",
       shipId: "ascendant_templar",
-      upgrades: ["elusive", "fire_control_system", "hull_upgrade"],
+      upgrades: ["elusive", "advanced_sensors", "hull_upgrade"],
       description: "Durable guardian with enhanced survivability",
       role: "defense",
     },
@@ -2654,10 +1778,9 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       shipId: "ascendant_oracle",
       upgrades: [
         "coordinated_assault",
-        "squadron_leader",
         "tactical_officer",
         "advanced_sensors",
-        "targeting_computer",
+        "pattern_analyzer",
       ],
       description: "Full coordination oracle with squad enhancement",
       role: "support",
@@ -2666,7 +1789,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "oracle_shield",
       name: "Oracle Shield",
       shipId: "ascendant_oracle",
-      upgrades: ["shield_upgrade", "shield_upgrade", "collision_detector"],
+      upgrades: ["shield_upgrade", "collision_detector", "elusive"],
       description: "Maximum durability support platform",
       role: "defense",
     },
@@ -2803,7 +1926,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "paladin_guardian",
       name: "Paladin Guardian",
       shipId: "ascendant_paladin",
-      upgrades: ["elusive", "shield_upgrade", "hull_upgrade"],
+      upgrades: ["elusive", "shield_upgrade"],
       description: "Guardian build",
       role: "defense",
     },
@@ -2813,7 +1936,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "inquisitor_hunter",
       name: "Inquisitor Hunter",
       shipId: "ascendant_inquisitor",
-      upgrades: ["predator", "heavy_laser_cannon", "targeting_computer"],
+      upgrades: ["predator", "heavy_laser_cannon", "pattern_analyzer"],
       description: "Hunter build",
       role: "offense",
     },
@@ -2831,12 +1954,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "prophet_seer",
       name: "Prophet Seer",
       shipId: "ascendant_prophet",
-      upgrades: [
-        "coordinated_assault",
-        "tactical_officer",
-        "weapons_engineer",
-        "advanced_sensors",
-      ],
+      upgrades: ["tactical_officer", "advanced_sensors"],
       description: "Fleet coordination",
       role: "support",
     },
@@ -2844,7 +1962,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "prophet_bastion",
       name: "Prophet Bastion",
       shipId: "ascendant_prophet",
-      upgrades: ["shield_upgrade", "hull_upgrade"],
+      upgrades: ["shield_upgrade", "pattern_analyzer"],
       description: "Defensive support",
       role: "defense",
     },
@@ -2862,7 +1980,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "acolyte_relay",
       name: "Acolyte Relay",
       shipId: "ascendant_acolyte",
-      upgrades: ["targeting_computer"],
+      upgrades: ["pattern_analyzer"],
       description: "Relay support",
       role: "support",
     },
@@ -2876,7 +1994,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
         "twin_laser_turret",
         "heavy_laser_cannon",
         "heavy_laser_cannon",
-        "veteran_gunner",
+        "skilled_gunner",
       ],
       description: "Heavy assault",
       role: "offense",
@@ -2918,7 +2036,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "smiter_bomber",
       name: "Smiter Bomber",
       shipId: "ascendant_smiter",
-      upgrades: ["proton_torpedo", "proton_bomb", "veteran_gunner"],
+      upgrades: ["proton_torpedo", "proton_bomb"],
       description: "Standard bomber",
       role: "offense",
     },
@@ -2926,7 +2044,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "smiter_strike",
       name: "Smiter Strike",
       shipId: "ascendant_smiter",
-      upgrades: ["proton_torpedo", "engine_upgrade"],
+      upgrades: ["proton_torpedo", "hull_upgrade"],
       description: "Fast strike bomber",
       role: "offense",
     },
@@ -2940,7 +2058,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
         "proton_torpedo",
         "proton_torpedo",
         "proton_bomb",
-        "veteran_gunner",
+        "weapons_engineer",
       ],
       description: "Heavy siege bomber",
       role: "offense",
@@ -2973,12 +2091,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       id: "divine_command",
       name: "Divine Command",
       shipId: "ascendant_divine",
-      upgrades: [
-        "twin_laser_turret",
-        "coordinated_assault",
-        "tactical_officer",
-        "weapons_engineer",
-      ],
+      upgrades: ["twin_laser_turret", "tactical_officer", "veteran_gunner"],
       description: "Command vessel",
       role: "support",
     },
@@ -3013,9 +2126,8 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       shipId: "ascendant_sanctum",
       upgrades: [
         "twin_laser_turret",
-        "coordinated_assault",
         "tactical_officer",
-        "weapons_engineer",
+        "veteran_gunner",
         "advanced_sensors",
       ],
       description: "Command capital",
@@ -3032,7 +2144,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
   ],
   ascendant_bastion: [
     {
-      id: "bastion_fortress",
+      id: "asc_bastion_fortress",
       name: "Bastion Fortress",
       shipId: "ascendant_bastion",
       upgrades: [
@@ -3045,7 +2157,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       role: "offense",
     },
     {
-      id: "bastion_defender",
+      id: "asc_bastion_defender",
       name: "Bastion Defender",
       shipId: "ascendant_bastion",
       upgrades: ["ion_turret", "ion_turret", "shield_upgrade", "hull_upgrade"],
@@ -3074,13 +2186,6 @@ export const SHIP_LOADOUTS: Record<string, ShipLoadout[]> = Object.fromEntries(
 // ============================================
 // Helper Functions
 // ============================================
-
-/**
- * Get slot configuration for a ship
- */
-export function getShipSlots(shipId: string): ShipSlotConfig | undefined {
-  return SHIP_SLOTS[shipId];
-}
 
 /**
  * Get all loadouts for a ship

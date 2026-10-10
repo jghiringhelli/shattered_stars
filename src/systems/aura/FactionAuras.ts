@@ -18,6 +18,7 @@
 import type { FactionId, ShipSize } from "../../config";
 import type { ShipRole } from "../../core/types";
 import { UPGRADE_CATALOG } from "../../data/upgrades";
+import { combineEffects } from "../../core/CombatModifiers";
 
 /** Minimal ship shape needed to resolve auras (no Phaser/runtime coupling). */
 export interface AuraShip {
@@ -109,6 +110,20 @@ export const AURA_GRANTING_CREW: ReadonlySet<string> = new Set(
     .filter((upgrade) => upgrade.realtime?.projectsAura === true)
     .map((upgrade) => upgrade.id),
 );
+
+/**
+ * How much a ship's command upgrades widen the aura it projects.
+ *
+ * @param upgradeIds - The projector's equipped upgrade ids.
+ * @returns Fractional radius increase (0 = none), capped by the modifier rules.
+ */
+export function auraRadiusBonusFor(upgradeIds: ReadonlyArray<string>): number {
+  const effects = upgradeIds.flatMap((id) => {
+    const realtime = UPGRADE_CATALOG[id]?.realtime;
+    return realtime ? [realtime] : [];
+  });
+  return combineEffects(effects).auraRadiusBonus;
+}
 
 /**
  * The signature aura for each faction, tuned to its playstyle.

@@ -48,6 +48,8 @@ export interface CombatModifiers {
   readonly cloakDurationBonus: number;
   /** True when the ship projects its faction's support aura. */
   readonly projectsAura: boolean;
+  /** Fractional increase to the radius of the aura this ship projects. */
+  readonly auraRadiusBonus: number;
 }
 
 /** The partial sheet a single upgrade declares. */
@@ -72,6 +74,7 @@ export const NEUTRAL_MODIFIERS: CombatModifiers = {
   stressOnHit: 0,
   cloakDurationBonus: 0,
   projectsAura: false,
+  auraRadiusBonus: 0,
 };
 
 /** Stacked damage reduction never makes a ship take less than half damage. */
@@ -86,6 +89,9 @@ export const MIN_STRESS_RATE_MULTIPLIER = 0.5;
 /** Stress relief never eases a maneuver by more than two tiers (red → green). */
 export const MAX_STRESS_RELIEF_TIERS = 2;
 
+/** Stacked command upgrades never widen an aura by more than 50%. */
+export const MAX_AURA_RADIUS_BONUS = 0.5;
+
 /** Additive fields: stacking two upgrades sums them. */
 const ADDITIVE_KEYS = [
   "laserDamageBonus",
@@ -97,6 +103,7 @@ const ADDITIVE_KEYS = [
   "homingTurnBonus",
   "stressOnHit",
   "cloakDurationBonus",
+  "auraRadiusBonus",
 ] as const satisfies ReadonlyArray<keyof CombatModifiers>;
 
 /** Multiplicative fields: stacking two upgrades multiplies them. */
@@ -153,6 +160,7 @@ function clampModifiers(sheet: MutableModifiers): CombatModifiers {
       MAX_STRESS_RELIEF_TIERS,
       sheet.stressReliefTiers,
     ),
+    auraRadiusBonus: Math.min(MAX_AURA_RADIUS_BONUS, sheet.auraRadiusBonus),
     boostCooldownMultiplier: Math.max(
       MIN_COOLDOWN_MULTIPLIER,
       sheet.boostCooldownMultiplier,

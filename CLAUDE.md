@@ -507,6 +507,8 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 ### Data (src/data/)
 - **ShipDefinitions.ts** - All ship stats and configurations
 - **ModeBalancing.ts** - Per-mode stat adjustments
+- **upgrades/** - Upgrade catalog by category; every card has a real-time effect (spec: docs/specs/upgrades-and-slots.md)
+- **ShipSlots.ts** - Slot bar per ship (single source); **ShipLoadouts.ts** - quick-build loadouts, validated by **loadoutRules.ts**
 
 
 ### Core Types (src/core/)

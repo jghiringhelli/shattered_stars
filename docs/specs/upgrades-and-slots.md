@@ -23,9 +23,11 @@ Every card MUST change real-time combat (tested in `UpgradeCatalog.test.ts`):
 `CombatModifiers` knobs: laser damage (flat, calm-only, vs unshielded), damage
 taken, shield regen, maneuver stress rate and relief tiers, boost / barrel
 roll / K-turn recharge, ordnance reload / charges / homing, turret rate of
-fire, stress inflicted per laser hit, cloak duration, aura projection.
+fire, stress inflicted per laser hit, cloak duration, aura projection and aura
+radius (command cards widen the aura on ships that already project one).
 Stacking: additive bonuses sum, multipliers multiply, then clamp
-(damage taken ≥ 0.5×, recharge ≥ 0.4×, stress rate ≥ 0.5×, relief ≤ 2 tiers).
+(damage taken ≥ 0.5×, recharge ≥ 0.4×, stress rate ≥ 0.5×, relief ≤ 2 tiers,
+aura radius ≤ +50%).
 
 ### Invariants (tested)
 - No two cards in the same slot play identically (no reskins at different prices).
@@ -37,18 +39,24 @@ Stacking: additive bonuses sum, multipliers multiply, then clamp
 ### Price rule (fixed point values)
 +1 hull = 3 · +1 shield = 4 · +1 laser damage = 5 (cannon) or 3 with a drawback ·
 40% faster recharge on one maneuver = 3 · 15% less damage taken ≈ 5–6 ·
-aura projection = 4–5 · trade-off configuration = 2 · illicit = clean equivalent − 1.
+aura projection = 4 · trade-off configuration = 2 · illicit = clean equivalent − 1.
 
-## 2. Slots (`SHIP_SLOTS` in `src/data/ShipLoadouts.ts`)
+## 2. Slots (`SHIP_SLOTS` in `src/data/ShipSlots.ts`)
 
 `SHIP_SLOTS` is the single source of truth for a ship's slot bar. Same-chassis
 variants across factions are differentiated by their slot bar (plus hull,
 shields, speed, dial and size), not by action lists, which have no real-time
 effect.
 
-Every loadout MUST fit its ship: each upgrade consumes one matching slot
-(duplicates need duplicate slots) and satisfies the card's faction, size and
-role requirements (tested in `ShipLoadouts.test.ts`).
+Structural rule: large and huge hulls carry two modification slots.
+
+Every loadout MUST (tested in `ShipLoadouts.test.ts`, rules in
+`src/data/loadoutRules.ts`):
+- fit its ship: each upgrade consumes one matching slot (duplicates need
+  duplicate slots) and satisfies the card's faction, size and role requirements;
+- carry no dead card: no ordnance booster without ordnance, no turret booster
+  without a turret;
+- differ from every other loadout of the same ship, and have a globally unique id.
 
 ## 3. Loadout price
 

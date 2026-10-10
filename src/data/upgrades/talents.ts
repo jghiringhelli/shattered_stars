@@ -92,10 +92,11 @@ export const TALENT_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
     id: "coordinated_assault",
     name: "Coordinated Assault",
     slotType: "talent",
-    description: "Projects the faction support aura to nearby allies.",
-    pointCost: 5,
-    creditCost: 250,
-    realtime: { projectsAura: true },
+    description:
+      "Projects the faction support aura to nearby allies (or widens it 25% on ships that already project one).",
+    pointCost: 4,
+    creditCost: 200,
+    realtime: { projectsAura: true, auraRadiusBonus: 0.25 },
   },
   squadron_leader: {
     id: "squadron_leader",

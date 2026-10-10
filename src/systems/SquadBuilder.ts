@@ -20,12 +20,12 @@ import {
   type UpgradeSlotType,
   type UpgradeDefinition,
   UPGRADE_DEFINITIONS,
-  getDefaultUpgradeSlots,
   canEquipUpgrade,
   calculateUpgradesCost,
 } from "./UpgradeSystem";
 import { PILOT_ABILITIES, type PilotAbility } from "./PilotAbilities";
 import { SHIP_DEFINITIONS } from "../data/ShipDefinitions";
+import { getShipSlots } from "../data/ShipSlots";
 
 // ============================================
 // Squad Building Constants
@@ -3037,6 +3037,26 @@ export function removeUnitFromSquad(squad: Squad, unitId: string): Squad {
 }
 
 /**
+ * A unit's slot bar: the ship's own slots (src/data/ShipSlots.ts) plus any
+ * the pilot card adds, minus any it removes.
+ *
+ * @param shipId - The unit's ship definition id.
+ * @param pilot - The unit's pilot card.
+ * @returns The slots the unit can fill.
+ */
+function unitSlotBar(shipId: string, pilot: PilotCard): UpgradeSlotType[] {
+  const slots = [
+    ...(getShipSlots(shipId)?.slots ?? []),
+    ...(pilot.extraSlots ?? []),
+  ];
+  for (const removed of pilot.removedSlots ?? []) {
+    const index = slots.indexOf(removed);
+    if (index !== -1) slots.splice(index, 1);
+  }
+  return slots;
+}
+
+/**
  * Equip an upgrade to a unit
  */
 export function equipUpgradeToUnit(
@@ -3064,17 +3084,7 @@ export function equipUpgradeToUnit(
   }
 
   // Get available slots for this unit
-  const baseSlots = getDefaultUpgradeSlots(ship.baseStats.size, ship.role);
-  const extraSlots = pilot.extraSlots ?? [];
-  const removedSlots = pilot.removedSlots ?? [];
-
-  let availableSlots = [...baseSlots, ...extraSlots];
-  for (const removed of removedSlots) {
-    const idx = availableSlots.indexOf(removed);
-    if (idx !== -1) {
-      availableSlots.splice(idx, 1);
-    }
-  }
+  const availableSlots = unitSlotBar(ship.id, pilot);
 
   // Remove slots used by existing upgrades
   for (const equippedId of unit.equippedUpgrades) {
@@ -3310,17 +3320,7 @@ export function getAvailableUpgradesForUnit(
   if (!pilot || !ship) return [];
 
   // Calculate available slots
-  const baseSlots = getDefaultUpgradeSlots(ship.baseStats.size, ship.role);
-  const extraSlots = pilot.extraSlots ?? [];
-  const removedSlots = pilot.removedSlots ?? [];
-
-  let availableSlots = [...baseSlots, ...extraSlots];
-  for (const removed of removedSlots) {
-    const idx = availableSlots.indexOf(removed);
-    if (idx !== -1) {
-      availableSlots.splice(idx, 1);
-    }
-  }
+  const availableSlots = unitSlotBar(ship.id, pilot);
 
   // Remove slots used by existing upgrades
   for (const equippedId of unit.equippedUpgrades) {
@@ -3391,17 +3391,7 @@ export function getUnitDetails(
     .filter((u): u is UpgradeDefinition => u !== undefined);
 
   // Calculate slots
-  const baseSlots = getDefaultUpgradeSlots(ship.baseStats.size, ship.role);
-  const extraSlots = pilot.extraSlots ?? [];
-  const removedSlots = pilot.removedSlots ?? [];
-
-  let allSlots = [...baseSlots, ...extraSlots];
-  for (const removed of removedSlots) {
-    const idx = allSlots.indexOf(removed);
-    if (idx !== -1) {
-      allSlots.splice(idx, 1);
-    }
-  }
+  const allSlots = unitSlotBar(ship.id, pilot);
 
   const usedSlots = upgrades.map((u) => u.slotType);
   const availableSlots = [...allSlots];
