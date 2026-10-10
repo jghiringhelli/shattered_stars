@@ -5,7 +5,13 @@ import {
   applyControlModifiers,
   applyOrdnanceModifiers,
   applyTurretModifiers,
+  resolveLoadoutModifiers,
 } from "../../../src/arcade/ArcadeUpgradeEffects";
+import { PILOT_CARDS } from "../../../src/systems/SquadBuilder";
+import { PILOT_ABILITY_REALTIME } from "../../../src/data/pilotAbilityEffects";
+import { combineEffects } from "../../../src/core/CombatModifiers";
+import { resolveUpgradeModifiers as upgradesOnly } from "../../../src/arcade/ArcadeUpgradeEffects";
+import { UPGRADE_DEFINITIONS } from "../../../src/systems/UpgradeSystem";
 import { buildOrdnanceSlots } from "../../../src/arcade/ArcadeOrdnance";
 import { buildTurretSlot } from "../../../src/arcade/ArcadeTurret";
 import { createControlState } from "../../../src/core/ArcadeControls";
@@ -138,5 +144,61 @@ describe("applyTurretModifiers", () => {
       resolveUpgradeModifiers(["veteran_gunner"]),
     );
     expect(upgraded!.cooldownMax).toBeCloseTo(turret!.cooldownMax * 0.7);
+  });
+});
+
+describe("resolveLoadoutModifiers — upgrades plus the pilot's ability", () => {
+  const allLoadouts = Object.values(SHIP_LOADOUTS).flat();
+
+  it("equals the upgrades and the pilot's ability folded together", () => {
+    const loadout = allLoadouts.find(
+      (l) =>
+        PILOT_CARDS[l.pilotId]?.abilityId !== undefined &&
+        l.upgrades.length > 0,
+    )!;
+    const abilityId = PILOT_CARDS[loadout.pilotId]!.abilityId!;
+    const effects = loadout.upgrades
+      .map((id) => UPGRADE_DEFINITIONS[id]?.realtime)
+      .filter((effect) => effect !== undefined);
+    expect(resolveLoadoutModifiers(loadout.shipId, loadout.id)).toEqual(
+      combineEffects([...effects, PILOT_ABILITY_REALTIME[abilityId]!]),
+    );
+  });
+
+  it("a pilot ability changes the sheet versus upgrades alone", () => {
+    const loadout = allLoadouts.find(
+      (l) => PILOT_CARDS[l.pilotId]?.abilityId !== undefined,
+    )!;
+    expect(resolveLoadoutModifiers(loadout.shipId, loadout.id)).not.toEqual(
+      upgradesOnly(loadout.upgrades),
+    );
+  });
+
+  it("a bare ship (no loadout) is neutral", () => {
+    expect(resolveLoadoutModifiers("terran_viper", undefined)).toEqual(
+      NEUTRAL_MODIFIERS,
+    );
+  });
+
+  it("a rookie loadout carries only its upgrades", () => {
+    const rookie = allLoadouts.find(
+      (l) =>
+        PILOT_CARDS[l.pilotId]?.abilityId === undefined &&
+        l.upgrades.length > 0,
+    )!;
+    expect(resolveLoadoutModifiers(rookie.shipId, rookie.id)).toEqual(
+      upgradesOnly(rookie.upgrades),
+    );
+  });
+});
+
+describe("applyControlModifiers — speed bonus", () => {
+  it("raises the top speed by the bonus", () => {
+    const base = createControlState(SHIP, 18, "fighter", { min: 1, max: 4 });
+    const control = applyControlModifiers(base, {
+      ...NEUTRAL_MODIFIERS,
+      maxSpeedBonus: 1,
+    });
+    expect(control.maxSpeed).toBe(5);
   });
 });

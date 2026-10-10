@@ -1,6 +1,8 @@
 /**
- * Combat modifiers — the real-time effect an upgrade (or a stack of upgrades)
- * has on a ship during arcade combat.
+ * Combat modifiers — the real-time effect an upgrade or pilot ability (or a
+ * stack of them) has on a ship during arcade combat. Conditional knobs
+ * (range 1, rear arc, bullseye, wingman, stressed, damaged, kill frenzy)
+ * are judged per hit by src/arcade/ShotConditions.ts.
  *
  * Pure data + combination rules, no framework imports. Each upgrade in the
  * catalog declares a partial {@link RealtimeEffect}; a ship's loadout folds
@@ -50,6 +52,30 @@ export interface CombatModifiers {
   readonly projectsAura: boolean;
   /** Fractional increase to the radius of the aura this ship projects. */
   readonly auraRadiusBonus: number;
+
+  // --- Conditional knobs (pilot abilities), read per hit -------------------
+  /** Laser damage added when the target is at range 1. */
+  readonly closeRangeLaserBonus: number;
+  /** Laser damage added when firing from inside the target's rear arc. */
+  readonly rearArcLaserBonus: number;
+  /** Laser damage added when the target sits in the bullseye arc. */
+  readonly bullseyeLaserBonus: number;
+  /** Laser damage added while a friendly ship flies nearby. */
+  readonly wingmanLaserBonus: number;
+  /** Multiplier on incoming damage while a friendly ship flies nearby. */
+  readonly wingmanDamageTakenMultiplier: number;
+  /** Laser damage added while the pilot is stressed. */
+  readonly stressedLaserBonus: number;
+  /** Laser damage added once the hull has taken damage. */
+  readonly damagedLaserBonus: number;
+  /** Laser damage added for a short frenzy after each kill. */
+  readonly killFrenzyLaserBonus: number;
+  /** Shield points restored on each kill. */
+  readonly shieldsPerKill: number;
+  /** Extra notches on the ship's top speed. */
+  readonly maxSpeedBonus: number;
+  /** Damage dealt to every enemy nearby when this ship is destroyed. */
+  readonly deathBlastDamage: number;
 }
 
 /** The partial sheet a single upgrade declares. */
@@ -75,6 +101,17 @@ export const NEUTRAL_MODIFIERS: CombatModifiers = {
   cloakDurationBonus: 0,
   projectsAura: false,
   auraRadiusBonus: 0,
+  closeRangeLaserBonus: 0,
+  rearArcLaserBonus: 0,
+  bullseyeLaserBonus: 0,
+  wingmanLaserBonus: 0,
+  wingmanDamageTakenMultiplier: 1,
+  stressedLaserBonus: 0,
+  damagedLaserBonus: 0,
+  killFrenzyLaserBonus: 0,
+  shieldsPerKill: 0,
+  maxSpeedBonus: 0,
+  deathBlastDamage: 0,
 };
 
 /** Stacked damage reduction never makes a ship take less than half damage. */
@@ -92,6 +129,9 @@ export const MAX_STRESS_RELIEF_TIERS = 2;
 /** Stacked command upgrades never widen an aura by more than 50%. */
 export const MAX_AURA_RADIUS_BONUS = 0.5;
 
+/** A ship's top speed never rises more than one notch above its dial. */
+export const MAX_SPEED_BONUS = 1;
+
 /** Additive fields: stacking two upgrades sums them. */
 const ADDITIVE_KEYS = [
   "laserDamageBonus",
@@ -104,6 +144,16 @@ const ADDITIVE_KEYS = [
   "stressOnHit",
   "cloakDurationBonus",
   "auraRadiusBonus",
+  "closeRangeLaserBonus",
+  "rearArcLaserBonus",
+  "bullseyeLaserBonus",
+  "wingmanLaserBonus",
+  "stressedLaserBonus",
+  "damagedLaserBonus",
+  "killFrenzyLaserBonus",
+  "shieldsPerKill",
+  "maxSpeedBonus",
+  "deathBlastDamage",
 ] as const satisfies ReadonlyArray<keyof CombatModifiers>;
 
 /** Multiplicative fields: stacking two upgrades multiplies them. */
@@ -115,6 +165,7 @@ const MULTIPLICATIVE_KEYS = [
   "kturnCooldownMultiplier",
   "ordnanceCooldownMultiplier",
   "turretCooldownMultiplier",
+  "wingmanDamageTakenMultiplier",
 ] as const satisfies ReadonlyArray<keyof CombatModifiers>;
 
 type MutableModifiers = {
@@ -161,6 +212,11 @@ function clampModifiers(sheet: MutableModifiers): CombatModifiers {
       sheet.stressReliefTiers,
     ),
     auraRadiusBonus: Math.min(MAX_AURA_RADIUS_BONUS, sheet.auraRadiusBonus),
+    maxSpeedBonus: Math.min(MAX_SPEED_BONUS, sheet.maxSpeedBonus),
+    wingmanDamageTakenMultiplier: Math.max(
+      MIN_DAMAGE_TAKEN_MULTIPLIER,
+      sheet.wingmanDamageTakenMultiplier,
+    ),
     boostCooldownMultiplier: Math.max(
       MIN_COOLDOWN_MULTIPLIER,
       sheet.boostCooldownMultiplier,

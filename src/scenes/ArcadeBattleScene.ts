@@ -70,7 +70,7 @@ import {
 } from "../arcade/ArcadeTurret";
 import {
   loadoutUpgradeIds,
-  resolveUpgradeModifiers,
+  resolveLoadoutModifiers,
   applyControlModifiers,
   applyOrdnanceModifiers,
   applyTurretModifiers,
@@ -107,6 +107,13 @@ import {
   difficultyColor,
 } from "../arcade/ArcadeStress";
 import { resolveAiSteeringManeuver } from "../arcade/SteeringIntent";
+import {
+  deathBlastTargets,
+  hasWingman,
+  laserHitBonus,
+  rewardKill,
+} from "../arcade/PilotAbilityCombat";
+import { incomingDamageMultiplier } from "../arcade/ShotConditions";
 import {
   BATTLEFIELD_SIZE,
   CYCLE_DURATION_MS,
@@ -269,6 +276,8 @@ interface ArcadeShip extends ShipState {
   modifiers: CombatModifiers;
   /** True when a named (unique) pilot flies this ship — projects a hero aura. */
   isUniquePilot: boolean;
+  /** Scene time (ms) until which a kill-frenzy pilot ability is active. */
+  frenzyUntilMs: number;
 }
 
 interface ShipSprite extends Phaser.GameObjects.Container {
@@ -1175,6 +1184,100 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   /**
+   * Extra laser damage the attacker's pilot ability earns on this hit.
+   *
+   * @param proj - The bolt that hit.
+   * @param attacker - Who fired it (undefined once destroyed).
+   * @param target - The ship hit.
+   * @returns Extra damage (0 for ordnance, or when no condition holds).
+   */
+  private abilityHitBonus(
+    proj: Projectile,
+    attacker: ArcadeShip | undefined,
+    target: ArcadeShip,
+  ): number {
+    if (!proj.isLaser || !attacker || attacker.hull <= 0) return 0;
+    return laserHitBonus({
+      attacker,
+      target,
+      attackerHasWingman: this.fliesWithWingman(attacker),
+      nowMs: this.time.now,
+    });
+  }
+
+  /**
+   * @param ship - The ship asking.
+   * @returns Whether another ship of its side flies within wingman range.
+   */
+  private fliesWithWingman(ship: ArcadeShip): boolean {
+    return hasWingman(
+      ship,
+      this.frameCache?.aliveByFaction.get(ship.faction) ?? [],
+    );
+  }
+
+  /**
+   * Pilot-ability effects of a kill: the killer's reward (shields, frenzy)
+   * and the victim's death blast on nearby enemies.
+   *
+   * @param attacker - Who made the kill (undefined once destroyed).
+   * @param victim - The ship just destroyed.
+   */
+  private resolveAbilityKill(
+    attacker: ArcadeShip | undefined,
+    victim: ArcadeShip,
+  ): void {
+    if (attacker && attacker.hull > 0) {
+      Object.assign(attacker, rewardKill(attacker, this.time.now));
+    }
+    const enemies = this.frameCache?.aliveEnemiesOf(victim.faction) ?? [];
+    for (const target of deathBlastTargets(victim, enemies)) {
+      const ship = this.ships.get(target.id);
+      if (ship) this.applyBlastDamage(ship, victim.modifiers.deathBlastDamage);
+    }
+  }
+
+  /**
+   * Blast damage: shields first, then hull (capital hulls through their
+   * subsystems). A ship destroyed by the blast counts as a kill for the
+   * victim's side.
+   *
+   * @param target - Ship caught in the blast.
+   * @param damage - Blast damage.
+   */
+  private applyBlastDamage(target: ArcadeShip, damage: number): void {
+    if (target.hull <= 0) return;
+    const absorbed = Math.min(target.shields, damage);
+    target.shields -= absorbed;
+    const toHull = damage - absorbed;
+    if (target.capitalSystems) {
+      target.capitalSystems = applyCapitalSystemDamage(
+        target.capitalSystems,
+        toHull,
+      ).systems;
+      target.hull = sumSystemsHull(target.capitalSystems);
+    } else {
+      target.hull = Math.max(0, target.hull - toHull);
+    }
+    this.damageThisFrame = true;
+    if (this.damageNumbersEnabled) {
+      this.showFloatingText(target.x, target.y - 20, `-${damage}`, "#ff8800");
+    }
+    if (target.hull > 0) return;
+    if (target.faction === this.playerFaction) {
+      this.enemySideScore = creditKill(
+        this.enemySideScore,
+        target.definitionId,
+      );
+    } else {
+      this.playerSideScore = creditKill(
+        this.playerSideScore,
+        target.definitionId,
+      );
+    }
+  }
+
+  /**
    * Performs a boost or barrel roll through the shared motion path, carrying
    * the maneuver in progress along with the displacement.
    *
@@ -1490,20 +1593,23 @@ export class ArcadeBattleScene extends Phaser.Scene {
     // Spawn projectile from ship nose
     const rad = (ship.angle - 90) * (Math.PI / 180);
     const spawnDist = 20;
-    const proj = withOnHit(
-      createProjectile(
-        ship.x + Math.cos(rad) * spawnDist,
-        ship.y + Math.sin(rad) * spawnDist,
-        ship.angle,
-        ship.id,
-        ship.faction,
-        damage,
+    const proj = {
+      ...withOnHit(
+        createProjectile(
+          ship.x + Math.cos(rad) * spawnDist,
+          ship.y + Math.sin(rad) * spawnDist,
+          ship.angle,
+          ship.id,
+          ship.faction,
+          damage,
+        ),
+        {
+          stressOnHit: ship.modifiers.stressOnHit,
+          bonusDamageVsUnshielded: ship.modifiers.bonusDamageVsUnshielded,
+        },
       ),
-      {
-        stressOnHit: ship.modifiers.stressOnHit,
-        bonusDamageVsUnshielded: ship.modifiers.bonusDamageVsUnshielded,
-      },
-    );
+      isLaser: true,
+    };
 
     this.projectiles.push(proj);
 
@@ -1607,7 +1713,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
           const ship = this.ships.get(view.id)!;
 
           const wasAlive = ship.hull > 0;
-          const hitDamage = projectileRawDamage(proj, ship.shields);
+          const attacker = this.ships.get(proj.ownerId);
+          const hitDamage =
+            projectileRawDamage(proj, ship.shields) +
+            this.abilityHitBonus(proj, attacker, ship);
           const rawDamage = ship.isCloaked
             ? Math.max(1, Math.floor(hitDamage / 2))
             : hitDamage;
@@ -1617,9 +1726,12 @@ export class ArcadeBattleScene extends Phaser.Scene {
           const mitigation = Math.max(
             MIN_DAMAGE_TAKEN_MULTIPLIER,
             (this.activeAuras.get(ship.id)?.damageTakenMultiplier ?? 1) *
-              ship.modifiers.damageTakenMultiplier,
+              incomingDamageMultiplier(
+                ship.modifiers,
+                this.fliesWithWingman(ship),
+              ),
           );
-          const attackerOrders = this.ships.get(proj.ownerId)?.commanderOrders;
+          const attackerOrders = attacker?.commanderOrders;
           const concentrateMultiplier = attackerOrders
             ? concentrateFireMultiplier(
                 attackerOrders.concentrateFire,
@@ -1676,6 +1788,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
           }
 
           if (ship.hull <= 0 && wasAlive) {
+            this.resolveAbilityKill(attacker, ship);
             if (ship.faction === this.playerFaction) {
               this.enemySideScore = creditKill(
                 this.enemySideScore,
@@ -1815,7 +1928,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   /**
    * Equips a loadout on a freshly created ship: stat bonuses, the real-time
-   * upgrade modifier sheet, upgraded maneuver recharge times, and the
+   * modifier sheet (upgrades + the pilot's ability), upgraded maneuver recharge times, and the
    * ordnance/turret weapons with their reload modifiers baked in.
    *
    * @param ship - The ship to equip (mutated in place, before first update).
@@ -1824,7 +1937,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private equipLoadout(ship: ArcadeShip, loadoutId: string | undefined): void {
     applyLoadoutEffects(ship, loadoutId);
     const upgradeIds = loadoutUpgradeIds(ship.definitionId, loadoutId);
-    const modifiers = resolveUpgradeModifiers(upgradeIds);
+    const modifiers = resolveLoadoutModifiers(ship.definitionId, loadoutId);
     ship.upgradeIds = upgradeIds;
     ship.modifiers = modifiers;
     ship.isUniquePilot = uniquePilotOf(loadoutId ?? null) !== null;
@@ -1961,6 +2074,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       upgradeIds: [],
       modifiers: NEUTRAL_MODIFIERS,
       isUniquePilot: false,
+      frenzyUntilMs: 0,
     };
 
     return ship;

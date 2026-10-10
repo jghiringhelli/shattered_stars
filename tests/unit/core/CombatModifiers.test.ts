@@ -7,6 +7,7 @@ import {
   MIN_COOLDOWN_MULTIPLIER,
   MIN_STRESS_RATE_MULTIPLIER,
   MAX_STRESS_RELIEF_TIERS,
+  MAX_SPEED_BONUS,
 } from "../../../src/core/CombatModifiers";
 
 describe("combineEffects", () => {
@@ -88,5 +89,32 @@ describe("laserDamageWithModifiers", () => {
     const sheet = combineEffects([{ calmLaserDamageBonus: 1 }]);
     expect(laserDamageWithModifiers(2, sheet, false)).toBe(3);
     expect(laserDamageWithModifiers(2, sheet, true)).toBe(2);
+  });
+});
+
+describe("combineEffects — pilot-ability knobs", () => {
+  it("sums conditional laser bonuses and per-kill shields", () => {
+    const sheet = combineEffects([
+      { rearArcLaserBonus: 1, shieldsPerKill: 1 },
+      { rearArcLaserBonus: 1, deathBlastDamage: 2 },
+    ]);
+    expect(sheet.rearArcLaserBonus).toBe(2);
+    expect(sheet.shieldsPerKill).toBe(1);
+    expect(sheet.deathBlastDamage).toBe(2);
+  });
+
+  it("multiplies wingman protection and clamps it at the damage floor", () => {
+    const sheet = combineEffects([
+      { wingmanDamageTakenMultiplier: 0.6 },
+      { wingmanDamageTakenMultiplier: 0.6 },
+    ]);
+    expect(sheet.wingmanDamageTakenMultiplier).toBe(
+      MIN_DAMAGE_TAKEN_MULTIPLIER,
+    );
+  });
+
+  it("caps the speed bonus", () => {
+    const sheet = combineEffects([{ maxSpeedBonus: 1 }, { maxSpeedBonus: 1 }]);
+    expect(sheet.maxSpeedBonus).toBe(MAX_SPEED_BONUS);
   });
 });

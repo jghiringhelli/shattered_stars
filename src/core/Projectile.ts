@@ -31,6 +31,8 @@ export interface Projectile {
   stressOnHit?: number;
   /** Extra damage dealt when the target's shields are already down. */
   bonusDamageVsUnshielded?: number;
+  /** A primary-laser bolt: pilot-ability hit bonuses apply to it. */
+  isLaser?: boolean;
 }
 
 /** Secondary on-hit riders a weapon can attach to its projectiles. */

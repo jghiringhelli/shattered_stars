@@ -3,13 +3,16 @@
  *
  * A pilot is a surcharge on top of the bare hull, never the hull's price
  * again: +1 point per initiative level above 1, plus the point value of the
- * pilot's single signature ability. A generic initiative-1 cadet costs 0, so
+ * pilot's single signature ability — derived from what the ability does in
+ * real time (pilotAbilityEffects + abilityPricing), never authored. A generic initiative-1 cadet costs 0, so
  * the bare ship price is the price of flying it with a rookie.
  *
  * Pure: reads the ability catalogue, owns no state.
  */
 
 import { PILOT_ABILITIES } from "../systems/PilotAbilities";
+import { abilityPointValue } from "./abilityPricing";
+import { PILOT_ABILITY_REALTIME } from "./pilotAbilityEffects";
 
 /** Points charged per initiative level above the rookie baseline. */
 export const POINTS_PER_INITIATIVE = 1;
@@ -27,6 +30,16 @@ export class UnknownAbilityError extends Error {
   }
 }
 
+/** Thrown when a pilot card's ability has no real-time effect to price. */
+export class AbilityWithoutEffectError extends Error {
+  constructor(public readonly abilityId: string) {
+    super(
+      `Pilot ability "${abilityId}" has no real-time effect in PILOT_ABILITY_REALTIME, so the pilot cannot be priced.`,
+    );
+    this.name = "AbilityWithoutEffectError";
+  }
+}
+
 /**
  * Surcharge a pilot adds to the bare ship.
  *
@@ -34,6 +47,7 @@ export class UnknownAbilityError extends Error {
  * @param abilityId - The pilot's signature ability, if any.
  * @returns Points added on top of the ship's base cost.
  * @throws UnknownAbilityError if the ability has no definition.
+ * @throws AbilityWithoutEffectError if the ability has no real-time effect.
  */
 export function derivePilotSurcharge(
   initiative: number,
@@ -42,7 +56,8 @@ export function derivePilotSurcharge(
   const initiativeCost =
     Math.max(0, initiative - ROOKIE_INITIATIVE) * POINTS_PER_INITIATIVE;
   if (!abilityId) return initiativeCost;
-  const ability = PILOT_ABILITIES[abilityId];
-  if (!ability) throw new UnknownAbilityError(abilityId);
-  return initiativeCost + ability.pointCost;
+  if (!PILOT_ABILITIES[abilityId]) throw new UnknownAbilityError(abilityId);
+  const effect = PILOT_ABILITY_REALTIME[abilityId];
+  if (!effect) throw new AbilityWithoutEffectError(abilityId);
+  return initiativeCost + abilityPointValue(effect);
 }

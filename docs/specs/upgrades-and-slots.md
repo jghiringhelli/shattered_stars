@@ -66,8 +66,10 @@ Every loadout is a quick build: ship + one pilot + upgrades.
 (`src/data/loadoutPricing.ts`).
 
 Pilot surcharge (`src/data/pilotPricing.ts`, derived, never authored):
-`(initiative − 1) × 1 + ability.pointCost`. A generic initiative-1 rookie
-costs 0, so the bare-ship price is the price of flying it with a rookie.
+`(initiative − 1) × 1 + abilityPointValue(ability's real-time effect)`
+(`src/data/abilityPricing.ts`, same price rule as the catalog; conditional
+bonuses are worth less than unconditional ones). A generic initiative-1
+rookie costs 0, so the bare-ship price is the price of flying it with a rookie.
 
 - Each pilot card has at most one signature ability. Campaign pilots
   (`CampaignPilot`) are the exception: they level up and collect abilities.
@@ -78,3 +80,24 @@ costs 0, so the bare-ship price is the price of flying it with a rookie.
   generation and quick-build presets). A unique pilot projects a hero aura.
 - Quick-build presets list loadout ids only; their total is the sum of the
   loadout prices.
+
+## 4. Pilot abilities in real time (`src/data/pilotAbilityEffects.ts`)
+
+Every ability on a pilot card MUST have a real-time effect (tested in
+`pilotAbilityEffects.test.ts`; no two abilities play identically). A
+loadout's modifier sheet is its upgrades plus its pilot's ability
+(`resolveLoadoutModifiers`).
+
+| Card text | Real-time reading |
+|---|---|
+| Dice / reroll bonus | laser damage or damage-taken knob |
+| "At range 1", "from behind", "bullseye", "while a friendly is near", "while stressed", "while damaged" | conditional knob, judged when the bolt hits (`src/arcade/ShotConditions.ts`) |
+| "After you destroy a ship" | shields per kill, or a 4 s laser frenzy |
+| "When destroyed" | death blast on enemies at range 1 |
+| "Free boost / barrel roll" | faster recharge of that action |
+| Acts on friendlies | projects the faction aura |
+| Force "Action:" | automatic on a recharge (shield regen, stress per hit) |
+
+Conditional knobs: range 1 (`RANGE_1`), rear arc (±45° behind the
+target), bullseye (±10° off the nose), wingman (a friendly within
+`RANGE_2`). Hooks live in `src/arcade/PilotAbilityCombat.ts`.

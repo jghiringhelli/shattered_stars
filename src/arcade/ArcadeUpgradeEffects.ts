@@ -15,6 +15,8 @@ import {
   type RealtimeEffect,
 } from "../core/CombatModifiers";
 import { getShipLoadouts } from "../data/ShipLoadouts";
+import { PILOT_ABILITY_REALTIME } from "../data/pilotAbilityEffects";
+import { PILOT_CARDS } from "../systems/SquadBuilder";
 import { UPGRADE_DEFINITIONS } from "../systems/UpgradeSystem";
 import type { ArcadeOrdnanceSlot } from "./ArcadeOrdnance";
 import type { ArcadeTurretSlot } from "./ArcadeTurret";
@@ -36,6 +38,17 @@ export function loadoutUpgradeIds(
 }
 
 /**
+ * Real-time effects of a list of upgrades (unknown ids are ignored).
+ * @param upgradeIds - Equipped upgrade ids.
+ * @returns Each upgrade's effect.
+ */
+function upgradeEffects(upgradeIds: ReadonlyArray<string>): RealtimeEffect[] {
+  return upgradeIds
+    .map((id) => UPGRADE_DEFINITIONS[id]?.realtime)
+    .filter((effect): effect is RealtimeEffect => effect !== undefined);
+}
+
+/**
  * Fold the real-time effects of a list of upgrades into one modifier sheet.
  *
  * @param upgradeIds - Equipped upgrade ids (unknown ids are ignored).
@@ -44,16 +57,34 @@ export function loadoutUpgradeIds(
 export function resolveUpgradeModifiers(
   upgradeIds: ReadonlyArray<string>,
 ): CombatModifiers {
-  const effects: RealtimeEffect[] = [];
-  for (const id of upgradeIds) {
-    const realtime = UPGRADE_DEFINITIONS[id]?.realtime;
-    if (realtime) effects.push(realtime);
-  }
-  return combineEffects(effects);
+  return combineEffects(upgradeEffects(upgradeIds));
 }
 
 /**
- * Scale the maneuver recharge times on a ship's control state.
+ * The full modifier sheet a quick build flies with: its upgrades plus its
+ * pilot's signature ability (pilotAbilityEffects).
+ *
+ * @param definitionId - Ship definition id.
+ * @param loadoutId - Chosen loadout id, or null/undefined for the bare ship.
+ * @returns The combined modifier sheet.
+ */
+export function resolveLoadoutModifiers(
+  definitionId: string,
+  loadoutId: string | null | undefined,
+): CombatModifiers {
+  const loadout = loadoutId
+    ? getShipLoadouts(definitionId).find((l) => l.id === loadoutId)
+    : undefined;
+  if (!loadout) return combineEffects([]);
+  const abilityId = PILOT_CARDS[loadout.pilotId]?.abilityId;
+  const ability = abilityId ? PILOT_ABILITY_REALTIME[abilityId] : undefined;
+  const effects = upgradeEffects(loadout.upgrades);
+  return combineEffects(ability ? [...effects, ability] : effects);
+}
+
+/**
+ * Scale the maneuver recharge times and raise the top speed on a ship's
+ * control state.
  *
  * @param control - Control state as created for the bare hull.
  * @param modifiers - The ship's modifier sheet.
@@ -65,6 +96,7 @@ export function applyControlModifiers(
 ): ShipControlState {
   return {
     ...control,
+    maxSpeed: control.maxSpeed + modifiers.maxSpeedBonus,
     boostCooldownMax:
       control.boostCooldownMax * modifiers.boostCooldownMultiplier,
     barrelRollCooldownMax:

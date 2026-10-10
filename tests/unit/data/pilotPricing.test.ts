@@ -4,6 +4,8 @@ import {
   UnknownAbilityError,
   POINTS_PER_INITIATIVE,
 } from "../../../src/data/pilotPricing";
+import { PILOT_ABILITY_REALTIME } from "../../../src/data/pilotAbilityEffects";
+import { abilityPointValue } from "../../../src/data/abilityPricing";
 import { PILOT_ABILITIES } from "../../../src/systems/PilotAbilities";
 import { PILOT_CARDS } from "../../../src/systems/SquadBuilder";
 
@@ -16,10 +18,10 @@ describe("derivePilotSurcharge", () => {
     expect(derivePilotSurcharge(4, undefined)).toBe(3 * POINTS_PER_INITIATIVE);
   });
 
-  it("adds the signature ability's own point value", () => {
-    const ability = PILOT_ABILITIES["iron_discipline"]!;
+  it("adds the value of the signature ability's real-time effect", () => {
+    const effect = PILOT_ABILITY_REALTIME["iron_discipline"]!;
     expect(derivePilotSurcharge(5, "iron_discipline")).toBe(
-      4 + ability.pointCost,
+      4 + abilityPointValue(effect),
     );
   });
 
