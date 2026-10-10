@@ -117,7 +117,14 @@ interface Flight {
 }
 
 /**
- * Steering keys: tap = drift, hold = one bank then drift, hard turn = 90°.
+ * Maneuvers the pilot committed to with a deliberate press (hard turn,
+ * K-turn, Segnor, Tallon). They stay queued until their cycle flies them;
+ * steering keys never overwrite them.
+ */
+const COMMITTED_MANEUVER = /^(turn_|kturn|segnor_|tallon_)/;
+
+/**
+ * Steering keys: tap = drift, hold = one bank then drift; Q/E = 90° turn.
  * @param flown - Ship being flown.
  * @param flight - Motion/stress being built this frame (mutated).
  * @param steering - Steering memory after this frame's input.
@@ -129,22 +136,23 @@ function applySteering(
   steering: HeldSteering,
   hard: "left" | "right" | null,
 ): void {
-  const queued = steeringQueue(steering, false);
-  if (queued) {
-    flight.motion = command(flown, flight.motion, queued as FlightCommand);
-  } else if (
-    flight.motion.control.nextManeuver === null ||
-    /^(drift|bank|turn)_/.test(flight.motion.control.nextManeuver)
-  ) {
-    // No steering: straight next cycle, but keep special maneuvers queued.
-    const control = { ...flight.motion.control, nextManeuver: null };
-    flight.motion = { ...flight.motion, control };
-  }
   if (hard) {
     const side = hard === "left" ? "turn_left" : "turn_right";
-    flight.motion = queueHardTurn(flown, flight.motion, flight.stress, side);
-    flight.events.push("hard_turn");
+    const turned = queueHardTurn(flown, flight.motion, flight.stress, side);
+    if (turned.control.nextManeuver === side) {
+      flight.motion = turned;
+      flight.events.push("hard_turn");
+      return;
+    }
   }
+  if (COMMITTED_MANEUVER.test(flight.motion.control.nextManeuver ?? "")) {
+    return;
+  }
+  const queued = steeringQueue(steering, false);
+  const control = queued
+    ? command(flown, flight.motion, queued as FlightCommand).control
+    : { ...flight.motion.control, nextManeuver: null };
+  flight.motion = { ...flight.motion, control };
 }
 
 /**
@@ -257,12 +265,12 @@ export function applyPilotFlightInput(
         ? "right"
         : "none";
   const steering = updateHeldSteering(pilot.steering, side, input.deltaMs);
-  const hard =
-    edge("SHARP_TURN_LEFT") || (side === "left" && has("hard_turn_left"))
-      ? "left"
-      : edge("SHARP_TURN_RIGHT") || (side === "right" && has("hard_turn_right"))
-        ? "right"
-        : null;
+  // Hold is a bank (SteeringIntent); only a deliberate Q/E press is a 90° turn.
+  const hard = edge("SHARP_TURN_LEFT")
+    ? "left"
+    : edge("SHARP_TURN_RIGHT")
+      ? "right"
+      : null;
   applySteering(flown, flight, steering, hard);
 
   applySpecials(flown, flight, [

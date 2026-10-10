@@ -266,3 +266,93 @@ describe("PilotFlightControls — dashes", () => {
     expect(second.events).toEqual([]);
   });
 });
+
+describe("PilotFlightControls — committed maneuvers stay queued until the cycle flies them", () => {
+  /** Applies `count` frames of the same input, threading pilot and flight. */
+  function frames(
+    first: ReturnType<typeof applyPilotFlightInput>,
+    input: Partial<FlightInput>,
+    count: number,
+  ) {
+    let r = first;
+    for (let i = 0; i < count; i++) {
+      r = applyPilotFlightInput(
+        r.pilot,
+        flown({ motion: r.motion, stress: r.stress }),
+        frame({ nowMs: 2000 + i * FRAME_MS, ...input }),
+        BATTLEFIELD_SIZE,
+      );
+    }
+    return r;
+  }
+
+  it("a hard turn (Q) stays queued on the following frames with no steering", () => {
+    const q = applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      flown(),
+      frame({ edges: edges("SHARP_TURN_LEFT") }),
+      BATTLEFIELD_SIZE,
+    );
+    expect(frames(q, {}, 5).motion.control.nextManeuver).toBe("turn_left");
+  });
+
+  it("steering held after a hard turn does not overwrite it", () => {
+    const q = applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      flown(),
+      frame({ edges: edges("SHARP_TURN_RIGHT") }),
+      BATTLEFIELD_SIZE,
+    );
+    expect(frames(q, { left: true }, 20).motion.control.nextManeuver).toBe(
+      "turn_right",
+    );
+  });
+
+  it("steering after a K-turn does not overwrite it", () => {
+    const k = applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      flown(),
+      frame({ edges: edges("KTURN") }),
+      BATTLEFIELD_SIZE,
+    );
+    expect(frames(k, { left: true }, 20).motion.control.nextManeuver).toBe(
+      "kturn",
+    );
+  });
+
+  it("holding a side never queues a 90° turn — hold is a bank", () => {
+    let r = applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      flown(),
+      frame(),
+      BATTLEFIELD_SIZE,
+    );
+    const queued = new Set<string | null>();
+    for (let t = 0; t < 600; t += FRAME_MS) {
+      r = frames(r, { left: true }, 1);
+      queued.add(r.motion.control.nextManeuver);
+    }
+    expect(queued.has("turn_left")).toBe(false);
+    expect(queued.has("bank_left")).toBe(true);
+  });
+
+  it("once the turn commits, steering queues again", () => {
+    const q = applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      flown(),
+      frame({ edges: edges("SHARP_TURN_LEFT") }),
+      BATTLEFIELD_SIZE,
+    );
+    const committed = {
+      ...q,
+      pilot: onPilotCycleCommitted(q.pilot, "turn_left"),
+      motion: {
+        ...q.motion,
+        control: { ...q.motion.control, nextManeuver: null },
+      },
+    };
+    expect(
+      frames(committed, { right: true }, 2).motion.control.nextManeuver,
+    ).toBe("drift_right");
+  });
+});

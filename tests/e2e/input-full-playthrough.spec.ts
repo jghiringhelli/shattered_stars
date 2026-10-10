@@ -79,6 +79,29 @@ async function getPlayerShip(page: Page): Promise<any> {
   });
 }
 
+/**
+ * Waits until the player ship has queued or is flying `maneuver`. A queued
+ * maneuver can commit on the very next cycle boundary, so checking only
+ * nextManeuver after the key is released races the 500 ms cycle.
+ */
+async function waitForPlayerManeuver(
+  page: Page,
+  maneuver: string,
+  timeout = 2_000,
+): Promise<void> {
+  await page.waitForFunction(
+    (m: string) => {
+      const scene = (window as any).game.scene.getScene(
+        "ArcadeBattleScene",
+      ) as any;
+      const control = scene.ships.get(scene.playerShipId).control;
+      return control.nextManeuver === m || control.currentManeuver === m;
+    },
+    maneuver,
+    { timeout },
+  );
+}
+
 /** Monkeypatch a scene method to count invocations; returns a reader for the live count. */
 async function countSceneCalls(
   page: Page,
@@ -142,8 +165,8 @@ test.describe("ArcadeBattleScene — keyboard playthrough", () => {
         }),
       ),
     );
-    await page.waitForTimeout(150);
-    expect((await getPlayerShip(page)).control.nextManeuver).toBe("bank_left");
+    // Hold is a 45° bank once the key has been down BANK_HOLD_MS.
+    await waitForPlayerManeuver(page, "bank_left", 1_000);
     await page.evaluate(() =>
       window.dispatchEvent(
         new KeyboardEvent("keyup", {
@@ -157,13 +180,11 @@ test.describe("ArcadeBattleScene — keyboard playthrough", () => {
     );
   });
 
-  test("Q reaches the discrete sharp-turn handler", async ({ page }) => {
+  test("Q queues a 90° hard turn left", async ({ page }) => {
     suppressWebGLNoise(page);
     await openArcade(page, CONFED_KESTREL);
-    const getTurnCalls = await countSceneCalls(page, "executeDiscreteTurn");
     await holdGameKey(page, "Q", 100);
-    await page.waitForTimeout(50);
-    expect(await getTurnCalls()).toBe(1);
+    await waitForPlayerManeuver(page, "turn_left");
   });
 
   test("Shift+Q queues a segnor loop (distinct from plain Q)", async ({
@@ -172,40 +193,14 @@ test.describe("ArcadeBattleScene — keyboard playthrough", () => {
     suppressWebGLNoise(page);
     await openArcade(page, CONFED_KESTREL);
     await holdGameKey(page, "Q", 100, { shift: true });
-    // Poll instead of a blind wait: under parallel-worker CPU contention a
-    // fixed-time wait can land after the ~500ms maneuver cycle already
-    // rolled over and consumed nextManeuver back to null (pure test
-    // flakiness, not an input-wiring bug — confirmed via isolated runs).
-    await page.waitForFunction(
-      () => {
-        const scene = (window as any).game.scene.getScene(
-          "ArcadeBattleScene",
-        ) as any;
-        return scene.ships.get(scene.playerShipId).control.nextManeuver != null;
-      },
-      { timeout: 2_000 },
-    );
-    expect((await getPlayerShip(page)).control.nextManeuver).toBe(
-      "segnor_left",
-    );
+    await waitForPlayerManeuver(page, "segnor_left");
   });
 
   test("T queues a tallon roll", async ({ page }) => {
     suppressWebGLNoise(page);
     await openArcade(page, CONFED_KESTREL);
     await holdGameKey(page, "T", 100);
-    await page.waitForFunction(
-      () => {
-        const scene = (window as any).game.scene.getScene(
-          "ArcadeBattleScene",
-        ) as any;
-        return scene.ships.get(scene.playerShipId).control.nextManeuver != null;
-      },
-      { timeout: 2_000 },
-    );
-    expect((await getPlayerShip(page)).control.nextManeuver).toBe(
-      "tallon_left",
-    );
+    await waitForPlayerManeuver(page, "tallon_left");
   });
 
   test("C toggles cloak on", async ({ page }) => {
@@ -398,8 +393,7 @@ test.describe("ArcadeBattleScene — gamepad controls", () => {
     );
 
     await setFakeGamepadAxes(page, [-1, 0, 0, 0]);
-    await page.waitForTimeout(200);
-    expect((await getPlayerShip(page)).control.nextManeuver).toBe("bank_left");
+    await waitForPlayerManeuver(page, "bank_left", 1_000);
     await setFakeGamepadAxes(page, [0, 0, 0, 0]);
   });
 
