@@ -19,9 +19,10 @@ import {
   useBarrelRoll,
   useBoost,
   type ShipControlState,
+  type ShipPose,
 } from "../../core/ArcadeControls";
 import { SPEED_SCALE_FACTOR } from "../../config";
-import type { ManeuverDirection, ShipState } from "../../core/types";
+import type { ManeuverDirection } from "../../core/types";
 import { BOOST_DISTANCE_PX } from "../ArcadeInputGestures";
 
 /** Where a ship is and what it is flying. */
@@ -74,7 +75,7 @@ export function wrapCoordinate(value: number, worldSize: number): number {
  */
 export function stepMotion(
   state: MotionState,
-  ship: ShipState,
+  ship: ShipPose,
   deltaMs: number,
   worldSize: number,
 ): MotionStep {
@@ -223,7 +224,7 @@ export interface ActionResult {
  */
 export function performAction(
   state: MotionState,
-  ship: ShipState,
+  ship: ShipPose,
   action: MotionAction,
   worldSize: number,
 ): ActionResult {

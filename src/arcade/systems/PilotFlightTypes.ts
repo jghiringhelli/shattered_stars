@@ -3,7 +3,8 @@
  * (input frame, per-pilot memory, flown ship, result and effect events).
  */
 
-import type { ManeuverDefinition, ShipState } from "../../core/types";
+import type { ShipPose } from "../../core/ArcadeControls";
+import type { ManeuverDefinition } from "../../core/types";
 import type { GestureState } from "../ArcadeInputGestures";
 import type { StressState } from "../ArcadeStress";
 import type { HeldSteering } from "../SteeringIntent";
@@ -43,7 +44,7 @@ export interface PilotControlState {
 
 /** The ship being flown, as far as flight controls care. */
 export interface FlownShip {
-  readonly ship: ShipState;
+  readonly ship: ShipPose;
   readonly motion: MotionState;
   readonly stress: StressState;
   readonly dial: readonly ManeuverDefinition[];

@@ -12,6 +12,9 @@
  */
 
 import type { ShipState, ManeuverDefinition, ManeuverDirection } from "./types";
+
+/** The only part of a ship the flight engine reads: where it is and where it points. */
+export type ShipPose = Pick<ShipState, "x" | "y" | "angle">;
 import {
   resolveManeuver,
   generateManeuverPath,
@@ -71,7 +74,7 @@ export interface ShipControlState {
  *                          defaults to the generic 1-5 fighter range when omitted.
  */
 export function createControlState(
-  ship: ShipState,
+  ship: ShipPose,
   baseSize: number = 0,
   movementProfile: MovementProfile = "fighter",
   speedBounds: { min: number; max: number } = { min: 1, max: 5 },
@@ -136,7 +139,7 @@ export type FlightCommand =
  * @param direction - Maneuver direction to execute.
  */
 export function startManeuver(
-  ship: ShipState,
+  ship: ShipPose,
   control: ShipControlState,
   direction: ManeuverDirection,
 ): ShipControlState {
@@ -258,7 +261,7 @@ export function updateManeuver(
  * @param control - Control state (reads nextManeuver; clears it after commit).
  */
 export function advanceCycle(
-  ship: ShipState,
+  ship: ShipPose,
   control: ShipControlState,
 ): ShipControlState {
   const direction: ManeuverDirection = control.nextManeuver ?? "straight";
@@ -368,7 +371,7 @@ export function getManeuverDifficulty(
  * @param command - The command to process.
  */
 export function processCommand(
-  ship: ShipState,
+  ship: ShipPose,
   control: ShipControlState,
   command: FlightCommand,
 ): ShipControlState {
@@ -459,7 +462,7 @@ export function getSizeMovementBase(size: string): number {
  * turn-based compatibility but should not be used in ArcadeBattleScene.
  */
 export function getContinuousMovement(
-  ship: ShipState,
+  ship: ShipPose,
   control: ShipControlState,
   deltaMs: number,
   speedBase = 120,
