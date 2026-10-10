@@ -281,3 +281,70 @@ export function findBestTurnSpeed(
       : best,
   ).speed;
 }
+
+// ============================================
+// Cycle stress accrual (shared by every cycle-engine scene)
+// ============================================
+
+/** Maneuver difficulty ordered from most to least stressful. */
+const DIFFICULTY_ORDER: readonly ManeuverDifficulty[] = [
+  "red",
+  "white",
+  "green",
+];
+
+/**
+ * Ease a maneuver difficulty toward "green" by a number of tiers.
+ * @param difficulty - The base maneuver difficulty.
+ * @param tiers - How many tiers to relax (0 = unchanged).
+ * @returns The eased difficulty.
+ */
+export function easeDifficulty(
+  difficulty: ManeuverDifficulty,
+  tiers: number,
+): ManeuverDifficulty {
+  if (tiers <= 0) return difficulty;
+  const index = DIFFICULTY_ORDER.indexOf(difficulty);
+  const eased = Math.min(
+    DIFFICULTY_ORDER.length - 1,
+    index + Math.floor(tiers),
+  );
+  return DIFFICULTY_ORDER[eased]!;
+}
+
+/** Inputs for {@link accrueCycleStress}. */
+export interface CycleStressInput {
+  readonly stress: StressState;
+  /** The maneuver that just completed. */
+  readonly direction: string;
+  readonly speed: number;
+  readonly dial: readonly ManeuverDefinition[];
+  /** Difficulty tiers eased by auras and upgrades. */
+  readonly reliefTiers: number;
+  /** Upgrade multiplier on stress gained (1 = unchanged). */
+  readonly rateMultiplier: number;
+  readonly cycleMs: number;
+}
+
+/**
+ * Stress after a maneuver cycle completes: classify the maneuver against the
+ * ship's dial, ease it by relief tiers, accrue for the cycle, scale the gain.
+ *
+ * @param input - The completed cycle and the ship's stress modifiers.
+ * @returns The new stress state.
+ */
+export function accrueCycleStress(input: CycleStressInput): StressState {
+  const dir = input.direction;
+  const dialDir = dir.includes("turn")
+    ? "turn_left"
+    : dir.includes("bank")
+      ? "bank_left"
+      : "straight";
+  const difficulty = lookupDialDifficulty(dialDir, input.speed, input.dial);
+  const eased = easeDifficulty(difficulty, input.reliefTiers);
+  return scaleStressGain(
+    input.stress,
+    updateStress(input.stress, eased, input.cycleMs),
+    input.rateMultiplier,
+  );
+}

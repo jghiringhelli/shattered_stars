@@ -37,10 +37,8 @@ import {
 import { consumeOrdnanceCharge } from "../arcade/ArcadeOrdnance";
 import {
   type GestureState,
-  type GestureAction,
   INITIAL_GESTURE_STATE,
   BOOST_DISTANCE_PX,
-  updateGestures,
 } from "../arcade/ArcadeInputGestures";
 import {
   spawnBoostTrail,
@@ -79,7 +77,6 @@ import {
 import {
   NEUTRAL_MODIFIERS,
   MIN_DAMAGE_TAKEN_MULTIPLIER,
-  MAX_STRESS_RELIEF_TIERS,
   laserDamageWithModifiers,
   type CombatModifiers,
 } from "../core/CombatModifiers";
@@ -96,29 +93,19 @@ import {
   selectAITarget,
   computeAIDecision,
 } from "../systems/ArcadeAI";
-import type { ManeuverDefinition, ManeuverDifficulty } from "../core/types";
+import type { ManeuverDefinition } from "../core/types";
 import {
   type StressState,
   INITIAL_STRESS,
   lookupDialDifficulty,
-  updateStress,
   applyKturnStress,
   applyBoostStress,
   applyInstantStress,
-  scaleStressGain,
+  accrueCycleStress,
   stressLevelColor,
   difficultyColor,
-  findBestTurnSpeed,
 } from "../arcade/ArcadeStress";
-import {
-  updateHeldSteering,
-  onSteeringCycleCommitted,
-  steeringQueue,
-  IDLE_STEERING,
-  type HeldSteering,
-  resolveAiSteeringManeuver,
-  type SteerInput,
-} from "../arcade/SteeringIntent";
+import { resolveAiSteeringManeuver } from "../arcade/SteeringIntent";
 import {
   BATTLEFIELD_SIZE,
   CYCLE_DURATION_MS,
@@ -207,6 +194,28 @@ import {
   performAction,
   type MotionAction,
 } from "../arcade/systems/ShipMotion";
+import {
+  applyPilotFlightInput,
+  onPilotCycleCommitted,
+  INITIAL_PILOT_CONTROL,
+  type FlightEdge,
+  type FlightEvent,
+  type PilotControlState,
+} from "../arcade/systems/PilotFlightControls";
+
+/** Edge intents that drive flight controls, consumed once per frame. */
+const FLIGHT_EDGES: readonly FlightEdge[] = [
+  "THRUST_UP",
+  "THRUST_DOWN",
+  "KTURN",
+  "SHARP_TURN_LEFT",
+  "SHARP_TURN_RIGHT",
+  "SEGNOR_LEFT",
+  "SEGNOR_RIGHT",
+  "TALLON_LEFT",
+  "TALLON_RIGHT",
+  "BOOST",
+];
 import { uniquePilotOf } from "../data/squadRules";
 import { audioManager } from "../audio/AudioManager";
 import { syncListenerToCamera } from "../audio/CameraListener";
@@ -278,32 +287,6 @@ interface ShipSprite extends Phaser.GameObjects.Container {
 
 /** Seconds a cloak lasts before upgrades (Phantom Strike extends it). */
 const BASE_CLOAK_SECONDS = 8;
-
-/** Maneuver difficulty ordered from most to least stressful. */
-const DIFFICULTY_ORDER: readonly ManeuverDifficulty[] = [
-  "red",
-  "white",
-  "green",
-];
-
-/**
- * Ease a maneuver difficulty toward "green" by a number of tiers.
- * @param difficulty - The base maneuver difficulty.
- * @param tiers - How many tiers to relax (0 = unchanged).
- * @returns The eased difficulty.
- */
-function easeDifficulty(
-  difficulty: ManeuverDifficulty,
-  tiers: number,
-): ManeuverDifficulty {
-  if (tiers <= 0) return difficulty;
-  const index = DIFFICULTY_ORDER.indexOf(difficulty);
-  const eased = Math.min(
-    DIFFICULTY_ORDER.length - 1,
-    index + Math.floor(tiers),
-  );
-  return DIFFICULTY_ORDER[eased]!;
-}
 
 export class ArcadeBattleScene extends Phaser.Scene {
   private ships: Map<string, ArcadeShip> = new Map();
@@ -412,8 +395,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   /** Gesture state machine — tracks tap timing, hold duration, chord detection. */
   private gestureState: GestureState = INITIAL_GESTURE_STATE;
-  /** Player steering-key history: tap vs hold, banks flown this hold. */
-  private steering: HeldSteering = IDLE_STEERING;
+  /** Player flight-input memory (gestures, tap vs hold steering). */
+  private pilotControl: PilotControlState = INITIAL_PILOT_CONTROL;
   /**
    * When true, pressing left+right simultaneously triggers a barrel roll.
    * Read from settings on create(); exposed as a toggle for accessibility / mobile.
@@ -908,76 +891,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const ship = this.ships.get(this.playerShipId!);
     if (!ship || ship.hull <= 0) return;
 
-    // Speed control (discrete steps, X-Wing style)
-    if (this.consumeEdge("THRUST_UP"))
-      ship.control = processCommand(ship, ship.control, "thrust_increase");
-    if (this.consumeEdge("THRUST_DOWN"))
-      ship.control = processCommand(ship, ship.control, "thrust_decrease");
-
-    // Gesture state machine: hold-duration banking vs turning, double-taps, chords
-    const { state: newGestureState, actions } = updateGestures({
-      state: this.gestureState,
-      leftDown: InputManager.isHeld("STEER_LEFT"),
-      rightDown: InputManager.isHeld("STEER_RIGHT"),
-      upDown: InputManager.isHeld("THRUST_UP"),
-      downDown: InputManager.isHeld("THRUST_DOWN"),
-      nowMs: this.time.now,
-      deltaMs,
-      allowChordBarrelRoll: this.allowChordBarrelRoll,
-    });
-    this.gestureState = newGestureState;
-
-    // Queue next maneuver from the steering keys (tap = drift, hold = one bank
-    // then drift, hard-turn gesture = 90° turn)
-    this.queueDirectionFromKeys(ship, deltaMs);
-
-    // K-turn: explicit Z key/gamepad/touch or double-tap DOWN
-    const kturnRequested =
-      this.consumeEdge("KTURN") || actions.includes("kturn_gesture");
-    if (kturnRequested && !ship.stress.isStressed) {
-      const def = getShipDefinition(ship.definitionId);
-      const size = SHIP_SIZES[def?.baseStats.size ?? "small"] ?? 18;
-      const color = FACTION_COLORS[ship.faction as FactionId] ?? 0xffffff;
-      spawnKturnAfterimage(this, ship.x, ship.y, ship.angle, size, color);
-      ship.control = processCommand(ship, ship.control, "kturn");
-      ship.stress = applyKturnStress(ship.stress);
-    }
-
-    // Discrete sharp turns: Q = left, E = right.
-    if (this.consumeEdge("SHARP_TURN_LEFT"))
-      this.executeDiscreteTurn(ship, "turn_left");
-    if (this.consumeEdge("SHARP_TURN_RIGHT"))
-      this.executeDiscreteTurn(ship, "turn_right");
-
-    // Segnor loop: Shift+Q = left, Shift+E = right
-    if (this.consumeEdge("SEGNOR_LEFT")) {
-      ship.control = processCommand(ship, ship.control, "segnor_left");
-      ship.stress = applyKturnStress(ship.stress);
-    }
-    if (this.consumeEdge("SEGNOR_RIGHT")) {
-      ship.control = processCommand(ship, ship.control, "segnor_right");
-      ship.stress = applyKturnStress(ship.stress);
-    }
-
-    // Tallon roll: T = left, Shift+T = right
-    if (this.consumeEdge("TALLON_LEFT")) {
-      ship.control = processCommand(ship, ship.control, "tallon_left");
-      ship.stress = applyKturnStress(ship.stress);
-    }
-    if (this.consumeEdge("TALLON_RIGHT")) {
-      ship.control = processCommand(ship, ship.control, "tallon_right");
-      ship.stress = applyKturnStress(ship.stress);
-    }
-
-    // Special maneuvers and actions from gesture events. BOOST also arrives
-    // as a discrete intent (touch double-tap-up) alongside the keyboard-native
-    // hold-duration gesture, so merge both into one action list.
-    const boostFromIntent = this.consumeEdge("BOOST");
-    const gestureActions =
-      boostFromIntent && !actions.includes("boost")
-        ? [...actions, "boost" as GestureAction]
-        : actions;
-    this.processGestureActions(ship, gestureActions);
+    this.applyFlightInput(ship, deltaMs);
 
     // Crew role cycle: pilot -> gunner (large/huge with a turret) -> commander (capital only)
     if (this.consumeEdge("CREW_CYCLE")) {
@@ -1018,133 +932,82 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   /**
-   * Queues the steering maneuver for the next cycle from the steering keys:
-   * a tap queues one 30° drift, a hold commits one 45° bank and then drifts
-   * (so a held key never orbits), and the hard-turn gesture queues a 90° turn.
+   * Runs one frame of the player's flight controls through the shared
+   * PilotFlightControls (the same code every cycle-engine scene uses) and
+   * plays the effects for whatever happened.
    *
    * @param ship - The player ship.
-   * @param deltaMs - Frame length (ms), for hold timing.
+   * @param deltaMs - Frame length (ms).
    */
-  private queueDirectionFromKeys(ship: ArcadeShip, deltaMs: number): void {
-    const left = InputManager.isHeld("STEER_LEFT");
-    const right = InputManager.isHeld("STEER_RIGHT");
-    const { actions } = updateGestures({
-      state: this.gestureState,
-      leftDown: left,
-      rightDown: right,
-      upDown: false,
-      downDown: false,
-      nowMs: this.time.now,
-      deltaMs: 0,
-      allowChordBarrelRoll: false,
-    });
-
-    const input: SteerInput =
-      left && !right ? "left" : right && !left ? "right" : "none";
-    const hardTurn = actions.includes(
-      input === "left" ? "hard_turn_left" : "hard_turn_right",
+  private applyFlightInput(ship: ArcadeShip, deltaMs: number): void {
+    const edges = new Set<FlightEdge>(
+      FLIGHT_EDGES.filter((edge) => this.consumeEdge(edge)),
     );
-    this.steering = updateHeldSteering(this.steering, input, deltaMs);
-    const queued = steeringQueue(this.steering, hardTurn);
-
-    if (queued) {
-      ship.control = processCommand(
-        ship,
-        ship.control,
-        queued as FlightCommand,
-      );
-      return;
-    }
-
-    // No direction held — fall back to straight next cycle, but leave special
-    // maneuvers (K-turn, Tallon, Segnor, barrel roll) queued by gestures alone.
-    if (
-      ship.control.nextManeuver === null ||
-      ship.control.nextManeuver.startsWith("drift") ||
-      ship.control.nextManeuver.startsWith("bank") ||
-      ship.control.nextManeuver.startsWith("turn")
-    ) {
-      ship.control = { ...ship.control, nextManeuver: null };
-    }
+    const result = applyPilotFlightInput(
+      this.pilotControl,
+      { ship, motion: ship, stress: ship.stress, dial: ship.shipDial },
+      {
+        left: InputManager.isHeld("STEER_LEFT"),
+        right: InputManager.isHeld("STEER_RIGHT"),
+        up: InputManager.isHeld("THRUST_UP"),
+        down: InputManager.isHeld("THRUST_DOWN"),
+        edges,
+        nowMs: this.time.now,
+        deltaMs,
+        allowChordBarrelRoll: this.allowChordBarrelRoll,
+      },
+      BATTLEFIELD_SIZE,
+    );
+    const origin = { x: ship.x, y: ship.y, angle: ship.angle };
+    this.pilotControl = result.pilot;
+    ship.x = result.motion.x;
+    ship.y = result.motion.y;
+    ship.angle = result.motion.angle;
+    ship.control = result.motion.control;
+    ship.stress = result.stress;
+    for (const event of result.events)
+      this.playFlightEvent(ship, event, origin);
   }
 
   /**
-   * Handles boost dash and barrel roll actions produced by the gesture system.
-   * FX are spawned before position/state mutation so they appear at the origin.
+   * Visual feedback for a flight event, drawn at the pose it started from.
    *
-   * @param ship    - Player ship.
-   * @param actions - Actions fired by updateGestures() this frame.
+   * @param ship - The ship that acted.
+   * @param event - What happened.
+   * @param origin - Pose before the action (boost trails start here).
    */
-  private processGestureActions(
+  private playFlightEvent(
     ship: ArcadeShip,
-    actions: readonly GestureAction[],
+    event: FlightEvent,
+    origin: { x: number; y: number; angle: number },
   ): void {
     const def = getShipDefinition(ship.definitionId);
     const size = SHIP_SIZES[def?.baseStats.size ?? "small"] ?? 18;
     const color = FACTION_COLORS[ship.faction as FactionId] ?? 0xffffff;
-
-    for (const action of actions) {
-      if (action === "boost" && canBoost(ship.control)) {
-        // FX at departure point before the position jump
-        spawnBoostTrail(
-          this,
-          ship.x,
-          ship.y,
-          ship.angle,
-          size,
-          color,
-          BOOST_DISTANCE_PX,
-        );
-        this.performMotionAction(ship, "boost");
-        ship.stress = applyBoostStress(ship.stress);
-        if (this.cameraShakeEnabled) this.cameras.main.shake(80, 0.008);
-        // Brief zoom-out pulse for speed sensation
-        const targetZoom = this.cameras.main.zoom * 0.88;
-        this.tweens.add({
-          targets: this.cameras.main,
-          zoom: targetZoom,
-          duration: 120,
-          ease: "Power2.easeIn",
-          yoyo: true,
-          onComplete: () => {
-            /* zoom restores via updateCameraFollow */
-          },
-        });
-      } else if (
-        (action === "barrel_roll_left" || action === "barrel_roll_right") &&
-        this.performMotionAction(ship, action)
-      ) {
-        const sprite = this.shipSprites.get(ship.id);
-        if (sprite) playBarrelRollLean(this, sprite);
-      } else if (action === "hard_turn_left") {
-        this.executeDiscreteTurn(ship, "turn_left");
-      } else if (action === "hard_turn_right") {
-        this.executeDiscreteTurn(ship, "turn_right");
-      } else if (action === "tallon_roll_left") {
-        if (canKTurn(ship.control)) {
-          spawnKturnAfterimage(this, ship.x, ship.y, ship.angle, size, color);
-          ship.control = processCommand(ship, ship.control, "tallon_left");
-          ship.stress = applyKturnStress(ship.stress);
-        }
-      } else if (action === "tallon_roll_right") {
-        if (canKTurn(ship.control)) {
-          spawnKturnAfterimage(this, ship.x, ship.y, ship.angle, size, color);
-          ship.control = processCommand(ship, ship.control, "tallon_right");
-          ship.stress = applyKturnStress(ship.stress);
-        }
-      } else if (action === "segnor_loop_left") {
-        if (canKTurn(ship.control)) {
-          spawnKturnAfterimage(this, ship.x, ship.y, ship.angle, size, color);
-          ship.control = processCommand(ship, ship.control, "segnor_left");
-          ship.stress = applyKturnStress(ship.stress);
-        }
-      } else if (action === "segnor_loop_right") {
-        if (canKTurn(ship.control)) {
-          spawnKturnAfterimage(this, ship.x, ship.y, ship.angle, size, color);
-          ship.control = processCommand(ship, ship.control, "segnor_right");
-          ship.stress = applyKturnStress(ship.stress);
-        }
-      }
+    if (event === "kturn" || event === "segnor" || event === "tallon") {
+      spawnKturnAfterimage(this, origin.x, origin.y, origin.angle, size, color);
+    } else if (event === "barrel_roll") {
+      const sprite = this.shipSprites.get(ship.id);
+      if (sprite) playBarrelRollLean(this, sprite);
+    } else if (event === "boost") {
+      spawnBoostTrail(
+        this,
+        origin.x,
+        origin.y,
+        origin.angle,
+        size,
+        color,
+        BOOST_DISTANCE_PX,
+      );
+      if (this.cameraShakeEnabled) this.cameras.main.shake(80, 0.008);
+      // Brief zoom-out pulse for speed sensation; zoom restores via updateCameraFollow
+      this.tweens.add({
+        targets: this.cameras.main,
+        zoom: this.cameras.main.zoom * 0.88,
+        duration: 120,
+        ease: "Power2.easeIn",
+        yoyo: true,
+      });
     }
   }
 
@@ -1225,36 +1088,24 @@ export class ArcadeBattleScene extends Phaser.Scene {
         ship.control = state.control;
 
         if (completed && ship.id === this.playerShipId) {
-          this.steering = onSteeringCycleCommitted(
-            this.steering,
+          this.pilotControl = onPilotCycleCommitted(
+            this.pilotControl,
             state.control.currentManeuver ?? "straight",
           );
         }
 
         if (completed) {
-          // Classify the completed maneuver for stress
-          const dir = completed.direction;
-          const dialDir = dir.includes("turn")
-            ? "turn_left"
-            : dir.includes("bank")
-              ? "bank_left"
-              : "straight";
-          const difficulty = lookupDialDifficulty(
-            dialDir,
-            completed.speed,
-            ship.shipDial,
-          );
-          const relief = Math.min(
-            MAX_STRESS_RELIEF_TIERS,
-            (this.activeAuras.get(ship.id)?.stressReliefTiers ?? 0) +
+          ship.stress = accrueCycleStress({
+            stress: ship.stress,
+            direction: completed.direction,
+            speed: completed.speed,
+            dial: ship.shipDial,
+            reliefTiers:
+              (this.activeAuras.get(ship.id)?.stressReliefTiers ?? 0) +
               ship.modifiers.stressReliefTiers,
-          );
-          const eased = easeDifficulty(difficulty, relief);
-          ship.stress = scaleStressGain(
-            ship.stress,
-            updateStress(ship.stress, eased, CYCLE_DURATION_MS),
-            ship.modifiers.stressRateMultiplier,
-          );
+            rateMultiplier: ship.modifiers.stressRateMultiplier,
+            cycleMs: CYCLE_DURATION_MS,
+          });
         }
       }
 
@@ -3142,32 +2993,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
       );
     }
     return status;
-  }
-
-  /**
-   * Executes a discrete sharp turn (Q = left, E = right).
-   * Looks up the ship's dial to find the nearest valid speed for a turn;
-   * auto-adjusts speed if needed and skips red maneuvers when stressed.
-   *
-   * @param ship      - Player ship.
-   * @param direction - 'turn_left' or 'turn_right'.
-   */
-  private executeDiscreteTurn(
-    ship: ArcadeShip,
-    direction: "turn_left" | "turn_right",
-  ): void {
-    if (ship.control.currentManeuver !== null) return;
-    const best = findBestTurnSpeed(
-      ship.shipDial,
-      ship.control.speed,
-      ship.control.minSpeed,
-      ship.control.maxSpeed,
-      ship.stress.isStressed,
-    );
-    if (best === null) return;
-    if (best !== ship.control.speed)
-      ship.control = { ...ship.control, speed: best };
-    ship.control = processCommand(ship, ship.control, direction);
   }
 
   private updateFleeDetector(deltaMs: number): void {

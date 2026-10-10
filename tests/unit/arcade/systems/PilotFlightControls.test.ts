@@ -1,0 +1,268 @@
+/**
+ * PilotFlightControls — specification tests for the player's flight inputs
+ * shared by every cycle-engine battle scene.
+ */
+
+import { describe, it, expect } from "vitest";
+import {
+  applyPilotFlightInput,
+  onPilotCycleCommitted,
+  INITIAL_PILOT_CONTROL,
+  type FlightEdge,
+  type FlightInput,
+  type FlownShip,
+  type PilotControlState,
+} from "../../../../src/arcade/systems/PilotFlightControls";
+import { BANK_HOLD_MS } from "../../../../src/arcade/SteeringIntent";
+import { BOOST_DISTANCE_PX } from "../../../../src/arcade/ArcadeInputGestures";
+import {
+  INITIAL_STRESS,
+  type StressState,
+} from "../../../../src/arcade/ArcadeStress";
+import { createControlState } from "../../../../src/core/ArcadeControls";
+import { getShipDial } from "../../../../src/data/ShipDefinitions";
+import { BATTLEFIELD_SIZE } from "../../../../src/config";
+import type { ShipState } from "../../../../src/core/types";
+
+const FRAME_MS = 16;
+const SHIP = {
+  id: "player",
+  definitionId: "terran_viper",
+  faction: "terran_hegemony",
+  owner: "player",
+  x: 3000,
+  y: 3000,
+  angle: 0,
+  hull: 5,
+  maxHull: 5,
+  shields: 2,
+  maxShields: 2,
+  isStressed: false,
+  hasFocus: false,
+  hasEvade: false,
+  hasTargetLock: null,
+  isCloaked: false,
+} as ShipState;
+
+/** A Viper at rest in the middle of the field, speed 3, nothing queued. */
+function flown(overrides: Partial<FlownShip> = {}): FlownShip {
+  return {
+    ship: SHIP,
+    motion: {
+      x: SHIP.x,
+      y: SHIP.y,
+      angle: 0,
+      control: createControlState(SHIP, 18),
+    },
+    stress: INITIAL_STRESS,
+    dial: getShipDial("terran_viper"),
+    ...overrides,
+  };
+}
+
+/** One input frame; nothing held, no edges, unless overridden. */
+function frame(overrides: Partial<FlightInput> = {}): FlightInput {
+  return {
+    left: false,
+    right: false,
+    up: false,
+    down: false,
+    edges: new Set<FlightEdge>(),
+    nowMs: 1000,
+    deltaMs: FRAME_MS,
+    allowChordBarrelRoll: false,
+    ...overrides,
+  };
+}
+
+const edges = (...list: FlightEdge[]): ReadonlySet<FlightEdge> => new Set(list);
+
+/** Holds `side` for `ms`, frame by frame, returning the final pilot + result. */
+function hold(side: "left" | "right", ms: number, ship = flown()) {
+  let pilot: PilotControlState = INITIAL_PILOT_CONTROL;
+  let result = applyPilotFlightInput(pilot, ship, frame(), BATTLEFIELD_SIZE);
+  for (let t = 0; t < ms; t += FRAME_MS) {
+    result = applyPilotFlightInput(
+      pilot,
+      { ...ship, motion: result.motion },
+      frame({ [side]: true, nowMs: 1000 + t }),
+      BATTLEFIELD_SIZE,
+    );
+    pilot = result.pilot;
+  }
+  return result;
+}
+
+describe("PilotFlightControls — throttle", () => {
+  it("THRUST_UP raises speed one step", () => {
+    const r = applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      flown(),
+      frame({ edges: edges("THRUST_UP") }),
+      BATTLEFIELD_SIZE,
+    );
+    expect(r.motion.control.speed).toBe(4);
+  });
+
+  it("THRUST_DOWN lowers speed one step", () => {
+    const r = applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      flown(),
+      frame({ edges: edges("THRUST_DOWN") }),
+      BATTLEFIELD_SIZE,
+    );
+    expect(r.motion.control.speed).toBe(2);
+  });
+});
+
+describe("PilotFlightControls — steering", () => {
+  it("holding a side past BANK_HOLD_MS queues a 45° bank", () => {
+    const r = hold("left", BANK_HOLD_MS + FRAME_MS * 2);
+    expect(r.motion.control.nextManeuver).toBe("bank_left");
+  });
+
+  it("a short hold queues a drift, not a bank", () => {
+    const r = hold("right", FRAME_MS * 2);
+    expect(r.motion.control.nextManeuver).toBe("drift_right");
+  });
+
+  it("a tap released before the cycle still owes one drift", () => {
+    const tapped = hold("left", FRAME_MS * 2);
+    const released = applyPilotFlightInput(
+      tapped.pilot,
+      flown({ motion: tapped.motion }),
+      frame(),
+      BATTLEFIELD_SIZE,
+    );
+    expect(released.motion.control.nextManeuver).toBe("drift_left");
+  });
+
+  it("after a bank was flown, continuing to hold drifts instead of banking again", () => {
+    const banked = hold("left", BANK_HOLD_MS + FRAME_MS * 2);
+    const pilot = onPilotCycleCommitted(banked.pilot, "bank_left");
+    const r = applyPilotFlightInput(
+      pilot,
+      flown({ motion: banked.motion }),
+      frame({ left: true }),
+      BATTLEFIELD_SIZE,
+    );
+    expect(r.motion.control.nextManeuver).toBe("drift_left");
+  });
+
+  it("no steering clears a stale bank so the next cycle flies straight", () => {
+    const base = flown();
+    const motion = {
+      ...base.motion,
+      control: { ...base.motion.control, nextManeuver: "bank_left" as const },
+    };
+    const r = applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      flown({ motion }),
+      frame(),
+      BATTLEFIELD_SIZE,
+    );
+    expect(r.motion.control.nextManeuver).toBeNull();
+  });
+
+  it("no steering keeps a queued K-turn", () => {
+    const base = flown();
+    const motion = {
+      ...base.motion,
+      control: { ...base.motion.control, nextManeuver: "kturn" as const },
+    };
+    const r = applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      flown({ motion }),
+      frame(),
+      BATTLEFIELD_SIZE,
+    );
+    expect(r.motion.control.nextManeuver).toBe("kturn");
+  });
+
+  it("SHARP_TURN_LEFT queues a 90° turn and reports a hard turn", () => {
+    const r = applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      flown(),
+      frame({ edges: edges("SHARP_TURN_LEFT") }),
+      BATTLEFIELD_SIZE,
+    );
+    expect(r.motion.control.nextManeuver).toBe("turn_left");
+    expect(r.events).toContain("hard_turn");
+  });
+});
+
+describe("PilotFlightControls — specials", () => {
+  it("KTURN queues the K-turn, spikes stress and reports it", () => {
+    const r = applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      flown(),
+      frame({ edges: edges("KTURN") }),
+      BATTLEFIELD_SIZE,
+    );
+    expect(r.motion.control.nextManeuver).toBe("kturn");
+    expect(r.stress.level).toBeGreaterThan(0);
+    expect(r.events).toEqual(["kturn"]);
+  });
+
+  it("KTURN is refused while stressed", () => {
+    const stressed: StressState = { level: 0.9, isStressed: true };
+    const r = applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      flown({ stress: stressed }),
+      frame({ edges: edges("KTURN") }),
+      BATTLEFIELD_SIZE,
+    );
+    expect(r.motion.control.nextManeuver).toBeNull();
+    expect(r.events).toEqual([]);
+  });
+
+  it("a second special on cooldown adds no stress", () => {
+    const first = applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      flown(),
+      frame({ edges: edges("TALLON_LEFT") }),
+      BATTLEFIELD_SIZE,
+    );
+    const second = applyPilotFlightInput(
+      first.pilot,
+      flown({ motion: first.motion, stress: first.stress }),
+      frame({ edges: edges("SEGNOR_RIGHT") }),
+      BATTLEFIELD_SIZE,
+    );
+    expect(second.motion.control.nextManeuver).toBe("tallon_left");
+    expect(second.stress).toEqual(first.stress);
+    expect(second.events).toEqual([]);
+  });
+});
+
+describe("PilotFlightControls — dashes", () => {
+  it("BOOST dashes forward BOOST_DISTANCE_PX, adds stress and reports it", () => {
+    const r = applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      flown(),
+      frame({ edges: edges("BOOST") }),
+      BATTLEFIELD_SIZE,
+    );
+    expect(r.motion.x).toBeCloseTo(SHIP.x, 6);
+    expect(r.motion.y).toBeCloseTo(SHIP.y - BOOST_DISTANCE_PX, 6);
+    expect(r.stress.level).toBeGreaterThan(0);
+    expect(r.events).toEqual(["boost"]);
+  });
+
+  it("BOOST on cooldown does nothing", () => {
+    const first = applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      flown(),
+      frame({ edges: edges("BOOST") }),
+      BATTLEFIELD_SIZE,
+    );
+    const second = applyPilotFlightInput(
+      first.pilot,
+      flown({ motion: first.motion, stress: first.stress }),
+      frame({ edges: edges("BOOST") }),
+      BATTLEFIELD_SIZE,
+    );
+    expect(second.motion.y).toBe(first.motion.y);
+    expect(second.events).toEqual([]);
+  });
+});
