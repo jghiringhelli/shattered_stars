@@ -19,6 +19,12 @@ import {
 import { CYCLE_DURATION_MS } from "../config";
 import type { MovementProfile } from "../data/ShipDefinitions";
 
+/**
+ * Floating-point slack when deciding a cycle is complete (ms). 30 ticks of
+ * 1000/60 ms sum to 499.99999…, which must count as a full 500 ms cycle.
+ */
+const CYCLE_EPSILON_MS = 1e-6;
+
 // ============================================
 // Control State
 // ============================================
@@ -113,8 +119,6 @@ export type FlightCommand =
   | "tallon_right"
   | "segnor_left"
   | "segnor_right"
-  | "barrel_roll_left"
-  | "barrel_roll_right"
   | "fire"
   | "focus"
   | "evade";
@@ -189,23 +193,26 @@ export function updateManeuver(
   control: ShipControlState;
   position: { x: number; y: number; angle: number } | null;
   cycleComplete: boolean;
+  /** Time left over after the cycle completed, owed to the next cycle (ms). */
+  overflowMs: number;
 } {
   if (control.currentManeuver === null || control.maneuverPath.length === 0) {
-    return { control, position: null, cycleComplete: false };
+    return { control, position: null, cycleComplete: false, overflowMs: 0 };
   }
 
-  const newProgress = Math.min(
-    1,
-    control.maneuverProgress + deltaMs / CYCLE_DURATION_MS,
-  );
+  // Accumulate in milliseconds: summing dt/CYCLE fractions drifts below 1.0
+  // at 60 Hz and stretched every 500 ms cycle to 31 ticks (516.7 ms).
+  const elapsedMs = control.maneuverProgress * CYCLE_DURATION_MS + deltaMs;
+  const newProgress = Math.min(1, elapsedMs / CYCLE_DURATION_MS);
   const pathIndex = Math.floor(newProgress * (control.maneuverPath.length - 1));
   const pathPoint = control.maneuverPath[pathIndex] ?? control.maneuverTarget;
 
-  if (newProgress >= 1) {
+  if (elapsedMs >= CYCLE_DURATION_MS - CYCLE_EPSILON_MS) {
     return {
       control: { ...control, maneuverProgress: 1 },
       position: control.maneuverTarget,
       cycleComplete: true,
+      overflowMs: Math.max(0, elapsedMs - CYCLE_DURATION_MS),
     };
   }
 
@@ -213,6 +220,7 @@ export function updateManeuver(
     control: { ...control, maneuverProgress: newProgress },
     position: pathPoint ?? null,
     cycleComplete: false,
+    overflowMs: 0,
   };
 }
 
@@ -390,16 +398,6 @@ export function processCommand(
     case "segnor_right":
       if (canKTurn(control))
         return { ...useKTurn(control), nextManeuver: "segnor_right" };
-      return control;
-
-    case "barrel_roll_left":
-      if (canBarrelRoll(control))
-        return { ...useBarrelRoll(control), nextManeuver: "bank_left" };
-      return control;
-
-    case "barrel_roll_right":
-      if (canBarrelRoll(control))
-        return { ...useBarrelRoll(control), nextManeuver: "bank_right" };
       return control;
 
     case "fire":

@@ -16,15 +16,12 @@ import { showConfirmDialog } from "../ui/ConfirmDialog";
 import type { ShipState } from "../core/types";
 import {
   createControlState,
-  updateManeuver,
   updateCooldowns,
-  advanceCycle,
   processCommand,
   canFire,
   canKTurn,
   canBarrelRoll,
   canBoost,
-  useBoost,
   type ShipControlState,
   type FlightCommand,
 } from "../core/ArcadeControls";
@@ -201,6 +198,11 @@ import {
 import { Minimap, type MinimapShip } from "../ui/Minimap";
 import { renderBattleStarfield } from "../rendering/Starfield";
 import { applyLoadoutEffects } from "../systems/BattleHelpers";
+import {
+  stepMotion,
+  performAction,
+  type MotionAction,
+} from "../arcade/systems/ShipMotion";
 import { uniquePilotOf } from "../data/squadRules";
 import { audioManager } from "../audio/AudioManager";
 import { syncListenerToCamera } from "../audio/CameraListener";
@@ -1081,16 +1083,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
           color,
           BOOST_DISTANCE_PX,
         );
-        const rad = (ship.angle - 90) * (Math.PI / 180);
-        ship.x =
-          (((ship.x + Math.cos(rad) * BOOST_DISTANCE_PX) % BATTLEFIELD_SIZE) +
-            BATTLEFIELD_SIZE) %
-          BATTLEFIELD_SIZE;
-        ship.y =
-          (((ship.y + Math.sin(rad) * BOOST_DISTANCE_PX) % BATTLEFIELD_SIZE) +
-            BATTLEFIELD_SIZE) %
-          BATTLEFIELD_SIZE;
-        ship.control = useBoost(ship.control);
+        this.performMotionAction(ship, "boost");
         ship.stress = applyBoostStress(ship.stress);
         if (this.cameraShakeEnabled) this.cameras.main.shake(80, 0.008);
         // Brief zoom-out pulse for speed sensation
@@ -1105,15 +1098,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
             /* zoom restores via updateCameraFollow */
           },
         });
-      } else if (action === "barrel_roll_left" && canBarrelRoll(ship.control)) {
-        ship.control = processCommand(ship, ship.control, "barrel_roll_left");
-        const sprite = this.shipSprites.get(ship.id);
-        if (sprite) playBarrelRollLean(this, sprite);
       } else if (
-        action === "barrel_roll_right" &&
-        canBarrelRoll(ship.control)
+        (action === "barrel_roll_left" || action === "barrel_roll_right") &&
+        this.performMotionAction(ship, action)
       ) {
-        ship.control = processCommand(ship, ship.control, "barrel_roll_right");
         const sprite = this.shipSprites.get(ship.id);
         if (sprite) playBarrelRollLean(this, sprite);
       } else if (action === "hard_turn_left") {
@@ -1211,22 +1199,22 @@ export class ArcadeBattleScene extends Phaser.Scene {
         ship.capitalSystems != null && isEnginesOffline(ship.capitalSystems);
 
       if (!enginesOffline) {
-        // Update maneuver — discrete cycle, always executing
-        const { control, position, cycleComplete } = updateManeuver(
-          ship.control,
+        // Discrete maneuver cycle, always executing (shared with the flight
+        // telemetry battery, so tests fly exactly what the scene flies).
+        const { state, completed } = stepMotion(
+          ship,
+          ship,
           deltaMs,
+          BATTLEFIELD_SIZE,
         );
-        ship.control = control;
+        ship.x = state.x;
+        ship.y = state.y;
+        ship.angle = state.angle;
+        ship.control = state.control;
 
-        if (position) {
-          ship.x = position.x;
-          ship.y = position.y;
-          ship.angle = position.angle;
-        }
-
-        if (cycleComplete) {
-          // Classify completed maneuver for stress, then start next cycle
-          const dir = ship.control.currentManeuver ?? "straight";
+        if (completed) {
+          // Classify the completed maneuver for stress
+          const dir = completed.direction;
           const dialDir = dir.includes("turn")
             ? "turn_left"
             : dir.includes("bank")
@@ -1234,7 +1222,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
               : "straight";
           const difficulty = lookupDialDifficulty(
             dialDir,
-            ship.control.speed,
+            completed.speed,
             ship.shipDial,
           );
           const relief = Math.min(
@@ -1248,7 +1236,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
             updateStress(ship.stress, eased, CYCLE_DURATION_MS),
             ship.modifiers.stressRateMultiplier,
           );
-          ship.control = advanceCycle(ship, ship.control);
         }
       }
 
@@ -1330,6 +1317,28 @@ export class ArcadeBattleScene extends Phaser.Scene {
       ship.maxShields,
       ship.shields + (rate * deltaMs) / 1000,
     );
+  }
+
+  /**
+   * Performs a boost or barrel roll through the shared motion path, carrying
+   * the maneuver in progress along with the displacement.
+   *
+   * @param ship - The acting ship.
+   * @param action - The flight action.
+   * @returns True when the action happened (it was off cooldown).
+   */
+  private performMotionAction(ship: ArcadeShip, action: MotionAction): boolean {
+    const { state, performed } = performAction(
+      ship,
+      ship,
+      action,
+      BATTLEFIELD_SIZE,
+    );
+    ship.x = state.x;
+    ship.y = state.y;
+    ship.angle = state.angle;
+    ship.control = state.control;
+    return performed;
   }
 
   private tickCloak(ship: ArcadeShip, deltaMs: number): void {
@@ -1484,16 +1493,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
         color,
         BOOST_DISTANCE_PX,
       );
-      const rad = (ship.angle - 90) * (Math.PI / 180);
-      ship.x =
-        (((ship.x + Math.cos(rad) * BOOST_DISTANCE_PX) % BATTLEFIELD_SIZE) +
-          BATTLEFIELD_SIZE) %
-        BATTLEFIELD_SIZE;
-      ship.y =
-        (((ship.y + Math.sin(rad) * BOOST_DISTANCE_PX) % BATTLEFIELD_SIZE) +
-          BATTLEFIELD_SIZE) %
-        BATTLEFIELD_SIZE;
-      ship.control = useBoost(ship.control);
+      this.performMotionAction(ship, "boost");
       ship.stress = applyBoostStress(ship.stress);
     }
 
@@ -1501,11 +1501,12 @@ export class ArcadeBattleScene extends Phaser.Scene {
     if (decision.doBarrelRoll && canBarrelRoll(ship.control)) {
       const sprite = this.shipSprites.get(ship.id);
       if (sprite) playBarrelRollLean(this, sprite, 500);
-      const cmd =
+      this.performMotionAction(
+        ship,
         decision.barrelRollDir === "left"
           ? "barrel_roll_left"
-          : "barrel_roll_right";
-      ship.control = processCommand(ship, ship.control, cmd);
+          : "barrel_roll_right",
+      );
     }
 
     // Apply steering — convert desired turn delta into a queued maneuver direction.

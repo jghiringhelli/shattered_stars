@@ -41,8 +41,9 @@ export const XWING_FACING_CHANGE: Readonly<
   turn_left: -90,
   turn_right: 90,
   kturn: 180,
-  segnor_left: -135,
-  segnor_right: 135,
+  // Segnor's Loop = bank, then rotate 180°: −45° + 180° = +135° for a left loop.
+  segnor_left: 135,
+  segnor_right: -135,
   tallon_left: -180,
   tallon_right: 180,
 };

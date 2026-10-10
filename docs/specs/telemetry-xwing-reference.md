@@ -50,7 +50,7 @@ the 1-straight template is ~40 mm and each speed adds one 40 mm segment.)
 | bank     | 45°           |
 | turn (hard) | 90°        |
 | K-turn (Koiogran) | 180° |
-| Segnor's Loop | 135° reversed |
+| Segnor's Loop | bank, then rotate 180° → +135° for a left loop, −135° right |
 | Tallon Roll | 90° template, 180° facing |
 
 ### 1.4 Turn/bank chord geometry (true circular arc)
@@ -78,7 +78,8 @@ At S = 1 px/mm the reference base sizes are small 40 px, medium 60 px, large 80 
   `speed × 40 + baseSize` px for every speed 1–5. *(matches X-Wing straight template
   at S = 1 px/mm.)*
 - **MOV-2 (MUST)** — Facing change MUST be: straight 0°, bank ±45°, turn ±90°,
-  K-turn 180°, Segnor ±135°, Tallon ±180°.
+  K-turn 180°, Segnor left +135° / right −135° (bank then rotate 180°, nose
+  back toward the start), Tallon ±180°.
 - **MOV-3 (MUST)** — The 90° turn chord unit vector MUST equal `(±0.7071, −0.7071)`
   within ±0.001 (true circular quarter-arc).
 - **MOV-4 (MUST)** — Per-cycle displacement MUST be constant across cycles for a
@@ -108,3 +109,45 @@ derived quantity, not an independent gate.
 - Live/simulated report: `npx tsx scripts/analyze_telemetry.ts`
   (optionally `--samples <telemetry.json>` from a Playwright `?debug=1` run to
   confirm the running game matches the pure function).
+- Multi-cycle flight battery: `tests/unit/simulation/flight/` (see §6).
+
+## 6. Multi-cycle flight battery
+
+Single-maneuver checks cannot catch errors that only show up over time: drift,
+dropped time, actions that get undone, wrap seams. The battery flies ships
+through the **same per-tick motion step the scene runs**
+(`src/arcade/systems/ShipMotion.ts`, via
+`src/simulation/flight/ArcadeFlightRecorder.ts`). After every cycle it compares
+the ship's pose with an independent oracle built from the X-Wing rules
+(`src/simulation/flight/XWingFlightOracle.ts`).
+
+Telemetry is recorded in two frames:
+
+- **Absolute.** Each sample is wrapped world coordinates (what the scene
+  stores) plus an unwrapped track that accumulates the torus displacement, so
+  a ship crossing the seam stays in one continuous frame.
+- **Relative.** Pursuit tests compare two recorded flights cycle by cycle
+  (separation and closing rate).
+
+Obligations:
+
+- **MOV-7 (MUST)** — Every ship, capitals included, MUST end each of N
+  consecutive cycles of every dial maneuver on the oracle pose (±0.5 px,
+  ±0.1°), starting from a non-axis heading.
+- **MOV-8 (MUST)** — Speed 0 MUST hold position (no base-length hop).
+- **MOV-9 (MUST)** — On the scene's fixed 60 Hz tick, a cycle MUST last
+  exactly `CYCLE_DURATION_MS`. Time past the boundary carries into the next
+  cycle. The same plan MUST land on the same poses at any tick length.
+- **MOV-10 (MUST)** — A boost displaces the ship and the maneuver in progress
+  together. The cycle MUST finish `BOOST_DISTANCE_PX` further along, not snap
+  back.
+- **MOV-11 (MUST)** — A barrel roll MUST slide the ship sideways by one
+  speed-1 template plus its base, with heading unchanged (X-Wing 2.0). It is
+  not a bank.
+- **MOV-12 (MUST)** — Crossing the battlefield seam MUST NOT jump the ship.
+  A tick's displacement stays within a fraction of a template.
+- **MOV-13 (MUST)** — Two ships flying the same plan keep a constant
+  separation. One speed step faster closes the gap by one template unit
+  (40 px) per cycle.
+- **MOV-14 (MUST)** — Closed loops close: four hard turns, or two K-turns,
+  bring a ship back to its start pose.

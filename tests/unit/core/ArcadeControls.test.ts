@@ -498,7 +498,7 @@ describe("ArcadeControls", () => {
       expect(result.nextManeuver).toBeNull();
     });
 
-    it("segnor_left endpoint has same x/y displacement as bank_left but ends at 225°", () => {
+    it("segnor_left flies the bank_left template, then flips 180° to end at 135°", () => {
       const ship = createMockShip({ x: 0, y: 0, angle: 0 });
       const control = createControlState(ship);
       const segnor = startManeuver(ship, control, "segnor_left");
@@ -516,8 +516,8 @@ describe("ArcadeControls", () => {
         bank.maneuverTarget?.y ?? 0,
         1,
       );
-      // Segnor ends at 225° (−135° from 0°), bank_left ends at 315° (−45° from 0°)
-      expect(segnor.maneuverTarget?.angle).toBeCloseTo(225, 1);
+      // X-Wing 2.0: bank left (315°), then rotate 180° → 135°, nose back toward the start
+      expect(segnor.maneuverTarget?.angle).toBeCloseTo(135, 1);
       expect(bank.maneuverTarget?.angle).toBeCloseTo(315, 1);
     });
   });

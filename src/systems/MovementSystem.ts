@@ -91,16 +91,18 @@ export const MANEUVER_TEMPLATES: Record<ManeuverDirection, ManeuverTemplate> = {
     deltaAngle: 180,
     pathType: "kturn",
   },
+  // Segnor's Loop: fly the bank, then rotate 180°. A left loop ends at
+  // −45° + 180° = +135°, nose pointing back toward where the ship came from.
   segnor_left: {
     deltaX: -0.5,
     deltaY: -0.866,
-    deltaAngle: -135, // Bank path but end facing back-left
+    deltaAngle: 135,
     pathType: "segnor",
   },
   segnor_right: {
     deltaX: 0.5,
     deltaY: -0.866,
-    deltaAngle: 135,
+    deltaAngle: -135,
     pathType: "segnor",
   },
   tallon_left: {
@@ -186,7 +188,9 @@ export function resolveManeuver(
   const template = MANEUVER_TEMPLATES[maneuver.direction];
 
   // Template unit vectors are already unit-length, so multiply by total length.
-  const templateLength = maneuver.speed * SPEED_SCALE_FACTOR + baseSize;
+  // Speed 0 is a full stop (capital ships hold position), not a base-length hop.
+  const templateLength =
+    maneuver.speed > 0 ? maneuver.speed * SPEED_SCALE_FACTOR + baseSize : 0;
   const scaledDeltaX = template.deltaX * templateLength;
   const scaledDeltaY = template.deltaY * templateLength;
 
