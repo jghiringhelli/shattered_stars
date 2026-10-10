@@ -21,8 +21,12 @@ import {
   type SquadInstance,
 } from "../ui/picker/SquadRosterPanel";
 import { getShipLoadouts } from "../data/ShipLoadouts";
+import { wouldDuplicateUniquePilot } from "../data/squadRules";
 import { PlayerProfileManager } from "../systems/PlayerProfile";
 import { isShipUnlocked, lockReason } from "../data/ProgressionData";
+
+/** How long a refused-action message replaces the points readout, in ms. */
+const RULE_MESSAGE_MS = 1500;
 
 interface PickerConfig {
   slotIndex: number;
@@ -192,6 +196,11 @@ export class ShipPickerScene extends Phaser.Scene {
       "addInstance",
       ({ shipId, loadoutId }: { shipId: string; loadoutId: string | null }) => {
         if (this.lockedShipIds.has(shipId)) return;
+        const roster = this.squadInstances.map((inst) => inst.loadoutId);
+        if (wouldDuplicateUniquePilot(roster, loadoutId)) {
+          this.flashPointsMessage("Unique pilot already in squad");
+          return;
+        }
         this.squadInstances.push({
           id: `i${++this.instanceCounter}`,
           shipId,
@@ -252,6 +261,17 @@ export class ShipPickerScene extends Phaser.Scene {
     const over = total > this.config.pointLimit;
     this.pointsText.setText(`${total} / ${this.config.pointLimit} pts`);
     this.pointsText.setColor(over ? "#ff4444" : "#44ff88");
+  }
+
+  /**
+   * Briefly replaces the points readout with a rule message, then restores it.
+   *
+   * @param message - Why the last action was refused.
+   */
+  private flashPointsMessage(message: string): void {
+    this.pointsText.setText(message);
+    this.pointsText.setColor("#ffaa44");
+    this.time.delayedCall(RULE_MESSAGE_MS, () => this.updatePointsText());
   }
 
   private totalPoints(): number {

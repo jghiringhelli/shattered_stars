@@ -201,6 +201,7 @@ import {
 import { Minimap, type MinimapShip } from "../ui/Minimap";
 import { renderBattleStarfield } from "../rendering/Starfield";
 import { applyLoadoutEffects } from "../systems/BattleHelpers";
+import { uniquePilotOf } from "../data/squadRules";
 import { audioManager } from "../audio/AudioManager";
 import { syncListenerToCamera } from "../audio/CameraListener";
 import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
@@ -250,6 +251,8 @@ interface ArcadeShip extends ShipState {
   upgradeIds: ReadonlyArray<string>;
   /** Real-time effects of those upgrades, folded into one sheet. */
   modifiers: CombatModifiers;
+  /** True when a named (unique) pilot flies this ship — projects a hero aura. */
+  isUniquePilot: boolean;
 }
 
 interface ShipSprite extends Phaser.GameObjects.Container {
@@ -1282,7 +1285,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
         faction: ship.faction,
         role: ship.role,
         size,
-        isUnique: false,
+        isUnique: ship.isUniquePilot,
         equippedUpgrades: ship.upgradeIds,
         hull: ship.hull,
         shields: ship.shields,
@@ -1968,6 +1971,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const modifiers = resolveUpgradeModifiers(upgradeIds);
     ship.upgradeIds = upgradeIds;
     ship.modifiers = modifiers;
+    ship.isUniquePilot = uniquePilotOf(loadoutId ?? null) !== null;
     ship.control = applyControlModifiers(ship.control, modifiers);
     ship.ordnanceSlots = applyOrdnanceModifiers(
       buildOrdnanceSlots(upgradeIds),
@@ -2100,6 +2104,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       commanderOrders: def?.role === "capital" ? createCommanderOrders() : null,
       upgradeIds: [],
       modifiers: NEUTRAL_MODIFIERS,
+      isUniquePilot: false,
     };
 
     return ship;

@@ -17,6 +17,8 @@ import {
   findLoadoutViolations,
   findDeadCards,
 } from "../../../src/data/loadoutRules";
+import { slotBarFor } from "../../../src/data/ShipSlots";
+import { PILOT_CARDS } from "../../../src/systems/SquadBuilder";
 
 describe("ShipLoadouts", () => {
   describe("SHIP_SLOTS", () => {
@@ -122,7 +124,11 @@ describe("ShipLoadouts", () => {
         findLoadoutViolations(
           loadout.upgrades,
           SHIP_DEFINITIONS[shipId]!,
-          SHIP_SLOTS[shipId]!.slots,
+          slotBarFor(
+            shipId,
+            PILOT_CARDS[loadout.pilotId]?.extraSlots,
+            PILOT_CARDS[loadout.pilotId]?.removedSlots,
+          ),
         ).map((v) => `${loadout.id}: ${v.upgradeId} (${v.reason})`),
       );
       expect(illegal).toEqual([]);

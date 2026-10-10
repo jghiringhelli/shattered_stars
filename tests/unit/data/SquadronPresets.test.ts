@@ -31,14 +31,22 @@ describe("quick-build presets", () => {
     expect(missing).toEqual([]);
   });
 
-  it("references only pilots that exist", () => {
-    const missing: string[] = [];
+  it("fields each unique pilot at most once per squad", () => {
+    const repeated: string[] = [];
     for (const squad of QUICK_BUILD_SQUADS) {
-      for (const ship of squad.ships) {
-        if (!PILOT_CARDS[ship.pilotId]) missing.push(ship.pilotId);
-      }
+      const pilots = squad.ships.map(
+        (ship) => getLoadoutById(ship.loadoutId)!.pilotId,
+      );
+      pilots.forEach((pilotId, index) => {
+        if (
+          PILOT_CARDS[pilotId]?.isUnique &&
+          pilots.indexOf(pilotId) !== index
+        ) {
+          repeated.push(`${squad.id}: ${pilotId}`);
+        }
+      });
     }
-    expect(missing).toEqual([]);
+    expect(repeated).toEqual([]);
   });
 
   it("reports a totalCost that matches what its ships cost", () => {
@@ -71,11 +79,10 @@ describe("squadCost", () => {
     expect(squadCost([])).toBe(0);
   });
 
-  it("adds the pilot and the loadout for each ship", () => {
+  it("charges each ship its loadout price, pilot included, once", () => {
     const ship = QUICK_BUILD_SQUADS[0]!.ships[0]!;
-    const expected =
-      (getLoadoutById(ship.loadoutId)?.pointCost ?? 0) +
-      (PILOT_CARDS[ship.pilotId]?.pointCost ?? 0);
-    expect(squadCost([ship])).toBe(expected);
+    expect(squadCost([ship, ship])).toBe(
+      2 * getLoadoutById(ship.loadoutId)!.pointCost,
+    );
   });
 });

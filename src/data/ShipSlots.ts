@@ -662,3 +662,25 @@ export const SHIP_SLOTS: Readonly<Record<string, ShipSlotConfig>> = {
 export function getShipSlots(shipId: string): ShipSlotConfig | undefined {
   return SHIP_SLOTS[shipId];
 }
+
+/**
+ * A ship's slot bar as flown by a particular pilot: the ship's own slots plus
+ * any the pilot card adds, minus any it removes.
+ *
+ * @param shipId - Ship definition id.
+ * @param extraSlots - Slots the pilot card adds.
+ * @param removedSlots - Slots the pilot card removes.
+ * @returns The slots the pilot can fill (empty for an unknown ship).
+ */
+export function slotBarFor(
+  shipId: string,
+  extraSlots: ReadonlyArray<UpgradeSlotType> = [],
+  removedSlots: ReadonlyArray<UpgradeSlotType> = [],
+): UpgradeSlotType[] {
+  const slots = [...(SHIP_SLOTS[shipId]?.slots ?? []), ...extraSlots];
+  for (const removed of removedSlots) {
+    const index = slots.indexOf(removed);
+    if (index !== -1) slots.splice(index, 1);
+  }
+  return slots;
+}

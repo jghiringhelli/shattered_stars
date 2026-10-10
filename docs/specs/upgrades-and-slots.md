@@ -58,8 +58,23 @@ Every loadout MUST (tested in `ShipLoadouts.test.ts`, rules in
   without a turret;
 - differ from every other loadout of the same ship, and have a globally unique id.
 
-## 3. Loadout price
+## 3. Loadout price and pilots
 
-`loadout.pointCost = ship.baseStats.pointCost + Σ card.pointCost`
-(`src/data/loadoutPricing.ts`). Pilots are folded into loadouts in a later
-phase (pilot = surcharge for initiative + one ability).
+Every loadout is a quick build: ship + one pilot + upgrades.
+
+`loadout.pointCost = ship.baseStats.pointCost + pilot surcharge + Σ card.pointCost`
+(`src/data/loadoutPricing.ts`).
+
+Pilot surcharge (`src/data/pilotPricing.ts`, derived, never authored):
+`(initiative − 1) × 1 + ability.pointCost`. A generic initiative-1 rookie
+costs 0, so the bare-ship price is the price of flying it with a rookie.
+
+- Each pilot card has at most one signature ability. Campaign pilots
+  (`CampaignPilot`) are the exception: they level up and collect abilities.
+- A pilot card's extra slots (e.g. an ace's talent slot) extend the ship's
+  slot bar for that loadout (`slotBarFor`).
+- Unique pilots appear in at most one loadout, and at most once per squad
+  (`src/data/squadRules.ts`, enforced in the ship picker, AI squad
+  generation and quick-build presets). A unique pilot projects a hero aura.
+- Quick-build presets list loadout ids only; their total is the sum of the
+  loadout prices.

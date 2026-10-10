@@ -7,14 +7,14 @@
  *
  * A preset authors only its roster. The total is derived from that roster by
  * `squadCost`, so a squad can never advertise a price its ships do not add up
- * to. What authoring still has to get right:
- *   pilotId must be a valid PILOT_CARDS key piloting the same ship as loadoutId.
- *   the roster must fit pointLimit, and should spend most of it.
+ * to. Each entry is a loadout id; the loadout already names its ship and
+ * pilot. What authoring still has to get right:
+ *   the roster must fit pointLimit, and should spend most of it;
+ *   a unique pilot may appear at most once per squad.
  * Both are pinned by tests/unit/data/SquadronPresets.test.ts.
  */
 
 import type { FactionId } from "../config";
-import { PILOT_CARDS } from "../systems/SquadBuilder";
 import { getLoadoutById } from "./ShipLoadouts";
 
 /** Structurally compatible with SimShipSpec in BattleSimulator (no circular import). */
@@ -27,7 +27,7 @@ export interface SquadShipSpec {
 // ─── Interfaces ───────────────────────────────────────────────────────────────
 
 export interface QuickBuildShip {
-  readonly pilotId: string;
+  /** A SHIP_LOADOUTS id — ship, pilot and upgrades in one quick build. */
   readonly loadoutId: string;
 }
 
@@ -38,7 +38,7 @@ export interface QuickBuildSquad {
   readonly name: string;
   readonly style: "aggressive" | "balanced" | "swarm" | "control";
   readonly ships: ReadonlyArray<QuickBuildShip>;
-  /** Sum of every pilot and loadout in the squad. Derived, never authored. */
+  /** Sum of every loadout in the squad. Derived, never authored. */
   readonly totalCost: number;
 }
 
@@ -46,23 +46,38 @@ export interface QuickBuildSquad {
 type SquadBlueprint = Omit<QuickBuildSquad, "totalCost">;
 
 /**
- * What a roster costs: every pilot card plus every loadout.
+ * What a roster costs: the sum of its loadouts (each already includes the
+ * bare ship and its pilot's surcharge).
  *
- * @param ships - Pilot/loadout pairs making up the squad.
+ * @param ships - Loadouts making up the squad.
  * @returns Total point cost of the roster.
  */
 export function squadCost(ships: ReadonlyArray<QuickBuildShip>): number {
-  return ships.reduce((total, ship) => {
-    const loadout = getLoadoutById(ship.loadoutId);
-    const pilot = PILOT_CARDS[ship.pilotId];
-    return total + (loadout?.pointCost ?? 0) + (pilot?.pointCost ?? 0);
-  }, 0);
+  return ships.reduce(
+    (total, ship) => total + (getLoadoutById(ship.loadoutId)?.pointCost ?? 0),
+    0,
+  );
+}
+
+/**
+ * Ship and pilot a quick-build entry flies, read from its loadout.
+ *
+ * @param ship - A roster entry.
+ * @returns The spec, falling back to the raw id for an unknown loadout.
+ */
+function specFor(ship: QuickBuildShip): SquadShipSpec {
+  const loadout = getLoadoutById(ship.loadoutId);
+  return {
+    shipId: loadout?.shipId ?? ship.loadoutId,
+    ...(loadout ? { pilotId: loadout.pilotId } : {}),
+    loadoutId: ship.loadoutId,
+  };
 }
 
 // ─── Squad Data ───────────────────────────────────────────────────────────────
 
 const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
-  // ── TERRAN HEGEMONY ────────────────────────────────────────────────────────
+  // ── TERRAN_HEGEMONY ──
   {
     id: "th_100_iron_cadets",
     factionId: "terran_hegemony",
@@ -70,8 +85,9 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Iron Cadets",
     style: "swarm",
     ships: [
-      { pilotId: "stiletto_cadet", loadoutId: "stiletto_basic" },
-      { pilotId: "stiletto_cadet", loadoutId: "stiletto_basic" },
+      { loadoutId: "stiletto_basic" },
+      { loadoutId: "stiletto_basic" },
+      { loadoutId: "stiletto_basic" },
     ],
   },
   {
@@ -81,8 +97,9 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Patrol Alpha",
     style: "balanced",
     ships: [
-      { pilotId: "stiletto_cadet", loadoutId: "stiletto_basic" },
-      { pilotId: "viper_cadet", loadoutId: "viper_pursuit" },
+      { loadoutId: "stiletto_basic" },
+      { loadoutId: "viper_pursuit" },
+      { loadoutId: "viper_pursuit" },
     ],
   },
   {
@@ -92,8 +109,10 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Iron Fist",
     style: "balanced",
     ships: [
-      { pilotId: "vindicator_crew", loadoutId: "vindicator_strike" },
-      { pilotId: "stiletto_cadet", loadoutId: "stiletto_basic" },
+      { loadoutId: "vindicator_strike" },
+      { loadoutId: "stiletto_basic" },
+      { loadoutId: "stiletto_basic" },
+      { loadoutId: "stiletto_basic" },
     ],
   },
   {
@@ -103,13 +122,15 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Battle Squadron",
     style: "balanced",
     ships: [
-      { pilotId: "viper_ace", loadoutId: "viper_ace" },
-      { pilotId: "harbinger_crew", loadoutId: "harbinger_coordinator" },
-      { pilotId: "viper_cadet", loadoutId: "viper_pursuit" },
+      { loadoutId: "viper_ace" },
+      { loadoutId: "harbinger_coordinator" },
+      { loadoutId: "viper_pursuit" },
+      { loadoutId: "harbinger_coordinator" },
+      { loadoutId: "harbinger_coordinator" },
     ],
   },
 
-  // ── FREE CONFEDERATION ─────────────────────────────────────────────────────
+  // ── FREE_CONFEDERATION ──
   {
     id: "fc_100_scout_squadron",
     factionId: "free_confederation",
@@ -117,8 +138,9 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Scout Squadron",
     style: "swarm",
     ships: [
-      { pilotId: "wasp_rookie", loadoutId: "wasp_swarm" },
-      { pilotId: "wasp_pilot", loadoutId: "wasp_swarm" },
+      { loadoutId: "wasp_swarm" },
+      { loadoutId: "wasp_swarm" },
+      { loadoutId: "wasp_swarm" },
     ],
   },
   {
@@ -128,9 +150,11 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Freedom Wing",
     style: "swarm",
     ships: [
-      { pilotId: "wasp_rookie", loadoutId: "wasp_swarm" },
-      { pilotId: "wasp_pilot", loadoutId: "wasp_swarm" },
-      { pilotId: "finch_pilot", loadoutId: "finch_patrol" },
+      { loadoutId: "wasp_swarm" },
+      { loadoutId: "wasp_swarm" },
+      { loadoutId: "finch_patrol" },
+      { loadoutId: "finch_patrol" },
+      { loadoutId: "finch_patrol" },
     ],
   },
   {
@@ -140,8 +164,9 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Confederacy Strike",
     style: "balanced",
     ships: [
-      { pilotId: "thunder_mason", loadoutId: "albatross_assault" },
-      { pilotId: "finch_pilot", loadoutId: "finch_scout" },
+      { loadoutId: "albatross_assault" },
+      { loadoutId: "finch_scout" },
+      { loadoutId: "albatross_assault" },
     ],
   },
   {
@@ -151,13 +176,16 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Liberation Fleet",
     style: "aggressive",
     ships: [
-      { pilotId: "hawk_rennick", loadoutId: "hawk_assault" },
-      { pilotId: "falcon_veteran", loadoutId: "falcon_striker" },
-      { pilotId: "sparrow_rookie", loadoutId: "sparrow_swarm" },
+      { loadoutId: "hawk_assault" },
+      { loadoutId: "falcon_striker" },
+      { loadoutId: "sparrow_swarm" },
+      { loadoutId: "sparrow_swarm" },
+      { loadoutId: "sparrow_swarm" },
+      { loadoutId: "sparrow_swarm" },
     ],
   },
 
-  // ── SYNTHETIC COLLECTIVE ───────────────────────────────────────────────────
+  // ── SYNTHETIC_COLLECTIVE ──
   {
     id: "sc_100_recon_cluster",
     factionId: "synthetic_collective",
@@ -165,8 +193,9 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Recon Cluster",
     style: "swarm",
     ships: [
-      { pilotId: "combat_drone_alpha", loadoutId: "drone_standard" },
-      { pilotId: "scout_drone_alpha", loadoutId: "scout_basic" },
+      { loadoutId: "drone_standard" },
+      { loadoutId: "scout_basic" },
+      { loadoutId: "drone_standard" },
     ],
   },
   {
@@ -176,9 +205,11 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Hunter Pack",
     style: "aggressive",
     ships: [
-      { pilotId: "interceptor_drone_alpha", loadoutId: "interceptor_swarm" },
-      { pilotId: "interceptor_drone_alpha", loadoutId: "interceptor_swarm" },
-      { pilotId: "scout_drone_alpha", loadoutId: "scout_basic" },
+      { loadoutId: "interceptor_swarm" },
+      { loadoutId: "interceptor_swarm" },
+      { loadoutId: "scout_basic" },
+      { loadoutId: "interceptor_swarm" },
+      { loadoutId: "scout_basic" },
     ],
   },
   {
@@ -188,8 +219,11 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Precision Strike",
     style: "balanced",
     ships: [
-      { pilotId: "eradicator_protocol", loadoutId: "eradicator_defender" },
-      { pilotId: "scout_drone_beta", loadoutId: "scout_basic" },
+      { loadoutId: "eradicator_defender" },
+      { loadoutId: "scout_basic" },
+      { loadoutId: "scout_basic" },
+      { loadoutId: "scout_basic" },
+      { loadoutId: "scout_basic" },
     ],
   },
   {
@@ -199,21 +233,23 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Hive Fleet",
     style: "balanced",
     ships: [
-      { pilotId: "interceptor_drone_beta", loadoutId: "interceptor_hunter" },
-      { pilotId: "demolition_unit", loadoutId: "bomber_basic" },
-      { pilotId: "interceptor_drone_alpha", loadoutId: "interceptor_swarm" },
-      { pilotId: "relay_node_basic", loadoutId: "relay_basic" },
+      { loadoutId: "interceptor_hunter" },
+      { loadoutId: "bomber_basic" },
+      { loadoutId: "interceptor_swarm" },
+      { loadoutId: "relay_basic" },
+      { loadoutId: "relay_basic" },
+      { loadoutId: "relay_basic" },
     ],
   },
 
-  // ── VOID CORSAIRS ──────────────────────────────────────────────────────────
+  // ── VOID_CORSAIRS ──
   {
     id: "vc_100_fang_blade",
     factionId: "void_corsairs",
     pointLimit: 100,
     name: "Fang Blade",
     style: "aggressive",
-    ships: [{ pilotId: "poison_fang", loadoutId: "fang_raider" }],
+    ships: [{ loadoutId: "fang_raider" }, { loadoutId: "fang_predator" }],
   },
   {
     id: "vc_150_corsair_raider",
@@ -222,8 +258,9 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Corsair Raider",
     style: "aggressive",
     ships: [
-      { pilotId: "fang_raider", loadoutId: "fang_raider" },
-      { pilotId: "venom_pilot", loadoutId: "venom_assassin" },
+      { loadoutId: "fang_raider" },
+      { loadoutId: "venom_assassin" },
+      { loadoutId: "torpedo_hunter" },
     ],
   },
   {
@@ -233,8 +270,9 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Terror Squadron",
     style: "aggressive",
     ships: [
-      { pilotId: "bloody_cutlass", loadoutId: "cutlass_assault" },
-      { pilotId: "fang_raider", loadoutId: "fang_raider" },
+      { loadoutId: "cutlass_assault" },
+      { loadoutId: "fang_raider" },
+      { loadoutId: "marauder_assault" },
     ],
   },
   {
@@ -244,20 +282,22 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Corsair Fleet",
     style: "balanced",
     ships: [
-      { pilotId: "tender_crew", loadoutId: "tender_support" },
-      { pilotId: "red_jenna", loadoutId: "blade_ace" },
-      { pilotId: "venom_pilot", loadoutId: "venom_swarm" },
+      { loadoutId: "tender_support" },
+      { loadoutId: "blade_ace" },
+      { loadoutId: "venom_swarm" },
+      { loadoutId: "tender_support" },
+      { loadoutId: "blade_ace" },
     ],
   },
 
-  // ── ASCENDANT EMPIRE ───────────────────────────────────────────────────────
+  // ── ASCENDANT_EMPIRE ──
   {
     id: "ae_100_holy_herald",
     factionId: "ascendant_empire",
     pointLimit: 100,
     name: "Holy Herald",
     style: "aggressive",
-    ships: [{ pilotId: "voice_of_glory", loadoutId: "herald_striker" }],
+    ships: [{ loadoutId: "herald_striker" }, { loadoutId: "cherub_ace" }],
   },
   {
     id: "ae_150_sacred_guard",
@@ -266,8 +306,9 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Sacred Guard",
     style: "balanced",
     ships: [
-      { pilotId: "virtue_pilot", loadoutId: "virtue_pursuit" },
-      { pilotId: "cherub_initiate", loadoutId: "cherub_swarm" },
+      { loadoutId: "virtue_pursuit" },
+      { loadoutId: "cherub_swarm" },
+      { loadoutId: "virtue_pursuit" },
     ],
   },
   {
@@ -277,8 +318,10 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Crusader Host",
     style: "balanced",
     ships: [
-      { pilotId: "holy_avenger", loadoutId: "crusader_assault" },
-      { pilotId: "cherub_initiate", loadoutId: "cherub_swarm" },
+      { loadoutId: "crusader_assault" },
+      { loadoutId: "cherub_swarm" },
+      { loadoutId: "cherub_swarm" },
+      { loadoutId: "cherub_swarm" },
     ],
   },
   {
@@ -288,9 +331,11 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Holy Crusade",
     style: "control",
     ships: [
-      { pilotId: "crusader_pilot", loadoutId: "crusader_defender" },
-      { pilotId: "acolyte_pilot", loadoutId: "acolyte_support" },
-      { pilotId: "virtue_pilot", loadoutId: "virtue_basic" },
+      { loadoutId: "crusader_defender" },
+      { loadoutId: "acolyte_support" },
+      { loadoutId: "virtue_basic" },
+      { loadoutId: "crusader_defender" },
+      { loadoutId: "cherub_ace" },
     ],
   },
 ];
@@ -329,11 +374,7 @@ export function getQuickBuild(
  * The return type is structurally compatible with SimShipSpec (structural typing).
  */
 export function toSimSpecs(squad: QuickBuildSquad): SquadShipSpec[] {
-  return squad.ships.map((ship) => ({
-    shipId: PILOT_CARDS[ship.pilotId]?.shipId ?? ship.pilotId,
-    pilotId: ship.pilotId,
-    loadoutId: ship.loadoutId,
-  }));
+  return squad.ships.map(specFor);
 }
 
 /** Minimal ship config compatible with AIShipConfig (avoids circular import). */
@@ -347,9 +388,5 @@ export interface AIShipConfigLike {
  * Convert a quick-build squad to AIShipConfig[] for AIShipFactory.createAISquad.
  */
 export function toAIConfigs(squad: QuickBuildSquad): AIShipConfigLike[] {
-  return squad.ships.map((ship) => ({
-    shipId: PILOT_CARDS[ship.pilotId]?.shipId ?? ship.pilotId,
-    pilotId: ship.pilotId,
-    loadoutId: ship.loadoutId,
-  }));
+  return squad.ships.map(specFor);
 }

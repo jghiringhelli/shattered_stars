@@ -6,14 +6,27 @@
  * appropriate equipment based on difficulty and battle context.
  */
 
-import type { ShipState } from '../core/types';
-import type { FactionId } from '../config';
-import type { AIDifficultyLevel } from './AIDifficulty';
-import { SHIP_DEFINITIONS, getShipsByFaction } from '../data/ShipDefinitions';
-import { SHIP_LOADOUTS, getAILoadout, getShipSlots, type ShipLoadout } from '../data/ShipLoadouts';
-import { UPGRADE_DEFINITIONS, type UpgradeDefinition } from '../systems/UpgradeSystem';
-import { PILOT_CARDS, type PilotCard, getPilotsForShip } from '../systems/SquadBuilder';
-import { getQuickBuild, toAIConfigs } from '../data/SquadronPresets';
+import type { ShipState } from "../core/types";
+import type { FactionId } from "../config";
+import type { AIDifficultyLevel } from "./AIDifficulty";
+import { SHIP_DEFINITIONS, getShipsByFaction } from "../data/ShipDefinitions";
+import {
+  SHIP_LOADOUTS,
+  getAILoadout,
+  getShipSlots,
+  type ShipLoadout,
+} from "../data/ShipLoadouts";
+import {
+  UPGRADE_DEFINITIONS,
+  type UpgradeDefinition,
+} from "../systems/UpgradeSystem";
+import {
+  PILOT_CARDS,
+  type PilotCard,
+  getPilotsForShip,
+} from "../systems/SquadBuilder";
+import { getQuickBuild, toAIConfigs } from "../data/SquadronPresets";
+import { wouldDuplicateUniquePilot } from "../data/squadRules";
 
 // ============================================
 // AI Ship Configuration
@@ -23,7 +36,7 @@ export interface AIShipConfig {
   readonly shipId: string;
   readonly pilotId?: string;
   readonly loadoutId?: string;
-  readonly preferredRole?: 'offense' | 'defense' | 'balanced';
+  readonly preferredRole?: "offense" | "defense" | "balanced";
   readonly position?: { x: number; y: number };
   readonly angle?: number;
 }
@@ -32,7 +45,7 @@ export interface AISquadConfig {
   readonly faction: FactionId;
   readonly difficulty: AIDifficultyLevel;
   readonly pointBudget: number;
-  readonly preferredRole?: 'offense' | 'defense' | 'balanced' | 'swarm';
+  readonly preferredRole?: "offense" | "defense" | "balanced" | "swarm";
   readonly shipConfigs?: readonly AIShipConfig[];
 }
 
@@ -55,24 +68,27 @@ export function resetShipIdCounter(startFrom: number = 1000): void {
 export function createAIShip(
   config: AIShipConfig,
   faction: FactionId,
-  difficulty: AIDifficultyLevel
+  difficulty: AIDifficultyLevel,
 ): ShipState | null {
   const shipDef = SHIP_DEFINITIONS[config.shipId];
   if (!shipDef) return null;
 
-  // Get pilot (or default generic)
-  const pilot = config.pilotId
-    ? PILOT_CARDS[config.pilotId]
-    : getDefaultPilot(config.shipId, faction);
-
   // Get loadout
   const loadout = config.loadoutId
     ? getLoadoutById(config.loadoutId)
-    : getAILoadout(config.shipId, config.preferredRole ?? 'balanced');
+    : getAILoadout(config.shipId, config.preferredRole ?? "balanced");
+
+  // Get pilot: explicit, else the loadout's own pilot, else the generic rookie
+  const pilotId = config.pilotId ?? loadout?.pilotId;
+  const pilot = pilotId
+    ? PILOT_CARDS[pilotId]
+    : getDefaultPilot(config.shipId, faction);
 
   // Get upgrades from loadout
   const upgrades = loadout
-    ? loadout.upgrades.map(id => UPGRADE_DEFINITIONS[id]).filter((u): u is UpgradeDefinition => u !== undefined)
+    ? loadout.upgrades
+        .map((id) => UPGRADE_DEFINITIONS[id])
+        .filter((u): u is UpgradeDefinition => u !== undefined)
     : [];
 
   // Calculate stat bonuses from upgrades
@@ -82,7 +98,7 @@ export function createAIShip(
     id: `ai_ship_${nextShipId++}`,
     definitionId: config.shipId,
     faction,
-    owner: 'ai',
+    owner: "ai",
     x: config.position?.x ?? 400,
     y: config.position?.y ?? 300,
     angle: config.angle ?? 0,
@@ -97,7 +113,7 @@ export function createAIShip(
     isCloaked: false,
     currentManeuver: null,
     maneuverProgress: 0,
-    mobileArcDirection: 'front',
+    mobileArcDirection: "front",
     charges: getShipSlots(config.shipId)?.charges ?? pilot?.charges ?? 0,
     maxCharges: getShipSlots(config.shipId)?.charges ?? pilot?.charges ?? 0,
   };
@@ -122,7 +138,11 @@ export function createAISquad(config: AISquadConfig): ShipState[] {
     const preset = getQuickBuild(config.faction, config.pointBudget);
     const generatedConfigs = preset
       ? toAIConfigs(preset)
-      : generateSquadConfigs(config.faction, config.pointBudget, config.preferredRole ?? 'balanced');
+      : generateSquadConfigs(
+          config.faction,
+          config.pointBudget,
+          config.preferredRole ?? "balanced",
+        );
     for (const shipConfig of generatedConfigs) {
       const ship = createAIShip(shipConfig, config.faction, config.difficulty);
       if (ship) ships.push(ship);
@@ -149,9 +169,11 @@ interface ShipWithLoadout {
 function generateSquadConfigs(
   faction: FactionId,
   pointBudget: number,
-  preferredRole: 'offense' | 'defense' | 'balanced' | 'swarm'
+  preferredRole: "offense" | "defense" | "balanced" | "swarm",
 ): AIShipConfig[] {
-  const factionShips = getShipsByFaction(faction).filter((s) => s.baseStats.size !== 'huge');
+  const factionShips = getShipsByFaction(faction).filter(
+    (s) => s.baseStats.size !== "huge",
+  );
   if (factionShips.length === 0) return [];
 
   const configs: AIShipConfig[] = [];
@@ -162,22 +184,21 @@ function generateSquadConfigs(
 
   for (const ship of factionShips) {
     const loadouts = SHIP_LOADOUTS[ship.id] ?? [];
-    const pilots = getPilotsForShip(ship.id);
 
     if (loadouts.length > 0) {
+      // A loadout is a full quick build: its price already covers the ship
+      // and the pilot flying it.
       for (const loadout of loadouts) {
-        for (const pilot of pilots) {
-          options.push({
-            shipId: ship.id,
-            loadout,
-            pilotId: pilot.id,
-            cost: loadout.pointCost + pilot.pointCost,
-          });
-        }
+        options.push({
+          shipId: ship.id,
+          loadout,
+          pilotId: loadout.pilotId,
+          cost: loadout.pointCost,
+        });
       }
     } else {
-      // Ship has no loadouts, use base cost
-      for (const pilot of pilots) {
+      // Ship has no loadouts: bare hull plus each pilot's surcharge
+      for (const pilot of getPilotsForShip(ship.id)) {
         options.push({
           shipId: ship.id,
           loadout: undefined,
@@ -190,15 +211,15 @@ function generateSquadConfigs(
 
   // Sort by role preference
   const sortedOptions = [...options].sort((a, b) => {
-    const roleA = a.loadout?.role ?? 'balanced';
-    const roleB = b.loadout?.role ?? 'balanced';
+    const roleA = a.loadout?.role ?? "balanced";
+    const roleB = b.loadout?.role ?? "balanced";
 
     // Prefer matching role
     if (roleA === preferredRole && roleB !== preferredRole) return -1;
     if (roleB === preferredRole && roleA !== preferredRole) return 1;
 
     // For swarm, prefer cheaper ships
-    if (preferredRole === 'swarm') {
+    if (preferredRole === "swarm") {
       return a.cost - b.cost;
     }
 
@@ -209,12 +230,19 @@ function generateSquadConfigs(
   // Fill squad
   let position = 0;
   while (remainingPoints > 0 && configs.length < 8) {
-    // Find affordable option
-    const affordable = sortedOptions.filter(o => o.cost <= remainingPoints);
+    // Find affordable option that doesn't field a unique pilot twice
+    const roster = configs.map((c) => c.loadoutId ?? null);
+    const affordable = sortedOptions.filter(
+      (o) =>
+        o.cost <= remainingPoints &&
+        !wouldDuplicateUniquePilot(roster, o.loadout?.id ?? null),
+    );
     if (affordable.length === 0) break;
 
     // Pick one (with some randomness for variety)
-    const pickIndex = Math.floor(Math.random() * Math.min(3, affordable.length));
+    const pickIndex = Math.floor(
+      Math.random() * Math.min(3, affordable.length),
+    );
     const picked = affordable[pickIndex]!;
 
     // Calculate position in formation
@@ -244,7 +272,10 @@ function generateSquadConfigs(
 /**
  * Get formation position for a ship in the squad
  */
-function getFormationPosition(index: number, _faction: FactionId): { x: number; y: number } {
+function getFormationPosition(
+  index: number,
+  _faction: FactionId,
+): { x: number; y: number } {
   // Standard formation: two columns
   const baseX = 700;
   const baseY = 200;
@@ -264,7 +295,10 @@ function getFormationPosition(index: number, _faction: FactionId): { x: number; 
 // Helper Functions
 // ============================================
 
-function getDefaultPilot(shipId: string, faction: FactionId): PilotCard | undefined {
+function getDefaultPilot(
+  shipId: string,
+  faction: FactionId,
+): PilotCard | undefined {
   const pilots = getPilotsForShip(shipId);
   // Find lowest initiative (generic) pilot
   const sorted = [...pilots].sort((a, b) => a.initiative - b.initiative);
@@ -273,7 +307,7 @@ function getDefaultPilot(shipId: string, faction: FactionId): PilotCard | undefi
 
 function getLoadoutById(loadoutId: string): ShipLoadout | undefined {
   for (const loadouts of Object.values(SHIP_LOADOUTS)) {
-    const found = loadouts.find(l => l.id === loadoutId);
+    const found = loadouts.find((l) => l.id === loadoutId);
     if (found) return found;
   }
   return undefined;
@@ -286,7 +320,9 @@ interface UpgradeBonuses {
   agility: number;
 }
 
-function calculateUpgradeBonuses(upgrades: UpgradeDefinition[]): UpgradeBonuses {
+function calculateUpgradeBonuses(
+  upgrades: UpgradeDefinition[],
+): UpgradeBonuses {
   return upgrades.reduce(
     (acc, upgrade) => ({
       hull: acc.hull + (upgrade.effects?.hullBonus ?? 0),
@@ -294,7 +330,7 @@ function calculateUpgradeBonuses(upgrades: UpgradeDefinition[]): UpgradeBonuses 
       attack: acc.attack + (upgrade.effects?.attackBonus ?? 0),
       agility: acc.agility + (upgrade.effects?.agilityBonus ?? 0),
     }),
-    { hull: 0, shields: 0, attack: 0, agility: 0 }
+    { hull: 0, shields: 0, attack: 0, agility: 0 },
   );
 }
 
@@ -314,7 +350,7 @@ export interface MissionEnemyWave {
 export function createMissionWaves(
   faction: FactionId,
   difficulty: AIDifficultyLevel,
-  missionDifficulty: number // 1-10
+  missionDifficulty: number, // 1-10
 ): MissionEnemyWave[] {
   const waves: MissionEnemyWave[] = [];
 
@@ -324,7 +360,11 @@ export function createMissionWaves(
 
   for (let wave = 0; wave < numWaves; wave++) {
     const wavePoints = Math.floor(basePoints * (1 + wave * 0.3));
-    const configs = generateSquadConfigs(faction, wavePoints, wave === 0 ? 'balanced' : 'offense');
+    const configs = generateSquadConfigs(
+      faction,
+      wavePoints,
+      wave === 0 ? "balanced" : "offense",
+    );
 
     // Adjust positions for wave
     const adjustedConfigs = configs.map((config, index) => ({
@@ -351,7 +391,7 @@ export function createMissionWaves(
 export function spawnWave(
   wave: MissionEnemyWave,
   faction: FactionId,
-  difficulty: AIDifficultyLevel
+  difficulty: AIDifficultyLevel,
 ): ShipState[] {
   const ships: ShipState[] = [];
 

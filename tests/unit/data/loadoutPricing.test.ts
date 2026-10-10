@@ -21,6 +21,7 @@ import {
 } from "../../../src/data/ShipLoadouts";
 import { SHIP_DEFINITIONS } from "../../../src/data/ShipDefinitions";
 import { UPGRADE_DEFINITIONS } from "../../../src/systems/UpgradeSystem";
+import { PILOT_CARDS } from "../../../src/systems/SquadBuilder";
 
 /** Bare hull cost of a ship, the floor every loadout price must clear. */
 function baseCost(shipId: string): number {
@@ -101,9 +102,13 @@ describe("the shipped loadout catalogue", () => {
     expect([...unknown]).toEqual([]);
   });
 
-  it("prices every loadout as ship cost plus upgrade costs", () => {
+  it("prices every loadout as ship cost plus pilot surcharge plus upgrade costs", () => {
     const wrong = allLoadouts().filter(
-      (l) => l.pointCost !== deriveLoadoutCost(l.shipId, l.upgrades),
+      (l) =>
+        l.pointCost !==
+        baseCost(l.shipId) +
+          PILOT_CARDS[l.pilotId]!.pointCost +
+          l.upgrades.reduce((sum, id) => sum + upgradeCost(id), 0),
     );
     expect(wrong.map((l) => l.id)).toEqual([]);
   });

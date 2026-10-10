@@ -25,7 +25,8 @@ import {
 } from "./UpgradeSystem";
 import { PILOT_ABILITIES, type PilotAbility } from "./PilotAbilities";
 import { SHIP_DEFINITIONS } from "../data/ShipDefinitions";
-import { getShipSlots } from "../data/ShipSlots";
+import { slotBarFor } from "../data/ShipSlots";
+import { derivePilotSurcharge } from "../data/pilotPricing";
 
 // ============================================
 // Squad Building Constants
@@ -50,6 +51,10 @@ export interface PilotCard {
   readonly shipId: string; // References ShipDefinition.id
   readonly faction: FactionId;
   readonly initiative: number; // 1-6 (skill level)
+  /**
+   * Surcharge over the bare ship: initiative above 1 plus the ability's value
+   * (src/data/pilotPricing.ts). Derived, never authored.
+   */
   readonly pointCost: number;
   readonly isUnique: boolean;
   readonly abilityText?: string;
@@ -60,6 +65,9 @@ export interface PilotCard {
   readonly force?: number; // For Force-sensitive pilots
   readonly limitedCount?: number; // How many can be in a squad (default 1 for unique)
 }
+
+/** A pilot card as authored: everything but its derived price. */
+type PilotCardBlueprint = Omit<PilotCard, "pointCost">;
 
 // ============================================
 // Squad Unit (Ship + Pilot + Upgrades)
@@ -127,7 +135,7 @@ export interface SquadWarning {
 // Pilot Database
 // ============================================
 
-export const PILOT_CARDS: Record<string, PilotCard> = {
+const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
   // ============================================
   // TERRAN HEGEMONY PILOTS
   // ============================================
@@ -139,7 +147,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_viper",
     faction: "terran_hegemony",
     initiative: 1,
-    pointCost: 32,
     isUnique: false,
   },
   viper_ace: {
@@ -148,7 +155,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_viper",
     faction: "terran_hegemony",
     initiative: 3,
-    pointCost: 40,
     isUnique: false,
   },
   commander_striker: {
@@ -157,7 +163,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_viper",
     faction: "terran_hegemony",
     initiative: 5,
-    pointCost: 52,
     isUnique: true,
     abilityText:
       "The first stress token you would gain each round is shrugged off by your iron discipline.",
@@ -170,7 +175,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_viper",
     faction: "terran_hegemony",
     initiative: 6,
-    pointCost: 58,
     isUnique: true,
     abilityText:
       "While a friendly ship is at range 0-1, you hold the line and roll 1 additional defense die.",
@@ -185,7 +189,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_gladius",
     faction: "terran_hegemony",
     initiative: 2,
-    pointCost: 38,
     isUnique: false,
   },
   gladius_veteran: {
@@ -194,7 +197,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_gladius",
     faction: "terran_hegemony",
     initiative: 3,
-    pointCost: 45,
     isUnique: false,
   },
   iron_wolf: {
@@ -203,7 +205,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_gladius",
     faction: "terran_hegemony",
     initiative: 4,
-    pointCost: 52,
     isUnique: true,
     abilityText:
       "When attacking a target a friendly ship is also engaging, roll 1 additional attack die.",
@@ -218,7 +219,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_hammer",
     faction: "terran_hegemony",
     initiative: 2,
-    pointCost: 42,
     isUnique: false,
   },
   deathbringer_ix: {
@@ -227,7 +227,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_hammer",
     faction: "terran_hegemony",
     initiative: 4,
-    pointCost: 55,
     isUnique: true,
     abilityText:
       "When you drop a bomb, you may use a speed 2 template instead of speed 1.",
@@ -240,7 +239,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_hammer",
     faction: "terran_hegemony",
     initiative: 5,
-    pointCost: 62,
     isUnique: true,
     abilityText:
       "After you perform a torpedo or missile attack, you may acquire a lock on the defender.",
@@ -255,7 +253,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_sentinel",
     faction: "terran_hegemony",
     initiative: 2,
-    pointCost: 48,
     isUnique: false,
   },
   admiral_kaine: {
@@ -264,7 +261,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_sentinel",
     faction: "terran_hegemony",
     initiative: 5,
-    pointCost: 68,
     isUnique: true,
     abilityText:
       "At the start of the Engagement Phase, you may choose up to 2 friendly ships at range 0-2. Those ships may perform a focus action.",
@@ -283,7 +279,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_sparrow",
     faction: "free_confederation",
     initiative: 1,
-    pointCost: 22,
     isUnique: false,
   },
   sparrow_pilot: {
@@ -292,7 +287,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_sparrow",
     faction: "free_confederation",
     initiative: 2,
-    pointCost: 26,
     isUnique: false,
   },
   swift_sara: {
@@ -301,7 +295,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_sparrow",
     faction: "free_confederation",
     initiative: 4,
-    pointCost: 35,
     isUnique: true,
     abilityText:
       "After you execute a white maneuver, you may perform a free boost action.",
@@ -316,7 +309,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_falcon",
     faction: "free_confederation",
     initiative: 2,
-    pointCost: 36,
     isUnique: false,
   },
   falcon_veteran: {
@@ -325,7 +317,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_falcon",
     faction: "free_confederation",
     initiative: 3,
-    pointCost: 42,
     isUnique: false,
   },
   hawk_rennick: {
@@ -334,7 +325,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_falcon",
     faction: "free_confederation",
     initiative: 5,
-    pointCost: 52,
     isUnique: true,
     abilityText:
       "After you perform an attack, you may acquire a lock on the defender.",
@@ -347,7 +337,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_falcon",
     faction: "free_confederation",
     initiative: 6,
-    pointCost: 58,
     isUnique: true,
     abilityText:
       "When defending, if the attacker is in your front arc, you may reroll 1 defense die.",
@@ -362,7 +351,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_raven",
     faction: "free_confederation",
     initiative: 2,
-    pointCost: 38,
     isUnique: false,
   },
   shadow_lynx: {
@@ -371,7 +359,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_raven",
     faction: "free_confederation",
     initiative: 5,
-    pointCost: 55,
     isUnique: true,
     abilityText:
       "After you defend, you may slip aside with a free barrel roll action.",
@@ -386,7 +373,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_phoenix",
     faction: "free_confederation",
     initiative: 2,
-    pointCost: 52,
     isUnique: false,
   },
   captain_vex: {
@@ -395,7 +381,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_phoenix",
     faction: "free_confederation",
     initiative: 4,
-    pointCost: 68,
     isUnique: true,
     abilityText:
       "When a friendly ship at range 0-1 defends, your covering fire lets it reroll 1 defense die.",
@@ -408,7 +393,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_phoenix",
     faction: "free_confederation",
     initiative: 5,
-    pointCost: 75,
     isUnique: true,
     abilityText:
       "When attacking with a turret weapon, you may reroll up to 2 attack dice.",
@@ -427,7 +411,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_drone",
     faction: "synthetic_collective",
     initiative: 1,
-    pointCost: 20,
     isUnique: false,
   },
   combat_drone_beta: {
@@ -436,7 +419,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_drone",
     faction: "synthetic_collective",
     initiative: 2,
-    pointCost: 24,
     isUnique: false,
   },
   unit_zero: {
@@ -445,7 +427,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_drone",
     faction: "synthetic_collective",
     initiative: 4,
-    pointCost: 32,
     isUnique: true,
     abilityText:
       "When another friendly ship at range 0-1 defends, you may spend 1 calculate token. If you do, the defender gains 1 evade token.",
@@ -460,7 +441,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_hunter",
     faction: "synthetic_collective",
     initiative: 2,
-    pointCost: 40,
     isUnique: false,
   },
   hunter_prime: {
@@ -469,7 +449,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_hunter",
     faction: "synthetic_collective",
     initiative: 3,
-    pointCost: 48,
     isUnique: false,
   },
   executioner_seven: {
@@ -478,7 +457,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_hunter",
     faction: "synthetic_collective",
     initiative: 5,
-    pointCost: 58,
     isUnique: true,
     abilityText:
       "When attacking at range 1, your saturation fire rolls 1 additional attack die.",
@@ -493,7 +471,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_carrier",
     faction: "synthetic_collective",
     initiative: 1,
-    pointCost: 55,
     isUnique: false,
   },
   nexus_core: {
@@ -502,7 +479,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_carrier",
     faction: "synthetic_collective",
     initiative: 4,
-    pointCost: 72,
     isUnique: true,
     abilityText:
       "At the start of the Activation Phase, you may transfer 1 calculate token to each friendly ship at range 0-2.",
@@ -515,7 +491,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_carrier",
     faction: "synthetic_collective",
     initiative: 6,
-    pointCost: 85,
     isUnique: true,
     abilityText:
       "Friendly ships at range 0-3 may spend your calculate tokens as if they were their own.",
@@ -530,7 +505,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_destroyer",
     faction: "synthetic_collective",
     initiative: 2,
-    pointCost: 48,
     isUnique: false,
   },
   annihilator_nine: {
@@ -539,7 +513,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_destroyer",
     faction: "synthetic_collective",
     initiative: 5,
-    pointCost: 68,
     isUnique: true,
     abilityText:
       "When attacking at range 1, your saturation fire rolls 1 additional attack die.",
@@ -558,7 +531,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_blade",
     faction: "void_corsairs",
     initiative: 2,
-    pointCost: 32,
     isUnique: false,
   },
   blade_cutthroat: {
@@ -567,7 +539,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_blade",
     faction: "void_corsairs",
     initiative: 3,
-    pointCost: 38,
     isUnique: false,
   },
   red_jenna: {
@@ -576,7 +547,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_blade",
     faction: "void_corsairs",
     initiative: 5,
-    pointCost: 50,
     isUnique: true,
     abilityText:
       "After you fully execute a red maneuver, you may perform a bonus attack.",
@@ -589,7 +559,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_blade",
     faction: "void_corsairs",
     initiative: 6,
-    pointCost: 55,
     isUnique: true,
     abilityText:
       "When attacking a ship at full health, you strike from ambush and roll 1 additional attack die.",
@@ -604,7 +573,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_marauder",
     faction: "void_corsairs",
     initiative: 2,
-    pointCost: 40,
     isUnique: false,
   },
   marauder_veteran: {
@@ -613,7 +581,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_marauder",
     faction: "void_corsairs",
     initiative: 3,
-    pointCost: 48,
     isUnique: false,
   },
   iron_fist_mora: {
@@ -622,7 +589,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_marauder",
     faction: "void_corsairs",
     initiative: 5,
-    pointCost: 60,
     isUnique: true,
     abilityText:
       "When attacking, you may deal 1 damage to a nearby ally to add 1 hit result.",
@@ -637,7 +603,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_specter",
     faction: "void_corsairs",
     initiative: 2,
-    pointCost: 38,
     isUnique: false,
   },
   ghost_dancer: {
@@ -646,7 +611,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_specter",
     faction: "void_corsairs",
     initiative: 5,
-    pointCost: 55,
     isUnique: true,
     abilityText:
       "After you perform a cloak action, you may perform a barrel roll.",
@@ -661,7 +625,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_reaver",
     faction: "void_corsairs",
     initiative: 2,
-    pointCost: 52,
     isUnique: false,
   },
   bloodaxe_thorne: {
@@ -670,7 +633,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_reaver",
     faction: "void_corsairs",
     initiative: 5,
-    pointCost: 72,
     isUnique: true,
     abilityText:
       "After you destroy an enemy ship, your blood frenzy adds 1 attack die for the rest of the game.",
@@ -689,7 +651,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_seraph",
     faction: "ascendant_empire",
     initiative: 1,
-    pointCost: 38,
     isUnique: false,
   },
   seraph_guardian: {
@@ -698,7 +659,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_seraph",
     faction: "ascendant_empire",
     initiative: 3,
-    pointCost: 48,
     isUnique: false,
   },
   divine_seraphina: {
@@ -707,7 +667,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_seraph",
     faction: "ascendant_empire",
     initiative: 5,
-    pointCost: 60,
     isUnique: true,
     abilityText:
       "When you spend a Force charge, you may perform a boost or barrel roll action.",
@@ -721,7 +680,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_seraph",
     faction: "ascendant_empire",
     initiative: 6,
-    pointCost: 68,
     isUnique: true,
     abilityText:
       "When attacking or defending, you may spend 1 Force charge to change 1 blank result to a focus result.",
@@ -737,7 +695,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_templar",
     faction: "ascendant_empire",
     initiative: 2,
-    pointCost: 42,
     isUnique: false,
   },
   templar_champion: {
@@ -746,7 +703,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_templar",
     faction: "ascendant_empire",
     initiative: 3,
-    pointCost: 50,
     isUnique: false,
   },
   crusader_vorn: {
@@ -755,7 +711,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_templar",
     faction: "ascendant_empire",
     initiative: 5,
-    pointCost: 62,
     isUnique: true,
     abilityText:
       "After you defend against an attacker at range 1, radiant judgment deals 1 damage to that attacker.",
@@ -770,7 +725,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_oracle",
     faction: "ascendant_empire",
     initiative: 2,
-    pointCost: 45,
     isUnique: false,
   },
   high_seer_mira: {
@@ -779,7 +733,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_oracle",
     faction: "ascendant_empire",
     initiative: 5,
-    pointCost: 65,
     isUnique: true,
     abilityText:
       "At the start of the Engagement Phase, you may spend 1 Force charge. If you do, each friendly ship at range 0-2 may remove 1 red token.",
@@ -795,7 +748,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_avatar",
     faction: "ascendant_empire",
     initiative: 2,
-    pointCost: 58,
     isUnique: false,
   },
   warlord_darius: {
@@ -804,7 +756,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_avatar",
     faction: "ascendant_empire",
     initiative: 5,
-    pointCost: 82,
     isUnique: true,
     abilityText:
       "When a friendly ship at range 0-2 attacks, you may spend 1 Force charge. If you do, the attacker may reroll up to 2 attack dice.",
@@ -818,7 +769,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_avatar",
     faction: "ascendant_empire",
     initiative: 6,
-    pointCost: 92,
     isUnique: true,
     abilityText:
       "At the start of the Engagement Phase, you may choose 1 enemy ship at range 0-3. That ship gains 1 stress token.",
@@ -838,7 +788,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_stiletto",
     faction: "terran_hegemony",
     initiative: 1,
-    pointCost: 22,
     isUnique: false,
   },
   stiletto_pilot: {
@@ -847,7 +796,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_stiletto",
     faction: "terran_hegemony",
     initiative: 2,
-    pointCost: 26,
     isUnique: false,
   },
   viper_dash: {
@@ -856,7 +804,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_stiletto",
     faction: "terran_hegemony",
     initiative: 4,
-    pointCost: 34,
     isUnique: true,
     abilityText:
       "The first stress token you would gain each round is ignored as you keep your nerve.",
@@ -871,7 +818,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_raptor",
     faction: "terran_hegemony",
     initiative: 2,
-    pointCost: 40,
     isUnique: false,
   },
   raptor_ace: {
@@ -880,7 +826,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_raptor",
     faction: "terran_hegemony",
     initiative: 3,
-    pointCost: 46,
     isUnique: false,
   },
   talon_reyes: {
@@ -889,7 +834,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_raptor",
     faction: "terran_hegemony",
     initiative: 5,
-    pointCost: 56,
     isUnique: true,
     abilityText:
       "When attacking a target a friendly wingmate is also engaging, roll 1 additional attack die.",
@@ -904,7 +848,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_centurion",
     faction: "terran_hegemony",
     initiative: 2,
-    pointCost: 48,
     isUnique: false,
   },
   centurion_veteran: {
@@ -913,7 +856,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_centurion",
     faction: "terran_hegemony",
     initiative: 3,
-    pointCost: 54,
     isUnique: false,
   },
   shield_breaker_kane: {
@@ -922,7 +864,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_centurion",
     faction: "terran_hegemony",
     initiative: 5,
-    pointCost: 66,
     isUnique: true,
     abilityText:
       "While a friendly ship is at range 0-1, you shield them and roll 1 additional defense die.",
@@ -937,7 +878,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_praetorian",
     faction: "terran_hegemony",
     initiative: 2,
-    pointCost: 50,
     isUnique: false,
   },
   praetorian_guard: {
@@ -946,7 +886,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_praetorian",
     faction: "terran_hegemony",
     initiative: 3,
-    pointCost: 56,
     isUnique: false,
   },
   steel_marcus: {
@@ -955,7 +894,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_praetorian",
     faction: "terran_hegemony",
     initiative: 5,
-    pointCost: 68,
     isUnique: true,
     abilityText:
       "When defending, you may reroll 1 defense die for each friendly ship at range 0-1.",
@@ -970,7 +908,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_legionnaire",
     faction: "terran_hegemony",
     initiative: 2,
-    pointCost: 46,
     isUnique: false,
   },
   legion_master_vex: {
@@ -979,7 +916,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_legionnaire",
     faction: "terran_hegemony",
     initiative: 4,
-    pointCost: 58,
     isUnique: true,
     abilityText:
       "At the start of the Engagement Phase, you may choose 1 friendly ship at range 0-1. That ship may perform a focus action.",
@@ -994,7 +930,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_thunderbolt",
     faction: "terran_hegemony",
     initiative: 2,
-    pointCost: 46,
     isUnique: false,
   },
   stormbringer_cole: {
@@ -1003,7 +938,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_thunderbolt",
     faction: "terran_hegemony",
     initiative: 4,
-    pointCost: 60,
     isUnique: true,
     abilityText:
       "When you drop a bomb, you may use a speed 2 template instead of speed 1.",
@@ -1018,7 +952,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_javelin",
     faction: "terran_hegemony",
     initiative: 2,
-    pointCost: 48,
     isUnique: false,
   },
   javelin_veteran: {
@@ -1027,7 +960,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_javelin",
     faction: "terran_hegemony",
     initiative: 3,
-    pointCost: 54,
     isUnique: false,
   },
   torpedo_ace_zara: {
@@ -1036,7 +968,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_javelin",
     faction: "terran_hegemony",
     initiative: 5,
-    pointCost: 68,
     isUnique: true,
     abilityText:
       "When you perform a torpedo attack, you may reroll up to 2 attack dice.",
@@ -1051,7 +982,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_guardian",
     faction: "terran_hegemony",
     initiative: 2,
-    pointCost: 52,
     isUnique: false,
   },
   shield_commander_ross: {
@@ -1060,7 +990,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_guardian",
     faction: "terran_hegemony",
     initiative: 4,
-    pointCost: 68,
     isUnique: true,
     abilityText:
       "At the start of the Combat Phase, you may transfer 1 shield token to a friendly ship at range 0-1.",
@@ -1075,7 +1004,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_harbinger",
     faction: "terran_hegemony",
     initiative: 2,
-    pointCost: 58,
     isUnique: false,
   },
   fleet_admiral_cross: {
@@ -1084,7 +1012,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_harbinger",
     faction: "terran_hegemony",
     initiative: 5,
-    pointCost: 78,
     isUnique: true,
     abilityText:
       "At the start of the Activation Phase, you may choose up to 3 friendly ships at range 0-3. Those ships may remove 1 stress token.",
@@ -1099,7 +1026,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_bastion",
     faction: "terran_hegemony",
     initiative: 2,
-    pointCost: 56,
     isUnique: false,
   },
   fortress_gunner_wade: {
@@ -1108,7 +1034,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_bastion",
     faction: "terran_hegemony",
     initiative: 4,
-    pointCost: 72,
     isUnique: true,
     abilityText:
       "When attacking with a turret weapon, you may reroll 1 attack die.",
@@ -1123,7 +1048,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_bulwark",
     faction: "terran_hegemony",
     initiative: 2,
-    pointCost: 62,
     isUnique: false,
   },
   captain_ironside: {
@@ -1132,7 +1056,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_bulwark",
     faction: "terran_hegemony",
     initiative: 4,
-    pointCost: 78,
     isUnique: true,
     abilityText:
       "When defending, if you have a reinforce token, add 1 evade result.",
@@ -1147,7 +1070,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_vindicator",
     faction: "terran_hegemony",
     initiative: 2,
-    pointCost: 68,
     isUnique: false,
   },
   wrath_of_mars: {
@@ -1156,7 +1078,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_vindicator",
     faction: "terran_hegemony",
     initiative: 5,
-    pointCost: 88,
     isUnique: true,
     abilityText: "When attacking, you may spend 1 charge to add 1 hit result.",
     abilityId: "heavy_gunner",
@@ -1171,7 +1092,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_imperator",
     faction: "terran_hegemony",
     initiative: 1,
-    pointCost: 90,
     isUnique: false,
   },
   grand_admiral_nero: {
@@ -1180,7 +1100,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_imperator",
     faction: "terran_hegemony",
     initiative: 4,
-    pointCost: 120,
     isUnique: true,
     abilityText:
       "Friendly ships at range 0-3 may spend your focus tokens as if they were their own.",
@@ -1195,7 +1114,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_dominator",
     faction: "terran_hegemony",
     initiative: 1,
-    pointCost: 110,
     isUnique: false,
   },
   conqueror_prime: {
@@ -1204,7 +1122,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_dominator",
     faction: "terran_hegemony",
     initiative: 4,
-    pointCost: 145,
     isUnique: true,
     abilityText:
       "At the start of the Combat Phase, you may choose 1 enemy ship at range 0-4. That ship gains 1 stress token.",
@@ -1219,7 +1136,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_executor",
     faction: "terran_hegemony",
     initiative: 1,
-    pointCost: 130,
     isUnique: false,
   },
   supreme_commander_ash: {
@@ -1228,7 +1144,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_executor",
     faction: "terran_hegemony",
     initiative: 5,
-    pointCost: 175,
     isUnique: true,
     abilityText:
       "When attacking a target another friendly ship is also engaging, roll 1 additional attack die.",
@@ -1243,7 +1158,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_consul",
     faction: "terran_hegemony",
     initiative: 1,
-    pointCost: 78,
     isUnique: false,
   },
   high_consul_vera: {
@@ -1252,7 +1166,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "terran_consul",
     faction: "terran_hegemony",
     initiative: 4,
-    pointCost: 105,
     isUnique: true,
     abilityText:
       "At the start of the Activation Phase, each friendly ship at range 0-3 may perform a coordinate action.",
@@ -1271,7 +1184,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_wasp",
     faction: "free_confederation",
     initiative: 1,
-    pointCost: 20,
     isUnique: false,
   },
   wasp_pilot: {
@@ -1280,7 +1192,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_wasp",
     faction: "free_confederation",
     initiative: 2,
-    pointCost: 24,
     isUnique: false,
   },
   stinger_webb: {
@@ -1289,7 +1200,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_wasp",
     faction: "free_confederation",
     initiative: 4,
-    pointCost: 32,
     isUnique: true,
     abilityText:
       "After you defend, you may weave away with a free barrel roll action.",
@@ -1304,7 +1214,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_finch",
     faction: "free_confederation",
     initiative: 2,
-    pointCost: 22,
     isUnique: false,
   },
   scout_master_piper: {
@@ -1313,7 +1222,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_finch",
     faction: "free_confederation",
     initiative: 4,
-    pointCost: 30,
     isUnique: true,
     abilityText:
       "At the start of the Planning Phase, if you are not stressed, you may look at 1 enemy ships dial.",
@@ -1328,7 +1236,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_kestrel",
     faction: "free_confederation",
     initiative: 2,
-    pointCost: 30,
     isUnique: false,
   },
   kestrel_ace: {
@@ -1337,7 +1244,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_kestrel",
     faction: "free_confederation",
     initiative: 3,
-    pointCost: 36,
     isUnique: false,
   },
   striker_vale: {
@@ -1346,7 +1252,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_kestrel",
     faction: "free_confederation",
     initiative: 5,
-    pointCost: 46,
     isUnique: true,
     abilityText:
       "When attacking at range 1, you may roll 1 additional attack die.",
@@ -1361,7 +1266,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_hawk",
     faction: "free_confederation",
     initiative: 2,
-    pointCost: 38,
     isUnique: false,
   },
   hawk_veteran: {
@@ -1370,7 +1274,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_hawk",
     faction: "free_confederation",
     initiative: 3,
-    pointCost: 44,
     isUnique: false,
   },
   ironwing_chen: {
@@ -1379,7 +1282,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_hawk",
     faction: "free_confederation",
     initiative: 5,
-    pointCost: 56,
     isUnique: true,
     abilityText:
       "When defending, you may spend 1 focus to cancel 1 hit result.",
@@ -1394,7 +1296,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_eagle",
     faction: "free_confederation",
     initiative: 2,
-    pointCost: 42,
     isUnique: false,
   },
   sky_commander_rex: {
@@ -1403,7 +1304,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_eagle",
     faction: "free_confederation",
     initiative: 5,
-    pointCost: 58,
     isUnique: true,
     abilityText:
       "Action: remove 1 stress token from a friendly ship at range 1-2.",
@@ -1418,7 +1318,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_condor",
     faction: "free_confederation",
     initiative: 2,
-    pointCost: 46,
     isUnique: false,
   },
   warhawk_santos: {
@@ -1427,7 +1326,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_condor",
     faction: "free_confederation",
     initiative: 5,
-    pointCost: 62,
     isUnique: true,
     abilityText:
       "When attacking from outside the defender's firing arc, roll 1 additional attack die.",
@@ -1442,7 +1340,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_owl",
     faction: "free_confederation",
     initiative: 2,
-    pointCost: 36,
     isUnique: false,
   },
   night_hunter_nova: {
@@ -1451,7 +1348,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_owl",
     faction: "free_confederation",
     initiative: 5,
-    pointCost: 50,
     isUnique: true,
     abilityText:
       "When attacking from outside the defender's firing arc, roll 1 additional attack die.",
@@ -1466,7 +1362,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_pelican",
     faction: "free_confederation",
     initiative: 2,
-    pointCost: 44,
     isUnique: false,
   },
   bomb_master_hayes: {
@@ -1475,7 +1370,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_pelican",
     faction: "free_confederation",
     initiative: 4,
-    pointCost: 58,
     isUnique: true,
     abilityText:
       "When attacking from outside the defender's firing arc, roll 1 additional attack die.",
@@ -1490,7 +1384,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_albatross",
     faction: "free_confederation",
     initiative: 2,
-    pointCost: 52,
     isUnique: false,
   },
   thunder_mason: {
@@ -1499,7 +1392,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_albatross",
     faction: "free_confederation",
     initiative: 4,
-    pointCost: 70,
     isUnique: true,
     abilityText:
       "When attacking, your steady aim lets you convert 1 focus result to a hit result.",
@@ -1514,7 +1406,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_thunderbird",
     faction: "free_confederation",
     initiative: 2,
-    pointCost: 58,
     isUnique: false,
   },
   stormlord_kai: {
@@ -1523,7 +1414,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_thunderbird",
     faction: "free_confederation",
     initiative: 5,
-    pointCost: 78,
     isUnique: true,
     abilityText:
       "When attacking, your marksmanship lets you convert 1 focus result to a hit result.",
@@ -1538,7 +1428,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_harrier",
     faction: "free_confederation",
     initiative: 2,
-    pointCost: 52,
     isUnique: false,
   },
   swooping_death_jin: {
@@ -1547,7 +1436,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_harrier",
     faction: "free_confederation",
     initiative: 5,
-    pointCost: 70,
     isUnique: true,
     abilityText:
       "After you fully execute a maneuver, you may perform a primary attack.",
@@ -1562,7 +1450,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_crane",
     faction: "free_confederation",
     initiative: 2,
-    pointCost: 48,
     isUnique: false,
   },
   mercy_pilot_lee: {
@@ -1571,7 +1458,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_crane",
     faction: "free_confederation",
     initiative: 4,
-    pointCost: 62,
     isUnique: true,
     abilityText:
       "When a friendly ship at range 0-1 defends, your covering fire lets it reroll 1 defense die.",
@@ -1586,7 +1472,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_heron",
     faction: "free_confederation",
     initiative: 2,
-    pointCost: 52,
     isUnique: false,
   },
   chief_medic_strand: {
@@ -1595,7 +1480,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_heron",
     faction: "free_confederation",
     initiative: 4,
-    pointCost: 68,
     isUnique: true,
     abilityText:
       "At the start of the End Phase, each friendly ship at range 0-2 may recover 1 shield.",
@@ -1610,7 +1494,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_liberty",
     faction: "free_confederation",
     initiative: 1,
-    pointCost: 82,
     isUnique: false,
   },
   admiral_freedom: {
@@ -1619,7 +1502,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_liberty",
     faction: "free_confederation",
     initiative: 4,
-    pointCost: 110,
     isUnique: true,
     abilityText:
       "Action: remove 1 stress token from a friendly ship at range 1-2.",
@@ -1634,7 +1516,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_independence",
     faction: "free_confederation",
     initiative: 1,
-    pointCost: 95,
     isUnique: false,
   },
   rebel_commander_blake: {
@@ -1643,7 +1524,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_independence",
     faction: "free_confederation",
     initiative: 4,
-    pointCost: 125,
     isUnique: true,
     abilityText:
       "Action: remove 1 stress token from a friendly ship at range 1-2.",
@@ -1658,7 +1538,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_defiance",
     faction: "free_confederation",
     initiative: 1,
-    pointCost: 105,
     isUnique: false,
   },
   hero_of_liberation: {
@@ -1667,7 +1546,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "confed_defiance",
     faction: "free_confederation",
     initiative: 5,
-    pointCost: 140,
     isUnique: true,
     abilityText:
       "When a friendly ship at range 0-1 defends, your covering fire lets it reroll 1 defense die.",
@@ -1686,7 +1564,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_scout_drone",
     faction: "synthetic_collective",
     initiative: 1,
-    pointCost: 16,
     isUnique: false,
   },
   scout_drone_beta: {
@@ -1695,7 +1572,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_scout_drone",
     faction: "synthetic_collective",
     initiative: 2,
-    pointCost: 20,
     isUnique: false,
   },
   observer_prime: {
@@ -1704,7 +1580,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_scout_drone",
     faction: "synthetic_collective",
     initiative: 4,
-    pointCost: 28,
     isUnique: true,
     abilityText:
       "At the start of the Planning Phase, you may choose 1 enemy ship at range 0-3. All friendly ships may acquire a lock on that ship.",
@@ -1719,7 +1594,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_heavy_drone",
     faction: "synthetic_collective",
     initiative: 1,
-    pointCost: 26,
     isUnique: false,
   },
   heavy_drone_beta: {
@@ -1728,7 +1602,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_heavy_drone",
     faction: "synthetic_collective",
     initiative: 2,
-    pointCost: 30,
     isUnique: false,
   },
   assault_core: {
@@ -1737,7 +1610,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_heavy_drone",
     faction: "synthetic_collective",
     initiative: 4,
-    pointCost: 40,
     isUnique: true,
     abilityText:
       "After a friendly ship at range 0-1 is destroyed, you assimilate its data and gain 1 focus token.",
@@ -1752,7 +1624,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_bomber_drone",
     faction: "synthetic_collective",
     initiative: 1,
-    pointCost: 28,
     isUnique: false,
   },
   demolition_unit: {
@@ -1761,7 +1632,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_bomber_drone",
     faction: "synthetic_collective",
     initiative: 3,
-    pointCost: 38,
     isUnique: true,
     abilityText:
       "When you are destroyed, each ship at range 0-1 suffers 1 damage.",
@@ -1776,7 +1646,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_interceptor_drone",
     faction: "synthetic_collective",
     initiative: 2,
-    pointCost: 24,
     isUnique: false,
   },
   interceptor_drone_beta: {
@@ -1785,7 +1654,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_interceptor_drone",
     faction: "synthetic_collective",
     initiative: 3,
-    pointCost: 28,
     isUnique: false,
   },
   pursuit_protocol: {
@@ -1794,7 +1662,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_interceptor_drone",
     faction: "synthetic_collective",
     initiative: 5,
-    pointCost: 38,
     isUnique: true,
     abilityText: "Your overclocked drive grants +1 speed on your maneuvers.",
     abilityId: "drone_overclock",
@@ -1808,7 +1675,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_stalker",
     faction: "synthetic_collective",
     initiative: 2,
-    pointCost: 42,
     isUnique: false,
   },
   shadow_hunter: {
@@ -1817,7 +1683,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_stalker",
     faction: "synthetic_collective",
     initiative: 5,
-    pointCost: 58,
     isUnique: true,
     abilityText:
       "When attacking, your targeting math converts 1 blank result to a focus result.",
@@ -1832,7 +1697,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_ravager",
     faction: "synthetic_collective",
     initiative: 2,
-    pointCost: 48,
     isUnique: false,
   },
   decimator_prime: {
@@ -1841,7 +1705,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_ravager",
     faction: "synthetic_collective",
     initiative: 5,
-    pointCost: 66,
     isUnique: true,
     abilityText:
       "When attacking at range 1, your saturation fire rolls 1 additional attack die.",
@@ -1856,7 +1719,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_predator",
     faction: "synthetic_collective",
     initiative: 2,
-    pointCost: 52,
     isUnique: false,
   },
   apex_hunter: {
@@ -1865,7 +1727,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_predator",
     faction: "synthetic_collective",
     initiative: 5,
-    pointCost: 72,
     isUnique: true,
     abilityText:
       "When attacking, your predictive math converts 1 blank result to a focus result.",
@@ -1880,7 +1741,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_annihilator",
     faction: "synthetic_collective",
     initiative: 2,
-    pointCost: 56,
     isUnique: false,
   },
   extinction_unit: {
@@ -1889,7 +1749,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_annihilator",
     faction: "synthetic_collective",
     initiative: 5,
-    pointCost: 78,
     isUnique: true,
     abilityText:
       "When attacking, your cold calculation converts 1 blank result to a focus result.",
@@ -1904,7 +1763,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_relay_node",
     faction: "synthetic_collective",
     initiative: 1,
-    pointCost: 42,
     isUnique: false,
   },
   command_relay: {
@@ -1913,7 +1771,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_relay_node",
     faction: "synthetic_collective",
     initiative: 3,
-    pointCost: 55,
     isUnique: true,
     abilityText:
       "Through the data link, friendly ships at range 0-2 may reroll 1 attack die.",
@@ -1928,7 +1785,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_repair_node",
     faction: "synthetic_collective",
     initiative: 1,
-    pointCost: 45,
     isUnique: false,
   },
   restoration_core: {
@@ -1937,7 +1793,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_repair_node",
     faction: "synthetic_collective",
     initiative: 3,
-    pointCost: 60,
     isUnique: true,
     abilityText:
       "At the end of each round, your regenerative matrix recovers 1 shield.",
@@ -1952,7 +1807,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_devastator",
     faction: "synthetic_collective",
     initiative: 2,
-    pointCost: 58,
     isUnique: false,
   },
   obliterator: {
@@ -1961,7 +1815,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_devastator",
     faction: "synthetic_collective",
     initiative: 4,
-    pointCost: 78,
     isUnique: true,
     abilityText:
       "When attacking at range 1, your saturation fire rolls 1 additional attack die.",
@@ -1976,7 +1829,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_eradicator",
     faction: "synthetic_collective",
     initiative: 2,
-    pointCost: 64,
     isUnique: false,
   },
   purge_unit: {
@@ -1985,7 +1837,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_eradicator",
     faction: "synthetic_collective",
     initiative: 5,
-    pointCost: 88,
     isUnique: true,
     abilityText:
       "When attacking at range 1, your saturation fire rolls 1 additional attack die.",
@@ -2000,7 +1851,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_nexus",
     faction: "synthetic_collective",
     initiative: 1,
-    pointCost: 90,
     isUnique: false,
   },
   central_nexus: {
@@ -2009,7 +1859,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_nexus",
     faction: "synthetic_collective",
     initiative: 4,
-    pointCost: 125,
     isUnique: true,
     abilityText:
       "At the start of each round, all friendly ships at range 0-4 gain 1 calculate token.",
@@ -2024,7 +1873,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_overmind",
     faction: "synthetic_collective",
     initiative: 1,
-    pointCost: 115,
     isUnique: false,
   },
   supreme_overmind: {
@@ -2033,7 +1881,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_overmind",
     faction: "synthetic_collective",
     initiative: 5,
-    pointCost: 160,
     isUnique: true,
     abilityText:
       "When a friendly ship at range 0-5 is destroyed, you may gain 2 calculate tokens.",
@@ -2048,7 +1895,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_terminus",
     faction: "synthetic_collective",
     initiative: 1,
-    pointCost: 130,
     isUnique: false,
   },
   end_protocol: {
@@ -2057,7 +1903,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_terminus",
     faction: "synthetic_collective",
     initiative: 4,
-    pointCost: 175,
     isUnique: true,
     abilityText:
       "When you are destroyed, all enemy ships at range 0-2 suffer 2 damage.",
@@ -2072,7 +1917,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_conduit",
     faction: "synthetic_collective",
     initiative: 1,
-    pointCost: 75,
     isUnique: false,
   },
   prime_conduit: {
@@ -2081,7 +1925,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_conduit",
     faction: "synthetic_collective",
     initiative: 3,
-    pointCost: 100,
     isUnique: true,
     abilityText:
       "At the start of the Activation Phase, you may transfer up to 2 calculate tokens to friendly ships at range 0-3.",
@@ -2096,7 +1939,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_gestalt",
     faction: "synthetic_collective",
     initiative: 1,
-    pointCost: 80,
     isUnique: false,
   },
   apex_gestalt: {
@@ -2105,7 +1947,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "synth_gestalt",
     faction: "synthetic_collective",
     initiative: 3,
-    pointCost: 110,
     isUnique: true,
     abilityText:
       "While you perform an attack, you may spend up to 2 calculate tokens. For each token spent, change 1 focus result to a hit result.",
@@ -2120,7 +1961,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_fang",
     faction: "void_corsairs",
     initiative: 2,
-    pointCost: 30,
     isUnique: false,
   },
   fang_ace: {
@@ -2129,7 +1969,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_fang",
     faction: "void_corsairs",
     initiative: 3,
-    pointCost: 36,
     isUnique: false,
   },
   poison_fang: {
@@ -2138,7 +1977,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_fang",
     faction: "void_corsairs",
     initiative: 5,
-    pointCost: 48,
     isUnique: true,
     abilityText:
       "When attacking a ship at full health, you strike from ambush and roll 1 additional attack die.",
@@ -2153,7 +1991,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_talon",
     faction: "void_corsairs",
     initiative: 2,
-    pointCost: 32,
     isUnique: false,
   },
   razor_talon: {
@@ -2162,7 +1999,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_talon",
     faction: "void_corsairs",
     initiative: 5,
-    pointCost: 46,
     isUnique: true,
     abilityText:
       "After you perform a boost action, you may perform a focus action.",
@@ -2177,7 +2013,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_venom",
     faction: "void_corsairs",
     initiative: 2,
-    pointCost: 34,
     isUnique: false,
   },
   deadly_venom: {
@@ -2186,7 +2021,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_venom",
     faction: "void_corsairs",
     initiative: 5,
-    pointCost: 50,
     isUnique: true,
     abilityText:
       "Once per game, you may push your luck and reroll all of your defense dice.",
@@ -2201,7 +2035,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_cutlass",
     faction: "void_corsairs",
     initiative: 2,
-    pointCost: 40,
     isUnique: false,
   },
   cutlass_veteran: {
@@ -2210,7 +2043,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_cutlass",
     faction: "void_corsairs",
     initiative: 3,
-    pointCost: 46,
     isUnique: false,
   },
   bloody_cutlass: {
@@ -2219,7 +2051,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_cutlass",
     faction: "void_corsairs",
     initiative: 5,
-    pointCost: 58,
     isUnique: true,
     abilityText:
       "When attacking, if you have at least 1 damage card, roll 1 additional attack die.",
@@ -2234,7 +2065,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_scimitar",
     faction: "void_corsairs",
     initiative: 2,
-    pointCost: 44,
     isUnique: false,
   },
   whirlwind_scimitar: {
@@ -2243,7 +2073,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_scimitar",
     faction: "void_corsairs",
     initiative: 5,
-    pointCost: 62,
     isUnique: true,
     abilityText:
       "After you fully execute a red maneuver, you may perform an attack.",
@@ -2258,7 +2087,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_saber",
     faction: "void_corsairs",
     initiative: 2,
-    pointCost: 46,
     isUnique: false,
   },
   saber_master: {
@@ -2267,7 +2095,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_saber",
     faction: "void_corsairs",
     initiative: 6,
-    pointCost: 66,
     isUnique: true,
     abilityText:
       "Once per game, you may trust your luck and reroll all of your defense dice.",
@@ -2282,7 +2109,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_phantom",
     faction: "void_corsairs",
     initiative: 2,
-    pointCost: 40,
     isUnique: false,
   },
   phantom_whisper: {
@@ -2291,7 +2117,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_phantom",
     faction: "void_corsairs",
     initiative: 5,
-    pointCost: 58,
     isUnique: true,
     abilityText: "After you decloak, you may perform an evade action.",
     abilityId: "phantom_strike",
@@ -2305,7 +2130,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_shadow",
     faction: "void_corsairs",
     initiative: 2,
-    pointCost: 44,
     isUnique: false,
   },
   death_shadow: {
@@ -2314,7 +2138,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_shadow",
     faction: "void_corsairs",
     initiative: 6,
-    pointCost: 66,
     isUnique: true,
     abilityText: "When you attack from cloak, add 1 critical hit result.",
     abilityId: "phantom_strike",
@@ -2328,7 +2151,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_pillager",
     faction: "void_corsairs",
     initiative: 2,
-    pointCost: 54,
     isUnique: false,
   },
   loot_master_graves: {
@@ -2337,7 +2159,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_pillager",
     faction: "void_corsairs",
     initiative: 4,
-    pointCost: 72,
     isUnique: true,
     abilityText:
       "When you destroy an enemy ship, gain 1 focus and 1 evade token.",
@@ -2352,7 +2173,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_ravager",
     faction: "void_corsairs",
     initiative: 2,
-    pointCost: 58,
     isUnique: false,
   },
   warlord_drake: {
@@ -2361,7 +2181,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_ravager",
     faction: "void_corsairs",
     initiative: 5,
-    pointCost: 78,
     isUnique: true,
     abilityText:
       "After you destroy an enemy ship, your blood frenzy adds 1 attack die for the rest of the game.",
@@ -2376,7 +2195,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_bomber",
     faction: "void_corsairs",
     initiative: 2,
-    pointCost: 42,
     isUnique: false,
   },
   bomb_runner_hex: {
@@ -2385,7 +2203,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_bomber",
     faction: "void_corsairs",
     initiative: 4,
-    pointCost: 56,
     isUnique: true,
     abilityText:
       "After you perform an attack, you may perform a free boost action to break away.",
@@ -2400,7 +2217,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_torpedo_boat",
     faction: "void_corsairs",
     initiative: 2,
-    pointCost: 48,
     isUnique: false,
   },
   torpedo_king_blaze: {
@@ -2409,7 +2225,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_torpedo_boat",
     faction: "void_corsairs",
     initiative: 5,
-    pointCost: 68,
     isUnique: true,
     abilityText:
       "When attacking a ship at full health, you strike from ambush and roll 1 additional attack die.",
@@ -2424,7 +2239,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_dreadnought",
     faction: "void_corsairs",
     initiative: 1,
-    pointCost: 95,
     isUnique: false,
   },
   pirate_king_skull: {
@@ -2433,7 +2247,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_dreadnought",
     faction: "void_corsairs",
     initiative: 5,
-    pointCost: 135,
     isUnique: true,
     abilityText:
       "After you destroy an enemy ship, your blood frenzy adds 1 attack die for the rest of the game.",
@@ -2448,7 +2261,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_galleon",
     faction: "void_corsairs",
     initiative: 1,
-    pointCost: 82,
     isUnique: false,
   },
   fleet_master_storm: {
@@ -2457,7 +2269,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_galleon",
     faction: "void_corsairs",
     initiative: 4,
-    pointCost: 110,
     isUnique: true,
     abilityText:
       "When you execute a red maneuver, your raider cadence spares you a stress token.",
@@ -2472,7 +2283,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_frigate",
     faction: "void_corsairs",
     initiative: 1,
-    pointCost: 72,
     isUnique: false,
   },
   raider_captain_flint: {
@@ -2481,7 +2291,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_frigate",
     faction: "void_corsairs",
     initiative: 4,
-    pointCost: 95,
     isUnique: true,
     abilityText:
       "When attacking, if the defender has no shields remaining, roll 1 additional attack die.",
@@ -2496,7 +2305,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_tender",
     faction: "void_corsairs",
     initiative: 1,
-    pointCost: 55,
     isUnique: false,
   },
   supply_master_patch: {
@@ -2505,7 +2313,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "corsair_tender",
     faction: "void_corsairs",
     initiative: 3,
-    pointCost: 72,
     isUnique: true,
     abilityText:
       "When you execute a red maneuver, your steady cadence spares you a stress token.",
@@ -2524,7 +2331,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_cherub",
     faction: "ascendant_empire",
     initiative: 1,
-    pointCost: 26,
     isUnique: false,
   },
   cherub_guardian: {
@@ -2533,7 +2339,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_cherub",
     faction: "ascendant_empire",
     initiative: 2,
-    pointCost: 30,
     isUnique: false,
   },
   divine_light: {
@@ -2542,7 +2347,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_cherub",
     faction: "ascendant_empire",
     initiative: 4,
-    pointCost: 42,
     isUnique: true,
     abilityText:
       "When defending, you may spend 1 Force charge to add 1 evade result.",
@@ -2558,7 +2362,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_herald",
     faction: "ascendant_empire",
     initiative: 2,
-    pointCost: 28,
     isUnique: false,
   },
   voice_of_glory: {
@@ -2567,7 +2370,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_herald",
     faction: "ascendant_empire",
     initiative: 4,
-    pointCost: 40,
     isUnique: true,
     abilityText:
       "Action: spend 1 Force charge; an enemy ship at range 1-2 cannot perform actions next round.",
@@ -2583,7 +2385,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_virtue",
     faction: "ascendant_empire",
     initiative: 2,
-    pointCost: 36,
     isUnique: false,
   },
   righteous_fury: {
@@ -2592,7 +2393,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_virtue",
     faction: "ascendant_empire",
     initiative: 5,
-    pointCost: 52,
     isUnique: true,
     abilityText:
       "When attacking, you may spend 1 Force charge to reroll up to 2 attack dice.",
@@ -2608,7 +2408,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_crusader",
     faction: "ascendant_empire",
     initiative: 2,
-    pointCost: 44,
     isUnique: false,
   },
   crusader_champion: {
@@ -2617,7 +2416,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_crusader",
     faction: "ascendant_empire",
     initiative: 3,
-    pointCost: 50,
     isUnique: false,
   },
   holy_avenger: {
@@ -2626,7 +2424,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_crusader",
     faction: "ascendant_empire",
     initiative: 5,
-    pointCost: 65,
     isUnique: true,
     abilityText:
       "When a friendly ship at range 0-2 is destroyed, gain 2 Force charges (up to your maximum).",
@@ -2642,7 +2439,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_paladin",
     faction: "ascendant_empire",
     initiative: 2,
-    pointCost: 48,
     isUnique: false,
   },
   shield_of_faith: {
@@ -2651,7 +2447,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_paladin",
     faction: "ascendant_empire",
     initiative: 5,
-    pointCost: 68,
     isUnique: true,
     abilityText:
       "When a friendly ship at range 0-1 defends, you may spend 1 Force charge. If you do, the defender adds 1 evade result.",
@@ -2667,7 +2462,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_inquisitor",
     faction: "ascendant_empire",
     initiative: 2,
-    pointCost: 52,
     isUnique: false,
   },
   grand_inquisitor: {
@@ -2676,7 +2470,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_inquisitor",
     faction: "ascendant_empire",
     initiative: 6,
-    pointCost: 78,
     isUnique: true,
     abilityText:
       "When attacking, you may spend 1 Force charge to add 1 hit result.",
@@ -2692,7 +2485,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_prophet",
     faction: "ascendant_empire",
     initiative: 2,
-    pointCost: 46,
     isUnique: false,
   },
   vision_of_doom: {
@@ -2701,7 +2493,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_prophet",
     faction: "ascendant_empire",
     initiative: 5,
-    pointCost: 65,
     isUnique: true,
     abilityText:
       "At the start of the Engagement Phase, you may spend 2 Force charges. If you do, choose 1 enemy ship at range 0-3. That ship cannot spend focus or evade tokens this round.",
@@ -2717,7 +2508,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_acolyte",
     faction: "ascendant_empire",
     initiative: 2,
-    pointCost: 38,
     isUnique: false,
   },
   blessed_healer: {
@@ -2726,7 +2516,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_acolyte",
     faction: "ascendant_empire",
     initiative: 4,
-    pointCost: 52,
     isUnique: true,
     abilityText:
       "At the start of the End Phase, you may spend 1 Force charge. If you do, each friendly ship at range 0-2 may recover 1 shield.",
@@ -2742,7 +2531,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_wrath",
     faction: "ascendant_empire",
     initiative: 2,
-    pointCost: 56,
     isUnique: false,
   },
   fury_incarnate: {
@@ -2751,7 +2539,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_wrath",
     faction: "ascendant_empire",
     initiative: 5,
-    pointCost: 78,
     isUnique: true,
     abilityText:
       "When attacking, you may spend any number of Force charges. For each charge spent, change 1 focus result to a hit result.",
@@ -2767,7 +2554,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_judgment",
     faction: "ascendant_empire",
     initiative: 2,
-    pointCost: 62,
     isUnique: false,
   },
   divine_sentence: {
@@ -2776,7 +2562,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_judgment",
     faction: "ascendant_empire",
     initiative: 5,
-    pointCost: 88,
     isUnique: true,
     abilityText:
       "When attacking, after rolling dice, you may spend 2 Force charges to add 1 critical hit result.",
@@ -2792,7 +2577,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_smiter",
     faction: "ascendant_empire",
     initiative: 2,
-    pointCost: 44,
     isUnique: false,
   },
   wrath_of_heaven: {
@@ -2801,7 +2585,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_smiter",
     faction: "ascendant_empire",
     initiative: 4,
-    pointCost: 60,
     isUnique: true,
     abilityText:
       "After you defend against an attacker at range 1, radiant judgment deals 1 damage to that attacker.",
@@ -2817,7 +2600,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_purifier",
     faction: "ascendant_empire",
     initiative: 2,
-    pointCost: 52,
     isUnique: false,
   },
   cleansing_fire: {
@@ -2826,7 +2608,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_purifier",
     faction: "ascendant_empire",
     initiative: 5,
-    pointCost: 72,
     isUnique: true,
     abilityText:
       "After you defend against an attacker at range 1, cleansing fire deals 1 damage to that attacker.",
@@ -2842,7 +2623,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_divine",
     faction: "ascendant_empire",
     initiative: 1,
-    pointCost: 105,
     isUnique: false,
   },
   hand_of_the_divine: {
@@ -2851,7 +2631,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_divine",
     faction: "ascendant_empire",
     initiative: 5,
-    pointCost: 150,
     isUnique: true,
     abilityText:
       "At the start of each round, all friendly ships at range 0-4 may recover 1 Force charge.",
@@ -2867,7 +2646,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_glory",
     faction: "ascendant_empire",
     initiative: 1,
-    pointCost: 115,
     isUnique: false,
   },
   light_of_glory: {
@@ -2876,7 +2654,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_glory",
     faction: "ascendant_empire",
     initiative: 5,
-    pointCost: 160,
     isUnique: true,
     abilityText:
       "When a friendly ship at range 0-3 attacks, you may spend 1 Force charge. If you do, the attacker may reroll up to 2 attack dice.",
@@ -2892,7 +2669,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_sanctum",
     faction: "ascendant_empire",
     initiative: 1,
-    pointCost: 95,
     isUnique: false,
   },
   high_priest: {
@@ -2901,7 +2677,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_sanctum",
     faction: "ascendant_empire",
     initiative: 4,
-    pointCost: 130,
     isUnique: true,
     abilityText:
       "At the start of the End Phase, friendly ships at range 0-3 may recover 1 shield or remove 1 stress token.",
@@ -2917,7 +2692,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_bastion",
     faction: "ascendant_empire",
     initiative: 1,
-    pointCost: 85,
     isUnique: false,
   },
   fortress_of_faith: {
@@ -2926,7 +2700,6 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     shipId: "ascendant_bastion",
     faction: "ascendant_empire",
     initiative: 4,
-    pointCost: 115,
     isUnique: true,
     abilityText:
       "Action: spend 1 Force charge to raise a barrier, giving a friendly ship at range 1-2 an evade token.",
@@ -2935,6 +2708,22 @@ export const PILOT_CARDS: Record<string, PilotCard> = {
     extraSlots: ["crew", "crew", "gunner", "force_power"],
   },
 };
+
+/**
+ * Every pilot card, with its surcharge derived from initiative and ability.
+ *
+ * Built once at module load, like SHIP_LOADOUTS, so a pilot's price can never
+ * disagree with what the card actually brings.
+ */
+export const PILOT_CARDS: Record<string, PilotCard> = Object.fromEntries(
+  Object.entries(PILOT_CARD_BLUEPRINTS).map(([id, card]) => [
+    id,
+    {
+      ...card,
+      pointCost: derivePilotSurcharge(card.initiative, card.abilityId),
+    },
+  ]),
+);
 
 // ============================================
 // Squad Builder Functions
@@ -3045,15 +2834,7 @@ export function removeUnitFromSquad(squad: Squad, unitId: string): Squad {
  * @returns The slots the unit can fill.
  */
 function unitSlotBar(shipId: string, pilot: PilotCard): UpgradeSlotType[] {
-  const slots = [
-    ...(getShipSlots(shipId)?.slots ?? []),
-    ...(pilot.extraSlots ?? []),
-  ];
-  for (const removed of pilot.removedSlots ?? []) {
-    const index = slots.indexOf(removed);
-    if (index !== -1) slots.splice(index, 1);
-  }
-  return slots;
+  return slotBarFor(shipId, pilot.extraSlots, pilot.removedSlots);
 }
 
 /**
@@ -3167,16 +2948,20 @@ export function removeUpgradeFromUnit(
 }
 
 /**
- * Calculate the total point cost of a unit
+ * Calculate the total point cost of a unit: bare ship + pilot surcharge +
+ * every equipped upgrade.
+ *
+ * @param unit - The squad unit to price.
+ * @returns The unit's point cost (0 for an unknown pilot).
  */
 export function calculateUnitCost(unit: SquadUnit): number {
   const pilot = PILOT_CARDS[unit.pilotId];
   if (!pilot) return 0;
 
-  const pilotCost = pilot.pointCost;
+  const shipCost = SHIP_DEFINITIONS[pilot.shipId]?.baseStats.pointCost ?? 0;
   const upgradeCost = calculateUpgradesCost(unit.equippedUpgrades);
 
-  return pilotCost + upgradeCost;
+  return shipCost + pilot.pointCost + upgradeCost;
 }
 
 /**
