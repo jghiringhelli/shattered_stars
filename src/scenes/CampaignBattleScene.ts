@@ -56,10 +56,33 @@ import {
   seatCampaignPilots,
 } from "../arcade/systems/CampaignPilotEquip";
 import {
+  deathBlastDamage,
   deathBlastTargets,
   hasWingman,
   rewardKill,
 } from "../arcade/PilotAbilityCombat";
+import {
+  attackIntervalMs,
+  HitImmunityLedger,
+} from "../arcade/systems/CombatTempo";
+import { nearestTargetInArc } from "../arcade/systems/ArcTargeting";
+import { squadHudSnapshot } from "../arcade/systems/FlagshipHudSnapshot";
+import {
+  ACE_ATTACK_BONUS,
+  BOSS_ATTACK_BONUS,
+  aceDurability,
+  bossDurability,
+  withEvolutionBonuses,
+  type DurabilityCaps,
+} from "../arcade/systems/CampaignDurability";
+import { BattleHud, cameraViewFrom } from "../ui/hud";
+import { HOLO_PALETTE } from "../ui/theme/HoloTheme";
+import { CampaignModeHud } from "../ui/modeHud/CampaignModeHud";
+import {
+  showResultOverlay,
+  type ResultLine,
+  type ResultOverlay,
+} from "../ui/modeHud/HoloResultOverlay";
 import { applyInstantStress } from "../arcade/ArcadeStress";
 import {
   NEUTRAL_MODIFIERS,
@@ -152,6 +175,11 @@ interface ShipSpawn {
 /** Vertical offset (px) of a ship's health bar above its sprite. */
 const HEALTH_BAR_OFFSET_Y = 40;
 
+/** Victory panel fade-in, hold, then camera fade-out before the debrief (ms). */
+const RESULT_FADE_IN_MS = 400;
+const VICTORY_HOLD_MS = 1600;
+const CAMERA_FADE_MS = 400;
+
 /** A pose on the battlefield. */
 interface Pose {
   readonly x: number;
@@ -203,12 +231,13 @@ export class CampaignBattleScene extends Phaser.Scene {
   private isPaused = false;
   private pauseMenu!: PauseMenu;
 
-  // UI
-  private missionTitleText!: Phaser.GameObjects.Text;
-  private objectivePanel!: Phaser.GameObjects.Container;
-  private objectiveTexts: Phaser.GameObjects.Text[] = [];
-  private controlsHintText!: Phaser.GameObjects.Text;
-  private messageText!: Phaser.GameObjects.Text;
+  // UI — holographic battle HUD (flight, radar, weapons) + mission readouts
+  private battleHud: BattleHud | null = null;
+  private modeHud!: CampaignModeHud;
+  private resultOverlay: ResultOverlay | null = null;
+
+  /** X-Wing round tempo: a struck target ignores its attacker for a cycle. */
+  private readonly hitLedger = new HitImmunityLedger();
 
   // Camera follow (manual — toroid wrap makes Phaser's startFollow jump at the seam)
   private cameraVirtualX = BATTLEFIELD_SIZE / 2;
@@ -257,6 +286,8 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.enemyShipIds = [];
     this.pilotedShipId = null;
     this.pilot.reset();
+    this.hitLedger.clear();
+    this.resultOverlay = null;
   }
 
   shutdown(): void {
@@ -264,6 +295,9 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.inputSubscriptionIds = [];
     teardownSceneInput();
     this.pilot.detach();
+    this.battleHud?.destroy();
+    this.battleHud = null;
+    this.resultOverlay = null;
   }
 
   create(): void {
@@ -294,7 +328,6 @@ export class CampaignBattleScene extends Phaser.Scene {
 
     this.createStarfield();
     this.createHUD();
-    this.createObjectivePanel();
     this.setupInput();
 
     this.spawnInitialShips();
@@ -314,7 +347,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.cameras.main.setZoom(1.0);
 
     this.missionStartTime = Date.now();
-    this.showMessage(this.mission.title, "Mission start!");
+    this.modeHud.showBriefing(this.factionId, this.mission);
   }
 
   update(time: number, delta: number): void {
@@ -322,6 +355,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     // Mix every positional sound relative to what the player is
     // looking at, so a distant firefight sounds distant.
     syncListenerToCamera(this.cameras.main);
+    this.modeHud.sync(this.cameras.main);
     if (this.isPaused || this.missionComplete || this.missionFailed) return;
 
     this.performanceState = updateFPS(this.performanceState, delta);
@@ -338,7 +372,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.updateCameraFollow();
     this.checkDelayedSpawns();
     this.checkObjectives();
-    this.updateObjectiveDisplay();
+    this.updateHud();
   }
 
   // ==========================================
@@ -352,86 +386,59 @@ export class CampaignBattleScene extends Phaser.Scene {
     });
   }
 
+  /** Holographic battle HUD (flagship ring, radar, weapons) + mission readouts. */
   private createHUD(): void {
-    this.missionTitleText = this.add
-      .text(10, 10, this.mission.title, {
-        font: "bold 20px Arial",
-        color: "#ffffff",
-      })
-      .setScrollFactor(0)
-      .setDepth(1000);
+    this.modeHud = new CampaignModeHud(this, this.factionId, this.mission);
+    this.battleHud = new BattleHud(this, { worldSize: BATTLEFIELD_SIZE });
+  }
 
-    this.messageText = this.add
-      .text(this.scale.width / 2, this.scale.height / 2, "", {
-        font: "bold 36px Arial",
-        color: "#00ffaa",
-        stroke: "#004422",
-        strokeThickness: 4,
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1001)
-      .setAlpha(0);
+  /**
+   * Refreshes the battle HUD from this frame's state: the flagship as the
+   * player (its status ring replaces its health bar), escorts as allies,
+   * mission enemies as enemies, its primary's cooldown and the objectives.
+   */
+  private updateHud(): void {
+    this.modeHud.updateObjectives(this.objectiveStates);
+    const flagship = this.ships.get(this.playerShipIds[0] ?? "") ?? null;
+    if (flagship) {
+      this.healthBars.get(flagship.id)?.destroy();
+      this.healthBars.delete(flagship.id);
+    }
+    this.battleHud?.update(
+      squadHudSnapshot({
+        flagship,
+        ships: this.ships.values(),
+        targetId: flagship ? this.hudTargetOf(flagship) : null,
+        cooldownRemainingMs: flagship?.weaponCooldown ?? 0,
+        attackIntervalMs: flagship
+          ? attackIntervalMs(flagship.combatStats.weaponCooldown)
+          : 0,
+        camera: cameraViewFrom(this.cameras.main),
+      }),
+    );
+  }
 
-    this.controlsHintText = this.add
-      .text(
-        this.scale.width / 2,
-        this.scale.height - 30,
-        "UP/DOWN: Speed (x2: Boost) | LEFT/RIGHT: tap drift, hold bank | Q/E: Hard turn | Z: K-turn | Weapons autofire | ESC: Pause",
-        { font: "14px monospace", color: "#666666" },
-      )
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1000);
+  /**
+   * @param ship - The flagship.
+   * @returns Id of what it is shooting at, else the foe it is closing on.
+   */
+  private hudTargetOf(ship: CampaignShip): string | null {
+    const target = this.findTarget(ship) ?? findClosestEnemy(ship, this.ships);
+    return target?.id ?? null;
+  }
+
+  /**
+   * Shows or hides both HUD layers (hidden under result overlays).
+   *
+   * @param visible - Visibility.
+   */
+  private setHudVisible(visible: boolean): void {
+    this.battleHud?.setVisible(visible);
+    this.modeHud.setVisible(visible);
   }
 
   private showMessage(title: string, subtitle: string): void {
-    this.messageText.setText(`${title}\n${subtitle}`);
-    this.messageText.setAlpha(1);
-    this.tweens.add({
-      targets: this.messageText,
-      alpha: 0,
-      delay: 1500,
-      duration: 500,
-    });
-  }
-
-  private createObjectivePanel(): void {
-    this.objectivePanel = this.add.container(this.scale.width - 10, 10);
-    this.objectivePanel.setScrollFactor(0);
-    this.objectivePanel.setDepth(1000);
-
-    const bg = this.add.graphics();
-    bg.fillStyle(0x112233, 0.8);
-    bg.fillRoundedRect(
-      -260,
-      0,
-      260,
-      30 + this.mission.objectives.length * 25,
-      8,
-    );
-    this.objectivePanel.add(bg);
-
-    const title = this.add.text(-250, 5, "OBJECTIVES", {
-      font: "bold 14px Arial",
-      color: "#ffcc00",
-    });
-    this.objectivePanel.add(title);
-
-    this.objectiveTexts = [];
-    let yOffset = 30;
-    for (const objState of this.objectiveStates) {
-      const prefix = objState.objective.optional ? "(Bonus) " : "";
-      const text = this.add.text(
-        -250,
-        yOffset,
-        `${prefix}${objState.objective.description}`,
-        { font: "12px Arial", color: "#ffffff", wordWrap: { width: 240 } },
-      );
-      this.objectivePanel.add(text);
-      this.objectiveTexts.push(text);
-      yOffset += 25;
-    }
+    this.modeHud.showMessage(title, subtitle);
   }
 
   private setupInput(): void {
@@ -659,21 +666,17 @@ export class CampaignBattleScene extends Phaser.Scene {
       loadoutId,
     });
     if (enemy.isAce) {
-      ship.maxHull = Math.floor(ship.maxHull * 1.5);
-      ship.hull = ship.maxHull;
+      this.setDurability(ship, aceDurability(ship));
       ship.combatStats = {
         ...ship.combatStats,
-        attackDice: ship.combatStats.attackDice + 1,
+        attackDice: ship.combatStats.attackDice + ACE_ATTACK_BONUS,
       };
     }
     if (enemy.isBoss) {
-      ship.maxHull = Math.floor(ship.maxHull * 3);
-      ship.hull = ship.maxHull;
-      ship.maxShields = Math.floor(ship.maxShields * 2);
-      ship.shields = ship.maxShields;
+      this.setDurability(ship, bossDurability(ship));
       ship.combatStats = {
         ...ship.combatStats,
-        attackDice: ship.combatStats.attackDice + 2,
+        attackDice: ship.combatStats.attackDice + BOSS_ATTACK_BONUS,
       };
       ship.capitalSystems = createCapitalSystems(ship.maxHull);
     }
@@ -687,7 +690,8 @@ export class CampaignBattleScene extends Phaser.Scene {
   /**
    * Applies the protagonist pilot's evolution bonuses to the flagship. The
    * old turn-based scene only ever applied hull/shields — attack/agility were
-   * silently ignored. Applying all four now.
+   * silently ignored. Applying all four now; hull/shields are miniature
+   * points, scaled to real-time hit points.
    */
   private applyProtagonistBonuses(ship: CampaignShip): void {
     const protagonist = this.saveData.campaignPilots.find((p) => {
@@ -699,10 +703,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     const bonuses = protagonist?.statBonuses;
     if (!bonuses) return;
 
-    ship.maxHull += bonuses.hull ?? 0;
-    ship.hull = ship.maxHull;
-    ship.maxShields += bonuses.shields ?? 0;
-    ship.shields = ship.maxShields;
+    this.setDurability(ship, withEvolutionBonuses(ship, bonuses));
     ship.combatStats = {
       ...ship.combatStats,
       attackDice: ship.combatStats.attackDice + (bonuses.attack ?? 0),
@@ -710,6 +711,19 @@ export class CampaignBattleScene extends Phaser.Scene {
         ship.combatStats.agilityDice +
         (bonuses.agility ?? 0) * AGILITY_EVASION_FACTOR,
     };
+  }
+
+  /**
+   * Sets a freshly spawned ship's caps and fills it to them.
+   *
+   * @param ship - The ship.
+   * @param caps - Its new hull/shield caps.
+   */
+  private setDurability(ship: CampaignShip, caps: DurabilityCaps): void {
+    ship.maxHull = caps.maxHull;
+    ship.hull = caps.maxHull;
+    ship.maxShields = caps.maxShields;
+    ship.shields = caps.maxShields;
   }
 
   private checkDelayedSpawns(): void {
@@ -957,6 +971,12 @@ export class CampaignBattleScene extends Phaser.Scene {
   // COMBAT
   // ==========================================
 
+  /**
+   * One frame of weapons: cooldowns and autofire at the nearest target in
+   * range and arc — at most one attack per maneuver cycle (X-Wing round).
+   *
+   * @param delta - Frame length (ms).
+   */
   private processCombat(delta: number): void {
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
@@ -965,42 +985,28 @@ export class CampaignBattleScene extends Phaser.Scene {
         const target = this.findTarget(ship);
         if (target) {
           this.fireAt(ship, target);
-          ship.weaponCooldown = ship.combatStats.weaponCooldown;
+          ship.weaponCooldown = attackIntervalMs(
+            ship.combatStats.weaponCooldown,
+          );
         }
       }
     }
   }
 
+  /**
+   * The nearest foe in weapon range and forward arc that is not still
+   * immune to this ship's hits (X-Wing round: one hit per attacker per cycle).
+   *
+   * @param ship - The firing ship.
+   * @returns Its target, or null when none can be fired at.
+   */
   private findTarget(ship: CampaignShip): CampaignShip | null {
-    let best: CampaignShip | null = null;
-    let bestDist = Infinity;
-    const maxRange = ship.combatStats.weaponRange;
-    const maxArcRad = (ship.combatStats.firingArc / 2) * Phaser.Math.DEG_TO_RAD;
-
-    for (const other of this.ships.values()) {
-      if (other.faction === ship.faction || other.hull <= 0) continue;
-      const dist = Phaser.Math.Distance.Between(
-        ship.x,
-        ship.y,
-        other.x,
-        other.y,
-      );
-      if (dist >= maxRange || dist >= bestDist) continue;
-      const angleToTarget = Phaser.Math.Angle.Between(
-        ship.x,
-        ship.y,
-        other.x,
-        other.y,
-      );
-      const shipFacing = (ship.angle - 90) * Phaser.Math.DEG_TO_RAD;
-      let arcDiff = Math.abs(angleToTarget - shipFacing);
-      if (arcDiff > Math.PI) arcDiff = Math.PI * 2 - arcDiff;
-      if (arcDiff < maxArcRad) {
-        best = other;
-        bestDist = dist;
-      }
-    }
-    return best;
+    const now = this.time.now;
+    return nearestTargetInArc(ship, this.ships.values(), {
+      rangePx: ship.combatStats.weaponRange,
+      arcDeg: ship.combatStats.firingArc,
+      isEligible: (other) => !this.hitLedger.isImmune(ship.id, other.id, now),
+    });
   }
 
   /**
@@ -1040,6 +1046,9 @@ export class CampaignBattleScene extends Phaser.Scene {
       stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
     });
     this.applyDamage(target, result.damage);
+    if (result.damage > 0) {
+      this.hitLedger.recordHit(attacker.id, target.id, this.time.now);
+    }
     if (target.hull <= 0) this.killShip(target, attacker);
   }
 
@@ -1114,10 +1123,11 @@ export class CampaignBattleScene extends Phaser.Scene {
       (other) => other.faction !== victim.faction && other.hull > 0,
     );
     const caught = deathBlastTargets(combatantOf(victim), enemies);
+    const blastDamage = deathBlastDamage(combatantOf(victim));
     this.destroyShip(victim.id, killer.owner === "player");
     for (const ship of caught) {
       if (!this.ships.has(ship.id)) continue;
-      this.applyDamage(ship, victim.modifiers.deathBlastDamage);
+      this.applyDamage(ship, blastDamage);
       if (ship.hull <= 0) this.killShip(ship, victim);
     }
   }
@@ -1128,6 +1138,7 @@ export class CampaignBattleScene extends Phaser.Scene {
 
     if (ship.owner === "ai" && wasPlayerKill) this.totalKills++;
     if (ship.owner === "player") this.playerShipsLost++;
+    this.hitLedger.forget(shipId);
 
     const sprite = this.shipSprites.get(shipId);
     if (sprite) {
@@ -1309,35 +1320,6 @@ export class CampaignBattleScene extends Phaser.Scene {
     }
   }
 
-  private updateObjectiveDisplay(): void {
-    for (let i = 0; i < this.objectiveStates.length; i++) {
-      const objState = this.objectiveStates[i];
-      const text = this.objectiveTexts[i];
-      if (!text || !objState) continue;
-
-      const prefix = objState.objective.optional ? "(Bonus) " : "";
-      let status = "";
-
-      if (objState.completed) {
-        text.setColor("#44ff44");
-        status = " ✓";
-      } else if (objState.objective.type === "eliminate") {
-        status = ` (${objState.progress}/${objState.target})`;
-        text.setColor("#ffffff");
-      } else if (
-        objState.objective.type === "survive" ||
-        objState.objective.type === "defend"
-      ) {
-        const remaining =
-          (objState.objective.timeLimit ?? 0) - objState.progress;
-        status = ` (${Math.max(0, remaining)}s)`;
-        text.setColor("#ffffff");
-      }
-
-      text.setText(`${prefix}${objState.objective.description}${status}`);
-    }
-  }
-
   private triggerMissionVictory(): void {
     this.missionComplete = true;
     audioManager.playFactionStinger(this.factionId, "victory");
@@ -1389,38 +1371,31 @@ export class CampaignBattleScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Victory beat before the debrief: HUD hidden, a holographic MISSION
+   * COMPLETE panel fades in, then the camera fades out.
+   *
+   * @param onComplete - Called once the fade finishes.
+   */
   private showMissionCompleteFlash(onComplete: () => void): void {
-    this.missionTitleText.setVisible(false);
-    this.objectivePanel.setVisible(false);
-    this.controlsHintText.setVisible(false);
-
-    const overlay = this.add.graphics();
-    overlay.fillStyle(0x000000, 0.5);
-    overlay.fillRect(0, 0, this.scale.width, this.scale.height);
-    overlay.setScrollFactor(0);
-    overlay.setDepth(2000);
-
-    const centerX = this.scale.width / 2;
-    const centerY = this.scale.height / 2;
-    const flashText = this.add
-      .text(centerX, centerY, "MISSION COMPLETE", {
-        font: "bold 48px Arial",
-        color: "#44ff66",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001)
-      .setAlpha(0);
-
+    this.setHudVisible(false);
+    this.resultOverlay = showResultOverlay(this, {
+      header: this.mission.title,
+      title: "MISSION COMPLETE",
+      accent: HOLO_PALETTE.success,
+      lines: this.missionTallyLines(),
+      actions: [],
+    });
+    const { panel } = this.resultOverlay;
+    panel.setAlpha(0);
     this.tweens.add({
-      targets: flashText,
+      targets: panel,
       alpha: 1,
-      duration: 400,
-      ease: "Linear",
+      duration: RESULT_FADE_IN_MS,
       onComplete: () => {
-        this.time.delayedCall(1600, () => {
+        this.time.delayedCall(VICTORY_HOLD_MS, () => {
           this.cameras.main.fade(
-            400,
+            CAMERA_FADE_MS,
             0,
             0,
             0,
@@ -1434,12 +1409,30 @@ export class CampaignBattleScene extends Phaser.Scene {
     });
   }
 
+  /** @returns Kill / loss lines shared by the result panels. */
+  private missionTallyLines(): ResultLine[] {
+    return [
+      { text: `Enemies destroyed: ${this.totalKills}` },
+      { text: `Ships lost: ${this.playerShipsLost}` },
+    ];
+  }
+
   private triggerMissionFailed(reason: string): void {
     this.missionFailed = true;
     audioManager.playFactionStinger(this.factionId, "defeat");
     this.showResultScreen(false, 0, 0, reason);
   }
 
+  /**
+   * Holographic result overlay (failure: RETRY / QUIT; victory: CONTINUE).
+   * Zoom resets to 1.0 first — its buttons are scrollFactor(0) and Phaser
+   * mis-hit-tests them under zoom.
+   *
+   * @param victory - Whether the mission was won.
+   * @param xpEarned - XP shown on a victory.
+   * @param creditsEarned - Credits shown on a victory.
+   * @param failReason - Why the mission failed.
+   */
   private showResultScreen(
     victory: boolean,
     xpEarned: number,
@@ -1447,205 +1440,72 @@ export class CampaignBattleScene extends Phaser.Scene {
     failReason?: string,
   ): void {
     this.cameras.main.setZoom(1.0);
-    this.missionTitleText.setVisible(false);
-    this.objectivePanel.setVisible(false);
-    this.controlsHintText.setVisible(false);
-
-    const dimmer = this.add.graphics();
-    dimmer.fillStyle(0x000000, 0.7);
-    dimmer.fillRect(0, 0, this.scale.width, this.scale.height);
-    dimmer.setScrollFactor(0);
-    dimmer.setDepth(2000);
-
-    const centerX = this.scale.width / 2;
-    const centerY = this.scale.height / 2;
-    const panel = this.add.container(centerX, centerY);
-    panel.setScrollFactor(0);
-    panel.setDepth(2001);
-
-    const bg = this.add.graphics();
-    bg.fillStyle(victory ? 0x1a3322 : 0x331a1a, 0.95);
-    bg.fillRoundedRect(-250, -200, 500, 400, 16);
-    bg.lineStyle(3, victory ? 0x44ff66 : 0xff4444, 1);
-    bg.strokeRoundedRect(-250, -200, 500, 400, 16);
-    panel.add(bg);
-
-    const title = this.add
-      .text(0, -160, victory ? "MISSION COMPLETE" : "MISSION FAILED", {
-        font: "bold 36px Arial",
-        color: victory ? "#44ff66" : "#ff4444",
-      })
-      .setOrigin(0.5);
-    panel.add(title);
-
-    const missionName = this.add
-      .text(0, -110, this.mission.title, {
-        font: "24px Arial",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5);
-    panel.add(missionName);
-
-    let yOffset = -60;
-    if (victory) {
-      panel.add(
-        this.add.text(-100, yOffset, `XP Earned: ${xpEarned}`, {
-          font: "20px Arial",
-          color: "#88ff88",
-        }),
-      );
-      yOffset += 35;
-      panel.add(
-        this.add.text(-100, yOffset, `Credits: ${creditsEarned}`, {
-          font: "20px Arial",
-          color: "#ffcc44",
-        }),
-      );
-      yOffset += 35;
-      panel.add(
-        this.add.text(-100, yOffset, `Enemies Destroyed: ${this.totalKills}`, {
-          font: "16px Arial",
-          color: "#aaaaaa",
-        }),
-      );
-      yOffset += 25;
-      panel.add(
-        this.add.text(-100, yOffset, `Ships Lost: ${this.playerShipsLost}`, {
-          font: "16px Arial",
-          color: "#aaaaaa",
-        }),
-      );
-      yOffset += 35;
-
-      if (
-        this.mission.rewards.unlocks &&
-        this.mission.rewards.unlocks.length > 0
-      ) {
-        panel.add(
-          this.add.text(-100, yOffset, "Unlocked:", {
-            font: "bold 16px Arial",
-            color: "#ffaa44",
-          }),
-        );
-        yOffset += 25;
-        for (const unlock of this.mission.rewards.unlocks) {
-          panel.add(
-            this.add.text(-80, yOffset, `• ${unlock}`, {
-              font: "14px Arial",
-              color: "#ffcc88",
-            }),
-          );
-          yOffset += 20;
-        }
-      }
-    } else {
-      panel.add(
-        this.add
-          .text(0, yOffset, failReason ?? "Objectives not completed", {
-            font: "18px Arial",
-            color: "#ff8888",
-          })
-          .setOrigin(0.5),
-      );
-      yOffset += 50;
-      panel.add(
-        this.add
-          .text(0, yOffset, "Try different tactics or ship loadouts", {
-            font: "14px Arial",
-            color: "#888888",
-          })
-          .setOrigin(0.5),
-      );
-    }
-
-    // Buttons are added directly to the scene (not reparented into `panel`)
-    // — Phaser's pointer input silently breaks hit-testing when an
-    // already-setInteractive() Container is added into another Container
-    // afterward (verified in DogfightScene/AceDuelScene).
-    const buttonY = centerY + 140;
-    const resultButtons: Phaser.GameObjects.Container[] = [];
-
-    if (victory) {
-      resultButtons.push(
-        this.createResultButton(centerX, buttonY, "CONTINUE", 0x44aa44, () => {
-          this.scene.start("CampaignScene", { factionId: this.factionId });
-        }),
-      );
-    } else {
-      resultButtons.push(
-        this.createResultButton(
-          centerX - 80,
-          buttonY,
-          "RETRY",
-          0xaa8844,
-          () => {
-            this.scene.restart();
-          },
-        ),
-      );
-      resultButtons.push(
-        this.createResultButton(centerX + 80, buttonY, "QUIT", 0x666666, () => {
-          this.scene.start("CampaignScene", { factionId: this.factionId });
-        }),
-      );
-    }
-
-    panel.setScale(0.5);
-    panel.setAlpha(0);
-    resultButtons.forEach((btn) => {
-      btn.setScale(0.5);
-      btn.setAlpha(0);
-    });
-    this.tweens.add({
-      targets: [panel, ...resultButtons],
-      scale: 1,
-      alpha: 1,
-      duration: 300,
-      ease: "Back.out",
+    this.setHudVisible(false);
+    const toCampaign = (): void => {
+      this.scene.start("CampaignScene", { factionId: this.factionId });
+    };
+    this.resultOverlay = showResultOverlay(this, {
+      header: this.mission.title,
+      title: victory ? "MISSION COMPLETE" : "MISSION FAILED",
+      accent: victory ? HOLO_PALETTE.success : HOLO_PALETTE.danger,
+      lines: victory
+        ? this.victoryLines(xpEarned, creditsEarned)
+        : this.failureLines(failReason),
+      actions: victory
+        ? [{ label: "Continue", variant: "primary", onClick: toCampaign }]
+        : [
+            {
+              label: "Retry",
+              variant: "primary",
+              onClick: () => this.scene.restart(),
+            },
+            { label: "Quit", variant: "secondary", onClick: toCampaign },
+          ],
     });
   }
 
-  private createResultButton(
-    x: number,
-    y: number,
-    text: string,
-    color: number,
-    onClick: () => void,
-  ): Phaser.GameObjects.Container {
-    const container = this.add.container(x, y);
+  /**
+   * @param xpEarned - XP earned.
+   * @param creditsEarned - Credits earned.
+   * @returns Reward, tally and unlock lines for a victory.
+   */
+  private victoryLines(xpEarned: number, creditsEarned: number): ResultLine[] {
+    const unlocks = this.mission.rewards.unlocks ?? [];
+    return [
+      {
+        text: `XP earned: ${xpEarned}`,
+        role: "heading",
+        color: HOLO_PALETTE.success,
+      },
+      {
+        text: `Credits: ${creditsEarned}`,
+        role: "heading",
+        color: HOLO_PALETTE.warning,
+      },
+      ...this.missionTallyLines(),
+      ...unlocks.map((unlock) => ({
+        text: `Unlocked: ${unlock}`,
+        color: HOLO_PALETTE.accent,
+      })),
+    ];
+  }
 
-    const bg = this.add.graphics();
-    bg.fillStyle(color, 1);
-    bg.fillRoundedRect(-60, -20, 120, 40, 8);
-    container.add(bg);
-
-    const label = this.add
-      .text(0, 0, text, { font: "bold 18px Arial", color: "#ffffff" })
-      .setOrigin(0.5);
-    container.add(label);
-
-    container.setSize(120, 40);
-    container.setInteractive({ useHandCursor: true });
-    container.setScrollFactor(0);
-    container.setDepth(2001);
-
-    container.on("pointerover", () => {
-      bg.clear();
-      bg.fillStyle(color, 0.8);
-      bg.fillRoundedRect(-60, -20, 120, 40, 8);
-      bg.lineStyle(2, 0xffffff, 1);
-      bg.strokeRoundedRect(-60, -20, 120, 40, 8);
-    });
-    container.on("pointerout", () => {
-      bg.clear();
-      bg.fillStyle(color, 1);
-      bg.fillRoundedRect(-60, -20, 120, 40, 8);
-    });
-    container.on("pointerdown", () => {
-      audioManager.playSound("ui_select", 0.7);
-      onClick();
-    });
-
-    return container;
+  /**
+   * @param failReason - Why the mission failed.
+   * @returns Reason and advice lines for a failure.
+   */
+  private failureLines(failReason?: string): ResultLine[] {
+    return [
+      {
+        text: failReason ?? "Objectives not completed",
+        role: "heading",
+        color: HOLO_PALETTE.danger,
+      },
+      ...this.missionTallyLines(),
+      {
+        text: "Try different tactics or ship loadouts",
+        color: HOLO_PALETTE.textMuted,
+      },
+    ];
   }
 }

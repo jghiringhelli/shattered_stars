@@ -12,8 +12,6 @@
 import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
 import { addShipVisual } from "../rendering/ShipVisual";
-import { createHoverButton, createToggleButton } from "../ui/ButtonFactory";
-import { quickTipLine } from "../ui/ControlsReference";
 import type { FactionId } from "../config";
 import { BATTLEFIELD_SIZE, CYCLE_DURATION_MS, SHIP_SIZES } from "../config";
 import {
@@ -28,7 +26,6 @@ import {
 } from "../data/ModeBalancing";
 import { HealthBar } from "../ui/HealthBar";
 import { EffectsManager } from "../rendering/EffectsManager";
-import { headingDiffToTarget } from "../systems/MovementSystem";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
 import { syncListenerToCamera } from "../audio/CameraListener";
@@ -69,12 +66,32 @@ import {
   absorbDamage,
   combatantOf,
   resolveDiceAttack,
+  type DiceAttackResult,
 } from "../arcade/systems/DiceAttack";
 import {
+  deathBlastDamage,
   deathBlastTargets,
   hasWingman,
   rewardKill,
 } from "../arcade/PilotAbilityCombat";
+import { HitImmunityLedger } from "../arcade/systems/CombatTempo";
+import {
+  primaryCooldownAfterShot,
+  primaryShotTarget,
+} from "../arcade/systems/DuelPrimaryFire";
+import { DuelHud } from "./duel/DuelHud";
+import { buildDuelHudSnapshot } from "./duel/duelHudSnapshot";
+import { showDuelEndScreen } from "./duel/DuelEndScreen";
+import {
+  renderDogfightSetup,
+  type DogfightSetupActions,
+} from "./duel/DogfightSetupView";
+import { cameraViewFrom } from "../ui/hud/hudMath";
+import {
+  HOLO_PALETTE,
+  SIDE_COLORS,
+  factionAccent,
+} from "../ui/theme/HoloTheme";
 import { applyInstantStress } from "../arcade/ArcadeStress";
 import {
   NEUTRAL_MODIFIERS,
@@ -152,10 +169,27 @@ interface ShipSprite extends Phaser.GameObjects.Container {
 
 type MatchFormat = "best_of_3" | "best_of_5";
 
-/** The player's quick-build chooser box on the setup screen (left of "Your Ship"). */
+/** AI hit-chance multiplier per difficulty setting. */
+const AI_HIT_CHANCE_BY_DIFFICULTY = {
+  easy: 0.7,
+  normal: 1,
+  hard: 1.1,
+  brutal: 1.2,
+} as const;
+
+/** The player's quick-build chooser box on the setup screen (left of the "Your ship" panel). */
 const QUICK_BUILD_CHOOSER_X = 24;
 const QUICK_BUILD_CHOOSER_Y = 226;
-const QUICK_BUILD_CHOOSER_W = 316;
+const QUICK_BUILD_CHOOSER_W = 290;
+/** Round time limit (s). */
+const ROUND_TIME_S = 180;
+const MS_PER_S = 1000;
+/** Round result banners. */
+const RESULT_BANNERS = {
+  player_win: { text: "VICTORY!", color: HOLO_PALETTE.success },
+  enemy_win: { text: "DEFEAT", color: HOLO_PALETTE.danger },
+  draw: { text: "DRAW", color: HOLO_PALETTE.warning },
+} as const;
 
 export class DogfightScene extends Phaser.Scene {
   private ships: Map<string, DogfightShip> = new Map();
@@ -164,13 +198,15 @@ export class DogfightScene extends Phaser.Scene {
 
   private playerShipIds: string[] = [];
   private enemyShipIds: string[] = [];
+  /** Round tempo: a struck ship ignores the same attacker until the next cycle. */
+  private readonly hitLedger = new HitImmunityLedger();
 
   // Match state
   private matchFormat: MatchFormat = "best_of_3";
   private playerWins = 0;
   private enemyWins = 0;
   private currentRound = 0;
-  private roundTimeRemaining = 180; // 3 minutes in seconds
+  private roundTimeRemaining = ROUND_TIME_S;
   private isRoundActive = false;
   private roundResult: "none" | "player_win" | "enemy_win" | "draw" = "none";
   /** Destroyed squad-point cost per side this round; decides a timed-out round. */
@@ -213,10 +249,8 @@ export class DogfightScene extends Phaser.Scene {
   private readonly pilot = new PlayerFlightPilot(InputManager);
 
   // UI
-  private roundText!: Phaser.GameObjects.Text;
-  private timerText!: Phaser.GameObjects.Text;
-  private scoreText!: Phaser.GameObjects.Text;
-  private controlsHintText!: Phaser.GameObjects.Text;
+  /** Holographic battle HUD + duel scoreboard; null outside a battle. */
+  private hud: DuelHud | null = null;
   /** Setup-screen objects, tracked individually — see track()'s doc comment for why. */
   private setupObjects: Phaser.GameObjects.GameObject[] = [];
   private pauseMenu!: PauseMenu;
@@ -321,6 +355,9 @@ export class DogfightScene extends Phaser.Scene {
     this.inputSubscriptionIds = [];
     teardownSceneInput();
     this.pilot.detach();
+    this.hud?.destroy();
+    this.hud = null;
+    this.hitLedger.clear();
     if (this.isOnlineMode) {
       networkService.off("game_action", this.onRemoteAction, this);
       networkService.off(
@@ -340,7 +377,7 @@ export class DogfightScene extends Phaser.Scene {
   private onOpponentDisconnected(): void {
     if (this.matchComplete) return;
     this.matchComplete = true;
-    this.showRoundResult("OPPONENT DISCONNECTED", "#ff8844");
+    this.showRoundResult("OPPONENT DISCONNECTED", HOLO_PALETTE.warning);
   }
 
   /**
@@ -398,6 +435,8 @@ export class DogfightScene extends Phaser.Scene {
     this.enemyShipIds = [];
     this.setupObjects = [];
     this.lastSentManeuver = null;
+    this.hud = null;
+    this.hitLedger.clear();
   }
 
   private resetRoundState(): void {
@@ -408,288 +447,70 @@ export class DogfightScene extends Phaser.Scene {
     this.healthBars.clear();
     this.playerShipIds = [];
     this.enemyShipIds = [];
-    this.roundTimeRemaining = 180;
+    this.roundTimeRemaining = ROUND_TIME_S;
     this.roundResult = "none";
     this.playerSideScore = createSideScore();
     this.enemySideScore = createSideScore();
     this.isPaused = false;
     this.pilot.reset();
+    this.hitLedger.clear();
   }
 
   private showSetupScreen(): void {
     // Destroy any previous setup-screen objects. Buttons are NOT reparented
-    // into a shared container (see setupObjects doc comment) — track and
+    // into a shared container (see track()'s doc comment) — track and
     // destroy them individually instead.
     this.setupObjects.forEach((o) => o.destroy());
     this.setupObjects = [];
-
-    const centerX = this.scale.width / 2;
-
-    // Textured background image — drawn above the space parallax layer
-    // (which renders at a higher depth than TexturedPanel's default -1)
-    // but below every setup-screen control.
-    if (this.textures.exists("tex_menu_bg")) {
-      const bgImage = this.add
-        .image(centerX, this.scale.height / 2, "tex_menu_bg")
-        .setDisplaySize(this.scale.width, this.scale.height)
-        .setScrollFactor(0)
-        .setDepth(1999);
-      this.setupObjects.push(bgImage);
-    }
-
-    // Background
-    const bg = this.add.graphics();
-    bg.fillStyle(0x000000, 0.55);
-    bg.fillRect(0, 0, this.scale.width, this.scale.height);
-    this.track(bg);
-
-    // Title
-    const title = this.add
-      .text(centerX, 50, "DOGFIGHT", {
-        font: "bold 48px Arial",
-        color: "#ff8844",
-      })
-      .setOrigin(0.5);
-    this.track(title);
-
-    const subtitle = this.add
-      .text(centerX, 95, "1v1 Quick Duels", {
-        font: "20px Arial",
-        color: "#aaaaaa",
-      })
-      .setOrigin(0.5);
-    this.track(subtitle);
-
-    // Format selection
-    const formatLabel = this.add
-      .text(centerX, 140, "Match Format:", {
-        font: "bold 20px Arial",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5);
-    this.track(formatLabel);
-
-    const formats: Array<{ id: MatchFormat; name: string }> = [
-      { id: "best_of_3", name: "Best of 3" },
-      { id: "best_of_5", name: "Best of 5" },
-    ];
-
-    formats.forEach((format, i) => {
-      const btn = this.createSelectionButton(
-        centerX - 100 + i * 200,
-        180,
-        format.name,
-        format.id === this.matchFormat,
-        () => {
-          this.matchFormat = format.id;
-          this.showSetupScreen();
-        },
-      );
-      this.track(btn);
-    });
-
-    // Ship selection - Player
-    const playerLabel = this.add
-      .text(centerX - 200, 240, "Your Ship:", {
-        font: "bold 20px Arial",
-        color: "#44ff44",
-      })
-      .setOrigin(0.5);
-    this.track(playerLabel);
-
-    const playerShips = getShipsByFaction(this.playerFaction);
-    let yPos = 280;
-    playerShips.slice(0, 4).forEach((ship) => {
-      const btn = this.createSelectionButton(
-        centerX - 200,
-        yPos,
-        ship.name,
-        ship.id === this.playerShipId,
-        () => {
-          this.playerShipId = ship.id;
-          this.showSetupScreen();
-        },
-      );
-      this.track(btn);
-      yPos += 40;
-    });
-    this.renderPlayerQuickBuild();
-
-    // Ship selection - Enemy
-    const enemyLabel = this.add
-      .text(centerX + 200, 240, "Enemy Ship:", {
-        font: "bold 20px Arial",
-        color: "#ff4444",
-      })
-      .setOrigin(0.5);
-    this.track(enemyLabel);
-
-    const enemyShips = getShipsByFaction(this.enemyFaction);
-    yPos = 280;
-    enemyShips.slice(0, 4).forEach((ship) => {
-      const btn = this.createSelectionButton(
-        centerX + 200,
-        yPos,
-        ship.name,
-        ship.id === this.enemyShipId,
-        () => {
-          this.enemyShipId = ship.id;
-          this.showSetupScreen();
-        },
-      );
-      this.track(btn);
-      yPos += 40;
-    });
-
-    // Faction selection
-    const factions: FactionId[] = [
-      "terran_hegemony",
-      "free_confederation",
-      "synthetic_collective",
-      "void_corsairs",
-      "ascendant_empire",
-    ];
-    const factionNames: Record<FactionId, string> = {
-      terran_hegemony: "Hegemony",
-      free_confederation: "Confederation",
-      synthetic_collective: "Collective",
-      void_corsairs: "Corsairs",
-      ascendant_empire: "Empire",
-    };
-
-    // Player faction
-    const playerFactionLabel = this.add
-      .text(centerX - 200, 460, "Your Faction:", {
-        font: "16px Arial",
-        color: "#888888",
-      })
-      .setOrigin(0.5);
-    this.track(playerFactionLabel);
-
-    factions.forEach((faction, i) => {
-      const btn = this.createSmallButton(
-        centerX - 320 + i * 60,
-        490,
-        factionNames[faction].substring(0, 3),
-        faction === this.playerFaction,
-        () => {
-          this.playerFaction = faction;
-          const ships = getShipsByFaction(faction);
-          this.playerShipId = ships[0]?.id ?? "";
-          this.showSetupScreen();
-        },
-      );
-      this.track(btn);
-    });
-
-    // Enemy faction
-    const enemyFactionLabel = this.add
-      .text(centerX + 200, 460, "Enemy Faction:", {
-        font: "16px Arial",
-        color: "#888888",
-      })
-      .setOrigin(0.5);
-    this.track(enemyFactionLabel);
-
-    factions.forEach((faction, i) => {
-      const btn = this.createSmallButton(
-        centerX + 80 + i * 60,
-        490,
-        factionNames[faction].substring(0, 3),
-        faction === this.enemyFaction,
-        () => {
-          this.enemyFaction = faction;
-          const ships = getShipsByFaction(faction);
-          this.enemyShipId = ships[0]?.id ?? "";
-          this.showSetupScreen();
-        },
-      );
-      this.track(btn);
-    });
-
-    // Difficulty
-    const diffLabel = this.add
-      .text(centerX, 540, "AI Difficulty:", {
-        font: "16px Arial",
-        color: "#888888",
-      })
-      .setOrigin(0.5);
-    this.track(diffLabel);
-
-    const difficulties: Array<"easy" | "normal" | "hard" | "brutal"> = [
-      "easy",
-      "normal",
-      "hard",
-      "brutal",
-    ];
-    difficulties.forEach((diff, i) => {
-      const btn = this.createSmallButton(
-        centerX - 120 + i * 80,
-        570,
-        diff.toUpperCase(),
-        diff === this.difficulty,
-        () => {
-          this.difficulty = diff;
-          this.showSetupScreen();
-        },
-      );
-      this.track(btn);
-    });
-
-    // Start button
-    const startBtn = createHoverButton(
+    renderDogfightSetup(
       this,
-      centerX,
-      this.scale.height - 80,
       {
-        width: 160,
-        height: 50,
-        radius: 10,
-        color: 0x884422,
-        hoverColor: 0xaa6633,
-        label: "FIGHT!",
-        font: "bold 28px Arial",
+        matchFormat: this.matchFormat,
+        playerFaction: this.playerFaction,
+        enemyFaction: this.enemyFaction,
+        playerShipId: this.playerShipId,
+        enemyShipId: this.enemyShipId,
+        difficulty: this.difficulty,
       },
-      () => this.startMatch(),
+      this.setupActions(),
+      (obj) => this.track(obj),
     );
-    this.track(startBtn);
+    this.renderPlayerQuickBuild();
+  }
 
-    const tip = this.add
-      .text(
-        centerX,
-        this.scale.height - 30,
-        quickTipLine([
-          { label: "Steer", intents: ["STEER_LEFT", "STEER_RIGHT"] },
-          {
-            label: "Hard turn",
-            intents: ["SHARP_TURN_LEFT", "SHARP_TURN_RIGHT"],
-          },
-          { label: "K-turn", intents: ["KTURN"] },
-          { label: "Boost", intents: ["BOOST"] },
-          { label: "Throttle", intents: ["THRUST_UP", "THRUST_DOWN"] },
-          { label: "Weapon", intents: [] },
-          { label: "Pause", intents: ["PAUSE"] },
-        ]),
-        { font: "13px Arial", color: "#6688aa" },
-      )
-      .setOrigin(0.5);
-    this.track(tip);
-
-    // Back button
-    const backBtn = this.add
-      .text(50, 40, "< BACK", {
-        font: "bold 20px Arial",
-        color: "#aaaaaa",
-      })
-      .setInteractive({ useHandCursor: true });
-
-    backBtn.on("pointerover", () => backBtn.setColor("#ffffff"));
-    backBtn.on("pointerout", () => backBtn.setColor("#aaaaaa"));
-    backBtn.on("pointerdown", () => {
-      this.scene.start("MainMenuScene");
-    });
-
-    this.track(backBtn);
+  /**
+   * What the setup screen's controls do: update a choice and re-render.
+   *
+   * @returns The setup actions.
+   */
+  private setupActions(): DogfightSetupActions {
+    const choose = (apply: () => void): void => {
+      apply();
+      this.showSetupScreen();
+    };
+    return {
+      selectFormat: (format) => choose(() => (this.matchFormat = format)),
+      selectShip: (owner, shipId) =>
+        choose(() => {
+          if (owner === "player") this.playerShipId = shipId;
+          else this.enemyShipId = shipId;
+        }),
+      selectFaction: (owner, faction) =>
+        choose(() => {
+          const firstShip = getShipsByFaction(faction)[0]?.id ?? "";
+          if (owner === "player") {
+            this.playerFaction = faction;
+            this.playerShipId = firstShip;
+          } else {
+            this.enemyFaction = faction;
+            this.enemyShipId = firstShip;
+          }
+        }),
+      selectDifficulty: (difficulty) =>
+        choose(() => (this.difficulty = difficulty)),
+      start: () => this.startMatch(),
+      back: () => this.scene.start("MainMenuScene"),
+    };
   }
 
   /**
@@ -745,8 +566,8 @@ export class DogfightScene extends Phaser.Scene {
    * top-level containers (compare MainMenuScene's menu buttons).
    * The scroll factor is pushed down to container children too: Phaser
    * hit-tests each interactive object with its OWN scroll factor, so a
-   * button whose hit rectangle is a child (createSelectionButton,
-   * createToggleButton) ignored real clicks while the camera is scrolled
+   * button whose hit rectangle is a child (the quick-build chooser's
+   * arrows) ignored real clicks while the camera is scrolled
    * to the battlefield centre.
    */
   private track(obj: Phaser.GameObjects.GameObject): void {
@@ -765,71 +586,6 @@ export class DogfightScene extends Phaser.Scene {
     this.setupObjects.push(obj);
   }
 
-  private createSelectionButton(
-    x: number,
-    y: number,
-    label: string,
-    selected: boolean,
-    onClick: () => void,
-  ): Phaser.GameObjects.Container {
-    const container = this.add.container(x, y);
-
-    const bg = this.add.graphics();
-    if (selected) {
-      bg.fillStyle(0x446688, 1);
-      bg.lineStyle(2, 0x66aaff, 1);
-    } else {
-      bg.fillStyle(0x222233, 0.8);
-    }
-    bg.fillRoundedRect(-80, -15, 160, 30, 5);
-    if (selected) {
-      bg.strokeRoundedRect(-80, -15, 160, 30, 5);
-    }
-    container.add(bg);
-
-    const text = this.add
-      .text(0, 0, label, {
-        font: selected ? "bold 14px Arial" : "14px Arial",
-        color: selected ? "#44ffaa" : "#888888",
-      })
-      .setOrigin(0.5);
-    container.add(text);
-
-    const hitArea = this.add
-      .rectangle(0, 0, 160, 30)
-      .setInteractive({ useHandCursor: true });
-    container.add(hitArea);
-
-    hitArea.on("pointerdown", onClick);
-
-    return container;
-  }
-
-  private createSmallButton(
-    x: number,
-    y: number,
-    label: string,
-    selected: boolean,
-    onClick: () => void,
-  ): Phaser.GameObjects.Container {
-    return createToggleButton(
-      this,
-      x,
-      y,
-      label,
-      selected,
-      {
-        width: 50,
-        height: 24,
-        selectedColor: 0x446688,
-        normalColor: 0x222233,
-        selectedFont: "bold 11px Arial",
-        font: "11px Arial",
-      },
-      onClick,
-    );
-  }
-
   private startMatch(): void {
     this.setupObjects.forEach((o) => o.destroy());
     this.setupObjects = [];
@@ -837,7 +593,10 @@ export class DogfightScene extends Phaser.Scene {
 
     audioManager.playFactionMusic(this.playerFaction, "combat");
 
-    this.createHUD();
+    this.hud = new DuelHud(this, {
+      accent: factionAccent(this.playerFaction),
+      scoreColors: [SIDE_COLORS.player, SIDE_COLORS.enemy],
+    });
     this.setupInput();
     this.startNextRound();
   }
@@ -846,7 +605,8 @@ export class DogfightScene extends Phaser.Scene {
     this.resetRoundState();
     this.currentRound++;
 
-    this.roundText.setText(`ROUND ${this.currentRound}`);
+    this.hud?.setRound(this.currentRound);
+    this.hud?.setClock(this.roundTimeRemaining * MS_PER_S);
     this.updateScoreDisplay();
 
     // Spawn ships closer together for faster engagement
@@ -887,32 +647,10 @@ export class DogfightScene extends Phaser.Scene {
     }
   }
 
+  /** The ROUND N banner; weapons go live once it has faded. */
   private showRoundStart(): void {
-    const text = this.add
-      .text(
-        this.scale.width / 2,
-        this.scale.height / 2,
-        `ROUND ${this.currentRound}`,
-        {
-          font: "bold 48px Arial",
-          color: "#ffaa00",
-          stroke: "#000000",
-          strokeThickness: 4,
-        },
-      )
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1001);
-
-    this.tweens.add({
-      targets: text,
-      scale: 1.5,
-      alpha: 0,
-      duration: 1500,
-      onComplete: () => {
-        text.destroy();
-        this.isRoundActive = true;
-      },
+    this.hud?.showRoundBanner(this.currentRound, () => {
+      this.isRoundActive = true;
     });
   }
 
@@ -960,7 +698,22 @@ export class DogfightScene extends Phaser.Scene {
     if (this.isRoundActive) this.processCombat(delta);
     this.updateSprites();
     this.updateCameraFollow();
+    this.updateHud();
     this.checkRoundEnd();
+  }
+
+  /** Feeds the holographic HUD this frame's ships and camera. */
+  private updateHud(): void {
+    const playerId = this.playerShipIds[0] ?? "";
+    this.hud?.update(
+      buildDuelHudSnapshot({
+        ships: this.ships.values(),
+        playerId,
+        isAlly: (ship) => ship.owner === "player",
+        camera: cameraViewFrom(this.cameras.main),
+        worldSize: BATTLEFIELD_SIZE,
+      }),
+    );
   }
 
   /**
@@ -996,71 +749,20 @@ export class DogfightScene extends Phaser.Scene {
     );
   }
 
-  private createHUD(): void {
-    this.roundText = this.add
-      .text(this.scale.width / 2, 25, "ROUND 1", {
-        font: "bold 24px Arial",
-        color: "#ffaa00",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    this.timerText = this.add
-      .text(this.scale.width / 2, 55, "3:00", {
-        font: "bold 32px monospace",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    this.scoreText = this.add
-      .text(this.scale.width / 2, 90, "0 - 0", {
-        font: "bold 28px Arial",
-        color: "#888888",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    this.controlsHintText = this.add
-      .text(
-        this.scale.width / 2,
-        this.scale.height - 25,
-        "UP/DOWN: Speed | LEFT/RIGHT: tap drift, hold bank | Q/E: Hard turn | Weapon autofires | ESC: Pause",
-        {
-          font: "14px monospace",
-          color: "#666666",
-        },
-      )
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1000);
-  }
-
   private updateTimerDisplay(): void {
-    const minutes = Math.floor(this.roundTimeRemaining / 60);
-    const seconds = this.roundTimeRemaining % 60;
-    this.timerText.setText(`${minutes}:${seconds.toString().padStart(2, "0")}`);
-
-    // Change color when low on time
-    if (this.roundTimeRemaining <= 30) {
-      this.timerText.setColor("#ff4444");
-    } else if (this.roundTimeRemaining <= 60) {
-      this.timerText.setColor("#ffaa44");
-    }
+    this.hud?.setClock(this.roundTimeRemaining * MS_PER_S);
   }
 
+  /** Best-of score; highlighted once either side is one round from the match. */
   private updateScoreDisplay(): void {
-    const winsNeeded = this.matchFormat === "best_of_3" ? 2 : 3;
-    this.scoreText.setText(`${this.playerWins} - ${this.enemyWins}`);
+    const remaining =
+      this.winsNeeded() - Math.max(this.playerWins, this.enemyWins);
+    this.hud?.setScore(this.playerWins, this.enemyWins, remaining === 1);
+  }
 
-    // Show how many wins needed
-    const remaining = winsNeeded - Math.max(this.playerWins, this.enemyWins);
-    if (remaining === 1) {
-      this.scoreText.setColor("#ffdd00");
-    }
+  /** @returns Round wins that take the match. */
+  private winsNeeded(): number {
+    return this.matchFormat === "best_of_3" ? 2 : 3;
   }
 
   private setupInput(): void {
@@ -1163,7 +865,8 @@ export class DogfightScene extends Phaser.Scene {
     }
 
     this.createShipSprite(ship);
-    this.createHealthBar(ship);
+    // The player's durability lives on the HUD status ring.
+    if (owner !== "player") this.createHealthBar(ship);
   }
 
   private createShipSprite(ship: DogfightShip): void {
@@ -1291,87 +994,55 @@ export class DogfightScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Autofires every ready primary weapon on the round tempo: at most one
+   * attack per maneuver cycle, never at a target still immune to that
+   * attacker (the cooldown is kept for the next frame instead).
+   *
+   * @param delta - Frame length (ms).
+   */
   private processCombat(delta: number): void {
-    if (this.isOnlineMode) {
-      // Only the local ship's cooldown/firing is simulated here — the
-      // opponent's ship is authoritative on their own client, and its
-      // attack outcomes arrive via the `combat_result` network message
-      // instead of being independently re-rolled (see onRemoteAction()).
-      const ship = this.ships.get(this.playerShipIds[0] ?? "");
-      if (!ship || ship.hull <= 0) return;
-
+    // Online, only the local ship fires here — the opponent's ship is
+    // authoritative on their own client, and its attack outcomes arrive via
+    // the `combat_result` network message instead of being independently
+    // re-rolled (see onRemoteAction()).
+    const gunners = this.isOnlineMode
+      ? [this.ships.get(this.playerShipIds[0] ?? "")]
+      : [...this.ships.values()];
+    for (const ship of gunners) {
+      if (!ship || ship.hull <= 0) continue;
       ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
-      if (ship.weaponCooldown <= 0) {
-        const target = this.findTarget(ship);
-        if (target) {
-          this.fireAt(ship, target);
-          ship.weaponCooldown = ship.combatStats.weaponCooldown;
-        }
-      }
-      return;
-    }
-
-    for (const ship of this.ships.values()) {
-      if (ship.hull <= 0) continue;
-
-      ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
-
-      if (ship.weaponCooldown <= 0) {
-        // Primary weapon always autofires once in range/arc — player and AI alike.
-        const target = this.findTarget(ship);
-        if (target) {
-          this.fireAt(ship, target);
-          ship.weaponCooldown = ship.combatStats.weaponCooldown;
-        }
-      }
+      if (ship.weaponCooldown > 0) continue;
+      const target = primaryShotTarget({
+        gunner: ship,
+        candidates: this.ships.values(),
+        isEnemy: (other) => other.owner !== ship.owner,
+        ledger: this.hitLedger,
+        nowMs: this.time.now,
+      });
+      if (!target) continue;
+      this.fireAt(ship, target);
+      ship.weaponCooldown = primaryCooldownAfterShot(ship);
     }
   }
 
-  private findTarget(ship: DogfightShip): DogfightShip | null {
-    const maxRange = ship.combatStats.weaponRange;
-    const maxArcRad = (ship.combatStats.firingArc / 2) * Phaser.Math.DEG_TO_RAD;
-
-    for (const other of this.ships.values()) {
-      if (other.faction === ship.faction || other.hull <= 0) continue;
-
-      const dist = Phaser.Math.Distance.Between(
-        ship.x,
-        ship.y,
-        other.x,
-        other.y,
-      );
-      const angleToTarget = Phaser.Math.Angle.Between(
-        ship.x,
-        ship.y,
-        other.x,
-        other.y,
-      );
-      const shipFacing = (ship.angle - 90) * Phaser.Math.DEG_TO_RAD;
-      let angleDiff = Math.abs(angleToTarget - shipFacing);
-      if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
-
-      if (dist < maxRange && angleDiff < maxArcRad) {
-        return other;
-      }
-    }
-
-    return null;
-  }
-
+  /**
+   * Fires the primary weapon: difficulty scales the AI's aim, DiceAttack
+   * applies equipment and abilities, and a hit makes the target immune to
+   * this attacker until the next cycle.
+   *
+   * @param attacker - The firing ship.
+   * @param target - The ship fired at.
+   */
   private fireAt(attacker: DogfightShip, target: DogfightShip): void {
-    // Apply difficulty modifier to AI
-    let hitChance = calculateHitChance(
+    const baseHitChance = calculateHitChance(
       attacker.combatStats.attackDice,
       target.combatStats.agilityDice,
     );
-
-    if (attacker.owner === "ai") {
-      const diffMod = { easy: 0.7, normal: 1, hard: 1.1, brutal: 1.2 }[
-        this.difficulty
-      ];
-      hitChance *= diffMod;
-    }
-
+    const hitChance =
+      attacker.owner === "ai"
+        ? baseHitChance * AI_HIT_CHANCE_BY_DIFFICULTY[this.difficulty]
+        : baseHitChance;
     const result = resolveDiceAttack({
       attacker: combatantOf(attacker),
       target: combatantOf(target),
@@ -1382,63 +1053,15 @@ export class DogfightScene extends Phaser.Scene {
       nowMs: this.time.now,
       roll: random.next(),
     });
-    const hit = result.hit;
-
-    if (hit) {
-      let damage = result.damage;
-      this.setFlight(target, {
-        ...target.flight,
-        stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
-      });
-
-      if (target.shields > 0) {
-        const shieldDmg = Math.min(target.shields, damage);
-        target.shields -= shieldDmg;
-        damage -= shieldDmg;
-        audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);
-      }
-      if (damage > 0) {
-        audioManager.playSoundAt("hull_hit", target.x, target.y, 0.4);
-        const wasAlive = target.hull > 0;
-        target.hull = Math.max(0, target.hull - damage);
-        if (wasAlive && target.hull <= 0) {
-          this.resolveAbilityKill(attacker, target);
-          if (target.owner === "player") {
-            this.enemySideScore = creditKill(
-              this.enemySideScore,
-              target.definitionId,
-            );
-          } else {
-            this.playerSideScore = creditKill(
-              this.playerSideScore,
-              target.definitionId,
-            );
-          }
-        }
-      }
-
-      this.effectsManager.fireLaser(
-        attacker.x,
-        attacker.y,
-        target.x,
-        target.y,
-        attacker.faction,
-        true,
-      );
-
-      const healthBar = this.healthBars.get(target.id);
-      healthBar?.update(target.hull, target.shields);
-    } else {
-      this.effectsManager.fireLaser(
-        attacker.x,
-        attacker.y,
-        target.x,
-        target.y,
-        attacker.faction,
-        false,
-      );
-    }
-
+    if (result.hit) this.applyHit(attacker, target, result);
+    this.effectsManager.fireLaser(
+      attacker.x,
+      attacker.y,
+      target.x,
+      target.y,
+      attacker.faction,
+      result.hit,
+    );
     // In online mode only the local ship ever reaches fireAt() as attacker
     // (see processCombat()) — relay the authoritative result so the
     // opponent's client updates its own copy of this ship instead of
@@ -1446,9 +1069,67 @@ export class DogfightScene extends Phaser.Scene {
     if (this.isOnlineMode && attacker.id === (this.playerShipIds[0] ?? "")) {
       networkService.sendGameAction({
         type: "combat_result",
-        data: { hit, hullAfter: target.hull, shieldsAfter: target.shields },
+        data: {
+          hit: result.hit,
+          hullAfter: target.hull,
+          shieldsAfter: target.shields,
+        },
       });
     }
+  }
+
+  /**
+   * Lands a hit: stress on the target's pilot, damage shields first then
+   * hull, hit immunity for this attacker, and the kill on the last point.
+   *
+   * @param attacker - The firing ship.
+   * @param target - The ship hit.
+   * @param result - The resolved shot.
+   */
+  private applyHit(
+    attacker: DogfightShip,
+    target: DogfightShip,
+    result: DiceAttackResult,
+  ): void {
+    this.setFlight(target, {
+      ...target.flight,
+      stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
+    });
+    const after = absorbDamage(target, result.damage);
+    if (after.shields < target.shields) {
+      audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);
+    }
+    if (after.hull < target.hull) {
+      audioManager.playSoundAt("hull_hit", target.x, target.y, 0.4);
+    }
+    const wasAlive = target.hull > 0;
+    Object.assign(target, after);
+    this.hitLedger.recordHit(attacker.id, target.id, this.time.now);
+    this.healthBars.get(target.id)?.update(target.hull, target.shields);
+    if (wasAlive && target.hull <= 0) this.onShipDestroyed(attacker, target);
+  }
+
+  /**
+   * A ship was destroyed: its cost goes to the other side's round score, it
+   * leaves the immunity ledger, and pilot-ability kill effects resolve.
+   *
+   * @param killer - The ship credited with the kill.
+   * @param victim - The ship destroyed.
+   */
+  private onShipDestroyed(killer: DogfightShip, victim: DogfightShip): void {
+    this.hitLedger.forget(victim.id);
+    if (victim.owner === "player") {
+      this.enemySideScore = creditKill(
+        this.enemySideScore,
+        victim.definitionId,
+      );
+    } else {
+      this.playerSideScore = creditKill(
+        this.playerSideScore,
+        victim.definitionId,
+      );
+    }
+    this.resolveAbilityKill(killer, victim);
   }
 
   /**
@@ -1476,12 +1157,11 @@ export class DogfightScene extends Phaser.Scene {
     const enemies = [...this.ships.values()].filter(
       (other) => other.faction !== victim.faction && other.hull > 0,
     );
+    const blastDamage = deathBlastDamage(combatantOf(victim));
     for (const caught of deathBlastTargets(combatantOf(victim), enemies)) {
-      Object.assign(
-        caught,
-        absorbDamage(caught, victim.modifiers.deathBlastDamage),
-      );
+      Object.assign(caught, absorbDamage(caught, blastDamage));
       this.healthBars.get(caught.id)?.update(caught.hull, caught.shields);
+      if (caught.hull <= 0) this.hitLedger.forget(caught.id);
     }
   }
 
@@ -1665,22 +1345,13 @@ export class DogfightScene extends Phaser.Scene {
   private endRound(result: "player_win" | "enemy_win" | "draw"): void {
     this.isRoundActive = false;
     this.roundResult = result;
-
-    if (result === "player_win") {
-      this.playerWins++;
-      this.showRoundResult("VICTORY!", "#44ff44");
-    } else if (result === "enemy_win") {
-      this.enemyWins++;
-      this.showRoundResult("DEFEAT", "#ff4444");
-    } else {
-      this.showRoundResult("DRAW", "#ffaa44");
-    }
-
+    if (result === "player_win") this.playerWins++;
+    else if (result === "enemy_win") this.enemyWins++;
+    const banner = RESULT_BANNERS[result];
+    this.showRoundResult(banner.text, banner.color);
     this.updateScoreDisplay();
 
-    // Check match end
-    const winsNeeded = this.matchFormat === "best_of_3" ? 2 : 3;
-
+    const winsNeeded = this.winsNeeded();
     if (this.playerWins >= winsNeeded || this.enemyWins >= winsNeeded) {
       this.time.delayedCall(2000, () => this.endMatch());
     } else {
@@ -1688,26 +1359,12 @@ export class DogfightScene extends Phaser.Scene {
     }
   }
 
-  private showRoundResult(message: string, color: string): void {
-    const text = this.add
-      .text(this.scale.width / 2, this.scale.height / 2, message, {
-        font: "bold 48px Arial",
-        color,
-        stroke: "#000000",
-        strokeThickness: 4,
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1001);
-
-    this.tweens.add({
-      targets: text,
-      alpha: 0,
-      y: this.scale.height / 2 - 50,
-      delay: 1500,
-      duration: 500,
-      onComplete: () => text.destroy(),
-    });
+  /**
+   * @param message - Banner text.
+   * @param color - Banner colour.
+   */
+  private showRoundResult(message: string, color: number): void {
+    this.hud?.showResultBanner(message, color);
   }
 
   private endMatch(): void {
@@ -1716,98 +1373,26 @@ export class DogfightScene extends Phaser.Scene {
     // player may have zoomed with the mouse wheel during the match, which
     // would make REMATCH/MENU unclickable below if left as-is.
     this.cameras.main.setZoom(1.0);
-    // Hide the in-battle HUD — previously bled through the semi-transparent overlay.
-    this.roundText.setVisible(false);
-    this.timerText.setVisible(false);
-    this.scoreText.setVisible(false);
-    this.controlsHintText.setVisible(false);
-
-    const centerX = this.scale.width / 2;
-    const centerY = this.scale.height / 2;
-
-    const bg = this.add.graphics();
-    bg.fillStyle(0x000000, 0.85);
-    bg.fillRect(0, 0, this.scale.width, this.scale.height);
-    bg.setScrollFactor(0);
-    bg.setDepth(2000);
+    // Hide the in-battle HUD under the end screen.
+    this.hud?.setVisible(false);
 
     const playerWon = this.playerWins > this.enemyWins;
-    const title = playerWon ? "MATCH WON!" : "MATCH LOST";
-    const color = playerWon ? "#44ff44" : "#ff4444";
     audioManager.playFactionStinger(
       this.playerFaction,
       playerWon ? "victory" : "defeat",
     );
-
-    this.add
-      .text(centerX, centerY - 80, title, {
-        font: "bold 56px Arial",
-        color,
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001);
-
-    this.add
-      .text(
-        centerX,
-        centerY - 20,
-        `Final Score: ${this.playerWins} - ${this.enemyWins}`,
-        {
-          font: "28px Arial",
-          color: "#ffffff",
-        },
-      )
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001);
-
-    // Sweep bonus indicator
-    if (
+    const sweep =
       (playerWon && this.enemyWins === 0) ||
-      (!playerWon && this.playerWins === 0)
-    ) {
-      this.add
-        .text(centerX, centerY + 20, "SWEEP!", {
-          font: "bold 24px Arial",
-          color: "#ffdd00",
-        })
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(2001);
-    }
-
-    // Buttons
-    const retryBtn = this.add
-      .text(centerX - 100, centerY + 80, "REMATCH", {
-        font: "bold 24px Arial",
-        color: "#44ff44",
-        backgroundColor: "#224422",
-        padding: { x: 16, y: 8 },
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001)
-      .setInteractive({ useHandCursor: true });
-
-    retryBtn.on("pointerdown", () => {
-      this.scene.restart();
-    });
-
-    const menuBtn = this.add
-      .text(centerX + 100, centerY + 80, "MENU", {
-        font: "bold 24px Arial",
-        color: "#ffffff",
-        backgroundColor: "#444444",
-        padding: { x: 20, y: 8 },
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001)
-      .setInteractive({ useHandCursor: true });
-
-    menuBtn.on("pointerdown", () => {
-      this.scene.start("MainMenuScene");
+      (!playerWon && this.playerWins === 0);
+    showDuelEndScreen(this, {
+      header: "Dogfight \u2014 match result",
+      title: playerWon ? "MATCH WON" : "MATCH LOST",
+      won: playerWon,
+      scoreLine: `Final score  ${this.playerWins}  \u2013  ${this.enemyWins}`,
+      notes: sweep ? ["Sweep!"] : [],
+      accent: factionAccent(this.playerFaction),
+      onRematch: () => this.scene.restart(),
+      onMenu: () => this.scene.start("MainMenuScene"),
     });
   }
 }

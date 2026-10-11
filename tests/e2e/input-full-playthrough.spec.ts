@@ -336,8 +336,11 @@ test.describe("ArcadeBattleScene — touch controls", () => {
       await page.mouse.up();
       await page.waitForTimeout(60);
     }
-    await page.waitForTimeout(100);
-    expect((await getPlayerShip(page)).control.nextManeuver).toBe("kturn");
+    // Queued K-turns commit on the next cycle boundary — accept queued or flying.
+    await waitForPlayerManeuver(page, "kturn");
+    expect((await getPlayerShip(page)).control.kturnCooldown).toBeGreaterThan(
+      0,
+    );
   });
 
   test("a single tap on the action zone reaches deployBomb (FIRE_SECONDARY)", async ({

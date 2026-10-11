@@ -10,9 +10,7 @@
  */
 
 import Phaser from "phaser";
-import { createHoverButton } from "../ui/ButtonFactory";
 import { ShipStatCard } from "../ui/ShipStatCard";
-import { PauseMenu } from "../ui/PauseMenu";
 import { InputManager } from "../input/InputManager";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import { addShipVisual } from "../rendering/ShipVisual";
@@ -66,10 +64,20 @@ import {
 } from "../arcade/systems/QuickBuildEquip";
 import { combatantOf, resolveDiceAttack } from "../arcade/systems/DiceAttack";
 import {
+  bossDamagePoints,
+  bossDurability,
+  bossRegenPoints,
+  bossTempoMs,
+  RAID_CLOCK_MS,
   mitigateBossDamage,
   resolveBossShot,
 } from "../arcade/systems/EpicRaidCombat";
 import {
+  attackIntervalMs,
+  HitImmunityLedger,
+} from "../arcade/systems/CombatTempo";
+import {
+  deathBlastDamage,
   deathBlastTargets,
   hasWingman,
   rewardKill,
@@ -100,10 +108,28 @@ import {
 } from "../systems/arena/BattleScore";
 import {
   createMatchTimer,
-  tickMatchTimer,
   formatMatchClock,
+  tickMatchTimer,
   type MatchTimerState,
 } from "../systems/arena/MatchTimer";
+import { cameraViewFrom } from "../ui/hud/hudMath";
+import { createHoloText } from "../ui/hud/holoPrimitives";
+import { HOLO_DEPTH, HOLO_PALETTE } from "../ui/theme/HoloTheme";
+import {
+  BOSS_ABILITY_BASE_MS,
+  BOSS_BROADSIDE_RANGE_PX,
+  BOSS_DEFINITIONS,
+  BOSS_SHIELD_REGEN_POINTS,
+  raidDifficultyMultiplier,
+} from "./epicRaid/bossDefinitions";
+import { buildRaidSetupScreen } from "./epicRaid/RaidSetupScreen";
+import { RaidHud } from "./epicRaid/RaidHud";
+import { BOSS_CONTACT_ID, raidContacts } from "./epicRaid/raidHudSnapshot";
+import type { BossStatusView } from "./epicRaid/bossStatus";
+import { HoloPauseOverlay } from "./battleUi/HoloPauseOverlay";
+import { showHoloResultScreen } from "./battleUi/HoloResultScreen";
+import { fitBackdropToZoom } from "./battleUi/fitBackdropToZoom";
+import { playerHudState, primaryWeaponSlot } from "./battleUi/hudSnapshot";
 
 interface BossSection {
   id: string;
@@ -171,6 +197,17 @@ interface EpicShip {
 
 /** Agility dice the boss rolls against every bolt fired at it. */
 const BOSS_AGILITY_DICE = 2;
+/** Banner geometry/timing: above the followed flagship, rising as it fades. */
+const BANNER_OFFSET_Y = 120;
+const BANNER_SCALE = 1.5;
+const BANNER_RISE_PX = 50;
+const BANNER_DURATION_MS = 1500;
+/** Pause after the boss explodes before the victory screen. */
+const VICTORY_SCREEN_DELAY_MS = 1000;
+/** Camera zoom in battle and the mouse-wheel limits. */
+const RAID_ZOOM = { battle: 0.7, min: 0.4, max: 1.5 } as const;
+/** Painted backdrop texture id. */
+const RAID_BACKDROP = "galaxy_spiral";
 
 /** What {@link EpicBattleScene.createShip} needs to build a flying ship. */
 interface ShipSpawn {
@@ -200,169 +237,6 @@ interface ShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
 }
 
-// Boss definitions from spec
-const BOSS_DEFINITIONS: Record<
-  FactionId,
-  {
-    name: string;
-    totalHull: number;
-    shields: number;
-    /** Flat damage reduction applied to every incoming hit before shields/hull. */
-    armor: number;
-    sections: Array<{
-      name: string;
-      hull: number;
-      offsetX: number;
-      offsetY: number;
-      weapons: boolean;
-      shields: boolean;
-    }>;
-    escortCount: number;
-  }
-> = {
-  terran_hegemony: {
-    name: "Hegemony Battlecruiser",
-    totalHull: 180,
-    shields: 40,
-    armor: 3,
-    sections: [
-      {
-        name: "Fore",
-        hull: 90,
-        offsetX: 0,
-        offsetY: -40,
-        weapons: true,
-        shields: true,
-      },
-      {
-        name: "Aft",
-        hull: 90,
-        offsetX: 0,
-        offsetY: 40,
-        weapons: true,
-        shields: false,
-      },
-    ],
-    escortCount: 6,
-  },
-  free_confederation: {
-    name: "Freedom Corvette",
-    totalHull: 150,
-    shields: 30,
-    armor: 3,
-    sections: [
-      {
-        name: "Fore",
-        hull: 50,
-        offsetX: 0,
-        offsetY: -30,
-        weapons: true,
-        shields: false,
-      },
-      {
-        name: "Mid",
-        hull: 50,
-        offsetX: 0,
-        offsetY: 0,
-        weapons: false,
-        shields: true,
-      },
-      {
-        name: "Aft",
-        hull: 50,
-        offsetX: 0,
-        offsetY: 30,
-        weapons: true,
-        shields: false,
-      },
-    ],
-    escortCount: 4,
-  },
-  synthetic_collective: {
-    name: "Collective Mothership",
-    totalHull: 140,
-    shields: 50,
-    armor: 3,
-    sections: [
-      {
-        name: "Core",
-        hull: 80,
-        offsetX: 0,
-        offsetY: 0,
-        weapons: true,
-        shields: true,
-      },
-      {
-        name: "Shell",
-        hull: 60,
-        offsetX: 0,
-        offsetY: 0,
-        weapons: true,
-        shields: false,
-      },
-    ],
-    escortCount: 10,
-  },
-  void_corsairs: {
-    name: "Pirate Mothership",
-    totalHull: 140,
-    shields: 25,
-    armor: 3,
-    sections: [
-      {
-        name: "Weapons Bay",
-        hull: 70,
-        offsetX: -30,
-        offsetY: 0,
-        weapons: true,
-        shields: false,
-      },
-      {
-        name: "Engines",
-        hull: 70,
-        offsetX: 30,
-        offsetY: 0,
-        weapons: false,
-        shields: true,
-      },
-    ],
-    escortCount: 5,
-  },
-  ascendant_empire: {
-    name: "Ascendant Dreadnought",
-    totalHull: 200,
-    shields: 60,
-    armor: 3,
-    sections: [
-      {
-        name: "Bio Core",
-        hull: 80,
-        offsetX: 0,
-        offsetY: -30,
-        weapons: false,
-        shields: true,
-      },
-      {
-        name: "Psionic Array",
-        hull: 60,
-        offsetX: 0,
-        offsetY: 0,
-        weapons: true,
-        shields: false,
-      },
-      {
-        name: "Heart",
-        hull: 60,
-        offsetX: 0,
-        offsetY: 30,
-        weapons: true,
-        shields: true,
-      },
-    ],
-    escortCount: 4,
-  },
-};
-
 export class EpicBattleScene extends Phaser.Scene {
   private ships: Map<string, EpicShip> = new Map();
   private shipSprites: Map<string, ShipSprite> = new Map();
@@ -388,11 +262,10 @@ export class EpicBattleScene extends Phaser.Scene {
   private gameResult: "none" | "victory" | "defeat" = "none";
 
   /** Raid time limit (ms); on timeout the boss survives and points decide it. */
-  private static readonly RAID_DURATION_MS = 300_000;
+  private static readonly RAID_DURATION_MS = RAID_CLOCK_MS;
   private raidTimer: MatchTimerState = createMatchTimer(
     EpicBattleScene.RAID_DURATION_MS,
   );
-  private timerText: Phaser.GameObjects.Text | null = null;
   /** Point cost of enemy ships the player destroyed. */
   private playerSideScore: SideScore = createSideScore();
   /** Point cost of the player's ships the enemy destroyed. */
@@ -400,7 +273,7 @@ export class EpicBattleScene extends Phaser.Scene {
 
   // Timing
   private lastBossAbilityTime = 0;
-  private bossAbilityInterval = 5000;
+  private bossAbilityInterval = bossTempoMs(BOSS_ABILITY_BASE_MS.tick);
 
   // Effects
   private effectsManager!: EffectsManager;
@@ -414,12 +287,13 @@ export class EpicBattleScene extends Phaser.Scene {
   /** Ship the pilot last flew; a new flagship starts with fresh input memory. */
   private pilotedShipId: string | null = null;
 
+  /** X-Wing round tempo: who struck whom this maneuver cycle. */
+  private readonly hitLedger = new HitImmunityLedger();
+
   // UI
-  private phaseText!: Phaser.GameObjects.Text;
-  private bossHealthBar!: Phaser.GameObjects.Graphics;
-  private controlsHintText!: Phaser.GameObjects.Text;
-  private setupObjects: Phaser.GameObjects.GameObject[] = [];
-  private pauseMenu!: PauseMenu;
+  private raidHud: RaidHud | null = null;
+  private setupRoot: Phaser.GameObjects.Container | null = null;
+  private pauseMenu: HoloPauseOverlay | null = null;
   private inputSubscriptionIds: number[] = [];
 
   constructor() {
@@ -439,7 +313,9 @@ export class EpicBattleScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.cameras.main.setBounds(0, 0, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
     this.cameras.main.setBackgroundColor(0x050510);
-    addPaintedSpaceBackground(this, "galaxy_spiral", 0);
+    this.cameras.main.setZoom(1);
+    addPaintedSpaceBackground(this, RAID_BACKDROP, 0);
+    fitBackdropToZoom(this, RAID_BACKDROP, RAID_ZOOM.min);
 
     audioManager.initialize();
 
@@ -500,251 +376,59 @@ export class EpicBattleScene extends Phaser.Scene {
     this.enemySideScore = createSideScore();
     this.pilot.reset();
     this.pilotedShipId = null;
+    this.hitLedger.clear();
+    this.lastBossAbilityTime = 0;
+    this.raidHud = null;
+    this.pauseMenu = null;
   }
 
+  /** (Re)builds the holographic briefing screen with the current choices. */
   private showSetupScreen(): void {
-    const centerX = this.scale.width / 2;
-
-    this.setupObjects.forEach((o) => o.destroy());
-    this.setupObjects = [];
-
-    // Background
-    const bg = this.add.graphics();
-    bg.fillStyle(0x000000, 0.9);
-    bg.fillRect(0, 0, this.scale.width, this.scale.height);
-    this.track(bg);
-
-    // Title — positioned near the very top to avoid blank gap
-    const title = this.add
-      .text(centerX, 22, "CAPITAL ASSAULT", {
-        font: "bold 48px Arial",
-        color: "#ff6644",
-      })
-      .setOrigin(0.5);
-    this.track(title);
-
-    const subtitle = this.add
-      .text(centerX, 70, "Destroy the enemy capital ship", {
-        font: "20px Arial",
-        color: "#aaaaaa",
-      })
-      .setOrigin(0.5);
-    this.track(subtitle);
-
-    // Boss selection
-    const bossLabel = this.add
-      .text(centerX, 110, "Select Target:", {
-        font: "bold 24px Arial",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5);
-    this.track(bossLabel);
-
-    const factions: FactionId[] = [
-      "terran_hegemony",
-      "free_confederation",
-      "synthetic_collective",
-      "void_corsairs",
-      "ascendant_empire",
-    ];
-    const factionNames: Record<FactionId, string> = {
-      terran_hegemony: "Hegemony Battlecruiser",
-      free_confederation: "Freedom Corvette",
-      synthetic_collective: "Collective Mothership",
-      void_corsairs: "Pirate Mothership",
-      ascendant_empire: "Ascendant Dreadnought",
-    };
-
-    let yPos = 150;
-    factions.forEach((faction, i) => {
-      const btn = this.createSelectionButton(
-        centerX - 200,
-        yPos,
-        factionNames[faction],
-        faction === this.selectedBossFaction,
-        () => {
-          this.selectedBossFaction = faction;
-          this.showSetupScreen();
-        },
-      );
-      this.track(btn);
-      yPos += 45;
-    });
-
-    // Difficulty selection
-    const diffLabel = this.add
-      .text(centerX + 200, 110, "Difficulty:", {
-        font: "bold 24px Arial",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5);
-    this.track(diffLabel);
-
-    const difficulties: Array<{
-      id: "easy" | "medium" | "hard" | "mythic";
-      name: string;
-      mult: string;
-    }> = [
-      { id: "easy", name: "Easy", mult: "0.75x" },
-      { id: "medium", name: "Medium", mult: "1.0x" },
-      { id: "hard", name: "Hard", mult: "1.5x" },
-      { id: "mythic", name: "Mythic", mult: "2.0x" },
-    ];
-
-    yPos = 150;
-    difficulties.forEach((diff) => {
-      const btn = this.createSelectionButton(
-        centerX + 200,
-        yPos,
-        `${diff.name} (${diff.mult})`,
-        diff.id === this.difficulty,
-        () => {
-          this.difficulty = diff.id;
-          this.showSetupScreen();
-        },
-      );
-      this.track(btn);
-      yPos += 45;
-    });
-
-    // Boss info
-    const bossDef = BOSS_DEFINITIONS[this.selectedBossFaction];
-    const infoY = 450;
-    const info = this.add
-      .text(
-        centerX,
-        infoY,
-        [
-          `Hull: ${bossDef.totalHull} | Shields: ${bossDef.shields}`,
-          `Sections: ${bossDef.sections.map((s) => s.name).join(", ")}`,
-          `Escorts: ${bossDef.escortCount} fighters`,
-        ].join("\n"),
-        {
-          font: "16px Arial",
-          color: "#88aacc",
-          align: "center",
-        },
-      )
-      .setOrigin(0.5);
-    this.track(info);
-
-    // Start button
-    const startBtn = createHoverButton(
-      this,
-      centerX,
-      this.scale.height - 100,
-      {
-        width: 200,
-        height: 60,
-        radius: 10,
-        color: 0x227722,
-        hoverColor: 0x33aa33,
-        label: "BEGIN ASSAULT",
-        font: "bold 24px Arial",
+    this.setupRoot?.destroy();
+    this.setupRoot = buildRaidSetupScreen({
+      scene: this,
+      bossFaction: this.selectedBossFaction,
+      difficulty: this.difficulty,
+      onSelectBoss: (faction) => {
+        this.selectedBossFaction = faction;
+        this.showSetupScreen();
       },
-      () => this.startBattle(),
-    );
-    this.track(startBtn);
-
-    // Back button
-    const backBtn = this.add
-      .text(50, 50, "< BACK", {
-        font: "bold 20px Arial",
-        color: "#aaaaaa",
-      })
-      .setInteractive({ useHandCursor: true });
-
-    backBtn.on("pointerover", () => backBtn.setColor("#ffffff"));
-    backBtn.on("pointerout", () => backBtn.setColor("#aaaaaa"));
-    backBtn.on("pointerdown", () => {
-      this.scene.start("MainMenuScene");
+      onSelectDifficulty: (difficulty) => {
+        this.difficulty = difficulty;
+        this.showSetupScreen();
+      },
+      onStart: () => this.startBattle(),
+      onBack: () => this.scene.start("MainMenuScene"),
     });
-
-    this.track(backBtn);
-  }
-
-  /**
-   * Tracks a setup-screen object for later cleanup, forcing its own
-   * scrollFactor(0)/depth so it hit-tests correctly regardless of camera
-   * zoom (see the reparenting/zoom note in showSetupScreen's caller).
-   */
-  private track(obj: Phaser.GameObjects.GameObject): void {
-    const withTransform = obj as unknown as {
-      setScrollFactor?: (x: number) => unknown;
-      setDepth?: (d: number) => unknown;
-    };
-    withTransform.setScrollFactor?.(0);
-    withTransform.setDepth?.(2000);
-    this.setupObjects.push(obj);
-  }
-
-  private createSelectionButton(
-    x: number,
-    y: number,
-    label: string,
-    selected: boolean,
-    onClick: () => void,
-  ): Phaser.GameObjects.Container {
-    const container = this.add.container(x, y);
-
-    const bg = this.add.graphics();
-    if (selected) {
-      bg.fillStyle(0x336688, 1);
-      bg.lineStyle(2, 0x44aaff, 1);
-    } else {
-      bg.fillStyle(0x222233, 0.8);
-    }
-    bg.fillRoundedRect(-120, -18, 240, 36, 6);
-    if (selected) {
-      bg.strokeRoundedRect(-120, -18, 240, 36, 6);
-    }
-    container.add(bg);
-
-    const text = this.add
-      .text(0, 0, label, {
-        font: selected ? "bold 16px Arial" : "16px Arial",
-        color: selected ? "#44ffaa" : "#888888",
-      })
-      .setOrigin(0.5);
-    container.add(text);
-
-    const hitArea = this.add
-      .rectangle(0, 0, 240, 36)
-      .setInteractive({ useHandCursor: true })
-      .setScrollFactor(0);
-    container.add(hitArea);
-
-    hitArea.on("pointerdown", onClick);
-
-    return container;
   }
 
   private startBattle(): void {
-    this.setupObjects.forEach((o) => o.destroy());
-    this.setupObjects = [];
+    this.setupRoot?.destroy();
+    this.setupRoot = null;
     this.isSetupPhase = false;
-    this.cameras.main.setZoom(0.7);
+    this.cameras.main.setZoom(RAID_ZOOM.battle);
 
     audioManager.playMusic("combat_high");
 
-    this.createHUD();
     this.setupInput();
     this.createPauseMenu();
     this.spawnBoss();
     this.spawnPlayerSquad();
     this.spawnEscorts();
+    this.raidHud = new RaidHud(
+      this,
+      BOSS_DEFINITIONS[this.selectedBossFaction].name,
+      BATTLEFIELD_SIZE,
+    );
+    this.refreshHud();
 
-    // The camera never moved off its create()-time center (3000,3000) before
-    // this — the boss spawns at y=200 and the player squad at y=5800 on a
-    // 6000px-tall battlefield, so neither was ever actually visible on
-    // screen. Follow the flagship so the player can see their own ship and
-    // (once they fly toward it) the boss.
+    // Follow the flagship: the boss spawns at y=200 and the squad at y=5800,
+    // so the camera's create()-time centre shows neither.
     const flagship = this.shipSprites.get(this.playerShipIds[0] ?? "");
     if (flagship) {
       this.cameras.main.startFollow(flagship, true, 0.09, 0.09);
     }
   }
-
   update(time: number, delta: number): void {
     InputManager.update();
     // Mix every positional sound relative to what the player is
@@ -768,121 +452,84 @@ export class EpicBattleScene extends Phaser.Scene {
     this.processBossAbilities(time);
     this.updateSprites();
     this.checkVictoryConditions();
+    this.refreshHud();
   }
 
-  private createHUD(): void {
-    const style = { font: "bold 20px monospace", color: "#ffffff" };
-
-    this.phaseText = this.add
-      .text(this.scale.width / 2, 30, "PHASE 1", {
-        font: "bold 28px Arial",
-        color: "#44ff44",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    this.timerText = this.add
-      .text(
-        this.scale.width - 20,
-        30,
-        formatMatchClock(EpicBattleScene.RAID_DURATION_MS),
-        {
-          font: "bold 22px Arial",
-          color: "#ffffff",
-          stroke: "#000000",
-          strokeThickness: 3,
-        },
-      )
-      .setOrigin(1, 0)
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    // Boss health bar
-    this.bossHealthBar = this.add.graphics();
-    this.bossHealthBar.setScrollFactor(0);
-    this.bossHealthBar.setDepth(1000);
-    this.updateBossHealthBar();
-
-    this.controlsHintText = this.add
-      .text(
-        this.scale.width / 2,
-        this.scale.height - 30,
-        "UP/DOWN: Speed | UP x2: Boost | LEFT/RIGHT: tap drift, hold bank | Q/E: Hard turn | Z: K-turn | Weapon autofires | Scroll: Zoom | ESC: Pause",
-        {
-          font: "14px monospace",
-          color: "#666666",
-        },
-      )
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1000);
-  }
-
-  private updateBossHealthBar(): void {
-    if (!this.boss || !this.bossHealthBar) return;
-
-    const barWidth = 400;
-    const barHeight = 30;
-    const x = (this.scale.width - barWidth) / 2;
-    const y = 60;
-
-    this.bossHealthBar.clear();
-
-    // Background
-    this.bossHealthBar.fillStyle(0x222222, 1);
-    this.bossHealthBar.fillRect(x, y, barWidth, barHeight);
-
-    // Shields
-    if (this.boss.shields > 0) {
-      const shieldRatio = this.boss.shields / this.boss.maxShields;
-      this.bossHealthBar.fillStyle(0x4488ff, 1);
-      this.bossHealthBar.fillRect(x, y, barWidth * shieldRatio, barHeight / 3);
-    }
-
-    // Hull
-    const hullRatio = this.boss.totalHull / this.boss.maxTotalHull;
-    let hullColor = 0x44ff44;
-    if (hullRatio < 0.3) hullColor = 0xff4444;
-    else if (hullRatio < 0.6) hullColor = 0xffaa44;
-
-    this.bossHealthBar.fillStyle(hullColor, 1);
-    this.bossHealthBar.fillRect(
-      x,
-      y + barHeight / 3,
-      barWidth * hullRatio,
-      (barHeight * 2) / 3,
-    );
-
-    // Border
-    this.bossHealthBar.lineStyle(2, 0xffffff, 0.8);
-    this.bossHealthBar.strokeRect(x, y, barWidth, barHeight);
-
-    // Section indicators
-    let sectionX = x;
-    this.boss.sections.forEach((section, i) => {
-      const sectionWidth =
-        (section.maxHull / this.boss!.maxTotalHull) * barWidth;
-
-      if (section.isDisabled) {
-        this.bossHealthBar.fillStyle(0x444444, 0.8);
-        this.bossHealthBar.fillRect(sectionX, y, sectionWidth, barHeight);
-      }
-
-      if (i < this.boss!.sections.length - 1) {
-        this.bossHealthBar.lineStyle(1, 0x888888, 1);
-        this.bossHealthBar.lineBetween(
-          sectionX + sectionWidth,
-          y,
-          sectionX + sectionWidth,
-          y + barHeight,
-        );
-      }
-
-      sectionX += sectionWidth;
+  /** Feeds the holographic HUD this frame's flagship, contacts, boss and clock. */
+  private refreshHud(): void {
+    if (!this.raidHud) return;
+    const flagship = this.livingFlagship();
+    const boss = this.boss;
+    this.raidHud.update({
+      battle: {
+        player: flagship ? playerHudState(flagship) : null,
+        contacts: raidContacts({
+          flagshipId: flagship?.id ?? null,
+          ships: this.ships.values(),
+          boss: boss
+            ? {
+                id: boss.id,
+                x: boss.x,
+                y: boss.y,
+                angle: boss.angle,
+                hull: boss.totalHull,
+              }
+            : null,
+          targetId: flagship ? this.flagshipTargetId(flagship) : null,
+        }),
+        weapons: flagship
+          ? [
+              primaryWeaponSlot(
+                flagship.weaponCooldown,
+                attackIntervalMs(flagship.combatStats.weaponCooldown),
+              ),
+            ]
+          : [],
+        camera: cameraViewFrom(this.cameras.main),
+      },
+      boss: this.bossStatusView(),
+      remainingMs: this.raidTimer.remainingMs,
     });
   }
 
+  /** @returns The flagship (first living player ship), or null. */
+  private livingFlagship(): EpicShip | null {
+    const flagship = this.ships.get(this.playerShipIds[0] ?? "");
+    return flagship && flagship.hull > 0 ? flagship : null;
+  }
+
+  /**
+   * What the flagship's lasers are locked on: the boss in range, else the
+   * escort it would shoot, else the boss as the raid objective.
+   *
+   * @param flagship - The flagship.
+   * @returns A HUD contact id, or null.
+   */
+  private flagshipTargetId(flagship: EpicShip): string | null {
+    if (this.bossInRange(flagship)) return BOSS_CONTACT_ID;
+    const escort = this.findEscortTarget(flagship);
+    if (escort) return escort.id;
+    return this.boss && this.boss.totalHull > 0 ? BOSS_CONTACT_ID : null;
+  }
+
+  /** @returns The boss as the status panel shows it, or null once it is gone. */
+  private bossStatusView(): BossStatusView | null {
+    const boss = this.boss;
+    if (!boss || boss.totalHull <= 0) return null;
+    return {
+      name: BOSS_DEFINITIONS[boss.faction].name,
+      phase: boss.phase,
+      shields: boss.shields,
+      maxShields: boss.maxShields,
+      hull: boss.totalHull,
+      maxHull: boss.maxTotalHull,
+      sections: boss.sections.map((section) => ({
+        hull: section.hull,
+        maxHull: section.maxHull,
+        disabled: section.isDisabled,
+      })),
+    };
+  }
   private setupInput(): void {
     setupSceneInput(this);
     this.pilot.attach();
@@ -899,17 +546,18 @@ export class EpicBattleScene extends Phaser.Scene {
         deltaY: number,
       ) => {
         const zoom = this.cameras.main.zoom - deltaY * 0.001;
-        this.cameras.main.setZoom(Phaser.Math.Clamp(zoom, 0.4, 1.5));
+        this.cameras.main.setZoom(
+          Phaser.Math.Clamp(zoom, RAID_ZOOM.min, RAID_ZOOM.max),
+        );
       },
     );
   }
 
   private createPauseMenu(): void {
-    this.pauseMenu = new PauseMenu({
+    this.pauseMenu = new HoloPauseOverlay({
       scene: this,
-      onResume: () => {
-        this.isPaused = false;
-      },
+      faction: this.playerFaction,
+      onResume: () => this.resumeFromPause(),
       onRestart: () => {
         this.scene.restart();
       },
@@ -923,31 +571,40 @@ export class EpicBattleScene extends Phaser.Scene {
   }
 
   /**
-   * ESC previously just flipped `isPaused` with no visual feedback or way
-   * back to the menu — the freeze looked like a bug. Zoom is reset to 1.0
-   * first for the same scrollFactor(0)-vs-zoom hit-testing reason as the
-   * setup/end screens.
+   * ESC opens (or closes) the holographic pause menu. Zoom is reset to 1.0
+   * first: scrollFactor(0) buttons mis-hit-test under camera zoom.
    */
   private togglePause(): void {
     if (this.isSetupPhase || this.gameResult !== "none") return;
-    this.isPaused = !this.isPaused;
     if (this.isPaused) {
-      this.cameras.main.setZoom(1.0);
-      this.pauseMenu.show();
+      this.pauseMenu?.hide();
+      this.resumeFromPause();
+      return;
     }
+    this.isPaused = true;
+    // The HUD stops updating while paused, so it would keep the old zoom's
+    // compensation: hide it under the menu.
+    this.raidHud?.setVisible(false);
+    this.cameras.main.setZoom(1.0);
+    this.pauseMenu?.show();
   }
 
+  /** Leaves the pause menu: the raid and its HUD resume. */
+  private resumeFromPause(): void {
+    this.isPaused = false;
+    this.raidHud?.setVisible(true);
+  }
+
+  /** Spawns the raid boss at the difficulty, in real-time hit points. */
   private spawnBoss(): void {
     const bossDef = BOSS_DEFINITIONS[this.selectedBossFaction];
-    const diffMultiplier = { easy: 0.75, medium: 1, hard: 1.5, mythic: 2 }[
-      this.difficulty
-    ];
+    const multiplier = raidDifficultyMultiplier(this.difficulty);
 
     const sections: BossSection[] = bossDef.sections.map((s, i) => ({
       id: `section_${i}`,
       name: s.name,
-      hull: Math.floor(s.hull * diffMultiplier),
-      maxHull: Math.floor(s.hull * diffMultiplier),
+      hull: bossDurability(s.hull, multiplier),
+      maxHull: bossDurability(s.hull, multiplier),
       isDisabled: false,
       offsetX: s.offsetX,
       offsetY: s.offsetY,
@@ -956,16 +613,16 @@ export class EpicBattleScene extends Phaser.Scene {
     }));
 
     this.boss = {
-      id: "boss",
+      id: BOSS_CONTACT_ID,
       faction: this.selectedBossFaction,
       x: BATTLEFIELD_SIZE / 2,
       y: 200,
       angle: 180,
       sections,
-      totalHull: sections.reduce((sum, s) => sum + s.hull, 0),
-      maxTotalHull: sections.reduce((sum, s) => sum + s.maxHull, 0),
-      shields: Math.floor(bossDef.shields * diffMultiplier),
-      maxShields: Math.floor(bossDef.shields * diffMultiplier),
+      totalHull: sumSectionHull(sections),
+      maxTotalHull: sumSectionHull(sections),
+      shields: bossDurability(bossDef.shields, multiplier),
+      maxShields: bossDurability(bossDef.shields, multiplier),
       armor: bossDef.armor,
       phase: 1,
       abilities: this.getBossAbilities(),
@@ -975,47 +632,63 @@ export class EpicBattleScene extends Phaser.Scene {
     this.createBossSprite();
   }
 
+  /**
+   * Broadside: one shot at every player ship within reach, at the phase's
+   * damage in real-time points; a ship the boss struck this cycle is spared.
+   *
+   * @param boss - The boss.
+   */
+  private fireBroadside(boss: BossShip): void {
+    const now = this.time.now;
+    for (const ship of this.livingShips(this.playerShipIds)) {
+      const distance = Phaser.Math.Distance.Between(
+        boss.x,
+        boss.y,
+        ship.x,
+        ship.y,
+      );
+      if (distance >= BOSS_BROADSIDE_RANGE_PX) continue;
+      if (this.hitLedger.isImmune(boss.id, ship.id, now)) continue;
+      const damage = mitigateBossDamage(
+        bossDamagePoints(bossBroadsideDamage(boss.phase)),
+        ship.modifiers,
+        this.fliesWithWingman(ship),
+      );
+      this.damageShip(ship, damage);
+      this.hitLedger.recordHit(boss.id, ship.id, now);
+      this.effectsManager.fireLaser(
+        boss.x,
+        boss.y,
+        ship.x,
+        ship.y,
+        boss.faction,
+        true,
+      );
+    }
+  }
+
+  /**
+   * @param ids - Ship ids.
+   * @returns The living ships among them.
+   */
+  private livingShips(ids: readonly string[]): EpicShip[] {
+    return ids.flatMap((id) => {
+      const ship = this.ships.get(id);
+      return ship && ship.hull > 0 ? [ship] : [];
+    });
+  }
   private getBossAbilities(): BossAbility[] {
     return [
       {
         id: "broadside",
         name: "Broadside",
-        cooldown: 8000,
-        effect: (boss) => {
-          // Hit all player ships in range
-          for (const shipId of this.playerShipIds) {
-            const ship = this.ships.get(shipId);
-            if (!ship || ship.hull <= 0) continue;
-
-            const dist = Phaser.Math.Distance.Between(
-              boss.x,
-              boss.y,
-              ship.x,
-              ship.y,
-            );
-            if (dist < 400) {
-              const damage = mitigateBossDamage(
-                bossBroadsideDamage(boss.phase),
-                ship.modifiers,
-                this.fliesWithWingman(ship),
-              );
-              this.damageShip(ship, damage);
-              this.effectsManager.fireLaser(
-                boss.x,
-                boss.y,
-                ship.x,
-                ship.y,
-                boss.faction,
-                true,
-              );
-            }
-          }
-        },
+        cooldown: bossTempoMs(BOSS_ABILITY_BASE_MS.broadside),
+        effect: (boss) => this.fireBroadside(boss),
       },
       {
         id: "launch_fighters",
         name: "Launch Fighters",
-        cooldown: 15000,
+        cooldown: bossTempoMs(BOSS_ABILITY_BASE_MS.launchFighters),
         effect: (boss) => {
           // Spawn additional escorts
           const escortCount = bossReinforcementCount(boss.phase);
@@ -1043,11 +716,13 @@ export class EpicBattleScene extends Phaser.Scene {
       {
         id: "shield_regen",
         name: "Shield Regeneration",
-        cooldown: 12000,
+        cooldown: bossTempoMs(BOSS_ABILITY_BASE_MS.shieldRegen),
         effect: (boss) => {
           if (boss.phase < 3) {
-            boss.shields = Math.min(boss.maxShields, boss.shields + 10);
-            this.updateBossHealthBar();
+            boss.shields = Math.min(
+              boss.maxShields,
+              boss.shields + bossRegenPoints(BOSS_SHIELD_REGEN_POINTS),
+            );
           }
         },
       },
@@ -1374,56 +1049,79 @@ export class EpicBattleScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * One frame of laser fire on the X-Wing round tempo: each ship attacks at
+   * most once per maneuver cycle, and holds its shot while its target is
+   * still immune to it (struck by it this cycle).
+   *
+   * @param delta - Frame length (ms).
+   */
   private processCombat(delta: number): void {
-    // Player ships attack boss and escorts
-    for (const shipId of this.playerShipIds) {
-      const ship = this.ships.get(shipId);
-      if (!ship || ship.hull <= 0) continue;
-
-      ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
-
-      if (ship.weaponCooldown <= 0) {
-        // Prefer attacking boss if in range
-        if (this.boss && this.boss.totalHull > 0) {
-          const distToBoss = Phaser.Math.Distance.Between(
-            ship.x,
-            ship.y,
-            this.boss.x,
-            this.boss.y,
-          );
-          if (distToBoss < ship.combatStats.weaponRange) {
-            this.attackBoss(ship);
-            ship.weaponCooldown = ship.combatStats.weaponCooldown;
-            continue;
-          }
-        }
-
-        // Otherwise attack escorts
-        const target = this.findEscortTarget(ship);
-        if (target) {
-          this.attackShip(ship, target);
-          ship.weaponCooldown = ship.combatStats.weaponCooldown;
-        }
+    for (const ship of this.livingShips(this.playerShipIds)) {
+      if (!this.weaponReady(ship, delta)) continue;
+      if (this.boss && this.bossInRange(ship)) {
+        this.fireAt(ship, this.boss.id, () => this.attackBoss(ship));
+        continue;
       }
+      const target = this.findEscortTarget(ship);
+      if (target)
+        this.fireAt(ship, target.id, () => this.attackShip(ship, target));
     }
-
-    // Escorts attack player ships
-    for (const shipId of this.escortShipIds) {
-      const ship = this.ships.get(shipId);
-      if (!ship || ship.hull <= 0) continue;
-
-      ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
-
-      if (ship.weaponCooldown <= 0) {
-        const target = this.findPlayerTarget(ship);
-        if (target) {
-          this.attackShip(ship, target);
-          ship.weaponCooldown = ship.combatStats.weaponCooldown;
-        }
-      }
+    for (const ship of this.livingShips(this.escortShipIds)) {
+      if (!this.weaponReady(ship, delta)) continue;
+      const target = this.findPlayerTarget(ship);
+      if (target)
+        this.fireAt(ship, target.id, () => this.attackShip(ship, target));
     }
   }
 
+  /**
+   * Ticks a ship's weapon cooldown.
+   *
+   * @param ship - A living ship.
+   * @param delta - Frame length (ms).
+   * @returns True once it may fire.
+   */
+  private weaponReady(ship: EpicShip, delta: number): boolean {
+    ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
+    return ship.weaponCooldown <= 0;
+  }
+
+  /**
+   * Fires one attack unless the target is immune to this attacker; a hit
+   * makes it immune for a cycle. The weapon waits a full attack interval.
+   *
+   * @param attacker - The firing ship.
+   * @param targetId - The target's id (the boss's for a boss shot).
+   * @param attack - Resolves the shot; returns whether it hit.
+   */
+  private fireAt(
+    attacker: EpicShip,
+    targetId: string,
+    attack: () => boolean,
+  ): void {
+    const now = this.time.now;
+    if (this.hitLedger.isImmune(attacker.id, targetId, now)) return;
+    if (attack()) this.hitLedger.recordHit(attacker.id, targetId, now);
+    attacker.weaponCooldown = attackIntervalMs(
+      attacker.combatStats.weaponCooldown,
+    );
+  }
+
+  /**
+   * @param ship - A ship.
+   * @returns Whether the standing boss is within its weapon range.
+   */
+  private bossInRange(ship: EpicShip): boolean {
+    if (!this.boss || this.boss.totalHull <= 0) return false;
+    const distance = Phaser.Math.Distance.Between(
+      ship.x,
+      ship.y,
+      this.boss.x,
+      this.boss.y,
+    );
+    return distance < ship.combatStats.weaponRange;
+  }
   private findEscortTarget(ship: EpicShip): EpicShip | null {
     let best: EpicShip | null = null;
     let bestDist = Infinity;
@@ -1475,9 +1173,10 @@ export class EpicBattleScene extends Phaser.Scene {
    * pose stands in as the target for the pilot's conditional bonuses.
    *
    * @param attacker - The firing player-side ship.
+   * @returns Whether the bolt damaged the boss.
    */
-  private attackBoss(attacker: EpicShip): void {
-    if (!this.boss) return;
+  private attackBoss(attacker: EpicShip): boolean {
+    if (!this.boss) return false;
 
     const damage = resolveBossShot({
       attacker: combatantOf(attacker),
@@ -1502,6 +1201,7 @@ export class EpicBattleScene extends Phaser.Scene {
       attacker.faction,
       hit,
     );
+    return hit;
   }
 
   /**
@@ -1539,9 +1239,8 @@ export class EpicBattleScene extends Phaser.Scene {
       boss.totalHull = sumSectionHull(boss.sections);
       this.checkBossPhaseTransition();
     }
-
-    this.updateBossHealthBar();
   }
+
   private checkBossPhaseTransition(): void {
     if (!this.boss) return;
 
@@ -1550,13 +1249,9 @@ export class EpicBattleScene extends Phaser.Scene {
 
     if (targetPhase === 3 && this.boss.phase < 3) {
       this.boss.phase = 3;
-      this.phaseText.setText("PHASE 3 - CRITICAL");
-      this.phaseText.setColor("#ff4444");
       this.showMessage("BOSS ENTERING CRITICAL PHASE!");
     } else if (targetPhase === 2 && this.boss.phase < 2) {
       this.boss.phase = 2;
-      this.phaseText.setText("PHASE 2 - SHIELDS FAILING");
-      this.phaseText.setColor("#ffaa44");
       this.showMessage("Boss shields failing! Reinforcements incoming!");
       // Spawn reinforcements
       this.boss.abilities
@@ -1572,8 +1267,9 @@ export class EpicBattleScene extends Phaser.Scene {
    *
    * @param attacker - The firing ship.
    * @param target - The ship fired at.
+   * @returns Whether the bolt damaged the target.
    */
-  private attackShip(attacker: EpicShip, target: EpicShip): void {
+  private attackShip(attacker: EpicShip, target: EpicShip): boolean {
     const result = resolveDiceAttack({
       attacker: combatantOf(attacker),
       target: combatantOf(target),
@@ -1588,30 +1284,21 @@ export class EpicBattleScene extends Phaser.Scene {
       roll: random.next(),
     });
 
-    if (result.hit) {
-      this.setFlight(target, {
-        ...target.flight,
-        stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
-      });
-      this.damageShip(target, result.damage, attacker);
-      this.effectsManager.fireLaser(
-        attacker.x,
-        attacker.y,
-        target.x,
-        target.y,
-        attacker.faction,
-        true,
-      );
-    } else {
-      this.effectsManager.fireLaser(
-        attacker.x,
-        attacker.y,
-        target.x,
-        target.y,
-        attacker.faction,
-        false,
-      );
-    }
+    this.effectsManager.fireLaser(
+      attacker.x,
+      attacker.y,
+      target.x,
+      target.y,
+      attacker.faction,
+      result.hit,
+    );
+    if (!result.hit) return false;
+    this.setFlight(target, {
+      ...target.flight,
+      stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
+    });
+    this.damageShip(target, result.damage, attacker);
+    return result.damage > 0;
   }
 
   /**
@@ -1676,7 +1363,7 @@ export class EpicBattleScene extends Phaser.Scene {
       (other) => other.owner !== victim.owner && other.hull > 0,
     );
     for (const caught of deathBlastTargets(combatantOf(victim), enemies)) {
-      this.damageShip(caught, victim.modifiers.deathBlastDamage, victim);
+      this.damageShip(caught, deathBlastDamage(combatantOf(victim)), victim);
     }
   }
 
@@ -1702,6 +1389,7 @@ export class EpicBattleScene extends Phaser.Scene {
   private destroyShip(shipId: string): void {
     const ship = this.ships.get(shipId);
     if (!ship) return;
+    this.hitLedger.forget(shipId);
 
     if (ship.owner === "player") {
       this.enemySideScore = creditKill(this.enemySideScore, ship.definitionId);
@@ -1917,17 +1605,6 @@ export class EpicBattleScene extends Phaser.Scene {
    */
   private updateRaidTimer(deltaMs: number): boolean {
     this.raidTimer = tickMatchTimer(this.raidTimer, deltaMs);
-    if (this.timerText) {
-      const remaining = this.raidTimer.remainingMs;
-      this.timerText.setText(formatMatchClock(remaining));
-      this.timerText.setColor(
-        remaining <= 30_000
-          ? "#ff4444"
-          : remaining <= 60_000
-            ? "#ffcc00"
-            : "#ffffff",
-      );
-    }
     if (!this.raidTimer.expired) return false;
     const outcome = resolveByPoints(this.playerSideScore, this.enemySideScore);
     if (outcome === "side1") {
@@ -1949,177 +1626,108 @@ export class EpicBattleScene extends Phaser.Scene {
     }
 
     // Defeat: All player ships destroyed
-    const playersAlive = this.playerShipIds.filter((id) => {
-      const ship = this.ships.get(id);
-      return ship && ship.hull > 0;
-    }).length;
-
-    if (playersAlive === 0) {
+    if (this.livingShips(this.playerShipIds).length === 0) {
       this.gameResult = "defeat";
       this.showDefeatScreen();
     }
   }
 
+  /**
+   * A short holographic banner (ability, section disabled, phase change).
+   *
+   * @param message - Banner text.
+   */
   private showMessage(message: string): void {
-    const text = this.add
-      .text(this.scale.width / 2, this.scale.height / 2, message, {
-        font: "bold 32px Arial",
-        color: "#ffdd00",
-        stroke: "#000000",
-        strokeThickness: 4,
-      })
-      .setOrigin(0.5)
+    const text = createHoloText(
+      this,
+      this.scale.width / 2,
+      this.scale.height / 2 - BANNER_OFFSET_Y,
+      message.toUpperCase(),
+      "heading",
+      HOLO_PALETTE.warning,
+    )
+      .setScale(BANNER_SCALE)
       .setScrollFactor(0)
-      .setDepth(1001);
+      .setDepth(HOLO_DEPTH.hudIndicators);
 
     this.tweens.add({
       targets: text,
       alpha: 0,
-      y: this.scale.height / 2 - 50,
-      duration: 1500,
+      y: text.y - BANNER_RISE_PX,
+      duration: BANNER_DURATION_MS,
       onComplete: () => text.destroy(),
     });
   }
 
+  /** Raid won: the boss blows up (if it fell), then the result screen. */
   private showVictoryScreen(): void {
     this.isPaused = true;
-    this.phaseText.setVisible(false);
-    this.timerText?.setVisible(false);
-    this.bossHealthBar.setVisible(false);
-    this.controlsHintText.setVisible(false);
-
-    const centerX = this.scale.width / 2;
-    const centerY = this.scale.height / 2;
-
-    // Destroy boss sprite with big explosion
-    if (this.bossSprite) {
-      this.effectsManager.createExplosion(this.boss!.x, this.boss!.y, "large");
+    this.raidHud?.setVisible(false);
+    const bossDestroyed = this.boss !== null && this.boss.totalHull <= 0;
+    if (bossDestroyed && this.bossSprite && this.boss) {
+      this.effectsManager.createExplosion(this.boss.x, this.boss.y, "large");
       this.bossSprite.destroy();
+      this.bossSprite = null;
     }
-
-    this.time.delayedCall(1000, () => {
-      const bg = this.add.graphics();
-      bg.fillStyle(0x000000, 0.8);
-      bg.fillRect(0, 0, this.scale.width, this.scale.height);
-      bg.setScrollFactor(0);
-      bg.setDepth(2000);
-
-      this.add
-        .text(centerX, centerY - 80, "VICTORY!", {
-          font: "bold 56px Arial",
-          color: "#44ff44",
-        })
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(2001);
-
-      this.add
-        .text(
-          centerX,
-          centerY - 20,
-          `${BOSS_DEFINITIONS[this.selectedBossFaction].name} Destroyed`,
-          {
-            font: "24px Arial",
-            color: "#ffffff",
-          },
-        )
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(2001);
-
-      const playersRemaining = this.playerShipIds.filter((id) => {
-        const ship = this.ships.get(id);
-        return ship && ship.hull > 0;
-      }).length;
-
-      this.add
-        .text(centerX, centerY + 20, `Ships Remaining: ${playersRemaining}`, {
-          font: "20px Arial",
-          color: "#aaaaaa",
-        })
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(2001);
-
-      this.createEndButtons(centerX, centerY + 100);
-    });
+    const bossName = BOSS_DEFINITIONS[this.selectedBossFaction].name;
+    this.time.delayedCall(VICTORY_SCREEN_DELAY_MS, () =>
+      this.showResult(
+        true,
+        bossDestroyed
+          ? `${bossName} destroyed`
+          : "Raid clock expired — won on points",
+      ),
+    );
   }
 
+  /** Raid lost: the result screen. */
   private showDefeatScreen(): void {
     this.isPaused = true;
-    this.phaseText.setVisible(false);
-    this.timerText?.setVisible(false);
-    this.bossHealthBar.setVisible(false);
-    this.controlsHintText.setVisible(false);
-
-    const centerX = this.scale.width / 2;
-    const centerY = this.scale.height / 2;
-
-    const bg = this.add.graphics();
-    bg.fillStyle(0x000000, 0.8);
-    bg.fillRect(0, 0, this.scale.width, this.scale.height);
-    bg.setScrollFactor(0);
-    bg.setDepth(2000);
-
-    this.add
-      .text(centerX, centerY - 80, "DEFEAT", {
-        font: "bold 56px Arial",
-        color: "#ff4444",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001);
-
-    const bossRemaining = this.boss
-      ? Math.floor((this.boss.totalHull / this.boss.maxTotalHull) * 100)
-      : 0;
-    this.add
-      .text(centerX, centerY - 20, `Boss Hull Remaining: ${bossRemaining}%`, {
-        font: "24px Arial",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001);
-
-    this.createEndButtons(centerX, centerY + 80);
+    this.raidHud?.setVisible(false);
+    this.showResult(false, "Squadron lost — the capital ship survives");
   }
 
-  private createEndButtons(x: number, y: number): void {
-    // Same scrollFactor(0)-vs-zoom hit-test issue as the setup screen — the
-    // mouse wheel can leave zoom far from 1.0 by the time the match ends.
-    this.cameras.main.setZoom(1.0);
-
-    const retryBtn = this.add
-      .text(x - 100, y, "RETRY", {
-        font: "bold 24px Arial",
-        color: "#44ff44",
-        backgroundColor: "#224422",
-        padding: { x: 20, y: 10 },
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001)
-      .setInteractive({ useHandCursor: true });
-
-    retryBtn.on("pointerdown", () => {
-      this.scene.restart();
-    });
-
-    const menuBtn = this.add
-      .text(x + 100, y, "MENU", {
-        font: "bold 24px Arial",
-        color: "#ffffff",
-        backgroundColor: "#444444",
-        padding: { x: 20, y: 10 },
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001)
-      .setInteractive({ useHandCursor: true });
-
-    menuBtn.on("pointerdown", () => {
-      this.scene.start("MainMenuScene");
+  /**
+   * The holographic end screen with the raid's stats, RETRY and MENU.
+   *
+   * @param victory - Whether the player won.
+   * @param subtitle - One-line outcome.
+   */
+  private showResult(victory: boolean, subtitle: string): void {
+    const boss = this.boss;
+    const bossHullPct = boss
+      ? Math.floor((Math.max(0, boss.totalHull) / boss.maxTotalHull) * 100)
+      : 0;
+    showHoloResultScreen({
+      scene: this,
+      victory,
+      subtitle,
+      stats: [
+        {
+          label: "Ships remaining",
+          value: `${this.livingShips(this.playerShipIds).length}`,
+        },
+        { label: "Boss hull remaining", value: `${bossHullPct}%` },
+        { label: "Escorts destroyed", value: `${this.playerSideScore.kills}` },
+        {
+          label: "Raid time",
+          value: formatMatchClock(
+            EpicBattleScene.RAID_DURATION_MS - this.raidTimer.remainingMs,
+          ),
+        },
+      ],
+      actions: [
+        {
+          label: "Retry",
+          variant: "primary",
+          onClick: () => this.scene.restart(),
+        },
+        {
+          label: "Menu",
+          variant: "secondary",
+          onClick: () => this.scene.start("MainMenuScene"),
+        },
+      ],
     });
   }
 }

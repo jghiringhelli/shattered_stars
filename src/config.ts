@@ -21,11 +21,16 @@ export const CYCLE_DURATION_MS = 500; // Fixed duration of every maneuver cycle
  * Miniature hull/shield points → real-time hit points. X-Wing resolves one
  * attack per round with dice; real time attacks every cycle, so a ship needs
  * this many times its card's points to last a comparable number of rounds.
+ * Calibrated with the skill-tier bots (src/simulation/skill): equal pilots
+ * duel for ~30–60 s.
  */
-export const DURABILITY_SCALE = 4;
+export const DURABILITY_SCALE = 12;
 
-/** Ordnance, bombs and death blasts hit this many times their card damage. */
-export const ORDNANCE_DAMAGE_SCALE = 5;
+/**
+ * Ordnance, bombs and death blasts hit this many times their card damage —
+ * a decisive strike against DURABILITY_SCALE hit points, with few charges.
+ */
+export const ORDNANCE_DAMAGE_SCALE = 10;
 /**
  * Heading change per cycle for a sustained (held-key) arcade turn.
  *

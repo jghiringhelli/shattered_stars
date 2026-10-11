@@ -2,8 +2,8 @@
  * arcade_systems.spec.ts — E2E assertions for arcade stress and cloak systems.
  *
  * Tests:
- *  1. Stress bar HUD element is present after scene loads.
- *  2. stressLevelText shows 'STRESSED' when stress.isStressed is injected.
+ *  1. The holographic HUD shows the player's stress gauge after scene load.
+ *  2. The HUD's stress call-out reads 'STRESSED' when stress.isStressed is injected.
  *  3. Enemy ship sprite alpha drops to ~0.12 when isCloaked is injected.
  *  4. Cloak auto-expires after cloakTimer ticks to zero.
  */
@@ -63,22 +63,27 @@ async function openArcadeScene(page: Page): Promise<void> {
 // ─────────────────────────────────────────────
 
 test.describe("ArcadeBattleScene — stress HUD", () => {
-  test("stress bar graphics object is created on scene start", async ({
+  test("HUD status ring shows the player's stress gauge on scene start", async ({
     page,
   }) => {
     suppressWebGLNoise(page);
     await openArcadeScene(page);
 
-    const hasBar = await page.evaluate(() => {
-      const scene = (window as any).game.scene.getScene(
-        "ArcadeBattleScene",
-      ) as any;
-      return scene?.stressBarGraphics != null;
-    });
-    expect(hasBar).toBe(true);
+    // The stress bar was replaced by the holographic status ring; the HUD
+    // reports the stress level it is drawing for the player's ship.
+    await page.waitForFunction(
+      () => {
+        const readout = (window as any).game.scene.getScene(
+          "ArcadeBattleScene",
+        )?.hudReadout;
+        return readout?.playerShown === true && readout.stressLevel !== null;
+      },
+      undefined,
+      { timeout: 5_000 },
+    );
   });
 
-  test("stressLevelText shows STRESSED when stress is injected", async ({
+  test("HUD stress call-out shows STRESSED when stress is injected", async ({
     page,
   }) => {
     suppressWebGLNoise(page);
@@ -91,18 +96,16 @@ test.describe("ArcadeBattleScene — stress HUD", () => {
       const ship = scene.ships.get(scene.playerShipId);
       if (ship) ship.stress = { level: 0.9, isStressed: true };
     });
-    // The label pulses (shown/blank every 350 ms) — wait for a shown phase.
     await page.waitForFunction(
       () =>
-        (window as any).game.scene
-          .getScene("ArcadeBattleScene")
-          ?.stressLevelText?.text?.includes("STRESSED"),
+        (window as any).game.scene.getScene("ArcadeBattleScene")?.hudReadout
+          ?.stressLabel === "STRESSED",
       undefined,
       { timeout: 2_000 },
     );
   });
 
-  test("stressLevelText is empty when stress level is low", async ({
+  test("HUD stress call-out is empty when stress level is low", async ({
     page,
   }) => {
     suppressWebGLNoise(page);
@@ -117,13 +120,14 @@ test.describe("ArcadeBattleScene — stress HUD", () => {
     });
     await page.waitForTimeout(200);
 
-    const text = await page.evaluate(() => {
+    const readout = await page.evaluate(() => {
       const scene = (window as any).game.scene.getScene(
         "ArcadeBattleScene",
       ) as any;
-      return scene?.stressLevelText?.text ?? "";
+      return scene?.hudReadout ?? null;
     });
-    expect(text).not.toContain("STRESSED");
+    expect(readout).not.toBeNull();
+    expect(readout.stressLabel).not.toContain("STRESSED");
   });
 });
 

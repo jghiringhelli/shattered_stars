@@ -69,6 +69,78 @@ export function resolveBossShot(input: BossShotInput): number {
   return Math.max(MIN_BOSS_HIT_DAMAGE, raw - boss.armor);
 }
 
+/*
+ * Raid calibration — the raid has its own scales instead of DURABILITY_SCALE.
+ * Ships are x12 so equal-pilot duels last 30–60 s; a boss on that scale
+ * (with ability timers stretched to match) would make one raid an hour long.
+ * Calibrated headless against the default squad and the Hegemony
+ * Battlecruiser (220 catalogue points, medium):
+ * - five ships always in range deal ~5.5 HP/s (one attack per cycle, armor
+ *   floors most hits to 1): the boss's 1760 HP fall in ~5.3 min with no
+ *   boss abilities; a squad that pulls out of broadside reach around each
+ *   ability tick kills it in ~7.3 min with no losses, one that dodges half
+ *   the ticks wins about half its raids in ~6 min, one that tanks every
+ *   broadside is wiped with the boss at ~70%;
+ * - Shield Regeneration restores at most 30 shields per 36 s (<= 0.83/s,
+ *   0.3–0.6/s in play) — below even the weak AI squad's 1.1–2.0 HP/s;
+ * - a broadside deals 8 / 12 / 16 by phase: a third, a half, two thirds of a
+ *   24-HP light fighter, so a ship caught in it is hurt, not one-shot.
+ */
+
+/** Real-time HP per catalogue point of a boss pool (hull, shields, sections). */
+export const BOSS_HP_SCALE = 8;
+/** Real-time damage per rules point of a boss weapon (broadside). */
+export const BOSS_DAMAGE_SCALE = 4;
+/** Real-time shield points per rules point of the boss's Shield Regeneration. */
+export const BOSS_REGEN_SCALE = 3;
+/** Boss ability timers (ability tick, cooldowns) relative to the catalogue's. */
+export const BOSS_TEMPO_SCALE = 3;
+/** Raid time limit (ms): 12 minutes; on timeout points decide the raid. */
+export const RAID_CLOCK_MS = 720_000;
+/**
+ * Real-time hit points of a boss pool (hull, shields or a section): the
+ * catalogue's points at the raid difficulty, at BOSS_HP_SCALE.
+ *
+ * @param catalogPoints - Catalogue value.
+ * @param difficultyMultiplier - Raid difficulty multiplier.
+ * @returns Real-time hit points.
+ */
+export function bossDurability(
+  catalogPoints: number,
+  difficultyMultiplier: number,
+): number {
+  return Math.floor(catalogPoints * difficultyMultiplier) * BOSS_HP_SCALE;
+}
+
+/**
+ * A boss weapon's damage (broadside) in real-time points.
+ *
+ * @param rulesPoints - The rules' damage value.
+ * @returns Real-time damage.
+ */
+export function bossDamagePoints(rulesPoints: number): number {
+  return rulesPoints * BOSS_DAMAGE_SCALE;
+}
+
+/**
+ * Shield points the boss's Shield Regeneration restores in real time.
+ *
+ * @param rulesPoints - The rules' regeneration value.
+ * @returns Real-time shield points.
+ */
+export function bossRegenPoints(rulesPoints: number): number {
+  return rulesPoints * BOSS_REGEN_SCALE;
+}
+
+/**
+ * A boss ability timer (ability tick, cooldowns) at the raid's tempo.
+ *
+ * @param catalogMs - The catalogue's timer (ms).
+ * @returns The timer in play (ms).
+ */
+export function bossTempoMs(catalogMs: number): number {
+  return catalogMs * BOSS_TEMPO_SCALE;
+}
 /**
  * Damage an equipped ship takes from a boss ability, after its mitigation.
  *

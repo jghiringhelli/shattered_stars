@@ -17,7 +17,6 @@ import { addShipVisual } from "../rendering/ShipVisual";
 import type {
   ShipState,
   ManeuverDefinition,
-  ManeuverDifficulty,
   ManeuverDirection,
 } from "../core/types";
 import type { FactionId } from "../config";
@@ -53,9 +52,6 @@ import {
   type PreviewPose,
 } from "../arcade/systems/TacticalOrders";
 import { HealthBar } from "../ui/HealthBar";
-import { Minimap, type MinimapShip } from "../ui/Minimap";
-import { PauseMenu } from "../ui/PauseMenu";
-import { GameOverScreen } from "../ui/GameOverScreen";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { renderBattleStarfield } from "../rendering/Starfield";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
@@ -87,6 +83,19 @@ import {
   createCapitalSystems,
   turretDamageMultiplier,
 } from "../systems/CapitalSystems";
+import { attackIntervalMs } from "../arcade/systems/CombatTempo";
+import { cameraViewFrom } from "../ui/hud/hudMath";
+import {
+  ownerContacts,
+  playerHudState,
+  primaryWeaponSlot,
+} from "./battleUi/hudSnapshot";
+import { HoloPauseOverlay } from "./battleUi/HoloPauseOverlay";
+import { showHoloResultScreen } from "./battleUi/HoloResultScreen";
+import { fitBackdropToZoom } from "./battleUi/fitBackdropToZoom";
+import { TacticalHud } from "./tactical/TacticalHud";
+import type { OrdersView } from "./tactical/OrdersPanel";
+import { difficultyColor } from "./tactical/dialMarkers";
 
 /** One faction slot of the squad builder's battle config. */
 interface TacticalFactionSlot {
@@ -132,21 +141,10 @@ interface ShipSprite extends Phaser.GameObjects.Container {
 const PREVIEW_REMAINING_COLOR = 0xaaaaaa;
 /** Radius (px) of the ghost ring where the queued order ends. */
 const PREVIEW_GHOST_RADIUS = 15;
-/** Dial color per maneuver difficulty. */
-const DIFFICULTY_HEX: Readonly<Record<ManeuverDifficulty, number>> = {
-  green: 0x44ff44,
-  white: 0xffffff,
-  red: 0xff4444,
-};
-
-/**
- * Dial color for a maneuver difficulty.
- * @param difficulty - Green, white or red.
- * @returns The fill/line color.
- */
-function difficultyHex(difficulty: ManeuverDifficulty): number {
-  return DIFFICULTY_HEX[difficulty];
-}
+/** Camera zoom in battle and the mouse-wheel limits (buttons appear only at zoom 1). */
+const TACTICAL_ZOOM = { battle: 0.9, min: 0.5, max: 2 } as const;
+/** Painted backdrop texture id. */
+const TACTICAL_BACKDROP = "nebula_blue";
 
 /**
  * Strokes a polyline through a list of poses (current line style).
@@ -165,7 +163,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   TacticalShip,
   ShipSprite
 > {
-  private minimap!: Minimap;
+  private hud: TacticalHud | null = null;
 
   private playerShipIds: string[] = [];
   private enemyShipIds: string[] = [];
@@ -176,12 +174,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
 
   private battleStartTime: number = 0;
 
-  private speedText!: Phaser.GameObjects.Text;
-  private maneuverText!: Phaser.GameObjects.Text;
-  private instructionText!: Phaser.GameObjects.Text;
-  private hudTitleText!: Phaser.GameObjects.Text;
-  private dialGraphics!: Phaser.GameObjects.Graphics;
-  private pauseMenu: PauseMenu | null = null;
+  private pauseMenu: HoloPauseOverlay | null = null;
 
   private stats = { shipsDestroyed: 0, shipsLost: 0, damageDealt: 0 };
 
@@ -190,7 +183,6 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   private matchTimer: MatchTimerState = createMatchTimer(
     ContinuousTacticalScene.MATCH_DURATION_MS,
   );
-  private timerText: Phaser.GameObjects.Text | null = null;
   /** Point cost of enemy ships the player destroyed. */
   private playerSideScore: SideScore = createSideScore();
   /** Point cost of the player's ships the enemy destroyed. */
@@ -212,9 +204,11 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     // Phaser never calls shutdown() on its own; without this, every restart
     // stacks another set of input subscriptions.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
+    this.resetState();
     this.cameras.main.setBounds(0, 0, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
     this.cameras.main.setBackgroundColor(0x050510);
-    addPaintedSpaceBackground(this, "nebula_blue", 0);
+    addPaintedSpaceBackground(this, TACTICAL_BACKDROP, 0);
+    fitBackdropToZoom(this, TACTICAL_BACKDROP, TACTICAL_ZOOM.min);
 
     audioManager.initialize();
 
@@ -249,12 +243,11 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     renderBattleStarfield(this, BATTLEFIELD_SIZE, { includeNebula: false });
     this.spawnShips();
     this.createHealthBars();
-    this.createMinimap();
-    this.createHUD();
+    this.hud = new TacticalHud(this, BATTLEFIELD_SIZE);
     this.setupInput();
 
     this.cameras.main.centerOn(BATTLEFIELD_SIZE / 2, BATTLEFIELD_SIZE / 2);
-    this.cameras.main.setZoom(0.9);
+    this.cameras.main.setZoom(TACTICAL_ZOOM.battle);
 
     this.battleStartTime = this.time.now;
     this.stats = { shipsDestroyed: 0, shipsLost: 0, damageDealt: 0 };
@@ -277,6 +270,30 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     if (this.playerShipIds.length > 0) {
       this.selectShip(this.playerShipIds[0] as string);
     }
+    this.refreshHud();
+  }
+
+  /**
+   * Phaser reuses the scene instance on restart, so every piece of battle
+   * state is cleared here — a restarted match would otherwise start paused
+   * (the old game-over) with the old squads' ids still listed.
+   */
+  private resetState(): void {
+    this.ships.clear();
+    this.shipSprites.clear();
+    this.healthBars.clear();
+    this.playerShipIds = [];
+    this.enemyShipIds = [];
+    this.selectedShipId = null;
+    this.isPaused = false;
+    this.hud = null;
+    this.pauseMenu = null;
+    this.previewGraphics = null;
+    this.prevSteerLeft = false;
+    this.prevSteerRight = false;
+    this.prevThrustUp = false;
+    this.prevThrustDown = false;
+    this.hitLedger.clear();
   }
 
   shutdown(): void {
@@ -305,7 +322,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     }
     this.effectsManager.renderTrails();
 
-    this.updateMinimapDisplay();
+    this.refreshHud();
     this.updatePreview();
     this.updateSpriteHighlights();
   }
@@ -370,7 +387,9 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     this.enemyShipIds = this.enemyShipIds.filter((id) => id !== shipId);
 
     if (shipId === this.selectedShipId) {
-      this.selectedShipId = this.playerShipIds[0] ?? null;
+      const next = this.playerShipIds[0];
+      if (next) this.selectShip(next);
+      else this.selectedShipId = null;
     }
   }
 
@@ -396,17 +415,6 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
    */
   private updateMatchTimer(deltaMs: number): boolean {
     this.matchTimer = tickMatchTimer(this.matchTimer, deltaMs);
-    if (this.timerText) {
-      const remaining = this.matchTimer.remainingMs;
-      this.timerText.setText(formatMatchClock(remaining));
-      this.timerText.setColor(
-        remaining <= 30_000
-          ? "#ff4444"
-          : remaining <= 60_000
-            ? "#ffcc00"
-            : "#ffffff",
-      );
-    }
     if (!this.matchTimer.expired) return false;
     const outcome = resolveByPoints(this.playerSideScore, this.enemySideScore);
     this.showGameOver(
@@ -523,10 +531,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       ship.dial,
       ship.flight.stress.isStressed,
     );
-    if (calmed !== ship.order) {
-      ship.order = calmed;
-      if (ship.id === this.selectedShipId) this.updateHUD();
-    }
+    if (calmed !== ship.order) ship.order = calmed;
     const { control } = ship.flight.motion;
     const latched = latchManeuverOrder(control, ship.order);
     if (latched === control) return;
@@ -570,21 +575,20 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     return enemies[Math.floor(Math.random() * enemies.length)] ?? null;
   }
 
-  protected override processCombat(delta: number): void {
-    for (const ship of this.ships.values()) {
-      if (ship.hull <= 0) continue;
-      ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
-      if (ship.weaponCooldown <= 0) {
-        const target = this.findWeaponTarget(ship);
-        if (target) {
-          this.performAttack(ship, target);
-          let cooldown = ship.combatStats.weaponCooldown;
-          if (ship.owner === "ai")
-            cooldown = getModifiedCooldown(cooldown, this.aiDifficulty);
-          ship.weaponCooldown = cooldown;
-        }
-      }
-    }
+  /**
+   * The weapon cooldown with AI difficulty applied, never faster than one
+   * attack per maneuver cycle.
+   *
+   * @param ship - The ship that just fired.
+   * @returns Attack interval (ms).
+   */
+  protected override attackIntervalOf(ship: TacticalShip): number {
+    const cooldown = ship.combatStats.weaponCooldown;
+    return attackIntervalMs(
+      ship.owner === "ai"
+        ? getModifiedCooldown(cooldown, this.aiDifficulty)
+        : cooldown,
+    );
   }
 
   // ──────────────────────────────────────────────
@@ -890,68 +894,6 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     }
   }
 
-  private createMinimap(): void {
-    this.minimap = new Minimap({
-      scene: this,
-      x: this.scale.width - 160,
-      y: this.scale.height - 160,
-      width: 150,
-      height: 150,
-    });
-  }
-
-  private createHUD(): void {
-    const style = { font: "bold 18px monospace", color: "#ffffff" };
-
-    this.hudTitleText = this.add
-      .text(this.scale.width / 2, 20, "TACTICAL COMBAT", {
-        font: "bold 24px monospace",
-        color: "#00ff88",
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    this.speedText = this.add
-      .text(20, 100, "Speed: 2", style)
-      .setScrollFactor(0)
-      .setDepth(1000);
-    this.maneuverText = this.add
-      .text(20, 130, "Maneuver: STRAIGHT", style)
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    this.instructionText = this.add
-      .text(
-        20,
-        this.scale.height - 40,
-        "LEFT/RIGHT: Dial maneuver | UP/DOWN: Speed | Orders fly next cycle | Click: Select ship | ESC: Pause",
-        { font: "14px monospace", color: "#888888" },
-      )
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    this.timerText = this.add
-      .text(
-        this.scale.width / 2,
-        52,
-        formatMatchClock(ContinuousTacticalScene.MATCH_DURATION_MS),
-        {
-          font: "bold 22px monospace",
-          color: "#ffffff",
-          stroke: "#000000",
-          strokeThickness: 3,
-        },
-      )
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    this.dialGraphics = this.add.graphics();
-    this.dialGraphics.setScrollFactor(0);
-    this.dialGraphics.setDepth(1000);
-  }
-
   private setupInput(): void {
     setupSceneInput(this);
     this.inputSubscriptionIds.push(
@@ -968,7 +910,11 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       ) => {
         const zoom = this.cameras.main.zoom;
         this.cameras.main.setZoom(
-          Phaser.Math.Clamp(zoom - deltaY * 0.001, 0.5, 2),
+          Phaser.Math.Clamp(
+            zoom - deltaY * 0.001,
+            TACTICAL_ZOOM.min,
+            TACTICAL_ZOOM.max,
+          ),
         );
       },
     );
@@ -998,11 +944,10 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   }
 
   private createPauseMenu(): void {
-    this.pauseMenu = new PauseMenu({
+    this.pauseMenu = new HoloPauseOverlay({
       scene: this,
-      onResume: () => {
-        this.isPaused = false;
-      },
+      faction: this.playerFaction,
+      onResume: () => this.resumeFromPause(),
       onRestart: () => {
         this.scene.restart();
       },
@@ -1016,7 +961,6 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       },
     });
   }
-
   // ──────────────────────────────────────────────
   // Player input
   // ──────────────────────────────────────────────
@@ -1025,7 +969,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     this.selectedShipId = shipId;
     const ship = this.ships.get(shipId);
     if (ship) {
-      this.updateHUD();
+      this.refreshHud();
       this.cameras.main.startFollow(
         this.shipSprites.get(shipId) as Phaser.GameObjects.Container,
         true,
@@ -1079,7 +1023,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     if (!newDir) return;
     const dialed = nearestDialManeuver(ship.dial, newDir, ship.order.speed);
     if (dialed) this.dialOrder(ship, dialed);
-    this.updateHUD();
+    this.refreshHud();
   }
 
   /**
@@ -1106,92 +1050,73 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
         )
       ];
     if (dialed) this.dialOrder(ship, dialed);
-    this.updateHUD();
+    this.refreshHud();
   }
 
   private togglePause(): void {
-    this.isPaused = !this.isPaused;
-    this.instructionText.setColor(this.isPaused ? "#ff4444" : "#888888");
-    if (this.isPaused && this.pauseMenu) {
-      // Same scrollFactor(0)-vs-zoom hit-test issue seen elsewhere in this
-      // codebase: a GameObject with scrollFactor(0) is not correctly
-      // hit-tested by Phaser's pointer input when the camera zoom != 1.0.
-      this.cameras.main.setZoom(1.0);
-      this.pauseMenu.show();
+    if (this.isPaused) {
+      if (!this.pauseMenu?.isVisible) return; // the match is over
+      this.pauseMenu.hide();
+      this.resumeFromPause();
+      return;
     }
+    this.isPaused = true;
+    // The HUD stops updating while paused, so it would keep the old zoom's
+    // compensation: hide it under the menu. Buttons need zoom 1 to hit-test.
+    this.hud?.setVisible(false);
+    this.cameras.main.setZoom(1.0);
+    this.pauseMenu?.show();
+  }
+
+  /** Leaves the pause menu: the match and its HUD resume. */
+  private resumeFromPause(): void {
+    this.isPaused = false;
+    this.hud?.setVisible(true);
   }
 
   // ──────────────────────────────────────────────
   // UI updates
   // ──────────────────────────────────────────────
 
-  private updateHUD(): void {
-    const dirNames: Record<ManeuverDirection, string> = {
-      straight: "STRAIGHT",
-      drift_left: "TURNING LEFT",
-      drift_right: "TURNING RIGHT",
-      bank_left: "BANK LEFT",
-      bank_right: "BANK RIGHT",
-      turn_left: "TURN LEFT",
-      turn_right: "TURN RIGHT",
-      kturn: "K-TURN",
-      segnor_left: "SEGNOR L",
-      segnor_right: "SEGNOR R",
-      tallon_left: "TALLON L",
-      tallon_right: "TALLON R",
-    };
+  /** Feeds the holographic HUD this frame, centred on the selected ship. */
+  private refreshHud(): void {
+    if (!this.hud) return;
     const ship = this.selectedShip();
-    if (!ship) {
-      this.dialGraphics.clear();
-      return;
-    }
-    this.speedText.setText(`Speed: ${ship.order.speed}`);
-    this.maneuverText.setText(`Maneuver: ${dirNames[ship.order.direction]}`);
-    this.updateDialDisplay();
+    this.hud.update({
+      battle: {
+        player: ship ? playerHudState(ship, ship.order) : null,
+        contacts: ownerContacts(
+          ship?.id ?? null,
+          this.ships.values(),
+          ship ? (this.findWeaponTarget(ship)?.id ?? null) : null,
+        ),
+        weapons: ship
+          ? [
+              primaryWeaponSlot(
+                ship.weaponCooldown,
+                this.attackIntervalOf(ship),
+              ),
+            ]
+          : [],
+        camera: cameraViewFrom(this.cameras.main),
+      },
+      orders: ship ? this.ordersView(ship) : null,
+      remainingMs: this.matchTimer.remainingMs,
+    });
   }
 
-  private updateDialDisplay(): void {
-    this.dialGraphics.clear();
-    const ship = this.selectedShip();
-    if (!ship) return;
-
-    const dial = ship.dial;
-    const cx = 100;
-    const cy = 200;
-    const radius = 40;
-
-    this.dialGraphics.fillStyle(0x000000, 0.6);
-    this.dialGraphics.fillCircle(cx, cy, radius + 10);
-
-    const positions: Partial<Record<ManeuverDirection, { angle: number }>> = {
-      turn_left: { angle: -90 },
-      bank_left: { angle: -45 },
-      straight: { angle: 0 },
-      bank_right: { angle: 45 },
-      turn_right: { angle: 90 },
-      kturn: { angle: 180 },
-      segnor_left: { angle: 135 },
-      segnor_right: { angle: -135 },
-      tallon_left: { angle: -135 },
-      tallon_right: { angle: 135 },
+  /**
+   * @param ship - The selected ship.
+   * @returns What its order card shows.
+   */
+  private ordersView(ship: TacticalShip): OrdersView {
+    return {
+      shipName: getShipDefinition(ship.definitionId)?.name ?? ship.definitionId,
+      order: ship.order,
+      dial: ship.dial,
+      isStressed: ship.flight.stress.isStressed,
     };
-
-    for (const m of dial) {
-      if (m.speed !== ship.order.speed) continue;
-      const pos = positions[m.direction];
-      if (!pos) continue;
-
-      const angle = (pos.angle - 90) * Phaser.Math.DEG_TO_RAD;
-      const x = cx + Math.cos(angle) * radius;
-      const y = cy + Math.sin(angle) * radius;
-      const isSelected = m.direction === ship.order.direction;
-      const color = difficultyHex(m.difficulty);
-
-      this.dialGraphics.fillStyle(color, isSelected ? 1 : 0.5);
-      this.dialGraphics.fillCircle(x, y, isSelected ? 8 : 5);
-    }
   }
-
   /**
    * Draws where the selected ship will fly: the rest of the cycle in flight
    * (dim) then its queued order (dial color) ending in a ghost ring — the
@@ -1209,7 +1134,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       ship.flight.motion.control,
       ship.order,
     );
-    const color = difficultyHex(ship.order.difficulty);
+    const color = difficultyColor(ship.order.difficulty);
     const end = preview.queued[preview.queued.length - 1];
 
     this.previewGraphics.lineStyle(1, PREVIEW_REMAINING_COLOR, 0.35);
@@ -1231,50 +1156,46 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     }
   }
 
-  private updateMinimapDisplay(): void {
-    const minimapShips: MinimapShip[] = [];
-    for (const ship of this.ships.values()) {
-      minimapShips.push({
-        id: ship.id,
-        x: ship.x,
-        y: ship.y,
-        faction: ship.faction as FactionId,
-        isPlayer: ship.owner === "player",
-        isAlive: ship.hull > 0,
-      });
-    }
-    this.minimap.update(minimapShips);
-  }
-
+  /**
+   * Ends the match: stinger, HUD hidden, the holographic result screen.
+   *
+   * @param isPlayerVictory - Whether the player's side won.
+   * @param winner - Winning side's display name.
+   */
   private showGameOver(isPlayerVictory: boolean, winner: string): void {
+    if (this.isPaused) return;
     this.isPaused = true;
     audioManager.playFactionStinger(
       this.playerFaction,
       isPlayerVictory ? "victory" : "defeat",
     );
-    // Hide the in-battle HUD — previously bled through the semi-transparent overlay.
-    this.hudTitleText.setVisible(false);
-    this.speedText.setVisible(false);
-    this.maneuverText.setVisible(false);
-    this.instructionText.setVisible(false);
-    this.timerText?.setVisible(false);
-    this.minimap?.setVisible(false);
-    new GameOverScreen({
+    this.hud?.setVisible(false);
+    this.previewGraphics?.clear();
+    showHoloResultScreen({
       scene: this,
-      stats: {
-        winner,
-        isPlayerVictory,
-        shipsDestroyed: this.stats.shipsDestroyed,
-        shipsLost: this.stats.shipsLost,
-        damageDealt: this.stats.damageDealt,
-        battleDuration: this.time.now - this.battleStartTime,
-      },
-      onRestart: () => {
-        this.scene.restart();
-      },
-      onQuit: () => {
-        this.scene.start("MainMenuScene");
-      },
+      victory: isPlayerVictory,
+      subtitle: `${winner} win`,
+      stats: [
+        { label: "Ships destroyed", value: `${this.stats.shipsDestroyed}` },
+        { label: "Ships lost", value: `${this.stats.shipsLost}` },
+        { label: "Damage dealt", value: `${this.stats.damageDealt}` },
+        {
+          label: "Battle time",
+          value: formatMatchClock(this.time.now - this.battleStartTime),
+        },
+      ],
+      actions: [
+        {
+          label: "Restart",
+          variant: "primary",
+          onClick: () => this.scene.restart(),
+        },
+        {
+          label: "Main menu",
+          variant: "secondary",
+          onClick: () => this.scene.start("MainMenuScene"),
+        },
+      ],
     });
   }
 }

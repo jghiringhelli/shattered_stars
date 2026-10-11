@@ -121,7 +121,7 @@ describe("laserHitBonus", () => {
 
 describe("rewardKill", () => {
   it("restores shields per kill (scaled miniature points), capped at max", () => {
-    const roomy = { shields: 1, maxShields: 12 };
+    const roomy = { shields: 1, maxShields: 100 };
     expect(rewardKill(pilot({ shieldsPerKill: 1 }, roomy), 0).shields).toBe(
       1 + DURABILITY_SCALE,
     );

@@ -182,9 +182,12 @@ test.describe("Dogfight setup — quick-build chooser", () => {
       return choice ? { id: choice.id, name: choice.name } : null;
     });
     expect(ship).not.toBeNull();
-    expect(await clickObject(page, "DogfightScene", { text: ship!.name })).toBe(
-      true,
-    );
+    // Holo toggles show their label in capitals.
+    expect(
+      await clickObject(page, "DogfightScene", {
+        text: ship!.name.toUpperCase(),
+      }),
+    ).toBe(true);
     await page.waitForFunction(
       (id) =>
         (window as any).game.scene.getScene("DogfightScene").playerShipId ===

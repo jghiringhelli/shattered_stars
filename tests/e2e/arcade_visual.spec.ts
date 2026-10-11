@@ -141,41 +141,43 @@ test.describe("ArcadeBattleScene — HUD presence", () => {
     expect(shipCount).toBeGreaterThanOrEqual(2); // player + at least one enemy
   });
 
-  test("speed HUD text is visible and non-empty", async ({ page }) => {
+  test("HUD flight readout shows the player's speed", async ({ page }) => {
     suppressWebGLNoise(page);
     await openArcadeScene(page);
 
-    const speedText = await readSceneState<string>(
+    const speed = await readSceneState<number | null>(
       page,
       "ArcadeBattleScene",
-      "speedText.text",
+      "hudReadout.speed",
     );
-    expect(speedText).toBeTruthy();
-    expect(speedText).toMatch(/\d/); // contains a digit
+    expect(speed).not.toBeNull();
+    expect(String(speed)).toMatch(/\d/);
   });
 
-  test("stress bar graphics object exists in scene", async ({ page }) => {
+  test("HUD status ring shows the player's stress gauge", async ({ page }) => {
     suppressWebGLNoise(page);
     await openArcadeScene(page);
 
-    const visible = await readSceneState<boolean>(
-      page,
-      "ArcadeBattleScene",
-      "stressBarGraphics.visible",
-    );
-    expect(visible).toBe(true);
+    const readout = await readSceneState<{
+      visible: boolean;
+      playerShown: boolean;
+      stressLevel: number | null;
+    }>(page, "ArcadeBattleScene", "hudReadout");
+    expect(readout.visible).toBe(true);
+    expect(readout.playerShown).toBe(true);
+    expect(readout.stressLevel).not.toBeNull();
   });
 
-  test("maneuver indicator text object exists", async ({ page }) => {
+  test("HUD flight readout shows the current maneuver", async ({ page }) => {
     suppressWebGLNoise(page);
     await openArcadeScene(page);
 
-    const exists = await readSceneState<boolean>(
+    const maneuver = await readSceneState<string | null>(
       page,
       "ArcadeBattleScene",
-      "maneuverText.active",
+      "hudReadout.maneuver",
     );
-    expect(exists).toBe(true);
+    expect(maneuver).toMatch(/[A-Z]+ \d/);
   });
 });
 
@@ -223,7 +225,7 @@ test.describe("ArcadeBattleScene — stress HUD", () => {
     expect(stressLevel).toBeGreaterThan(0.3);
   });
 
-  test("stress bar redraws after stress spike", async ({ page }) => {
+  test("HUD stress gauge follows a stress spike", async ({ page }) => {
     suppressWebGLNoise(page);
     await openArcadeScene(page);
 
@@ -240,16 +242,18 @@ test.describe("ArcadeBattleScene — stress HUD", () => {
         : null;
       return {
         level: ship?.stress?.level ?? 0,
-        barVisible: !!scene?.stressBarGraphics?.visible,
+        hudLevel: scene?.hudReadout?.stressLevel ?? null,
+        hudVisible: !!scene?.hudReadout?.visible,
       };
     });
 
     // Pixel-sampling the Phaser Graphics HUD is fragile (canvas layering,
-    // Phaser world→screen scaling). Assert the observable game state instead:
-    // stress rose past the K-turn spike threshold, and the bar graphic stays
-    // visible after redraw. Visual regression covered by the snapshot test.
+    // Phaser world→screen scaling). Assert the observable state instead:
+    // stress rose past the K-turn spike threshold, and the visible HUD's
+    // status ring is drawing that same level.
     expect(state.level).toBeGreaterThan(0.3);
-    expect(state.barVisible).toBe(true);
+    expect(state.hudVisible).toBe(true);
+    expect(state.hudLevel).toBeGreaterThan(0.3);
   });
 });
 

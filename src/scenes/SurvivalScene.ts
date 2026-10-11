@@ -37,6 +37,26 @@ import {
   type BeltConfig,
 } from "../systems/arena/ArenaBoundary";
 import { HealthBar } from "../ui/HealthBar";
+import { BattleHud, cameraViewFrom } from "../ui/hud";
+import { HOLO_PALETTE } from "../ui/theme/HoloTheme";
+import { SurvivalModeHud } from "../ui/modeHud/SurvivalModeHud";
+import {
+  showResultOverlay,
+  type ResultOverlay,
+} from "../ui/modeHud/HoloResultOverlay";
+import {
+  attackIntervalMs,
+  HitImmunityLedger,
+} from "../arcade/systems/CombatTempo";
+import { nearestTargetInArc } from "../arcade/systems/ArcTargeting";
+import { squadHudSnapshot } from "../arcade/systems/FlagshipHudSnapshot";
+import {
+  bossDurability,
+  bossMultiplier,
+  eliteMaxHull,
+  realTimeBeltDamage,
+  realTimeRunBonuses,
+} from "../arcade/systems/SurvivalDurability";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
@@ -81,6 +101,7 @@ import {
   type WaveSlot,
 } from "../arcade/systems/SurvivalLoadouts";
 import {
+  deathBlastDamage,
   deathBlastTargets,
   hasWingman,
   rewardKill,
@@ -161,14 +182,8 @@ const BASE_BELT: BeltConfig = {
   maxDamagePerSecond: 3,
 };
 
-/** Elite wave ships fly with this much of their equipped hull. */
-const ELITE_HULL_MULTIPLIER = 1.5;
-
 /** Extra attack dice an elite wave ship rolls. */
 const ELITE_ATTACK_BONUS = 1;
-
-/** Boss stat multiplier before the per-5-waves growth. */
-const BOSS_BASE_MULTIPLIER = 2;
 
 /** Horizontal gap (px) between elites entering side by side. */
 const ELITE_SPACING_PX = 120;
@@ -182,6 +197,9 @@ const ENEMY_ENTRY_ANGLE = 180;
 
 /** Damage multiplier of a crit drafted by the player fleet. */
 const CRIT_DAMAGE_MULTIPLIER = 2;
+
+/** Floor on the fire-rate bonus's cooldown multiplier (at most 2x faster). */
+const MIN_PLAYER_COOLDOWN_MOD = 0.5;
 
 interface SurvivalShip {
   id: string;
@@ -287,11 +305,13 @@ export class SurvivalScene extends Phaser.Scene {
   private run!: SurvivalRunController;
   private choicePanel!: SurvivalChoicePanel;
 
-  // UI
-  private waveText!: Phaser.GameObjects.Text;
-  private scoreText!: Phaser.GameObjects.Text;
-  private controlsHintText!: Phaser.GameObjects.Text;
-  private messageText!: Phaser.GameObjects.Text;
+  // UI — holographic battle HUD (flight, radar, weapons) + Survival readouts
+  private battleHud: BattleHud | null = null;
+  private modeHud!: SurvivalModeHud;
+  private gameOverOverlay: ResultOverlay | null = null;
+
+  /** X-Wing round tempo: a struck target ignores its attacker for a cycle. */
+  private readonly hitLedger = new HitImmunityLedger();
 
   /** The human pilot's flight input (InputManager-driven) — flies the flagship. */
   private readonly pilot = new PlayerFlightPilot(InputManager);
@@ -359,7 +379,7 @@ export class SurvivalScene extends Phaser.Scene {
     );
     this.background.startShootingStars();
 
-    this.choicePanel = new SurvivalChoicePanel(this);
+    this.choicePanel = new SurvivalChoicePanel(this, this.playerFaction);
     this.beltGraphics = this.add.graphics().setDepth(1);
     this.resetState();
     this.createHUD();
@@ -386,6 +406,9 @@ export class SurvivalScene extends Phaser.Scene {
     this.inputSubscriptionIds = [];
     teardownSceneInput();
     this.pilot.detach();
+    this.battleHud?.destroy();
+    this.battleHud = null;
+    this.gameOverOverlay = null;
   }
 
   private resetState(): void {
@@ -400,6 +423,8 @@ export class SurvivalScene extends Phaser.Scene {
     this.choicePanel.hide();
     this.pilot.reset();
     this.pilotedShipId = null;
+    this.hitLedger.clear();
+    this.gameOverOverlay = null;
 
     this.ships.clear();
     this.shipSprites.forEach((s) => s.destroy());
@@ -432,6 +457,7 @@ export class SurvivalScene extends Phaser.Scene {
     // Mix every positional sound relative to what the player is
     // looking at, so a distant firefight sounds distant.
     syncListenerToCamera(this.cameras.main);
+    this.modeHud.sync(this.cameras.main);
     if (this.isPaused || this.isChoicePhase) return;
     this.performanceState = updateFPS(this.performanceState, delta);
     this.performanceState = evaluateQuality(this.performanceState, time);
@@ -447,6 +473,7 @@ export class SurvivalScene extends Phaser.Scene {
     this.applyBeltDamage(delta);
     this.updateSprites();
     this.updateCameraFollow();
+    this.updateHud();
     this.checkWaveComplete();
   }
 
@@ -483,45 +510,62 @@ export class SurvivalScene extends Phaser.Scene {
     );
   }
 
+  /** Holographic battle HUD (flagship ring, radar, weapons) + Survival readouts. */
   private createHUD(): void {
-    const style = { font: "bold 20px monospace", color: "#ffffff" };
+    this.modeHud = new SurvivalModeHud(this, this.playerFaction);
+    this.battleHud = new BattleHud(this, { worldSize: BATTLEFIELD_SIZE });
+  }
 
-    this.waveText = this.add
-      .text(20, 20, "WAVE 0", style)
-      .setScrollFactor(0)
-      .setDepth(1000);
+  /**
+   * Refreshes the battle HUD from this frame's state: the flagship as the
+   * player (its status ring replaces its health bar), wing mates as allies,
+   * wave ships as enemies, its primary's cooldown and the score readout.
+   */
+  private updateHud(): void {
+    this.modeHud.setScore(
+      this.score,
+      `Wing ${this.playerShipIds.length}/${MAX_FLEET}`,
+    );
+    const flagship = this.ships.get(this.playerShipIds[0] ?? "") ?? null;
+    if (flagship) this.retireHealthBar(flagship.id);
+    this.battleHud?.update(
+      squadHudSnapshot({
+        flagship,
+        ships: this.ships.values(),
+        targetId: flagship ? this.hudTargetOf(flagship) : null,
+        cooldownRemainingMs: flagship?.weaponCooldown ?? 0,
+        attackIntervalMs: flagship ? this.attackIntervalOf(flagship) : 0,
+        camera: cameraViewFrom(this.cameras.main),
+      }),
+    );
+  }
 
-    this.scoreText = this.add
-      .text(this.scale.width - 20, 20, "SCORE: 0", style)
-      .setOrigin(1, 0)
-      .setScrollFactor(0)
-      .setDepth(1000);
+  /**
+   * @param ship - The flagship.
+   * @returns Id of what it is shooting at, else the foe it is closing on.
+   */
+  private hudTargetOf(ship: SurvivalShip): string | null {
+    return (this.findTarget(ship) ?? this.findClosestEnemy(ship))?.id ?? null;
+  }
 
-    this.messageText = this.add
-      .text(this.scale.width / 2, this.scale.height / 2, "", {
-        font: "bold 36px Arial",
-        color: "#00ffaa",
-        stroke: "#004422",
-        strokeThickness: 4,
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1001)
-      .setAlpha(0);
+  /**
+   * Drops a ship's floating health bar (the flagship's status ring shows it).
+   *
+   * @param shipId - The ship.
+   */
+  private retireHealthBar(shipId: string): void {
+    this.healthBars.get(shipId)?.destroy();
+    this.healthBars.delete(shipId);
+  }
 
-    this.controlsHintText = this.add
-      .text(
-        this.scale.width / 2,
-        this.scale.height - 30,
-        "UP/DOWN: Speed (2×UP: Boost) | LEFT/RIGHT: tap drift, hold bank | Q/E: Hard turn | Z: K-turn | Weapons autofire | ESC: Pause",
-        {
-          font: "14px monospace",
-          color: "#666666",
-        },
-      )
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1000);
+  /**
+   * Shows or hides both HUD layers (hidden under choice and game-over panels).
+   *
+   * @param visible - Visibility.
+   */
+  private setHudVisible(visible: boolean): void {
+    this.battleHud?.setVisible(visible);
+    this.modeHud.setVisible(visible);
   }
 
   private setupInput(): void {
@@ -580,15 +624,7 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   private showMessage(title: string, subtitle: string): void {
-    this.messageText.setText(`${title}\n${subtitle}`);
-    this.messageText.setAlpha(1);
-
-    this.tweens.add({
-      targets: this.messageText,
-      alpha: 0,
-      delay: 1500,
-      duration: 500,
-    });
+    this.modeHud.showMessage(title, subtitle);
   }
 
   // ==========================================
@@ -607,7 +643,7 @@ export class SurvivalScene extends Phaser.Scene {
     this.wave = this.run.beginWave();
     this.beltConfig = tightenBelt(BASE_BELT, this.wave);
     this.drawBelt();
-    this.waveText.setText(`WAVE ${this.wave}`);
+    this.modeHud.setWave(this.wave, this.getWaveType());
     this.isWaveActive = true;
 
     if (this.run.isMilestone) {
@@ -644,6 +680,7 @@ export class SurvivalScene extends Phaser.Scene {
   /**
    * Apply asteroid-belt damage to every living ship based on its distance from
    * the arena center; ships driven to zero hull are destroyed as belt kills.
+   * The belt is tuned in miniature points, scaled to real-time hit points.
    */
   private applyBeltDamage(deltaMs: number): void {
     const cx = BATTLEFIELD_SIZE / 2;
@@ -651,7 +688,9 @@ export class SurvivalScene extends Phaser.Scene {
     for (const ship of [...this.ships.values()]) {
       if (ship.hull <= 0) continue;
       const dist = Math.hypot(ship.x - cx, ship.y - cy);
-      const damage = beltDamageForFrame(dist, this.beltConfig, deltaMs);
+      const damage = realTimeBeltDamage(
+        beltDamageForFrame(dist, this.beltConfig, deltaMs),
+      );
       if (damage <= 0) continue;
       ship.hull = Math.max(0, ship.hull - damage);
       this.healthBars.get(ship.id)?.update(ship.hull, ship.shields);
@@ -670,7 +709,6 @@ export class SurvivalScene extends Phaser.Scene {
     if (enemiesAlive === 0) {
       this.isWaveActive = false;
       this.score += this.wave * 100;
-      this.updateHUD();
 
       const heading = this.run.isMilestone ? "HANGAR" : "WAVE COMPLETE!";
       this.showMessage(heading, "Choose your upgrade");
@@ -695,13 +733,14 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   /**
-   * Spawns an elite wave ship: its equipped build with +50% hull and +1 attack.
+   * Spawns an elite wave ship: its equipped build with +50% hull and +1 attack
+   * (the multiplier applies to the already-scaled hull — no double scaling).
    *
    * @param spawn - The wave ship and where it enters.
    */
   private spawnEliteShip(spawn: EnemySpawn): void {
     const ship = this.createEnemy(spawn, "elite");
-    ship.maxHull = Math.floor(ship.maxHull * ELITE_HULL_MULTIPLIER);
+    ship.maxHull = eliteMaxHull(ship.maxHull);
     ship.hull = ship.maxHull;
     ship.combatStats = {
       ...ship.combatStats,
@@ -711,17 +750,19 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   /**
-   * Spawns a milestone boss: its equipped build scaled by the wave's boss
-   * multiplier, with capital-style engines/turrets/bridge subsystems.
+   * Spawns a milestone boss: its equipped (already scaled) build multiplied
+   * by the wave's boss multiplier, with capital-style engines/turrets/bridge
+   * subsystems splitting its final hull.
    *
    * @param spawn - The wave ship and where it enters.
    */
   private spawnBossShip(spawn: EnemySpawn): void {
-    const multiplier = BOSS_BASE_MULTIPLIER + Math.floor(this.wave / 5);
+    const multiplier = bossMultiplier(this.wave);
     const ship = this.createEnemy(spawn, "boss");
-    ship.maxHull = ship.maxHull * multiplier;
+    const caps = bossDurability(ship, this.wave);
+    ship.maxHull = caps.maxHull;
     ship.hull = ship.maxHull;
-    ship.maxShields = ship.maxShields * multiplier;
+    ship.maxShields = caps.maxShields;
     ship.shields = ship.maxShields;
     ship.combatStats = {
       ...ship.combatStats,
@@ -786,9 +827,7 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   private showDraft(): void {
-    this.isChoicePhase = true;
-    this.preChoiceZoom = this.cameras.main.zoom;
-    this.cameras.main.setZoom(1.0);
+    this.enterChoicePhase();
     const powers = this.run.draft();
     const cards: ChoiceCard[] = powers.map((p) => ({
       icon: p.icon,
@@ -808,9 +847,7 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   private showHangar(): void {
-    this.isChoicePhase = true;
-    this.preChoiceZoom = this.cameras.main.zoom;
-    this.cameras.main.setZoom(1.0);
+    this.enterChoicePhase();
     const options = this.run.hangar();
     const cards: ChoiceCard[] = options.map((o) => ({
       icon: o.icon,
@@ -853,10 +890,23 @@ export class SurvivalScene extends Phaser.Scene {
     this.endChoicePhase();
   }
 
+  /**
+   * Freezes the battle for a between-wave choice: camera zoom 1.0 (choice
+   * cards are scrollFactor-0 buttons, mis-hit-tested under zoom) and the
+   * battle HUD hidden under the choice panel.
+   */
+  private enterChoicePhase(): void {
+    this.isChoicePhase = true;
+    this.preChoiceZoom = this.cameras.main.zoom;
+    this.cameras.main.setZoom(1.0);
+    this.setHudVisible(false);
+  }
+
   private endChoicePhase(): void {
     this.isChoicePhase = false;
     this.pilot.reset();
     this.cameras.main.setZoom(this.preChoiceZoom);
+    this.setHudVisible(true);
     this.startNextWave();
   }
 
@@ -892,10 +942,11 @@ export class SurvivalScene extends Phaser.Scene {
 
   /**
    * Re-applies hull/shield bonuses to the flagship fleet (escorts stay basic).
-   * combatStats holds the equipped baseline, so quick-build bonuses persist.
+   * combatStats holds the equipped baseline, so quick-build bonuses persist;
+   * the drafted bonuses are miniature points, scaled to real-time HP.
    */
   private applyBonusesToFleet(): void {
-    const { maxHull, maxShields } = this.run.bonuses;
+    const { maxHull, maxShields } = realTimeRunBonuses(this.run.bonuses);
     for (const id of this.playerShipIds) {
       if (this.escortShipIds.has(id)) continue;
       const ship = this.ships.get(id);
@@ -907,90 +958,42 @@ export class SurvivalScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Run over: freezes the battle, hides the HUD and shows the holographic
+   * result overlay. Zoom resets to 1.0 first — its buttons are
+   * scrollFactor(0) and Phaser mis-hit-tests them under zoom.
+   */
   private gameOver(): void {
+    if (this.gameOverOverlay) return;
     this.isPaused = true;
     audioManager.playFactionStinger(this.playerFaction, "defeat");
-
-    // Kill any in-progress wave announcement tween so it doesn't bleed through the overlay
-    this.tweens.killTweensOf(this.messageText);
-    this.messageText.setAlpha(0);
-    // Hide the in-battle HUD — previously bled through the semi-transparent overlay.
-    this.waveText.setVisible(false);
-    this.scoreText.setVisible(false);
-    this.controlsHintText.setVisible(false);
-
-    const centerX = this.scale.width / 2;
-    const centerY = this.scale.height / 2;
-
-    const bg = this.add.graphics();
-    bg.fillStyle(0x000000, 0.8);
-    bg.fillRect(0, 0, this.scale.width, this.scale.height);
-    bg.setScrollFactor(0);
-    bg.setDepth(2000);
-
-    this.add
-      .text(centerX, centerY - 80, "GAME OVER", {
-        font: "bold 48px Arial",
-        color: "#ff4444",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001);
-
-    this.add
-      .text(centerX, centerY - 20, `Wave Reached: ${this.wave}`, {
-        font: "24px Arial",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001);
-
-    this.add
-      .text(centerX, centerY + 20, `Final Score: ${this.score}`, {
-        font: "24px Arial",
-        color: "#ffdd44",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001);
-
-    // Buttons
-    const retryBtn = this.add
-      .text(centerX - 100, centerY + 80, "RETRY", {
-        font: "bold 24px Arial",
-        color: "#44ff44",
-        backgroundColor: "#224422",
-        padding: { x: 20, y: 10 },
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001)
-      .setInteractive({ useHandCursor: true });
-
-    retryBtn.on("pointerdown", () => {
-      this.scene.restart();
+    this.setHudVisible(false);
+    this.cameras.main.setZoom(1.0);
+    this.gameOverOverlay = showResultOverlay(this, {
+      header: "Survival",
+      title: "GAME OVER",
+      accent: HOLO_PALETTE.danger,
+      lines: [
+        { text: `Wave reached: ${this.wave}`, role: "heading" },
+        {
+          text: `Final score: ${this.score.toLocaleString("en-US")}`,
+          role: "heading",
+          color: HOLO_PALETTE.warning,
+        },
+      ],
+      actions: [
+        {
+          label: "Retry",
+          variant: "primary",
+          onClick: () => this.scene.restart(),
+        },
+        {
+          label: "Menu",
+          variant: "secondary",
+          onClick: () => this.scene.start("MainMenuScene"),
+        },
+      ],
     });
-
-    const menuBtn = this.add
-      .text(centerX + 100, centerY + 80, "MENU", {
-        font: "bold 24px Arial",
-        color: "#ffffff",
-        backgroundColor: "#444444",
-        padding: { x: 20, y: 10 },
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001)
-      .setInteractive({ useHandCursor: true });
-
-    menuBtn.on("pointerdown", () => {
-      this.scene.start("MainMenuScene");
-    });
-  }
-
-  private updateHUD(): void {
-    this.scoreText.setText(`SCORE: ${this.score}`);
   }
 
   // ==========================================
@@ -1099,7 +1102,7 @@ export class SurvivalScene extends Phaser.Scene {
 
     const isFlagship = spawn.owner === "player" && !this.escortShipIds.has(id);
     if (isFlagship) {
-      const bonuses = this.run.bonuses;
+      const bonuses = realTimeRunBonuses(this.run.bonuses);
       ship.hull += bonuses.maxHull;
       ship.maxHull += bonuses.maxHull;
       ship.shields += bonuses.maxShields;
@@ -1290,21 +1293,21 @@ export class SurvivalScene extends Phaser.Scene {
 
   /**
    * One frame of weapons: the run's shield regen for the player fleet,
-   * cooldowns, and autofire at the nearest target in range and arc.
+   * cooldowns, and autofire at the nearest target in range and arc — at
+   * most one attack per maneuver cycle (X-Wing round tempo).
    *
    * @param delta - Frame length (ms).
    */
   private processCombat(delta: number): void {
-    const { fireRate, shieldRegen } = this.run.bonuses;
-    const playerCooldownMod = Math.max(0.5, 1 - fireRate);
+    const regen = realTimeRunBonuses(this.run.bonuses).shieldRegenPerSecond;
     let sides: LivingBySide | null = null;
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
 
-      if (ship.owner === "player" && shieldRegen > 0) {
+      if (ship.owner === "player" && regen > 0) {
         ship.shields = Math.min(
           ship.maxShields,
-          ship.shields + (shieldRegen * delta) / 1000,
+          ship.shields + (regen * delta) / 1000,
         );
       }
       ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
@@ -1315,11 +1318,23 @@ export class SurvivalScene extends Phaser.Scene {
         if (target) {
           sides ??= this.livingBySide();
           this.fireAt(ship, target, sides);
-          const mod = ship.owner === "player" ? playerCooldownMod : 1;
-          ship.weaponCooldown = ship.combatStats.weaponCooldown * mod;
+          ship.weaponCooldown = this.attackIntervalOf(ship);
         }
       }
     }
+  }
+
+  /**
+   * Time between a ship's attacks: its weapon cooldown (the run's fire-rate
+   * bonus applies to the player fleet), never faster than once per cycle.
+   *
+   * @param ship - The ship.
+   * @returns Attack interval (ms).
+   */
+  private attackIntervalOf(ship: SurvivalShip): number {
+    const fireRate = ship.owner === "player" ? this.run.bonuses.fireRate : 0;
+    const cooldownMod = Math.max(MIN_PLAYER_COOLDOWN_MOD, 1 - fireRate);
+    return attackIntervalMs(ship.combatStats.weaponCooldown * cooldownMod);
   }
 
   /**
@@ -1337,41 +1352,22 @@ export class SurvivalScene extends Phaser.Scene {
     ]);
   }
 
+  /**
+   * The nearest foe in weapon range and forward arc that is not still
+   * immune to this ship's hits (X-Wing round: one hit per attacker per cycle).
+   *
+   * @param ship - The firing ship.
+   * @returns Its target, or null when none can be fired at.
+   */
   private findTarget(ship: SurvivalShip): SurvivalShip | null {
-    let best: SurvivalShip | null = null;
-    let bestDist = Infinity;
-
-    const maxRange =
-      ship.combatStats.weaponRange +
-      (ship.owner === "player" ? this.run.bonuses.range * RANGE_PER_POINT : 0);
-    const maxArcRad = (ship.combatStats.firingArc / 2) * Phaser.Math.DEG_TO_RAD;
-
-    for (const other of this.ships.values()) {
-      if (other.faction === ship.faction || other.hull <= 0) continue;
-
-      const dist = Phaser.Math.Distance.Between(
-        ship.x,
-        ship.y,
-        other.x,
-        other.y,
-      );
-      const angleToTarget = Phaser.Math.Angle.Between(
-        ship.x,
-        ship.y,
-        other.x,
-        other.y,
-      );
-      const shipFacing = (ship.angle - 90) * Phaser.Math.DEG_TO_RAD;
-      let angleDiff = Math.abs(angleToTarget - shipFacing);
-      if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
-
-      if (dist < maxRange && angleDiff < maxArcRad && dist < bestDist) {
-        best = other;
-        bestDist = dist;
-      }
-    }
-
-    return best;
+    const rangeBonus =
+      ship.owner === "player" ? this.run.bonuses.range * RANGE_PER_POINT : 0;
+    const now = this.time.now;
+    return nearestTargetInArc(ship, this.ships.values(), {
+      rangePx: ship.combatStats.weaponRange + rangeBonus,
+      arcDeg: ship.combatStats.firingArc,
+      isEligible: (other) => !this.hitLedger.isImmune(ship.id, other.id, now),
+    });
   }
 
   /**
@@ -1414,6 +1410,9 @@ export class SurvivalScene extends Phaser.Scene {
       });
     }
     this.dealDamage(target, result.damage);
+    if (result.damage > 0) {
+      this.hitLedger.recordHit(attacker.id, target.id, this.time.now);
+    }
     if (target.hull > 0) return;
     this.resolveAbilityKill(attacker, target);
     this.destroyShip(target.id, attacker.owner === "player");
@@ -1506,7 +1505,7 @@ export class SurvivalScene extends Phaser.Scene {
       Object.assign(killer, rewardKill(combatantOf(killer), this.time.now));
       this.healthBars.get(killer.id)?.update(killer.hull, killer.shields);
     }
-    const blastDamage = victim.modifiers.deathBlastDamage;
+    const blastDamage = deathBlastDamage(combatantOf(victim));
     if (blastDamage <= 0) return;
     const enemies = [...this.ships.values()].filter(
       (other) => other.owner !== victim.owner && other.hull > 0,
@@ -1523,10 +1522,8 @@ export class SurvivalScene extends Phaser.Scene {
     const ship = this.ships.get(shipId);
     if (!ship) return;
 
-    if (wasPlayerKill) {
-      this.score += 100;
-      this.updateHUD();
-    }
+    if (wasPlayerKill) this.score += 100;
+    this.hitLedger.forget(shipId);
 
     const sprite = this.shipSprites.get(shipId);
     if (sprite) {

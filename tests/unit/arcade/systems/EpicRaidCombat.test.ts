@@ -5,7 +5,24 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { CYCLE_DURATION_MS } from "../../../../src/config";
+import { getModeCombatStats } from "../../../../src/data/ModeBalancing";
+import { bossBroadsideDamage } from "../../../../src/systems/EpicBossRules";
 import {
+  BOSS_ABILITY_BASE_MS,
+  BOSS_SHIELD_REGEN_POINTS,
+} from "../../../../src/scenes/epicRaid/bossDefinitions";
+import {
+  BOSS_DAMAGE_SCALE,
+  BOSS_HP_SCALE,
+  BOSS_REGEN_SCALE,
+  BOSS_TEMPO_SCALE,
+  bossDamagePoints,
+  bossDurability,
+  bossRegenPoints,
+  bossTempoMs,
+  RAID_CLOCK_MS,
+  MIN_BOSS_HIT_DAMAGE,
   mitigateBossDamage,
   resolveBossShot,
   type BossShotInput,
@@ -117,5 +134,53 @@ describe("mitigateBossDamage", () => {
 
   it("no damage stays no damage", () => {
     expect(mitigateBossDamage(0, NEUTRAL_MODIFIERS, false)).toBe(0);
+  });
+});
+
+describe("raid scales (decoupled from DURABILITY_SCALE)", () => {
+  it("scales a boss pool by the difficulty, then by BOSS_HP_SCALE", () => {
+    expect(bossDurability(90, 1)).toBe(90 * BOSS_HP_SCALE);
+    expect(bossDurability(90, 1.5)).toBe(135 * BOSS_HP_SCALE);
+  });
+
+  it("floors the difficulty-scaled catalogue points before scaling", () => {
+    expect(bossDurability(25, 0.75)).toBe(18 * BOSS_HP_SCALE);
+  });
+
+  it("scales broadside damage, shield regeneration and timers by their own scales", () => {
+    expect(bossDamagePoints(3)).toBe(3 * BOSS_DAMAGE_SCALE);
+    expect(bossRegenPoints(10)).toBe(10 * BOSS_REGEN_SCALE);
+    expect(bossTempoMs(8_000)).toBe(8_000 * BOSS_TEMPO_SCALE);
+  });
+
+  it("gives a raid twelve minutes", () => {
+    expect(RAID_CLOCK_MS).toBe(12 * 60_000);
+  });
+});
+
+describe("raid calibration invariants", () => {
+  const lightFighter = getModeCombatStats("confed_sparrow", "continuous");
+  const lightFighterHp = lightFighter.maxHull + lightFighter.maxShields;
+
+  it("a broadside hurts a full-health light fighter badly but never one-shots it", () => {
+    const phase1 = bossDamagePoints(bossBroadsideDamage(1));
+    const phase3 = bossDamagePoints(bossBroadsideDamage(3));
+    expect(phase1 / lightFighterHp).toBeGreaterThanOrEqual(0.25);
+    expect(phase3).toBeLessThan(lightFighterHp);
+  });
+
+  it("shield regeneration is slower than one ship landing a floor-damage hit every cycle", () => {
+    const regenPerSecond =
+      bossRegenPoints(BOSS_SHIELD_REGEN_POINTS) /
+      (bossTempoMs(BOSS_ABILITY_BASE_MS.shieldRegen) / 1000);
+    const oneShipFloorDps = MIN_BOSS_HIT_DAMAGE / (CYCLE_DURATION_MS / 1000);
+    expect(regenPerSecond).toBeLessThan(oneShipFloorDps / 2);
+  });
+
+  it("the boss acts at most every few seconds, well inside the raid clock", () => {
+    expect(bossTempoMs(BOSS_ABILITY_BASE_MS.tick)).toBeGreaterThanOrEqual(
+      10_000,
+    );
+    expect(bossTempoMs(BOSS_ABILITY_BASE_MS.tick)).toBeLessThanOrEqual(30_000);
   });
 });

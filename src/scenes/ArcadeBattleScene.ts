@@ -98,16 +98,14 @@ import type { ManeuverDefinition } from "../core/types";
 import {
   type StressState,
   INITIAL_STRESS,
-  lookupDialDifficulty,
   applyKturnStress,
   applyBoostStress,
   applyInstantStress,
   accrueCycleStress,
-  stressLevelColor,
-  difficultyColor,
 } from "../arcade/ArcadeStress";
 import { resolveAiSteeringManeuver } from "../arcade/SteeringIntent";
 import {
+  deathBlastDamage,
   deathBlastTargets,
   hasWingman,
   laserHitBonus,
@@ -120,6 +118,7 @@ import {
   FACTION_COLORS,
   SHIP_SIZES,
   type FactionId,
+  type ShipSize,
 } from "../config";
 import { HealthBar } from "../ui/HealthBar";
 import { CapitalSystemsIndicator } from "../ui/CapitalSystemsIndicator";
@@ -151,17 +150,8 @@ import {
   tickMainBeam,
   isMainBeamReady,
   resetMainBeam,
-  canFireMainBeam,
   canEmergencyRepair,
-  MAIN_BEAM_DAMAGE,
-  MAIN_BEAM_COOLDOWN_MS,
-  POWER_REDIRECT_COOLDOWN_MS,
   POWER_REDIRECT_TURRET_MULTIPLIER,
-  POWER_REDIRECT_ENGINE_REPAIR_PER_SEC,
-  POWER_REDIRECT_SHIELD_REGEN_PER_SEC,
-  EMERGENCY_REPAIR_COOLDOWN_MS,
-  EMERGENCY_REPAIR_SHIELD_AMOUNT,
-  EMERGENCY_REPAIR_HULL_AMOUNT,
 } from "../systems/ShipCrew";
 import {
   buildFrameCache,
@@ -175,7 +165,7 @@ import {
   fleeSecondsRemaining,
   type FleeState,
 } from "../arcade/systems/FleeDetector";
-import { torusDistance, torusDelta } from "../core/Torus";
+import { torusDelta } from "../core/Torus";
 import {
   createSideScore,
   creditKill,
@@ -185,7 +175,6 @@ import {
 import {
   createMatchTimer,
   tickMatchTimer,
-  formatMatchClock,
   type MatchTimerState,
 } from "../systems/arena/MatchTimer";
 import {
@@ -194,7 +183,6 @@ import {
   evaluateQuality,
   type PerformanceState,
 } from "../systems/PerformanceSystem";
-import { Minimap, type MinimapShip } from "../ui/Minimap";
 import { renderBattleStarfield } from "../rendering/Starfield";
 import { applyLoadoutEffects } from "../systems/BattleHelpers";
 import {
@@ -235,6 +223,40 @@ import {
   type AuraShip,
   type ActiveAura,
 } from "../systems/SupportAura";
+import {
+  attackIntervalMs,
+  HitImmunityLedger,
+} from "../arcade/systems/CombatTempo";
+import { regenerateShields } from "../arcade/systems/QuickBuildEquip";
+import {
+  DEFAULT_SQUAD_DURABILITY,
+  EMERGENCY_HULL_REPAIR,
+  EMERGENCY_SHIELD_REPAIR,
+  ENGINE_REPAIR_PER_SECOND,
+  MAIN_BEAM_HIT_DAMAGE,
+  PLAYER_HULL_FLOOR,
+  PLAYER_SHIELD_FLOOR,
+  POWER_SHIELD_REGEN_PER_SECOND,
+  WINGMAN_HULL_FLOOR,
+  realTimeDurability,
+  regenerateScaledShields,
+} from "./arcadeBattle/arcadeDurability";
+import {
+  ArcadeBattleHud,
+  type ArcadeHudReadout,
+} from "./arcadeBattle/ArcadeBattleHud";
+import { TARGET_ARC_HALF_DEG } from "./arcadeBattle/arcadeHudModel";
+import { nearestInArc } from "./arcadeBattle/arcTargeting";
+import {
+  createEndOverlay,
+  createPauseOverlay,
+} from "./arcadeBattle/ArcadeOverlays";
+import { spawnDeflectFlash } from "./arcadeBattle/hitFx";
+import {
+  aiFiringSolution,
+  LASER_BOLT_SPEED_PX_PER_S,
+} from "./arcadeBattle/aiFiringSolution";
+import type { ScreenRect } from "../ui/hud/screenRect";
 
 interface ArcadeShip extends ShipState {
   control: ShipControlState;
@@ -297,6 +319,18 @@ interface ShipSprite extends Phaser.GameObjects.Container {
 
 /** Seconds a cloak lasts before upgrades (Phantom Strike extends it). */
 const BASE_CLOAK_SECONDS = 8;
+/** Hit-test radius of a ship for projectiles (px, before the bolt radius). */
+const SHIP_HIT_RADIUS_PX = 15;
+/** Score for each enemy the player's side destroys. */
+const KILL_SCORE = 100;
+
+/**
+ * @param definitionId - Ship definition id.
+ * @returns Its size class (small for unknown ids).
+ */
+function shipSizeOf(definitionId: string): ShipSize {
+  return getShipDefinition(definitionId)?.baseStats.size ?? "small";
+}
 
 export class ArcadeBattleScene extends Phaser.Scene {
   private ships: Map<string, ArcadeShip> = new Map();
@@ -307,7 +341,15 @@ export class ArcadeBattleScene extends Phaser.Scene {
     new Map();
   private healthBars: Map<string, HealthBar> = new Map();
   private capitalIndicators: Map<string, CapitalSystemsIndicator> = new Map();
-  private minimap: Minimap | undefined;
+  /** Holographic HUD; created in create(), destroyed on shutdown. */
+  private hud: ArcadeBattleHud | null = null;
+  /**
+   * X-Wing round tempo: a ship struck by an attacker ignores that attacker's
+   * lasers, turret and ordnance until the next maneuver cycle.
+   */
+  private readonly hitLedger = new HitImmunityLedger();
+  /** Simulated battle time (ms), advanced by the fixed-step logic tick. */
+  private battleClockMs = 0;
   private cameraShakeEnabled = true;
   private damageNumbersEnabled = true;
   private userWantsCameraShake = true;
@@ -362,18 +404,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private prevThrustDownHeld = false;
   private inputSubscriptionIds: number[] = [];
 
-  // HUD
-  private speedText!: Phaser.GameObjects.Text;
-  private hullText!: Phaser.GameObjects.Text;
-  private shieldText!: Phaser.GameObjects.Text;
-  private cooldownText!: Phaser.GameObjects.Text;
-  private instructionsText!: Phaser.GameObjects.Text;
-  private scoreText!: Phaser.GameObjects.Text;
-
-  /** Right-side panel showing all-team status. Rebuilt each frame via updateTeamHUD(). */
-  private teamHudGraphics!: Phaser.GameObjects.Graphics;
-  private teamHudTexts: Phaser.GameObjects.Text[] = [];
-
   private playerFaction: FactionId = "free_confederation";
   private score = 0;
   private lastTime = 0;
@@ -387,15 +417,12 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   private fleeState: FleeState = createFleeState();
   private damageThisFrame = false;
-  private fleeWarningText: Phaser.GameObjects.Text | null = null;
-  private fleeArrow: Phaser.GameObjects.Graphics | null = null;
 
   /** Competitive time limit (ms); when it runs out, destroyed point cost decides the match. */
   private static readonly MATCH_DURATION_MS = 180_000;
   private matchTimer: MatchTimerState = createMatchTimer(
     ArcadeBattleScene.MATCH_DURATION_MS,
   );
-  private matchTimerText: Phaser.GameObjects.Text | null = null;
   /** Point cost of enemy ships the player's side has destroyed. */
   private playerSideScore: SideScore = createSideScore();
   /** Point cost of the player's ships the enemy side has destroyed. */
@@ -421,34 +448,35 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private cameraVirtualX = BATTLEFIELD_SIZE / 2;
   private cameraVirtualY = BATTLEFIELD_SIZE / 2;
 
-  // Maneuver indicator HUD elements
-  private maneuverText!: Phaser.GameObjects.Text;
-  private turnGauge!: Phaser.GameObjects.Graphics;
-
-  // Stress HUD
-  private stressBarGraphics!: Phaser.GameObjects.Graphics;
-  private stressLevelText!: Phaser.GameObjects.Text;
-
-  // Ordnance HUD (up to 3 slots)
-  private ordnanceHudTexts: Phaser.GameObjects.Text[] = [];
   /** -1 = primary laser; 0/1/2 = ordnance slot index */
   private selectedWeaponSlot = -1;
-  /** Backdrop panels for the top-left stats, score, timer, and controls
-   * reminder, plus the reminder's text lines — hidden alongside their
-   * content on the end screen. */
-  private hudBackgroundPanels: Array<
-    Phaser.GameObjects.Graphics | Phaser.GameObjects.Text
-  > = [];
-  private crewModeText!: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: "ArcadeBattleScene" });
+  }
+
+  /** What the holographic HUD showed on its last update (e2e / screenshots). */
+  get hudReadout(): ArcadeHudReadout | null {
+    return this.hud?.readout ?? null;
+  }
+
+  /** Screen rects of the fixed HUD widgets (e2e overlap checks). */
+  get hudLayout(): Record<string, ScreenRect> {
+    return this.hud?.layoutRects() ?? {};
+  }
+
+  /** The flee countdown text (e2e wiring check). */
+  get fleeWarningText(): Phaser.GameObjects.Text | null {
+    return this.hud?.fleeWarningText ?? null;
   }
 
   shutdown(): void {
     this.inputSubscriptionIds.forEach((id) => InputManager.off(id));
     this.inputSubscriptionIds = [];
     this.pendingEdgeIntents.clear();
+    this.hitLedger.clear();
+    this.hud?.destroy();
+    this.hud = null;
     teardownSceneInput();
   }
 
@@ -495,14 +523,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
       | {
           cameraShake: boolean;
           showDamageNumbers: boolean;
-          showMinimap: boolean;
         }
       | undefined;
     this.userWantsCameraShake = savedSettings?.cameraShake ?? true;
     this.userWantsDamageNumbers = savedSettings?.showDamageNumbers ?? true;
     this.cameraShakeEnabled = this.userWantsCameraShake;
     this.damageNumbersEnabled = this.userWantsDamageNumbers;
-    const showMinimap = savedSettings?.showMinimap ?? true;
+    this.resetBattleState();
 
     // No setBounds — we manage the camera manually for seamless toroid wrapping.
     this.cameras.main.setBackgroundColor(0x050510);
@@ -511,10 +538,12 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
     this.createStarfield();
     this.setupInput();
-    this.createHUD();
     this.spawnShips();
     this.createHealthBars();
-    if (showMinimap) this.createMinimap();
+    this.hud = new ArcadeBattleHud(this, {
+      worldSize: BATTLEFIELD_SIZE,
+      sizeOf: (definitionId) => shipSizeOf(definitionId),
+    });
     audioManager.playFactionMusic(this.playerFaction, "combat");
 
     if (ShipTelemetry.isEnabled()) {
@@ -538,12 +567,34 @@ export class ArcadeBattleScene extends Phaser.Scene {
     if (playerSprite) {
       this.cameraVirtualX = playerSprite.x;
       this.cameraVirtualY = playerSprite.y;
-      const zoom = this.cameras.main.zoom;
-      this.cameras.main.setScroll(
-        this.cameraVirtualX - this.scale.width / (2 * zoom),
-        this.cameraVirtualY - this.scale.height / (2 * zoom),
-      );
+      this.cameras.main.centerOn(this.cameraVirtualX, this.cameraVirtualY);
     }
+  }
+
+  /**
+   * Forget everything from a previous battle. Phaser reuses the scene
+   * instance on restart / RETRY, so field initialisers do not run again.
+   */
+  private resetBattleState(): void {
+    this.ships.clear();
+    this.shipSprites.clear();
+    this.projectiles = [];
+    this.projectileSprites.clear();
+    this.healthBars.clear();
+    this.capitalIndicators.clear();
+    this.hitLedger.clear();
+    this.battleClockMs = 0;
+    this.accumulator = 0;
+    this.framesAlive = 0;
+    this.score = 0;
+    this.isPaused = false;
+    this.pauseOverlay = null;
+    this.selectedWeaponSlot = -1;
+    this.activeAuras = new Map();
+    this.playerWasAuraCovered = false;
+    this.pilotControl = INITIAL_PILOT_CONTROL;
+    this.prevThrustUpHeld = false;
+    this.prevThrustDownHeld = false;
   }
 
   private createHealthBars(): void {
@@ -570,24 +621,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
         this.capitalIndicators.set(id, indicator);
       }
     }
-  }
-
-  private createMinimap(): void {
-    this.minimap = new Minimap({
-      scene: this,
-      x: this.scale.width - 160,
-      y: this.scale.height - 160,
-      width: 150,
-      height: 150,
-    });
-    const mapLabel = this.add
-      .text(this.scale.width - 160, this.scale.height - 176, "MAP", {
-        font: "bold 12px monospace",
-        color: "#5a7a9a",
-      })
-      .setScrollFactor(0)
-      .setDepth(1000);
-    this.hudBackgroundPanels.push(mapLabel);
   }
 
   update(time: number): void {
@@ -631,6 +664,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   private tickLogic(dt: number): void {
     this.framesAlive++;
+    this.battleClockMs += dt;
     this.perfState = updateFPS(this.perfState, dt);
     if (this.framesAlive % 30 === 0) {
       this.perfState = evaluateQuality(this.perfState, this.lastTime);
@@ -687,14 +721,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
     // Speed-based zoom: zoom out slightly at high speed for spatial awareness.
     const speedRatio = (ship.control.speed - 1) / 4;
     const targetZoom = Phaser.Math.Linear(1.0, 0.75, speedRatio);
-    const currentZoom = this.cameras.main.zoom;
-    this.cameras.main.setZoom(currentZoom + (targetZoom - currentZoom) * 0.03);
-
     const zoom = this.cameras.main.zoom;
-    this.cameras.main.setScroll(
-      this.cameraVirtualX - this.scale.width / (2 * zoom),
-      this.cameraVirtualY - this.scale.height / (2 * zoom),
-    );
+    this.cameras.main.setZoom(zoom + (targetZoom - zoom) * 0.03);
+    this.cameras.main.centerOn(this.cameraVirtualX, this.cameraVirtualY);
   }
 
   private createStarfield(): void {
@@ -712,15 +741,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
     );
     this.inputSubscriptionIds.push(
       InputManager.on("PAUSE", () => {
-        if (this.gameEnded) return;
-        if (this.isPaused) {
-          this.isPaused = false;
-          this.pauseOverlay?.destroy();
-          this.pauseOverlay = null;
-        } else {
-          this.isPaused = true;
-          this.showPauseOverlay();
-        }
+        if (this.isPaused) this.resumeBattle();
+        else this.pauseBattle();
       }),
     );
 
@@ -737,167 +759,36 @@ export class ArcadeBattleScene extends Phaser.Scene {
     return had;
   }
 
-  private showPauseOverlay(): void {
-    // Same scrollFactor(0)-vs-zoom hit-test issue seen elsewhere in this
-    // codebase: a GameObject with scrollFactor(0) is not correctly hit-tested
-    // by Phaser's pointer input when the camera zoom != 1.0.
+  /**
+   * Pause the battle and show the pause menu. The camera goes to zoom 1:
+   * Phaser mis-hit-tests scrollFactor(0) buttons under any other zoom.
+   */
+  private pauseBattle(): void {
+    if (this.isPaused || this.gameEnded) return;
+    this.isPaused = true;
     this.cameras.main.setZoom(1.0);
-
-    const cx = this.scale.width / 2;
-    const cy = this.scale.height / 2;
-    this.pauseOverlay = this.add
-      .container(0, 0)
-      .setDepth(3000)
-      .setScrollFactor(0);
-
-    const dim = this.add.graphics();
-    dim.fillStyle(0x000000, 0.7);
-    dim.fillRect(0, 0, this.scale.width, this.scale.height);
-    this.pauseOverlay.add(dim);
-
-    // Two-column panel: buttons left, controls right
-    const panelW = 520;
-    const panelH = 360;
-    const panel = this.add.graphics();
-    panel.fillStyle(0x0a1a2e, 0.98);
-    panel.lineStyle(2, 0x2244aa, 1);
-    panel.fillRoundedRect(cx - panelW / 2, cy - panelH / 2, panelW, panelH, 12);
-    panel.strokeRoundedRect(
-      cx - panelW / 2,
-      cy - panelH / 2,
-      panelW,
-      panelH,
-      12,
-    );
-    // Vertical divider between columns
-    panel.lineStyle(1, 0x1a3366, 0.8);
-    panel.lineBetween(
-      cx + 10,
-      cy - panelH / 2 + 16,
-      cx + 10,
-      cy + panelH / 2 - 16,
-    );
-    this.pauseOverlay.add(panel);
-
-    // — Left column: menu buttons —
-    const lx = cx - panelW / 4 - 10;
-
-    this.pauseOverlay.add(
-      this.add
-        .text(lx, cy - panelH / 2 + 28, "PAUSED", {
-          font: "bold 30px Arial",
-          color: "#ffffff",
-        })
-        .setOrigin(0.5),
-    );
-
-    const resumeBtn = this.add
-      .text(lx, cy - 20, "RESUME", {
-        font: "bold 20px Arial",
-        color: "#44ff88",
-        backgroundColor: "#1a3322",
-        padding: { x: 22, y: 10 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true })
-      .setScrollFactor(0);
-    resumeBtn.on("pointerover", () => resumeBtn.setColor("#ffffff"));
-    resumeBtn.on("pointerout", () => resumeBtn.setColor("#44ff88"));
-    resumeBtn.on("pointerdown", () => {
-      this.isPaused = false;
-      this.pauseOverlay?.destroy();
-      this.pauseOverlay = null;
+    this.hud?.setVisible(false);
+    this.pauseOverlay = createPauseOverlay(this, {
+      onResume: () => this.resumeBattle(),
+      onSettings: () =>
+        this.scene.launch("SettingsScene", {
+          returnScene: "ArcadeBattleScene",
+        }),
+      onQuit: () =>
+        showConfirmDialog({
+          scene: this,
+          message: "Quit to menu? Battle progress will be lost.",
+          onConfirm: () => this.scene.start("MainMenuScene"),
+        }),
     });
-    this.pauseOverlay.add(resumeBtn);
+  }
 
-    const settingsBtn = this.add
-      .text(lx, cy + 38, "SETTINGS", {
-        font: "bold 17px Arial",
-        color: "#88aaff",
-        backgroundColor: "#112244",
-        padding: { x: 22, y: 8 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true })
-      .setScrollFactor(0);
-    settingsBtn.on("pointerover", () => settingsBtn.setColor("#ffffff"));
-    settingsBtn.on("pointerout", () => settingsBtn.setColor("#88aaff"));
-    settingsBtn.on("pointerdown", () => {
-      this.scene.launch("SettingsScene", { returnScene: "ArcadeBattleScene" });
-    });
-    this.pauseOverlay.add(settingsBtn);
-
-    const quitBtn = this.add
-      .text(lx, cy + 90, "QUIT TO MENU", {
-        font: "bold 17px Arial",
-        color: "#ff5555",
-        backgroundColor: "#331111",
-        padding: { x: 18, y: 8 },
-      })
-      .setOrigin(0.5)
-      .setInteractive({ useHandCursor: true })
-      .setScrollFactor(0);
-    quitBtn.on("pointerover", () => quitBtn.setColor("#ffffff"));
-    quitBtn.on("pointerout", () => quitBtn.setColor("#ff5555"));
-    quitBtn.on("pointerdown", () => {
-      showConfirmDialog({
-        scene: this,
-        message: "Quit to menu? Battle progress will be lost.",
-        onConfirm: () => this.scene.start("MainMenuScene"),
-      });
-    });
-    this.pauseOverlay.add(quitBtn);
-
-    // — Right column: controls reference —
-    const rx = cx + panelW / 4 + 20;
-    this.pauseOverlay.add(
-      this.add
-        .text(rx, cy - panelH / 2 + 28, "CONTROLS", {
-          font: "bold 14px monospace",
-          color: "#6688bb",
-        })
-        .setOrigin(0.5),
-    );
-
-    const controls: [string, string][] = [
-      ["↑ / ↓", "Speed up / down"],
-      ["← / →  (tap)", "Drift 30° (fine correction)"],
-      ["← / →  (hold)", "Bank 45°, then drift"],
-      ["Q / E", "Hard turn 90° (auto-speed)"],
-      ["Shift+Q/E", "Segnor loop (bank + flip)"],
-      ["T / Shift+T", "Tallon roll (L / R)"],
-      ["↑↑  double", "Boost dash (3s CD)"],
-      ["↓↓  double", "K-Turn (alt to Z)"],
-      ["← + →  chord", "Barrel roll"],
-      ["Z", "K-Turn (flip)"],
-      ["(auto)", "Selected weapon fires on its own"],
-      ["SHIFT+SPACE", "Deploy bomb backward"],
-      ["TAB", "Cycle weapon"],
-      ["G", "Cycle crew role (pilot/gunner/commander)"],
-      ["1-4", "Commander orders (capital only)"],
-      ["ESC", "Pause / resume"],
-    ];
-
-    let ry = cy - panelH / 2 + 52;
-    for (const [key, desc] of controls) {
-      this.pauseOverlay.add(
-        this.add
-          .text(rx - 80, ry, key, {
-            font: "bold 12px monospace",
-            color: "#ffcc44",
-          })
-          .setOrigin(0, 0),
-      );
-      this.pauseOverlay.add(
-        this.add
-          .text(rx - 20, ry, desc, {
-            font: "12px monospace",
-            color: "#aaaaaa",
-          })
-          .setOrigin(0, 0),
-      );
-      ry += 22;
-    }
+  /** Close the pause menu and resume the battle. */
+  private resumeBattle(): void {
+    this.isPaused = false;
+    this.pauseOverlay?.destroy();
+    this.pauseOverlay = null;
+    this.hud?.setVisible(true);
   }
 
   private handleInput(deltaMs: number): void {
@@ -1103,7 +994,12 @@ export class ArcadeBattleScene extends Phaser.Scene {
         }
       }
 
-      this.regenerateUpgradeShields(ship, deltaMs);
+      ship.shields = regenerateShields(
+        ship.shields,
+        ship.maxShields,
+        ship.modifiers,
+        deltaMs,
+      );
 
       // Wrap around battlefield
       ship.x =
@@ -1159,28 +1055,15 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.playerWasAuraCovered = playerCovered;
 
     for (const [id, aura] of buffs) {
-      if (aura.shieldRegenPerSecond <= 0) continue;
       const ship = this.ships.get(id);
-      if (!ship || ship.shields >= ship.maxShields) continue;
-      const gain = (aura.shieldRegenPerSecond * deltaMs) / 1000;
-      ship.shields = Math.min(ship.maxShields, ship.shields + gain);
+      if (!ship) continue;
+      ship.shields = regenerateScaledShields(
+        ship.shields,
+        ship.maxShields,
+        aura.shieldRegenPerSecond,
+        deltaMs,
+      );
     }
-  }
-
-  /**
-   * Regenerates shields granted by upgrades (repair astromech, illicit
-   * deflectors). Support-aura regen is applied separately in updateAuras.
-   *
-   * @param ship - Ship to regenerate.
-   * @param deltaMs - Elapsed simulation time for this tick, in milliseconds.
-   */
-  private regenerateUpgradeShields(ship: ArcadeShip, deltaMs: number): void {
-    const rate = ship.modifiers.shieldRegenPerSecond;
-    if (rate <= 0 || ship.shields >= ship.maxShields) return;
-    ship.shields = Math.min(
-      ship.maxShields,
-      ship.shields + (rate * deltaMs) / 1000,
-    );
   }
 
   /**
@@ -1231,9 +1114,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
       Object.assign(attacker, rewardKill(attacker, this.time.now));
     }
     const enemies = this.frameCache?.aliveEnemiesOf(victim.faction) ?? [];
+    const blast = deathBlastDamage(victim);
     for (const target of deathBlastTargets(victim, enemies)) {
       const ship = this.ships.get(target.id);
-      if (ship) this.applyBlastDamage(ship, victim.modifiers.deathBlastDamage);
+      if (ship) this.applyBlastDamage(ship, blast);
     }
   }
 
@@ -1243,7 +1127,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
    * victim's side.
    *
    * @param target - Ship caught in the blast.
-   * @param damage - Blast damage.
+   * @param damage - Blast damage (already at ordnance scale).
    */
   private applyBlastDamage(target: ArcadeShip, damage: number): void {
     if (target.hull <= 0) return;
@@ -1263,7 +1147,16 @@ export class ArcadeBattleScene extends Phaser.Scene {
     if (this.damageNumbersEnabled) {
       this.showFloatingText(target.x, target.y - 20, `-${damage}`, "#ff8800");
     }
-    if (target.hull > 0) return;
+    if (target.hull <= 0) this.recordDestruction(target);
+  }
+
+  /**
+   * Bookkeeping for a destroyed ship: its point cost goes to the other side's
+   * score and it drops out of the hit-immunity ledger.
+   *
+   * @param target - The ship just destroyed.
+   */
+  private recordDestruction(target: ArcadeShip): void {
     if (target.faction === this.playerFaction) {
       this.enemySideScore = creditKill(
         this.enemySideScore,
@@ -1275,6 +1168,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
         target.definitionId,
       );
     }
+    this.hitLedger.forget(target.id);
   }
 
   /**
@@ -1498,14 +1392,22 @@ export class ArcadeBattleScene extends Phaser.Scene {
       }
     }
 
-    // Primary fire
-    if (decision.firePrimary && canFire(ship.control)) {
-      ship.control = processCommand(ship, ship.control, "fire");
-      this.fireWeapon(ship);
+    // Primary fire — one attack per cycle, spent only on a firing solution
+    // against a target that is not still immune to this ship.
+    if (canFire(ship.control) && !this.isImmuneTo(ship, target)) {
+      const aim = aiFiringSolution(
+        { ...ship, speed: ship.control.speed },
+        { ...target, speed: target.control.speed },
+        { boltSpeed: LASER_BOLT_SPEED_PX_PER_S, worldSize: BATTLEFIELD_SIZE },
+      );
+      if (aim !== null) {
+        ship.control = processCommand(ship, ship.control, "fire");
+        this.fireWeapon(ship, aim);
+      }
     }
 
     // Ordnance — try first ready slot when decision flags it
-    if (decision.firingOrdnanceSlot >= 0) {
+    if (decision.firingOrdnanceSlot >= 0 && !this.isImmuneTo(ship, target)) {
       for (let i = 0; i < ship.ordnanceSlots.length; i++) {
         if (canFireOrdnance(ship.ordnanceSlots[i]!)) {
           this.fireOrdnance(ship, i);
@@ -1573,7 +1475,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
     }
   }
 
-  private fireWeapon(ship: ArcadeShip): void {
+  /**
+   * Fires the primary laser from the ship's nose.
+   *
+   * @param ship - The firing ship.
+   * @param aimAngle - Bolt heading (°); the nose by default, an AI's
+   *   lead-intercept bearing when it has a firing solution.
+   */
+  private fireWeapon(ship: ArcadeShip, aimAngle: number = ship.angle): void {
     // Firing breaks cloak
     ship.isCloaked = false;
     ship.cloakTimer = 0;
@@ -1598,7 +1507,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
         createProjectile(
           ship.x + Math.cos(rad) * spawnDist,
           ship.y + Math.sin(rad) * spawnDist,
-          ship.angle,
+          aimAngle,
           ship.id,
           ship.faction,
           damage,
@@ -1638,25 +1547,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const slot = ship.ordnanceSlots[slotIndex];
     if (!slot || !canFireOrdnance(slot)) return;
 
-    let bestTarget: ArcadeShip | null = null;
-    if (slot.isHoming) {
-      let bestDist = Infinity;
-      for (const other of this.ships.values()) {
-        if (other.faction === ship.faction || other.hull <= 0) continue;
-        const dx = other.x - ship.x;
-        const dy = other.y - ship.y;
-        const angleToTarget =
-          ((Math.atan2(dy, dx) * 180) / Math.PI + 90 + 360) % 360;
-        let angleDiff = Math.abs(angleToTarget - ship.angle);
-        if (angleDiff > 180) angleDiff = 360 - angleDiff;
-        if (angleDiff > 60) continue; // outside 120° front arc
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestTarget = other;
-        }
-      }
-    }
+    const bestTarget = slot.isHoming ? this.lockTargetFor(ship) : null;
 
     consumeOrdnanceCharge(slot);
 
@@ -1691,130 +1582,170 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.projectileSprites.set(proj.id, sprite);
   }
 
+  /**
+   * The nearest visible enemy in this ship's forward arc — what a homing
+   * missile fired now locks, and what the HUD marks as the player's target.
+   *
+   * @param ship - The firing ship.
+   * @returns The target, or null when no enemy is in the arc.
+   */
+  private lockTargetFor(ship: ArcadeShip): ArcadeShip | null {
+    const enemies = [...this.ships.values()].filter(
+      (other) =>
+        other.faction !== ship.faction && other.hull > 0 && !other.isCloaked,
+    );
+    return nearestInArc(
+      ship,
+      ship.angle,
+      enemies,
+      TARGET_ARC_HALF_DEG,
+      BATTLEFIELD_SIZE,
+    );
+  }
+
+  /**
+   * @param attacker - The ship about to attack.
+   * @param target - Its target.
+   * @returns True while the target ignores this attacker (struck this cycle).
+   */
+  private isImmuneTo(attacker: ArcadeShip, target: ArcadeShip): boolean {
+    return this.hitLedger.isImmune(attacker.id, target.id, this.battleClockMs);
+  }
+
   private checkCollisions(): void {
     if (!this.frameCache) return;
-    const hitProjectiles = new Set<string>();
-
+    const spent = new Set<string>();
     for (const proj of this.projectiles) {
-      for (const view of this.frameCache.aliveShips) {
-        if (view.id === proj.ownerId) continue;
-
-        if (
+      const struck = this.frameCache.aliveShips.find(
+        (view) =>
+          view.id !== proj.ownerId &&
+          (this.ships.get(view.id)?.hull ?? 0) > 0 &&
           checkProjectileHit(
             proj,
             view.x,
             view.y,
-            15,
+            SHIP_HIT_RADIUS_PX,
             view.faction,
             BATTLEFIELD_SIZE,
-          )
-        ) {
-          hitProjectiles.add(proj.id);
-          const ship = this.ships.get(view.id)!;
-
-          const wasAlive = ship.hull > 0;
-          const attacker = this.ships.get(proj.ownerId);
-          const hitDamage =
-            projectileRawDamage(proj, ship.shields) +
-            this.abilityHitBonus(proj, attacker, ship);
-          const rawDamage = ship.isCloaked
-            ? Math.max(1, Math.floor(hitDamage / 2))
-            : hitDamage;
-          const armor =
-            getShipDefinition(ship.definitionId)?.baseStats.armor ?? 0;
-          const armoredDamage = Math.max(1, rawDamage - armor);
-          const mitigation = Math.max(
-            MIN_DAMAGE_TAKEN_MULTIPLIER,
-            (this.activeAuras.get(ship.id)?.damageTakenMultiplier ?? 1) *
-              incomingDamageMultiplier(
-                ship.modifiers,
-                this.fliesWithWingman(ship),
-              ),
-          );
-          const attackerOrders = attacker?.commanderOrders;
-          const concentrateMultiplier = attackerOrders
-            ? concentrateFireMultiplier(
-                attackerOrders.concentrateFire,
-                ship.id,
-                this.time.now,
-              )
-            : 1;
-          const damage = Math.max(
-            1,
-            Math.round(armoredDamage * mitigation * concentrateMultiplier),
-          );
-          ship.stress = applyInstantStress(ship.stress, proj.stressOnHit ?? 0);
-          ship.isCloaked = false;
-          ship.cloakTimer = 0;
-
-          if (ship.shields > 0) {
-            ship.shields = Math.max(0, ship.shields - damage);
-            audioManager.playSoundAt("shield_hit", ship.x, ship.y, 0.4);
-          } else if (ship.capitalSystems) {
-            const result = applyCapitalSystemDamage(
-              ship.capitalSystems,
-              damage,
-            );
-            ship.capitalSystems = result.systems;
-            ship.hull = sumSystemsHull(result.systems);
-            this.damageThisFrame = true;
-            audioManager.playSoundAt("hull_hit", ship.x, ship.y, 0.4);
-            if (result.justDisabled && result.hitSystemId) {
-              this.showFloatingText(
-                ship.x,
-                ship.y - 45,
-                `${SYSTEM_LABELS[result.hitSystemId]} DISABLED!`,
-                "#ff8800",
-              );
-            }
-          } else {
-            ship.hull = Math.max(0, ship.hull - damage);
-            this.damageThisFrame = true;
-            audioManager.playSoundAt("hull_hit", ship.x, ship.y, 0.4);
-          }
-
-          if (this.damageNumbersEnabled) {
-            this.showFloatingText(ship.x, ship.y - 20, `-${damage}`, "#ff4444");
-          }
-
-          if (
-            proj.ownerFaction === this.playerFaction &&
-            ship.hull <= 0 &&
-            wasAlive
-          ) {
-            this.score += 100;
-            this.showFloatingText(ship.x, ship.y - 40, "KILL!", "#ffff00");
-            this.scoreText.setText(`SCORE: ${this.score}`);
-          }
-
-          if (ship.hull <= 0 && wasAlive) {
-            this.resolveAbilityKill(attacker, ship);
-            if (ship.faction === this.playerFaction) {
-              this.enemySideScore = creditKill(
-                this.enemySideScore,
-                ship.definitionId,
-              );
-            } else {
-              this.playerSideScore = creditKill(
-                this.playerSideScore,
-                ship.definitionId,
-              );
-            }
-          }
-
-          if (this.cameraShakeEnabled) this.cameras.main.shake(50, 0.005);
-          break;
-        }
-      }
+          ),
+      );
+      if (!struck) continue;
+      spent.add(proj.id);
+      this.resolveProjectileHit(proj, this.ships.get(struck.id)!);
     }
-
-    this.projectiles = this.projectiles.filter(
-      (p) => !hitProjectiles.has(p.id),
-    );
-    for (const id of hitProjectiles) {
-      const sprite = this.projectileSprites.get(id);
-      sprite?.destroy();
+    this.projectiles = this.projectiles.filter((p) => !spent.has(p.id));
+    for (const id of spent) {
+      this.projectileSprites.get(id)?.destroy();
       this.projectileSprites.delete(id);
+    }
+  }
+
+  /**
+   * One bolt / shot / ordnance striking a ship, under the X-Wing round
+   * tempo: while the target is immune to this attacker (struck by it earlier
+   * this cycle) the bolt is spent harmlessly with a deflect flash; otherwise
+   * it deals damage and starts the target's immunity to that attacker.
+   *
+   * @param proj - The projectile that struck.
+   * @param ship - The living ship it struck.
+   */
+  private resolveProjectileHit(proj: Projectile, ship: ArcadeShip): void {
+    const now = this.battleClockMs;
+    if (this.hitLedger.isImmune(proj.ownerId, ship.id, now)) {
+      spawnDeflectFlash(this, proj.x, proj.y);
+      return;
+    }
+    this.hitLedger.recordHit(proj.ownerId, ship.id, now);
+    const attacker = this.ships.get(proj.ownerId);
+    const damage = this.projectileHitDamage(proj, attacker, ship);
+    ship.stress = applyInstantStress(ship.stress, proj.stressOnHit ?? 0);
+    ship.isCloaked = false;
+    ship.cloakTimer = 0;
+    this.applyHitDamage(ship, damage);
+    if (this.damageNumbersEnabled) {
+      this.showFloatingText(ship.x, ship.y - 20, `-${damage}`, "#ff4444");
+    }
+    if (ship.hull <= 0) {
+      if (proj.ownerFaction === this.playerFaction) {
+        this.score += KILL_SCORE;
+        this.showFloatingText(ship.x, ship.y - 40, "KILL!", "#ffff00");
+      }
+      this.resolveAbilityKill(attacker, ship);
+      this.recordDestruction(ship);
+    }
+    if (this.cameraShakeEnabled) this.cameras.main.shake(50, 0.005);
+  }
+
+  /**
+   * Damage a projectile deals: raw damage + pilot bonus, halved against a
+   * cloaked ship, minus armour, scaled by mitigation and concentrate fire.
+   *
+   * @param proj - The projectile.
+   * @param attacker - Who fired it (undefined once destroyed).
+   * @param ship - The ship struck.
+   * @returns Damage, at least 1.
+   */
+  private projectileHitDamage(
+    proj: Projectile,
+    attacker: ArcadeShip | undefined,
+    ship: ArcadeShip,
+  ): number {
+    const hitDamage =
+      projectileRawDamage(proj, ship.shields) +
+      this.abilityHitBonus(proj, attacker, ship);
+    const rawDamage = ship.isCloaked
+      ? Math.max(1, Math.floor(hitDamage / 2))
+      : hitDamage;
+    const armor = getShipDefinition(ship.definitionId)?.baseStats.armor ?? 0;
+    const armoredDamage = Math.max(1, rawDamage - armor);
+    const mitigation = Math.max(
+      MIN_DAMAGE_TAKEN_MULTIPLIER,
+      (this.activeAuras.get(ship.id)?.damageTakenMultiplier ?? 1) *
+        incomingDamageMultiplier(ship.modifiers, this.fliesWithWingman(ship)),
+    );
+    const attackerOrders = attacker?.commanderOrders;
+    const concentrateMultiplier = attackerOrders
+      ? concentrateFireMultiplier(
+          attackerOrders.concentrateFire,
+          ship.id,
+          this.time.now,
+        )
+      : 1;
+    return Math.max(
+      1,
+      Math.round(armoredDamage * mitigation * concentrateMultiplier),
+    );
+  }
+
+  /**
+   * Apply hit damage: shields absorb the whole hit while up, then hull
+   * (capital hulls through their subsystems).
+   *
+   * @param ship - The ship struck.
+   * @param damage - Damage to apply.
+   */
+  private applyHitDamage(ship: ArcadeShip, damage: number): void {
+    if (ship.shields > 0) {
+      ship.shields = Math.max(0, ship.shields - damage);
+      audioManager.playSoundAt("shield_hit", ship.x, ship.y, 0.4);
+      return;
+    }
+    this.damageThisFrame = true;
+    audioManager.playSoundAt("hull_hit", ship.x, ship.y, 0.4);
+    if (!ship.capitalSystems) {
+      ship.hull = Math.max(0, ship.hull - damage);
+      return;
+    }
+    const result = applyCapitalSystemDamage(ship.capitalSystems, damage);
+    ship.capitalSystems = result.systems;
+    ship.hull = sumSystemsHull(result.systems);
+    if (result.justDisabled && result.hitSystemId) {
+      this.showFloatingText(
+        ship.x,
+        ship.y - 45,
+        `${SYSTEM_LABELS[result.hitSystemId]} DISABLED!`,
+        "#ff8800",
+      );
     }
   }
 
@@ -1865,9 +1796,12 @@ export class ArcadeBattleScene extends Phaser.Scene {
       BATTLEFIELD_SIZE / 2 + 50,
       0,
     );
-    playerShip.hull = playerShip.maxHull = Math.max(6, playerShip.maxHull);
+    playerShip.hull = playerShip.maxHull = Math.max(
+      PLAYER_HULL_FLOOR,
+      playerShip.maxHull,
+    );
     playerShip.shields = playerShip.maxShields = Math.max(
-      3,
+      PLAYER_SHIELD_FLOOR,
       playerShip.maxShields,
     );
     this.equipLoadout(playerShip, playerSlot.loadoutChoices?.["0"]);
@@ -1894,7 +1828,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       this.equipLoadout(ally, playerSlot.loadoutChoices?.[String(i + 1)]);
       // Arcade wingman hull floor — glass-cannon light fighters (hull 2) get
       // one-shot by any decent burst. Bumps floor so wingmen survive a hit.
-      ally.hull = ally.maxHull = Math.max(4, ally.maxHull);
+      ally.hull = ally.maxHull = Math.max(WINGMAN_HULL_FLOOR, ally.maxHull);
       // First two allies form up on the player; remaining fly independently.
       if (i < 2) {
         ally.wingLeaderId = playerShip.id;
@@ -1945,11 +1879,16 @@ export class ArcadeBattleScene extends Phaser.Scene {
     ship.ordnanceSlots = applyOrdnanceModifiers(
       buildOrdnanceSlots(upgradeIds),
       modifiers,
-    );
-    ship.turretSlot = applyTurretModifiers(
-      buildTurretSlot(upgradeIds),
-      modifiers,
-    );
+    ).map((slot) => ({
+      ...slot,
+      cooldownMax: attackIntervalMs(slot.cooldownMax),
+    }));
+    const turret = applyTurretModifiers(buildTurretSlot(upgradeIds), modifiers);
+    // One attack per maneuver cycle: no weapon may reload faster than that.
+    ship.turretSlot = turret && {
+      ...turret,
+      cooldownMax: attackIntervalMs(turret.cooldownMax),
+    };
   }
 
   private spawnDefaultShips(): void {
@@ -1962,8 +1901,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
       BATTLEFIELD_SIZE / 2 + 50,
       0,
     );
-    playerShip.hull = playerShip.maxHull = 8;
-    playerShip.shields = playerShip.maxShields = 4;
+    playerShip.hull = playerShip.maxHull = DEFAULT_SQUAD_DURABILITY.player.hull;
+    playerShip.shields = playerShip.maxShields =
+      DEFAULT_SQUAD_DURABILITY.player.shields;
     this.ships.set(playerShip.id, playerShip);
     this.playerShipId = playerShip.id;
 
@@ -1982,8 +1922,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
         BATTLEFIELD_SIZE / 2 + offset.y,
         0,
       );
-      ally.hull = ally.maxHull = 5;
-      ally.shields = ally.maxShields = 3;
+      ally.hull = ally.maxHull = DEFAULT_SQUAD_DURABILITY.wingman.hull;
+      ally.shields = ally.maxShields = DEFAULT_SQUAD_DURABILITY.wingman.shields;
       this.ships.set(ally.id, ally);
     }
 
@@ -2013,6 +1953,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     angle: number,
   ): ArcadeShip {
     const def = getShipDefinition(defId);
+    const durability = realTimeDurability(def?.baseStats);
     const baseShip: ShipState = {
       id,
       definitionId: defId,
@@ -2021,10 +1962,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
       x,
       y,
       angle,
-      hull: def?.baseStats.hull ?? 4,
-      maxHull: def?.baseStats.hull ?? 4,
-      shields: def?.baseStats.shields ?? 2,
-      maxShields: def?.baseStats.shields ?? 2,
+      hull: durability.hull,
+      maxHull: durability.hull,
+      shields: durability.shields,
+      maxShields: durability.shields,
       isStressed: false,
       hasFocus: false,
       hasEvade: false,
@@ -2212,532 +2153,26 @@ export class ArcadeBattleScene extends Phaser.Scene {
         sprite.setAngle(proj.angle);
       }
     }
-
-    // Update minimap with all ship positions
-    this.updateMinimap();
   }
 
-  private updateMinimap(): void {
-    const minimapShips: MinimapShip[] = [];
-
-    for (const ship of this.ships.values()) {
-      minimapShips.push({
-        id: ship.id,
-        x: ship.x,
-        y: ship.y,
-        faction: ship.faction as FactionId,
-        isPlayer: ship.id === this.playerShipId,
-        isAlive: ship.hull > 0,
-      });
-    }
-
-    this.minimap?.updateShips(minimapShips);
-    this.minimap?.updateViewRect();
-  }
-
-  private createHUD(): void {
-    const style = { font: "bold 16px monospace", color: "#ffffff" };
-
-    // Backdrop panel for the top-left stat cluster (speed/hull/shields/cooldowns/
-    // maneuver/stress) — previously bare text floating over the game world.
-    const statPanelBg = this.add.graphics().setScrollFactor(0).setDepth(999);
-    statPanelBg.fillStyle(0x000000, 0.45);
-    statPanelBg.fillRoundedRect(4, 4, 190, 172, 6);
-    statPanelBg.lineStyle(1, 0x2a3a4a, 0.8);
-    statPanelBg.strokeRoundedRect(4, 4, 190, 172, 6);
-    this.hudBackgroundPanels.push(statPanelBg);
-
-    this.speedText = this.add
-      .text(10, 10, "SPEED: 3", style)
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    this.hullText = this.add
-      .text(10, 35, "HULL: 4/4", style)
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    this.shieldText = this.add
-      .text(10, 60, "SHIELDS: 2/2", { ...style, color: "#00bfff" })
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    this.cooldownText = this.add
-      .text(10, 90, "", { font: "14px monospace", color: "#ff8888" })
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    // SCORE sits under the match timer (top-center) — top-right is reserved
-    // for the per-team status panel drawn by updateTeamHUD(), which can grow
-    // tall with more factions and must not collide with a fixed HUD element.
-    const scoreBg = this.add.graphics().setScrollFactor(0).setDepth(999);
-    scoreBg.fillStyle(0x000000, 0.45);
-    scoreBg.fillRoundedRect(this.scale.width / 2 - 60, 44, 120, 26, 6);
-    scoreBg.lineStyle(1, 0x2a3a4a, 0.8);
-    scoreBg.strokeRoundedRect(this.scale.width / 2 - 60, 44, 120, 26, 6);
-    this.hudBackgroundPanels.push(scoreBg);
-
-    this.scoreText = this.add
-      .text(this.scale.width / 2, 49, "SCORE: 0", style)
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    const timerBg = this.add.graphics().setScrollFactor(0).setDepth(999);
-    timerBg.fillStyle(0x000000, 0.45);
-    timerBg.fillRoundedRect(this.scale.width / 2 - 60, 4, 120, 36, 6);
-    timerBg.lineStyle(1, 0x2a3a4a, 0.8);
-    timerBg.strokeRoundedRect(this.scale.width / 2 - 60, 4, 120, 36, 6);
-    this.hudBackgroundPanels.push(timerBg);
-
-    this.matchTimerText = this.add
-      .text(
-        this.scale.width / 2,
-        10,
-        formatMatchClock(ArcadeBattleScene.MATCH_DURATION_MS),
-        {
-          font: "bold 24px Arial",
-          color: "#ffffff",
-          stroke: "#000000",
-          strokeThickness: 3,
-        },
-      )
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    this.fleeWarningText = this.add
-      .text(this.scale.width / 2, 80, "", {
-        font: "bold 22px Arial",
-        color: "#ff4444",
-        stroke: "#000000",
-        strokeThickness: 3,
-        align: "center",
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(1500)
-      .setVisible(false);
-
-    this.fleeArrow = this.add
-      .graphics()
-      .setScrollFactor(0)
-      .setDepth(1500)
-      .setVisible(false);
-    this.fleeArrow.fillStyle(0xff4444, 1);
-    this.fleeArrow.lineStyle(2, 0x000000, 1);
-    this.fleeArrow.beginPath();
-    this.fleeArrow.moveTo(20, 0);
-    this.fleeArrow.lineTo(-12, -11);
-    this.fleeArrow.lineTo(-12, 11);
-    this.fleeArrow.closePath();
-    this.fleeArrow.fillPath();
-    this.fleeArrow.strokePath();
-    this.fleeArrow.setPosition(this.scale.width / 2, 132);
-
-    this.instructionsText = this.add
-      .text(10, this.scale.height - 20, "", {
-        font: "12px monospace",
-        color: "#555555",
-      })
-      .setOrigin(0, 1)
-      .setScrollFactor(0)
-      .setDepth(1000)
-      .setVisible(false); // replaced by corner controls reminder
-
-    this.maneuverText = this.add
-      .text(10, 118, "STRAIGHT", {
-        font: "bold 13px monospace",
-        color: "#44ff44",
-      })
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    this.turnGauge = this.add.graphics().setScrollFactor(0).setDepth(1000);
-
-    this.crewModeText = this.add
-      .text(this.scale.width / 2, 76, "◎ GUNNER MODE", {
-        font: "bold 16px monospace",
-        color: "#ffaa00",
-      })
-      .setOrigin(0.5, 0)
-      .setScrollFactor(0)
-      .setDepth(1000)
-      .setVisible(false);
-
-    // Team status panel — redrawn each frame by updateTeamHUD()
-    this.teamHudGraphics = this.add
-      .graphics()
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    // Stress bar: label + 100px bar drawn each frame by updateHUD()
-    this.stressBarGraphics = this.add
-      .graphics()
-      .setScrollFactor(0)
-      .setDepth(1000);
-    this.stressLevelText = this.add
-      .text(10, 165, "", { font: "bold 13px monospace", color: "#ff4444" })
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    // Controls reminder — bottom-left corner, semi-transparent
-    const controlsLines = [
-      "↑↓  Speed",
-      "←→  Turn",
-      "Q/E Sharp Turn",
-      "Shift+Q/E Segnor",
-      "T/Shift+T Tallon",
-      "Hold ←→ Barrel Roll",
-      "2x Tap ↑ Boost",
-      "Z    K-Turn",
-      "C    Cloak",
-      "TAB  Weapon",
-      "SPC  Fire",
-      "G    Crew Role",
-      "1-4  Commander Orders",
-      "ESC  Pause",
-    ];
-    // Bottom-LEFT (not bottom-right, which is reserved for the minimap).
-    const cx = 10;
-    let cy = this.scale.height - 10 - controlsLines.length * 17;
-    const cBg = this.add.graphics().setScrollFactor(0).setDepth(999);
-    cBg.fillStyle(0x000000, 0.45);
-    cBg.fillRoundedRect(cx - 4, cy - 6, 150, controlsLines.length * 17 + 10, 5);
-    this.hudBackgroundPanels.push(cBg);
-    for (const line of controlsLines) {
-      const t = this.add
-        .text(cx, cy, line, { font: "12px monospace", color: "#999999" })
-        .setOrigin(0, 0)
-        .setScrollFactor(0)
-        .setDepth(1000);
-      this.hudBackgroundPanels.push(t);
-      cy += 17;
-    }
-  }
-
+  /** Feed this frame's battle state to the holographic HUD. */
   private updateHUD(): void {
-    const ship = this.ships.get(this.playerShipId!);
-    if (!ship) return;
-
-    this.speedText.setText(`SPEED: ${ship.control.speed}`);
-    this.hullText.setText(`HULL: ${ship.hull}/${ship.maxHull}`);
-    this.shieldText.setText(`SHIELDS: ${ship.shields}/${ship.maxShields}`);
-    this.scoreText.setText(`SCORE: ${this.score}`);
-
-    // Cooldowns
-    const cooldowns: string[] = [];
-    if (!canKTurn(ship.control)) {
-      cooldowns.push(
-        `K-TURN: ${Math.ceil(ship.control.kturnCooldown / 1000)}s`,
-      );
-    }
-    if (!canBarrelRoll(ship.control)) {
-      cooldowns.push(
-        `ROLL: ${(ship.control.barrelRollCooldown / 1000).toFixed(1)}s`,
-      );
-    }
-    if (!canBoost(ship.control)) {
-      cooldowns.push(
-        `BOOST: ${(ship.control.boostCooldown / 1000).toFixed(1)}s`,
-      );
-    }
-    if (ship.crewMode === "commander" && ship.commanderOrders) {
-      cooldowns.push(...this.commanderOrderStatus(ship.commanderOrders));
-    }
-    this.cooldownText.setText(cooldowns.join(" | "));
-
-    // Hull color
-    const hullPct = ship.hull / ship.maxHull;
-    this.hullText.setColor(
-      hullPct > 0.5 ? "#44ff44" : hullPct > 0.25 ? "#ffff44" : "#ff4444",
-    );
-
-    this.updateTurnIndicator();
-    this.updateWeaponSelectorHUD(ship);
-    this.crewModeText.setVisible(
-      ship.crewMode === "gunner" || ship.crewMode === "commander",
-    );
-    if (ship.crewMode === "gunner") {
-      this.crewModeText.setText("◎ GUNNER MODE").setColor("#ffaa00");
-    } else if (ship.crewMode === "commander") {
-      this.crewModeText.setText("★ COMMANDER MODE").setColor("#00ccff");
-    }
-    this.updateStressHUD(ship);
-    this.updateTeamHUD();
-  }
-
-  /**
-   * Lazy-initialises ordnance slot labels on first call, then updates
-   * charge counts and cooldown countdowns each frame.
-   *
-   * @param ship - The player ship whose ordnance slots are displayed.
-   */
-  /**
-   * Draws the weapon selector strip bottom-right.
-   * Laser is always listed first; ordnance slots follow.
-   * The selected entry shows a ► cursor and bright colour.
-   * Lazy-initialises Text nodes on first call when ordnance exists.
-   *
-   * @param ship - The player ship.
-   */
-  private updateWeaponSelectorHUD(ship: ArcadeShip): void {
-    if (ship.ordnanceSlots.length === 0) return;
-
-    // One text per entry: index 0 = laser, 1..n = ordnance slots
-    const totalEntries = 1 + ship.ordnanceSlots.length;
-    if (this.ordnanceHudTexts.length === 0) {
-      const panelTop = this.scale.height - 40 - (totalEntries - 1) * 26 - 24;
-      const panelH = (totalEntries - 1) * 26 + 30;
-      const bg = this.add.graphics().setScrollFactor(0).setDepth(999);
-      bg.fillStyle(0x000000, 0.45);
-      bg.fillRoundedRect(this.scale.width - 152, panelTop, 142, panelH, 6);
-      bg.lineStyle(1, 0x2a3a4a, 0.8);
-      bg.strokeRoundedRect(this.scale.width - 152, panelTop, 142, panelH, 6);
-      this.hudBackgroundPanels.push(bg);
-      for (let i = 0; i < totalEntries; i++) {
-        const t = this.add
-          .text(
-            this.scale.width - 10,
-            this.scale.height - 40 - (totalEntries - 1 - i) * 26,
-            "",
-            { font: "13px monospace", color: "#ffffff" },
-          )
-          .setOrigin(1, 1)
-          .setScrollFactor(0)
-          .setDepth(1000);
-        this.ordnanceHudTexts.push(t);
-      }
-    }
-
-    // Laser row
-    const laserSelected = this.selectedWeaponSlot < 0;
-    this.ordnanceHudTexts[0]
-      ?.setText(`${laserSelected ? "►" : " "} LASER`)
-      .setColor(laserSelected ? "#ffff44" : "#666644");
-
-    // Ordnance rows
-    for (let i = 0; i < ship.ordnanceSlots.length; i++) {
-      const slot = ship.ordnanceSlots[i]!;
-      const t = this.ordnanceHudTexts[i + 1];
-      if (!t) continue;
-      const selected = this.selectedWeaponSlot === i;
-      const ready = canFireOrdnance(slot);
-      const cdSec =
-        slot.cooldownRemaining > 0
-          ? ` ${Math.ceil(slot.cooldownRemaining / 1000)}s`
-          : "";
-      const pips =
-        "■".repeat(slot.charges) + "□".repeat(slot.maxCharges - slot.charges);
-      t.setText(
-        `${selected ? "►" : " "} ${slot.name} ${pips}${cdSec}`,
-      ).setColor(selected ? "#ffaa00" : ready ? "#886600" : "#443300");
-    }
-  }
-
-  /**
-   * Redraws the right-side team status panel each frame.
-   * Groups ships by faction and renders a compact health row per team.
-   *
-   * @remarks No external dependencies — reads this.ships directly.
-   */
-  private updateTeamHUD(): void {
-    // Destroy previous text nodes and redraw on graphics
-    for (const t of this.teamHudTexts) t.destroy();
-    this.teamHudTexts = [];
-    this.teamHudGraphics.clear();
-
-    // Group ships by faction
-    const factions = new Map<string, ArcadeShip[]>();
-    for (const ship of this.ships.values()) {
-      const list = factions.get(ship.faction) ?? [];
-      list.push(ship);
-      factions.set(ship.faction, list);
-    }
-
-    const panelW = 160;
-    const panelX = this.scale.width - panelW - 4;
-    const rowH = 42;
-    let panelY = 4;
-    const totalH = factions.size * (rowH + 4);
-
-    this.teamHudGraphics.fillStyle(0x000000, 0.55);
-    this.teamHudGraphics.fillRoundedRect(
-      panelX - 4,
-      panelY - 2,
-      panelW + 8,
-      totalH,
-      6,
-    );
-
-    for (const [faction, ships] of factions) {
-      const isPlayer = faction === this.playerFaction;
-      const labelColor = isPlayer ? "#44aaff" : "#ff6644";
-      const label = faction.replace(/_/g, " ").toUpperCase().slice(0, 16);
-
-      const factionTitle = this.add
-        .text(panelX, panelY + 2, label, {
-          font: "bold 10px monospace",
-          color: labelColor,
-        })
-        .setScrollFactor(0)
-        .setDepth(1001);
-      this.teamHudTexts.push(factionTitle);
-
-      // Ship health pips row
-      const dotSize = 8;
-      const dotGap = 11;
-      let dotX = panelX;
-      const dotY = panelY + 18;
-
-      for (const ship of ships) {
-        const hullPct = ship.hull / Math.max(ship.maxHull, 1);
-        const shieldPct = ship.shields / Math.max(ship.maxShields, 1);
-        const alive = ship.hull > 0;
-
-        // Hull pip
-        const hullColor = !alive
-          ? 0x333333
-          : hullPct > 0.5
-            ? 0x44ff44
-            : hullPct > 0.25
-              ? 0xffff00
-              : 0xff4444;
-        this.teamHudGraphics.fillStyle(hullColor, alive ? 1 : 0.3);
-        this.teamHudGraphics.fillCircle(
-          dotX + dotSize / 2,
-          dotY + dotSize / 2,
-          dotSize / 2,
-        );
-
-        // Shield ring overlay
-        if (alive && ship.maxShields > 0 && shieldPct > 0) {
-          this.teamHudGraphics.lineStyle(1.5, 0x00aaff, shieldPct);
-          this.teamHudGraphics.strokeCircle(
-            dotX + dotSize / 2,
-            dotY + dotSize / 2,
-            dotSize / 2 + 1,
-          );
-        }
-
-        dotX += dotGap;
-        if (dotX + dotSize > panelX + panelW) {
-          dotX = panelX;
-          // second row would overflow panel but acceptable for large squads
-        }
-      }
-
-      panelY += rowH + 4;
-    }
-  }
-
-  /**
-   * Updates the maneuver label and gauge.
-   * Label text reflects current deflection; color reflects the difficulty
-   * of that maneuver on THIS ship's dial (green/white/red = easy/neutral/stressful).
-   */
-  private updateTurnIndicator(): void {
-    const ship = this.ships.get(this.playerShipId!);
-    if (!ship) return;
-
-    const current = ship.control.currentManeuver ?? "straight";
-    const queued = ship.control.nextManeuver;
-    const display = queued ?? current;
-
-    let label: string;
-    if (display === "straight") {
-      label = "STRAIGHT";
-    } else if (display === "drift_left") {
-      label = "◄ TURNING";
-    } else if (display === "drift_right") {
-      label = "TURNING ►";
-    } else if (display === "bank_left") {
-      label = "◄ BANK";
-    } else if (display === "bank_right") {
-      label = "BANK ►";
-    } else if (display === "turn_left") {
-      label = "◄ TURN";
-    } else if (display === "turn_right") {
-      label = "TURN ►";
-    } else if (display === "kturn") {
-      label = "↺ K-TURN";
-    } else if (display === "tallon_left" || display === "tallon_right") {
-      label = display === "tallon_left" ? "↺ TALLON ◄" : "► TALLON ↻";
-    } else {
-      label = display === "segnor_left" ? "↺ SEGNOR ◄" : "► SEGNOR ↻";
-    }
-
-    // Queued indicator: prefix shows it hasn't executed yet
-    if (queued) label = `▸ ${label}`;
-
-    // Color from dial difficulty
-    const dialDir = display.includes("turn")
-      ? "turn_left"
-      : display.includes("bank")
-        ? "bank_left"
-        : "straight";
-    const diff = lookupDialDifficulty(
-      dialDir,
-      ship.control.speed,
-      ship.shipDial,
-    );
-    const color = difficultyColor(diff);
-    this.maneuverText.setText(label).setColor(color);
-
-    // Cycle progress bar (replaces angular velocity gauge)
-    this.turnGauge.clear();
-    const gx = 10,
-      gy = 136,
-      gw = 120,
-      gh = 5;
-    this.turnGauge.fillStyle(0x333333, 0.8);
-    this.turnGauge.fillRect(gx, gy, gw, gh);
-    const progress = ship.control.maneuverProgress;
-    if (progress > 0) {
-      const gaugeColor =
-        diff === "green" ? 0x44ff44 : diff === "red" ? 0xff4444 : 0xffffff;
-      this.turnGauge.fillStyle(gaugeColor, 0.9);
-      this.turnGauge.fillRect(gx, gy, Math.round(progress * gw), gh);
-    }
-  }
-
-  /**
-   * Draws the stress bar below the turn gauge and updates the stressed label.
-   * Bar color interpolates green → yellow → red with the stress level.
-   *
-   * @param ship - The player-controlled ship.
-   */
-  private updateStressHUD(ship: ArcadeShip): void {
-    const BAR_X = 10;
-    const BAR_Y = 150;
-    const BAR_W = 120;
-    const BAR_H = 5;
-    const { level, isStressed } = ship.stress;
-
-    this.stressBarGraphics.clear();
-    // Track background
-    this.stressBarGraphics.fillStyle(0x333333, 0.8);
-    this.stressBarGraphics.fillRect(BAR_X, BAR_Y, BAR_W, BAR_H);
-    // Filled portion
-    if (level > 0.01) {
-      const fillW = Math.round(level * BAR_W);
-      // Parse color from stressLevelColor helper (returns CSS hex like #rrggbb)
-      const cssColor = stressLevelColor(level);
-      const hexInt = parseInt(cssColor.slice(1), 16);
-      this.stressBarGraphics.fillStyle(hexInt, 1);
-      this.stressBarGraphics.fillRect(BAR_X, BAR_Y, fillW, BAR_H);
-    }
-    // "STRESS" label: dim when low, bright when high
-    const labelAlpha = 0.4 + level * 0.6;
-    this.stressBarGraphics.fillStyle(0xffffff, labelAlpha * 0.25);
-    // "STRESSED" flash text
-    if (isStressed) {
-      // Pulse by alternating visibility every ~30 frames
-      const show = Math.floor(this.time.now / 350) % 2 === 0;
-      this.stressLevelText.setText(show ? "STRESSED" : "").setVisible(true);
-    } else {
-      this.stressLevelText.setVisible(false);
-    }
+    if (!this.hud) return;
+    const player = this.playerShipId
+      ? (this.ships.get(this.playerShipId) ?? null)
+      : null;
+    this.hud.update({
+      player,
+      crewMode: player?.crewMode ?? "pilot",
+      commanderOrders: player?.commanderOrders ?? null,
+      ships: [...this.ships.values()],
+      playerFaction: this.playerFaction,
+      selectedWeaponSlot: this.selectedWeaponSlot,
+      camera: this.cameras.main,
+      score: this.score,
+      remainingMs: this.matchTimer.remainingMs,
+      nowMs: this.time.now,
+    });
   }
 
   private showFloatingText(
@@ -2981,13 +2416,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
     ) {
       ship.shields = Math.min(
         ship.maxShields,
-        ship.shields + EMERGENCY_REPAIR_SHIELD_AMOUNT,
+        ship.shields + EMERGENCY_SHIELD_REPAIR,
       );
       const worst = mostDamagedSystem(ship.capitalSystems);
       ship.capitalSystems = repairCapitalSystem(
         ship.capitalSystems,
         worst,
-        EMERGENCY_REPAIR_HULL_AMOUNT,
+        EMERGENCY_HULL_REPAIR,
       );
       ship.hull = sumSystemsHull(ship.capitalSystems);
       orders.lastEmergencyRepairAt = now;
@@ -3005,14 +2440,16 @@ export class ArcadeBattleScene extends Phaser.Scene {
         ship.capitalSystems = repairCapitalSystem(
           ship.capitalSystems,
           "engines",
-          (POWER_REDIRECT_ENGINE_REPAIR_PER_SEC * deltaMs) / 1000,
+          (ENGINE_REPAIR_PER_SECOND * deltaMs) / 1000,
         );
         ship.hull = sumSystemsHull(ship.capitalSystems);
       }
       if (isPowerFocused(orders.powerRedirect, "shields", now)) {
-        ship.shields = Math.min(
+        ship.shields = regenerateScaledShields(
+          ship.shields,
           ship.maxShields,
-          ship.shields + (POWER_REDIRECT_SHIELD_REGEN_PER_SEC * deltaMs) / 1000,
+          POWER_SHIELD_REGEN_PER_SECOND,
+          deltaMs,
         );
       }
     }
@@ -3048,7 +2485,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       ship.angle,
       ship.id,
       ship.faction,
-      MAIN_BEAM_DAMAGE,
+      MAIN_BEAM_HIT_DAMAGE,
     );
     this.projectiles.push(proj);
 
@@ -3061,94 +2498,60 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.showFloatingText(ship.x, ship.y - 45, "MAIN BEAM FIRED!", "#ffffff");
   }
 
-  /** HUD strings for the commander's order cooldowns/charge state. */
-  private commanderOrderStatus(orders: CommanderOrders): string[] {
-    const now = this.time.now;
-    const status: string[] = [];
-    if (orders.mainBeam.charging) {
-      const pct = Math.round((orders.mainBeam.chargeMs / 1000) * 100);
-      status.push(`BEAM CHARGING: ${pct}%`);
-    } else if (!canFireMainBeam(orders.lastMainBeamFiredAt, now)) {
-      status.push(
-        `BEAM: ${Math.ceil(
-          (orders.lastMainBeamFiredAt + MAIN_BEAM_COOLDOWN_MS - now) / 1000,
-        )}s`,
-      );
-    }
-    if (!canRedirectPower(orders.lastPowerRedirectAt, now)) {
-      status.push(
-        `POWER: ${Math.ceil(
-          (orders.lastPowerRedirectAt + POWER_REDIRECT_COOLDOWN_MS - now) /
-            1000,
-        )}s`,
-      );
-    }
-    if (!canEmergencyRepair(orders.lastEmergencyRepairAt, now)) {
-      status.push(
-        `REPAIR: ${Math.ceil(
-          (orders.lastEmergencyRepairAt + EMERGENCY_REPAIR_COOLDOWN_MS - now) /
-            1000,
-        )}s`,
-      );
-    }
-    return status;
-  }
-
   private updateFleeDetector(deltaMs: number): void {
     if (!this.frameCache || this.gameEnded) return;
     const player = this.playerShipId ? this.ships.get(this.playerShipId) : null;
     if (!player || player.hull <= 0) {
       // No player alive → flee doesn't apply; regular victory check handles it
-      if (this.fleeWarningText) this.fleeWarningText.setVisible(false);
-      this.fleeArrow?.setVisible(false);
+      this.hud?.hideFleeWarning();
       return;
     }
 
-    let nearest = Infinity;
-    let nearestX = 0;
-    let nearestY = 0;
-    for (const s of this.frameCache.aliveShips) {
-      if (s.faction === this.playerFaction) continue;
-      const d = torusDistance(player.x, player.y, s.x, s.y, BATTLEFIELD_SIZE);
-      if (d < nearest) {
-        nearest = d;
-        nearestX = s.x;
-        nearestY = s.y;
-      }
-    }
-
+    const nearest = this.nearestEnemyOffset(player);
     this.fleeState = updateFleeState(this.fleeState, {
       deltaMs,
       damageThisFrame: this.damageThisFrame,
-      playerNearestEnemyDist: nearest,
+      playerNearestEnemyDist: nearest?.distance ?? Infinity,
     });
 
-    if (this.fleeWarningText) {
-      if (this.fleeState.isWarning && !this.fleeState.hasFled) {
-        const secs = fleeSecondsRemaining(this.fleeState);
-        this.fleeWarningText
-          .setText(`⚠ RETURN TO COMBAT — battle ends in ${secs.toFixed(1)}s`)
-          .setVisible(true);
-        if (this.fleeArrow && nearest < Infinity) {
-          const { dx, dy } = torusDelta(
-            player.x,
-            player.y,
-            nearestX,
-            nearestY,
-            BATTLEFIELD_SIZE,
-          );
-          this.fleeArrow.setRotation(Math.atan2(dy, dx)).setVisible(true);
-        }
-      } else {
-        this.fleeWarningText.setVisible(false);
-        this.fleeArrow?.setVisible(false);
-      }
+    if (this.fleeState.isWarning && !this.fleeState.hasFled) {
+      this.hud?.showFleeWarning(
+        fleeSecondsRemaining(this.fleeState),
+        nearest ? Math.atan2(nearest.dy, nearest.dx) : null,
+      );
+    } else {
+      this.hud?.hideFleeWarning();
     }
 
     if (this.fleeState.hasFled) {
       this.gameEnded = true;
       this.showEndScreen(false);
     }
+  }
+
+  /**
+   * Torus-shortest offset from the player to the nearest living enemy.
+   *
+   * @param player - The player's ship.
+   * @returns Offset and distance, or null when no enemy is alive.
+   */
+  private nearestEnemyOffset(
+    player: ArcadeShip,
+  ): { dx: number; dy: number; distance: number } | null {
+    let best: { dx: number; dy: number; distance: number } | null = null;
+    for (const s of this.frameCache?.aliveShips ?? []) {
+      if (s.faction === this.playerFaction) continue;
+      const { dx, dy } = torusDelta(
+        player.x,
+        player.y,
+        s.x,
+        s.y,
+        BATTLEFIELD_SIZE,
+      );
+      const distance = Math.hypot(dx, dy);
+      if (!best || distance < best.distance) best = { dx, dy, distance };
+    }
+    return best;
   }
 
   private checkVictory(): void {
@@ -3171,17 +2574,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private updateMatchTimer(deltaMs: number): void {
     if (this.gameEnded) return;
     this.matchTimer = tickMatchTimer(this.matchTimer, deltaMs);
-    if (this.matchTimerText) {
-      const remaining = this.matchTimer.remainingMs;
-      this.matchTimerText.setText(formatMatchClock(remaining));
-      this.matchTimerText.setColor(
-        remaining <= 30_000
-          ? "#ff4444"
-          : remaining <= 60_000
-            ? "#ffcc00"
-            : "#ffffff",
-      );
-    }
     if (this.matchTimer.expired) {
       this.gameEnded = true;
       const outcome = resolveByPoints(
@@ -3192,10 +2584,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
     }
   }
 
-  /** Award global progression XP for this battle (score is exactly 100 per kill). */
+  /** Award global progression XP for this battle (score is exactly KILL_SCORE per kill). */
   private awardProgressionXp(victory: boolean): void {
     try {
-      const kills = Math.max(0, Math.floor(this.score / 100));
+      const kills = Math.max(0, Math.floor(this.score / KILL_SCORE));
       const active = PlayerProfileManager.getActive();
       PlayerProfileManager.awardBattleResult(active.id, {
         kills,
@@ -3206,98 +2598,28 @@ export class ArcadeBattleScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Show the victory / defeat screen. The battle HUD is hidden and the
+   * camera returns to zoom 1 so the overlay buttons hit-test correctly.
+   *
+   * @param victory - Whether the player's side won.
+   */
   private showEndScreen(victory: boolean): void {
-    // Same scrollFactor(0)-vs-zoom hit-test issue as the pause overlay — the
-    // dynamic speed-based zoom can be far from 1.0 when the match ends.
     this.cameras.main.setZoom(1.0);
     audioManager.playFactionStinger(
       this.playerFaction,
       victory ? "victory" : "defeat",
     );
     this.awardProgressionXp(victory);
-    // Hide player flight-stats HUD — irrelevant (and misleading) on the end screen
-    this.hullText.setVisible(false);
-    this.shieldText.setVisible(false);
-    this.speedText.setVisible(false);
-    this.cooldownText.setVisible(false);
-    this.instructionsText.setVisible(false);
-    this.maneuverText.setVisible(false);
-    this.turnGauge.setVisible(false);
-    this.crewModeText.setVisible(false);
-    this.teamHudGraphics.setVisible(false);
-    for (const t of this.teamHudTexts) t.setVisible(false);
-    for (const t of this.ordnanceHudTexts) t.setVisible(false);
-    this.fleeWarningText?.setVisible(false);
-    this.fleeArrow?.setVisible(false);
-    // Score/timer are restated on the end screen itself; stress bar, minimap,
-    // and the controls reminder are just clutter bleeding through the overlay.
-    this.scoreText.setVisible(false);
-    this.matchTimerText?.setVisible(false);
-    this.stressBarGraphics.setVisible(false);
-    this.stressLevelText.setVisible(false);
-    this.minimap?.setVisible(false);
-    for (const o of this.hudBackgroundPanels) o.setVisible(false);
-
-    const cx = this.scale.width / 2;
-    const cy = this.scale.height / 2;
-
-    const overlay = this.add.graphics();
-    overlay.fillStyle(0x000000, 0.75);
-    overlay.fillRect(0, 0, this.scale.width, this.scale.height);
-    overlay.setScrollFactor(0).setDepth(2000);
-
-    const title = victory ? "VICTORY!" : "DEFEATED";
-    const titleColor = victory ? "#44ff44" : "#ff4444";
-    this.add
-      .text(cx, cy - 70, title, {
-        font: "bold 56px Arial",
-        color: titleColor,
-        stroke: "#000000",
-        strokeThickness: 4,
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001);
-
-    this.add
-      .text(cx, cy - 15, `Score: ${this.score}`, {
-        font: "26px Arial",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001);
-
-    // RETRY button
-    const retryBtn = this.add
-      .text(cx - 100, cy + 50, "RETRY", {
-        font: "bold 24px Arial",
-        color: "#44ff88",
-        backgroundColor: "#224422",
-        padding: { x: 20, y: 10 },
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001)
-      .setInteractive({ useHandCursor: true });
-    retryBtn.on("pointerover", () => retryBtn.setStyle({ color: "#ffffff" }));
-    retryBtn.on("pointerout", () => retryBtn.setStyle({ color: "#44ff88" }));
-    retryBtn.on("pointerdown", () => this.scene.start("ArcadeBattleScene"));
-
-    // MENU button
-    const menuBtn = this.add
-      .text(cx + 100, cy + 50, "MENU", {
-        font: "bold 24px Arial",
-        color: "#aaaaaa",
-        backgroundColor: "#333333",
-        padding: { x: 20, y: 10 },
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001)
-      .setInteractive({ useHandCursor: true });
-    menuBtn.on("pointerover", () => menuBtn.setStyle({ color: "#ffffff" }));
-    menuBtn.on("pointerout", () => menuBtn.setStyle({ color: "#aaaaaa" }));
-    menuBtn.on("pointerdown", () => this.scene.start("MainMenuScene"));
+    this.hud?.hideFleeWarning();
+    this.hud?.setVisible(false);
+    createEndOverlay(this, {
+      victory,
+      score: this.score,
+      pointsDestroyed: this.playerSideScore.destroyedPoints,
+      pointsLost: this.enemySideScore.destroyedPoints,
+      onRetry: () => this.scene.start("ArcadeBattleScene"),
+      onMenu: () => this.scene.start("MainMenuScene"),
+    });
   }
 }

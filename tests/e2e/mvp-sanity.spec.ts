@@ -183,23 +183,21 @@ test.describe("MVP sanity — Skirmish", () => {
         const s = (window as any).game.scene.getScene(
           "ArcadeBattleScene",
         ) as any;
-        const items = [
-          ["hull", s.hullText],
-          ["shields", s.shieldText],
-          ["speed", s.speedText],
-          ["score", s.scoreText],
-          ["cooldown", s.cooldownText],
-        ] as const;
-        return items
-          .filter(([, o]) => o && o.visible)
-          .map(([name, o]) => ({
-            name,
-            x: o.getTopLeft().x,
-            y: o.getTopLeft().y,
-            w: o.width,
-            h: o.height,
-          }));
+        // Fixed holographic HUD widgets (clock+score, roster, crew panel,
+        // flight readout, radar, weapon bar) in screen px.
+        const layout = (s.hudLayout ?? {}) as Record<
+          string,
+          { x: number; y: number; width: number; height: number }
+        >;
+        return Object.entries(layout).map(([name, r]) => ({
+          name,
+          x: r.x,
+          y: r.y,
+          w: r.width,
+          h: r.height,
+        }));
       });
+      expect(boxes.length).toBeGreaterThanOrEqual(5);
 
       // Pairwise overlap check
       const overlaps: string[] = [];

@@ -13,15 +13,8 @@
 import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
 import { addShipVisual } from "../rendering/ShipVisual";
-import { createHoverButton, createToggleButton } from "../ui/ButtonFactory";
-import { quickTipLine } from "../ui/ControlsReference";
 import type { FactionId } from "../config";
-import {
-  BATTLEFIELD_SIZE,
-  CYCLE_DURATION_MS,
-  FACTION_COLORS,
-  SHIP_SIZES,
-} from "../config";
+import { BATTLEFIELD_SIZE, CYCLE_DURATION_MS, SHIP_SIZES } from "../config";
 import { getShipDefinition, getShipDial } from "../data/ShipDefinitions";
 import {
   getModeCombatStats,
@@ -64,10 +57,25 @@ import {
   type DiceAttackResult,
 } from "../arcade/systems/DiceAttack";
 import {
+  deathBlastDamage,
   deathBlastTargets,
   hasWingman,
   rewardKill,
 } from "../arcade/PilotAbilityCombat";
+import { HitImmunityLedger } from "../arcade/systems/CombatTempo";
+import {
+  primaryCooldownAfterShot,
+  primaryShotTarget,
+} from "../arcade/systems/DuelPrimaryFire";
+import { DuelHud } from "./duel/DuelHud";
+import { buildDuelHudSnapshot } from "./duel/duelHudSnapshot";
+import { showDuelEndScreen } from "./duel/DuelEndScreen";
+import {
+  renderAceDuelSetup,
+  type AceDuelSetupActions,
+} from "./duel/AceDuelSetupView";
+import { cameraViewFrom } from "../ui/hud/hudMath";
+import { HOLO_PALETTE, factionAccent } from "../ui/theme/HoloTheme";
 import { applyInstantStress } from "../arcade/ArcadeStress";
 import {
   NEUTRAL_MODIFIERS,
@@ -89,7 +97,6 @@ import {
   type PerformanceState,
 } from "../systems/PerformanceSystem";
 import type { ManeuverDefinition } from "../core/types";
-import { PILOT_ABILITIES } from "../systems/PilotAbilities";
 import { ACE_MATCHUPS, type AceMatchup } from "../data/AceMatchups";
 import { PauseMenu } from "../ui/PauseMenu";
 import { InputManager } from "../input/InputManager";
@@ -103,7 +110,6 @@ import {
 import {
   createMatchTimer,
   tickMatchTimer,
-  formatMatchClock,
   type MatchTimerState,
 } from "../systems/arena/MatchTimer";
 
@@ -151,6 +157,9 @@ const AI_HIT_CHANCE_BY_DIFFICULTY = {
 /** AI difficulty settings a duel can be fought at. */
 type DuelDifficulty = keyof typeof AI_HIT_CHANCE_BY_DIFFICULTY;
 
+/** Round wins that take the match (best of 3). */
+const WINS_NEEDED = 2;
+
 /** Distance (px) from the battlefield centre at which each side spawns. */
 const SPAWN_DISTANCE = 200;
 
@@ -184,6 +193,8 @@ export class AceDuelScene extends Phaser.Scene {
 
   private side1ShipIds: string[] = [];
   private side2ShipIds: string[] = [];
+  /** Round tempo: a struck ship ignores the same attacker until the next cycle. */
+  private readonly hitLedger = new HitImmunityLedger();
 
   // Match state
   private selectedMatchup: AceMatchup = ACE_MATCHUPS[0]!;
@@ -199,7 +210,6 @@ export class AceDuelScene extends Phaser.Scene {
   private roundTimer: MatchTimerState = createMatchTimer(
     AceDuelScene.ROUND_DURATION_MS,
   );
-  private timerText: Phaser.GameObjects.Text | null = null;
   /** Destroyed squad-point cost each side inflicted this round. */
   private side1Score: SideScore = createSideScore();
   private side2Score: SideScore = createSideScore();
@@ -236,13 +246,8 @@ export class AceDuelScene extends Phaser.Scene {
   private cameraShakeEnabled = true;
 
   // UI
-  private roundText!: Phaser.GameObjects.Text;
-  private scoreText!: Phaser.GameObjects.Text;
-  /** Matchup name, side-faction indicators, controls hint — hidden alongside
-   * roundText/timerText/scoreText on the end screen. */
-  private battleHudExtras: Array<
-    Phaser.GameObjects.Text | Phaser.GameObjects.Graphics
-  > = [];
+  /** Holographic battle HUD + duel scoreboard; null outside a battle. */
+  private hud: DuelHud | null = null;
   /** Setup-screen objects, tracked individually — see track()'s doc comment for why. */
   private setupObjects: Phaser.GameObjects.GameObject[] = [];
 
@@ -320,6 +325,9 @@ export class AceDuelScene extends Phaser.Scene {
     this.inputSubscriptionIds = [];
     teardownSceneInput();
     this.pilot.detach();
+    this.hud?.destroy();
+    this.hud = null;
+    this.hitLedger.clear();
   }
 
   private resetMatchState(): void {
@@ -328,6 +336,16 @@ export class AceDuelScene extends Phaser.Scene {
     this.currentRound = 0;
     this.isRoundActive = false;
     this.matchComplete = false;
+    this.isSetupPhase = true;
+    this.isPaused = false;
+    this.setupObjects = [];
+    this.ships.clear();
+    this.shipSprites.clear();
+    this.healthBars.clear();
+    this.side1ShipIds = [];
+    this.side2ShipIds = [];
+    this.hud = null;
+    this.hitLedger.clear();
   }
 
   private resetRoundState(): void {
@@ -343,6 +361,7 @@ export class AceDuelScene extends Phaser.Scene {
     this.side2Score = createSideScore();
     this.isPaused = false;
     this.pilot.reset();
+    this.hitLedger.clear();
   }
 
   private showSetupScreen(): void {
@@ -351,236 +370,44 @@ export class AceDuelScene extends Phaser.Scene {
     // fix as DogfightScene's setup screen).
     this.setupObjects.forEach((o) => o.destroy());
     this.setupObjects = [];
-
-    const centerX = this.scale.width / 2;
-
-    if (this.textures.exists("tex_menu_bg")) {
-      const bgImage = this.add
-        .image(centerX, this.scale.height / 2, "tex_menu_bg")
-        .setDisplaySize(this.scale.width, this.scale.height)
-        .setScrollFactor(0)
-        .setDepth(1999);
-      this.setupObjects.push(bgImage);
-    }
-
-    // Background
-    const bg = this.add.graphics();
-    bg.fillStyle(0x000000, 0.6);
-    bg.fillRect(0, 0, this.scale.width, this.scale.height);
-    this.track(bg);
-
-    // Title
-    const title = this.add
-      .text(centerX, 40, "ACE DUEL", {
-        font: "bold 48px Arial",
-        color: "#ffdd00",
-      })
-      .setOrigin(0.5);
-    this.track(title);
-
-    const subtitle = this.add
-      .text(centerX, 80, "Legendary Matchups", {
-        font: "18px Arial",
-        color: "#aaaaaa",
-      })
-      .setOrigin(0.5);
-    this.track(subtitle);
-
-    // Matchup selection
-    let yPos = 130;
-    ACE_MATCHUPS.forEach((matchup, i) => {
-      const isSelected = matchup.id === this.selectedMatchup.id;
-      const isCompleted = this.completedMatchups.has(matchup.id);
-
-      const btn = this.createMatchupButton(
-        centerX,
-        yPos,
-        matchup,
-        isSelected,
-        isCompleted,
-        () => {
-          this.selectedMatchup = matchup;
-          this.showSetupScreen();
-        },
-      );
-      this.track(btn);
-      yPos += 55;
-    });
-
-    // Selected matchup details
-    const detailsY = 480;
-    const detailsBg = this.add.graphics();
-    detailsBg.fillStyle(0x112233, 0.9);
-    detailsBg.fillRoundedRect(centerX - 300, detailsY - 10, 600, 100, 8);
-    this.track(detailsBg);
-
-    const flavorText = this.add
-      .text(centerX, detailsY + 10, `"${this.selectedMatchup.flavorText}"`, {
-        font: "italic 14px Arial",
-        color: "#aaaaaa",
-        wordWrap: { width: 560 },
-        align: "center",
-      })
-      .setOrigin(0.5, 0);
-    this.track(flavorText);
-
-    // Side selection
-    const sideY = detailsY + 70;
-    const side1Color = FACTION_COLORS[this.selectedMatchup.side1.faction];
-    const side2Color = FACTION_COLORS[this.selectedMatchup.side2.faction];
-
-    const side1Btn = this.createSideButton(
-      centerX - 150,
-      sideY,
-      this.selectedMatchup.side1.name,
-      side1Color,
-      this.playerSide === 1,
-      () => {
-        this.playerSide = 1;
-        this.showSetupScreen();
-      },
-    );
-    this.track(side1Btn);
-
-    const vsText = this.add
-      .text(centerX, sideY, "VS", {
-        font: "bold 24px Arial",
-        color: "#666666",
-      })
-      .setOrigin(0.5);
-    this.track(vsText);
-
-    const side2Btn = this.createSideButton(
-      centerX + 150,
-      sideY,
-      this.selectedMatchup.side2.name,
-      side2Color,
-      this.playerSide === 2,
-      () => {
-        this.playerSide = 2;
-        this.showSetupScreen();
-      },
-    );
-    this.track(side2Btn);
-
-    // Ability chips under each side
-    const abilityY = sideY + 30;
-    [this.selectedMatchup.side1, this.selectedMatchup.side2].forEach(
-      (side, si) => {
-        const chipX = centerX + (si === 0 ? -150 : 150);
-        side.abilities.forEach((abilityId, ai) => {
-          const ab = PILOT_ABILITIES[abilityId];
-          if (!ab) return;
-          const col = FACTION_COLORS[side.faction];
-          const chip = this.add.container(chipX, abilityY + ai * 18);
-          const chipBg = this.add.graphics();
-          chipBg.fillStyle(col, 0.18);
-          chipBg.fillRoundedRect(-60, -8, 120, 16, 4);
-          chipBg.lineStyle(1, col, 0.5);
-          chipBg.strokeRoundedRect(-60, -8, 120, 16, 4);
-          const chipTxt = this.add
-            .text(0, 0, ab.name, {
-              font: "9px Arial",
-              color: `#${col.toString(16).padStart(6, "0")}`,
-            })
-            .setOrigin(0.5);
-          chip.add([chipBg, chipTxt]);
-          this.track(chip);
-        });
-      },
-    );
-
-    // Difficulty selection
-    const diffY = sideY + 100;
-    const diffLabel = this.add
-      .text(centerX, diffY, "AI Difficulty:", {
-        font: "14px Arial",
-        color: "#888888",
-      })
-      .setOrigin(0.5);
-    this.track(diffLabel);
-
-    const difficulties: DuelDifficulty[] = ["easy", "normal", "hard", "brutal"];
-    difficulties.forEach((diff, i) => {
-      const btn = this.createSmallButton(
-        centerX - 120 + i * 80,
-        diffY + 30,
-        diff.toUpperCase(),
-        diff === this.difficulty,
-        () => {
-          this.difficulty = diff;
-          this.showSetupScreen();
-        },
-      );
-      this.track(btn);
-    });
-
-    // Start button
-    const startBtn = createHoverButton(
+    renderAceDuelSetup(
       this,
-      centerX,
-      this.scale.height - 60,
       {
-        width: 160,
-        height: 50,
-        radius: 10,
-        color: 0x886622,
-        hoverColor: 0xaa8833,
-        label: "DUEL!",
-        font: "bold 28px Arial",
+        matchups: ACE_MATCHUPS,
+        selected: this.selectedMatchup,
+        completed: this.completedMatchups,
+        playerSide: this.playerSide,
+        difficulty: this.difficulty,
       },
-      () => this.startDuel(),
+      this.setupActions(),
+      (obj) => this.track(obj),
     );
-    this.track(startBtn);
-
-    const tip = this.add
-      .text(
-        centerX,
-        this.scale.height - 14,
-        quickTipLine([
-          { label: "Steer", intents: ["STEER_LEFT", "STEER_RIGHT"] },
-          {
-            label: "Hard turn",
-            intents: ["SHARP_TURN_LEFT", "SHARP_TURN_RIGHT"],
-          },
-          { label: "K-turn", intents: ["KTURN"] },
-          { label: "Boost", intents: ["BOOST"] },
-          { label: "Throttle", intents: ["THRUST_UP", "THRUST_DOWN"] },
-          { label: "Weapon", intents: [] },
-          { label: "Pause", intents: ["PAUSE"] },
-        ]),
-        { font: "12px Arial", color: "#6688aa" },
-      )
-      .setOrigin(0.5);
-    this.track(tip);
-
-    // Back button
-    const backBtn = this.add
-      .text(50, 40, "< BACK", {
-        font: "bold 20px Arial",
-        color: "#aaaaaa",
-      })
-      .setInteractive({ useHandCursor: true });
-
-    backBtn.on("pointerover", () => backBtn.setColor("#ffffff"));
-    backBtn.on("pointerout", () => backBtn.setColor("#aaaaaa"));
-    backBtn.on("pointerdown", () => {
-      this.scene.start("MainMenuScene");
-    });
-
-    this.track(backBtn);
-
-    // Completion counter
-    const completed = this.completedMatchups.size;
-    const total = ACE_MATCHUPS.length;
-    const completionText = this.add
-      .text(this.scale.width - 50, 40, `${completed}/${total} Completed`, {
-        font: "14px Arial",
-        color: completed === total ? "#44ff44" : "#888888",
-      })
-      .setOrigin(1, 0.5);
-    this.track(completionText);
     this.renderPlayerQuickBuilds();
+  }
+
+  /**
+   * What the setup screen's controls do: update a choice and re-render.
+   *
+   * @returns The setup actions.
+   */
+  private setupActions(): AceDuelSetupActions {
+    const rerender = (): void => this.showSetupScreen();
+    return {
+      selectMatchup: (matchup) => {
+        this.selectedMatchup = matchup;
+        rerender();
+      },
+      selectSide: (side) => {
+        this.playerSide = side;
+        rerender();
+      },
+      selectDifficulty: (difficulty) => {
+        this.difficulty = difficulty;
+        rerender();
+      },
+      start: () => this.startDuel(),
+      back: () => this.scene.start("MainMenuScene"),
+    };
   }
 
   /** The ships the player flies in the selected matchup. */
@@ -608,7 +435,7 @@ export class AceDuelScene extends Phaser.Scene {
         shipId,
         loadoutId: this.playerBuilds?.loadoutIds[index] ?? null,
         name: `aceDuelQuickBuild${index}`,
-        accentColor: FACTION_COLORS[this.playerSideFaction()],
+        accentColor: factionAccent(this.playerSideFaction()),
         onCycle: (step) => {
           if (!this.playerBuilds) return;
           this.playerBuilds = cycleQuickBuild(this.playerBuilds, index, step);
@@ -655,156 +482,6 @@ export class AceDuelScene extends Phaser.Scene {
     this.setupObjects.push(obj);
   }
 
-  private createMatchupButton(
-    x: number,
-    y: number,
-    matchup: AceMatchup,
-    selected: boolean,
-    completed: boolean,
-    onClick: () => void,
-  ): Phaser.GameObjects.Container {
-    const container = this.add.container(x, y);
-
-    const bg = this.add.graphics();
-    if (selected) {
-      bg.fillStyle(0x446688, 0.95);
-      bg.lineStyle(2, 0x66aaff, 1);
-    } else {
-      bg.fillStyle(0x222233, 0.8);
-    }
-    bg.fillRoundedRect(-280, -22, 560, 44, 6);
-    if (selected) {
-      bg.strokeRoundedRect(-280, -22, 560, 44, 6);
-    }
-    container.add(bg);
-
-    // Completion indicator
-    if (completed) {
-      const checkmark = this.add
-        .text(-260, 0, "✓", {
-          font: "bold 18px Arial",
-          color: "#44ff44",
-        })
-        .setOrigin(0.5);
-      container.add(checkmark);
-    }
-
-    // Matchup name
-    const name = this.add
-      .text(-230, -5, matchup.name, {
-        font: selected ? "bold 16px Arial" : "16px Arial",
-        color: selected ? "#ffffff" : "#aaaaaa",
-      })
-      .setOrigin(0, 0.5);
-    container.add(name);
-
-    // Description
-    const desc = this.add
-      .text(-230, 10, matchup.description, {
-        font: "12px Arial",
-        color: "#666666",
-      })
-      .setOrigin(0, 0.5);
-    container.add(desc);
-
-    // Faction colors
-    const color1 = FACTION_COLORS[matchup.side1.faction];
-    const color2 = FACTION_COLORS[matchup.side2.faction];
-
-    const indicator1 = this.add.graphics();
-    indicator1.fillStyle(color1, 1);
-    indicator1.fillCircle(220, 0, 8);
-    container.add(indicator1);
-
-    const vsIndicator = this.add
-      .text(240, 0, "vs", {
-        font: "12px Arial",
-        color: "#666666",
-      })
-      .setOrigin(0.5);
-    container.add(vsIndicator);
-
-    const indicator2 = this.add.graphics();
-    indicator2.fillStyle(color2, 1);
-    indicator2.fillCircle(260, 0, 8);
-    container.add(indicator2);
-
-    const hitArea = this.add
-      .rectangle(0, 0, 560, 44)
-      .setInteractive({ useHandCursor: true });
-    container.add(hitArea);
-
-    hitArea.on("pointerdown", onClick);
-
-    return container;
-  }
-
-  private createSideButton(
-    x: number,
-    y: number,
-    label: string,
-    color: number,
-    selected: boolean,
-    onClick: () => void,
-  ): Phaser.GameObjects.Container {
-    const container = this.add.container(x, y);
-
-    const bg = this.add.graphics();
-    if (selected) {
-      bg.fillStyle(color, 0.4);
-      bg.lineStyle(3, color, 1);
-    } else {
-      bg.fillStyle(0x222233, 0.8);
-    }
-    bg.fillRoundedRect(-70, -20, 140, 40, 6);
-    if (selected) {
-      bg.strokeRoundedRect(-70, -20, 140, 40, 6);
-    }
-    container.add(bg);
-
-    const text = this.add
-      .text(0, 0, label, {
-        font: selected ? "bold 13px Arial" : "13px Arial",
-        color: selected ? "#ffffff" : "#888888",
-      })
-      .setOrigin(0.5);
-    container.add(text);
-
-    const hitArea = this.add
-      .rectangle(0, 0, 140, 40)
-      .setInteractive({ useHandCursor: true });
-    container.add(hitArea);
-
-    hitArea.on("pointerdown", onClick);
-
-    return container;
-  }
-
-  private createSmallButton(
-    x: number,
-    y: number,
-    label: string,
-    selected: boolean,
-    onClick: () => void,
-  ): Phaser.GameObjects.Container {
-    return createToggleButton(
-      this,
-      x,
-      y,
-      label,
-      selected,
-      {
-        width: 60,
-        height: 24,
-        selectedColor: 0x446688,
-        normalColor: 0x222233,
-        selectedFont: "bold 10px Arial",
-        font: "10px Arial",
-      },
-      onClick,
-    );
-  }
-
   private startDuel(): void {
     this.setupObjects.forEach((o) => o.destroy());
     this.setupObjects = [];
@@ -817,7 +494,12 @@ export class AceDuelScene extends Phaser.Scene {
       "combat",
     );
 
-    this.createHUD();
+    const { side1, side2 } = this.selectedMatchup;
+    this.hud = new DuelHud(this, {
+      accent: factionAccent(this.playerSideFaction()),
+      scoreColors: [factionAccent(side1.faction), factionAccent(side2.faction)],
+      subtitle: this.selectedMatchup.name,
+    });
     this.setupInput();
     this.startNextRound();
   }
@@ -826,7 +508,8 @@ export class AceDuelScene extends Phaser.Scene {
     this.resetRoundState();
     this.currentRound++;
 
-    this.roundText.setText(`ROUND ${this.currentRound}`);
+    this.hud?.setRound(this.currentRound);
+    this.hud?.setClock(this.roundTimer.remainingMs);
     this.updateScoreDisplay();
 
     this.spawnSide(1);
@@ -846,32 +529,10 @@ export class AceDuelScene extends Phaser.Scene {
     }
   }
 
+  /** The ROUND N banner; weapons go live once it has faded. */
   private showRoundStart(): void {
-    const text = this.add
-      .text(
-        this.scale.width / 2,
-        this.scale.height / 2,
-        `ROUND ${this.currentRound}`,
-        {
-          font: "bold 48px Arial",
-          color: "#ffdd00",
-          stroke: "#000000",
-          strokeThickness: 4,
-        },
-      )
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1001);
-
-    this.tweens.add({
-      targets: text,
-      scale: 1.5,
-      alpha: 0,
-      duration: 1500,
-      onComplete: () => {
-        text.destroy();
-        this.isRoundActive = true;
-      },
+    this.hud?.showRoundBanner(this.currentRound, () => {
+      this.isRoundActive = true;
     });
   }
 
@@ -891,17 +552,7 @@ export class AceDuelScene extends Phaser.Scene {
 
     if (this.isRoundActive) {
       this.roundTimer = tickMatchTimer(this.roundTimer, delta);
-      if (this.timerText) {
-        const remaining = this.roundTimer.remainingMs;
-        this.timerText.setText(formatMatchClock(remaining));
-        this.timerText.setColor(
-          remaining <= 30_000
-            ? "#ff4444"
-            : remaining <= 60_000
-              ? "#ffcc00"
-              : "#ffffff",
-        );
-      }
+      this.hud?.setClock(this.roundTimer.remainingMs);
       if (this.roundTimer.expired) {
         const outcome = resolveByPoints(this.side1Score, this.side2Score);
         const winner: 1 | 2 =
@@ -923,7 +574,23 @@ export class AceDuelScene extends Phaser.Scene {
     if (this.isRoundActive) this.processCombat(delta);
     this.updateSprites();
     this.updateCameraFollow();
+    this.updateHud();
     this.checkRoundEnd();
+  }
+
+  /** Feeds the holographic HUD this frame's ships and camera. */
+  private updateHud(): void {
+    const playerSideIds =
+      this.playerSide === 1 ? this.side1ShipIds : this.side2ShipIds;
+    this.hud?.update(
+      buildDuelHudSnapshot({
+        ships: this.ships.values(),
+        playerId: this.flagshipId,
+        isAlly: (ship) => playerSideIds.includes(ship.id),
+        camera: cameraViewFrom(this.cameras.main),
+        worldSize: BATTLEFIELD_SIZE,
+      }),
+    );
   }
 
   /**
@@ -959,86 +626,11 @@ export class AceDuelScene extends Phaser.Scene {
     );
   }
 
-  private createHUD(): void {
-    this.roundText = this.add
-      .text(this.scale.width / 2, 30, "ROUND 1", {
-        font: "bold 24px Arial",
-        color: "#ffdd00",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    this.timerText = this.add
-      .text(
-        this.scale.width / 2,
-        88,
-        formatMatchClock(AceDuelScene.ROUND_DURATION_MS),
-        {
-          font: "bold 22px Arial",
-          color: "#ffffff",
-          stroke: "#000000",
-          strokeThickness: 3,
-        },
-      )
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    // Show matchup name
-    const matchupNameText = this.add
-      .text(this.scale.width / 2, 60, this.selectedMatchup.name, {
-        font: "18px Arial",
-        color: "#888888",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1000);
-    this.battleHudExtras.push(matchupNameText);
-
-    this.scoreText = this.add
-      .text(this.scale.width / 2, 90, "0 - 0", {
-        font: "bold 28px Arial",
-        color: "#888888",
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1000);
-
-    // Side indicators
-    const side1Color = FACTION_COLORS[this.selectedMatchup.side1.faction];
-    const side2Color = FACTION_COLORS[this.selectedMatchup.side2.faction];
-
-    const side1Indicator = this.add.graphics();
-    side1Indicator.fillStyle(side1Color, 1);
-    side1Indicator.fillCircle(this.scale.width / 2 - 60, 90, 10);
-    side1Indicator.setScrollFactor(0).setDepth(1000);
-    this.battleHudExtras.push(side1Indicator);
-
-    const side2Indicator = this.add.graphics();
-    side2Indicator.fillStyle(side2Color, 1);
-    side2Indicator.fillCircle(this.scale.width / 2 + 60, 90, 10);
-    side2Indicator.setScrollFactor(0).setDepth(1000);
-    this.battleHudExtras.push(side2Indicator);
-
-    const controlsHint = this.add
-      .text(
-        this.scale.width / 2,
-        this.scale.height - 25,
-        "UP/DOWN: Speed | LEFT/RIGHT: tap drift, hold bank | Q/E: Hard turn | Z: K-turn | UP x2: Boost | Weapon autofires | Scroll: Zoom | ESC: Pause",
-        {
-          font: "14px monospace",
-          color: "#666666",
-        },
-      )
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1000);
-    this.battleHudExtras.push(controlsHint);
-  }
-
+  /** Best-of-3 score (side 1 left); highlighted at match point. */
   private updateScoreDisplay(): void {
-    this.scoreText.setText(`${this.side1Wins} - ${this.side2Wins}`);
+    const matchPoint =
+      Math.max(this.side1Wins, this.side2Wins) === WINS_NEEDED - 1;
+    this.hud?.setScore(this.side1Wins, this.side2Wins, matchPoint);
   }
 
   private setupInput(): void {
@@ -1179,7 +771,8 @@ export class AceDuelScene extends Phaser.Scene {
     }
 
     this.createShipSprite(ship);
-    this.createHealthBar(ship);
+    // The flagship's durability lives on the HUD status ring.
+    if (id !== this.flagshipId) this.createHealthBar(ship);
   }
 
   private createShipSprite(ship: AceDuelShip): void {
@@ -1332,52 +925,31 @@ export class AceDuelScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Autofires every ready primary weapon on the round tempo: at most one
+   * attack per maneuver cycle, never at a target still immune to that
+   * attacker (the cooldown is kept for the next frame instead).
+   *
+   * @param delta - Frame length (ms).
+   */
   private processCombat(delta: number): void {
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
-
       ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
-
-      if (ship.weaponCooldown <= 0) {
-        // Primary weapon always autofires once in range/arc — flagship, escorts, and AI alike.
-        const target = this.findTarget(ship);
-        if (target) {
-          this.fireAt(ship, target);
-          ship.weaponCooldown = ship.combatStats.weaponCooldown;
-        }
-      }
+      if (ship.weaponCooldown > 0) continue;
+      const shipOnSide1 = this.side1ShipIds.includes(ship.id);
+      const target = primaryShotTarget({
+        gunner: ship,
+        candidates: this.ships.values(),
+        isEnemy: (other) =>
+          this.side1ShipIds.includes(other.id) !== shipOnSide1,
+        ledger: this.hitLedger,
+        nowMs: this.time.now,
+      });
+      if (!target) continue;
+      this.fireAt(ship, target);
+      ship.weaponCooldown = primaryCooldownAfterShot(ship);
     }
-  }
-
-  private findTarget(ship: AceDuelShip): AceDuelShip | null {
-    const maxRange = ship.combatStats.weaponRange;
-    const maxArcRad = (ship.combatStats.firingArc / 2) * Phaser.Math.DEG_TO_RAD;
-
-    for (const other of this.ships.values()) {
-      if (other.faction === ship.faction || other.hull <= 0) continue;
-
-      const dist = Phaser.Math.Distance.Between(
-        ship.x,
-        ship.y,
-        other.x,
-        other.y,
-      );
-      const angleToTarget = Phaser.Math.Angle.Between(
-        ship.x,
-        ship.y,
-        other.x,
-        other.y,
-      );
-      const shipFacing = (ship.angle - 90) * Phaser.Math.DEG_TO_RAD;
-      let angleDiff = Math.abs(angleToTarget - shipFacing);
-      if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
-
-      if (dist < maxRange && angleDiff < maxArcRad) {
-        return other;
-      }
-    }
-
-    return null;
   }
 
   /**
@@ -1420,7 +992,8 @@ export class AceDuelScene extends Phaser.Scene {
 
   /**
    * Lands a hit: stress on the target's pilot, damage shields first then
-   * hull, and the kill if it was the last hull point.
+   * hull, hit immunity for this attacker until the next cycle, and the kill
+   * if it was the last hull point.
    *
    * @param attacker - The firing ship.
    * @param target - The ship hit.
@@ -1444,6 +1017,7 @@ export class AceDuelScene extends Phaser.Scene {
     }
     const wasAlive = target.hull > 0;
     Object.assign(target, after);
+    this.hitLedger.recordHit(attacker.id, target.id, this.time.now);
     this.healthBars.get(target.id)?.update(target.hull, target.shields);
     if (wasAlive && target.hull <= 0) this.onShipDestroyed(attacker, target);
   }
@@ -1457,6 +1031,7 @@ export class AceDuelScene extends Phaser.Scene {
    * @param victim - The ship destroyed.
    */
   private onShipDestroyed(killer: AceDuelShip, victim: AceDuelShip): void {
+    this.hitLedger.forget(victim.id);
     if (this.side1ShipIds.includes(victim.id)) {
       this.side2Score = creditKill(this.side2Score, victim.definitionId);
     } else {
@@ -1466,7 +1041,7 @@ export class AceDuelScene extends Phaser.Scene {
       Object.assign(killer, rewardKill(combatantOf(killer), this.time.now));
       this.healthBars.get(killer.id)?.update(killer.hull, killer.shields);
     }
-    const blastDamage = victim.modifiers.deathBlastDamage;
+    const blastDamage = deathBlastDamage(combatantOf(victim));
     const caught = deathBlastTargets(
       combatantOf(victim),
       this.livingEnemiesOf(victim),
@@ -1604,53 +1179,28 @@ export class AceDuelScene extends Phaser.Scene {
 
   private endRound(winner: 1 | 2): void {
     this.isRoundActive = false;
-
-    if (winner === 1) {
-      this.side1Wins++;
-      const isPlayerWin = this.playerSide === 1;
-      this.showRoundResult(
-        isPlayerWin ? "VICTORY!" : "DEFEAT",
-        isPlayerWin ? "#44ff44" : "#ff4444",
-      );
-    } else {
-      this.side2Wins++;
-      const isPlayerWin = this.playerSide === 2;
-      this.showRoundResult(
-        isPlayerWin ? "VICTORY!" : "DEFEAT",
-        isPlayerWin ? "#44ff44" : "#ff4444",
-      );
-    }
-
+    if (winner === 1) this.side1Wins++;
+    else this.side2Wins++;
+    const isPlayerWin = this.playerSide === winner;
+    this.showRoundResult(
+      isPlayerWin ? "VICTORY!" : "DEFEAT",
+      isPlayerWin ? HOLO_PALETTE.success : HOLO_PALETTE.danger,
+    );
     this.updateScoreDisplay();
 
-    // Best of 3 - need 2 wins
-    if (this.side1Wins >= 2 || this.side2Wins >= 2) {
+    if (this.side1Wins >= WINS_NEEDED || this.side2Wins >= WINS_NEEDED) {
       this.time.delayedCall(2000, () => this.endMatch());
     } else {
       this.time.delayedCall(2000, () => this.startNextRound());
     }
   }
 
-  private showRoundResult(message: string, color: string): void {
-    const text = this.add
-      .text(this.scale.width / 2, this.scale.height / 2, message, {
-        font: "bold 48px Arial",
-        color,
-        stroke: "#000000",
-        strokeThickness: 4,
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(1001);
-
-    this.tweens.add({
-      targets: text,
-      alpha: 0,
-      y: this.scale.height / 2 - 50,
-      delay: 1500,
-      duration: 500,
-      onComplete: () => text.destroy(),
-    });
+  /**
+   * @param message - Banner text.
+   * @param color - Banner colour.
+   */
+  private showRoundResult(message: string, color: number): void {
+    this.hud?.showResultBanner(message, color);
   }
 
   private endMatch(): void {
@@ -1658,11 +1208,8 @@ export class AceDuelScene extends Phaser.Scene {
     // Same scrollFactor(0)-vs-zoom hit-test issue as the setup screen — the
     // player may have zoomed with the mouse wheel during the match.
     this.cameras.main.setZoom(1.0);
-    // Hide the in-battle HUD — previously bled through the semi-transparent overlay.
-    this.roundText?.setVisible(false);
-    this.timerText?.setVisible(false);
-    this.scoreText?.setVisible(false);
-    for (const o of this.battleHudExtras) o.setVisible(false);
+    // Hide the in-battle HUD under the end screen.
+    this.hud?.setVisible(false);
 
     const playerWins = this.playerSide === 1 ? this.side1Wins : this.side2Wins;
     const enemyWins = this.playerSide === 1 ? this.side2Wins : this.side1Wins;
@@ -1677,91 +1224,37 @@ export class AceDuelScene extends Phaser.Scene {
         playerWon ? "victory" : "defeat",
       );
     }
-
-    // Mark matchup as completed
     if (playerWon) {
       this.completedMatchups.add(this.selectedMatchup.id);
       this.saveCompletedMatchups();
     }
+    this.showEndScreen(playerWon, playerWins, enemyWins, playerMatchupFaction);
+  }
 
-    const centerX = this.scale.width / 2;
-    const centerY = this.scale.height / 2;
-
-    const bg = this.add.graphics();
-    bg.fillStyle(0x000000, 0.85);
-    bg.fillRect(0, 0, this.scale.width, this.scale.height);
-    bg.setScrollFactor(0);
-    bg.setDepth(2000);
-
-    const title = playerWon ? "DUEL WON!" : "DUEL LOST";
-    const color = playerWon ? "#44ff44" : "#ff4444";
-
-    this.add
-      .text(centerX, centerY - 80, title, {
-        font: "bold 56px Arial",
-        color,
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001);
-
-    this.add
-      .text(
-        centerX,
-        centerY - 20,
-        `Final Score: ${playerWins} - ${enemyWins}`,
-        {
-          font: "28px Arial",
-          color: "#ffffff",
-        },
-      )
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001);
-
-    // Achievement check
-    if (this.completedMatchups.size === ACE_MATCHUPS.length) {
-      this.add
-        .text(centerX, centerY + 20, "🏆 DUELIST ACHIEVEMENT UNLOCKED!", {
-          font: "bold 20px Arial",
-          color: "#ffdd00",
-        })
-        .setOrigin(0.5)
-        .setScrollFactor(0)
-        .setDepth(2001);
-    }
-
-    // Buttons
-    const retryBtn = this.add
-      .text(centerX - 100, centerY + 80, "REMATCH", {
-        font: "bold 24px Arial",
-        color: "#44ff44",
-        backgroundColor: "#224422",
-        padding: { x: 16, y: 8 },
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001)
-      .setInteractive({ useHandCursor: true });
-
-    retryBtn.on("pointerdown", () => {
-      this.scene.restart();
-    });
-
-    const menuBtn = this.add
-      .text(centerX + 100, centerY + 80, "MENU", {
-        font: "bold 24px Arial",
-        color: "#ffffff",
-        backgroundColor: "#444444",
-        padding: { x: 20, y: 8 },
-      })
-      .setOrigin(0.5)
-      .setScrollFactor(0)
-      .setDepth(2001)
-      .setInteractive({ useHandCursor: true });
-
-    menuBtn.on("pointerdown", () => {
-      this.scene.start("MainMenuScene");
+  /**
+   * The end-of-match panel with REMATCH / MENU.
+   *
+   * @param playerWon - Whether the player took the match.
+   * @param playerWins - Rounds the player won.
+   * @param enemyWins - Rounds the opponent won.
+   * @param faction - The player's faction (accent), if known.
+   */
+  private showEndScreen(
+    playerWon: boolean,
+    playerWins: number,
+    enemyWins: number,
+    faction: FactionId | undefined,
+  ): void {
+    const allDone = this.completedMatchups.size === ACE_MATCHUPS.length;
+    showDuelEndScreen(this, {
+      header: `Ace Duel \u2014 ${this.selectedMatchup.name ?? "match"}`,
+      title: playerWon ? "DUEL WON" : "DUEL LOST",
+      won: playerWon,
+      scoreLine: `Final score  ${playerWins}  \u2013  ${enemyWins}`,
+      notes: allDone ? ["\u2605 Duelist achievement unlocked"] : [],
+      accent: factionAccent(faction),
+      onRematch: () => this.scene.restart(),
+      onMenu: () => this.scene.start("MainMenuScene"),
     });
   }
 }

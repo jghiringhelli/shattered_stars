@@ -9,6 +9,9 @@
 import { getShipDefinition } from "./ShipDefinitions";
 import { DURABILITY_SCALE } from "../config";
 
+/** The fewest miniature hull points any ship has in a real-time mode. */
+const MIN_MINIATURE_HULL = 1;
+
 export type GameMode = "arcade" | "continuous" | "survival";
 
 /**
@@ -196,9 +199,16 @@ export function getModeCombatStats(
   const modeStats = MODE_BASE_STATS[mode];
 
   // Calculate hull and shields
+  // Every ship keeps at least one miniature hull point — a fragile drone
+  // must still be a ship, not spawn already destroyed.
   const hull =
-    Math.round(
-      baseStats.hull * modeStats.hullMultiplier * (roleModifiers?.hullMod ?? 1),
+    Math.max(
+      MIN_MINIATURE_HULL,
+      Math.round(
+        baseStats.hull *
+          modeStats.hullMultiplier *
+          (roleModifiers?.hullMod ?? 1),
+      ),
     ) * durabilityScale;
   const shields =
     Math.round(

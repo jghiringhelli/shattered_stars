@@ -21,6 +21,7 @@ import { applyLoadoutEffects } from "../../../../src/systems/BattleHelpers";
 import { buildOrdnanceSlots } from "../../../../src/arcade/ArcadeOrdnance";
 import { UPGRADE_DEFINITIONS } from "../../../../src/systems/UpgradeSystem";
 import { SHIP_LOADOUTS } from "../../../../src/data/ShipLoadouts";
+import { SHIP_DEFINITIONS } from "../../../../src/data/ShipDefinitions";
 import { deathBlastDamage } from "../../../../src/arcade/PilotAbilityCombat";
 import { combineEffects } from "../../../../src/core/CombatModifiers";
 import { INITIAL_STRESS } from "../../../../src/arcade/ArcadeStress";
@@ -104,6 +105,17 @@ describe("durability scale", () => {
     };
     applyLoadoutEffects(ship, loadout.id);
     expect(ship.maxHull).toBe(8 + totalBonus * DURABILITY_SCALE);
+  });
+});
+
+describe("every real ship can be damaged and destroyed", () => {
+  it("no ship spawns with zero hull in any real-time mode", () => {
+    const empty = Object.keys(SHIP_DEFINITIONS).flatMap((id) =>
+      (["continuous", "survival", "arcade"] as const)
+        .filter((mode) => getModeCombatStats(id, mode).hull <= 0)
+        .map((mode) => `${id}@${mode}`),
+    );
+    expect(empty).toEqual([]);
   });
 });
 

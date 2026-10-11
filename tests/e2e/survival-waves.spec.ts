@@ -105,15 +105,17 @@ test.describe("SurvivalScene — milestone boss", () => {
     await advanceToWave(page, 5);
     const result = await page.evaluate(() => {
       const s = (window as any).game.scene.getScene("SurvivalScene") as any;
-      const maxHull = Math.max(
-        ...[...s.ships.values()]
-          .filter((sh: any) => sh.owner === "ai")
-          .map((sh: any) => sh.maxHull),
+      const boss = [...s.ships.values()].find((sh: any) =>
+        String(sh.id).startsWith("boss_"),
       );
-      return { milestone: s.run.isMilestone, maxHull };
+      return {
+        milestone: s.run.isMilestone,
+        bossHull: boss?.maxHull ?? 0,
+        equippedHull: boss?.combatStats.maxHull ?? Infinity,
+      };
     });
     expect(result.milestone).toBe(true);
-    // Boss hull is multiplied (2+); regular ships are single-digit.
-    expect(result.maxHull).toBeGreaterThanOrEqual(10);
+    // Boss hull is its equipped (already x4-scaled) hull multiplied 2+ times.
+    expect(result.bossHull).toBeGreaterThanOrEqual(2 * result.equippedHull);
   });
 });

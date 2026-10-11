@@ -41,6 +41,11 @@ import {
   type DiceAttackResult,
 } from "../arcade/systems/DiceAttack";
 import {
+  attackIntervalMs,
+  HitImmunityLedger,
+} from "../arcade/systems/CombatTempo";
+import {
+  deathBlastDamage,
   deathBlastTargets,
   hasWingman,
   rewardKill,
@@ -141,6 +146,8 @@ export abstract class ContinuousBaseScene<
   protected performanceState: PerformanceState = createPerformanceState();
   /** Debug pose recorder (?debug=1); sampled every frame by {@link flyShips}. */
   protected telemetry: ShipTelemetry | null = null;
+  /** X-Wing round tempo: who struck whom this maneuver cycle (clear on restart). */
+  protected readonly hitLedger = new HitImmunityLedger();
 
   // ──────────────────────────────────────────────
   // Abstract — each scene must implement these
@@ -217,6 +224,9 @@ export abstract class ContinuousBaseScene<
       ...target.flight,
       stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
     });
+    if (result.damage > 0) {
+      this.hitLedger.recordHit(attacker.id, target.id, this.time.now);
+    }
     this.applyDamage(attacker, target, result.damage);
   }
 
@@ -299,7 +309,7 @@ export abstract class ContinuousBaseScene<
       (other) => other.faction !== victim.faction && other.hull > 0,
     );
     for (const caught of deathBlastTargets(combatantOf(victim), enemies)) {
-      this.applyDamage(victim, caught, victim.modifiers.deathBlastDamage);
+      this.applyDamage(victim, caught, deathBlastDamage(combatantOf(victim)));
     }
   }
 
@@ -331,6 +341,7 @@ export abstract class ContinuousBaseScene<
     }
     this.healthBars.get(target.id)?.update(target.hull, target.shields);
     if (target.hull <= 0) {
+      this.hitLedger.forget(target.id);
       this.resolveAbilityKill(attacker, target);
       this.onShipDestroyed(target.id, attacker.id);
     }
@@ -469,19 +480,36 @@ export abstract class ContinuousBaseScene<
     ship.angle = flight.motion.angle;
   }
 
-  /** Tick weapon cooldowns and fire at targets when ready. */
+  /**
+   * Tick weapon cooldowns and fire on the X-Wing round tempo: each ship
+   * attacks at most once per maneuver cycle, and holds its shot (without
+   * spending the cooldown) while its target is immune to it.
+   *
+   * @param delta - Frame length (ms).
+   */
   protected processCombat(delta: number): void {
+    const now = this.time.now;
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
       ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
-      if (ship.weaponCooldown <= 0) {
-        const target = this.findWeaponTarget(ship);
-        if (target) {
-          this.performAttack(ship, target);
-          ship.weaponCooldown = ship.combatStats.weaponCooldown;
-        }
-      }
+      if (ship.weaponCooldown > 0) continue;
+      const target = this.findWeaponTarget(ship);
+      if (!target || this.hitLedger.isImmune(ship.id, target.id, now)) continue;
+      this.performAttack(ship, target);
+      ship.weaponCooldown = this.attackIntervalOf(ship);
     }
+  }
+
+  /**
+   * Time a ship waits between attacks: its weapon cooldown, never faster
+   * than one attack per maneuver cycle. Override to adjust the cooldown
+   * (e.g. AI difficulty) — the cycle floor still applies.
+   *
+   * @param ship - The ship that just fired.
+   * @returns Attack interval (ms).
+   */
+  protected attackIntervalOf(ship: T): number {
+    return attackIntervalMs(ship.combatStats.weaponCooldown);
   }
 
   /** Steer every AI-controlled ship that can fly this frame. */
