@@ -6,8 +6,8 @@
  * frame its reaction delay points at. Pure: no Phaser.
  */
 
-import { signedAngle, torusOffset } from "./ArenaGeometry";
-import type { PerceivedShip, ShipSnapshot } from "./SkillTypes";
+import { signedAngle, torusOffset } from "./AiGeometry";
+import type { PerceivedShip, ShipSnapshot } from "./BotTypes";
 
 /** Window over which a ship's motion is judged (ms). */
 export const MOTION_WINDOW_MS = 200;

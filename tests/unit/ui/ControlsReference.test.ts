@@ -44,6 +44,16 @@ describe("ControlsReference", () => {
     expect(touchLabelFor(["COMMANDER_ORDER_1"])).toBe("—");
   });
 
+  it("lists the squad mark on R and right-stick click (no touch gesture is free)", () => {
+    const row = CONTROL_GROUPS.flatMap((g) => g.rows).find((r) =>
+      r.intents.includes("MARK_TARGET"),
+    );
+    expect(row?.label).toBe("Mark Target (squad focus)");
+    expect(keyboardLabelFor(["MARK_TARGET"])).toBe("R");
+    expect(gamepadLabelFor(["MARK_TARGET"])).toBe("R3");
+    expect(touchLabelFor(["MARK_TARGET"])).toBe("—");
+  });
+
   it("builds a joined single-line quick tip", () => {
     const line = quickTipLine([
       { label: "Steer", intents: ["STEER_LEFT", "STEER_RIGHT"] },

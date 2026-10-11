@@ -17,7 +17,7 @@ import {
   offNoseDeg,
   signedAngle,
   torusOffset,
-} from "./ArenaGeometry";
+} from "../../arcade/ai/AiGeometry";
 import { CROSSFIRE_MIN_SEPARATION_DEG, type ShotContext } from "./ArenaRules";
 import type { ArenaShip } from "./ArenaShip";
 

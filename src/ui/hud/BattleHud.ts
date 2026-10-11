@@ -5,7 +5,8 @@
  * plain data ({@link BattleHudSnapshot}); it never touches component
  * internals. The facade owns layout (radar bottom centre, flight readout to
  * its left, weapon bar to its right, edge arrows around the screen, status
- * ring around the player ship) and cancels camera zoom for screen-space
+ * ring around the player ship, squad-mark reticles on marked ships) and
+ * cancels camera zoom for screen-space
  * widgets, so the HUD is pixel-stable at any zoom. Nothing is interactive.
  */
 
@@ -16,6 +17,7 @@ import { FlightReadout } from "./FlightReadout";
 import { createScreenContainer } from "./holoPrimitives";
 import { hudRootTransform, type EdgeInsets } from "./hudMath";
 import type { ClosenessOptions } from "./hudStyleMath";
+import { MarkReticle } from "./MarkReticle";
 import { Radar } from "./Radar";
 import type { ScreenRect } from "./screenRect";
 import { ShipStatusRing } from "./ShipStatusRing";
@@ -53,6 +55,7 @@ export class BattleHud {
   private readonly weapons: WeaponBar;
   private readonly readout: FlightReadout;
   private readonly edges: EdgeIndicators;
+  private readonly marks: MarkReticle;
   private lastZoom = Number.NaN;
   private lastWidth = Number.NaN;
   private lastHeight = Number.NaN;
@@ -77,6 +80,7 @@ export class BattleHud {
       insets: config.edgeInsets,
       closeness: config.edgeCloseness,
     });
+    this.marks = new MarkReticle(scene, { worldSize: config.worldSize });
     this.root = createScreenContainer(scene).setDepth(HOLO_DEPTH.hud);
     this.root.add([
       this.radar.container,
@@ -89,6 +93,11 @@ export class BattleHud {
   /** Number of edge arrows currently shown. */
   get edgeArrowCount(): number {
     return this.edges.activeCount;
+  }
+
+  /** Number of in-world squad-mark reticles drawn by the last update. */
+  get markReticleCount(): number {
+    return this.marks.activeCount;
   }
 
   /**
@@ -116,6 +125,7 @@ export class BattleHud {
     if (this.weapons.width !== this.lastWeaponWidth) this.refreshObstacles();
     this.readout.update(player);
     this.edges.update(snapshot.camera, snapshot.contacts);
+    this.marks.update(snapshot.camera, snapshot.contacts);
   }
 
   /**
@@ -128,11 +138,13 @@ export class BattleHud {
     this.root.setVisible(visible);
     this.edges.container.setVisible(visible);
     this.ring.setVisible(visible);
+    this.marks.setVisible(visible);
   }
 
   /** Destroy every HUD game object. */
   destroy(): void {
     this.ring.destroy();
+    this.marks.destroy();
     this.edges.destroy();
     this.root.destroy();
   }

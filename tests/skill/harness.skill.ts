@@ -15,7 +15,6 @@ import {
   PilotHands,
   SquadCoordinator,
   TICK_MS,
-  createBot,
   runBattle,
   runSeries,
   seedRange,
@@ -36,8 +35,8 @@ function duel(
   ship = SHIP,
 ): BattleSpec {
   return {
-    A: { ships: [{ definitionId: ship, bot: createBot(tierA) }], squad: null },
-    B: { ships: [{ definitionId: ship, bot: createBot(tierB) }], squad: null },
+    A: { ships: [{ definitionId: ship, tier: tierA }], squad: null },
+    B: { ships: [{ definitionId: ship, tier: tierB }], squad: null },
     seed,
   };
 }

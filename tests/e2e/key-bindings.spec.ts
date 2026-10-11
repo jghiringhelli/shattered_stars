@@ -119,4 +119,18 @@ test.describe("key bindings — Dogfight", () => {
     await page.waitForTimeout(50);
     expect((await control(page)).speed).toBe(before + 1);
   });
+
+  test("R → MARK_TARGET reaches the pilot's mark latch", async ({ page }) => {
+    const takeMark = (): Promise<boolean> =>
+      page.evaluate(
+        (key) =>
+          (window as any).game.scene.getScene(key).pilot.takeMarkRequest(),
+        SCENE,
+      );
+    expect(await takeMark()).toBe(false);
+    await pressKey(page, "r");
+    await page.waitForTimeout(50);
+    expect(await takeMark()).toBe(true);
+    expect(await takeMark()).toBe(false);
+  });
 });

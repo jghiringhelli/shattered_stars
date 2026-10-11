@@ -28,6 +28,12 @@ export {
   type EdgeIndicatorsConfig,
 } from "./EdgeIndicators";
 export { FlightReadout } from "./FlightReadout";
+export { MarkReticle, type MarkReticleConfig } from "./MarkReticle";
+export {
+  markedContacts,
+  markReticleWorldRadius,
+  nearestImage,
+} from "./markMath";
 export { cameraViewFrom, type CameraLike, type EdgeInsets } from "./hudMath";
 export type { ScreenRect } from "./screenRect";
 export type { ClosenessOptions } from "./hudStyleMath";

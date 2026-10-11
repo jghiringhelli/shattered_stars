@@ -48,6 +48,9 @@ const EVENT_EDGES: ReadonlySet<string> = new Set(
   FLIGHT_EDGES.filter((edge) => edge !== "THRUST_UP" && edge !== "THRUST_DOWN"),
 );
 
+/** The squad-mark press the pilot latches for the scene (takeMarkRequest). */
+export const MARK_TARGET_INTENT: ActionIntent = "MARK_TARGET";
+
 /** One frame of the player's flight, as the scene supplies it. */
 export interface PlayerFlightFrame {
   readonly flight: CycleFlightState;
@@ -61,6 +64,7 @@ export interface PlayerFlightFrame {
 export class PlayerFlightPilot {
   private memory: PilotControlState = INITIAL_PILOT_CONTROL;
   private pending = new Set<FlightEdge>();
+  private markPressed = false;
   private thrustUpWasHeld = false;
   private thrustDownWasHeld = false;
   private subscriptionId: number | null = null;
@@ -74,12 +78,13 @@ export class PlayerFlightPilot {
     private readonly allowChordBarrelRoll = true,
   ) {}
 
-  /** Start listening for edge-triggered flight intents. */
+  /** Start listening for edge-triggered flight intents (and MARK_TARGET). */
   attach(): void {
     if (this.subscriptionId !== null) return;
     this.subscriptionId = this.source.onAny((event) => {
       if (EVENT_EDGES.has(event.intent))
         this.pending.add(event.intent as FlightEdge);
+      if (event.intent === MARK_TARGET_INTENT) this.markPressed = true;
     });
   }
 
@@ -94,8 +99,22 @@ export class PlayerFlightPilot {
   reset(): void {
     this.memory = INITIAL_PILOT_CONTROL;
     this.pending.clear();
+    this.markPressed = false;
     this.thrustUpWasHeld = false;
     this.thrustDownWasHeld = false;
+  }
+
+  /**
+   * Whether the player pressed MARK_TARGET since the last call (consumed):
+   * the scene then marks its HUD target for the player's side
+   * (SquadMark.placeMark), which the side's SquadCommand makes its focus.
+   *
+   * @returns True once per press.
+   */
+  takeMarkRequest(): boolean {
+    const pressed = this.markPressed;
+    this.markPressed = false;
+    return pressed;
   }
 
   /**

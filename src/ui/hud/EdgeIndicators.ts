@@ -2,8 +2,8 @@
  * EdgeIndicators — an arrow on the screen edge for every ship outside the
  * camera view, pointing at it. Colour = side; size and alpha grow as the
  * ship gets closer to the visible area; beyond a max distance arrows hide
- * (the locked target never hides). The locked target uses a distinct
- * bracketed glyph.
+ * (the locked target and the squad's marked target never hide). The locked
+ * target uses a ringed glyph, the marked target red brackets.
  *
  * Pooled: one Graphics per arrow, created only when the number of
  * simultaneous arrows exceeds the pool, never per frame. Each Graphics
@@ -19,6 +19,7 @@ import { HOLO_PALETTE, SIDE_COLORS } from "../theme/HoloTheme";
 import { addPinned, createScreenContainer } from "./holoPrimitives";
 import { drawArrowGlyph, drawTargetArrowGlyph } from "./HudIcons";
 import { placeEdgeArrow, type EdgeInsets } from "./hudMath";
+import { drawMarkArrowGlyph } from "./markGlyphs";
 import { closenessStyle, type ClosenessOptions } from "./hudStyleMath";
 import { inflateRect, pullOutOfRect, type ScreenRect } from "./screenRect";
 import type { CameraViewSnapshot, ContactHudState, HudPoint } from "./types";
@@ -43,8 +44,8 @@ export const DEFAULT_EDGE_CLOSENESS: ClosenessOptions = {
 };
 /** Glyph cache key: no glyph drawn yet. */
 const NO_GLYPH = -1;
-/** Multiplier applied to the side colour to form a glyph cache key. */
-const KEY_STRIDE = 2;
+/** Multiplier applied to the side colour to form a glyph cache key (3 glyph kinds). */
+const KEY_STRIDE = 3;
 /** Obstacle clearance in arrow-size units — covers the target ring at max scale. */
 const OBSTACLE_CLEARANCE = 1.5;
 
@@ -149,10 +150,11 @@ export class EdgeIndicators {
         placement.beyondEdgeDistance,
         this.closeness,
       );
-      if (!style.visible && !contact.isTarget) continue;
+      if (!style.visible && !contact.isTarget && contact.isMarked !== true)
+        continue;
       const position = this.avoidObstacles(center, placement);
       const arrow = this.acquire(used++);
-      this.ensureGlyph(arrow, SIDE_COLORS[contact.side], contact.isTarget);
+      this.ensureGlyph(arrow, SIDE_COLORS[contact.side], glyphKind(contact));
       arrow.graphics
         .setPosition(position.x, position.y)
         .setRotation(placement.angle)
@@ -191,13 +193,15 @@ export class EdgeIndicators {
   private ensureGlyph(
     arrow: PooledArrow,
     color: number,
-    isTarget: boolean,
+    kind: GlyphKind,
   ): void {
-    const key = color * KEY_STRIDE + (isTarget ? 1 : 0);
+    const key = color * KEY_STRIDE + kind;
     if (arrow.glyphKey === key) return;
     arrow.glyphKey = key;
     arrow.graphics.clear();
-    if (isTarget)
+    if (kind === GLYPH_MARKED)
+      drawMarkArrowGlyph(arrow.graphics, this.arrowSize, color);
+    else if (kind === GLYPH_TARGET)
       drawTargetArrowGlyph(
         arrow.graphics,
         this.arrowSize,
@@ -206,4 +210,21 @@ export class EdgeIndicators {
       );
     else drawArrowGlyph(arrow.graphics, this.arrowSize, color);
   }
+}
+
+/** Plain arrow. */
+const GLYPH_PLAIN = 0;
+/** Locked target: arrow in the amber ring. */
+const GLYPH_TARGET = 1;
+/** Squad mark: arrow in the red brackets (wins over the target ring). */
+const GLYPH_MARKED = 2;
+type GlyphKind = typeof GLYPH_PLAIN | typeof GLYPH_TARGET | typeof GLYPH_MARKED;
+
+/**
+ * @param contact - The contact the arrow points at.
+ * @returns Which glyph it wears.
+ */
+function glyphKind(contact: ContactHudState): GlyphKind {
+  if (contact.isMarked === true) return GLYPH_MARKED;
+  return contact.isTarget ? GLYPH_TARGET : GLYPH_PLAIN;
 }

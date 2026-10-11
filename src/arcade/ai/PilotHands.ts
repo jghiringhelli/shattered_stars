@@ -11,7 +11,7 @@
 
 import { canBarrelRoll, canKTurn } from "../../core/ArcadeControls";
 import type { ManeuverDirection } from "../../core/types";
-import { DOUBLE_TAP_WINDOW_MS } from "../../arcade/ArcadeInputGestures";
+import { DOUBLE_TAP_WINDOW_MS } from "../ArcadeInputGestures";
 import {
   applyPilotFlightInput,
   INITIAL_PILOT_CONTROL,
@@ -20,12 +20,12 @@ import {
   type FlightEdge,
   type FlownShip,
   type PilotControlState,
-} from "../../arcade/systems/PilotFlightControls";
+} from "../systems/PilotFlightControls";
 import {
   IDLE_INTENT,
   type PilotIntent,
   type SpecialManeuver,
-} from "./SkillTypes";
+} from "./BotTypes";
 
 /** Gap between two throttle taps, so two taps never read as a ↑↑/↓↓ gesture (ms). */
 export const THROTTLE_TAP_GAP_MS = DOUBLE_TAP_WINDOW_MS + 20;

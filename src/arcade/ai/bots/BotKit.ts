@@ -6,14 +6,14 @@
  * Pure: no Phaser.
  */
 
-import { offNoseDeg, torusOffset, type Point } from "../ArenaGeometry";
+import { offNoseDeg, torusOffset, type Point } from "../AiGeometry";
 import type {
   BotProfile,
   PerceivedShip,
   Pose,
   SkillTier,
   SteerManeuver,
-} from "../SkillTypes";
+} from "../BotTypes";
 
 /** Reaction delay, decision cadence and heading noise per tier. */
 export const TIER_PROFILES: Readonly<Record<SkillTier, BotProfile>> = {

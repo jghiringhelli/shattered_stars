@@ -53,6 +53,9 @@ export type ActionIntent =
   | "SEGNOR_RIGHT"
   | "TALLON_LEFT"
   | "TALLON_RIGHT"
+  // Squad — mark the HUD target as the squad's focus (SquadMark): player-side
+  // AI wingmen attack it, and the squad's shots on it gain the mark bonus.
+  | "MARK_TARGET"
   // Continuous flight — advanced (large/capital ships)
   | "CREW_CYCLE"
   | "CLOAK"

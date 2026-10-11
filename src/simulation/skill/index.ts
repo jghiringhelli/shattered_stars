@@ -1,21 +1,20 @@
 /**
- * Skill arena — public API. Headless bot pilots of three skill tiers flying
- * the real engine, battles, series statistics and the two piloting gates.
+ * Skill arena — public API: headless battles between the game's AI pilots
+ * (src/arcade/ai, re-exported here), series statistics, the lever report
+ * and the two piloting gates.
  */
 
-export * from "./SkillTypes";
-export * from "./ArenaGeometry";
+export * from "../../arcade/ai";
 export * from "./ArenaRules";
 export * from "./ArenaLayout";
-export { PilotHands, THROTTLE_TAP_GAP_MS } from "./PilotHands";
-export { SnapshotHistory } from "./Perception";
 export {
   spawnArenaShip,
-  snapshotOf,
-  ownViewOf,
+  contactOf,
+  setArenaFlight,
   type ArenaShip,
 } from "./ArenaShip";
 export { emptyTally, type SideTally, type CombatState } from "./ArenaCombat";
+export type { SideId } from "./ArenaCombatState";
 export {
   runBattle,
   TICK_MS,
@@ -24,22 +23,9 @@ export {
   type BattleResult,
   type SideSpec,
   type ShipEntry,
+  type SquadSetup,
 } from "./SkillArena";
 export * from "./ArenaStats";
 export * from "./SkillGates";
+export * from "./SkillGate2";
 export * from "./SkillLevers";
-export { createBot } from "./bots/BotFactory";
-export { TIER_PROFILES } from "./bots/BotKit";
-export { NoviceBot } from "./bots/NoviceBot";
-export { AverageBot } from "./bots/AverageBot";
-export { ExpertBot } from "./bots/ExpertBot";
-export {
-  SquadCoordinator,
-  DEFAULT_COORDINATION,
-  type CoordinationOptions,
-} from "./bots/SquadCoordinator";
-export {
-  planManeuver,
-  EXPERT_WEIGHTS,
-  type PlanWeights,
-} from "./bots/ManeuverPlanner";

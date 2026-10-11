@@ -15,7 +15,7 @@
  * Pure: no Phaser.
  */
 
-import { BATTLEFIELD_SIZE } from "../../../config";
+import { BATTLEFIELD_SIZE } from "../../config";
 import {
   inFiringArc,
   offNoseDeg,
@@ -23,14 +23,14 @@ import {
   torusOffset,
   unwrapNear,
   type Point,
-} from "../ArenaGeometry";
+} from "./AiGeometry";
 import type {
   PerceivedShip,
   ShipSnapshot,
   SquadBrain,
   SquadOrder,
-} from "../SkillTypes";
-import { TIER_PROFILES } from "./BotKit";
+} from "./BotTypes";
+import { TIER_PROFILES } from "./bots/BotKit";
 
 /** Flank slots in assignment order (° relative to the target's heading). */
 export const FLANK_BEARINGS_DEG: readonly number[] = [
@@ -93,11 +93,14 @@ export class SquadCoordinator implements SquadBrain {
   /**
    * @param own - The squad's living ships.
    * @param enemies - Living enemies as perceived.
+   * @param focusOverrideId - The player's mark, which the squad must focus
+   *   when it is among `enemies`; null/omitted = the coordinator's choice.
    * @returns One order per own ship.
    */
   plan(
     own: readonly ShipSnapshot[],
     enemies: readonly PerceivedShip[],
+    focusOverrideId: string | null = null,
   ): ReadonlyMap<string, SquadOrder> {
     const orders = new Map<string, SquadOrder>();
     if (own.length === 0 || enemies.length === 0) return orders;
@@ -105,7 +108,8 @@ export class SquadCoordinator implements SquadBrain {
     const bandit = this.options.dragAndBag
       ? this.banditOnASix(own, enemies, centre)
       : null;
-    const focus = bandit?.enemy ?? this.pickFocus(centre, enemies);
+    const forced = enemies.find((e) => e.id === focusOverrideId);
+    const focus = forced ?? bandit?.enemy ?? this.pickFocus(centre, enemies);
     this.focusId = focus.id;
     const slots = this.options.flanking
       ? assignSlots(own, focus, this.worldSize)

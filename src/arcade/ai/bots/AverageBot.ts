@@ -14,7 +14,7 @@
  * Pure: no Phaser.
  */
 
-import { offNoseDeg, torusOffset, type Point } from "../ArenaGeometry";
+import { offNoseDeg, torusOffset, type Point } from "../AiGeometry";
 import {
   IDLE_INTENT,
   type BotProfile,
@@ -24,7 +24,7 @@ import {
   type PilotView,
   type SpecialManeuver,
   type SteerManeuver,
-} from "../SkillTypes";
+} from "../BotTypes";
 import {
   judgedHeadingError,
   leadPoint,

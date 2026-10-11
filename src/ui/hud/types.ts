@@ -50,6 +50,11 @@ export interface ContactHudState {
   readonly sizeClass: HudSizeClass;
   /** True for the player's locked target. */
   readonly isTarget: boolean;
+  /**
+   * True for the squad's marked target (SquadMark — the player's mark, or the
+   * side's focus): a red crosshair on radar, edge arrow and in the world.
+   */
+  readonly isMarked?: boolean | undefined;
   readonly alive: boolean;
 }
 

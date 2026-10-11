@@ -7,9 +7,9 @@
  * Pure: no Phaser.
  */
 
-import type { ArcPosition } from "./ArenaGeometry";
+import type { ArcPosition } from "../../arcade/ai/AiGeometry";
 import { runBattle, type BattleResult, type BattleSpec } from "./SkillArena";
-import type { SideId } from "./SkillTypes";
+import type { SideId } from "./ArenaCombatState";
 
 /** Gunnery of one side over a series. */
 export interface GunnerySummary {

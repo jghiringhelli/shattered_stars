@@ -1,8 +1,9 @@
 /**
- * SkillTypes — data contracts of the skill arena: what a bot pilot perceives
- * (its own ship exactly, every other ship through a delayed, noisy view),
- * what it decides (the same intents a human expresses with the keyboard) and
- * the squad orders a coordination layer may hand it.
+ * BotTypes — data contracts of the AI pilots (the in-game AI and the skill
+ * gates fly the same bots): what a bot perceives (its own ship exactly,
+ * every other ship through a delayed, noisy view), what it decides (the
+ * same intents a human expresses with the keyboard) and the squad orders a
+ * coordination layer may hand it.
  *
  * Pure data, no behaviour, no Phaser.
  */
@@ -12,8 +13,14 @@ import type { ManeuverDefinition } from "../../core/types";
 /** How well a bot flies. */
 export type SkillTier = "novice" | "average" | "expert";
 
-/** One of the two sides of a battle. */
-export type SideId = "A" | "B";
+/** Same as {@link SkillTier} — the name scenes use. */
+export type BotTier = SkillTier;
+
+/**
+ * A side of a battle: any key the scene uses (faction, owner, "A"/"B").
+ * Ships of the same side are allies.
+ */
+export type SideKey = string;
 
 /** A pose on the battlefield (angle in degrees, 0 = up, clockwise). */
 export interface Pose {
@@ -25,7 +32,7 @@ export interface Pose {
 /** What any pilot can see of a ship (its own or another). */
 export interface ShipSnapshot extends Pose {
   readonly id: string;
-  readonly side: SideId;
+  readonly side: SideKey;
   readonly definitionId: string;
   readonly alive: boolean;
   /** Current throttle setting (template speed). */
@@ -154,11 +161,14 @@ export interface SquadBrain {
   /**
    * @param own - The squad's living ships (exact: the squad knows itself).
    * @param enemies - Living enemies as the squad perceives them.
+   * @param focusOverrideId - A target the squad must focus (the player's
+   *   mark) when it is among `enemies`; null/omitted = the brain's choice.
    * @returns Orders per own ship id.
    */
   plan(
     own: readonly ShipSnapshot[],
     enemies: readonly PerceivedShip[],
+    focusOverrideId?: string | null,
   ): ReadonlyMap<string, SquadOrder>;
 }
 

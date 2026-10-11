@@ -16,10 +16,8 @@ import type { ShipDefinition } from "../../core/types";
 import type { ArenaRules } from "./ArenaRules";
 import { spawnArenaShip } from "./ArenaShip";
 import { runSeries, seedRange, type SeriesSummary } from "./ArenaStats";
-import { createBot } from "./bots/BotFactory";
-import { SquadCoordinator } from "./bots/SquadCoordinator";
+import { BotPilot } from "../../arcade/ai/BotPilot";
 import type { BattleSpec } from "./SkillArena";
-import { TIER_PROFILES } from "./bots/BotKit";
 
 /** Gate 1: minimum expert win rate against a novice, per pair. */
 export const GATE1_MIN_EXPERT_WIN_RATE = 0.85;
@@ -33,9 +31,6 @@ export const GATE1_NOVICE_PRICE_PREMIUM = 0.3;
  * 1,500+ pairs, 20 seeds alone would fail ~25 sound pairs on noise).
  */
 export const GATE1_CONFIRM_SEEDS = 100;
-
-/** Gate 2: minimum win rate of the coordinated average squad. */
-export const GATE2_MIN_SQUAD_WIN_RATE = 0.7;
 
 /** Roles gate 1 covers (fighters: light, interceptor, heavy). */
 export const GATE_FIGHTER_ROLES: readonly string[] = [
@@ -73,8 +68,7 @@ export function fighterRoster(): FighterRoster {
       side: "A",
       definitionId: def.id,
       pose: { x: 0, y: 0, angle: 0 },
-      bot: createBot("novice"),
-      firstDecisionMs: 0,
+      pilot: new BotPilot("novice"),
     });
     if (!probe.alive)
       excluded.push({
@@ -189,11 +183,11 @@ export function duelSpec(
 ): BattleSpec {
   return {
     A: {
-      ships: [{ definitionId: pair.expertShip, bot: createBot("expert") }],
+      ships: [{ definitionId: pair.expertShip, tier: "expert" }],
       squad: null,
     },
     B: {
-      ships: [{ definitionId: pair.noviceShip, bot: createBot("novice") }],
+      ships: [{ definitionId: pair.noviceShip, tier: "novice" }],
       squad: null,
     },
     seed,
@@ -238,90 +232,4 @@ export function measureGate1Pair(
     seedRange(GATE1_CONFIRM_SEEDS),
   ).summary;
   return { pair, summary: confirm, confirmed: true };
-}
-
-/**
- * Gate-2 squad lists: per faction, one heavy fighter, one interceptor and
- * one light fighter (first of each role in the catalog) — flown by both
- * sides, so points match exactly.
- * @param fighters - The roster.
- * @returns Squad compositions (ship ids).
- */
-export function gate2Compositions(
-  fighters: readonly ShipDefinition[],
-): string[][] {
-  const factions = [...new Set(fighters.map((f) => f.faction))];
-  return factions
-    .map((faction) =>
-      GATE_FIGHTER_ROLES.map(
-        (role) =>
-          fighters.find((f) => f.faction === faction && f.role === role)?.id,
-      ).filter((id): id is string => id !== undefined),
-    )
-    .filter((squad) => squad.length >= 2);
-}
-
-/**
- * @returns Gate-2 battle: coordinated average squad on A, solo experts on B.
- */
-export function squadSpec(
-  composition: readonly string[],
-  seed: number,
-  rules?: ArenaRules,
-): BattleSpec {
-  return {
-    A: {
-      ships: composition.map((definitionId) => ({
-        definitionId,
-        bot: createBot("average"),
-      })),
-      squad: new SquadCoordinator(TIER_PROFILES.average.reactionMs),
-    },
-    B: {
-      ships: composition.map((definitionId) => ({
-        definitionId,
-        bot: createBot("expert"),
-      })),
-      squad: null,
-    },
-    seed,
-    ...(rules ? { rules } : {}),
-  };
-}
-
-/** Gate 2, measured. */
-export interface SquadGateMeasurement {
-  /** Squad win rate over every battle of every composition. */
-  readonly winRate: number;
-  readonly battles: number;
-  readonly rows: readonly {
-    readonly composition: readonly string[];
-    readonly summary: SeriesSummary;
-  }[];
-}
-
-/**
- * @param compositions - Squad lists (flown by both sides).
- * @param seeds - Battles per composition.
- * @param rules - Rules in force (engine by default).
- * @returns The coordinated squad's win rate overall and per composition.
- */
-export function measureGate2(
-  compositions: readonly (readonly string[])[],
-  seeds: number,
-  rules?: ArenaRules,
-): SquadGateMeasurement {
-  const rows = compositions.map((composition) => ({
-    composition,
-    summary: runSeries(
-      (seed) => squadSpec(composition, seed, rules),
-      seedRange(seeds),
-    ).summary,
-  }));
-  const battles = rows.reduce((sum, r) => sum + r.summary.battles, 0);
-  const wins = rows.reduce(
-    (sum, r) => sum + r.summary.winRate * r.summary.battles,
-    0,
-  );
-  return { winRate: battles > 0 ? wins / battles : 0, battles, rows };
 }

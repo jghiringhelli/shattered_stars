@@ -74,6 +74,39 @@ async function edgeArrows(page: Page): Promise<Point[]> {
   );
 }
 
+/**
+ * Mark contacts as the squad's target (SquadMark) without touching the
+ * preview scene: wrap its HUD's update so the listed contacts arrive with
+ * `isMarked: true`. Pass null to restore the plain update.
+ */
+async function markContacts(page: Page, ids: string[] | null): Promise<void> {
+  await page.evaluate(
+    ({ key, marked }) => {
+      const hud = (window as any).game.scene.getScene(key).hud;
+      hud.__plainUpdate ??= hud.update.bind(hud);
+      hud.update =
+        marked === null
+          ? hud.__plainUpdate
+          : (snapshot: any) =>
+              hud.__plainUpdate({
+                ...snapshot,
+                contacts: snapshot.contacts.map((c: any) =>
+                  marked.includes(c.id) ? { ...c, isMarked: true } : c,
+                ),
+              });
+    },
+    { key: SCENE_KEY, marked: ids },
+  );
+  await waitFrames(page, 3);
+}
+
+async function markReticleCount(page: Page): Promise<number> {
+  return page.evaluate(
+    (key) => (window as any).game.scene.getScene(key).hud.markReticleCount,
+    SCENE_KEY,
+  );
+}
+
 async function expectArrowsClearOfCluster(page: Page): Promise<void> {
   const [arrows, cluster] = await page.evaluate((key) => {
     const scene = (window as any).game.scene.getScene(key);
@@ -181,6 +214,20 @@ test.describe("HUD preview", () => {
     await test.step("weapon bar with cooldowns and charges", async () => {
       await setPreview(page, { ...calm, showMenu: false });
       await shoot(page, "weapons", CLIPS.weapons);
+    });
+
+    await test.step("squad mark: radar, edge arrow and in-world reticle", async () => {
+      await setPreview(page, { ...calm, zoom: 1, showMenu: false });
+      const arrowsBefore = await edgeArrows(page);
+      await markContacts(page, ["bandit-near", "bandit-left"]);
+      expect(await markReticleCount(page)).toBe(2);
+      const arrows = await edgeArrows(page);
+      expect(arrows.length).toBe(arrowsBefore.length);
+      expectAllOnScreen(arrows);
+      await expectArrowsClearOfCluster(page);
+      await shoot(page, "mark");
+      await markContacts(page, null);
+      expect(await markReticleCount(page)).toBe(0);
     });
 
     await test.step("HUD is pixel-stable across camera zoom", async () => {

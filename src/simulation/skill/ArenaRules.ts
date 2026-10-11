@@ -18,7 +18,7 @@
 import { calculateHitChance } from "../../data/ModeBalancing";
 import { attackIntervalMs } from "../../arcade/systems/CombatTempo";
 import { DEFAULT_SHOT_LEVERS, type ShotLevers } from "../../arcade/ShotLevers";
-import type { ArcPosition } from "./ArenaGeometry";
+import type { ArcPosition } from "../../arcade/ai/AiGeometry";
 
 /** Combat rules and lever settings. */
 export interface ArenaRules {

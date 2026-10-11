@@ -3,7 +3,8 @@
  *
  * The player's forward direction is always up (Squadrons style). Blips are
  * heading-oriented triangles coloured by side and sized by ship class; the
- * locked target gets a diamond. Contacts beyond range are clamped to the rim
+ * locked target gets a diamond and the squad's marked target a red
+ * bracket crosshair. Contacts beyond range are clamped to the rim
  * and dimmed. The static face (disc, range rings, forward cone, player
  * chevron) is drawn once; blips are redrawn into one Graphics per update.
  *
@@ -20,6 +21,7 @@ import {
 import { addPinned, createScreenContainer } from "./holoPrimitives";
 import { drawDiamond, fillBlip } from "./HudIcons";
 import { projectToRadar } from "./hudMath";
+import { drawMarkReticle } from "./markGlyphs";
 import type { ScreenRect } from "./screenRect";
 import type { ContactHudState, HudPose, HudSizeClass } from "./types";
 
@@ -41,6 +43,9 @@ const TICK_LENGTH = 6;
 const CHEVRON = { tip: 8, back: 5, wing: 6 } as const;
 const TARGET_PAD = 4;
 const TARGET_LINE_WIDTH = 1.5;
+/** Squad-mark crosshair: padding around the blip and stroke (px). */
+const MARK_PAD = 6;
+const MARK_LINE_WIDTH = 1.5;
 /** Rim tick angles (Phaser degrees): fore, starboard, aft, port. */
 const RIM_TICKS_DEG = [270, 0, 90, 180] as const;
 
@@ -171,6 +176,15 @@ export class Radar {
           TARGET_LINE_WIDTH,
           HOLO_PALETTE.target,
           1,
+        );
+      }
+      if (contact.isMarked === true) {
+        drawMarkReticle(
+          this.blips,
+          p.x,
+          p.y,
+          blipRadius + MARK_PAD,
+          MARK_LINE_WIDTH,
         );
       }
     }

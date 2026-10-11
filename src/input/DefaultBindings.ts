@@ -58,6 +58,8 @@ export const DEFAULT_KEYBOARD_BINDINGS: readonly KeyboardBinding[] = [
   { key: "E", intent: "SEGNOR_RIGHT", modifiers: { shift: true } },
   { key: "T", intent: "TALLON_LEFT" },
   { key: "T", intent: "TALLON_RIGHT", modifiers: { shift: true } },
+  // Squad: mark the HUD target as the squad's focus (SquadMark)
+  { key: "R", intent: "MARK_TARGET" },
   // Other
   { key: "P", intent: "PAUSE" },
   { key: "ESC", intent: "PAUSE" },
@@ -115,6 +117,8 @@ export const DEFAULT_GAMEPAD_BINDINGS: readonly GamepadBinding[] = [
   { button: 5, intent: "WEAPON_CYCLE" }, // RB
   // Start/Select
   { button: 9, intent: "PAUSE" }, // Start
+  // Right-stick click: mark the HUD target as the squad's focus
+  { button: 11, intent: "MARK_TARGET" }, // R3
 ];
 
 export const DEFAULT_INPUT_PROFILE: InputProfile = {

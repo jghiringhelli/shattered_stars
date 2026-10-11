@@ -508,6 +508,12 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
   bonus; applied inside resolveDiceAttack (callers pass `targetMarked` to opt into the mark)
 - **systems/SquadMark.ts** - One marked target per side (leader/player marks, expires on death or timeout);
   focus fire is what lets a coordinated squad beat solo aces (skill gate 2)
+- **ai/** - THE in-game AI = the skill-gate bots (no Phaser). Scenes give each AI ship a **BotPilot**
+  (`new BotPilot(tier, {reactionScale, random|seed})`, `fly(frame)` / `onCycleCommitted` / `reset`, same
+  shape as PlayerFlightPilot; flies only through applyPilotFlightInput) with the tier from
+  **difficultyToTier** (easy=novice, normal=average, hard=expert, brutal=expert ×0.5 reaction), and each
+  squad side a **SquadCommand** (orders + SquadMark; `aiLeader: false` on the player's side, where the
+  player marks with MARK_TARGET — R / R3 — read via `PlayerFlightPilot.takeMarkRequest()`)
 - **ArcadeStress.ts** - Pilot stress driven by ship dial difficulty (green/white/red rates,
   K-turn + boost instant spikes, hysteresis thresholds, HUD color helpers)
 - **ArcadeOrdnance.ts** - Arcade ordnance slots, cooldowns, homing
@@ -571,8 +577,8 @@ npm test -- --run
 
 All tests must pass. Current: 3309 unit/balance/sim tests + 299 e2e tests.
 
-Piloting gates (src/simulation/skill — novice/average/expert bots flying the real engine through the
-player's inputs): fast smoke versions run in the unit suite (tests/unit/simulation/skill); the full
+Piloting gates (src/simulation/skill — the game's own AI from src/arcade/ai, BotPilot + SquadCommand,
+flying the real engine through the player's inputs): fast smoke versions run in the unit suite (tests/unit/simulation/skill); the full
 gates run with `npm run test:skill` (`SKILL_PAIRS=all` for the whole fighter matrix). Gate 1: expert
 beats novice >= 85% in any fighter pair (novice ship up to +30% points). Gate 2: coordinated average
 squad beats equal points of solo experts >= 70%. Never move the thresholds — tune the levers.

@@ -8,8 +8,8 @@
  */
 
 import { torusDelta } from "../../core/Torus";
-import { REAR_ARC_HALF_DEG } from "../../arcade/ShotConditions";
-import type { PerceivedShip, Pose } from "./SkillTypes";
+import { REAR_ARC_HALF_DEG } from "../ShotConditions";
+import type { PerceivedShip, Pose } from "./BotTypes";
 
 /** A point on the battlefield. */
 export interface Point {

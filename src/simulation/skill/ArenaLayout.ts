@@ -6,7 +6,7 @@
  * Pure: no Phaser.
  */
 
-import type { Pose } from "./SkillTypes";
+import type { Pose } from "../../arcade/ai/BotTypes";
 
 /** Separation range between the two lines for a duel (px). */
 export const DUEL_SEPARATION_PX = { min: 500, max: 900 } as const;

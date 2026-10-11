@@ -110,6 +110,22 @@ describe("PlayerFlightPilot", () => {
     expect(step().motion.control.nextManeuver).toBeNull();
   });
 
+  it("latches a MARK_TARGET press for the scene, once", () => {
+    const { intents, pilot, step } = setup();
+    expect(pilot.takeMarkRequest()).toBe(false);
+    intents.press("MARK_TARGET");
+    expect(step().events).toEqual([]);
+    expect(pilot.takeMarkRequest()).toBe(true);
+    expect(pilot.takeMarkRequest()).toBe(false);
+  });
+
+  it("forgets a pending mark press on reset", () => {
+    const { intents, pilot } = setup();
+    intents.press("MARK_TARGET");
+    pilot.reset();
+    expect(pilot.takeMarkRequest()).toBe(false);
+  });
+
   it("after a bank cycle commits, a continued hold drifts", () => {
     const { intents, pilot, step } = setup();
     intents.held.add("STEER_LEFT");

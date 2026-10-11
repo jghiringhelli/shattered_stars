@@ -13,7 +13,7 @@ import {
   type PilotBot,
   type PilotIntent,
   type PilotView,
-} from "../SkillTypes";
+} from "../BotTypes";
 import {
   judgedHeadingError,
   nearestShip,

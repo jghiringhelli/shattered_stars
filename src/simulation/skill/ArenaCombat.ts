@@ -24,7 +24,11 @@ import {
 import { forgetMarkedTarget } from "../../arcade/systems/SquadMark";
 import { creditKill } from "../../systems/arena/BattleScore";
 import type { CombatState, SideTally } from "./ArenaCombatState";
-import { inFiringArc, torusOffset, unwrapNear } from "./ArenaGeometry";
+import {
+  inFiringArc,
+  torusOffset,
+  unwrapNear,
+} from "../../arcade/ai/AiGeometry";
 import {
   attackInterval,
   shotHitChance,
@@ -83,7 +87,7 @@ export function chooseTarget(
     firingArcDeg: ship.combatStats.firingArc,
     weaponRange: ship.combatStats.weaponRange,
   };
-  const wanted = ship.pilot.hands.currentIntent().targetId;
+  const wanted = ship.pilot.targetId;
   let best: ArenaShip | null = null;
   let bestDistance = Infinity;
   for (const other of state.ships) {

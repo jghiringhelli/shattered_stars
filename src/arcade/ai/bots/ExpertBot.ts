@@ -9,14 +9,14 @@
  * Pure: no Phaser.
  */
 
-import { barrelRollDistance } from "../../../arcade/systems/ShipMotion";
+import { barrelRollDistance } from "../../systems/ShipMotion";
 import {
   extrapolatePose,
   inFiringArc,
   offNoseDeg,
   torusOffset,
   type Shooter,
-} from "../ArenaGeometry";
+} from "../AiGeometry";
 import {
   IDLE_INTENT,
   type BotProfile,
@@ -25,7 +25,7 @@ import {
   type PilotIntent,
   type PilotView,
   type Pose,
-} from "../SkillTypes";
+} from "../BotTypes";
 import { noise, TIER_PROFILES } from "./BotKit";
 import {
   EXPERT_WEIGHTS,

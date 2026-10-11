@@ -9,10 +9,12 @@
 import type { HitImmunityLedger } from "../../arcade/systems/CombatTempo";
 import type { SquadMarks } from "../../arcade/systems/SquadMark";
 import type { SideScore } from "../../systems/arena/BattleScore";
-import type { ArcPosition } from "./ArenaGeometry";
+import type { ArcPosition } from "../../arcade/ai/AiGeometry";
 import type { ArenaRules } from "./ArenaRules";
 import type { ArenaShip } from "./ArenaShip";
-import type { SideId } from "./SkillTypes";
+import type { SideId } from "./ArenaSide";
+
+export type { SideId } from "./ArenaSide";
 
 /** What one side's guns did over a battle. */
 export interface SideTally {
