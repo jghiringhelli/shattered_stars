@@ -125,6 +125,24 @@ describe("toContacts", () => {
     const marks = toContacts([a, b], view("enemy_1")).map((c) => c.isTarget);
     expect(marks).toEqual([false, true]);
   });
+
+  it("flags the squad's marked enemy as marked", () => {
+    const a = HudShipBuilder.anEnemy("enemy_0").build();
+    const b = HudShipBuilder.anEnemy("enemy_1").build();
+    const contacts = toContacts([a, b], { ...view(), markedId: "enemy_0" });
+    expect(contacts.map((c) => c.isMarked)).toEqual([true, false]);
+  });
+
+  it("marks nothing when the side has no mark", () => {
+    const enemy = HudShipBuilder.anEnemy().build();
+    expect(toContacts([enemy], view())[0]!.isMarked).toBe(false);
+  });
+
+  it("never flags an ally as marked", () => {
+    const ally = HudShipBuilder.aPlayer("ally_0").build();
+    const contacts = toContacts([ally], { ...view(), markedId: "ally_0" });
+    expect(contacts[0]!.isMarked).toBe(false);
+  });
 });
 
 describe("selectHudTargetId", () => {
@@ -271,5 +289,14 @@ describe("buildBattleHudSnapshot", () => {
     expect(snapshot.weapons).toEqual([]);
     expect(targetId).toBeNull();
     expect(snapshot.contacts.map((c) => c.id)).toEqual(["enemy_0"]);
+  });
+
+  it("shows the side's marked target on its contact", () => {
+    const player = HudShipBuilder.aPlayer().at(1000, 1000, 0).build();
+    const { snapshot } = buildBattleHudSnapshot({
+      ...input(player),
+      markedId: "enemy_0",
+    });
+    expect(snapshot.contacts[0]!.isMarked).toBe(true);
   });
 });

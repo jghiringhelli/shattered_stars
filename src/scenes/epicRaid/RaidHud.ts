@@ -20,7 +20,7 @@ import { ZoomStableLayer } from "../battleUi/ZoomStableLayer";
 import { BossStatusPanel } from "./BossStatusPanel";
 import type { BossStatusView } from "./bossStatus";
 
-/** Radar reach: the boss starts ~5600 px from the squad, so read far. */
+/** Radar reach: the boss starts half a world (3000 px) from the squad. */
 const RADAR_RANGE_PX = 3000;
 /** Boss panel centre distance from the screen top. */
 const BOSS_PANEL_CENTER_Y = 58;
@@ -36,7 +36,7 @@ const CONTROLS_LINES: readonly string[] = [
   "↑ / ↓  speed   ·   ↑↑  boost",
   "← / →  tap drift, hold bank",
   "Q / E  hard turn   ·   Z  K-turn",
-  "Lasers autofire  ·  wheel zoom  ·  ESC pause",
+  "R  mark target  ·  lasers autofire  ·  ESC pause",
 ];
 
 /** Everything the raid HUD shows in one frame. */
@@ -82,6 +82,11 @@ export class RaidHud {
     this.battleHud.update(frame.battle);
     this.bossPanel.panel.setVisible(frame.boss !== null);
     if (frame.boss) this.bossPanel.update(frame.boss, frame.remainingMs);
+  }
+
+  /** Squad-mark reticles drawn last frame (the player's marked target). */
+  get markReticleCount(): number {
+    return this.battleHud.markReticleCount;
   }
 
   /**

@@ -1,12 +1,14 @@
 /**
  * Duel tempo — headless specification of the X-Wing round tempo in the duel
- * scenes: an attacker never damages the same target twice within a maneuver
- * cycle, no ship attacks more than once per cycle, and a duel between equal
- * pilots lasts many cycles instead of the old 1–2 s trade.
+ * scenes, flown by the same bot pilots as the scenes' AI: an attacker never
+ * damages the same target twice within a maneuver cycle, no ship attacks
+ * more than once per cycle, and a duel between two average pilots (Normal)
+ * lasts 30–60 s instead of the old 1–2 s trade.
  */
 
 import { describe, it, expect } from "vitest";
 import { CYCLE_DURATION_MS } from "../../src/config";
+import type { BotTier } from "../../src/arcade/ai";
 import {
   DUEL_BANNER_MS,
   DUEL_ROUND_LIMIT_MS,
@@ -20,8 +22,9 @@ import {
 const STEP_EPSILON_MS = 1e-6;
 /** Seeds per measured matchup. */
 const SEEDS = 15;
-/** A duel between equal pilots must last at least this long (ms). */
-const MIN_EQUAL_DUEL_MEDIAN_MS = 10_000;
+/** Target band of an average-pilot mirror round (ms). */
+const AVERAGE_MIRROR_MIN_MS = 30_000;
+const AVERAGE_MIRROR_MAX_MS = 60_000;
 
 const FALCON_MIRROR: Omit<DuelTempoConfig, "seed"> = {
   side1: ["confed_falcon"],
@@ -32,6 +35,10 @@ function rounds(base: Omit<DuelTempoConfig, "seed">): DuelTempoResult[] {
   return Array.from({ length: SEEDS }, (_, i) =>
     simulateDuelRound({ ...base, seed: 100 + i }),
   );
+}
+
+function mirrorMedian(tier: BotTier): number | null {
+  return medianDurationMs(rounds({ ...FALCON_MIRROR, tier }));
 }
 
 describe("duel round tempo (headless)", () => {
@@ -72,10 +79,31 @@ describe("duel round tempo (headless)", () => {
     }
   });
 
-  it("makes a duel between equal pilots last many maneuver cycles", () => {
-    expect(medianDurationMs(falconRounds)).toBeGreaterThanOrEqual(
-      MIN_EQUAL_DUEL_MEDIAN_MS,
-    );
+  it("makes a duel between two average pilots (Normal) last 30–60 s", () => {
+    const median = medianDurationMs(falconRounds);
+    expect(median).toBeGreaterThanOrEqual(AVERAGE_MIRROR_MIN_MS);
+    expect(median).toBeLessThanOrEqual(AVERAGE_MIRROR_MAX_MS);
+  });
+
+  it("flies the average tier by default (Normal difficulty)", () => {
+    const average = simulateDuelRound({
+      ...FALCON_MIRROR,
+      seed: 100,
+      tier: "average",
+    });
+    expect(average.durationMs).toBe(falconRounds[0]!.durationMs);
+  });
+
+  it("makes expert pilots finish a duel sooner than novices", () => {
+    expect(mirrorMedian("expert")!).toBeLessThan(mirrorMedian("novice")!);
+  });
+
+  it("finishes every 2v2 between bot squads within the round limit", () => {
+    const squadRounds = rounds({
+      side1: ["confed_falcon", "confed_falcon"],
+      side2: ["terran_raptor", "terran_raptor"],
+    });
+    expect(squadRounds.every((r) => r.winner !== null)).toBe(true);
   });
 });
 

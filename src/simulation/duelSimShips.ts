@@ -45,7 +45,6 @@ export interface DuelSimShip {
   readonly combatStats: ModeCombatStats;
   flight: CycleFlightState;
   readonly dial: readonly ManeuverDefinition[];
-  cycleCommitted: boolean;
   weaponCooldown: number;
   modifiers: CombatModifiers;
   frenzyUntilMs: number;
@@ -104,7 +103,6 @@ function buildShip(spec: ShipSpec): DuelSimShip {
     combatStats,
     flight: createCycleFlight(spec.definitionId, pose),
     dial: getShipDial(spec.definitionId),
-    cycleCommitted: false,
     weaponCooldown: 0,
     modifiers: NEUTRAL_MODIFIERS,
     frenzyUntilMs: 0,

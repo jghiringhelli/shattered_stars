@@ -1,7 +1,8 @@
 /**
  * duel-tempo.spec.ts — the X-Wing round tempo inside the real Dogfight and
- * Ace Duel scenes. Two equal pilots (same hull, both flown by the duel AI at
- * normal) fight one round while every damaging hit is logged:
+ * Ace Duel scenes. Two equal pilots (same hull, both flown by average bots —
+ * the Normal opponent, and the player's ship autopiloted by the same bot)
+ * fight one round while every damaging hit is logged:
  *
  *  - an attacker never damages the same target twice within one maneuver
  *    cycle (hit immunity), and
@@ -64,6 +65,29 @@ async function instrument(page: Page, sceneKey: string): Promise<void> {
   }, sceneKey);
 }
 
+/**
+ * The human's ship flies as an average bot (the opponent's tier at Normal)
+ * for this round: a BotPilot joins the scene's crew and player input is off.
+ *
+ * @param idPath - Scene property holding the player's ship id.
+ */
+async function autopilot(
+  page: Page,
+  sceneKey: string,
+  idPath: "playerShipIds[0]" | "flagshipId",
+): Promise<void> {
+  await page.evaluate(
+    async ({ key, path }) => {
+      const { BotPilot } = await import("/src/arcade/ai/index.ts");
+      const s = (window as any).game.scene.getScene(key);
+      const id = path === "flagshipId" ? s.flagshipId : s.playerShipIds[0];
+      s.crew.pilots.set(id, new BotPilot("average", { random: Math.random }));
+      s.flyPlayer = () => undefined;
+    },
+    { key: sceneKey, path: idPath },
+  );
+}
+
 async function fightOneRound(page: Page, sceneKey: string): Promise<TempoLog> {
   await page.waitForFunction(
     (key) => (window as any).game.scene.getScene(key).isRoundActive === true,
@@ -117,12 +141,10 @@ test.describe("Duel round tempo in the live scenes", () => {
       s.playerShipId = ship;
       s.enemyShipId = ship;
       s.enemyFaction = "terran_hegemony";
-      s.flyPlayer = (own: any) => {
-        const foe = s.ships.get("ai_0");
-        if (foe && foe.hull > 0) s.steerAi(own, foe);
-      };
+      s.difficulty = "normal";
       s.startMatch();
     }, MIRROR_SHIP);
+    await autopilot(page, "DogfightScene", "playerShipIds[0]");
     const log = await fightOneRound(page, "DogfightScene");
     expectHitImmunity(log);
     report("Dogfight falcon mirror", log);
@@ -147,11 +169,10 @@ test.describe("Duel round tempo in the live scenes", () => {
         side1: side("free_confederation", "Blue"),
         side2: side("terran_hegemony", "Red"),
       };
-      s.flyPlayer = (own: any) => s.steerAi(own);
+      s.difficulty = "normal";
       s.startDuel();
-      // The flagship flies as an equal AI pilot (normal difficulty).
-      s.ships.get(s.flagshipId).owner = "ai";
     }, MIRROR_SHIP);
+    await autopilot(page, "AceDuelScene", "flagshipId");
     const log = await fightOneRound(page, "AceDuelScene");
     expectHitImmunity(log);
     report("Ace Duel falcon mirror", log);

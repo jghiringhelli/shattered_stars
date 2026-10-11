@@ -17,21 +17,28 @@ import { createSeededRng } from "../../utils/random";
 import type { CycleFlightState } from "../systems/CycleFlight";
 import { canHullKTurn } from "../systems/AiPursuit";
 import type { FlightControlResult } from "../systems/PilotFlightTypes";
+import { offNoseDeg, type Point } from "./AiGeometry";
 import { botProfile } from "./BotDifficulty";
-import type {
-  BotProfile,
-  BotTier,
-  PilotBot,
-  PilotIntent,
-  SquadOrder,
+import {
+  IDLE_INTENT,
+  type BotProfile,
+  type BotTier,
+  type OwnShipView,
+  type PilotBot,
+  type PilotIntent,
+  type SquadOrder,
 } from "./BotTypes";
 import { createBot } from "./bots/BotFactory";
+import { steerForError, type SteerThresholds } from "./bots/BotKit";
 import { contactSnapshot, ownShipView, type BotContact } from "./BotView";
 import { SnapshotHistory } from "./Perception";
 import { PilotHands } from "./PilotHands";
 
 /** Seed used when neither a seed nor a random source is given. */
 const DEFAULT_BOT_SEED = 1;
+
+/** Steering escalation while escaping a hazard: turn hard, early. */
+export const ESCAPE_STEER: SteerThresholds = { hold: 10, drift: 25, bank: 50 };
 
 /** BotPilot options. */
 export interface BotPilotOptions {
@@ -58,6 +65,11 @@ export interface BotFlightFrame {
   readonly nowMs: number;
   readonly deltaMs: number;
   readonly worldSize: number;
+  /**
+   * A hazard (the arena's asteroid belt...) threatens the ship: break off
+   * and fly toward this point. Null/omitted = no hazard.
+   */
+  readonly safePoint?: Point | null;
 }
 
 export class BotPilot {
@@ -166,7 +178,10 @@ export class BotPilot {
       enemies: others.filter((s) => s.side !== self.side),
       order: frame.order ?? null,
     };
-    this.hands.setIntent(this.bot.decide(view, this.random));
+    const intent = this.bot.decide(view, this.random);
+    this.hands.setIntent(
+      frame.safePoint ? escapeIntent(intent, view.self, frame) : intent,
+    );
   }
 
   /**
@@ -177,4 +192,27 @@ export class BotPilot {
     this.history ??= new SnapshotHistory(this.profile.reactionMs, worldSize);
     return this.history;
   }
+}
+
+/**
+ * The bot's intent turned into a hazard escape: it steers for the safe point
+ * (no specials, no dash) and keeps shooting whatever it was targeting.
+ *
+ * @param intent - What the bot decided.
+ * @param self - Its own ship.
+ * @param frame - This frame (with the safe point).
+ * @returns The escape intent.
+ */
+function escapeIntent(
+  intent: PilotIntent,
+  self: OwnShipView,
+  frame: BotFlightFrame,
+): PilotIntent {
+  const point = frame.safePoint ?? self;
+  const error = offNoseDeg(self, point, frame.worldSize);
+  return {
+    ...IDLE_INTENT,
+    maneuver: steerForError(error, ESCAPE_STEER, self.isStressed),
+    targetId: intent.targetId,
+  };
 }

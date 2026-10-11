@@ -6,9 +6,11 @@
  * flank slot, cohesion rally point, support wingman, fall back / drag) and
  * manages the side's SquadMark:
  * - AI squads (`aiLeader: true`): the AI leader marks the squad's focus;
- * - the player's side (`aiLeader: false`): only the player marks (with the
+ * - the player's side (`aiLeader: false`): the player marks (with the
  *   MARK_TARGET intent → SquadMark.placeMark); wingmen focus the player's
- *   mark, or the coordinator's own choice while there is none.
+ *   mark, or the coordinator's own choice while there is none. With
+ *   `assistMark` the wingmen also mark that choice while the player has no
+ *   mark, and keep the player's mark refreshed while its target lives.
  *
  * Pure: no Phaser.
  */
@@ -39,6 +41,11 @@ export interface SquadCommandOptions {
   readonly side: SideKey;
   /** True: the AI leader marks the focus. False: only the player marks. */
   readonly aiLeader: boolean;
+  /**
+   * Player-led sides only: the squad marks its own focus while the player
+   * has none (the player's mark always wins). Default false.
+   */
+  readonly assistMark?: boolean;
   /** Delay of the squad's shared picture (ms). Default: the average pilot's. */
   readonly reactionMs?: number;
   /** Re-plan interval (ms). Default: {@link SQUAD_PLAN_INTERVAL_MS}. */
@@ -61,6 +68,7 @@ export interface SquadCommandFrame {
 export class SquadCommand {
   readonly side: SideKey;
   private readonly aiLeader: boolean;
+  private readonly assistMark: boolean;
   private readonly reactionMs: number;
   private readonly planIntervalMs: number;
   private readonly worldSize: number;
@@ -75,6 +83,7 @@ export class SquadCommand {
   constructor(options: SquadCommandOptions) {
     this.side = options.side;
     this.aiLeader = options.aiLeader;
+    this.assistMark = options.assistMark ?? false;
     this.reactionMs = options.reactionMs ?? TIER_PROFILES.average.reactionMs;
     this.planIntervalMs = options.planIntervalMs ?? SQUAD_PLAN_INTERVAL_MS;
     this.worldSize = options.worldSize ?? BATTLEFIELD_SIZE;
@@ -139,7 +148,7 @@ export class SquadCommand {
       : markedTargetOf(frame.marks, this.side, frame.nowMs);
     this.orders = this.coordinator.plan(own, enemies, playerMark);
     this.focus = [...this.orders.values()][0]?.focusTargetId ?? null;
-    if (!this.aiLeader) return frame.marks;
+    if (!this.aiLeader && !this.assistMark) return frame.marks;
     return this.focus
       ? placeMark(frame.marks, this.side, this.focus, frame.nowMs)
       : clearMark(frame.marks, this.side);

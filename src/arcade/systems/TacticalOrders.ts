@@ -13,18 +13,9 @@
 import { samplePath, type ShipControlState } from "../../core/ArcadeControls";
 import type { ManeuverDefinition, ManeuverDirection } from "../../core/types";
 import { generateManeuverPath } from "../../systems/MovementSystem";
-import { chooseAiHeadingError as chooseSloppyHeadingError } from "./AiPursuit";
 
 /** Waypoints sampled per previewed maneuver (matches the engine's path). */
 export const PREVIEW_PATH_POINTS = 20;
-
-/**
- * Heading errors (°) a sloppy AI pilot flies instead of the true one:
- * hard turn, bank or hold course either way — the spread of a random dial pick.
- */
-export const TACTICAL_SLOPPY_HEADING_ERRORS_DEG: readonly number[] = [
-  -90, -40, 0, 40, 90,
-];
 
 /** A pose on the battlefield. */
 export interface PreviewPose {
@@ -155,27 +146,6 @@ export function planOrderPreview(
     control.movementProfile,
   );
   return { remaining, queued };
-}
-
-/**
- * The heading error an AI pilot steers by this frame.
- *
- * @param trueErrorDeg - Signed heading error to its target (°).
- * @param flyOptimal - Whether the pilot flies the optimal line this time.
- * @param roll - Uniform random value in [0, 1) choosing a sloppy error.
- * @returns The heading error to steer by (°).
- */
-export function chooseAiHeadingError(
-  trueErrorDeg: number,
-  flyOptimal: boolean,
-  roll: number,
-): number {
-  return chooseSloppyHeadingError(
-    trueErrorDeg,
-    flyOptimal,
-    roll,
-    TACTICAL_SLOPPY_HEADING_ERRORS_DEG,
-  );
 }
 
 /**

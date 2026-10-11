@@ -96,6 +96,11 @@ export class TacticalHud {
       .setColor(toCssColor(matchClockColor(frame.remainingMs)));
   }
 
+  /** Squad-mark reticles drawn last frame (the player's marked target). */
+  get markReticleCount(): number {
+    return this.battleHud.markReticleCount;
+  }
+
   /**
    * @param visible - Whether the HUD shows (hidden under the end screen).
    */

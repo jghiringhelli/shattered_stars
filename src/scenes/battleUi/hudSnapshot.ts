@@ -143,6 +143,24 @@ export function contactHudState(
 }
 
 /**
+ * Flags the squad's marked target among the HUD contacts.
+ *
+ * @param contacts - HUD contacts.
+ * @param markedId - The player's side's marked target, or null.
+ * @returns The contacts, the marked one with `isMarked: true`.
+ */
+export function markContacts(
+  contacts: readonly ContactHudState[],
+  markedId: string | null,
+): ContactHudState[] {
+  return contacts.map((contact) =>
+    markedId !== null && contact.id === markedId
+      ? { ...contact, isMarked: true }
+      : contact,
+  );
+}
+
+/**
  * The always-on primary laser slot.
  *
  * @param cooldownRemainingMs - Time until it may fire again.

@@ -33,7 +33,6 @@ import {
 } from "../data/ModeBalancing";
 import { HealthBar } from "../ui/HealthBar";
 import { EffectsManager } from "../rendering/EffectsManager";
-import { headingDiffToTarget } from "../systems/MovementSystem";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
 import { syncListenerToCamera } from "../audio/CameraListener";
@@ -47,8 +46,6 @@ import {
 import type { ManeuverDefinition } from "../core/types";
 import {
   createCycleFlight,
-  pursuitSpeed,
-  steerAiFlight,
   tickCycleFlight,
   type CycleFlightState,
 } from "../arcade/systems/CycleFlight";
@@ -88,12 +85,14 @@ import {
   type CombatModifiers,
 } from "../core/CombatModifiers";
 import { random } from "../utils/random";
+import { torusDistance } from "../core/Torus";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import {
-  mayAiKTurn,
+  raidBotSkill,
   type EpicAiSide,
   type EpicDifficulty,
 } from "../arcade/systems/EpicAiFlight";
+import type { BotContact } from "../arcade/ai";
 import {
   bossPhaseForHullRatio,
   bossBroadsideDamage,
@@ -125,11 +124,25 @@ import {
 import { buildRaidSetupScreen } from "./epicRaid/RaidSetupScreen";
 import { RaidHud } from "./epicRaid/RaidHud";
 import { BOSS_CONTACT_ID, raidContacts } from "./epicRaid/raidHudSnapshot";
+import {
+  bossContact,
+  escortWaveKey,
+  RAID_BOSS_SIDE,
+  RAID_PLAYER_SIDE,
+  screenBossUntilEscortsFall,
+} from "./epicRaid/raidTactics";
 import type { BossStatusView } from "./epicRaid/bossStatus";
 import { HoloPauseOverlay } from "./battleUi/HoloPauseOverlay";
 import { showHoloResultScreen } from "./battleUi/HoloResultScreen";
 import { fitBackdropToZoom } from "./battleUi/fitBackdropToZoom";
-import { playerHudState, primaryWeaponSlot } from "./battleUi/hudSnapshot";
+import {
+  markContacts,
+  playerHudState,
+  primaryWeaponSlot,
+} from "./battleUi/hudSnapshot";
+import { BattleBots } from "./battleUi/BattleBots";
+import { botContactOf } from "./battleUi/botContacts";
+import { pickShotTarget } from "./battleUi/shotPreference";
 
 interface BossSection {
   id: string;
@@ -184,8 +197,6 @@ interface EpicShip {
   /** Cycle-engine motion and pilot stress; x/y/angle mirror its pose. */
   flight: CycleFlightState;
   dial: readonly ManeuverDefinition[];
-  /** True on the frame this ship's maneuver cycle committed. */
-  cycleCommitted: boolean;
   weaponCooldown: number;
   /** Quick build flown (upgrades + pilot), or null for the bare hull. */
   loadoutId: string | null;
@@ -208,6 +219,31 @@ const VICTORY_SCREEN_DELAY_MS = 1000;
 const RAID_ZOOM = { battle: 0.7, min: 0.4, max: 1.5 } as const;
 /** Painted backdrop texture id. */
 const RAID_BACKDROP = "galaxy_spiral";
+/**
+ * Where the boss lies: a quarter world from the top seam, so the fight
+ * around it never straddles the wrap.
+ */
+const BOSS_SPAWN = {
+  x: BATTLEFIELD_SIZE / 2,
+  y: BATTLEFIELD_SIZE / 4,
+} as const;
+/** The squad starts half a world south of the boss: as far as the torus allows. */
+const SQUAD_SPAWN = {
+  x: BOSS_SPAWN.x,
+  y: BOSS_SPAWN.y + BATTLEFIELD_SIZE / 2,
+} as const;
+
+/**
+ * @param a - A point.
+ * @param b - Another point.
+ * @returns Their shortest distance on the wrapping battlefield.
+ */
+function worldDistance(
+  a: Readonly<{ x: number; y: number }>,
+  b: Readonly<{ x: number; y: number }>,
+): number {
+  return torusDistance(a.x, a.y, b.x, b.y, BATTLEFIELD_SIZE);
+}
 
 /** What {@link EpicBattleScene.createShip} needs to build a flying ship. */
 interface ShipSpawn {
@@ -226,12 +262,6 @@ interface Pose {
   readonly y: number;
   readonly angle: number;
 }
-
-/** Where the player's wingmen fly when there is no boss and no escort left. */
-const WINGMAN_FALLBACK_GOAL: Readonly<{ x: number; y: number }> = {
-  x: BATTLEFIELD_SIZE / 2,
-  y: 200,
-};
 
 interface ShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
@@ -289,6 +319,14 @@ export class EpicBattleScene extends Phaser.Scene {
 
   /** X-Wing round tempo: who struck whom this maneuver cycle. */
   private readonly hitLedger = new HitImmunityLedger();
+
+  /** The raid's AI: escorts' and wingmen's bot pilots, squads and marks. */
+  private readonly bots = new BattleBots({
+    worldSize: BATTLEFIELD_SIZE,
+    random: () => random.next(),
+  });
+  /** Escort waves launched so far (each wave flies as its own squad). */
+  private escortWaves = 0;
 
   // UI
   private raidHud: RaidHud | null = null;
@@ -377,6 +415,8 @@ export class EpicBattleScene extends Phaser.Scene {
     this.pilot.reset();
     this.pilotedShipId = null;
     this.hitLedger.clear();
+    this.bots.reset();
+    this.escortWaves = 0;
     this.lastBossAbilityTime = 0;
     this.raidHud = null;
     this.pauseMenu = null;
@@ -412,6 +452,7 @@ export class EpicBattleScene extends Phaser.Scene {
 
     this.setupInput();
     this.createPauseMenu();
+    this.addPlayerSquad();
     this.spawnBoss();
     this.spawnPlayerSquad();
     this.spawnEscorts();
@@ -422,7 +463,7 @@ export class EpicBattleScene extends Phaser.Scene {
     );
     this.refreshHud();
 
-    // Follow the flagship: the boss spawns at y=200 and the squad at y=5800,
+    // Follow the flagship: the boss and the squad spawn half a world apart,
     // so the camera's create()-time centre shows neither.
     const flagship = this.shipSprites.get(this.playerShipIds[0] ?? "");
     if (flagship) {
@@ -460,23 +501,27 @@ export class EpicBattleScene extends Phaser.Scene {
     if (!this.raidHud) return;
     const flagship = this.livingFlagship();
     const boss = this.boss;
+    const contacts = raidContacts({
+      flagshipId: flagship?.id ?? null,
+      ships: this.ships.values(),
+      boss: boss
+        ? {
+            id: boss.id,
+            x: boss.x,
+            y: boss.y,
+            angle: boss.angle,
+            hull: boss.totalHull,
+          }
+        : null,
+      targetId: flagship ? this.flagshipTargetId(flagship) : null,
+    });
     this.raidHud.update({
       battle: {
         player: flagship ? playerHudState(flagship) : null,
-        contacts: raidContacts({
-          flagshipId: flagship?.id ?? null,
-          ships: this.ships.values(),
-          boss: boss
-            ? {
-                id: boss.id,
-                x: boss.x,
-                y: boss.y,
-                angle: boss.angle,
-                hull: boss.totalHull,
-              }
-            : null,
-          targetId: flagship ? this.flagshipTargetId(flagship) : null,
-        }),
+        contacts: markContacts(
+          contacts,
+          this.bots.markedTarget(RAID_PLAYER_SIDE, this.time.now),
+        ),
         weapons: flagship
           ? [
               primaryWeaponSlot(
@@ -499,16 +544,15 @@ export class EpicBattleScene extends Phaser.Scene {
   }
 
   /**
-   * What the flagship's lasers are locked on: the boss in range, else the
-   * escort it would shoot, else the boss as the raid objective.
+   * What the flagship's lasers are locked on (and what R marks): the target
+   * it would shoot now, else the boss as the raid objective.
    *
    * @param flagship - The flagship.
    * @returns A HUD contact id, or null.
    */
   private flagshipTargetId(flagship: EpicShip): string | null {
-    if (this.bossInRange(flagship)) return BOSS_CONTACT_ID;
-    const escort = this.findEscortTarget(flagship);
-    if (escort) return escort.id;
+    const shot = this.shotTargetId(flagship);
+    if (shot) return shot;
     return this.boss && this.boss.totalHull > 0 ? BOSS_CONTACT_ID : null;
   }
 
@@ -615,8 +659,8 @@ export class EpicBattleScene extends Phaser.Scene {
     this.boss = {
       id: BOSS_CONTACT_ID,
       faction: this.selectedBossFaction,
-      x: BATTLEFIELD_SIZE / 2,
-      y: 200,
+      x: BOSS_SPAWN.x,
+      y: BOSS_SPAWN.y,
       angle: 180,
       sections,
       totalHull: sumSectionHull(sections),
@@ -641,13 +685,7 @@ export class EpicBattleScene extends Phaser.Scene {
   private fireBroadside(boss: BossShip): void {
     const now = this.time.now;
     for (const ship of this.livingShips(this.playerShipIds)) {
-      const distance = Phaser.Math.Distance.Between(
-        boss.x,
-        boss.y,
-        ship.x,
-        ship.y,
-      );
-      if (distance >= BOSS_BROADSIDE_RANGE_PX) continue;
+      if (worldDistance(boss, ship) >= BOSS_BROADSIDE_RANGE_PX) continue;
       if (this.hitLedger.isImmune(boss.id, ship.id, now)) continue;
       const damage = mitigateBossDamage(
         bossDamagePoints(bossBroadsideDamage(boss.phase)),
@@ -777,8 +815,8 @@ export class EpicBattleScene extends Phaser.Scene {
 
   private spawnPlayerSquad(): void {
     const ships = getShipsByFaction(this.playerFaction);
-    const centerX = BATTLEFIELD_SIZE / 2;
-    const startY = BATTLEFIELD_SIZE - 200;
+    const centerX = SQUAD_SPAWN.x;
+    const startY = SQUAD_SPAWN.y;
 
     // Spawn a squad within point budget
     let pointsUsed = 0;
@@ -823,8 +861,46 @@ export class EpicBattleScene extends Phaser.Scene {
     });
     this.ships.set(id, ship);
     this.playerShipIds.push(id);
+    this.crewShip(id, "wingman", RAID_PLAYER_SIDE);
     this.createShipSprite(ship);
     this.createHealthBar(ship);
+  }
+
+  /**
+   * The player's squad: the player marks (R); without a mark the wingmen
+   * mark their own focus, clearing the escort screen before the boss.
+   */
+  private addPlayerSquad(): void {
+    this.bots.addSquad({
+      key: RAID_PLAYER_SIDE,
+      side: RAID_PLAYER_SIDE,
+      aiLeader: false,
+      assistMark: true,
+      screen: (contacts, nowMs) =>
+        screenBossUntilEscortsFall(contacts, {
+          bossId: BOSS_CONTACT_ID,
+          bossMarked:
+            this.bots.markedTarget(RAID_PLAYER_SIDE, nowMs) === BOSS_CONTACT_ID,
+        }),
+    });
+  }
+
+  /**
+   * Gives an AI-capable ship its bot pilot and squad. Every player ship gets
+   * one: a wingman promoted to flagship is simply not flown by it.
+   *
+   * @param shipId - The ship.
+   * @param side - Escort or wingman (sets the bot's tier).
+   * @param squadKey - Its squad.
+   */
+  private crewShip(shipId: string, side: EpicAiSide, squadKey: string): void {
+    const skill = raidBotSkill(side, this.difficulty);
+    this.bots.addPilot({
+      shipId,
+      tier: skill.tier,
+      reactionScale: skill.reactionScale,
+    });
+    this.bots.enlist(shipId, squadKey);
   }
 
   private spawnEscorts(): void {
@@ -855,8 +931,9 @@ export class EpicBattleScene extends Phaser.Scene {
   }
 
   /**
-   * Spawns one wave of boss escorts; the wave's quick builds are assigned
-   * together so no unique ace flies twice in it.
+   * Spawns one wave of boss escorts, flying as its own AI-led squad; the
+   * wave's quick builds are assigned together so no unique ace flies twice
+   * in it.
    *
    * @param defId - Ship definition id of every escort in the wave.
    * @param faction - The boss's faction.
@@ -867,35 +944,43 @@ export class EpicBattleScene extends Phaser.Scene {
     faction: FactionId,
     positions: readonly Readonly<{ x: number; y: number }>[],
   ): void {
+    this.escortWaves += 1;
+    const squadKey = escortWaveKey(this.escortWaves);
+    this.bots.addSquad({ key: squadKey, side: RAID_BOSS_SIDE, aiLeader: true });
     const loadoutIds = assignQuickBuilds(positions.map(() => defId));
     positions.forEach((at, index) =>
-      this.spawnEscort(defId, faction, at, loadoutIds[index] ?? null),
+      this.spawnEscort(
+        { defId, faction, at, loadoutId: loadoutIds[index] ?? null },
+        squadKey,
+      ),
     );
   }
 
   /**
-   * @param defId - Ship definition id.
-   * @param faction - The boss's faction.
-   * @param at - Spawn position.
-   * @param loadoutId - Quick build it flies, or null for the bare hull.
+   * @param escort - Definition, faction, position and quick build.
+   * @param squadKey - Its wave's squad.
    */
   private spawnEscort(
-    defId: string,
-    faction: FactionId,
-    at: Readonly<{ x: number; y: number }>,
-    loadoutId: string | null,
+    escort: Readonly<{
+      defId: string;
+      faction: FactionId;
+      at: Readonly<{ x: number; y: number }>;
+      loadoutId: string | null;
+    }>,
+    squadKey: string,
   ): void {
     const id = `escort_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const ship = this.createShip({
       id,
-      defId,
-      faction,
+      defId: escort.defId,
+      faction: escort.faction,
       owner: "ai",
-      pose: { x: at.x, y: at.y, angle: 180 },
-      loadoutId,
+      pose: { x: escort.at.x, y: escort.at.y, angle: 180 },
+      loadoutId: escort.loadoutId,
     });
     this.ships.set(id, ship);
     this.escortShipIds.push(id);
+    this.crewShip(id, "escort", squadKey);
     this.createShipSprite(ship);
     this.createHealthBar(ship);
   }
@@ -926,7 +1011,6 @@ export class EpicBattleScene extends Phaser.Scene {
       combatStats,
       flight: createCycleFlight(defId, pose),
       dial: getShipDial(defId),
-      cycleCommitted: false,
       weaponCooldown: 0,
       loadoutId: spawn.loadoutId,
       modifiers: NEUTRAL_MODIFIERS,
@@ -995,11 +1079,11 @@ export class EpicBattleScene extends Phaser.Scene {
       });
       this.setFlight(ship, tick.state);
       this.regenerateShipShields(ship, deltaMs);
-      ship.cycleCommitted = tick.completed !== null;
-      if (tick.completed && ship.id === this.pilotedShipId) {
-        this.pilot.onCycleCommitted(
-          tick.state.motion.control.currentManeuver ?? "straight",
-        );
+      if (tick.completed) {
+        const started = tick.state.motion.control.currentManeuver ?? "straight";
+        if (ship.id === this.pilotedShipId)
+          this.pilot.onCycleCommitted(started);
+        else this.bots.onCycleCommitted(ship.id, started);
       }
       this.shipSprites
         .get(ship.id)
@@ -1058,21 +1142,28 @@ export class EpicBattleScene extends Phaser.Scene {
    */
   private processCombat(delta: number): void {
     for (const ship of this.livingShips(this.playerShipIds)) {
-      if (!this.weaponReady(ship, delta)) continue;
-      if (this.boss && this.bossInRange(ship)) {
-        this.fireAt(ship, this.boss.id, () => this.attackBoss(ship));
-        continue;
-      }
-      const target = this.findEscortTarget(ship);
-      if (target)
-        this.fireAt(ship, target.id, () => this.attackShip(ship, target));
+      if (this.weaponReady(ship, delta)) this.fireShot(ship);
     }
     for (const ship of this.livingShips(this.escortShipIds)) {
-      if (!this.weaponReady(ship, delta)) continue;
-      const target = this.findPlayerTarget(ship);
-      if (target)
-        this.fireAt(ship, target.id, () => this.attackShip(ship, target));
+      if (this.weaponReady(ship, delta)) this.fireShot(ship);
     }
+  }
+
+  /**
+   * A ready ship fires at its shot target (the boss, or a ship), if any.
+   *
+   * @param ship - A living ship whose weapon is ready.
+   */
+  private fireShot(ship: EpicShip): void {
+    const targetId = this.shotTargetId(ship);
+    if (!targetId) return;
+    if (this.boss && targetId === this.boss.id) {
+      this.fireAt(ship, targetId, () => this.attackBoss(ship));
+      return;
+    }
+    const target = this.ships.get(targetId);
+    if (target)
+      this.fireAt(ship, targetId, () => this.attackShip(ship, target));
   }
 
   /**
@@ -1114,63 +1205,58 @@ export class EpicBattleScene extends Phaser.Scene {
    */
   private bossInRange(ship: EpicShip): boolean {
     if (!this.boss || this.boss.totalHull <= 0) return false;
-    const distance = Phaser.Math.Distance.Between(
-      ship.x,
-      ship.y,
-      this.boss.x,
-      this.boss.y,
-    );
-    return distance < ship.combatStats.weaponRange;
-  }
-  private findEscortTarget(ship: EpicShip): EpicShip | null {
-    let best: EpicShip | null = null;
-    let bestDist = Infinity;
-
-    for (const escortId of this.escortShipIds) {
-      const escort = this.ships.get(escortId);
-      if (!escort || escort.hull <= 0) continue;
-
-      const dist = Phaser.Math.Distance.Between(
-        ship.x,
-        ship.y,
-        escort.x,
-        escort.y,
-      );
-      if (dist < ship.combatStats.weaponRange && dist < bestDist) {
-        best = escort;
-        bestDist = dist;
-      }
-    }
-
-    return best;
-  }
-
-  private findPlayerTarget(ship: EpicShip): EpicShip | null {
-    let best: EpicShip | null = null;
-    let bestDist = Infinity;
-
-    for (const playerId of this.playerShipIds) {
-      const player = this.ships.get(playerId);
-      if (!player || player.hull <= 0) continue;
-
-      const dist = Phaser.Math.Distance.Between(
-        ship.x,
-        ship.y,
-        player.x,
-        player.y,
-      );
-      if (dist < ship.combatStats.weaponRange && dist < bestDist) {
-        best = player;
-        bestDist = dist;
-      }
-    }
-
-    return best;
+    return worldDistance(ship, this.boss) < ship.combatStats.weaponRange;
   }
 
   /**
-   * One bolt at the boss, carrying the attacker's laser bonuses; the boss's
-   * pose stands in as the target for the pilot's conditional bonuses.
+   * What a ship shoots now: its squad's mark, then its pilot's target (AI
+   * ships), then the nearest enemy ship in range, then the boss in range —
+   * the escort screen first unless the boss is marked.
+   *
+   * @param ship - A living ship.
+   * @returns Target id (the boss's for the boss), or null.
+   */
+  private shotTargetId(ship: EpicShip): string | null {
+    const isPlayerSide = ship.owner === "player";
+    const enemies = this.livingShips(
+      isPlayerSide ? this.escortShipIds : this.playerShipIds,
+    );
+    const inRange = enemies
+      .map((enemy) => ({
+        id: enemy.id,
+        distance: worldDistance(ship, enemy),
+      }))
+      .filter((entry) => entry.distance < ship.combatStats.weaponRange)
+      .sort((a, b) => a.distance - b.distance)
+      .map((entry) => entry.id);
+    if (isPlayerSide && this.boss && this.bossInRange(ship))
+      inRange.push(this.boss.id);
+    return pickShotTarget(inRange, [
+      this.markedTargetOf(ship),
+      ship.id === this.pilotedShipId ? null : this.bots.pilotTargetOf(ship.id),
+    ]);
+  }
+
+  /**
+   * @param ship - A ship.
+   * @returns The target its squad has marked right now, or null.
+   */
+  private markedTargetOf(ship: EpicShip): string | null {
+    return this.bots.markedTargetFor(ship.id, this.sideOf(ship), this.time.now);
+  }
+
+  /**
+   * @param ship - A ship.
+   * @returns Its raid side key.
+   */
+  private sideOf(ship: EpicShip): string {
+    return ship.owner === "player" ? RAID_PLAYER_SIDE : RAID_BOSS_SIDE;
+  }
+
+  /**
+   * One bolt at the boss, carrying the attacker's laser bonuses (and the
+   * squad mark's when the player's side marked the boss); the boss's pose
+   * stands in as the target for the pilot's conditional bonuses.
    *
    * @param attacker - The firing player-side ship.
    * @returns Whether the bolt damaged the boss.
@@ -1189,6 +1275,7 @@ export class EpicBattleScene extends Phaser.Scene {
       attackerHasWingman: this.fliesWithWingman(attacker),
       nowMs: this.time.now,
       roll: random.next(),
+      targetMarked: this.markedTargetOf(attacker) === this.boss.id,
     });
     const hit = damage > 0;
     if (hit) this.damageBoss(this.boss, damage);
@@ -1282,6 +1369,7 @@ export class EpicBattleScene extends Phaser.Scene {
       targetHasWingman: this.fliesWithWingman(target),
       nowMs: this.time.now,
       roll: random.next(),
+      targetMarked: this.markedTargetOf(attacker) === target.id,
     });
 
     this.effectsManager.fireLaser(
@@ -1390,6 +1478,7 @@ export class EpicBattleScene extends Phaser.Scene {
     const ship = this.ships.get(shipId);
     if (!ship) return;
     this.hitLedger.forget(shipId);
+    this.bots.remove(shipId);
 
     if (ship.owner === "player") {
       this.enemySideScore = creditKill(this.enemySideScore, ship.definitionId);
@@ -1443,75 +1532,73 @@ export class EpicBattleScene extends Phaser.Scene {
 
   /**
    * Queues every ship's next maneuver: the flagship's from the player's
-   * input, boss escorts' by pursuing the closest player ship, and the
-   * player's wingmen by attacking the boss (or the closest escort once the
-   * boss is down).
+   * input, every other ship's from its bot pilot (escorts at the raid
+   * difficulty's tier, wingmen average) under its squad's orders. The
+   * player's R marks the flagship's target for the player's squad.
    *
    * @param time - Scene time (ms).
    * @param delta - Frame length (ms).
    */
   private updateAI(time: number, delta: number): void {
-    for (const escortId of this.escortShipIds) {
-      const ship = this.ships.get(escortId);
-      if (!ship || ship.hull <= 0) continue;
-      const target = this.findClosestPlayer(ship);
-      if (target) this.steerAi(ship, target, "escort");
+    const flagship = this.livingFlagship();
+    this.takePlayerMark(flagship);
+    const contacts = this.aiContacts();
+    this.bots.command(this.time.now, contacts);
+    const aiShips = [
+      ...this.livingShips(this.escortShipIds),
+      ...this.livingShips(this.playerShipIds),
+    ];
+    for (const ship of aiShips) {
+      if (ship !== flagship) this.flyBot(ship, contacts, time, delta);
     }
-
-    const flagshipId = this.playerShipIds[0];
-    for (const playerId of this.playerShipIds) {
-      if (playerId === flagshipId) continue;
-      const ship = this.ships.get(playerId);
-      if (ship && ship.hull > 0) {
-        this.steerAi(ship, this.wingmanGoal(ship), "wingman");
-      }
-    }
-
-    const flagship = this.ships.get(flagshipId ?? "");
-    if (flagship && flagship.hull > 0) this.flyPlayer(flagship, time, delta);
+    if (flagship) this.flyPlayer(flagship, time, delta);
   }
 
   /**
-   * Where a player wingman flies: the boss while it stands, then the closest
-   * escort, then wherever the boss was.
+   * R (MARK_TARGET) marks the flagship's target for the player's squad: an
+   * escort to focus, or the boss to turn the whole squad onto it.
    *
-   * @param ship - The wingman.
-   * @returns The point it steers toward.
+   * @param flagship - The flagship, or null.
    */
-  private wingmanGoal(ship: EpicShip): Readonly<{ x: number; y: number }> {
-    if (this.boss && this.boss.totalHull > 0) return this.boss;
-    return this.findClosestEscort(ship) ?? this.boss ?? WINGMAN_FALLBACK_GOAL;
+  private takePlayerMark(flagship: EpicShip | null): void {
+    if (!this.pilot.takeMarkRequest() || !flagship) return;
+    const targetId = this.flagshipTargetId(flagship);
+    if (targetId) this.bots.mark(RAID_PLAYER_SIDE, targetId, this.time.now);
+  }
+
+  /** @returns Every living ship and the standing boss, as the AI sees them. */
+  private aiContacts(): BotContact[] {
+    const contacts = this.livingShips([...this.ships.keys()]).map((ship) =>
+      botContactOf(ship, this.sideOf(ship)),
+    );
+    if (this.boss && this.boss.totalHull > 0)
+      contacts.push(bossContact(this.boss));
+    return contacts;
   }
 
   /**
-   * Steers an AI ship at a goal: drift/bank/turn by heading error, slow down
-   * to turn tight, and K-turn onto a goal behind it when its hull and the
-   * raid difficulty allow (capital hulls never K-turn).
+   * An AI ship's bot pilot flies one frame through the player's controls.
    *
    * @param ship - The AI ship.
-   * @param goal - The point it is flying at.
-   * @param side - Boss escort or player wingman.
+   * @param contacts - Every ship and the boss.
+   * @param time - Scene time (ms).
+   * @param delta - Frame length (ms).
    */
-  private steerAi(
+  private flyBot(
     ship: EpicShip,
-    goal: Readonly<{ x: number; y: number }>,
-    side: EpicAiSide,
+    contacts: readonly BotContact[],
+    time: number,
+    delta: number,
   ): void {
-    const headingErrorDeg = headingDiffToTarget(
-      ship.x,
-      ship.y,
-      ship.angle,
-      goal.x,
-      goal.y,
-    );
     const origin = { x: ship.x, y: ship.y, angle: ship.angle };
-    const result = steerAiFlight(ship.flight, {
-      headingErrorDeg,
-      desiredSpeed: pursuitSpeed(ship.flight.motion.control, headingErrorDeg),
-      cycleCommitted: ship.cycleCommitted,
-      allowKTurn: mayAiKTurn(ship.definitionId, side, this.difficulty),
+    const result = this.bots.fly(ship.id, contacts, {
+      flight: ship.flight,
+      dial: ship.dial,
+      nowMs: time,
+      deltaMs: delta,
     });
-    this.setFlight(ship, result.state);
+    if (!result) return;
+    this.setFlight(ship, { motion: result.motion, stress: result.stress });
     this.playFlightEvents(ship, result.events, origin);
   }
 
@@ -1541,52 +1628,6 @@ export class EpicBattleScene extends Phaser.Scene {
     });
     this.setFlight(ship, { motion: result.motion, stress: result.stress });
     this.playFlightEvents(ship, result.events, origin);
-  }
-
-  private findClosestPlayer(ship: EpicShip): EpicShip | null {
-    let closest: EpicShip | null = null;
-    let closestDist = Infinity;
-
-    for (const playerId of this.playerShipIds) {
-      const player = this.ships.get(playerId);
-      if (!player || player.hull <= 0) continue;
-
-      const dist = Phaser.Math.Distance.Between(
-        ship.x,
-        ship.y,
-        player.x,
-        player.y,
-      );
-      if (dist < closestDist) {
-        closest = player;
-        closestDist = dist;
-      }
-    }
-
-    return closest;
-  }
-
-  private findClosestEscort(ship: EpicShip): EpicShip | null {
-    let closest: EpicShip | null = null;
-    let closestDist = Infinity;
-
-    for (const escortId of this.escortShipIds) {
-      const escort = this.ships.get(escortId);
-      if (!escort || escort.hull <= 0) continue;
-
-      const dist = Phaser.Math.Distance.Between(
-        ship.x,
-        ship.y,
-        escort.x,
-        escort.y,
-      );
-      if (dist < closestDist) {
-        closest = escort;
-        closestDist = dist;
-      }
-    }
-
-    return closest;
   }
 
   private updateSprites(): void {

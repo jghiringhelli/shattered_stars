@@ -27,6 +27,7 @@ function fly(
   enemyPose: { x: number; y: number; angle: number },
   cycles: number,
   pilot = new BotPilot(tier, { seed: 7 }),
+  safePoint: { x: number; y: number } | null = null,
 ) {
   const self = contact("ai", "ai", definitionId, {
     x: 3000,
@@ -47,6 +48,7 @@ function fly(
       nowMs: t,
       deltaMs: TICK_MS,
       worldSize: BATTLEFIELD_SIZE,
+      safePoint,
     });
     events.push(...result.events);
     const tick = tickCycleFlight(
@@ -77,6 +79,21 @@ describe("BotPilot", () => {
       6,
     );
     expect(committed.some((m) => m.endsWith("right"))).toBe(true);
+  });
+
+  it("breaks off toward the safe point while a hazard threatens, even with an enemy dead ahead", () => {
+    const enemyAhead = { x: 3000, y: 2500, angle: 180 };
+    const escaping = fly(
+      "expert",
+      "terran_gladius",
+      enemyAhead,
+      4,
+      new BotPilot("expert", { seed: 7 }),
+      { x: 3600, y: 3000 },
+    );
+    const angle = ((escaping.flight.motion.angle % 360) + 360) % 360;
+    expect(angle).toBeGreaterThan(45);
+    expect(angle).toBeLessThan(135);
   });
 
   it("is deterministic for a seed", () => {

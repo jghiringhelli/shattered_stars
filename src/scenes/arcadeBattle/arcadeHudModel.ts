@@ -103,6 +103,8 @@ export interface ContactPerspective {
   readonly playerId: string | null;
   readonly playerFaction: string;
   readonly targetId: string | null;
+  /** The player's side's marked target (SquadMark); omitted/null = none. */
+  readonly markedId?: string | null;
   readonly sizeOf: (definitionId: string) => ShipSize;
 }
 
@@ -111,7 +113,7 @@ export interface ContactPerspective {
  * are hidden — the player can barely see them on screen either.
  *
  * @param ships - All ships in the battle.
- * @param view - Player id, side and locked target.
+ * @param view - Player id, side, locked target and marked target.
  * @returns Contacts, excluding the player's own ship.
  */
 export function toContacts(
@@ -129,6 +131,7 @@ export function toContacts(
       side: isAlly ? "ally" : "enemy",
       sizeClass: view.sizeOf(ship.definitionId),
       isTarget: ship.id === view.targetId,
+      isMarked: !isAlly && ship.id === (view.markedId ?? null),
       alive: true,
     });
   }
@@ -167,6 +170,8 @@ export interface HudSnapshotInput {
   readonly camera: CameraViewSnapshot;
   readonly worldSize: number;
   readonly sizeOf: (definitionId: string) => ShipSize;
+  /** The player's side's marked target (SquadMark); omitted/null = none. */
+  readonly markedId?: string | null;
 }
 
 /** A BattleHud snapshot plus the target it marks. */
@@ -190,6 +195,7 @@ export function buildBattleHudSnapshot(input: HudSnapshotInput): HudFrameModel {
     playerId: input.player?.id ?? null,
     playerFaction: input.playerFaction,
     targetId,
+    markedId: input.markedId ?? null,
     sizeOf: input.sizeOf,
   });
   return {

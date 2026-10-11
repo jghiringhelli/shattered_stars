@@ -2,7 +2,9 @@
  * cycle-flight-continuous.spec.ts — ContinuousTacticalScene flies the X-Wing
  * cycle engine: every ship rides template arcs on its own, and the player's
  * dial order latches into the selected ship's queue (nextManeuver + speed),
- * flies at the next cycle boundary and turns the ship accordingly.
+ * flies at the next cycle boundary and turns the ship accordingly. Its AI
+ * ships fly the skill-gate bots at the match difficulty's tier, and R marks
+ * the selected ship's target for the player's side.
  */
 
 import { test, expect, type Page } from "@playwright/test";
@@ -133,5 +135,64 @@ test.describe("ContinuousTacticalScene — cycle-engine flight", () => {
     const slowed = await readSelected(page);
     expect(slowed.orderSpeed).toBeLessThan(start.orderSpeed);
     expect(slowed.speed).toBe(slowed.orderSpeed);
+  });
+});
+
+test.describe("ContinuousTacticalScene — the AI is the skill-gate bots", () => {
+  test("AI ships fly bot pilots at the match difficulty's tier; player ships keep their dial", async ({
+    page,
+  }) => {
+    await CONTINUOUS.enter(page, { peaceful: true });
+    await page.waitForTimeout(1500);
+    const crew = await page.evaluate(async (key) => {
+      const { difficultyToTier } = await import("/src/arcade/ai/index.ts");
+      const scene = (window as any).game.scene.getScene(key);
+      return {
+        expected: difficultyToTier(scene.aiDifficulty).tier,
+        ai: scene.enemyShipIds.map((id: string) => ({
+          tier: scene.bots.tierOf(id),
+          squad: scene.bots.squadKeyOf(id),
+          target: scene.bots.pilotTargetOf(id),
+          faction: scene.ships.get(id).faction,
+        })),
+        player: scene.playerShipIds.map((id: string) => scene.bots.tierOf(id)),
+        playerIds: scene.playerShipIds,
+      };
+    }, SCENE);
+    expect(crew.ai.length).toBeGreaterThan(0);
+    for (const ship of crew.ai) {
+      expect(ship.tier).toBe(crew.expected);
+      expect(ship.squad).toBe(ship.faction);
+      expect(crew.playerIds).toContain(ship.target);
+    }
+    expect(crew.player.every((tier: string | null) => tier === null)).toBe(
+      true,
+    );
+  });
+
+  test("R marks the selected ship's target for the player's side and the HUD shows it", async ({
+    page,
+  }) => {
+    await CONTINUOUS.enter(page, { peaceful: true });
+    await holdGameKey(page, "R", 100);
+    await page.waitForFunction(
+      (key) => {
+        const scene = (window as any).game.scene.getScene(key);
+        return scene.bots.markedTarget(scene.playerFaction, scene.time.now);
+      },
+      SCENE,
+      { timeout: 3_000 },
+    );
+    await page.waitForTimeout(100);
+    const marked = await page.evaluate((key) => {
+      const scene = (window as any).game.scene.getScene(key);
+      const id = scene.bots.markedTarget(scene.playerFaction, scene.time.now);
+      return {
+        isEnemy: scene.enemyShipIds.includes(id),
+        reticles: scene.hud.markReticleCount,
+      };
+    }, SCENE);
+    expect(marked.isEnemy).toBe(true);
+    expect(marked.reticles).toBeGreaterThanOrEqual(1);
   });
 });

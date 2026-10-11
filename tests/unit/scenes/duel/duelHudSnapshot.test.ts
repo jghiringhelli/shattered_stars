@@ -9,6 +9,7 @@ import {
   buildDuelHudSnapshot,
   duelTargetId,
   maneuverLabel,
+  playerTargetId,
   type DuelHudShip,
 } from "../../../../src/scenes/duel/duelHudSnapshot";
 import { createCycleFlight } from "../../../../src/arcade/systems/CycleFlight";
@@ -113,6 +114,63 @@ describe("buildDuelHudSnapshot", () => {
 
   it("passes the camera view through", () => {
     expect(snapshot([ship({ id: "p" })]).camera).toBe(CAMERA);
+  });
+
+  it("flags exactly the contact the player's side marked", () => {
+    const hud = buildDuelHudSnapshot({
+      ships: [
+        ship({ id: "p" }),
+        ship({ id: "near", side: 2, y: 1100 }),
+        ship({ id: "far", side: 2, y: 3000 }),
+      ],
+      playerId: "p",
+      isAlly: (s) => s.side === 1,
+      camera: CAMERA,
+      worldSize: WORLD,
+      markedId: "far",
+    });
+    expect(hud.contacts.filter((c) => c.isMarked).map((c) => c.id)).toEqual([
+      "far",
+    ]);
+  });
+
+  it("flags no contact as marked without a mark", () => {
+    const hud = snapshot([ship({ id: "p" }), ship({ id: "foe", side: 2 })]);
+    expect(hud.contacts.some((c) => c.isMarked)).toBe(false);
+  });
+});
+
+describe("playerTargetId", () => {
+  const input = (ships: TestShip[]) => ({
+    ships,
+    playerId: "p",
+    isAlly: (s: TestShip) => s.side === 1,
+    worldSize: WORLD,
+  });
+
+  it("is the HUD's locked target (what R marks)", () => {
+    const ships = [
+      ship({ id: "p" }),
+      ship({ id: "near", side: 2, y: 1100 }),
+      ship({ id: "far", side: 2, y: 3000 }),
+    ];
+    const locked = snapshot(ships).contacts.find((c) => c.isTarget)!.id;
+    expect(playerTargetId(input(ships))).toBe(locked);
+  });
+
+  it("never picks an ally or a destroyed enemy", () => {
+    const ships = [
+      ship({ id: "p" }),
+      ship({ id: "wing", side: 1, y: 1050 }),
+      ship({ id: "wreck", side: 2, y: 1100, hull: 0 }),
+      ship({ id: "foe", side: 2, y: 2000 }),
+    ];
+    expect(playerTargetId(input(ships))).toBe("foe");
+  });
+
+  it("is null once the player is destroyed", () => {
+    const ships = [ship({ id: "p", hull: 0 }), ship({ id: "foe", side: 2 })];
+    expect(playerTargetId(input(ships))).toBeNull();
   });
 });
 

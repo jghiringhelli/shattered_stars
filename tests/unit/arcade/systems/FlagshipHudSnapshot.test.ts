@@ -93,6 +93,18 @@ describe("squadHudSnapshot", () => {
     expect(targets).toEqual(["enemy_1"]);
   });
 
+  it("brackets the enemy the player's squad marked", () => {
+    const marked = squadHudSnapshot({ ...input, markedId: "enemy_1" })
+      .contacts.filter((c) => c.isMarked)
+      .map((c) => c.id);
+    expect(marked).toEqual(["enemy_1"]);
+  });
+
+  it("brackets nothing without a mark", () => {
+    const contacts = squadHudSnapshot({ ...input, markedId: null }).contacts;
+    expect(contacts.some((c) => c.isMarked)).toBe(false);
+  });
+
   it("boss hulls read as large blips", () => {
     const boss = ship("boss_1", "ai", { capitalSystems: {} });
     const [contact] = squadHudSnapshot({

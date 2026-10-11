@@ -2,7 +2,8 @@
  * duelHudSnapshot — builds the holographic BattleHud snapshot for the duel
  * scenes (Dogfight, Ace Duel) from their ship records: the player's status
  * ring / readout, every other ship as a contact (ally or enemy, the player's
- * current target marked), and the autofiring primary weapon's cooldown.
+ * current target locked, the side's squad-mark target marked), and the
+ * autofiring primary weapon's cooldown.
  *
  * Pure: no Phaser.
  */
@@ -52,12 +53,21 @@ export interface DuelHudInput<T extends DuelHudShip> {
   readonly camera: CameraViewSnapshot;
   /** Torus side length for nearest-enemy distance. */
   readonly worldSize: number;
+  /** The target the player's side has marked (SquadMark), or null/omitted. */
+  readonly markedId?: string | null;
 }
+
+/** What picking the player's HUD target needs (a DuelHudInput without camera). */
+export type DuelTargetInput<T extends DuelHudShip> = Pick<
+  DuelHudInput<T>,
+  "ships" | "playerId" | "isAlly" | "worldSize"
+>;
 
 /**
  * Build the BattleHud snapshot for one frame.
  *
- * @param input - Ships, player id, side test, camera and world size.
+ * @param input - Ships, player id, side test, camera, world size and the
+ *   player's side mark.
  * @returns Player (null once destroyed), contacts and the primary weapon slot.
  */
 export function buildDuelHudSnapshot<T extends DuelHudShip>(
@@ -66,19 +76,36 @@ export function buildDuelHudSnapshot<T extends DuelHudShip>(
   const ships = [...input.ships];
   const player = ships.find((ship) => ship.id === input.playerId);
   const alivePlayer = player !== undefined && player.hull > 0 ? player : null;
-  const enemies = ships.filter((s) => s.hull > 0 && !input.isAlly(s));
-  const targetId =
-    alivePlayer === null
-      ? null
-      : duelTargetId(alivePlayer, enemies, input.worldSize);
+  const targetId = playerTargetId({ ...input, ships });
   return {
     player: alivePlayer === null ? null : playerState(alivePlayer),
     contacts: ships
       .filter((ship) => ship.id !== input.playerId)
-      .map((ship) => contactState(ship, input.isAlly(ship), targetId)),
+      .map((ship) =>
+        contactState(ship, input.isAlly(ship), {
+          targetId,
+          markedId: input.markedId ?? null,
+        }),
+      ),
     weapons: alivePlayer === null ? [] : [primarySlot(alivePlayer)],
     camera: input.camera,
   };
+}
+
+/**
+ * The HUD's current target for the player (what R marks).
+ *
+ * @param input - Ships, player id, side test and world size.
+ * @returns The target's id, or null (player destroyed, or no enemies).
+ */
+export function playerTargetId<T extends DuelHudShip>(
+  input: DuelTargetInput<T>,
+): string | null {
+  const ships = [...input.ships];
+  const player = ships.find((ship) => ship.id === input.playerId);
+  if (player === undefined || player.hull <= 0) return null;
+  const enemies = ships.filter((s) => s.hull > 0 && !input.isAlly(s));
+  return duelTargetId(player, enemies, input.worldSize);
 }
 
 /**
@@ -143,10 +170,16 @@ function playerState(ship: DuelHudShip): PlayerHudState {
   };
 }
 
+/** The player's locked and marked targets. */
+interface HudTargets {
+  readonly targetId: string | null;
+  readonly markedId: string | null;
+}
+
 function contactState(
   ship: DuelHudShip,
   isAlly: boolean,
-  targetId: string | null,
+  targets: HudTargets,
 ): ContactHudState {
   return {
     id: ship.id,
@@ -154,7 +187,8 @@ function contactState(
     side: isAlly ? "ally" : "enemy",
     sizeClass:
       getShipDefinition(ship.definitionId)?.baseStats.size ?? FALLBACK_SIZE,
-    isTarget: ship.id === targetId,
+    isTarget: ship.id === targets.targetId,
+    isMarked: ship.id === targets.markedId,
     alive: ship.hull > 0,
   };
 }

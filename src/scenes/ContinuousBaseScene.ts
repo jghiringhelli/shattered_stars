@@ -4,11 +4,13 @@
  * Handles: X-Wing cycle-engine flight (template arcs, cycle-boundary commits,
  * stress), quick builds (upgrades + pilot ability: stat bonuses, flight,
  * cycle stress, shield regen, dice shots, kill rewards and death blasts),
- * weapon cooldown/firing, AI steering, sprite + health-bar repositioning.
+ * weapon cooldown/firing (squad marks: a side shoots its marked target
+ * first, with the mark's bonus), AI ships flown by bot pilots under their
+ * squads' orders (BattleBots), sprite + health-bar repositioning.
  *
- * Subclasses implement `onShipDestroyed` and `checkRoundEnd`, and equip
- * every ship they spawn with `equipShip`.
- * Individual hooks (`shotDice`, `landShot`, `steerAiShip`, etc.) can be
+ * Subclasses implement `onShipDestroyed` and `checkRoundEnd`, equip every
+ * ship they spawn with `equipShip`, and crew their AI ships on `bots`.
+ * Individual hooks (`shotDice`, `landShot`, `getAIShipIds`, etc.) can be
  * overridden for scene-specific behaviour.
  */
 
@@ -18,14 +20,11 @@ import { BATTLEFIELD_SIZE, CYCLE_DURATION_MS } from "../config";
 import type { FactionId } from "../config";
 import { type ModeCombatStats } from "../data/ModeBalancing";
 import { calculateHitChance } from "../data/ModeBalancing";
-import { headingDiffToTarget } from "../systems/MovementSystem";
 import {
-  pursuitSpeed,
-  steerAiFlight,
   tickCycleFlight,
   type CycleFlightState,
 } from "../arcade/systems/CycleFlight";
-import { canHullKTurn } from "../arcade/systems/AiPursuit";
+import type { BotContact } from "../arcade/ai";
 import type { FlightEvent } from "../arcade/systems/PilotFlightTypes";
 import { playFlightEventFx } from "../arcade/ArcadeFX";
 import {
@@ -54,7 +53,6 @@ import { applyInstantStress } from "../arcade/ArcadeStress";
 import type { CombatModifiers } from "../core/CombatModifiers";
 import { random } from "../utils/random";
 import type { ShipTelemetry } from "../debug/ShipTelemetry";
-import { findClosestEnemy } from "../systems/BattleHelpers";
 import { HealthBar } from "../ui/HealthBar";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
@@ -74,6 +72,9 @@ import {
   SYSTEM_LABELS,
   type CapitalSystemsState,
 } from "../systems/CapitalSystems";
+import { BattleBots } from "./battleUi/BattleBots";
+import { botContactOf } from "./battleUi/botContacts";
+import { pickShotTarget } from "./battleUi/shotPreference";
 
 /** Minimum ship data required by the shared combat loop. */
 export interface ContinuousShip {
@@ -94,8 +95,6 @@ export interface ContinuousShip {
   /** Cycle-engine motion and pilot stress; x/y/angle mirror its pose. */
   flight: CycleFlightState;
   dial: readonly ManeuverDefinition[];
-  /** True on the frame this ship's maneuver cycle committed. */
-  cycleCommitted: boolean;
   weaponCooldown: number;
   combatStats: ModeCombatStats;
   /** Present only for capital-role ships; null/undefined for everything else. */
@@ -148,6 +147,11 @@ export abstract class ContinuousBaseScene<
   protected telemetry: ShipTelemetry | null = null;
   /** X-Wing round tempo: who struck whom this maneuver cycle (clear on restart). */
   protected readonly hitLedger = new HitImmunityLedger();
+  /** AI ships' bot pilots, their squads and every side's mark (reset on restart). */
+  protected readonly bots = new BattleBots({
+    worldSize: BATTLEFIELD_SIZE,
+    random: () => random.next(),
+  });
 
   // ──────────────────────────────────────────────
   // Abstract — each scene must implement these
@@ -230,18 +234,6 @@ export abstract class ContinuousBaseScene<
     this.applyDamage(attacker, target, result.damage);
   }
 
-  /**
-   * Steer a single AI ship for this frame.
-   * Default: chase the closest enemy along the true heading error.
-   *
-   * @param ship - The AI ship (alive, engines online).
-   */
-  protected steerAiShip(ship: T): void {
-    const target = findClosestEnemy<T>(ship, this.ships);
-    if (!target) return;
-    this.steerToward(ship, target, this.headingErrorTo(ship, target));
-  }
-
   // ──────────────────────────────────────────────
   // Shared concrete methods
   // ──────────────────────────────────────────────
@@ -264,7 +256,8 @@ export abstract class ContinuousBaseScene<
   }
 
   /**
-   * Roll one shot from the scene RNG with the attacker's equipment.
+   * Roll one shot from the scene RNG with the attacker's equipment (and the
+   * squad mark's bonus when its side marked the target).
    *
    * @param attacker - The ship firing.
    * @param target - The ship fired at.
@@ -279,7 +272,16 @@ export abstract class ContinuousBaseScene<
       targetHasWingman: this.fliesWithWingman(target),
       nowMs: this.time.now,
       roll: random.next(),
+      targetMarked: this.markedTargetOf(attacker) === target.id,
     });
+  }
+
+  /**
+   * @param ship - A ship.
+   * @returns The target its side (squad) has marked right now, or null.
+   */
+  protected markedTargetOf(ship: T): string | null {
+    return this.bots.markedTargetFor(ship.id, ship.faction, this.time.now);
   }
 
   /**
@@ -342,6 +344,7 @@ export abstract class ContinuousBaseScene<
     this.healthBars.get(target.id)?.update(target.hull, target.shields);
     if (target.hull <= 0) {
       this.hitLedger.forget(target.id);
+      this.bots.remove(target.id);
       this.resolveAbilityKill(attacker, target);
       this.onShipDestroyed(target.id, attacker.id);
     }
@@ -370,39 +373,53 @@ export abstract class ContinuousBaseScene<
   }
 
   /**
-   * Returns the nearest enemy ship within weapon range and firing arc,
-   * or null if none is in range.
+   * The enemy a ship shoots: among those within weapon range and firing
+   * arc, its side's marked target first, then its pilot's target (AI
+   * ships), then the nearest. Null if none is in reach.
+   *
+   * @param ship - The ship.
+   * @returns Its shot target, or null.
    */
   protected findWeaponTarget(ship: T): T | null {
+    const inReach = this.enemiesInArc(ship);
+    const id = pickShotTarget(
+      inReach.map((other) => other.id),
+      [this.markedTargetOf(ship), this.bots.pilotTargetOf(ship.id)],
+    );
+    return inReach.find((other) => other.id === id) ?? null;
+  }
+
+  /**
+   * @param ship - The ship.
+   * @returns Living enemies within its weapon range and firing arc, nearest first.
+   */
+  private enemiesInArc(ship: T): T[] {
     const maxRange = ship.combatStats.weaponRange;
     const maxArcRad = (ship.combatStats.firingArc / 2) * Phaser.Math.DEG_TO_RAD;
-    let best: T | null = null;
-    let bestDist = Infinity;
-
+    const shipFacing = (ship.angle - 90) * Phaser.Math.DEG_TO_RAD;
+    const inReach: { ship: T; distance: number }[] = [];
     for (const other of this.ships.values()) {
       if (other.faction === ship.faction || other.hull <= 0) continue;
-      const dist = Phaser.Math.Distance.Between(
+      const distance = Phaser.Math.Distance.Between(
         ship.x,
         ship.y,
         other.x,
         other.y,
       );
-      if (dist >= maxRange || dist >= bestDist) continue;
+      if (distance >= maxRange) continue;
       const angleToTarget = Phaser.Math.Angle.Between(
         ship.x,
         ship.y,
         other.x,
         other.y,
       );
-      const shipFacing = (ship.angle - 90) * Phaser.Math.DEG_TO_RAD;
       let arcDiff = Math.abs(angleToTarget - shipFacing);
       if (arcDiff > Math.PI) arcDiff = Math.PI * 2 - arcDiff;
-      if (arcDiff < maxArcRad) {
-        best = other as T;
-        bestDist = dist;
-      }
+      if (arcDiff < maxArcRad) inReach.push({ ship: other, distance });
     }
-    return best;
+    return inReach
+      .sort((a, b) => a.distance - b.distance)
+      .map((entry) => entry.ship);
   }
 
   /**
@@ -427,10 +444,7 @@ export abstract class ContinuousBaseScene<
   protected flyShips(deltaMs: number): void {
     for (const ship of this.ships.values()) {
       if (ship.hull > 0) this.regenerateShipShields(ship, deltaMs);
-      if (!this.canFly(ship)) {
-        ship.cycleCommitted = false;
-        continue;
-      }
+      if (!this.canFly(ship)) continue;
       const tick = tickCycleFlight(ship.flight, {
         deltaMs,
         worldSize: BATTLEFIELD_SIZE,
@@ -439,7 +453,12 @@ export abstract class ContinuousBaseScene<
         modifiers: stressModifiersOf(ship.modifiers),
       });
       this.setFlight(ship, tick.state);
-      ship.cycleCommitted = tick.completed !== null;
+      if (tick.completed) {
+        this.bots.onCycleCommitted(
+          ship.id,
+          tick.state.motion.control.currentManeuver ?? "straight",
+        );
+      }
       this.shipSprites
         .get(ship.id)
         ?.setPosition(ship.x, ship.y)
@@ -512,46 +531,52 @@ export abstract class ContinuousBaseScene<
     return attackIntervalMs(ship.combatStats.weaponCooldown);
   }
 
-  /** Steer every AI-controlled ship that can fly this frame. */
-  protected updateAI(): void {
+  /**
+   * Every squad updates its orders and marks, then every AI ship that can
+   * fly this frame is flown by its bot pilot through the player's controls.
+   *
+   * @param time - Scene time (ms).
+   * @param delta - Frame length (ms).
+   */
+  protected updateAI(time: number, delta: number): void {
+    const contacts = this.aiContacts();
+    this.bots.command(this.time.now, contacts);
     for (const shipId of this.getAIShipIds()) {
       const ship = this.ships.get(shipId);
-      if (ship && this.canFly(ship)) this.steerAiShip(ship);
+      if (ship && this.canFly(ship)) this.flyBot(ship, contacts, time, delta);
     }
   }
 
-  /**
-   * Signed heading error from a ship's nose to a target.
-   *
-   * @param ship - The steering ship.
-   * @param target - What it is chasing.
-   * @returns Heading error (°): positive = target is to the right.
-   */
-  protected headingErrorTo(ship: T, target: T): number {
-    return headingDiffToTarget(ship.x, ship.y, ship.angle, target.x, target.y);
+  /** @returns Every living ship as the AI sees it (sides = factions). */
+  protected aiContacts(): BotContact[] {
+    return [...this.ships.values()]
+      .filter((ship) => ship.hull > 0)
+      .map((ship) => botContactOf(ship, ship.faction));
   }
 
   /**
-   * Queues an AI ship's next maneuver on the cycle engine: drift/bank/turn by
-   * heading error, slowing to turn tight, K-turning onto a target behind it
-   * (capital ships never K-turn).
+   * An AI ship's bot pilot flies one frame (no pilot: it holds its course).
    *
    * @param ship - The AI ship.
-   * @param target - What it is chasing (sets its pursuit speed).
-   * @param headingErrorDeg - Heading error it steers by (may be deliberately sloppy).
+   * @param contacts - Every living ship.
+   * @param time - Scene time (ms).
+   * @param delta - Frame length (ms).
    */
-  protected steerToward(ship: T, target: T, headingErrorDeg: number): void {
+  private flyBot(
+    ship: T,
+    contacts: readonly BotContact[],
+    time: number,
+    delta: number,
+  ): void {
     const origin = { x: ship.x, y: ship.y, angle: ship.angle };
-    const result = steerAiFlight(ship.flight, {
-      headingErrorDeg,
-      desiredSpeed: pursuitSpeed(
-        ship.flight.motion.control,
-        this.headingErrorTo(ship, target),
-      ),
-      cycleCommitted: ship.cycleCommitted,
-      allowKTurn: canHullKTurn(ship.definitionId),
+    const result = this.bots.fly(ship.id, contacts, {
+      flight: ship.flight,
+      dial: ship.dial,
+      nowMs: time,
+      deltaMs: delta,
     });
-    this.setFlight(ship, result.state);
+    if (!result) return;
+    this.setFlight(ship, { motion: result.motion, stress: result.stress });
     this.playFlightEvents(ship, result.events, origin);
   }
 
@@ -606,7 +631,7 @@ export abstract class ContinuousBaseScene<
 
     this.background.update();
 
-    this.updateAI();
+    this.updateAI(time, delta);
     this.flyShips(delta);
     this.processCombat(delta);
     this.updateSpritePositions();

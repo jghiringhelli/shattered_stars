@@ -1,8 +1,9 @@
 /**
  * DuelPrimaryFire — the autofiring primary weapon of the duel scenes
  * (Dogfight, Ace Duel) on the X-Wing round tempo (CombatTempo): a ready gun
- * fires at the first enemy in range and arc that is not immune to it this
- * cycle, then waits at least one maneuver cycle before its next attack.
+ * fires at its pilot's target when it is in range and arc (else the first
+ * such enemy) that is not immune to it this cycle, then waits at least one
+ * maneuver cycle before its next attack.
  *
  * Pure: no Phaser.
  */
@@ -48,6 +49,11 @@ export interface PrimaryShotQuery<T extends PrimaryCandidate> {
   readonly ledger: HitImmunityLedger;
   /** Scene time (ms). */
   readonly nowMs: number;
+  /**
+   * The enemy the gunner's pilot is trying to shoot (BotPilot.targetId):
+   * fired at whenever it is eligible, ahead of any other enemy in arc.
+   */
+  readonly preferredId?: string | null;
 }
 
 /**
@@ -71,23 +77,28 @@ export function inPrimaryArc(
 }
 
 /**
- * The enemy a ready primary weapon fires at: the first living enemy in
- * range and arc that is not immune to this attacker this cycle.
+ * The enemy a ready primary weapon fires at: the pilot's preferred target
+ * when it is eligible, otherwise the first living enemy in range and arc
+ * that is not immune to this attacker this cycle.
  *
- * @param query - Gunner, candidates, side test, immunity ledger and time.
+ * @param query - Gunner, candidates, side test, immunity ledger, time and
+ *   the pilot's preferred target.
  * @returns The target, or null to hold fire (the cooldown is not spent).
  */
 export function primaryShotTarget<T extends PrimaryCandidate>(
   query: PrimaryShotQuery<T>,
 ): T | null {
   const { gunner, ledger, nowMs } = query;
+  let first: T | null = null;
   for (const candidate of query.candidates) {
     if (candidate.id === gunner.id || candidate.hull <= 0) continue;
     if (!query.isEnemy(candidate)) continue;
     if (ledger.isImmune(gunner.id, candidate.id, nowMs)) continue;
-    if (inPrimaryArc(gunner, candidate)) return candidate;
+    if (!inPrimaryArc(gunner, candidate)) continue;
+    if (candidate.id === query.preferredId) return candidate;
+    first ??= candidate;
   }
-  return null;
+  return first;
 }
 
 /**

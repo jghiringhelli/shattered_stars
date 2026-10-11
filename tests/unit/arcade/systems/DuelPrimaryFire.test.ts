@@ -144,6 +144,50 @@ describe("primaryShotTarget", () => {
       }),
     ).toBeNull();
   });
+
+  it("fires at the pilot's preferred target over an earlier enemy in arc", () => {
+    const preferred = candidate({ id: "c", y: -200 });
+    expect(
+      primaryShotTarget({
+        gunner: gunner(),
+        candidates: [candidate(), preferred],
+        isEnemy: enemyOfSide1,
+        ledger: new HitImmunityLedger(),
+        nowMs: 0,
+        preferredId: "c",
+      }),
+    ).toBe(preferred);
+  });
+
+  it("falls back to another enemy when the preferred one is out of arc", () => {
+    const first = candidate();
+    expect(
+      primaryShotTarget({
+        gunner: gunner(),
+        candidates: [first, candidate({ id: "c", x: 0, y: 100 })],
+        isEnemy: enemyOfSide1,
+        ledger: new HitImmunityLedger(),
+        nowMs: 0,
+        preferredId: "c",
+      }),
+    ).toBe(first);
+  });
+
+  it("falls back to another enemy when the preferred one is immune", () => {
+    const ledger = new HitImmunityLedger();
+    ledger.recordHit("a", "c", 0);
+    const first = candidate();
+    expect(
+      primaryShotTarget({
+        gunner: gunner(),
+        candidates: [first, candidate({ id: "c", y: -150 })],
+        isEnemy: enemyOfSide1,
+        ledger,
+        nowMs: 10,
+        preferredId: "c",
+      }),
+    ).toBe(first);
+  });
 });
 
 describe("primary weapon cadence", () => {

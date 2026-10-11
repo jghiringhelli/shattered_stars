@@ -8,9 +8,7 @@
  * - Brutal: Perfect play, focus fire, no mercy
  */
 
-import type { AIPersonality } from './AITypes';
-
-export type AIDifficultyLevel = 'easy' | 'normal' | 'hard' | 'brutal';
+export type AIDifficultyLevel = "easy" | "normal" | "hard" | "brutal";
 
 export interface AIDifficultyModifiers {
   // Decision quality (0-1): Chance of making optimal decisions
@@ -41,7 +39,10 @@ export interface AIDifficultyModifiers {
   damageTakenMultiplier: number;
 }
 
-export const DIFFICULTY_SETTINGS: Record<AIDifficultyLevel, AIDifficultyModifiers> = {
+export const DIFFICULTY_SETTINGS: Record<
+  AIDifficultyLevel,
+  AIDifficultyModifiers
+> = {
   easy: {
     decisionQuality: 0.4,
     reactionTimeMultiplier: 1.5,
@@ -89,40 +90,25 @@ export const DIFFICULTY_SETTINGS: Record<AIDifficultyLevel, AIDifficultyModifier
 };
 
 export const DIFFICULTY_NAMES: Record<AIDifficultyLevel, string> = {
-  easy: 'Easy',
-  normal: 'Normal',
-  hard: 'Hard',
-  brutal: 'Brutal',
+  easy: "Easy",
+  normal: "Normal",
+  hard: "Hard",
+  brutal: "Brutal",
 };
 
 export const DIFFICULTY_DESCRIPTIONS: Record<AIDifficultyLevel, string> = {
-  easy: 'AI makes frequent mistakes and deals less damage',
-  normal: 'Balanced challenge for most players',
-  hard: 'AI plays efficiently with faster reactions',
-  brutal: 'Perfect AI play - no mercy given',
+  easy: "AI makes frequent mistakes and deals less damage",
+  normal: "Balanced challenge for most players",
+  hard: "AI plays efficiently with faster reactions",
+  brutal: "Perfect AI play - no mercy given",
 };
-
-/**
- * Apply difficulty modifiers to a personality
- */
-export function applyDifficultyToPersonality(
-  personality: AIPersonality,
-  difficulty: AIDifficultyLevel
-): AIPersonality {
-  const mods = DIFFICULTY_SETTINGS[difficulty];
-
-  return {
-    ...personality,
-    aggression: Math.min(1, personality.aggression * mods.aggressionMultiplier),
-    focus_fire: Math.min(1, personality.focus_fire + mods.coordinationBonus * 0.3),
-    formation_cohesion: Math.min(1, personality.formation_cohesion + mods.coordinationBonus * 0.2),
-  };
-}
 
 /**
  * Check if AI should make optimal decision based on difficulty
  */
-export function shouldMakeOptimalDecision(difficulty: AIDifficultyLevel): boolean {
+export function shouldMakeOptimalDecision(
+  difficulty: AIDifficultyLevel,
+): boolean {
   const mods = DIFFICULTY_SETTINGS[difficulty];
   return Math.random() < mods.decisionQuality;
 }
@@ -130,7 +116,10 @@ export function shouldMakeOptimalDecision(difficulty: AIDifficultyLevel): boolea
 /**
  * Get modified weapon cooldown based on difficulty
  */
-export function getModifiedCooldown(baseCooldown: number, difficulty: AIDifficultyLevel): number {
+export function getModifiedCooldown(
+  baseCooldown: number,
+  difficulty: AIDifficultyLevel,
+): number {
   const mods = DIFFICULTY_SETTINGS[difficulty];
   return Math.round(baseCooldown * mods.reactionTimeMultiplier);
 }
@@ -138,7 +127,10 @@ export function getModifiedCooldown(baseCooldown: number, difficulty: AIDifficul
 /**
  * Get modified hit chance based on difficulty
  */
-export function getModifiedHitChance(baseChance: number, difficulty: AIDifficultyLevel): number {
+export function getModifiedHitChance(
+  baseChance: number,
+  difficulty: AIDifficultyLevel,
+): number {
   const mods = DIFFICULTY_SETTINGS[difficulty];
   return Math.min(0.95, baseChance * mods.accuracyMultiplier);
 }
@@ -149,7 +141,7 @@ export function getModifiedHitChance(baseChance: number, difficulty: AIDifficult
 export function getModifiedDamage(
   baseDamage: number,
   difficulty: AIDifficultyLevel,
-  isAIAttacking: boolean
+  isAIAttacking: boolean,
 ): number {
   const mods = DIFFICULTY_SETTINGS[difficulty];
   if (isAIAttacking) {
@@ -163,7 +155,9 @@ export function getModifiedDamage(
 /**
  * Should AI pick optimal target or random?
  */
-export function shouldPickOptimalTarget(difficulty: AIDifficultyLevel): boolean {
+export function shouldPickOptimalTarget(
+  difficulty: AIDifficultyLevel,
+): boolean {
   const mods = DIFFICULTY_SETTINGS[difficulty];
   return Math.random() < mods.targetSelectionQuality;
 }
@@ -171,7 +165,9 @@ export function shouldPickOptimalTarget(difficulty: AIDifficultyLevel): boolean 
 /**
  * Should AI pick optimal maneuver or random valid one?
  */
-export function shouldPickOptimalManeuver(difficulty: AIDifficultyLevel): boolean {
+export function shouldPickOptimalManeuver(
+  difficulty: AIDifficultyLevel,
+): boolean {
   const mods = DIFFICULTY_SETTINGS[difficulty];
   return Math.random() < mods.maneuverQuality;
 }

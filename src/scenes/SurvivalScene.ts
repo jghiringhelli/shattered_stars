@@ -33,6 +33,7 @@ import {
 } from "../data/ModeBalancing";
 import {
   beltDamageForFrame,
+  beltRetreatPoint,
   tightenBelt,
   type BeltConfig,
 } from "../systems/arena/ArenaBoundary";
@@ -48,7 +49,10 @@ import {
   attackIntervalMs,
   HitImmunityLedger,
 } from "../arcade/systems/CombatTempo";
-import { nearestTargetInArc } from "../arcade/systems/ArcTargeting";
+import {
+  nearestHostile,
+  nearestTargetInArc,
+} from "../arcade/systems/ArcTargeting";
 import { squadHudSnapshot } from "../arcade/systems/FlagshipHudSnapshot";
 import {
   bossDurability,
@@ -68,20 +72,23 @@ import {
   evaluateQuality,
   type PerformanceState,
 } from "../systems/PerformanceSystem";
-import { findClosestEnemy as battleFindClosestEnemy } from "../systems/BattleHelpers";
 import type { ManeuverDefinition } from "../core/types";
 import {
   createCycleFlight,
-  steerAiFlight,
   tickCycleFlight,
   type CycleFlightState,
 } from "../arcade/systems/CycleFlight";
 import { PlayerFlightPilot } from "../arcade/systems/PlayerFlightPilot";
-import type { FlightEvent } from "../arcade/systems/PilotFlightTypes";
+import type {
+  FlightControlResult,
+  FlightEvent,
+} from "../arcade/systems/PilotFlightTypes";
 import {
-  survivalSteerOrder,
-  type SurvivalPilotRole,
+  SURVIVAL_ESCORT_TIER,
+  survivalEnemyTier,
 } from "../arcade/systems/SurvivalSteering";
+import { SquadBattleAi } from "../arcade/systems/SquadBattleAi";
+import type { BotPilot } from "../arcade/ai/BotPilot";
 import { playFlightEventFx } from "../arcade/ArcadeFX";
 import {
   equipFlight,
@@ -217,8 +224,6 @@ interface SurvivalShip {
   /** Cycle-engine motion and pilot stress; x/y/angle mirror its pose. */
   flight: CycleFlightState;
   dial: readonly ManeuverDefinition[];
-  /** True on the frame this ship's maneuver cycle committed. */
-  cycleCommitted: boolean;
   weaponCooldown: number;
   /** Quick build flown (upgrades + pilot), or null for the bare hull. */
   loadoutId: string | null;
@@ -228,6 +233,8 @@ interface SurvivalShip {
   frenzyUntilMs: number;
   /** Present only for boss-tier ships — Survival's closest analog to a capital. */
   capitalSystems?: CapitalSystemsState | null;
+  /** Its AI pilot (wave enemies, escorts), or null when the player flies it. */
+  bot: BotPilot | null;
 }
 
 /** A pose on the battlefield. */
@@ -315,6 +322,16 @@ export class SurvivalScene extends Phaser.Scene {
 
   /** The human pilot's flight input (InputManager-driven) — flies the flagship. */
   private readonly pilot = new PlayerFlightPilot(InputManager);
+  /** Bots, squad orders and marks of every AI-flown ship (enemies, escorts). */
+  private readonly squadAi = new SquadBattleAi({
+    worldSize: BATTLEFIELD_SIZE,
+    safePointFor: (x, y) =>
+      beltRetreatPoint(
+        { x, y },
+        { x: BATTLEFIELD_SIZE / 2, y: BATTLEFIELD_SIZE / 2 },
+        this.beltConfig,
+      ),
+  });
   /** Ship the pilot last flew; a new flagship (old one lost) starts with fresh input memory. */
   private pilotedShipId: string | null = null;
   private cameraShakeEnabled = true;
@@ -423,6 +440,7 @@ export class SurvivalScene extends Phaser.Scene {
     this.choicePanel.hide();
     this.pilot.reset();
     this.pilotedShipId = null;
+    this.squadAi.reset();
     this.hitLedger.clear();
     this.gameOverOverlay = null;
 
@@ -533,6 +551,7 @@ export class SurvivalScene extends Phaser.Scene {
         flagship,
         ships: this.ships.values(),
         targetId: flagship ? this.hudTargetOf(flagship) : null,
+        markedId: this.squadAi.playerMarkOf(this.time.now),
         cooldownRemainingMs: flagship?.weaponCooldown ?? 0,
         attackIntervalMs: flagship ? this.attackIntervalOf(flagship) : 0,
         camera: cameraViewFrom(this.cameras.main),
@@ -652,6 +671,7 @@ export class SurvivalScene extends Phaser.Scene {
       this.showMessage(`WAVE ${this.wave}`, this.getWaveType());
     }
 
+    this.squadAi.resetEnemySquad();
     this.spawnWaveEnemies();
   }
 
@@ -1017,6 +1037,7 @@ export class SurvivalScene extends Phaser.Scene {
       pose: { x: spawn.x, y: spawn.y, angle: 0 },
       loadoutId: spawn.loadoutId,
     });
+    if (isEscort) ship.bot = this.squadAi.createPilot(SURVIVAL_ESCORT_TIER);
     this.ships.set(id, ship);
     this.playerShipIds.push(id);
     this.createShipSprite(ship);
@@ -1033,7 +1054,8 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   /**
-   * Builds (but does not add) a wave ship record with its quick build.
+   * Builds (but does not add) a wave ship record with its quick build and
+   * its BotPilot (tier from the wave and its rank — see SurvivalSteering).
    *
    * @param spawn - The wave ship and where it enters.
    * @param idPrefix - Id prefix naming its tier.
@@ -1041,7 +1063,7 @@ export class SurvivalScene extends Phaser.Scene {
    */
   private createEnemy(spawn: EnemySpawn, idPrefix: string): SurvivalShip {
     const suffix = Math.random().toString(36).substring(2, 11);
-    return this.createShip({
+    const ship = this.createShip({
       id: `${idPrefix}_${Date.now()}_${suffix}`,
       definitionId: spawn.slot.definitionId,
       faction: spawn.faction,
@@ -1049,6 +1071,10 @@ export class SurvivalScene extends Phaser.Scene {
       pose: { x: spawn.x, y: spawn.y, angle: ENEMY_ENTRY_ANGLE },
       loadoutId: spawn.slot.loadoutId,
     });
+    ship.bot = this.squadAi.createPilot(
+      survivalEnemyTier(this.wave, spawn.slot.tier),
+    );
+    return ship;
   }
 
   /**
@@ -1089,11 +1115,11 @@ export class SurvivalScene extends Phaser.Scene {
       combatStats,
       flight: createCycleFlight(definitionId, pose),
       dial: getShipDial(definitionId),
-      cycleCommitted: false,
       weaponCooldown: 0,
       loadoutId: spawn.loadoutId,
       modifiers: NEUTRAL_MODIFIERS,
       frenzyUntilMs: 0,
+      bot: null,
     };
     ship.modifiers = equipQuickBuild(ship, spawn.loadoutId);
     ship.flight = equipFlight(ship.flight, ship.modifiers);
@@ -1200,7 +1226,6 @@ export class SurvivalScene extends Phaser.Scene {
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
       if (ship.capitalSystems && isEnginesOffline(ship.capitalSystems)) {
-        ship.cycleCommitted = false;
         continue;
       }
       const tick = tickCycleFlight(ship.flight, {
@@ -1217,13 +1242,27 @@ export class SurvivalScene extends Phaser.Scene {
         ship.modifiers,
         deltaMs,
       );
-      ship.cycleCommitted = tick.completed !== null;
-      if (tick.completed && ship.id === this.pilotedShipId) {
-        const { control } = tick.state.motion;
-        this.pilot.onCycleCommitted(control.currentManeuver ?? "straight");
-      }
+      if (tick.completed) this.notifyCycleCommitted(ship, tick.state);
       this.syncShipSprite(ship, deltaMs);
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
+    }
+  }
+
+  /**
+   * Tells whoever flies the ship (its bot, or the player's pilot) that a
+   * cycle committed.
+   *
+   * @param ship - The ship whose cycle committed.
+   * @param flight - Its flight state after the commit.
+   */
+  private notifyCycleCommitted(
+    ship: SurvivalShip,
+    flight: CycleFlightState,
+  ): void {
+    const started = flight.motion.control.currentManeuver ?? "straight";
+    if (ship.bot) ship.bot.onCycleCommitted(started);
+    else if (ship.id === this.pilotedShipId) {
+      this.pilot.onCycleCommitted(started);
     }
   }
 
@@ -1353,8 +1392,10 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   /**
-   * The nearest foe in weapon range and forward arc that is not still
-   * immune to this ship's hits (X-Wing round: one hit per attacker per cycle).
+   * The foe a ship fires at: its pilot's chosen target (a bot's target; the
+   * player's mark for the flagship) when valid, else the nearest foe in
+   * weapon range and forward arc — never one still immune to this ship's
+   * hits (X-Wing round: one hit per attacker per cycle).
    *
    * @param ship - The firing ship.
    * @returns Its target, or null when none can be fired at.
@@ -1366,8 +1407,21 @@ export class SurvivalScene extends Phaser.Scene {
     return nearestTargetInArc(ship, this.ships.values(), {
       rangePx: ship.combatStats.weaponRange + rangeBonus,
       arcDeg: ship.combatStats.firingArc,
+      isHostile: (other) => other.owner !== ship.owner,
       isEligible: (other) => !this.hitLedger.isImmune(ship.id, other.id, now),
+      preferredId: this.wantedTargetOf(ship, now),
     });
+  }
+
+  /**
+   * @param ship - A ship.
+   * @param nowMs - Scene time (ms).
+   * @returns The enemy its pilot wants to shoot: its bot's target, or the
+   *   player's mark for the player-flown flagship.
+   */
+  private wantedTargetOf(ship: SurvivalShip, nowMs: number): string | null {
+    if (ship.bot) return ship.bot.targetId;
+    return ship.owner === "player" ? this.squadAi.playerMarkOf(nowMs) : null;
   }
 
   /**
@@ -1393,6 +1447,11 @@ export class SurvivalScene extends Phaser.Scene {
       targetHasWingman: hasWingman(target, sides.get(target.owner) ?? []),
       nowMs: this.time.now,
       roll: Math.random(),
+      targetMarked: this.squadAi.isMarkedBy(
+        attacker.owner,
+        target.id,
+        this.time.now,
+      ),
     });
     this.effectsManager.fireLaser(
       attacker.x,
@@ -1524,6 +1583,7 @@ export class SurvivalScene extends Phaser.Scene {
 
     if (wasPlayerKill) this.score += 100;
     this.hitLedger.forget(shipId);
+    this.squadAi.forget(shipId);
 
     const sprite = this.shipSprites.get(shipId);
     if (sprite) {
@@ -1543,17 +1603,35 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   /**
-   * Queues every ship's next maneuver: the flagship's from player input,
-   * wave enemies' and escorts' from their chase of the nearest foe.
+   * Queues every ship's next maneuver: the flagship's from player input
+   * (and the player's mark, R), wave enemies' and escorts' from their
+   * BotPilots under their squads' orders.
    *
    * @param time - Scene time (ms).
    * @param delta - Frame length (ms).
    */
   private updateAI(time: number, delta: number): void {
     const [flagshipId, ...escortIds] = this.playerShipIds;
+    this.squadAi.command(this.ships.values(), time);
     this.flyFlagship(flagshipId, time, delta);
-    for (const id of this.enemyShipIds) this.steerAi(id, "enemy");
-    for (const id of escortIds) this.steerAi(id, "escort");
+    this.applyMarkRequest(flagshipId);
+    for (const id of [...this.enemyShipIds, ...escortIds]) {
+      this.flyBot(id, time, delta);
+    }
+  }
+
+  /**
+   * The player pressed MARK (R / R3): mark the flagship's HUD target for the
+   * squad. The press is consumed every frame, so it never fires late.
+   *
+   * @param flagshipId - The flagship's id, if the fleet has one.
+   */
+  private applyMarkRequest(flagshipId: string | undefined): void {
+    if (!this.pilot.takeMarkRequest()) return;
+    const flagship = this.ships.get(flagshipId ?? "");
+    if (!flagship || flagship.hull <= 0) return;
+    const targetId = this.hudTargetOf(flagship);
+    if (targetId) this.squadAi.markTarget(targetId, this.time.now);
   }
 
   /**
@@ -1576,6 +1654,7 @@ export class SurvivalScene extends Phaser.Scene {
     if (ship.id !== this.pilotedShipId) {
       this.pilot.reset();
       this.pilotedShipId = ship.id;
+      ship.bot = null;
     }
     const origin = { x: ship.x, y: ship.y, angle: ship.angle };
     const result = this.pilot.fly({
@@ -1586,40 +1665,51 @@ export class SurvivalScene extends Phaser.Scene {
       deltaMs: delta,
       worldSize: BATTLEFIELD_SIZE,
     });
+    this.applyControls(ship, result, origin);
+  }
+
+  /**
+   * One frame of an AI ship (wave enemy or escort): its BotPilot presses
+   * the same controls the player has. A boss with its engines offline
+   * holds position.
+   *
+   * @param shipId - The AI ship's id.
+   * @param time - Scene time (ms).
+   * @param delta - Frame length (ms).
+   */
+  private flyBot(shipId: string, time: number, delta: number): void {
+    const ship = this.ships.get(shipId);
+    if (!ship || ship.hull <= 0) return;
+    if (ship.capitalSystems && isEnginesOffline(ship.capitalSystems)) return;
+    const origin = { x: ship.x, y: ship.y, angle: ship.angle };
+    const result = this.squadAi.fly(ship, time, delta);
+    if (result) this.applyControls(ship, result, origin);
+  }
+
+  /**
+   * Applies a pilot's controls (player or bot) and plays their effects.
+   *
+   * @param ship - The ship flown.
+   * @param result - What its pilot's controls did this frame.
+   * @param origin - Pose before the controls.
+   */
+  private applyControls(
+    ship: SurvivalShip,
+    result: FlightControlResult,
+    origin: Pose,
+  ): void {
     this.setFlight(ship, { motion: result.motion, stress: result.stress });
     this.playFlightEvents(ship, result.events, origin);
   }
 
   /**
-   * Steers one AI ship (wave enemy or escort) at its nearest foe.
-   *
-   * @param shipId - The AI ship's id.
-   * @param role - Which side it flies for.
+   * @param ship - A ship.
+   * @returns The nearest living ship of the other side, or null.
    */
-  private steerAi(shipId: string, role: SurvivalPilotRole): void {
-    const ship = this.ships.get(shipId);
-    if (!ship || ship.hull <= 0) return;
-    const target = this.findClosestEnemy(ship);
-    if (!target) return;
-    const origin = { x: ship.x, y: ship.y, angle: ship.angle };
-    const result = steerAiFlight(
-      ship.flight,
-      survivalSteerOrder({
-        role,
-        pose: origin,
-        target,
-        control: ship.flight.motion.control,
-        cycleCommitted: ship.cycleCommitted,
-        wave: this.wave,
-        speedBonus: this.run.bonuses.speed,
-      }),
-    );
-    this.setFlight(ship, result.state);
-    this.playFlightEvents(ship, result.events, origin);
-  }
-
   private findClosestEnemy(ship: SurvivalShip): SurvivalShip | null {
-    return battleFindClosestEnemy(ship, this.ships);
+    return nearestHostile(ship, this.ships.values(), (other) => {
+      return other.owner !== ship.owner;
+    });
   }
 
   private updateSprites(): void {

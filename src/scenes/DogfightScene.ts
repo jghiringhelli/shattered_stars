@@ -39,13 +39,12 @@ import {
 import type { ManeuverDefinition, ManeuverDirection } from "../core/types";
 import {
   createCycleFlight,
-  pursuitSpeed,
-  steerAiFlight,
   tickCycleFlight,
   type CycleFlightState,
 } from "../arcade/systems/CycleFlight";
 import { PlayerFlightPilot } from "../arcade/systems/PlayerFlightPilot";
-import { planDuelSteer } from "../arcade/systems/AiPursuit";
+import { difficultyToTier, type BotContact } from "../arcade/ai";
+import { DuelBotCrew } from "../arcade/systems/DuelBotCrew";
 import { shiftMotion } from "../arcade/systems/ShipMotion";
 import type { FlightEvent } from "../arcade/systems/PilotFlightTypes";
 import { playFlightEventFx } from "../arcade/ArcadeFX";
@@ -80,7 +79,7 @@ import {
   primaryShotTarget,
 } from "../arcade/systems/DuelPrimaryFire";
 import { DuelHud } from "./duel/DuelHud";
-import { buildDuelHudSnapshot } from "./duel/duelHudSnapshot";
+import { buildDuelHudSnapshot, playerTargetId } from "./duel/duelHudSnapshot";
 import { showDuelEndScreen } from "./duel/DuelEndScreen";
 import {
   renderDogfightSetup,
@@ -131,8 +130,6 @@ interface DogfightShip {
   /** Cycle-engine motion and pilot stress; x/y/angle mirror its pose. */
   flight: CycleFlightState;
   dial: readonly ManeuverDefinition[];
-  /** True on the frame this ship's maneuver cycle committed. */
-  cycleCommitted: boolean;
   weaponCooldown: number;
   /** Quick build flown (upgrades + pilot), or null for the bare hull. */
   loadoutId: string | null;
@@ -169,13 +166,8 @@ interface ShipSprite extends Phaser.GameObjects.Container {
 
 type MatchFormat = "best_of_3" | "best_of_5";
 
-/** AI hit-chance multiplier per difficulty setting. */
-const AI_HIT_CHANCE_BY_DIFFICULTY = {
-  easy: 0.7,
-  normal: 1,
-  hard: 1.1,
-  brutal: 1.2,
-} as const;
+/** The human's side key (SquadMark / DuelBotCrew); the AI flies as "ai". */
+const PLAYER_SIDE = "player";
 
 /** The player's quick-build chooser box on the setup screen (left of the "Your ship" panel). */
 const QUICK_BUILD_CHOOSER_X = 24;
@@ -247,6 +239,12 @@ export class DogfightScene extends Phaser.Scene {
 
   /** The human pilot's flight input (InputManager-driven). */
   private readonly pilot = new PlayerFlightPilot(InputManager);
+  /**
+   * The round's AI: a BotPilot for the AI opponent (tier from the
+   * difficulty — the bots the skill gates measure) and the squad marks
+   * (the player's R mark). Null outside a round.
+   */
+  private crew: DuelBotCrew | null = null;
 
   // UI
   /** Holographic battle HUD + duel scoreboard; null outside a battle. */
@@ -454,6 +452,30 @@ export class DogfightScene extends Phaser.Scene {
     this.isPaused = false;
     this.pilot.reset();
     this.hitLedger.clear();
+    this.crew = null;
+  }
+
+  /**
+   * The round's crew: a bot for the AI opponent at the difficulty's tier
+   * (easy = novice, normal = average, hard = expert, brutal = expert with
+   * faster reactions). Online the opponent is a remote human — no bot.
+   *
+   * @returns The crew for the ships just spawned.
+   */
+  private createCrew(): DuelBotCrew {
+    const aiSkill = this.isOnlineMode
+      ? null
+      : difficultyToTier(this.difficulty);
+    return new DuelBotCrew({
+      roster: [...this.ships.values()].map((ship) => ({
+        shipId: ship.id,
+        side: ship.owner,
+        skill: ship.owner === "ai" ? aiSkill : null,
+      })),
+      playerSide: PLAYER_SIDE,
+      random: () => random.next(),
+      worldSize: BATTLEFIELD_SIZE,
+    });
   }
 
   private showSetupScreen(): void {
@@ -630,6 +652,7 @@ export class DogfightScene extends Phaser.Scene {
       centerY - spawnDistance,
       180,
     );
+    this.crew = this.createCrew();
 
     this.showRoundStart();
 
@@ -702,18 +725,30 @@ export class DogfightScene extends Phaser.Scene {
     this.checkRoundEnd();
   }
 
-  /** Feeds the holographic HUD this frame's ships and camera. */
+  /** Feeds the holographic HUD this frame's ships, camera and the player's mark. */
   private updateHud(): void {
     const playerId = this.playerShipIds[0] ?? "";
     this.hud?.update(
       buildDuelHudSnapshot({
         ships: this.ships.values(),
         playerId,
-        isAlly: (ship) => ship.owner === "player",
+        isAlly: (ship) => ship.owner === PLAYER_SIDE,
         camera: cameraViewFrom(this.cameras.main),
         worldSize: BATTLEFIELD_SIZE,
+        markedId: this.crew?.markedTargetOf(PLAYER_SIDE, this.time.now) ?? null,
       }),
     );
+  }
+
+  /** R / gamepad R3: the player marks the HUD's current target for their side. */
+  private markHudTarget(): void {
+    const targetId = playerTargetId({
+      ships: this.ships.values(),
+      playerId: this.playerShipIds[0] ?? "",
+      isAlly: (ship) => ship.owner === PLAYER_SIDE,
+      worldSize: BATTLEFIELD_SIZE,
+    });
+    if (targetId) this.crew?.markTarget(PLAYER_SIDE, targetId, this.time.now);
   }
 
   /**
@@ -847,7 +882,6 @@ export class DogfightScene extends Phaser.Scene {
       combatStats,
       flight: createCycleFlight(defId, { x, y, angle }),
       dial: getShipDial(defId),
-      cycleCommitted: false,
       weaponCooldown: 0,
       loadoutId,
       modifiers: NEUTRAL_MODIFIERS,
@@ -918,7 +952,6 @@ export class DogfightScene extends Phaser.Scene {
    * @param deltaMs - Frame length (ms).
    */
   private flyShips(deltaMs: number): void {
-    const playerId = this.playerShipIds[0];
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
       const tick = tickCycleFlight(ship.flight, {
@@ -935,23 +968,33 @@ export class DogfightScene extends Phaser.Scene {
         ship.modifiers,
         deltaMs,
       );
-      ship.cycleCommitted = tick.completed !== null;
-      if (tick.completed && ship.id === playerId) {
-        const { control } = tick.state.motion;
-        this.pilot.onCycleCommitted(control.currentManeuver ?? "straight");
-        this.sendManeuver(
-          control.nextManeuver ?? "straight",
-          control.speed,
-          ship,
-          true,
-        );
-      }
+      if (tick.completed) this.onCycleCommitted(ship, tick.state);
       this.shipSprites
         .get(ship.id)
         ?.setPosition(ship.x, ship.y)
         .setAngle(ship.angle);
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
+  }
+
+  /**
+   * A ship's maneuver cycle committed: its pilot (human or bot) learns which
+   * maneuver the new cycle started; the player's is relayed online.
+   *
+   * @param ship - The ship.
+   * @param flight - Its flight state after the commit.
+   */
+  private onCycleCommitted(ship: DogfightShip, flight: CycleFlightState): void {
+    this.crew?.onCycleCommitted(ship);
+    if (ship.id !== this.playerShipIds[0]) return;
+    const { control } = flight.motion;
+    this.pilot.onCycleCommitted(control.currentManeuver ?? "straight");
+    this.sendManeuver(
+      control.nextManeuver ?? "straight",
+      control.speed,
+      ship,
+      true,
+    );
   }
 
   /**
@@ -1019,6 +1062,7 @@ export class DogfightScene extends Phaser.Scene {
         isEnemy: (other) => other.owner !== ship.owner,
         ledger: this.hitLedger,
         nowMs: this.time.now,
+        preferredId: this.crew?.targetOf(ship.id) ?? null,
       });
       if (!target) continue;
       this.fireAt(ship, target);
@@ -1027,31 +1071,29 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   /**
-   * Fires the primary weapon: difficulty scales the AI's aim, DiceAttack
-   * applies equipment and abilities, and a hit makes the target immune to
-   * this attacker until the next cycle.
+   * Fires the primary weapon: the same dice odds for every pilot (an AI's
+   * skill is in its flying), the squad-mark bonus when the shooter's squad
+   * marked the target, DiceAttack applies equipment and abilities, and a hit
+   * makes the target immune to this attacker until the next cycle.
    *
    * @param attacker - The firing ship.
    * @param target - The ship fired at.
    */
   private fireAt(attacker: DogfightShip, target: DogfightShip): void {
-    const baseHitChance = calculateHitChance(
-      attacker.combatStats.attackDice,
-      target.combatStats.agilityDice,
-    );
-    const hitChance =
-      attacker.owner === "ai"
-        ? baseHitChance * AI_HIT_CHANCE_BY_DIFFICULTY[this.difficulty]
-        : baseHitChance;
     const result = resolveDiceAttack({
       attacker: combatantOf(attacker),
       target: combatantOf(target),
-      hitChance,
+      hitChance: calculateHitChance(
+        attacker.combatStats.attackDice,
+        target.combatStats.agilityDice,
+      ),
       baseDamage: attacker.combatStats.attackDice,
       attackerHasWingman: this.fliesWithWingman(attacker),
       targetHasWingman: this.fliesWithWingman(target),
       nowMs: this.time.now,
       roll: random.next(),
+      targetMarked:
+        this.crew?.isMarkedShot(attacker.id, target.id, this.time.now) ?? false,
     });
     if (result.hit) this.applyHit(attacker, target, result);
     this.effectsManager.fireLaser(
@@ -1118,6 +1160,7 @@ export class DogfightScene extends Phaser.Scene {
    */
   private onShipDestroyed(killer: DogfightShip, victim: DogfightShip): void {
     this.hitLedger.forget(victim.id);
+    this.crew?.forget(victim.id);
     if (victim.owner === "player") {
       this.enemySideScore = creditKill(
         this.enemySideScore,
@@ -1161,13 +1204,17 @@ export class DogfightScene extends Phaser.Scene {
     for (const caught of deathBlastTargets(combatantOf(victim), enemies)) {
       Object.assign(caught, absorbDamage(caught, blastDamage));
       this.healthBars.get(caught.id)?.update(caught.hull, caught.shields);
-      if (caught.hull <= 0) this.hitLedger.forget(caught.id);
+      if (caught.hull > 0) continue;
+      this.hitLedger.forget(caught.id);
+      this.crew?.forget(caught.id);
     }
   }
 
   /**
-   * Queues every ship's next maneuver: the player's from input, AI ships'
-   * from the heading error to their target.
+   * Queues every ship's next maneuver: the player's from input (and their
+   * R mark), every AI ship's from its BotPilot — the same controls, through
+   * the same pilot hands. Online the opponent is a remote human driven by
+   * onRemoteAction() (the crew has no bot for it).
    *
    * @param time - Scene time (ms).
    * @param delta - Frame length (ms).
@@ -1177,42 +1224,32 @@ export class DogfightScene extends Phaser.Scene {
       const ship = this.ships.get(shipId);
       if (ship && ship.hull > 0) this.flyPlayer(ship, time, delta);
     }
-    // In online mode the opponent's ship is a human on the other client,
-    // driven entirely by onRemoteAction() — running local AI on it too
-    // would fight the network-received maneuver every frame.
-    if (this.isOnlineMode) return;
-
-    const target = this.ships.get(this.playerShipIds[0] ?? "");
-    if (!target || target.hull <= 0) return;
-    for (const shipId of this.enemyShipIds) {
-      const ship = this.ships.get(shipId);
-      if (ship && ship.hull > 0) this.steerAi(ship, target);
+    if (this.pilot.takeMarkRequest()) this.markHudTarget();
+    const crew = this.crew;
+    if (!crew) return;
+    const contacts = crew.contactsOf(this.ships.values());
+    crew.command(contacts, this.time.now);
+    for (const ship of this.ships.values()) {
+      if (ship.hull > 0) this.flyBot(ship, contacts, delta);
     }
   }
 
   /**
-   * Steers an AI ship at its target. Difficulty sets how often it flies the
-   * optimal line and whether it may K-turn onto a target behind it.
+   * One frame of a ship's bot, applied exactly like the player's input.
    *
-   * @param ship - The AI ship.
-   * @param target - What it is chasing.
+   * @param ship - A ship (no-op unless a bot flies it).
+   * @param contacts - Every ship as the AI sees it.
+   * @param delta - Frame length (ms).
    */
-  private steerAi(ship: DogfightShip, target: DogfightShip): void {
-    const plan = planDuelSteer({
-      ship,
-      target,
-      owner: "ai",
-      difficulty: this.difficulty,
-      random: random.next,
-    });
+  private flyBot(
+    ship: DogfightShip,
+    contacts: readonly BotContact[],
+    delta: number,
+  ): void {
     const origin = { x: ship.x, y: ship.y, angle: ship.angle };
-    const result = steerAiFlight(ship.flight, {
-      headingErrorDeg: plan.headingErrorDeg,
-      desiredSpeed: pursuitSpeed(ship.flight.motion.control, plan.trueErrorDeg),
-      cycleCommitted: ship.cycleCommitted,
-      allowKTurn: plan.allowKTurn,
-    });
-    this.setFlight(ship, result.state);
+    const result = this.crew?.fly(ship, contacts, this.time.now, delta);
+    if (!result) return;
+    this.setFlight(ship, { motion: result.motion, stress: result.stress });
     this.playFlightEvents(ship, result.events, origin);
   }
 

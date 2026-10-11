@@ -1,7 +1,8 @@
 /**
- * ArcTargeting — pick the ship a primary weapon fires at: the nearest
- * hostile inside weapon range and the forward firing arc. Pure (no Phaser),
- * shared by the squad battle scenes (Survival, Campaign).
+ * ArcTargeting — pick the ship a primary weapon fires at: the pilot's
+ * preferred target (its bot's choice, the squad mark) when it is inside
+ * weapon range and the forward firing arc, else the nearest hostile that
+ * is. Pure (no Phaser), shared by the squad battle scenes (Survival, Campaign).
  */
 
 /** Degrees → radians. */
@@ -37,6 +38,16 @@ export interface ArcWeapon<T> {
   readonly arcDeg: number;
   /** Extra filter, e.g. "not immune to this attacker"; default: all. */
   readonly isEligible?: (candidate: T) => boolean;
+  /**
+   * Who the shooter may fire at; default: any other faction. Squad scenes
+   * side by owner (a mirror match fields the same faction on both sides).
+   */
+  readonly isHostile?: (candidate: T) => boolean;
+  /**
+   * The ship the pilot wants to shoot (its bot's target, the squad mark):
+   * fired at whenever it is a valid target, even if another is nearer.
+   */
+  readonly preferredId?: string | null;
 }
 
 /**
@@ -73,11 +84,42 @@ export function isInFiringArc(
 }
 
 /**
- * The nearest living hostile (other faction) the shooter can fire at.
+ * The nearest living hostile, wherever it is (no range or arc): what a
+ * pilot closes on when nothing is in its sights.
+ *
+ * @param shooter - The ship asking.
+ * @param candidates - Every ship on the field.
+ * @param isHostile - Who counts as hostile; default: any other faction.
+ * @returns The nearest hostile, or null when none is alive.
+ */
+export function nearestHostile<T extends ArcCandidate>(
+  shooter: ArcShooter,
+  candidates: Iterable<T>,
+  isHostile: (candidate: T) => boolean = (other) =>
+    other.faction !== shooter.faction,
+): T | null {
+  let best: T | null = null;
+  let bestDistance = Infinity;
+  for (const other of candidates) {
+    if (other.hull <= 0 || other.id === shooter.id || !isHostile(other)) {
+      continue;
+    }
+    const distance = Math.hypot(other.x - shooter.x, other.y - shooter.y);
+    if (distance < bestDistance) {
+      best = other;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+/**
+ * The living hostile the shooter fires at: its preferred target when that
+ * one is in range and arc, otherwise the nearest one that is.
  *
  * @param shooter - The firing ship.
  * @param candidates - Every ship on the field.
- * @param weapon - Range, arc and an optional eligibility filter.
+ * @param weapon - Range, arc, eligibility/hostility filters, preferred target.
  * @returns The target, or null when none is in range and arc.
  */
 export function nearestTargetInArc<T extends ArcCandidate>(
@@ -85,14 +127,20 @@ export function nearestTargetInArc<T extends ArcCandidate>(
   candidates: Iterable<T>,
   weapon: ArcWeapon<T>,
 ): T | null {
+  const isHostile =
+    weapon.isHostile ?? ((other: T) => other.faction !== shooter.faction);
   let best: T | null = null;
   let bestDistance = Infinity;
   for (const other of candidates) {
-    if (other.faction === shooter.faction || other.hull <= 0) continue;
+    if (other.hull <= 0 || other.id === shooter.id || !isHostile(other)) {
+      continue;
+    }
+    const preferred = other.id === weapon.preferredId;
     const distance = Math.hypot(other.x - shooter.x, other.y - shooter.y);
-    if (distance >= bestDistance) continue;
+    if (!preferred && distance >= bestDistance) continue;
     if (!isInFiringArc(shooter, other, weapon)) continue;
     if (weapon.isEligible && !weapon.isEligible(other)) continue;
+    if (preferred) return other;
     best = other;
     bestDistance = distance;
   }

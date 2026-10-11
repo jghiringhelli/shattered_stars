@@ -14,6 +14,7 @@ import {
 } from "../../core/CombatModifiers";
 import { laserHitBonus, type AbilityCombatant } from "../PilotAbilityCombat";
 import { incomingDamageMultiplier } from "../ShotConditions";
+import { leverShot } from "../ShotLevers";
 
 /** The boss as a laser target: its pose and what blunts a bolt. */
 export interface BossTarget extends ShipPose {
@@ -35,21 +36,34 @@ export interface BossShotInput {
   readonly nowMs: number;
   /** Uniform roll in [0, 1): the bolt hits when roll < hitChance. */
   readonly roll: number;
+  /**
+   * The boss is the attacker's side's marked target (SquadMark): the same
+   * +hit / +damage as a marked ship (ShotLevers), damage before armor.
+   * Omitted = not marked.
+   */
+  readonly targetMarked?: boolean;
 }
 
 /** Every bolt that hits the boss deals at least this much. */
 export const MIN_BOSS_HIT_DAMAGE = 1;
 
 /**
- * Damage a bolt deals to the boss: the attacker's laser bonuses (flat, calm,
- * vs-unshielded and the pilot's conditional bonus judged against the boss's
- * pose), then the boss's armor.
+ * Damage a bolt deals to the boss: the squad mark's levers on the odds and
+ * damage, the attacker's laser bonuses (flat, calm, vs-unshielded and the
+ * pilot's conditional bonus judged against the boss's pose), then the
+ * boss's armor. A static hulk has no rear arc or joust to exploit: only
+ * the mark lever applies.
  *
  * @param input - Attacker, boss, dice odds and damage, context and roll.
  * @returns Damage to apply (shields first, then a section); 0 on a miss.
  */
 export function resolveBossShot(input: BossShotInput): number {
-  if (input.roll >= input.hitChance) return 0;
+  const levered = leverShot({
+    hitChance: input.hitChance,
+    position: "neutral",
+    marked: input.targetMarked === true,
+  });
+  if (input.roll >= levered.hitChance) return 0;
   const { attacker, boss } = input;
   const { modifiers } = attacker;
   const exposed = boss.shields <= 0 ? modifiers.bonusDamageVsUnshielded : 0;
@@ -60,6 +74,7 @@ export function resolveBossShot(input: BossShotInput): number {
       attacker.stress.isStressed,
     ) +
     exposed +
+    levered.damageBonus +
     laserHitBonus({
       attacker,
       target: boss,

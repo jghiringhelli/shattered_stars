@@ -8,6 +8,7 @@ import { createCycleFlight } from "../../../../src/arcade/systems/CycleFlight";
 import {
   contactHudState,
   maneuverLabel,
+  markContacts,
   matchClockColor,
   MATCH_CLOCK_DANGER_MS,
   MATCH_CLOCK_WARNING_MS,
@@ -152,5 +153,23 @@ describe("matchClockColor", () => {
     );
     expect(matchClockColor(MATCH_CLOCK_WARNING_MS)).toBe(HOLO_PALETTE.warning);
     expect(matchClockColor(MATCH_CLOCK_DANGER_MS)).toBe(HOLO_PALETTE.danger);
+  });
+});
+
+describe("markContacts", () => {
+  const contacts = ownerContacts(
+    null,
+    [owned("a1", "ai"), owned("a2", "ai")],
+    null,
+  );
+
+  it("flags the marked contact only", () => {
+    const marked = markContacts(contacts, "a2");
+    expect(marked.find((c) => c.id === "a2")?.isMarked).toBe(true);
+    expect(marked.find((c) => c.id === "a1")?.isMarked).toBeUndefined();
+  });
+
+  it("flags nothing without a mark", () => {
+    expect(markContacts(contacts, null).some((c) => c.isMarked)).toBe(false);
   });
 });

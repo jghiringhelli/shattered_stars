@@ -1,7 +1,9 @@
 /**
  * cycle-flight-epic.spec.ts — Boss Raid (EpicBattleScene) flies the X-Wing
  * cycle engine: every ship rides template arcs on its own, holding LEFT banks
- * the player's flagship, and Z queues a K-turn that costs stress.
+ * the player's flagship, and Z queues a K-turn that costs stress. Its AI is
+ * the skill-gate bots: escorts at the raid difficulty's tier, average
+ * wingmen who clear the escorts until the player marks the boss (R).
  */
 
 import { test, expect, type Page } from "@playwright/test";
@@ -86,5 +88,109 @@ test.describe("EpicBattleScene — cycle-engine flight", () => {
     const ship = flagship(await readShips(page));
     expect([ship.currentManeuver, ship.nextManeuver]).toContain("kturn");
     expect(ship.stress).toBeGreaterThan(0);
+  });
+});
+
+/** Every AI ship's bot: tier, expected tier, and whom it is after. */
+async function readCrew(page: Page): Promise<
+  {
+    id: string;
+    side: "escort" | "wingman";
+    tier: string | null;
+    expected: string;
+    pilotTarget: string | null;
+  }[]
+> {
+  return page.evaluate(async (key) => {
+    const { raidBotSkill } =
+      await import("/src/arcade/systems/EpicAiFlight.ts");
+    const scene = (window as any).game.scene.getScene(key);
+    const crew = (ids: string[], side: "escort" | "wingman") =>
+      ids.map((id) => ({
+        id,
+        side,
+        tier: scene.bots.tierOf(id),
+        expected: raidBotSkill(side, scene.difficulty).tier,
+        pilotTarget: scene.bots.pilotTargetOf(id),
+      }));
+    return [
+      ...crew(scene.escortShipIds, "escort"),
+      ...crew(scene.playerShipIds.slice(1), "wingman"),
+    ];
+  }, SCENE);
+}
+
+/** Squad focus of every wingman (the flagship is the player's). */
+async function wingmanFocus(page: Page): Promise<(string | null)[]> {
+  return page.evaluate((key) => {
+    const scene = (window as any).game.scene.getScene(key);
+    return scene.playerShipIds
+      .slice(1)
+      .map((id: string) => scene.bots.orderFor(id)?.focusTargetId ?? null);
+  }, SCENE);
+}
+
+test.describe("EpicBattleScene — the AI is the skill-gate bots", () => {
+  test("escorts and wingmen fly bot pilots at their raid tiers", async ({
+    page,
+  }) => {
+    await BOSS_RAID.enter(page, { peaceful: true });
+    await page.waitForTimeout(1500);
+    const crew = await readCrew(page);
+    expect(crew.some((c) => c.side === "escort")).toBe(true);
+    expect(crew.some((c) => c.side === "wingman")).toBe(true);
+    for (const ship of crew) {
+      expect(ship.tier, `${ship.side} ${ship.id}`).toBe(ship.expected);
+    }
+    const playerIds = await page.evaluate(
+      (key) => (window as any).game.scene.getScene(key).playerShipIds,
+      SCENE,
+    );
+    for (const escort of crew.filter((c) => c.side === "escort")) {
+      expect(playerIds, `${escort.id} hunts a player ship`).toContain(
+        escort.pilotTarget,
+      );
+    }
+  });
+
+  test("wingmen engage the escorts until R marks the boss, then turn on it", async ({
+    page,
+  }) => {
+    await BOSS_RAID.enter(page, { peaceful: true });
+    await page.waitForFunction(
+      (key) => {
+        const scene = (window as any).game.scene.getScene(key);
+        const wingman = scene.playerShipIds[1];
+        return scene.bots.orderFor(wingman)?.focusTargetId != null;
+      },
+      SCENE,
+      { timeout: 5_000 },
+    );
+    const before = await wingmanFocus(page);
+    expect(before).not.toContain("boss");
+    expect(before.every((id) => id?.startsWith("escort_"))).toBe(true);
+
+    await holdGameKey(page, "R", 100);
+    await page.waitForFunction(
+      (key) => {
+        const scene = (window as any).game.scene.getScene(key);
+        return scene.playerShipIds
+          .slice(1)
+          .every(
+            (id: string) => scene.bots.orderFor(id)?.focusTargetId === "boss",
+          );
+      },
+      SCENE,
+      { timeout: 5_000 },
+    );
+    const hud = await page.evaluate((key) => {
+      const scene = (window as any).game.scene.getScene(key);
+      return {
+        mark: scene.bots.markedTarget("player", scene.time.now),
+        reticles: scene.raidHud.markReticleCount,
+      };
+    }, SCENE);
+    expect(hud.mark).toBe("boss");
+    expect(hud.reticles).toBeGreaterThanOrEqual(1);
   });
 });

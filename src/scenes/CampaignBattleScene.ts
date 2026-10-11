@@ -5,10 +5,12 @@
  * DogfightScene/SurvivalScene (X-Wing cycle engine: template arcs committed
  * each cycle, pilot stress; autofire; toroidal battlefield). The flagship is
  * flown by the player through the shared pilot controls; escorts and enemies
- * run the seek AI. Owns objective tracking, scripted enemy spawns from
- * mission data, and the briefing/debrief hand-off. Campaign used to run on a
- * separate discrete turn-based engine (BattleManager/TurnSystem); that engine
- * was removed so every game mode shares one combat model.
+ * are BotPilots (the bots the skill gates measure, tiers per
+ * CampaignAiSteering) under their sides' squad orders, and R marks the
+ * player's target for the escorts. Owns objective tracking, scripted enemy
+ * spawns from mission data, and the briefing/debrief hand-off. Campaign used
+ * to run on a separate discrete turn-based engine (BattleManager/TurnSystem);
+ * that engine was removed so every game mode shares one combat model.
  */
 
 import Phaser from "phaser";
@@ -25,18 +27,24 @@ import {
   calculateHitChance,
   type ModeCombatStats,
 } from "../data/ModeBalancing";
-import { findClosestEnemy } from "../systems/BattleHelpers";
 import type { ManeuverDefinition } from "../core/types";
 import {
   createCycleFlight,
-  steerAiFlight,
   tickCycleFlight,
   type CycleFlightState,
 } from "../arcade/systems/CycleFlight";
 import { PlayerFlightPilot } from "../arcade/systems/PlayerFlightPilot";
 import { wrapCoordinate } from "../arcade/systems/ShipMotion";
-import type { FlightEvent } from "../arcade/systems/PilotFlightTypes";
-import { canHullKTurn, seekSteerOrder } from "../arcade/systems/AiPursuit";
+import type {
+  FlightControlResult,
+  FlightEvent,
+} from "../arcade/systems/PilotFlightTypes";
+import { SquadBattleAi } from "../arcade/systems/SquadBattleAi";
+import {
+  CAMPAIGN_ESCORT_TIER,
+  campaignEnemyTier,
+} from "../arcade/systems/CampaignAiSteering";
+import type { BotPilot } from "../arcade/ai/BotPilot";
 import { playFlightEventFx } from "../arcade/ArcadeFX";
 import {
   assignQuickBuilds,
@@ -65,7 +73,10 @@ import {
   attackIntervalMs,
   HitImmunityLedger,
 } from "../arcade/systems/CombatTempo";
-import { nearestTargetInArc } from "../arcade/systems/ArcTargeting";
+import {
+  nearestHostile,
+  nearestTargetInArc,
+} from "../arcade/systems/ArcTargeting";
 import { squadHudSnapshot } from "../arcade/systems/FlagshipHudSnapshot";
 import {
   ACE_ATTACK_BONUS,
@@ -144,10 +155,6 @@ interface CampaignShip {
   /** Cycle-engine motion and pilot stress; x/y/angle mirror its pose. */
   flight: CycleFlightState;
   dial: readonly ManeuverDefinition[];
-  /** True on the frame this ship's maneuver cycle committed. */
-  cycleCommitted: boolean;
-  /** Whether the AI may K-turn this hull (false for capitals). */
-  allowKTurn: boolean;
   weaponCooldown: number;
   /** Quick build flown (upgrades + pilot), or null for the bare hull. */
   loadoutId: string | null;
@@ -157,6 +164,8 @@ interface CampaignShip {
   frenzyUntilMs: number;
   /** Present only for boss-tier ships. */
   capitalSystems?: CapitalSystemsState | null;
+  /** Its AI pilot (enemies, escorts), or null when the player flies it. */
+  bot: BotPilot | null;
 }
 
 /** What a new ship is and how it is equipped. */
@@ -251,6 +260,11 @@ export class CampaignBattleScene extends Phaser.Scene {
 
   /** The human pilot's flight input (InputManager-driven), flying the flagship. */
   private readonly pilot = new PlayerFlightPilot(InputManager);
+  /** Bots, squad orders and marks of every AI-flown ship (enemies, escorts). */
+  private readonly squadAi = new SquadBattleAi({
+    worldSize: BATTLEFIELD_SIZE,
+    random: () => random.next(),
+  });
   /** Ship the pilot flew last frame; input memory resets when the flagship changes. */
   private pilotedShipId: string | null = null;
 
@@ -286,6 +300,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.enemyShipIds = [];
     this.pilotedShipId = null;
     this.pilot.reset();
+    this.squadAi.reset();
     this.hitLedger.clear();
     this.resultOverlay = null;
   }
@@ -409,6 +424,7 @@ export class CampaignBattleScene extends Phaser.Scene {
         flagship,
         ships: this.ships.values(),
         targetId: flagship ? this.hudTargetOf(flagship) : null,
+        markedId: this.squadAi.playerMarkOf(this.time.now),
         cooldownRemainingMs: flagship?.weaponCooldown ?? 0,
         attackIntervalMs: flagship
           ? attackIntervalMs(flagship.combatStats.weaponCooldown)
@@ -423,7 +439,11 @@ export class CampaignBattleScene extends Phaser.Scene {
    * @returns Id of what it is shooting at, else the foe it is closing on.
    */
   private hudTargetOf(ship: CampaignShip): string | null {
-    const target = this.findTarget(ship) ?? findClosestEnemy(ship, this.ships);
+    const target =
+      this.findTarget(ship) ??
+      nearestHostile(ship, this.ships.values(), (other) => {
+        return other.owner !== ship.owner;
+      });
     return target?.id ?? null;
   }
 
@@ -583,6 +603,7 @@ export class CampaignBattleScene extends Phaser.Scene {
         pilotAbilityIds: seat ? campaignAbilityIds(seat) : [],
       });
       if (i === 0) this.applyProtagonistBonuses(ship);
+      else ship.bot = this.squadAi.createPilot(CAMPAIGN_ESCORT_TIER);
       this.ships.set(ship.id, ship);
       this.playerShipIds.push(ship.id);
       this.createShipSprite(ship);
@@ -665,6 +686,7 @@ export class CampaignBattleScene extends Phaser.Scene {
       pose: spawn,
       loadoutId,
     });
+    ship.bot = this.squadAi.createPilot(campaignEnemyTier(this.mission, enemy));
     if (enemy.isAce) {
       this.setDurability(ship, aceDurability(ship));
       ship.combatStats = {
@@ -770,12 +792,11 @@ export class CampaignBattleScene extends Phaser.Scene {
       combatStats,
       flight,
       dial: getShipDial(definitionId),
-      cycleCommitted: false,
-      allowKTurn: canHullKTurn(definitionId),
       weaponCooldown: 0,
       loadoutId: spawn.loadoutId,
       modifiers: NEUTRAL_MODIFIERS,
       frenzyUntilMs: 0,
+      bot: null,
     };
     ship.modifiers = equipQuickBuild(ship, spawn.loadoutId);
     const abilityIds = spawn.pilotAbilityIds ?? [];
@@ -883,12 +904,26 @@ export class CampaignBattleScene extends Phaser.Scene {
       });
       this.setFlight(ship, tick.state);
       this.regenerateShipShields(ship, deltaMs);
-      ship.cycleCommitted = tick.completed !== null;
-      if (tick.completed && ship.id === this.pilotedShipId) {
-        const { control } = tick.state.motion;
-        this.pilot.onCycleCommitted(control.currentManeuver ?? "straight");
-      }
+      if (tick.completed) this.notifyCycleCommitted(ship, tick.state);
       this.syncShipVisuals(ship);
+    }
+  }
+
+  /**
+   * Tells whoever flies the ship (its bot, or the player's pilot) that a
+   * cycle committed.
+   *
+   * @param ship - The ship whose cycle committed.
+   * @param flight - Its flight state after the commit.
+   */
+  private notifyCycleCommitted(
+    ship: CampaignShip,
+    flight: CycleFlightState,
+  ): void {
+    const started = flight.motion.control.currentManeuver ?? "straight";
+    if (ship.bot) ship.bot.onCycleCommitted(started);
+    else if (ship.id === this.pilotedShipId) {
+      this.pilot.onCycleCommitted(started);
     }
   }
 
@@ -994,8 +1029,11 @@ export class CampaignBattleScene extends Phaser.Scene {
   }
 
   /**
-   * The nearest foe in weapon range and forward arc that is not still
-   * immune to this ship's hits (X-Wing round: one hit per attacker per cycle).
+   * The foe a ship fires at: its pilot's chosen target (a bot's target; the
+   * player's mark for the flagship) when valid, else the nearest foe in
+   * weapon range and forward arc — never one still immune to this ship's
+   * hits (X-Wing round: one hit per attacker per cycle). Sides are owners,
+   * so a mission against the player's own faction still fights.
    *
    * @param ship - The firing ship.
    * @returns Its target, or null when none can be fired at.
@@ -1005,7 +1043,11 @@ export class CampaignBattleScene extends Phaser.Scene {
     return nearestTargetInArc(ship, this.ships.values(), {
       rangePx: ship.combatStats.weaponRange,
       arcDeg: ship.combatStats.firingArc,
+      isHostile: (other) => other.owner !== ship.owner,
       isEligible: (other) => !this.hitLedger.isImmune(ship.id, other.id, now),
+      preferredId: ship.bot
+        ? ship.bot.targetId
+        : this.squadAi.playerMarkOf(now),
     });
   }
 
@@ -1029,6 +1071,11 @@ export class CampaignBattleScene extends Phaser.Scene {
       targetHasWingman: this.fliesWithWingman(target),
       nowMs: this.time.now,
       roll: random.next(),
+      targetMarked: this.squadAi.isMarkedBy(
+        attacker.owner,
+        target.id,
+        this.time.now,
+      ),
     });
 
     this.effectsManager.fireLaser(
@@ -1139,6 +1186,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     if (ship.owner === "ai" && wasPlayerKill) this.totalKills++;
     if (ship.owner === "player") this.playerShipsLost++;
     this.hitLedger.forget(shipId);
+    this.squadAi.forget(shipId);
 
     const sprite = this.shipSprites.get(shipId);
     if (sprite) {
@@ -1156,53 +1204,80 @@ export class CampaignBattleScene extends Phaser.Scene {
 
   /**
    * Queues every ship's next maneuver: the flagship's from the player's
-   * input, enemies' and escorts' from the seek AI (chase the closest enemy).
+   * input (and the player's mark, R), enemies' and escorts' from their
+   * BotPilots under their squads' orders.
    *
    * @param time - Scene time (ms).
    * @param delta - Frame length (ms).
    */
   private updateAI(time: number, delta: number): void {
     const flagship = this.ships.get(this.playerShipIds[0] ?? "");
-    this.trackPilotedShip(flagship?.id ?? null);
+    this.trackPilotedShip(flagship ?? null);
+    this.squadAi.command(this.ships.values(), time);
     for (const ship of this.ships.values()) {
       if (!this.canFly(ship)) continue;
       if (ship === flagship) this.flyPlayer(ship, time, delta);
-      else this.steerSeeker(ship);
+      else this.flyBot(ship, time, delta);
     }
+    this.applyMarkRequest(flagship ?? null);
   }
 
   /**
    * Hands the pilot controls to the current flagship, forgetting held-input
-   * memory when the flagship changes (the previous one was destroyed).
+   * memory when the flagship changes (the previous one was destroyed): the
+   * escort taking over loses its bot — the player flies it now.
    *
-   * @param shipId - The flagship's id, or null when the squad is gone.
+   * @param flagship - The flagship, or null when the squad is gone.
    */
-  private trackPilotedShip(shipId: string | null): void {
+  private trackPilotedShip(flagship: CampaignShip | null): void {
+    const shipId = flagship?.id ?? null;
     if (shipId === this.pilotedShipId) return;
     this.pilotedShipId = shipId;
     this.pilot.reset();
+    if (flagship) flagship.bot = null;
   }
 
   /**
-   * Steers an AI ship (enemy or escort) at the closest hostile ship.
-   * Capital hulls never K-turn.
+   * The player pressed MARK (R / R3): mark the flagship's HUD target for the
+   * squad. The press is consumed every frame, so it never fires late.
+   *
+   * @param flagship - The flagship, or null when the squad is gone.
+   */
+  private applyMarkRequest(flagship: CampaignShip | null): void {
+    if (!this.pilot.takeMarkRequest() || !flagship || flagship.hull <= 0) {
+      return;
+    }
+    const targetId = this.hudTargetOf(flagship);
+    if (targetId) this.squadAi.markTarget(targetId, this.time.now);
+  }
+
+  /**
+   * One frame of an AI ship (enemy or escort): its BotPilot presses the same
+   * controls the player has (capital hulls fly without specials).
    *
    * @param ship - The AI-flown ship.
+   * @param time - Scene time (ms).
+   * @param delta - Frame length (ms).
    */
-  private steerSeeker(ship: CampaignShip): void {
-    const target = findClosestEnemy(ship, this.ships);
-    if (!target) return;
+  private flyBot(ship: CampaignShip, time: number, delta: number): void {
     const origin = { x: ship.x, y: ship.y, angle: ship.angle };
-    const result = steerAiFlight(
-      ship.flight,
-      seekSteerOrder({
-        flight: ship.flight,
-        target,
-        cycleCommitted: ship.cycleCommitted,
-        allowKTurn: ship.allowKTurn,
-      }),
-    );
-    this.setFlight(ship, result.state);
+    const result = this.squadAi.fly(ship, time, delta);
+    if (result) this.applyControls(ship, result, origin);
+  }
+
+  /**
+   * Applies a pilot's controls (player or bot) and plays their effects.
+   *
+   * @param ship - The ship flown.
+   * @param result - What its pilot's controls did this frame.
+   * @param origin - Pose before the controls.
+   */
+  private applyControls(
+    ship: CampaignShip,
+    result: FlightControlResult,
+    origin: Pose,
+  ): void {
+    this.setFlight(ship, { motion: result.motion, stress: result.stress });
     this.playFlightEvents(ship, result.events, origin);
   }
 
@@ -1225,8 +1300,7 @@ export class CampaignBattleScene extends Phaser.Scene {
       deltaMs: delta,
       worldSize: BATTLEFIELD_SIZE,
     });
-    this.setFlight(ship, { motion: result.motion, stress: result.stress });
-    this.playFlightEvents(ship, result.events, origin);
+    this.applyControls(ship, result, origin);
   }
 
   // ==========================================

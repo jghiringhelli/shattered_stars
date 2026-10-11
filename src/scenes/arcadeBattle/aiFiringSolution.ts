@@ -14,7 +14,7 @@ import { bearingDeg, headingGapDeg } from "./arcTargeting";
 
 /** Half-width of the cone (° off the nose) inside which the AI takes its shot. */
 export const AI_AIM_CONE_DEG = 30;
-/** Farthest target the AI shoots at (px) — same reach ArcadeAI uses. */
+/** Farthest target the AI shoots at (px). */
 export const AI_MAX_FIRE_RANGE_PX = 1200;
 /** Laser bolt speed (px/s) — createProjectile's non-homing speed. */
 export const LASER_BOLT_SPEED_PX_PER_S = 2500;

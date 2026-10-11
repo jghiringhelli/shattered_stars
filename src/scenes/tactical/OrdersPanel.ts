@@ -40,7 +40,7 @@ const MARKER = {
 /** Order-control hint lines. */
 const HINT_LINES: readonly string[] = [
   "← / →  direction  ·  ↑ / ↓  speed  ·  flies next cycle",
-  "Click a ship to select  ·  wheel zoom  ·  ESC pause",
+  "Click a ship to select  ·  R mark target  ·  ESC pause",
 ];
 
 /** What the card shows for the selected ship. */

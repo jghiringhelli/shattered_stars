@@ -28,14 +28,12 @@ import {
 } from "../data/ModeBalancing";
 import {
   type AIDifficultyLevel,
-  DIFFICULTY_SETTINGS,
   getModifiedHitChance,
   getModifiedDamage,
   getModifiedCooldown,
-  shouldPickOptimalTarget,
-  shouldPickOptimalManeuver,
 } from "../ai/AIDifficulty";
 import { createCycleFlight } from "../arcade/systems/CycleFlight";
+import { difficultyToTier } from "../arcade/ai";
 import {
   squadQuickBuilds,
   type LoadoutChoices,
@@ -44,7 +42,6 @@ import type { DiceAttackResult } from "../arcade/systems/DiceAttack";
 import { NEUTRAL_MODIFIERS } from "../core/CombatModifiers";
 import {
   calmOrderIfStressed,
-  chooseAiHeadingError,
   initialOrder,
   latchManeuverOrder,
   nearestDialManeuver,
@@ -86,6 +83,7 @@ import {
 import { attackIntervalMs } from "../arcade/systems/CombatTempo";
 import { cameraViewFrom } from "../ui/hud/hudMath";
 import {
+  markContacts,
   ownerContacts,
   playerHudState,
   primaryWeaponSlot,
@@ -294,6 +292,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     this.prevThrustUp = false;
     this.prevThrustDown = false;
     this.hitLedger.clear();
+    this.bots.reset();
   }
 
   shutdown(): void {
@@ -509,9 +508,15 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     super.landShot(attacker, target, result);
   }
 
-  /** Steers the AI ships, then latches every player ship's standing order. */
-  protected override updateAI(): void {
-    super.updateAI();
+  /**
+   * Flies the AI ships (bot pilots), then latches every player ship's
+   * standing order.
+   *
+   * @param time - Scene time (ms).
+   * @param delta - Frame length (ms).
+   */
+  protected override updateAI(time: number, delta: number): void {
+    super.updateAI(time, delta);
     for (const id of this.playerShipIds) {
       const ship = this.ships.get(id);
       if (ship && this.canFly(ship)) this.latchOrder(ship);
@@ -542,37 +547,50 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   }
 
   /**
-   * Steers an AI ship: difficulty decides whether it chases the closest
-   * enemy or a random one, and whether it flies the true heading error or a
-   * sloppy one.
-   *
-   * @param ship - The AI ship.
+   * Crews every AI faction: one AI-led squad per faction (focus fire,
+   * flanking, cohesion, its leader's mark — novices focus without marking),
+   * each ship flown by a bot at the tier the match difficulty maps to.
    */
-  protected override steerAiShip(ship: TacticalShip): void {
-    const target = this.pickAiTarget(ship);
-    if (!target) return;
-    const headingErrorDeg = chooseAiHeadingError(
-      this.headingErrorTo(ship, target),
-      shouldPickOptimalManeuver(this.aiDifficulty),
-      Math.random(),
-    );
-    this.steerToward(ship, target, headingErrorDeg);
+  private crewAiSquads(): void {
+    const skill = difficultyToTier(this.aiDifficulty);
+    const ships = this.squadShips(this.enemyShipIds);
+    const aiLeader = skill.tier !== "novice";
+    for (const faction of new Set(ships.map((ship) => ship.faction))) {
+      this.bots.addSquad({ key: faction, side: faction, aiLeader });
+    }
+    for (const ship of ships) {
+      this.bots.addPilot({
+        shipId: ship.id,
+        tier: skill.tier,
+        reactionScale: skill.reactionScale,
+      });
+      this.bots.enlist(ship.id, ship.faction);
+    }
   }
 
   /**
-   * The enemy an AI ship chases this frame.
-   *
-   * @param ship - The AI ship.
-   * @returns The closest enemy (optimal) or a random living one.
+   * R (MARK_TARGET): the player's side marks the selected ship's target.
+   * Every player ship then shoots it first, with the mark's bonus; standing
+   * orders still decide where they fly.
    */
-  private pickAiTarget(ship: TacticalShip): TacticalShip | null {
-    if (shouldPickOptimalTarget(this.aiDifficulty)) {
-      return battleFindClosestEnemy(ship, this.ships);
-    }
-    const enemies = [...this.ships.values()].filter(
-      (other) => other.faction !== ship.faction && other.hull > 0,
+  private markTarget(): void {
+    if (this.isPaused) return;
+    const ship = this.selectedShip();
+    const targetId = ship ? this.hudTargetId(ship) : null;
+    if (targetId) this.bots.mark(this.playerFaction, targetId, this.time.now);
+  }
+
+  /**
+   * @param ship - The selected ship.
+   * @returns What its HUD locks (and R marks): its shot target, else the
+   *   nearest enemy.
+   */
+  private hudTargetId(ship: TacticalShip): string | null {
+    return (
+      this.findWeaponTarget(ship)?.id ??
+      battleFindClosestEnemy(ship, this.ships)?.id ??
+      null
     );
-    return enemies[Math.floor(Math.random() * enemies.length)] ?? null;
   }
 
   /**
@@ -608,6 +626,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     } else {
       this.spawnDefaultShips();
     }
+    this.crewAiSquads();
     audioManager.playFactionMusic(this.playerFaction, "tactical");
 
     for (const ship of this.ships.values()) {
@@ -806,7 +825,6 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       combatStats,
       flight,
       dial,
-      cycleCommitted: false,
       order: initialOrder(dial, flight.motion.control.speed),
       weaponCooldown: 0,
       capitalSystems: isCapital ? createCapitalSystems(combatStats.hull) : null,
@@ -898,6 +916,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     setupSceneInput(this);
     this.inputSubscriptionIds.push(
       InputManager.on("PAUSE", () => this.togglePause()),
+      InputManager.on("MARK_TARGET", () => this.markTarget()),
     );
 
     this.input.on(
@@ -1085,10 +1104,13 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     this.hud.update({
       battle: {
         player: ship ? playerHudState(ship, ship.order) : null,
-        contacts: ownerContacts(
-          ship?.id ?? null,
-          this.ships.values(),
-          ship ? (this.findWeaponTarget(ship)?.id ?? null) : null,
+        contacts: markContacts(
+          ownerContacts(
+            ship?.id ?? null,
+            this.ships.values(),
+            ship ? this.hudTargetId(ship) : null,
+          ),
+          this.bots.markedTarget(this.playerFaction, this.time.now),
         ),
         weapons: ship
           ? [

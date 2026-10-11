@@ -4,6 +4,8 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  BELT_AVOID_MARGIN_PX,
+  beltRetreatPoint,
   beltIntensity,
   beltDamagePerSecond,
   beltDamageForFrame,
@@ -95,5 +97,33 @@ describe("tightenBelt", () => {
 
   it("treats negative steps as no tightening", () => {
     expect(tightenBelt(BASE, -5)).toEqual(BASE);
+  });
+});
+
+describe("beltRetreatPoint", () => {
+  const BELT = { safeRadius: 2000, wallRadius: 2400, maxDamagePerSecond: 3 };
+  const CENTER = { x: 3000, y: 3000 };
+
+  it("is null well inside the safe zone", () => {
+    expect(beltRetreatPoint({ x: 3000, y: 2000 }, CENTER, BELT)).toBeNull();
+  });
+
+  it("sends a ship nearing the belt back to the arena centre", () => {
+    const nearEdge = { x: 3000, y: 3000 - (2000 - BELT_AVOID_MARGIN_PX / 2) };
+    expect(beltRetreatPoint(nearEdge, CENTER, BELT)).toEqual(CENTER);
+  });
+
+  it("sends a ship already in the belt back to the centre", () => {
+    expect(beltRetreatPoint({ x: 5300, y: 3000 }, CENTER, BELT)).toEqual(
+      CENTER,
+    );
+  });
+
+  it("keeps half the safe zone open when the belt is tight", () => {
+    const tight = { safeRadius: 300, wallRadius: 500, maxDamagePerSecond: 9 };
+    expect(beltRetreatPoint({ x: 3000, y: 2860 }, CENTER, tight)).toBeNull();
+    expect(beltRetreatPoint({ x: 3000, y: 2840 }, CENTER, tight)).toEqual(
+      CENTER,
+    );
   });
 });

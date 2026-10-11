@@ -22,14 +22,13 @@ import {
 } from "../data/ModeBalancing";
 import {
   createCycleFlight,
-  pursuitSpeed,
-  steerAiFlight,
   tickCycleFlight,
   type CycleFlightState,
 } from "../arcade/systems/CycleFlight";
 import { PlayerFlightPilot } from "../arcade/systems/PlayerFlightPilot";
 import type { FlightEvent } from "../arcade/systems/PilotFlightTypes";
-import { closestPoint, planDuelSteer } from "../arcade/systems/AiPursuit";
+import { difficultyToTier, type BotContact, type BotSkill } from "../arcade/ai";
+import { DuelBotCrew } from "../arcade/systems/DuelBotCrew";
 import { shieldsAfterCycle } from "../arcade/systems/AceDuelPilotAi";
 import {
   adHocAbilities,
@@ -68,10 +67,11 @@ import {
   primaryShotTarget,
 } from "../arcade/systems/DuelPrimaryFire";
 import { DuelHud } from "./duel/DuelHud";
-import { buildDuelHudSnapshot } from "./duel/duelHudSnapshot";
+import { buildDuelHudSnapshot, playerTargetId } from "./duel/duelHudSnapshot";
 import { showDuelEndScreen } from "./duel/DuelEndScreen";
 import {
   renderAceDuelSetup,
+  type AceDuelDifficulty,
   type AceDuelSetupActions,
 } from "./duel/AceDuelSetupView";
 import { cameraViewFrom } from "../ui/hud/hudMath";
@@ -129,8 +129,6 @@ interface AceDuelShip {
   /** Cycle-engine motion and pilot stress; x/y/angle mirror its pose. */
   flight: CycleFlightState;
   dial: readonly ManeuverDefinition[];
-  /** True on the frame this ship's maneuver cycle committed. */
-  cycleCommitted: boolean;
   weaponCooldown: number;
   /** The duel ace's pilot abilities (preset by the matchup). */
   abilities: string[];
@@ -146,16 +144,11 @@ interface ShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
 }
 
-/** AI hit-chance multiplier per difficulty setting. */
-const AI_HIT_CHANCE_BY_DIFFICULTY = {
-  easy: 0.7,
-  normal: 1,
-  hard: 1.1,
-  brutal: 1.2,
-} as const;
-
-/** AI difficulty settings a duel can be fought at. */
-type DuelDifficulty = keyof typeof AI_HIT_CHANCE_BY_DIFFICULTY;
+/**
+ * The player's escorts (their side's other ships) fly as average pilots,
+ * whatever the difficulty — it sets the opponents' tier only.
+ */
+const ESCORT_SKILL: BotSkill = { tier: "average", reactionScale: 1 };
 
 /** Round wins that take the match (best of 3). */
 const WINS_NEEDED = 2;
@@ -215,7 +208,7 @@ export class AceDuelScene extends Phaser.Scene {
   private side2Score: SideScore = createSideScore();
 
   // Settings
-  private difficulty: DuelDifficulty = "normal";
+  private difficulty: AceDuelDifficulty = "normal";
   /**
    * The player's quick-build picks for their side's ships. Null (never
    * touched) means the defaults assignQuickBuilds would give; picks made
@@ -229,6 +222,12 @@ export class AceDuelScene extends Phaser.Scene {
 
   /** The human pilot's flight input (InputManager-driven). */
   private readonly pilot = new PlayerFlightPilot(InputManager);
+  /**
+   * The round's AI: a BotPilot per AI ship (opponents at the difficulty's
+   * tier, the player's escorts average), a SquadCommand per side of 2+ ships
+   * and the squad marks (the player's R mark). Null outside a round.
+   */
+  private crew: DuelBotCrew | null = null;
 
   // Player input (routed through InputManager — see setupInput())
   private pauseMenu!: PauseMenu;
@@ -362,6 +361,43 @@ export class AceDuelScene extends Phaser.Scene {
     this.isPaused = false;
     this.pilot.reset();
     this.hitLedger.clear();
+    this.crew = null;
+  }
+
+  /** @returns The player's side key (SquadMark / DuelBotCrew). */
+  private get playerSideKey(): string {
+    return `side${this.playerSide}`;
+  }
+
+  /**
+   * The round's crew: the flagship is the human; the player's escorts fly
+   * as average bots and the opponents at the difficulty's tier (easy =
+   * novice, normal = average, hard = expert, brutal = expert with faster
+   * reactions). Sides of 2+ ships fly under a SquadCommand.
+   *
+   * @returns The crew for the ships just spawned.
+   */
+  private createCrew(): DuelBotCrew {
+    const enemySkill = difficultyToTier(this.difficulty);
+    const member = (shipId: string, side: 1 | 2) => ({
+      shipId,
+      side: `side${side}`,
+      skill:
+        shipId === this.flagshipId
+          ? null
+          : side === this.playerSide
+            ? ESCORT_SKILL
+            : enemySkill,
+    });
+    return new DuelBotCrew({
+      roster: [
+        ...this.side1ShipIds.map((id) => member(id, 1)),
+        ...this.side2ShipIds.map((id) => member(id, 2)),
+      ],
+      playerSide: this.playerSideKey,
+      random: Math.random,
+      worldSize: BATTLEFIELD_SIZE,
+    });
   }
 
   private showSetupScreen(): void {
@@ -514,6 +550,7 @@ export class AceDuelScene extends Phaser.Scene {
 
     this.spawnSide(1);
     this.spawnSide(2);
+    this.crew = this.createCrew();
 
     this.showRoundStart();
 
@@ -578,19 +615,44 @@ export class AceDuelScene extends Phaser.Scene {
     this.checkRoundEnd();
   }
 
-  /** Feeds the holographic HUD this frame's ships and camera. */
+  /** Feeds the holographic HUD this frame's ships, camera and the player's mark. */
   private updateHud(): void {
-    const playerSideIds =
-      this.playerSide === 1 ? this.side1ShipIds : this.side2ShipIds;
     this.hud?.update(
       buildDuelHudSnapshot({
         ships: this.ships.values(),
         playerId: this.flagshipId,
-        isAlly: (ship) => playerSideIds.includes(ship.id),
+        isAlly: (ship) => this.isPlayerSide(ship.id),
         camera: cameraViewFrom(this.cameras.main),
         worldSize: BATTLEFIELD_SIZE,
+        markedId:
+          this.crew?.markedTargetOf(this.playerSideKey, this.time.now) ?? null,
       }),
     );
+  }
+
+  /**
+   * @param shipId - A ship of the round.
+   * @returns Whether it flies on the player's side.
+   */
+  private isPlayerSide(shipId: string): boolean {
+    const playerSideIds =
+      this.playerSide === 1 ? this.side1ShipIds : this.side2ShipIds;
+    return playerSideIds.includes(shipId);
+  }
+
+  /**
+   * R / gamepad R3: the player marks the HUD's current target for their
+   * side; their escorts focus it (and shoot it with the mark bonus).
+   */
+  private markHudTarget(): void {
+    const targetId = playerTargetId({
+      ships: this.ships.values(),
+      playerId: this.flagshipId,
+      isAlly: (ship) => this.isPlayerSide(ship.id),
+      worldSize: BATTLEFIELD_SIZE,
+    });
+    if (!targetId) return;
+    this.crew?.markTarget(this.playerSideKey, targetId, this.time.now);
   }
 
   /**
@@ -748,7 +810,6 @@ export class AceDuelScene extends Phaser.Scene {
       combatStats,
       flight: createCycleFlight(defId, { x, y, angle }),
       dial: getShipDial(defId),
-      cycleCommitted: false,
       weaponCooldown: 0,
       abilities: [...spawn.abilities],
       loadoutId: spawn.loadoutId,
@@ -834,8 +895,7 @@ export class AceDuelScene extends Phaser.Scene {
       });
       this.setFlight(ship, tick.state);
       this.regenerateShieldsOf(ship, deltaMs);
-      ship.cycleCommitted = tick.completed !== null;
-      if (ship.cycleCommitted) this.onCycleCommitted(ship);
+      if (tick.completed) this.onCycleCommitted(ship);
       this.shipSprites
         .get(ship.id)
         ?.setPosition(ship.x, ship.y)
@@ -864,13 +924,15 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   /**
-   * End-of-cycle bookkeeping: the player's pilot learns which maneuver the
-   * new cycle started, and regenerative_shields restores a shield (unless
-   * it acts through the modifier sheet as steady regeneration instead).
+   * End-of-cycle bookkeeping: the ship's pilot (the human's or its bot)
+   * learns which maneuver the new cycle started, and regenerative_shields
+   * restores a shield (unless it acts through the modifier sheet as steady
+   * regeneration instead).
    *
    * @param ship - The ship whose cycle just committed.
    */
   private onCycleCommitted(ship: AceDuelShip): void {
+    this.crew?.onCycleCommitted(ship);
     if (ship.id === this.flagshipId) {
       const { currentManeuver } = ship.flight.motion.control;
       this.pilot.onCycleCommitted(currentManeuver ?? "straight");
@@ -945,6 +1007,7 @@ export class AceDuelScene extends Phaser.Scene {
           this.side1ShipIds.includes(other.id) !== shipOnSide1,
         ledger: this.hitLedger,
         nowMs: this.time.now,
+        preferredId: this.crew?.targetOf(ship.id) ?? null,
       });
       if (!target) continue;
       this.fireAt(ship, target);
@@ -953,19 +1016,17 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   /**
-   * Fires the primary weapon: the duel-only abilities set the dice odds,
-   * difficulty scales the AI's aim, and DiceAttack applies the quick build
-   * and sheet abilities to one uniform roll.
+   * Fires the primary weapon: the duel-only abilities set the dice odds
+   * (the same for every pilot — an AI's skill is in its flying), the
+   * squad-mark bonus applies when the shooter's squad marked the target,
+   * and DiceAttack applies the quick build and sheet abilities to one
+   * uniform roll.
    *
    * @param attacker - The firing ship.
    * @param target - The ship fired at.
    */
   private fireAt(attacker: AceDuelShip, target: AceDuelShip): void {
-    const odds = duelShotOdds(attacker, target);
-    const hitChance =
-      attacker.owner === "ai"
-        ? odds.hitChance * AI_HIT_CHANCE_BY_DIFFICULTY[this.difficulty]
-        : odds.hitChance;
+    const { hitChance, extraDamageChance } = duelShotOdds(attacker, target);
     const roll = Math.random();
     const result = resolveDiceAttack({
       attacker: combatantOf(attacker),
@@ -973,11 +1034,13 @@ export class AceDuelScene extends Phaser.Scene {
       hitChance,
       baseDamage:
         attacker.combatStats.attackDice +
-        marksmanshipDamage(roll, hitChance, odds.extraDamageChance),
+        marksmanshipDamage(roll, hitChance, extraDamageChance),
       attackerHasWingman: this.fliesWithWingman(attacker),
       targetHasWingman: this.fliesWithWingman(target),
       nowMs: this.time.now,
       roll,
+      targetMarked:
+        this.crew?.isMarkedShot(attacker.id, target.id, this.time.now) ?? false,
     });
     if (result.hit) this.applyHit(attacker, target, result);
     this.effectsManager.fireLaser(
@@ -1032,6 +1095,7 @@ export class AceDuelScene extends Phaser.Scene {
    */
   private onShipDestroyed(killer: AceDuelShip, victim: AceDuelShip): void {
     this.hitLedger.forget(victim.id);
+    this.crew?.forget(victim.id);
     if (this.side1ShipIds.includes(victim.id)) {
       this.side2Score = creditKill(this.side2Score, victim.definitionId);
     } else {
@@ -1070,45 +1134,42 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   /**
-   * Queues every ship's next maneuver: the flagship's from player input,
-   * every other ship's (escorts and enemies) from its AI pilot.
+   * Queues every ship's next maneuver: the flagship's from player input
+   * (and the R mark), every other ship's (escorts and enemies) from its
+   * BotPilot — the same controls, through the same pilot hands.
    *
    * @param time - Scene time (ms).
    * @param delta - Frame length (ms).
    */
   private updateAI(time: number, delta: number): void {
+    const flagship = this.ships.get(this.flagshipId);
+    if (flagship && flagship.hull > 0) this.flyPlayer(flagship, time, delta);
+    if (this.pilot.takeMarkRequest()) this.markHudTarget();
+    const crew = this.crew;
+    if (!crew) return;
+    const contacts = crew.contactsOf(this.ships.values());
+    crew.command(contacts, this.time.now);
     for (const ship of this.ships.values()) {
-      if (ship.hull <= 0) continue;
-      if (ship.id === this.flagshipId) this.flyPlayer(ship, time, delta);
-      else this.steerAi(ship);
+      if (ship.hull > 0) this.flyBot(ship, contacts, delta);
     }
   }
 
   /**
-   * Steers an AI ship at the nearest living enemy. Difficulty (or the fixed
-   * escort rate) sets how often it flies the optimal line; the plan becomes
-   * a heading error and pursuit speed for the cycle engine.
+   * One frame of a ship's bot, applied exactly like the player's input.
    *
-   * @param ship - The AI-piloted ship.
+   * @param ship - A ship (no-op unless a bot flies it).
+   * @param contacts - Every ship as the AI sees it.
+   * @param delta - Frame length (ms).
    */
-  private steerAi(ship: AceDuelShip): void {
-    const target = closestPoint(ship, this.livingEnemiesOf(ship));
-    if (!target) return;
-    const plan = planDuelSteer({
-      ship,
-      target,
-      owner: ship.owner,
-      difficulty: this.difficulty,
-      random: Math.random,
-    });
+  private flyBot(
+    ship: AceDuelShip,
+    contacts: readonly BotContact[],
+    delta: number,
+  ): void {
     const origin = { x: ship.x, y: ship.y, angle: ship.angle };
-    const result = steerAiFlight(ship.flight, {
-      headingErrorDeg: plan.headingErrorDeg,
-      desiredSpeed: pursuitSpeed(ship.flight.motion.control, plan.trueErrorDeg),
-      cycleCommitted: ship.cycleCommitted,
-      allowKTurn: plan.allowKTurn,
-    });
-    this.setFlight(ship, result.state);
+    const result = this.crew?.fly(ship, contacts, this.time.now, delta);
+    if (!result) return;
+    this.setFlight(ship, { motion: result.motion, stress: result.stress });
     this.playFlightEvents(ship, result.events, origin);
   }
 

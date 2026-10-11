@@ -120,17 +120,18 @@ test.describe("key bindings — Dogfight", () => {
     expect((await control(page)).speed).toBe(before + 1);
   });
 
-  test("R → MARK_TARGET reaches the pilot's mark latch", async ({ page }) => {
-    const takeMark = (): Promise<boolean> =>
-      page.evaluate(
-        (key) =>
-          (window as any).game.scene.getScene(key).pilot.takeMarkRequest(),
-        SCENE,
-      );
-    expect(await takeMark()).toBe(false);
+  test("R → MARK_TARGET marks the HUD target for the player's side", async ({
+    page,
+  }) => {
+    // The scene consumes the pilot's mark latch every frame and stores the
+    // mark in its crew (DuelBotCrew) on the HUD's current target.
+    const marked = (): Promise<string | null> =>
+      page.evaluate((key) => {
+        const scene = (window as any).game.scene.getScene(key);
+        return scene.crew.markedTargetOf("player", scene.time.now);
+      }, SCENE);
+    expect(await marked()).toBeNull();
     await pressKey(page, "r");
-    await page.waitForTimeout(50);
-    expect(await takeMark()).toBe(true);
-    expect(await takeMark()).toBe(false);
+    await expect.poll(marked, { timeout: 2_000 }).toBe("ai_0");
   });
 });

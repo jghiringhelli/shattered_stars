@@ -2,14 +2,12 @@
  * TacticalOrders — specification tests for the continuous-tactical dial:
  * a player's standing maneuver order latches into the cycle engine's queue,
  * a stressed pilot's red order is calmed, the preview flies the engine's own
- * geometry, and sloppy AI pilots pick a plausible heading error.
+ * geometry.
  */
 
 import { describe, it, expect } from "vitest";
 import {
-  TACTICAL_SLOPPY_HEADING_ERRORS_DEG,
   calmOrderIfStressed,
-  chooseAiHeadingError,
   initialOrder,
   latchManeuverOrder,
   nearestDialManeuver,
@@ -196,21 +194,6 @@ describe("planOrderPreview", () => {
     expect(wrapped.queued.at(-1)!.x - unwrapped.queued.at(-1)!.x).toBeCloseTo(
       4000,
       6,
-    );
-  });
-});
-
-describe("chooseAiHeadingError", () => {
-  it("flies the true heading error when the pilot flies optimally", () => {
-    expect(chooseAiHeadingError(-73, true, 0.9)).toBe(-73);
-  });
-
-  it("picks a sloppy heading error from the roll otherwise", () => {
-    expect(chooseAiHeadingError(-73, false, 0)).toBe(
-      TACTICAL_SLOPPY_HEADING_ERRORS_DEG[0],
-    );
-    expect(chooseAiHeadingError(-73, false, 0.999)).toBe(
-      TACTICAL_SLOPPY_HEADING_ERRORS_DEG.at(-1),
     );
   });
 });

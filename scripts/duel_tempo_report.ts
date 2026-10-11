@@ -1,13 +1,16 @@
 /**
  * Duel tempo report — how long Dogfight / Ace Duel rounds last between equal
- * AI pilots on the X-Wing round tempo (DuelTempoSim, same modules as the
- * scenes). Reports median / quartiles per matchup; tunes nothing.
+ * bot pilots on the X-Wing round tempo (DuelTempoSim: the same BotPilots,
+ * squad layer and modules as the scenes). For every matchup it reports the
+ * median round length (and timeouts) of each tier mirror — novice vs
+ * novice (Easy), average vs average (Normal), expert vs expert (Hard).
+ * Tunes nothing.
  *
  * Usage:
- *   npx tsx scripts/duel_tempo_report.ts [--rounds N] [--difficulty normal]
+ *   npx tsx scripts/duel_tempo_report.ts [--rounds N] [--tier average]
  */
 
-import type { DuelDifficulty } from "../src/arcade/systems/AiPursuit";
+import type { BotTier } from "../src/arcade/ai";
 import { ACE_MATCHUPS } from "../src/data/AceMatchups";
 import {
   medianDurationMs,
@@ -18,8 +21,9 @@ import {
 const DEFAULT_ROUNDS = 30;
 const SEED_BASE = 1000;
 const MS_PER_S = 1000;
-const QUARTILE_LOW = 0.25;
-const QUARTILE_HIGH = 0.75;
+const LABEL_WIDTH = 22;
+const CELL_WIDTH = 20;
+const TIERS: readonly BotTier[] = ["novice", "average", "expert"];
 
 /** Mirror matchups (truly equal pilots) plus the Dogfight default. */
 const MIRRORS: ReadonlyArray<
@@ -38,62 +42,70 @@ function argValue(name: string): string | undefined {
   return index >= 0 ? process.argv[index + 1] : undefined;
 }
 
-function seconds(ms: number | null | undefined): string {
-  return ms === null || ms === undefined ? "  -  " : (ms / MS_PER_S).toFixed(1);
+function seconds(ms: number | null): string {
+  return ms === null ? "-" : `${(ms / MS_PER_S).toFixed(1)}s`;
 }
 
-function quantile(
-  results: readonly DuelTempoResult[],
-  q: number,
-): number | null {
-  const sorted = results
-    .map((r) => r.durationMs)
-    .filter((d): d is number => d !== null)
-    .sort((a, b) => a - b);
-  return sorted.length === 0
-    ? null
-    : sorted[Math.floor(q * (sorted.length - 1))]!;
-}
-
-function report(
-  label: string,
+/**
+ * @param side1 - Side 1 ship ids.
+ * @param side2 - Side 2 ship ids.
+ * @param tier - Both sides' bot tier.
+ * @param rounds - Seeds to fly.
+ * @returns One cell: median, side-1 wins and timeouts of a tier mirror.
+ */
+function cell(
   side1: readonly string[],
   side2: readonly string[],
-  options: { rounds: number; difficulty: DuelDifficulty },
-): void {
-  const results = Array.from({ length: options.rounds }, (_, i) =>
-    simulateDuelRound({
-      side1,
-      side2,
-      seed: SEED_BASE + i,
-      difficulty: options.difficulty,
-    }),
+  tier: BotTier,
+  rounds: number,
+): string {
+  const results: DuelTempoResult[] = Array.from({ length: rounds }, (_, i) =>
+    simulateDuelRound({ side1, side2, seed: SEED_BASE + i, tier }),
   );
   const timeouts = results.filter((r) => r.durationMs === null).length;
   const side1Wins = results.filter((r) => r.winner === 1).length;
-  console.log(
-    `${label.padEnd(22)} median ${seconds(medianDurationMs(results))}s` +
-      `  p25 ${seconds(quantile(results, QUARTILE_LOW))}s` +
-      `  p75 ${seconds(quantile(results, QUARTILE_HIGH))}s` +
-      `  side1 ${side1Wins}/${options.rounds}  timeouts ${timeouts}`,
+  return `${seconds(medianDurationMs(results))} w${side1Wins} t${timeouts}`;
+}
+
+/**
+ * Print one matchup's row: a cell per tier mirror.
+ * @param label - Row label.
+ * @param sides - Side 1 and side 2 ship ids.
+ * @param tiers - Tier mirrors to fly.
+ * @param rounds - Seeds per cell.
+ */
+function row(
+  label: string,
+  sides: readonly [readonly string[], readonly string[]],
+  tiers: readonly BotTier[],
+  rounds: number,
+): void {
+  const cells = tiers.map((tier) =>
+    cell(sides[0], sides[1], tier, rounds).padEnd(CELL_WIDTH),
   );
+  console.log(`${label.padEnd(LABEL_WIDTH)}${cells.join("")}`);
 }
 
 function main(): void {
   const rounds = Number(argValue("--rounds") ?? DEFAULT_ROUNDS);
-  const difficulty = (argValue("--difficulty") ?? "normal") as DuelDifficulty;
-  const options = { rounds, difficulty };
+  const only = argValue("--tier") as BotTier | undefined;
+  const tiers = only ? [only] : TIERS;
   console.log(
-    `Duel tempo — ${rounds} rounds per matchup, AI ${difficulty} vs ${difficulty}\n`,
+    `Duel tempo — ${rounds} rounds per matchup and tier mirror; ` +
+      `median round, side-1 wins (w), timeouts (t)\n`,
+  );
+  console.log(
+    "".padEnd(LABEL_WIDTH) +
+      tiers.map((t) => `${t} mirror`.padEnd(CELL_WIDTH)).join(""),
   );
   for (const [label, side1, side2] of MIRRORS)
-    report(label, side1, side2, options);
+    row(label, [side1, side2], tiers, rounds);
   for (const matchup of ACE_MATCHUPS) {
-    report(
+    row(
       `ace: ${matchup.id}`,
-      matchup.side1.ships,
-      matchup.side2.ships,
-      options,
+      [matchup.side1.ships, matchup.side2.ships],
+      tiers,
+      rounds,
     );
   }
 }

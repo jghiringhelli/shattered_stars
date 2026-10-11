@@ -1,9 +1,13 @@
 /**
- * EpicAiFlight — pure flight rules for Boss Raid (EpicBattleScene) AI pilots
- * flying the X-Wing cycle engine.
+ * EpicAiFlight — who flies the Boss Raid's AI ships. Every AI ship is a
+ * skill-gate bot (BotPilot) flying the player's controls: boss escorts at
+ * the tier the raid difficulty maps to, the player's wingmen as average
+ * pilots.
+ *
+ * Pure: no Phaser.
  */
 
-import { canHullKTurn } from "./AiPursuit";
+import { difficultyToTier, type BotSkill } from "../ai/BotDifficulty";
 
 /** Boss Raid difficulty tiers. */
 export type EpicDifficulty = "easy" | "medium" | "hard" | "mythic";
@@ -11,27 +15,21 @@ export type EpicDifficulty = "easy" | "medium" | "hard" | "mythic";
 /** Which side an AI ship flies for in a raid. */
 export type EpicAiSide = "escort" | "wingman";
 
-/** Difficulties at which boss escorts may K-turn onto a target behind them. */
-const ESCORT_KTURN_DIFFICULTIES: ReadonlySet<EpicDifficulty> = new Set([
-  "medium",
-  "hard",
-  "mythic",
-]);
+/** The player's wingmen fly as average pilots at every difficulty. */
+export const WINGMAN_SKILL: BotSkill = { tier: "average", reactionScale: 1 };
 
 /**
- * Whether an AI ship may K-turn. Capital-profile hulls never do; boss escorts
- * only above easy difficulty; the player's wingmen always may.
+ * The bot that flies a raid AI ship: escorts at the raid difficulty's tier
+ * (easy novice, medium average, hard expert, mythic expert with Brutal
+ * reaction), wingmen always average.
  *
- * @param definitionId - Ship definition id.
  * @param side - Escort (boss side) or wingman (player side).
  * @param difficulty - Raid difficulty.
- * @returns True when steerAiFlight may queue a K-turn for this ship.
+ * @returns Tier and reaction scale.
  */
-export function mayAiKTurn(
-  definitionId: string,
+export function raidBotSkill(
   side: EpicAiSide,
   difficulty: EpicDifficulty,
-): boolean {
-  if (!canHullKTurn(definitionId)) return false;
-  return side === "wingman" || ESCORT_KTURN_DIFFICULTIES.has(difficulty);
+): BotSkill {
+  return side === "wingman" ? WINGMAN_SKILL : difficultyToTier(difficulty);
 }

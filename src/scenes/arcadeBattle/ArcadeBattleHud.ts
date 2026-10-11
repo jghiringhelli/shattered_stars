@@ -70,6 +70,8 @@ export interface ArcadeHudFrame {
   readonly remainingMs: number;
   /** Scene time (ms) — pulses and order cooldowns. */
   readonly nowMs: number;
+  /** The player's side's marked target (SquadMark), or null. */
+  readonly markedId?: string | null;
 }
 
 /** What the HUD showed on its last update. */
@@ -82,6 +84,8 @@ export interface ArcadeHudReadout {
   readonly stressLabel: string;
   readonly maneuver: string | null;
   readonly targetId: string | null;
+  /** The contact shown as the squad's marked target, or null. */
+  readonly markedId: string | null;
   readonly contactCount: number;
   readonly edgeArrowCount: number;
   readonly weaponIds: ReadonlyArray<string>;
@@ -98,6 +102,7 @@ const EMPTY_READOUT: ArcadeHudReadout = {
   stressLabel: "",
   maneuver: null,
   targetId: null,
+  markedId: null,
   contactCount: 0,
   edgeArrowCount: 0,
   weaponIds: [],
@@ -189,6 +194,7 @@ export class ArcadeBattleHud {
       camera,
       worldSize: this.config.worldSize,
       sizeOf: this.config.sizeOf,
+      markedId: frame.markedId ?? null,
     });
     this.battleHud.update(snapshot);
     this.applyCamera(camera.zoom, camera.width, camera.height);
@@ -203,6 +209,8 @@ export class ArcadeBattleHud {
       stressLabel: this.stress.label,
       maneuver: player?.maneuver ?? null,
       targetId,
+      markedId:
+        snapshot.contacts.find((contact) => contact.isMarked)?.id ?? null,
       contactCount: snapshot.contacts.length,
       edgeArrowCount: this.battleHud.edgeArrowCount,
       weaponIds: snapshot.weapons.map((slot) => slot.id),

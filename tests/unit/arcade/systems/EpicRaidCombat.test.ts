@@ -36,6 +36,10 @@ import {
 import { INITIAL_STRESS } from "../../../../src/arcade/ArcadeStress";
 import type { AbilityCombatant } from "../../../../src/arcade/PilotAbilityCombat";
 import { CLOSE_RANGE_PX } from "../../../../src/arcade/ShotConditions";
+import {
+  SQUAD_MARK_DAMAGE_BONUS,
+  SQUAD_MARK_HIT_BONUS,
+} from "../../../../src/arcade/systems/SquadMark";
 
 const BOSS: BossTarget = { x: 0, y: 0, angle: 180, shields: 10, armor: 3 };
 
@@ -108,6 +112,27 @@ describe("resolveBossShot", () => {
     expect(resolveBossShot(shot({ attacker, attackerHasWingman: true }))).toBe(
       3,
     );
+  });
+});
+
+describe("resolveBossShot — the boss as a marked target", () => {
+  it("adds the squad mark's damage bonus before the armor", () => {
+    expect(resolveBossShot(shot({ targetMarked: true }))).toBe(
+      2 + SQUAD_MARK_DAMAGE_BONUS,
+    );
+  });
+
+  it("raises the hit chance by the squad mark's bonus", () => {
+    const roll = 0.4 + SQUAD_MARK_HIT_BONUS / 2;
+    expect(resolveBossShot(shot({ hitChance: 0.4, roll }))).toBe(0);
+    expect(
+      resolveBossShot(shot({ hitChance: 0.4, roll, targetMarked: true })),
+    ).toBeGreaterThan(0);
+  });
+
+  it("an unmarked boss keeps the bare dice odds (no position lever)", () => {
+    expect(resolveBossShot(shot({ hitChance: 0.4, roll: 0.39 }))).toBe(2);
+    expect(resolveBossShot(shot({ targetMarked: false }))).toBe(2);
   });
 });
 

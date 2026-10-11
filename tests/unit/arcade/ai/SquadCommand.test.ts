@@ -107,3 +107,27 @@ describe("SquadCommand — the player's side", () => {
     expect(command.orderFor("a2")?.focusTargetId).toBe("b1");
   });
 });
+
+describe("SquadCommand — the player's side with mark assist", () => {
+  it("marks the squad's own focus while the player has no mark", () => {
+    const command = new SquadCommand({
+      side: "red",
+      aiLeader: false,
+      assistMark: true,
+    });
+    const marks = run(command, battle());
+    expect(markedTargetOf(marks, "red", 1000)).toBe("b2");
+  });
+
+  it("keeps the player's mark (refreshed) instead of choosing its own", () => {
+    const command = new SquadCommand({
+      side: "red",
+      aiLeader: false,
+      assistMark: true,
+    });
+    const marked = placeMark(NO_SQUAD_MARKS, "red", "b1", 0);
+    const marks = run(command, battle(), marked, 9000);
+    expect(markedTargetOf(marks, "red", 9000)).toBe("b1");
+    expect(command.orderFor("a2")?.focusTargetId).toBe("b1");
+  });
+});

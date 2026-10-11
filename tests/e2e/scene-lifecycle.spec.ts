@@ -110,28 +110,36 @@ for (const battle of [DOGFIGHT, ACE_DUEL]) {
     page,
   }) => {
     await battle.enter(page);
-    const durability = () =>
-      page.evaluate(
-        (key) =>
-          [...(window as any).game.scene.getScene(key).ships.values()].map(
-            (ship: any) => [ship.hull, Math.floor(ship.shields)],
-          ),
-        battle.sceneKey,
-      );
-    const atSpawn = await durability();
-    await page
-      .waitForFunction(
-        (key) =>
-          (window as any).game.scene.getScene(key).isRoundActive === true,
-        battle.sceneKey,
-        { polling: 16, timeout: 5_000 },
-      )
-      .catch(() => undefined);
-    const beforeFight = await page.evaluate((key) => {
+    // Log whether the round was live at every shot (the bots close in fast
+    // enough to fire on the first live frame, so durability alone is racy).
+    await page.evaluate((key) => {
+      const scene = (window as any).game.scene.getScene(key);
+      const fireAt = scene.fireAt.bind(scene);
+      scene.__shotsLive = [];
+      scene.fireAt = (attacker: unknown, target: unknown) => {
+        scene.__shotsLive.push(scene.isRoundActive === true);
+        fireAt(attacker, target);
+      };
+    }, battle.sceneKey);
+    const before = await page.evaluate((key) => {
       const scene = (window as any).game.scene.getScene(key);
       return { active: scene.isRoundActive, round: scene.currentRound };
     }, battle.sceneKey);
-    expect(beforeFight.round).toBe(1);
-    expect(await durability()).toEqual(atSpawn);
+    expect(before).toEqual({ active: false, round: 1 });
+    await page.waitForFunction(
+      (key) => (window as any).game.scene.getScene(key).isRoundActive === true,
+      battle.sceneKey,
+      { polling: 16, timeout: 5_000 },
+    );
+    await page.waitForFunction(
+      (key) => (window as any).game.scene.getScene(key).__shotsLive.length > 0,
+      battle.sceneKey,
+      { polling: 16, timeout: 20_000 },
+    );
+    const shotsLive: boolean[] = await page.evaluate(
+      (key) => (window as any).game.scene.getScene(key).__shotsLive,
+      battle.sceneKey,
+    );
+    expect(shotsLive.every(Boolean)).toBe(true);
   });
 }

@@ -8,6 +8,7 @@ import { describe, it, expect } from "vitest";
 import {
   angleBetweenRad,
   isInFiringArc,
+  nearestHostile,
   nearestTargetInArc,
   type ArcCandidate,
 } from "../../../../src/arcade/systems/ArcTargeting";
@@ -94,5 +95,71 @@ describe("nearestTargetInArc", () => {
       isEligible: () => false,
     });
     expect(target).toBeNull();
+  });
+
+  it("fires at the pilot's preferred target over a nearer one", () => {
+    const near = foe("near", 0, -60);
+    const wanted = foe("wanted", 30, -200);
+    const target = nearestTargetInArc(SHOOTER, [near, wanted], {
+      ...WEAPON,
+      preferredId: "wanted",
+    });
+    expect(target).toBe(wanted);
+  });
+
+  it("falls back to the nearest when the preferred target is out of arc", () => {
+    const near = foe("near", 0, -60);
+    const behind = foe("behind", 0, 100);
+    const target = nearestTargetInArc(SHOOTER, [near, behind], {
+      ...WEAPON,
+      preferredId: "behind",
+    });
+    expect(target).toBe(near);
+  });
+
+  it("does not fire at a preferred target that is still immune", () => {
+    const wanted = foe("wanted", 0, -60);
+    const target = nearestTargetInArc(SHOOTER, [wanted], {
+      ...WEAPON,
+      preferredId: "wanted",
+      isEligible: () => false,
+    });
+    expect(target).toBeNull();
+  });
+
+  it("sides by the hostility filter when given (mirror match)", () => {
+    const sameFactionFoe = { ...foe("mirror", 0, -50), faction: "a" };
+    const target = nearestTargetInArc(SHOOTER, [sameFactionFoe], {
+      ...WEAPON,
+      isHostile: (candidate) => candidate.id === "mirror",
+    });
+    expect(target).toBe(sameFactionFoe);
+  });
+
+  it("never fires at itself", () => {
+    const self = { ...foe("s", 0, -50) };
+    const target = nearestTargetInArc(SHOOTER, [self], {
+      ...WEAPON,
+      isHostile: () => true,
+    });
+    expect(target).toBeNull();
+  });
+});
+
+describe("nearestHostile", () => {
+  it("finds the nearest living hostile anywhere, even behind", () => {
+    const behind = foe("behind", 0, 400);
+    const farAhead = foe("ahead", 0, -900);
+    expect(nearestHostile(SHOOTER, [farAhead, behind])).toBe(behind);
+  });
+
+  it("skips destroyed ships and friends", () => {
+    const friend = { ...foe("f", 0, -50), faction: "a" };
+    expect(nearestHostile(SHOOTER, [friend, foe("d", 0, -60, 0)])).toBeNull();
+  });
+
+  it("uses the hostility filter when given", () => {
+    const mirror = { ...foe("mirror", 0, -50), faction: "a" };
+    expect(nearestHostile(SHOOTER, [mirror], () => true)).toBe(mirror);
   });
 });

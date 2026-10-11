@@ -56,6 +56,8 @@ export interface SquadHudInput {
   readonly ships: Iterable<HudShipSource>;
   /** The flagship's current target, if any. */
   readonly targetId: string | null;
+  /** The enemy the player's side has marked (R), if any. */
+  readonly markedId?: string | null;
   /** Primary-weapon cooldown remaining (ms). */
   readonly cooldownRemainingMs: number;
   /** Full primary-weapon interval (ms). */
@@ -111,14 +113,16 @@ export function hudSizeClassOf(ship: HudShipSource): ShipSize {
 }
 
 /**
- * Every living ship other than the flagship, sided from the player's view.
+ * Every living ship other than the flagship, sided from the player's view,
+ * with the flagship's target and the player's squad mark flagged.
  *
- * @param input - Ships, flagship and target.
+ * @param input - Ships, flagship, target and mark.
  * @returns HUD contacts.
  */
 export function squadContacts(
-  input: Pick<SquadHudInput, "flagship" | "ships" | "targetId">,
+  input: Pick<SquadHudInput, "flagship" | "ships" | "targetId" | "markedId">,
 ): ContactHudState[] {
+  const markedId = input.markedId ?? null;
   const contacts: ContactHudState[] = [];
   for (const ship of input.ships) {
     if (ship.hull <= 0 || ship.id === input.flagship?.id) continue;
@@ -128,6 +132,7 @@ export function squadContacts(
       side: ship.owner === "player" ? "ally" : "enemy",
       sizeClass: hudSizeClassOf(ship),
       isTarget: ship.id === input.targetId,
+      isMarked: ship.id === markedId,
       alive: true,
     });
   }

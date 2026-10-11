@@ -102,3 +102,38 @@ export function tightenBelt(base: BeltConfig, steps: number): BeltConfig {
     base.maxDamagePerSecond + DAMAGE_GROWTH_PER_STEP * clampedSteps;
   return { safeRadius, wallRadius, maxDamagePerSecond };
 }
+
+/**
+ * How far inside the safe radius an AI pilot starts heading back to the
+ * centre (px): a little over two maneuver cycles of a fast ship, so it turns
+ * before the belt bites.
+ */
+export const BELT_AVOID_MARGIN_PX = 300;
+
+/** Fraction of the safe radius that always stays free to fight in. */
+const MIN_OPEN_FRACTION = 0.5;
+
+/**
+ * Where an AI pilot should fly to stay out of the belt.
+ *
+ * @param position - The ship's position.
+ * @param center - The arena centre.
+ * @param config - The current belt.
+ * @returns The arena centre when the ship is within the avoid margin of the
+ *   belt (or in it); null while it is safely inside. On a tight belt the
+ *   margin shrinks so half the safe zone stays open.
+ */
+export function beltRetreatPoint(
+  position: { readonly x: number; readonly y: number },
+  center: { readonly x: number; readonly y: number },
+  config: BeltConfig,
+): { x: number; y: number } | null {
+  const margin = Math.min(
+    BELT_AVOID_MARGIN_PX,
+    config.safeRadius * MIN_OPEN_FRACTION,
+  );
+  const dist = Math.hypot(position.x - center.x, position.y - center.y);
+  return dist > config.safeRadius - margin
+    ? { x: center.x, y: center.y }
+    : null;
+}

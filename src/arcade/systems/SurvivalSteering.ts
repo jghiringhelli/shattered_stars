@@ -1,82 +1,67 @@
 /**
- * SurvivalSteering — Survival's AI pilots (wave enemies and escorts)
- * expressed as cycle-engine steering orders for {@link steerAiFlight}.
+ * SurvivalSteering — who flies Survival's AI ships. Every wave enemy and
+ * every escort is a BotPilot (the same bots the skill gates measure, flying
+ * through the player's controls); this module picks its tier.
  *
- * Enemies chase their nearest foe; from {@link ENEMY_KTURN_UNLOCK_WAVE} on
- * they may K-turn onto a target behind them. Escorts chase too, cruising
- * faster with the run's speed bonus but never K-turning (weak basic bodies).
+ * Survival has no difficulty selector — the wave is the difficulty:
+ *
+ * | ship            | waves 1–3 | waves 4–8 | wave 9+ |
+ * |-----------------|-----------|-----------|---------|
+ * | regular         | novice    | average   | expert  |
+ * | elite           | average   | expert    | expert  |
+ * | milestone boss  | expert    | expert    | expert  |
+ * | escort (player) | average   | average   | average |
+ *
+ * Elites fly one tier above the wave's regulars (capped at expert); every
+ * milestone boss (wave 5, 10, …) is an expert from the first one on.
  *
  * Pure: no Phaser.
  */
 
-import type { ShipControlState } from "../../core/ArcadeControls";
-import {
-  AI_SLOW_TURN_ERROR_DEG,
-  pursuitSpeed,
-  type AiSteerOrder,
-} from "./CycleFlight";
-import { seekSteerOrder } from "./AiPursuit";
+import type { BotTier } from "../ai/BotTypes";
+import type { WaveTier } from "./SurvivalLoadouts";
 
-/** First wave whose enemies may K-turn — after the first milestone boss. */
-export const ENEMY_KTURN_UNLOCK_WAVE = 6;
+/** Last wave whose regulars fly as novices. */
+export const NOVICE_LAST_WAVE = 3;
 
-/** Most speed notches the run's speed bonus can add to an escort's cruise. */
-export const MAX_ESCORT_SPEED_BONUS = 3;
+/** Last wave whose regulars fly as average pilots (experts after it). */
+export const AVERAGE_LAST_WAVE = 8;
 
-/** Which side an AI pilot flies for. */
-export type SurvivalPilotRole = "enemy" | "escort";
+/** Tier of every milestone boss. */
+export const SURVIVAL_BOSS_TIER: BotTier = "expert";
 
-/** A position and heading on the battlefield. */
-interface SteerPose {
-  readonly x: number;
-  readonly y: number;
-  readonly angle: number;
-}
+/** Tier of the player's escorts (weak basic bodies, competent wingmen). */
+export const SURVIVAL_ESCORT_TIER: BotTier = "average";
 
-/** What a Survival AI pilot knows this frame. */
-export interface SurvivalSteerInput {
-  readonly role: SurvivalPilotRole;
-  readonly pose: SteerPose;
-  readonly target: { readonly x: number; readonly y: number };
-  readonly control: Pick<ShipControlState, "minSpeed" | "maxSpeed">;
-  /** True on the frame this ship's cycle committed. */
-  readonly cycleCommitted: boolean;
-  /** Current wave number (1-based). */
-  readonly wave: number;
-  /** The run's speed bonus (fractional points; escorts only). */
-  readonly speedBonus: number;
+/** Tiers from weakest to strongest. */
+const TIER_LADDER: readonly BotTier[] = ["novice", "average", "expert"];
+
+/**
+ * @param wave - Wave number (1-based).
+ * @returns The tier the wave's regular ships fly at.
+ */
+export function survivalWaveTier(wave: number): BotTier {
+  if (wave <= NOVICE_LAST_WAVE) return "novice";
+  if (wave <= AVERAGE_LAST_WAVE) return "average";
+  return "expert";
 }
 
 /**
- * The steering order for one Survival AI pilot this frame.
- *
- * @param input - The pilot's pose, target, speed bounds and run context.
- * @returns Heading error, wanted speed and K-turn permission.
+ * @param tier - A bot tier.
+ * @returns The next tier up (expert stays expert).
  */
-export function survivalSteerOrder(input: SurvivalSteerInput): AiSteerOrder {
-  const seek = seekSteerOrder({
-    flight: { motion: { ...input.pose, control: input.control } },
-    target: input.target,
-    cycleCommitted: input.cycleCommitted,
-    allowKTurn: input.role === "enemy" && input.wave >= ENEMY_KTURN_UNLOCK_WAVE,
-  });
-  return { ...seek, desiredSpeed: desiredSpeed(input, seek.headingErrorDeg) };
+export function tierAbove(tier: BotTier): BotTier {
+  const index = TIER_LADDER.indexOf(tier);
+  return TIER_LADDER[Math.min(index + 1, TIER_LADDER.length - 1)]!;
 }
 
 /**
- * Pursuit speed, plus the escort speed bonus while lined up on the target.
- *
- * @param input - The pilot's context.
- * @param headingErrorDeg - Signed heading error to the target (°).
- * @returns The speed to aim for, within the ship's bounds.
+ * @param wave - Wave number (1-based).
+ * @param rank - The wave ship's rank (regular, elite, boss).
+ * @returns The tier its BotPilot flies at.
  */
-function desiredSpeed(
-  input: SurvivalSteerInput,
-  headingErrorDeg: number,
-): number {
-  const base = pursuitSpeed(input.control, headingErrorDeg);
-  const turning = Math.abs(headingErrorDeg) >= AI_SLOW_TURN_ERROR_DEG;
-  if (input.role !== "escort" || turning) return base;
-  const bonus = Math.min(MAX_ESCORT_SPEED_BONUS, Math.floor(input.speedBonus));
-  return Math.min(input.control.maxSpeed, base + Math.max(0, bonus));
+export function survivalEnemyTier(wave: number, rank: WaveTier): BotTier {
+  if (rank === "boss") return SURVIVAL_BOSS_TIER;
+  const regular = survivalWaveTier(wave);
+  return rank === "elite" ? tierAbove(regular) : regular;
 }
