@@ -15,6 +15,7 @@ artifacts and code to load. Run `npm run sentinel` for a live status + next acti
 | Combat / dice / actions | specs/advanced_mechanics.md | src/systems/CombatSystem.ts, ActionsSystem.ts, TargetingSystem.ts |
 | Squad building | — | src/systems/SquadBuilder.ts, src/scenes/SquadBuilderScene.ts, ShipPickerScene.ts |
 | Upgrade catalog / slots / loadout pricing | [docs/specs/upgrades-and-slots.md](specs/upgrades-and-slots.md) | src/data/upgrades/, src/core/CombatModifiers.ts, src/arcade/ArcadeUpgradeEffects.ts, src/data/ShipSlots.ts, src/data/ShipLoadouts.ts, src/data/loadoutRules.ts |
+| Ship variants / hull pricing | [docs/specs/ship-variants.md](specs/ship-variants.md) | src/data/shipPricing.ts, src/data/dialPermissiveness.ts, src/data/ShipDefinitions.ts (SHIP_DIALS, tuneDial), test `ShipVariants.test.ts` |
 | Progression / XP / unlocks | [docs/specs/progression.md](specs/progression.md), [adr/ADR-0002](adr/ADR-0002-player-progression.md) | src/systems/CampaignSaveManager.ts, src/systems/PlayerProfile.ts, src/data/ProgressionData.ts |
 | Ships / factions data | docs/scifi_factions.md | src/data/ShipDefinitions.ts, src/data/ModeBalancing.ts |
 | Verify loop (collapse→recover→verify) | [docs/specs/verify-loop.md](specs/verify-loop.md) | scripts/verify_loop.ts, scripts/vqa_helpers.ts, tests/e2e/helpers/game.ts |

@@ -6,6 +6,8 @@
 import type {
   ShipDefinition,
   ManeuverDefinition,
+  ManeuverDifficulty,
+  ManeuverDirection,
   ActionType,
 } from "../core/types";
 import type { FactionId } from "../config";
@@ -288,10 +290,10 @@ const TORPEDO_BOAT_DIAL: ManeuverDefinition[] = [
   { direction: "segnor_left", speed: 2, difficulty: "white" },
   { direction: "segnor_right", speed: 2, difficulty: "white" },
   { direction: "kturn", speed: 2, difficulty: "white" },
-  // Speed 3 — banks go red at speed
+  // Speed 3 — pirates keep the banks white where a Javelin's go red
   { direction: "straight", speed: 3, difficulty: "white" },
-  { direction: "bank_left", speed: 3, difficulty: "red" },
-  { direction: "bank_right", speed: 3, difficulty: "red" },
+  { direction: "bank_left", speed: 3, difficulty: "white" },
+  { direction: "bank_right", speed: 3, difficulty: "white" },
   // Speed 4 — hotrod territory
   { direction: "straight", speed: 4, difficulty: "red" },
 ];
@@ -323,6 +325,108 @@ const AVATAR_DIAL: ManeuverDefinition[] = [
 ];
 
 // ============================================
+// Variant Dials — a base dial with 1–2 maneuvers retuned
+// ============================================
+
+/** One retuned maneuver; banks and turns change on both sides together. */
+interface DialTweak {
+  readonly maneuver: "straight" | "bank" | "turn";
+  readonly speed: number;
+  readonly difficulty: ManeuverDifficulty;
+}
+
+/**
+ * Clone a dial with a few maneuvers retuned (added when the base lacks them).
+ * Same-chassis variants differ here: the dial drives real-time stress.
+ *
+ * @param base - The dial to start from (left untouched).
+ * @param tweaks - Maneuvers to set; banks/turns apply to left and right.
+ * @returns A new dial.
+ */
+function tuneDial(
+  base: readonly ManeuverDefinition[],
+  tweaks: readonly DialTweak[],
+): ManeuverDefinition[] {
+  const dial = [...base];
+  for (const { maneuver, speed, difficulty } of tweaks) {
+    const directions: readonly ManeuverDirection[] =
+      maneuver === "straight"
+        ? ["straight"]
+        : [`${maneuver}_left`, `${maneuver}_right`];
+    for (const direction of directions) {
+      const index = dial.findIndex(
+        (m) => m.direction === direction && m.speed === speed,
+      );
+      const entry = { direction, speed, difficulty };
+      if (index >= 0) dial[index] = entry;
+      else dial.push(entry);
+    }
+  }
+  return dial;
+}
+
+/** Confed Kestrel — light-shielded dogfighter: green hard turn at speed 1. */
+const KESTREL_DIAL = tuneDial(INTERCEPTOR_DIAL, [
+  { maneuver: "turn", speed: 1, difficulty: "green" },
+]);
+
+/** Corsair raider interceptors (Talon, Fang, Phantom) — white banks at speed 4. */
+const RAIDER_DIAL = tuneDial(INTERCEPTOR_DIAL, [
+  { maneuver: "bank", speed: 4, difficulty: "white" },
+]);
+
+/** Ascendant Virtue — zealot picket: green banks at speed 3. */
+const VIRTUE_DIAL = tuneDial(INTERCEPTOR_DIAL, [
+  { maneuver: "bank", speed: 3, difficulty: "green" },
+]);
+
+/** Synth Interceptor Drone — no pilot to black out: white hard turn at speed 3. */
+const SWARM_INTERCEPTOR_DIAL = tuneDial(INTERCEPTOR_DIAL, [
+  { maneuver: "turn", speed: 3, difficulty: "white" },
+]);
+
+/** Corsair Venom — hot-rodded light fighter: white banks at speed 3. */
+const VENOM_DIAL = tuneDial(LIGHT_FIGHTER_DIAL, [
+  { maneuver: "bank", speed: 3, difficulty: "white" },
+]);
+
+/** Ascendant Cherub — serene initiate: green banks at speed 2. */
+const CHERUB_DIAL = tuneDial(LIGHT_FIGHTER_DIAL, [
+  { maneuver: "bank", speed: 2, difficulty: "green" },
+]);
+
+/** Confed Finch — loitering scout: green turn at 1, green banks at 2. */
+const FINCH_DIAL = tuneDial(LIGHT_FIGHTER_DIAL, [
+  { maneuver: "turn", speed: 1, difficulty: "green" },
+  { maneuver: "bank", speed: 2, difficulty: "green" },
+]);
+
+/** Synth light drones — machine precision: green hard turn at speed 2. */
+const DRONE_DIAL = tuneDial(LIGHT_FIGHTER_DIAL, [
+  { maneuver: "turn", speed: 2, difficulty: "green" },
+]);
+
+/** Ascendant Templar — temple guard: green banks at speed 1. */
+const TEMPLAR_DIAL = tuneDial(FIGHTER_DIAL, [
+  { maneuver: "bank", speed: 1, difficulty: "green" },
+]);
+
+/** Confed Hawk — brawler that turns inside you: green hard turn at speed 1. */
+const HAWK_DIAL = tuneDial(FIGHTER_DIAL, [
+  { maneuver: "turn", speed: 1, difficulty: "green" },
+]);
+
+/** Corsair Cutlass — boarding fighter: white banks at speed 3. */
+const CUTLASS_DIAL = tuneDial(FIGHTER_DIAL, [
+  { maneuver: "bank", speed: 3, difficulty: "white" },
+]);
+
+/** Ascendant Oracle — foresighted command ship: green banks at speed 1. */
+const ORACLE_DIAL = tuneDial(SUPPORT_DIAL, [
+  { maneuver: "bank", speed: 1, difficulty: "green" },
+]);
+
+// ============================================
 // Ship Definitions by Faction
 // ============================================
 
@@ -346,7 +450,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 5 },
       size: "small",
       actions: ["focus", "evade", "target_lock", "barrel_roll", "boost"],
-      pointCost: 45,
+      pointCost: 46,
     },
     spriteKey: "ship_terran_viper",
     description: "Fast interceptor designed for fleet defense and pursuit.",
@@ -364,7 +468,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 5 },
       size: "tiny",
       actions: ["focus", "evade", "barrel_roll"],
-      pointCost: 28,
+      pointCost: 25,
     },
     spriteKey: "ship_terran_stiletto",
     description: "Mass-produced patrol fighter for system defense.",
@@ -402,7 +506,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 4 },
       size: "small",
       actions: ["focus", "target_lock", "barrel_roll"],
-      pointCost: 52,
+      pointCost: 49,
     },
     spriteKey: "ship_terran_gladius",
     description: "Workhorse fighter of the Hegemony fleet.",
@@ -420,7 +524,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 4 },
       size: "small",
       actions: ["focus", "target_lock", "reinforce"],
-      pointCost: 58,
+      pointCost: 56,
     },
     spriteKey: "ship_terran_centurion",
     description: "Heavily armored fighter for breakthrough assaults.",
@@ -438,7 +542,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 4 },
       size: "small",
       actions: ["focus", "target_lock", "reinforce", "coordinate"],
-      pointCost: 65,
+      pointCost: 60,
     },
     spriteKey: "ship_terran_praetorian",
     description: "Elite guard fighter assigned to flag officers.",
@@ -494,7 +598,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 3 },
       size: "medium",
       actions: ["focus", "target_lock", "reload", "reinforce"],
-      pointCost: 72,
+      pointCost: 70,
     },
     spriteKey: "ship_terran_thunderbolt",
     description: "Heavy assault bomber for capital ship strikes.",
@@ -525,17 +629,17 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     faction: "terran_hegemony",
     role: "support",
     baseStats: {
-      hull: 5,
+      hull: 6,
       shields: 4,
       attack: 2,
       agility: 1,
       speed: { min: 1, max: 3 },
       size: "medium",
       actions: ["focus", "coordinate", "reinforce", "jam"],
-      pointCost: 62,
+      pointCost: 60,
     },
     spriteKey: "ship_terran_sentinel",
-    description: "Command ship providing fleet coordination.",
+    description: "Armoured command ship providing fleet coordination.",
   },
   terran_guardian: {
     id: "terran_guardian",
@@ -565,10 +669,10 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       shields: 3,
       attack: 2,
       agility: 3,
-      speed: { min: 1, max: 5 },
+      speed: { min: 1, max: 4 },
       size: "small",
       actions: ["focus", "evade", "target_lock", "coordinate"],
-      pointCost: 45,
+      pointCost: 56,
     },
     spriteKey: "ship_terran_harbinger",
     description: "Fast reconnaissance and target acquisition ship.",
@@ -588,7 +692,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 3 },
       size: "medium",
       actions: ["focus", "target_lock", "rotate_arc", "reinforce"],
-      pointCost: 75,
+      pointCost: 73,
     },
     spriteKey: "ship_terran_bastion",
     description: "Heavy gunship with devastating forward firepower.",
@@ -606,7 +710,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 0, max: 2 },
       size: "large",
       actions: ["focus", "target_lock", "reinforce", "rotate_arc"],
-      pointCost: 82,
+      pointCost: 73,
     },
     spriteKey: "ship_terran_bulwark",
     description: "Mobile defense platform for area denial.",
@@ -645,7 +749,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 0, max: 2 },
       size: "huge",
       actions: ["focus", "target_lock", "reinforce", "coordinate"],
-      pointCost: 120,
+      pointCost: 118,
     },
     spriteKey: "ship_terran_imperator",
     description: "Flagship of the Hegemony battle fleet.",
@@ -664,7 +768,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 0, max: 2 },
       size: "huge",
       actions: ["focus", "coordinate", "reinforce", "jam"],
-      pointCost: 100,
+      pointCost: 94,
     },
     spriteKey: "ship_terran_dominator",
     description: "Fleet carrier capable of deploying fighter wings.",
@@ -702,7 +806,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 0, max: 2 },
       size: "large",
       actions: ["focus", "coordinate", "reinforce", "jam"],
-      pointCost: 95,
+      pointCost: 83,
     },
     spriteKey: "ship_terran_consul",
     description: "Dedicated command and control vessel.",
@@ -739,16 +843,17 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     role: "light_fighter",
     baseStats: {
       hull: 2,
-      shields: 2,
+      shields: 1,
       attack: 2,
       agility: 4,
       speed: { min: 1, max: 5 },
       size: "tiny",
       actions: ["focus", "evade", "barrel_roll", "boost"],
-      pointCost: 28,
+      pointCost: 25,
     },
     spriteKey: "ship_confed_wasp",
-    description: "Ultra-light interceptor for hit-and-run attacks.",
+    description:
+      "Ultra-light hit-and-run fighter: dodges well, shrugs off little.",
   },
   confed_finch: {
     id: "confed_finch",
@@ -758,15 +863,16 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     baseStats: {
       hull: 2,
       shields: 2,
-      attack: 2,
+      attack: 1,
       agility: 3,
       speed: { min: 1, max: 5 },
       size: "tiny",
       actions: ["focus", "evade", "barrel_roll", "boost", "coordinate"],
-      pointCost: 25,
+      pointCost: 21,
     },
     spriteKey: "ship_confed_finch",
-    description: "Reconnaissance fighter with sensor suite.",
+    description:
+      "Reconnaissance spotter with a sensor suite: loiters, does not dogfight.",
   },
   confed_kestrel: {
     id: "confed_kestrel",
@@ -775,7 +881,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     role: "interceptor",
     baseStats: {
       hull: 3,
-      shields: 2,
+      shields: 1,
       attack: 3,
       agility: 3,
       speed: { min: 1, max: 5 },
@@ -784,7 +890,8 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       pointCost: 42,
     },
     spriteKey: "ship_confed_kestrel",
-    description: "Fast attack fighter with missile hardpoints.",
+    description:
+      "Light-shielded dogfighter that turns inside anything at low speed.",
   },
 
   // Heavy Fighters (4)
@@ -819,10 +926,11 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 4 },
       size: "small",
       actions: ["focus", "target_lock", "barrel_roll"],
-      pointCost: 55,
+      pointCost: 57,
     },
     spriteKey: "ship_confed_hawk",
-    description: "Heavy assault fighter with increased firepower.",
+    description:
+      "Heavy assault fighter that turns inside its target at low speed.",
   },
   confed_eagle: {
     id: "confed_eagle",
@@ -848,17 +956,18 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     faction: "free_confederation",
     role: "heavy_fighter",
     baseStats: {
-      hull: 5,
-      shields: 3,
+      hull: 6,
+      shields: 2,
       attack: 3,
       agility: 2,
       speed: { min: 1, max: 4 },
       size: "small",
       actions: ["focus", "target_lock", "reinforce"],
-      pointCost: 58,
+      pointCost: 55,
     },
     spriteKey: "ship_confed_condor",
-    description: "Durable fighter for sustained engagements.",
+    description:
+      "Durable brawler for sustained engagements: armour plating over shields.",
   },
 
   // Stealth Ships (2)
@@ -869,16 +978,17 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     role: "interceptor",
     baseStats: {
       hull: 3,
-      shields: 2,
+      shields: 3,
       attack: 3,
       agility: 3,
       speed: { min: 1, max: 5 },
       size: "small",
       actions: ["focus", "evade", "cloak", "barrel_roll"],
-      pointCost: 52,
+      pointCost: 50,
     },
     spriteKey: "ship_confed_raven",
-    description: "Stealth-capable fighter for ambush tactics.",
+    description:
+      "Stealth-capable fighter for ambush tactics, with a reinforced shield grid.",
   },
   confed_owl: {
     id: "confed_owl",
@@ -893,7 +1003,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 5 },
       size: "small",
       actions: ["focus", "evade", "barrel_roll", "cloak", "jam"],
-      pointCost: 55,
+      pointCost: 50,
     },
     spriteKey: "ship_confed_owl",
     description: "Electronic warfare stealth fighter.",
@@ -1007,7 +1117,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 3 },
       size: "medium",
       actions: ["focus", "coordinate", "reinforce", "jam"],
-      pointCost: 50,
+      pointCost: 49,
     },
     spriteKey: "ship_confed_crane",
     description: "Dedicated support and repair vessel.",
@@ -1025,7 +1135,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 3 },
       size: "large",
       actions: ["focus", "coordinate", "reinforce", "jam"],
-      pointCost: 60,
+      pointCost: 65,
     },
     spriteKey: "ship_confed_heron",
     description: "Mobile command post for rebel operations.",
@@ -1038,18 +1148,19 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     faction: "free_confederation",
     role: "capital",
     baseStats: {
-      hull: 30,
-      shields: 18,
+      hull: 33,
+      shields: 15,
       armor: 1,
-      attack: 4,
+      attack: 3,
       agility: 0,
       speed: { min: 0, max: 2 },
       size: "huge",
       actions: ["focus", "target_lock", "coordinate", "reinforce"],
-      pointCost: 95,
+      pointCost: 93,
     },
     spriteKey: "ship_confed_liberty",
-    description: "Rebel flagship converted from a freighter.",
+    description:
+      "Rebel flagship converted from a freighter: thick hull, thin shields.",
   },
   confed_independence: {
     id: "confed_independence",
@@ -1065,7 +1176,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 0, max: 2 },
       size: "huge",
       actions: ["focus", "coordinate", "reinforce"],
-      pointCost: 88,
+      pointCost: 82,
     },
     spriteKey: "ship_confed_independence",
     description: "Converted cargo hauler serving as a light carrier.",
@@ -1109,10 +1220,11 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 4 },
       size: "tiny",
       actions: ["calculate", "evade", "barrel_roll"],
-      pointCost: 28,
+      pointCost: 29,
     },
     spriteKey: "ship_synth_drone",
-    description: "Expendable drone controlled by the Collective.",
+    description:
+      "Expendable Collective drone: slow, but turns with machine precision.",
   },
   synth_scout_drone: {
     id: "synth_scout_drone",
@@ -1120,8 +1232,8 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     faction: "synthetic_collective",
     role: "light_fighter",
     baseStats: {
-      hull: 2,
-      shields: 2,
+      hull: 1,
+      shields: 1,
       attack: 2,
       agility: 4,
       speed: { min: 1, max: 5 },
@@ -1130,7 +1242,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       pointCost: 22,
     },
     spriteKey: "ship_synth_scout_drone",
-    description: "Fast reconnaissance drone.",
+    description: "Disposable reconnaissance drone with machine-precise turns.",
   },
   synth_heavy_drone: {
     id: "synth_heavy_drone",
@@ -1163,7 +1275,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 3 },
       size: "small",
       actions: ["calculate", "target_lock", "reload"],
-      pointCost: 38,
+      pointCost: 43,
     },
     spriteKey: "ship_synth_bomber_drone",
     description: "Autonomous bombing unit.",
@@ -1174,17 +1286,18 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     faction: "synthetic_collective",
     role: "interceptor",
     baseStats: {
-      hull: 2,
+      hull: 1,
       shields: 2,
       attack: 3,
       agility: 4,
       speed: { min: 1, max: 5 },
       size: "tiny",
       actions: ["calculate", "evade", "boost", "barrel_roll"],
-      pointCost: 32,
+      pointCost: 40,
     },
     spriteKey: "ship_synth_interceptor_drone",
-    description: "Fast pursuit drone.",
+    description:
+      "Fast pursuit drone: a thin frame with no pilot to black out in hard turns.",
   },
 
   // Heavy Units (4)
@@ -1237,7 +1350,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 4 },
       size: "small",
       actions: ["calculate", "target_lock", "reinforce"],
-      pointCost: 62,
+      pointCost: 66,
     },
     spriteKey: "ship_synth_ravager",
     description: "Heavy assault unit for breakthrough attacks.",
@@ -1331,7 +1444,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 3 },
       size: "medium",
       actions: ["calculate", "coordinate", "jam"],
-      pointCost: 50,
+      pointCost: 56,
     },
     spriteKey: "ship_synth_relay_node",
     description: "Communication relay for extended network range.",
@@ -1387,7 +1500,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 0, max: 2 },
       size: "large",
       actions: ["calculate", "target_lock", "rotate_arc"],
-      pointCost: 82,
+      pointCost: 83,
     },
     spriteKey: "ship_synth_eradicator",
     description: "Maximum firepower siege platform.",
@@ -1408,7 +1521,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 0, max: 1 },
       size: "huge",
       actions: ["calculate", "coordinate", "reinforce", "jam"],
-      pointCost: 115,
+      pointCost: 109,
     },
     spriteKey: "ship_synth_nexus",
     description: "Central processing node for fleet operations.",
@@ -1419,18 +1532,18 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     faction: "synthetic_collective",
     role: "capital",
     baseStats: {
-      hull: 30,
-      shields: 18,
+      hull: 27,
+      shields: 21,
       armor: 1,
       attack: 3,
       agility: 0,
       speed: { min: 0, max: 2 },
       size: "huge",
       actions: ["calculate", "coordinate", "reinforce"],
-      pointCost: 100,
+      pointCost: 95,
     },
     spriteKey: "ship_synth_overmind",
-    description: "Drone production and deployment vessel.",
+    description: "Drone production vessel behind a dense shield lattice.",
   },
   synth_terminus: {
     id: "synth_terminus",
@@ -1504,16 +1617,16 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     role: "interceptor",
     baseStats: {
       hull: 3,
-      shields: 2,
-      attack: 3,
+      shields: 1,
+      attack: 4,
       agility: 3,
       speed: { min: 1, max: 5 },
       size: "small",
       actions: ["focus", "evade", "boost", "barrel_roll"],
-      pointCost: 45,
+      pointCost: 47,
     },
     spriteKey: "ship_corsair_blade",
-    description: "Fast attack craft favored by pirate aces.",
+    description: "Glass-cannon attack craft favored by pirate aces.",
   },
   corsair_fang: {
     id: "corsair_fang",
@@ -1522,16 +1635,16 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     role: "interceptor",
     baseStats: {
       hull: 2,
-      shields: 2,
+      shields: 1,
       attack: 3,
       agility: 4,
       speed: { min: 1, max: 5 },
       size: "tiny",
       actions: ["focus", "evade", "boost", "barrel_roll"],
-      pointCost: 38,
+      pointCost: 39,
     },
     spriteKey: "ship_corsair_fang",
-    description: "Ultra-fast strike craft.",
+    description: "Ultra-fast strike craft: stripped shields, hot-rodded banks.",
   },
   corsair_talon: {
     id: "corsair_talon",
@@ -1539,17 +1652,18 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     faction: "void_corsairs",
     role: "interceptor",
     baseStats: {
-      hull: 3,
-      shields: 2,
+      hull: 4,
+      shields: 1,
       attack: 3,
       agility: 3,
       speed: { min: 1, max: 5 },
       size: "small",
       actions: ["focus", "evade", "target_lock", "barrel_roll", "boost"],
-      pointCost: 48,
+      pointCost: 45,
     },
     spriteKey: "ship_corsair_talon",
-    description: "Versatile strike fighter.",
+    description:
+      "Armour-plated strike fighter, tuned to bank hard at full burn.",
   },
   corsair_venom: {
     id: "corsair_venom",
@@ -1557,17 +1671,17 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     faction: "void_corsairs",
     role: "light_fighter",
     baseStats: {
-      hull: 2,
-      shields: 2,
+      hull: 3,
+      shields: 1,
       attack: 2,
       agility: 3,
       speed: { min: 1, max: 5 },
       size: "tiny",
       actions: ["focus", "evade", "barrel_roll"],
-      pointCost: 28,
+      pointCost: 24,
     },
     spriteKey: "ship_corsair_venom",
-    description: "Cheap and expendable raider.",
+    description: "Cheap raider: scrap armour for shields, banks hard at speed.",
   },
 
   // Heavy Fighters (4)
@@ -1595,7 +1709,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     faction: "void_corsairs",
     role: "heavy_fighter",
     baseStats: {
-      hull: 5,
+      hull: 4,
       shields: 3,
       attack: 4,
       agility: 2,
@@ -1605,7 +1719,8 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       pointCost: 58,
     },
     spriteKey: "ship_corsair_cutlass",
-    description: "Pirate heavy fighter.",
+    description:
+      "Pirate boarding fighter: big guns, light plating, hard banks at speed.",
   },
   corsair_scimitar: {
     id: "corsair_scimitar",
@@ -1658,7 +1773,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 5 },
       size: "small",
       actions: ["focus", "evade", "barrel_roll", "cloak", "coordinate"],
-      pointCost: 52,
+      pointCost: 46,
     },
     spriteKey: "ship_corsair_specter",
     description: "Stealth raider used for ambush and sabotage.",
@@ -1676,10 +1791,10 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 5 },
       size: "small",
       actions: ["focus", "evade", "cloak", "barrel_roll"],
-      pointCost: 55,
+      pointCost: 50,
     },
     spriteKey: "ship_corsair_phantom",
-    description: "Advanced cloaking vessel.",
+    description: "Advanced cloaking vessel with a raider's hot-rodded banks.",
   },
   corsair_shadow: {
     id: "corsair_shadow",
@@ -1694,7 +1809,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 5 },
       size: "small",
       actions: ["focus", "evade", "barrel_roll", "cloak", "target_lock"],
-      pointCost: 58,
+      pointCost: 54,
     },
     spriteKey: "ship_corsair_shadow",
     description: "Heavy stealth attack craft.",
@@ -1714,7 +1829,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 3 },
       size: "medium",
       actions: ["focus", "target_lock", "rotate_arc"],
-      pointCost: 70,
+      pointCost: 65,
     },
     spriteKey: "ship_corsair_reaver",
     description: "Brutal gunboat designed to overwhelm targets.",
@@ -1788,10 +1903,10 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 4 },
       size: "small",
       actions: ["focus", "target_lock", "boost"],
-      pointCost: 48,
+      pointCost: 50,
     },
     spriteKey: "ship_corsair_torpedo_boat",
-    description: "Fast torpedo attack craft.",
+    description: "Fast torpedo attack craft that banks hard at speed.",
   },
 
   // Capital Ships (3)
@@ -1839,18 +1954,18 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     faction: "void_corsairs",
     role: "capital",
     baseStats: {
-      hull: 24,
-      shields: 12,
+      hull: 27,
+      shields: 9,
       armor: 1,
       attack: 4,
       agility: 0,
       speed: { min: 0, max: 2 },
       size: "large",
       actions: ["focus", "target_lock", "coordinate"],
-      pointCost: 78,
+      pointCost: 80,
     },
     spriteKey: "ship_corsair_frigate",
-    description: "Fast raiding frigate.",
+    description: "Fast raiding frigate: scrap armour over weak shields.",
   },
 
   // Support Ships (1)
@@ -1903,17 +2018,18 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     faction: "ascendant_empire",
     role: "light_fighter",
     baseStats: {
-      hull: 3,
-      shields: 2,
+      hull: 2,
+      shields: 3,
       attack: 2,
       agility: 3,
-      speed: { min: 1, max: 5 },
+      speed: { min: 1, max: 4 },
       size: "tiny",
       actions: ["focus", "evade", "barrel_roll"],
-      pointCost: 32,
+      pointCost: 25,
     },
     spriteKey: "ship_ascendant_cherub",
-    description: "Initiate training fighter.",
+    description:
+      "Initiate fighter: heavy shields and a gentle dial, no sprint.",
   },
   ascendant_herald: {
     id: "ascendant_herald",
@@ -1928,7 +2044,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 5 },
       size: "small",
       actions: ["focus", "evade", "barrel_roll", "boost", "coordinate"],
-      pointCost: 45,
+      pointCost: 49,
     },
     spriteKey: "ship_ascendant_herald",
     description: "Fast reconnaissance craft.",
@@ -1943,13 +2059,14 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       shields: 3,
       attack: 3,
       agility: 3,
-      speed: { min: 1, max: 5 },
+      speed: { min: 1, max: 4 },
       size: "small",
       actions: ["focus", "evade", "target_lock", "barrel_roll", "boost"],
-      pointCost: 50,
+      pointCost: 46,
     },
     spriteKey: "ship_ascendant_virtue",
-    description: "Standard interceptor of the faithful.",
+    description:
+      "Shielded picket of the faithful: slower, but banks serenely at speed.",
   },
 
   // Heavy Fighters (4)
@@ -1960,16 +2077,17 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     role: "heavy_fighter",
     baseStats: {
       hull: 5,
-      shields: 3,
+      shields: 4,
       attack: 3,
-      agility: 2,
+      agility: 1,
       speed: { min: 1, max: 4 },
       size: "small",
       actions: ["focus", "target_lock", "reinforce"],
-      pointCost: 58,
+      pointCost: 56,
     },
     spriteKey: "ship_ascendant_templar",
-    description: "Well-armored fighter used by temple guards.",
+    description:
+      "Temple guard: slow to dodge, heavy shields, steady low-speed banks.",
   },
   ascendant_crusader: {
     id: "ascendant_crusader",
@@ -2002,7 +2120,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 4 },
       size: "small",
       actions: ["focus", "target_lock", "coordinate"],
-      pointCost: 60,
+      pointCost: 56,
     },
     spriteKey: "ship_ascendant_paladin",
     description: "Knight-class escort fighter.",
@@ -2036,14 +2154,15 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       hull: 5,
       shields: 5,
       attack: 2,
-      agility: 2,
+      agility: 1,
       speed: { min: 1, max: 3 },
       size: "medium",
       actions: ["focus", "coordinate", "reinforce", "jam"],
-      pointCost: 60,
+      pointCost: 61,
     },
     spriteKey: "ship_ascendant_oracle",
-    description: "Support craft that enhances allied capabilities.",
+    description:
+      "Foresighted support craft: deep shields and calm low-speed banks.",
   },
   ascendant_prophet: {
     id: "ascendant_prophet",
@@ -2167,13 +2286,13 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       shields: 5,
       attack: 4,
       agility: 1,
-      speed: { min: 1, max: 3 },
+      speed: { min: 1, max: 2 },
       size: "large",
       actions: ["focus", "target_lock", "reload", "reinforce"],
-      pointCost: 72,
+      pointCost: 74,
     },
     spriteKey: "ship_ascendant_purifier",
-    description: "Heavy cleansing bomber.",
+    description: "Ponderous cleansing bomber: deep shields, no sprint.",
   },
 
   // Capital Ships (4)
@@ -2285,10 +2404,10 @@ export const SHIP_DIALS: Record<string, readonly ManeuverDefinition[]> = {
   // ── FREE CONFEDERATION ───────────────────────────────────────────────────
   confed_sparrow: LIGHT_FIGHTER_DIAL, // light_fighter — nimble but simple
   confed_wasp: LIGHT_FIGHTER_DIAL, // light_fighter — Z-95 tier
-  confed_finch: LIGHT_FIGHTER_DIAL, // light_fighter — scout
-  confed_kestrel: INTERCEPTOR_DIAL,
+  confed_finch: FINCH_DIAL, // light_fighter — scout, green turn @ 1 + banks @ 2
+  confed_kestrel: KESTREL_DIAL, // green hard turn @ speed 1
   confed_falcon: FIGHTER_DIAL,
-  confed_hawk: FIGHTER_DIAL,
+  confed_hawk: HAWK_DIAL, // green hard turn @ speed 1
   confed_eagle: FIGHTER_DIAL,
   confed_condor: FIGHTER_DIAL,
   confed_raven: INTERCEPTOR_DIAL,
@@ -2305,11 +2424,11 @@ export const SHIP_DIALS: Record<string, readonly ManeuverDefinition[]> = {
   confed_defiance: CAPITAL_DIAL,
 
   // ── SYNTHETIC COLLECTIVE ─────────────────────────────────────────────────
-  synth_drone: LIGHT_FIGHTER_DIAL, // light_fighter — basic combat drone
-  synth_scout_drone: LIGHT_FIGHTER_DIAL, // light_fighter — scout drone
+  synth_drone: DRONE_DIAL, // light_fighter — basic combat drone, green turn @ 2
+  synth_scout_drone: DRONE_DIAL, // light_fighter — scout drone, green turn @ 2
   synth_heavy_drone: FIGHTER_DIAL,
   synth_bomber_drone: BOMBER_DIAL,
-  synth_interceptor_drone: INTERCEPTOR_DIAL,
+  synth_interceptor_drone: SWARM_INTERCEPTOR_DIAL, // white turn @ speed 3
   synth_hunter: HUNTER_DIAL, // ODD DUCK: IG-88 chassis A
   synth_stalker: HUNTER_DIAL, // ODD DUCK: IG-88 chassis B (same dial)
   synth_ravager: HUNTER_DIAL, // ODD DUCK: IG-88 chassis C (same dial)
@@ -2329,15 +2448,15 @@ export const SHIP_DIALS: Record<string, readonly ManeuverDefinition[]> = {
 
   // ── VOID CORSAIRS ────────────────────────────────────────────────────────
   corsair_blade: INTERCEPTOR_DIAL,
-  corsair_fang: INTERCEPTOR_DIAL,
-  corsair_talon: INTERCEPTOR_DIAL,
-  corsair_venom: LIGHT_FIGHTER_DIAL, // light_fighter — cheap raider
+  corsair_fang: RAIDER_DIAL, // white banks @ speed 4
+  corsair_talon: RAIDER_DIAL, // white banks @ speed 4
+  corsair_venom: VENOM_DIAL, // light_fighter — cheap raider, white banks @ 3
   corsair_marauder: FIGHTER_DIAL,
-  corsair_cutlass: FIGHTER_DIAL,
+  corsair_cutlass: CUTLASS_DIAL, // white banks @ speed 3
   corsair_scimitar: FIGHTER_DIAL,
   corsair_saber: FIGHTER_DIAL,
   corsair_specter: INTERCEPTOR_DIAL,
-  corsair_phantom: INTERCEPTOR_DIAL,
+  corsair_phantom: RAIDER_DIAL, // white banks @ speed 4
   corsair_shadow: INTERCEPTOR_DIAL,
   corsair_reaver: GUNSHIP_DIAL, // fix: gunship (was BOMBER)
   corsair_pillager: GUNSHIP_DIAL,
@@ -2351,14 +2470,14 @@ export const SHIP_DIALS: Record<string, readonly ManeuverDefinition[]> = {
 
   // ── ASCENDANT EMPIRE ─────────────────────────────────────────────────────
   ascendant_seraph: INTERCEPTOR_DIAL,
-  ascendant_cherub: LIGHT_FIGHTER_DIAL, // light_fighter — initiates
+  ascendant_cherub: CHERUB_DIAL, // light_fighter — initiates, green banks @ 2
   ascendant_herald: INTERCEPTOR_DIAL,
-  ascendant_virtue: INTERCEPTOR_DIAL,
-  ascendant_templar: FIGHTER_DIAL,
+  ascendant_virtue: VIRTUE_DIAL, // green banks @ speed 3
+  ascendant_templar: TEMPLAR_DIAL, // green banks @ speed 1
   ascendant_crusader: FIGHTER_DIAL,
   ascendant_paladin: FIGHTER_DIAL,
   ascendant_inquisitor: FIGHTER_DIAL,
-  ascendant_oracle: SUPPORT_DIAL, // fix: support (was BOMBER)
+  ascendant_oracle: ORACLE_DIAL, // support, green banks @ speed 1
   ascendant_prophet: SUPPORT_DIAL,
   ascendant_acolyte: SUPPORT_DIAL,
   ascendant_avatar: AVATAR_DIAL, // ODD DUCK: segnor + white K-turn

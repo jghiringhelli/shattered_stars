@@ -64,8 +64,8 @@ describe("RoleMatchup", () => {
   });
 
   it("buildEqualPointSquad fills the budget with as many identical ships as fit", () => {
-    expect(buildEqualPointSquad("terran_stiletto", 200)).toHaveLength(7); // cost 28
-    expect(buildEqualPointSquad("terran_imperator", 200)).toHaveLength(1); // cost 120
+    expect(buildEqualPointSquad("terran_stiletto", 200)).toHaveLength(8); // cost 25
+    expect(buildEqualPointSquad("terran_imperator", 200)).toHaveLength(1); // cost 118
   });
 
   it("buildEqualPointSquad always returns at least 1 ship even over budget", () => {

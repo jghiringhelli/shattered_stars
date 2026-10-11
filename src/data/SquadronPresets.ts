@@ -126,7 +126,7 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
       { loadoutId: "harbinger_coordinator" },
       { loadoutId: "viper_pursuit" },
       { loadoutId: "harbinger_coordinator" },
-      { loadoutId: "harbinger_coordinator" },
+      { loadoutId: "viper_basic" },
     ],
   },
 
@@ -206,9 +206,9 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     style: "aggressive",
     ships: [
       { loadoutId: "interceptor_swarm" },
-      { loadoutId: "interceptor_swarm" },
       { loadoutId: "scout_basic" },
       { loadoutId: "interceptor_swarm" },
+      { loadoutId: "scout_basic" },
       { loadoutId: "scout_basic" },
     ],
   },
@@ -238,7 +238,7 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
       { loadoutId: "interceptor_swarm" },
       { loadoutId: "relay_basic" },
       { loadoutId: "relay_basic" },
-      { loadoutId: "relay_basic" },
+      { loadoutId: "drone_standard" },
     ],
   },
 
@@ -270,9 +270,9 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Terror Squadron",
     style: "aggressive",
     ships: [
-      { loadoutId: "cutlass_assault" },
-      { loadoutId: "fang_raider" },
-      { loadoutId: "marauder_assault" },
+      { loadoutId: "scimitar_assault" },
+      { loadoutId: "scimitar_assault" },
+      { loadoutId: "cutlass_brawler" },
     ],
   },
   {
