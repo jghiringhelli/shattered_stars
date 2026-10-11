@@ -3,17 +3,21 @@
  * every escort is a BotPilot (the same bots the skill gates measure, flying
  * through the player's controls); this module picks its tier.
  *
- * Survival has no difficulty selector — the wave is the difficulty:
+ * Survival has no difficulty selector — the wave is the difficulty. In the
+ * roguelite run the "wave" fed here is the battle node's *effective wave*
+ * (CombatNodePlan: sector 1 → 1–4, sector 2 → 5–8, sector 3 → 9–12, +3 at
+ * ascension 3), so sector 1 flies novices, sector 2 average pilots and
+ * sector 3 experts:
  *
  * | ship            | waves 1–3 | waves 4–8 | wave 9+ |
  * |-----------------|-----------|-----------|---------|
  * | regular         | novice    | average   | expert  |
  * | elite           | average   | expert    | expert  |
- * | milestone boss  | expert    | expert    | expert  |
+ * | sector boss     | expert    | expert    | expert  |
  * | escort (player) | average   | average   | average |
  *
- * Elites fly one tier above the wave's regulars (capped at expert); every
- * milestone boss (wave 5, 10, …) is an expert from the first one on.
+ * Elites fly one tier above the wave's regulars (capped at expert; an Ace
+ * affix adds one more); every sector boss is an expert.
  *
  * Pure: no Phaser.
  */

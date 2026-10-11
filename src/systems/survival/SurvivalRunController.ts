@@ -1,10 +1,13 @@
 /**
  * Survival roguelite — run controller (application layer, no Phaser, no I/O).
  *
- * Owns the mutable {@link SurvivalRunState} and the run's seeded RNG, and is the
- * single source of truth for progression: wave pacing, drafts, the milestone
- * Hangar, threat-driven wave sizing and the accumulated stat bonuses the scene
- * reads back. The scene renders and fights; this class decides.
+ * Owns a mutable {@link SurvivalRunState} (powers, branches, hull, level,
+ * escorts, rerolls) and a seeded RNG: drafts, the Hangar, threat-driven wave
+ * sizing and the accumulated stat bonuses the battle reads back. In the
+ * roguelite run (ADR-0004) each battle node restores one from the saved
+ * progression (`fromState`) and sizes its waves with `scaledWaveSize`; the
+ * map claims drafts through the pure RewardFlow. The balance sim drives it
+ * directly as an endless run.
  *
  * See docs/adr/ADR-0003-survival-roguelite-leveling.md.
  */
@@ -30,6 +33,7 @@ import {
   escortOptions,
 } from "../../data/survival/escorts";
 import {
+  MAX_ENEMIES,
   type WaveSize,
   computeThreat,
   sizeWave,
@@ -46,6 +50,25 @@ export class SurvivalRunController {
   constructor(seed: number, hull?: HullClass) {
     this.rng = createSeededRng(seed);
     this.run = createRunState(hull);
+  }
+
+  /**
+   * Rebuilds a controller around a saved progression (roguelite battles
+   * resume the run's powers, hull and level). Escorts already exist in the
+   * saved fleet, so none are pending.
+   *
+   * @param seed - Seed for this controller's own draws.
+   * @param state - The saved progression (copied, never mutated).
+   * @returns The controller.
+   */
+  static fromState(
+    seed: number,
+    state: Readonly<SurvivalRunState>,
+  ): SurvivalRunController {
+    const controller = new SurvivalRunController(seed, state.hull);
+    Object.assign(controller.run, structuredClone(state));
+    controller.escortsSpawned = state.escorts;
+    return controller;
   }
 
   /** Read-only snapshot of the run state (for HUD / debugging). */
@@ -83,6 +106,52 @@ export class SurvivalRunController {
   /** Draws the power choices offered after clearing a regular wave. */
   draft(size: number = DRAFT_SIZE): Power[] {
     return drawPowers(this.run, size, this.rng);
+  }
+
+  /**
+   * Spends one reroll charge (earned from Nav Computer, Hold Formation,
+   * shops and events) on a fresh draft.
+   *
+   * @param size - Powers to draw.
+   * @returns The new draft, or null when no reroll charge is left.
+   */
+  rerollDraft(size: number = DRAFT_SIZE): Power[] | null {
+    if (this.run.rerolls <= 0) return null;
+    this.run.rerolls -= 1;
+    return this.draft(size);
+  }
+
+  /**
+   * Enemy composition for a roguelite battle wave: the run's threat scaled
+   * by the node's multiplier; the node's extra elites replace regulars
+   * (never below one regular), and regulars are capped per node.
+   *
+   * @param playerShipCount - Living player ships.
+   * @param threatMultiplier - Sector / row / ascension threat scale.
+   * @param extraElites - Elites the node adds.
+   * @param isBossWave - True when the boss joins this wave.
+   * @param maxEnemies - Cap on regular ships (defaults to the threat cap).
+   * @param regularsPerElite - Regulars each extra elite replaces.
+   * @returns The wave's size.
+   */
+  scaledWaveSize(
+    playerShipCount: number,
+    threatMultiplier: number,
+    extraElites: number,
+    isBossWave: boolean,
+    maxEnemies: number = MAX_ENEMIES,
+    regularsPerElite = 0,
+  ): WaveSize {
+    const threat = computeThreat(this.run, playerShipCount) * threatMultiplier;
+    const size = sizeWave(threat, isBossWave);
+    const regulars = Math.max(
+      1,
+      size.enemyCount - extraElites * regularsPerElite,
+    );
+    return {
+      enemyCount: Math.min(maxEnemies, regulars),
+      eliteCount: size.eliteCount + extraElites,
+    };
   }
 
   /** Applies a drafted power to the run. */

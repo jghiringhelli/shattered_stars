@@ -22,6 +22,7 @@ import {
 import { SurvivalRunController } from "../systems/survival/SurvivalRunController";
 import { computeThreat } from "../data/survival/threat";
 import { escortFleetPower } from "../data/survival/escorts";
+import { driveEffect } from "../systems/survival/FleetEffects";
 import type { DraftPolicy } from "./SurvivalDraftPolicy";
 
 // ─── Fleet power model (documented tuning constants) ─────────────────────────
@@ -33,6 +34,28 @@ export const BASE_SHIELDS = 2;
 
 /** Each evasion point adds this fraction of effective durability. */
 export const EVASION_FACTOR = 0.08;
+
+/** Durability the Drive top-speed notch is worth (≈ one evasion point). */
+export const DRIVE_TOP_SPEED_FACTOR = 0.08;
+
+/** Durability per unit of boost-recharge reduction from Drive. */
+export const DRIVE_BOOST_FACTOR = 0.2;
+
+/**
+ * Drive ("speed" powers) as the battle applies it (FleetEffects.driveEffect:
+ * a top-speed notch, then faster boost recharge with a floor), converted to
+ * a durability fraction — mobility means dodging and disengaging.
+ *
+ * @param speed - The run's speed bonus.
+ * @returns Durability fraction added by Drive.
+ */
+export function driveMobility(speed: number): number {
+  const drive = driveEffect(speed);
+  return (
+    (drive.maxSpeedBonus ?? 0) * DRIVE_TOP_SPEED_FACTOR +
+    (1 - (drive.boostCooldownMultiplier ?? 1)) * DRIVE_BOOST_FACTOR
+  );
+}
 
 /** Threat units are converted to a power-equivalent by this factor. */
 export const THREAT_TO_POWER = 0.32;
@@ -77,7 +100,7 @@ export function fleetPower(
     ships;
   const durability =
     (BASE_HULL + bonuses.maxHull + BASE_SHIELDS + bonuses.maxShields) *
-    (1 + bonuses.evasion * EVASION_FACTOR) *
+    (1 + bonuses.evasion * EVASION_FACTOR + driveMobility(bonuses.speed)) *
     ships;
   return Math.sqrt(Math.max(0, offense) * Math.max(0, durability));
 }

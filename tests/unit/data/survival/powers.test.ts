@@ -113,3 +113,13 @@ describe("survival/powers draw", () => {
     }
   });
 });
+
+describe("Wing Commander escort cap", () => {
+  it("never raises escorts past MAX_ESCORTS", () => {
+    const state = createRunState();
+    state.escorts = 5;
+    const wingCommander = CROSS_POWERS.find((p) => p.id === "x_wingcmd")!;
+    applyPower(state, wingCommander);
+    expect(state.escorts).toBe(5);
+  });
+});

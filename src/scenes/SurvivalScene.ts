@@ -1,31 +1,23 @@
 /**
- * Survival Mode Scene
+ * Survival Mode Scene — one battle node of the Survival roguelite
+ * (docs/adr/ADR-0004-survival-roguelite-run-structure.md, leveling in
+ * ADR-0003).
  *
- * Roguelite survival mode (see docs/adr/ADR-0003):
- * - Start with one ship
- * - Defeat threat-scaled waves of enemies
- * - Two parallel choices per wave: draft a power for your ship AND decide the
- *   escort track (recruit a weak basic escort or bank a reroll)
- * - Milestone waves open the Hangar (graduate / evolve)
- * - Permanent death - start over on loss
+ * The run (sector map, relics, salvage, persisted hull) lives in the
+ * RoguelikeRunService; this scene fights the active combat / elite / boss
+ * node: the saved fleet spawns with its persisted damage, the node's waves
+ * arrive (threat scaled by sector, row and ascension; elites with affixes;
+ * a boss with phases), and on clear the outcome goes back to the run and
+ * the map. Losing the whole fleet ends the run (summary screen).
+ * Launched without a run (menus, tests) it starts a quick run straight
+ * into its first combat node.
  */
 
 import Phaser from "phaser";
-import { ShipStatCard } from "../ui/ShipStatCard";
-import { addShipVisual } from "../rendering/ShipVisual";
-import {
-  INITIAL_BANK_STATE,
-  updateBankState,
-  bankSquashFor,
-  type BankState,
-} from "../rendering/ShipBanking";
+import { updateBankState, bankSquashFor } from "../rendering/ShipBanking";
 import type { FactionId } from "../config";
-import { BATTLEFIELD_SIZE, CYCLE_DURATION_MS, SHIP_SIZES } from "../config";
-import {
-  getShipDefinition,
-  getShipsByFaction,
-  getShipDial,
-} from "../data/ShipDefinitions";
+import { BATTLEFIELD_SIZE, CYCLE_DURATION_MS } from "../config";
+import { getShipDial } from "../data/ShipDefinitions";
 import {
   getModeCombatStats,
   calculateHitChance,
@@ -38,13 +30,9 @@ import {
   type BeltConfig,
 } from "../systems/arena/ArenaBoundary";
 import { HealthBar } from "../ui/HealthBar";
+import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
 import { BattleHud, cameraViewFrom } from "../ui/hud";
-import { HOLO_PALETTE } from "../ui/theme/HoloTheme";
 import { SurvivalModeHud } from "../ui/modeHud/SurvivalModeHud";
-import {
-  showResultOverlay,
-  type ResultOverlay,
-} from "../ui/modeHud/HoloResultOverlay";
 import {
   attackIntervalMs,
   HitImmunityLedger,
@@ -83,17 +71,13 @@ import type {
   FlightControlResult,
   FlightEvent,
 } from "../arcade/systems/PilotFlightTypes";
-import {
-  SURVIVAL_ESCORT_TIER,
-  survivalEnemyTier,
-} from "../arcade/systems/SurvivalSteering";
+import { SURVIVAL_ESCORT_TIER } from "../arcade/systems/SurvivalSteering";
 import { SquadBattleAi } from "../arcade/systems/SquadBattleAi";
 import type { BotPilot } from "../arcade/ai/BotPilot";
 import { playFlightEventFx } from "../arcade/ArcadeFX";
 import {
   equipFlight,
   equipQuickBuild,
-  regenerateShields,
   stressModifiersOf,
 } from "../arcade/systems/QuickBuildEquip";
 import {
@@ -102,8 +86,6 @@ import {
   resolveDiceAttack,
 } from "../arcade/systems/DiceAttack";
 import {
-  flagshipLoadout,
-  joiningSquadLoadouts,
   planWaveRoster,
   type WaveSlot,
 } from "../arcade/systems/SurvivalLoadouts";
@@ -128,49 +110,50 @@ import {
 } from "../systems/CapitalSystems";
 import { SurvivalRunController } from "../systems/survival/SurvivalRunController";
 import {
-  SurvivalChoicePanel,
-  type ChoiceCard,
-} from "../ui/survival/SurvivalChoicePanel";
-import type { Power } from "../data/survival/powers";
-import type { HangarOption } from "../data/survival/hangar";
-import type { EscortOption } from "../data/survival/escorts";
+  runServiceOf,
+  type RoguelikeRunService,
+} from "../systems/survival/RoguelikeRunService";
+import {
+  planCombat,
+  REGULARS_PER_EXTRA_ELITE,
+  shouldStartNextBossPhase,
+} from "../systems/survival/CombatNodePlan";
+import {
+  layoutWave,
+  reinforcementPoints,
+  SURVIVAL_BASE_BELT,
+  type SpawnPoint,
+} from "../systems/survival/SurvivalSpawnArc";
+import {
+  fleetModifiers,
+  reequipFlight,
+} from "../systems/survival/runFlightEquip";
+import {
+  SurvivalBattleRules,
+  type WaveSpec,
+} from "../systems/survival/SurvivalBattleRules";
+import type { ShipRecord } from "../systems/survival/RunTypes";
+import { maneuverDifficultyOf } from "../systems/survival/maneuverDifficulty";
+import { affixLabel, type EliteAffix } from "../data/survival/affixes";
+import { FACTION_NAMES_SHORT } from "../data/survival/factionNames";
+import { SURVIVAL_STARTER_CHOICES } from "../data/survival/starters";
+import {
+  addAffixLabel,
+  addSurvivalShipSprite,
+  affixLabelOffset,
+  type SurvivalShipSprite,
+} from "../ui/survival/survivalShipSprite";
+import type {
+  ShotAdjust,
+  TriggerResult,
+} from "../systems/survival/RelicCombatEngine";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { PauseMenu } from "../ui/PauseMenu";
 import { InputManager } from "../input/InputManager";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 
-/**
- * Default starting ship for each faction in Survival mode.
- * terran_hegemony used terran_stiletto (agility 3, no boost action) — the
- * weakest of the 5 starters on every axis (hull/attack tied-lowest, agility
- * lowest, missing the boost escape tool every other starter has). Verified
- * via repeated self-play: died at Wave 1 in 4/4 runs under identical play,
- * while synth_scout_drone (agility 4) reliably reached Wave 2+. Swapped to
- * terran_viper (agility 3 too, but +1 hull, +1 attack, has boost + target_lock)
- * to bring it in line with the other factions' starters.
- */
-const FACTION_STARTER_SHIPS: Record<FactionId, string> = {
-  terran_hegemony: "terran_viper",
-  free_confederation: "confed_sparrow",
-  synthetic_collective: "synth_scout_drone",
-  void_corsairs: "corsair_fang",
-  ascendant_empire: "ascendant_herald",
-};
-
-/**
- * The 2 flagship choices offered on the Survival setup screen for each
- * faction — one nimble/high-agility pick, one tankier pick. No squad
- * builder, no loadouts: pick a faction, pick one of these, go. Escorts
- * (recruited during the run) always use FACTION_STARTER_SHIPS regardless of
- * this choice — see reconcileEscorts().
- */
-export const SURVIVAL_STARTER_CHOICES: Record<FactionId, readonly string[]> = {
-  terran_hegemony: ["terran_viper", "terran_raptor"],
-  free_confederation: ["confed_wasp", "confed_sparrow"],
-  synthetic_collective: ["synth_scout_drone", "synth_drone"],
-  void_corsairs: ["corsair_fang", "corsair_blade"],
-  ascendant_empire: ["ascendant_herald", "ascendant_seraph"],
-};
+/** Starter ships moved to data/survival/starters; re-exported for callers. */
+export { SURVIVAL_STARTER_CHOICES };
 
 /** Maximum ships (flagship + escorts) the player fleet may field. */
 const MAX_FLEET = 6;
@@ -179,34 +162,32 @@ const MAX_FLEET = 6;
 const RANGE_PER_POINT = 40;
 
 /**
- * Base asteroid-belt containment field before per-wave tightening. The belt is
- * harmless within `safeRadius` of the arena center and impassable at
- * `wallRadius`; each wave squeezes it inward (see tightenBelt).
+ * Base asteroid-belt containment field before tightening (shared with the
+ * spawn-arc tests). The belt is harmless within `safeRadius` of the arena
+ * center and impassable at `wallRadius`; waves squeeze it (see tightenBelt).
  */
-const BASE_BELT: BeltConfig = {
-  safeRadius: 2600,
-  wallRadius: 3000,
-  maxDamagePerSecond: 3,
-};
+const BASE_BELT: BeltConfig = SURVIVAL_BASE_BELT;
 
 /** Extra attack dice an elite wave ship rolls. */
 const ELITE_ATTACK_BONUS = 1;
-
-/** Horizontal gap (px) between elites entering side by side. */
-const ELITE_SPACING_PX = 120;
-
-/** Entry row (px from the top) for elites and the boss. */
-const ELITE_ENTRY_Y = 160;
-const BOSS_ENTRY_Y = 150;
-
-/** Wave ships enter facing down the arena. */
-const ENEMY_ENTRY_ANGLE = 180;
 
 /** Damage multiplier of a crit drafted by the player fleet. */
 const CRIT_DAMAGE_MULTIPLIER = 2;
 
 /** Floor on the fire-rate bonus's cooldown multiplier (at most 2x faster). */
 const MIN_PLAYER_COOLDOWN_MOD = 0.5;
+
+/** Relic hit-chance bonuses never push a shot above this. */
+const MAX_HIT_CHANCE = 0.95;
+
+/** Shot adjustments of a ship with no relics (enemies). */
+const NEUTRAL_SHOT: ShotAdjust = {
+  hitChanceBonus: 0,
+  damageBonus: 0,
+  damageMultiplier: 1,
+  critChanceBonus: 0,
+  shots: 1,
+};
 
 interface SurvivalShip {
   id: string;
@@ -262,31 +243,40 @@ interface PlayerSpawn {
   readonly loadoutId: string | null;
 }
 
-/** A wave ship about to spawn at a point. */
+/** A wave ship about to spawn at a point, facing the arena centre. */
 interface EnemySpawn {
   readonly slot: WaveSlot;
   readonly faction: FactionId;
-  readonly x: number;
-  readonly y: number;
+  readonly spec: WaveSpec;
+  readonly at: SpawnPoint;
 }
+
+/** Centre of the arena (the belt and the spawn arc are centred on it). */
+const ARENA_CENTER = {
+  x: BATTLEFIELD_SIZE / 2,
+  y: BATTLEFIELD_SIZE / 2,
+} as const;
 
 /** Living ships per side this frame (wingman checks). */
 type LivingBySide = ReadonlyMap<SurvivalShip["owner"], readonly SurvivalShip[]>;
 
-interface ShipSprite extends Phaser.GameObjects.Container {
-  shipId: string;
-  /** Ship art image, when loaded — squashed/stretched by the banking effect on hard turns. */
-  image?: Phaser.GameObjects.Image | null;
-  /** Image's base scale (from setDisplaySize) that banking must multiply, not overwrite. */
-  imageBaseScaleX?: number;
-  imageBaseScaleY?: number;
-  bankState: BankState;
-}
+type ShipSprite = SurvivalShipSprite;
+
+/** Pause before the node's next wave arrives (ms). */
+const NEXT_WAVE_DELAY_MS = 2500;
+/** Pause between the last kill and returning to the map (ms). */
+const RETURN_TO_MAP_DELAY_MS = 2000;
+/** Regulars that join a boss when it enters a new phase. */
+const BOSS_PHASE_REINFORCEMENTS = 2;
+/** Reinforcements enter this far (px) from the boss. */
+const BOSS_REINFORCEMENT_OFFSET_PX = 160;
 
 export class SurvivalScene extends Phaser.Scene {
   private ships: Map<string, SurvivalShip> = new Map();
   private shipSprites: Map<string, ShipSprite> = new Map();
   private healthBars: Map<string, HealthBar> = new Map();
+  /** Repair mechanic + overlay shimmer + repair drones (built in create). */
+  private repairFeedback: ShipRepairFeedback | null = null;
 
   private playerShipIds: string[] = [];
   private enemyShipIds: string[] = [];
@@ -298,24 +288,41 @@ export class SurvivalScene extends Phaser.Scene {
   private wave = 0;
   private score = 0;
 
-  // Asteroid-belt containment (see docs/adr/ADR-0003): tightens each wave.
+  // Asteroid-belt containment (ADR-0004): starts squeezed per the node plan, tightens each wave.
   private beltConfig: BeltConfig = BASE_BELT;
   private beltGraphics!: Phaser.GameObjects.Graphics;
   private playerFaction: FactionId = "free_confederation";
   private isWaveActive = false;
   private isPaused = false;
-  private isChoicePhase = false;
-  /** Zoom to restore when a choice panel closes — see showDraft()/showHangar(). */
-  private preChoiceZoom = 1;
+  /** True once the node is won or lost (no further wave / result handling). */
+  private battleEnded = false;
 
-  // Progression — single source of truth for pacing, drafts and bonuses.
+  // Progression — the run's powers/level for this battle (restored from the run).
   private run!: SurvivalRunController;
-  private choicePanel!: SurvivalChoicePanel;
+  /** The roguelite run (map, relics, salvage, persisted hull). */
+  private service!: RoguelikeRunService;
+  /** This node's rules: plan, relic engine, seeded rolls, kill bookkeeping. */
+  private rules!: SurvivalBattleRules;
+  /** Saved record of each player ship (persisted hull, upgrades), by ship id. */
+  private readonly records = new Map<string, ShipRecord>();
+  /** Each player ship's modifier sheet without the run's Drive (see applyBonusesToFleet). */
+  private readonly baseModifiers = new Map<string, CombatModifiers>();
+  /** Phases a boss has started (1 = opening phase), by ship id. */
+  private readonly bossPhases = new Map<string, number>();
+  /** Floating affix labels of elites, by ship id. */
+  private readonly affixLabels = new Map<string, Phaser.GameObjects.Text>();
+  /** Scene time the battle started (duration measurement). */
+  private battleStartMs = 0;
+  /** Monotonic counter for deterministic enemy ids. */
+  private enemySerial = 0;
+  /** True when launched from the map with the run's battle node active. */
+  private fromRun = false;
+  /** Debug/e2e: let a bot fly the flagship (node duration measurement). */
+  autopilot = false;
 
   // UI — holographic battle HUD (flight, radar, weapons) + Survival readouts
   private battleHud: BattleHud | null = null;
   private modeHud!: SurvivalModeHud;
-  private gameOverOverlay: ResultOverlay | null = null;
 
   /** X-Wing round tempo: a struck target ignores its attacker for a cycle. */
   private readonly hitLedger = new HitImmunityLedger();
@@ -362,10 +369,12 @@ export class SurvivalScene extends Phaser.Scene {
     factionId?: FactionId;
     shipId?: string;
     loadoutId?: string | null;
+    fromRun?: boolean;
   }): void {
     if (data?.factionId) this.playerFaction = data.factionId;
     this.starterShipId = data?.shipId ?? null;
     this.starterLoadoutId = data?.loadoutId ?? null;
+    this.fromRun = data?.fromRun === true;
   }
 
   create(): void {
@@ -380,6 +389,12 @@ export class SurvivalScene extends Phaser.Scene {
     audioManager.playFactionMusic(this.playerFaction, "combat");
 
     this.effectsManager = new EffectsManager(this);
+    this.repairFeedback = new ShipRepairFeedback({
+      scene: this,
+      shipOf: (id) => this.ships.get(id),
+      overlayOf: (id) => this.healthBars.get(id),
+      particleScale: () => this.performanceState.effectSettings.particleCount,
+    });
     const savedSettings = this.registry.get("settings") as
       { cameraShake: boolean; showDamageNumbers: boolean } | undefined;
     if (savedSettings) {
@@ -396,7 +411,6 @@ export class SurvivalScene extends Phaser.Scene {
     );
     this.background.startShootingStars();
 
-    this.choicePanel = new SurvivalChoicePanel(this, this.playerFaction);
     this.beltGraphics = this.add.graphics().setDepth(1);
     this.resetState();
     this.createHUD();
@@ -414,7 +428,17 @@ export class SurvivalScene extends Phaser.Scene {
     this.cameras.main.setZoom(0.9);
 
     // Start first wave after brief delay
-    this.showMessage("SURVIVAL MODE", "Survive as long as you can!");
+    const plan = this.rules.plan;
+    const title =
+      plan.kind === "boss"
+        ? "SECTOR BOSS"
+        : plan.kind === "elite"
+          ? "ELITE CONTACT"
+          : "HOSTILES";
+    this.showMessage(
+      title,
+      `${FACTION_NAMES_SHORT[plan.enemyFaction]} — sector ${plan.sector}`,
+    );
     this.time.delayedCall(2000, () => this.startNextWave());
   }
 
@@ -425,49 +449,110 @@ export class SurvivalScene extends Phaser.Scene {
     this.pilot.detach();
     this.battleHud?.destroy();
     this.battleHud = null;
-    this.gameOverOverlay = null;
   }
 
   private resetState(): void {
     this.wave = 0;
     this.score = 0;
-    this.beltConfig = BASE_BELT;
+    this.enemySerial = 0;
+    this.battleEnded = false;
+    this.openRunBattle();
+    this.beltConfig = tightenBelt(BASE_BELT, this.rules.plan.beltSteps);
     this.drawBelt();
-    this.run = new SurvivalRunController(this.rollSeed());
     this.isWaveActive = false;
     this.isPaused = false;
-    this.isChoicePhase = false;
-    this.choicePanel.hide();
     this.pilot.reset();
     this.pilotedShipId = null;
     this.squadAi.reset();
     this.hitLedger.clear();
-    this.gameOverOverlay = null;
 
     this.ships.clear();
     this.shipSprites.forEach((s) => s.destroy());
     this.shipSprites.clear();
     this.healthBars.forEach((h) => h.destroy());
     this.healthBars.clear();
+    this.affixLabels.forEach((l) => l.destroy());
+    this.affixLabels.clear();
+    this.records.clear();
+    this.baseModifiers.clear();
+    this.bossPhases.clear();
     this.playerShipIds = [];
     this.enemyShipIds = [];
     this.escortShipIds.clear();
-
-    // Spawn initial player ship based on chosen faction (+ optional flagship choice)
-    const definitionId =
-      this.starterShipId ?? FACTION_STARTER_SHIPS[this.playerFaction];
-    const loadoutId = flagshipLoadout(definitionId, this.starterLoadoutId);
-    this.spawnPlayerShip({
-      definitionId,
-      x: BATTLEFIELD_SIZE / 2,
-      y: BATTLEFIELD_SIZE / 2 + 100,
-      loadoutId,
-    });
+    this.spawnFleet();
+    this.battleStartMs = this.time.now;
   }
 
-  /** Fresh, unpredictable seed for a run's deterministic draft sequence. */
-  private rollSeed(): number {
-    return (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+  /**
+   * Binds the battle to the run's active combat node. Launched without one
+   * (menus, tests, quick play) it starts a quick run whose first combat
+   * node is entered at once.
+   */
+  private openRunBattle(): void {
+    this.service = runServiceOf(this.registry);
+    const active = this.fromRun
+      ? (this.service.run ?? this.service.resume())
+      : null;
+    const run =
+      active && planCombat(active)
+        ? active
+        : this.service.startQuickRun({
+            faction: this.playerFaction,
+            flagshipId:
+              this.starterShipId ??
+              SURVIVAL_STARTER_CHOICES[this.playerFaction][0]!,
+            loadoutId: this.starterLoadoutId,
+            ascension: 0,
+          });
+    this.playerFaction = run.faction;
+    this.run = SurvivalRunController.fromState(run.seed, run.progression);
+    this.rules = new SurvivalBattleRules(run, planCombat(run)!);
+  }
+
+  /** Spawns the run's saved fleet (flagship first) with its persisted damage. */
+  private spawnFleet(): void {
+    const centerX = BATTLEFIELD_SIZE / 2;
+    const centerY = BATTLEFIELD_SIZE / 2 + 100;
+    this.rules.fleet().forEach((record, index) => {
+      const spawned = this.spawnPlayerShip(
+        {
+          definitionId: record.definitionId,
+          x: centerX + index * 80,
+          y: centerY + (index > 0 ? 50 : 0),
+          loadoutId: record.loadoutId,
+        },
+        index > 0,
+      );
+      this.records.set(spawned.id, record);
+      this.rules.equipPlayer(
+        spawned,
+        index === 0 ? "flagship" : "escort",
+        record,
+      );
+      this.baseModifiers.set(spawned.id, spawned.modifiers);
+      this.healthBars.get(spawned.id)?.update(spawned.hull, spawned.shields);
+    });
+    this.applyBonusesToFleet();
+  }
+
+  /**
+   * Folds the run's Drive ("speed" powers) into every player ship's sheet —
+   * flagship and escorts alike — and re-applies it to the flight from the
+   * hull's base (runFlightEquip), so calling this again never stacks.
+   */
+  private applyBonusesToFleet(): void {
+    const speed = this.run.bonuses.speed;
+    for (const id of this.playerShipIds) {
+      const ship = this.ships.get(id);
+      const base = this.baseModifiers.get(id);
+      if (!ship || !base) continue;
+      ship.modifiers = fleetModifiers(base, speed);
+      ship.flight = reequipFlight(
+        ship.flight,
+        ship.definitionId,
+        ship.modifiers,
+      );
+    }
   }
 
   update(time: number, delta: number): void {
@@ -476,7 +561,7 @@ export class SurvivalScene extends Phaser.Scene {
     // looking at, so a distant firefight sounds distant.
     syncListenerToCamera(this.cameras.main);
     this.modeHud.sync(this.cameras.main);
-    if (this.isPaused || this.isChoicePhase) return;
+    if (this.isPaused) return;
     this.performanceState = updateFPS(this.performanceState, delta);
     this.performanceState = evaluateQuality(this.performanceState, time);
     this.effectsManager.setQualitySettings(
@@ -542,7 +627,7 @@ export class SurvivalScene extends Phaser.Scene {
   private updateHud(): void {
     this.modeHud.setScore(
       this.score,
-      `Wing ${this.playerShipIds.length}/${MAX_FLEET}`,
+      `Wing ${this.playerShipIds.length}/${MAX_FLEET} · +${this.rules.salvageEarned} ⚙`,
     );
     const flagship = this.ships.get(this.playerShipIds[0] ?? "") ?? null;
     if (flagship) this.retireHealthBar(flagship.id);
@@ -577,16 +662,6 @@ export class SurvivalScene extends Phaser.Scene {
     this.healthBars.delete(shipId);
   }
 
-  /**
-   * Shows or hides both HUD layers (hidden under choice and game-over panels).
-   *
-   * @param visible - Visibility.
-   */
-  private setHudVisible(visible: boolean): void {
-    this.battleHud?.setVisible(visible);
-    this.modeHud.setVisible(visible);
-  }
-
   private setupInput(): void {
     setupSceneInput(this);
     this.pilot.attach();
@@ -616,12 +691,16 @@ export class SurvivalScene extends Phaser.Scene {
         this.isPaused = false;
       },
       onRestart: () => {
-        this.scene.restart();
+        // A roguelite run cannot re-roll a battle: Restart abandons the run
+        // (Star Charts are still paid) and opens the setup screen.
+        this.service.abandon();
+        this.scene.start("SurvivalSetupScene");
       },
       onSettings: () => {
         this.scene.launch("SettingsScene", { returnScene: "SurvivalScene" });
       },
       onQuit: () => {
+        // The run stays saved at the node before this battle ("Continue").
         this.scene.start("MainMenuScene");
       },
     });
@@ -634,7 +713,7 @@ export class SurvivalScene extends Phaser.Scene {
    * DogfightScene.
    */
   private togglePause(): void {
-    if (this.isChoicePhase) return;
+    if (this.battleEnded) return;
     this.isPaused = !this.isPaused;
     if (this.isPaused) {
       this.cameras.main.setZoom(1.0);
@@ -651,36 +730,25 @@ export class SurvivalScene extends Phaser.Scene {
   // ==========================================
 
   /**
-   * Wave Structure (from spec):
-   * 1-5: Basic fighters and interceptors, Wave 5 mini-boss
-   * 6-10: Mixed squadrons with bombers, Wave 10 boss
-   * 11-15: Elite pilots and heavy ships, Wave 15 boss
-   * 16-20: Epic ship sections appear, Wave 20 boss
-   * 21+: Endless scaling, boss every 5 waves
+   * Sends the node's next wave: its size comes from the run's threat scaled
+   * by the node plan (sector, row, ascension), the belt squeezes one step,
+   * and the boss arrives on a boss node's last wave.
    */
   private startNextWave(): void {
+    if (this.battleEnded) return;
+    const spec = this.rules.nextWave();
     this.wave = this.run.beginWave();
-    this.beltConfig = tightenBelt(BASE_BELT, this.wave);
+    this.beltConfig = tightenBelt(BASE_BELT, spec.beltSteps);
     this.drawBelt();
-    this.modeHud.setWave(this.wave, this.getWaveType());
+    const label = `Wave ${spec.index}/${spec.total}`;
+    this.modeHud.setWave(this.wave, label);
     this.isWaveActive = true;
-
-    if (this.run.isMilestone) {
-      this.showMessage(`WAVE ${this.wave}`, "BOSS INCOMING!");
-    } else {
-      this.showMessage(`WAVE ${this.wave}`, this.getWaveType());
-    }
-
+    this.showMessage(
+      label.toUpperCase(),
+      spec.isBossWave ? "BOSS INCOMING!" : FACTION_NAMES_SHORT[spec.faction],
+    );
     this.squadAi.resetEnemySquad();
-    this.spawnWaveEnemies();
-  }
-
-  private getWaveType(): string {
-    if (this.wave <= 5) return "Basic Fighters";
-    if (this.wave <= 10) return "Mixed Squadron";
-    if (this.wave <= 15) return "Elite Pilots";
-    if (this.wave <= 20) return "Epic Forces";
-    return "Endless Wave";
+    this.spawnWaveEnemies(spec);
   }
 
   /**
@@ -719,301 +787,232 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   private checkWaveComplete(): void {
-    if (!this.isWaveActive) return;
-
-    const enemiesAlive = this.enemyShipIds.filter((id) => {
-      const ship = this.ships.get(id);
-      return ship && ship.hull > 0;
-    }).length;
-
-    if (enemiesAlive === 0) {
-      this.isWaveActive = false;
-      this.score += this.wave * 100;
-
-      const heading = this.run.isMilestone ? "HANGAR" : "WAVE COMPLETE!";
-      this.showMessage(heading, "Choose your upgrade");
-
-      this.time.delayedCall(2000, () => {
-        if (this.run.isMilestone) {
-          this.showHangar();
-        } else {
-          this.showDraft();
-        }
-      });
-    }
-
+    if (this.battleEnded) return;
     const playersAlive = this.playerShipIds.filter((id) => {
       const ship = this.ships.get(id);
       return ship && ship.hull > 0;
     }).length;
-
     if (playersAlive === 0) {
-      this.gameOver();
+      this.loseBattle();
+      return;
     }
+    if (!this.isWaveActive) return;
+    const enemiesAlive = this.enemyShipIds.filter((id) => {
+      const ship = this.ships.get(id);
+      return ship && ship.hull > 0;
+    }).length;
+    if (enemiesAlive > 0) return;
+    this.isWaveActive = false;
+    this.score += this.wave * 100;
+    if (!this.rules.onLastWave) {
+      this.showMessage("WAVE CLEARED", "Next wave inbound");
+      this.time.delayedCall(NEXT_WAVE_DELAY_MS, () => this.startNextWave());
+      return;
+    }
+    this.winBattle();
+  }
+
+  /**
+   * The node is cleared: the surviving fleet (with its damage) and the
+   * battle's kills / salvage go back to the run, then the map (or the
+   * summary after the final boss).
+   */
+  private winBattle(): void {
+    this.battleEnded = true;
+    const survivors = this.playerShipIds.flatMap((id) => {
+      const ship = this.ships.get(id);
+      const record = this.records.get(id);
+      return ship && record && ship.hull > 0 ? [{ record, ...ship }] : [];
+    });
+    const durationMs = this.time.now - this.battleStartMs;
+    const run = this.service.winBattle(
+      this.rules.outcome(survivors, this.run.level, durationMs),
+    );
+    const won = run?.status === "victory" || this.service.run === null;
+    this.showMessage(
+      won ? "VICTORY" : "SECTOR NODE CLEARED",
+      won ? "The Nexus flagship is down" : "Returning to the map",
+    );
+    if (won) audioManager.playFactionStinger(this.playerFaction, "victory");
+    this.time.delayedCall(RETURN_TO_MAP_DELAY_MS, () =>
+      this.scene.start(won ? "SurvivalSummaryScene" : "SurvivalMapScene"),
+    );
+  }
+
+  /** The whole fleet is lost: the run ends and the summary shows. */
+  private loseBattle(): void {
+    this.battleEnded = true;
+    this.isWaveActive = false;
+    audioManager.playFactionStinger(this.playerFaction, "defeat");
+    const enemy = FACTION_NAMES_SHORT[this.rules.plan.enemyFaction];
+    const where =
+      this.rules.plan.kind === "boss"
+        ? "the sector boss"
+        : `a ${this.rules.plan.kind} wing`;
+    this.service.loseBattle(
+      `Destroyed by ${where} of the ${enemy} (sector ${this.rules.plan.sector})`,
+      this.time.now - this.battleStartMs,
+      this.rules.killCount,
+    );
+    this.showMessage("FLEET DESTROYED", "The run is over");
+    this.time.delayedCall(RETURN_TO_MAP_DELAY_MS, () =>
+      this.scene.start("SurvivalSummaryScene"),
+    );
   }
 
   /**
    * Spawns an elite wave ship: its equipped build with +50% hull and +1 attack
-   * (the multiplier applies to the already-scaled hull — no double scaling).
+   * (the multiplier applies to the already-scaled hull — no double scaling),
+   * then its rolled affixes (shown above it and announced).
    *
    * @param spawn - The wave ship and where it enters.
    */
   private spawnEliteShip(spawn: EnemySpawn): void {
-    const ship = this.createEnemy(spawn, "elite");
+    const affixes = this.rules.eliteAffixes();
+    const ship = this.createEnemy(spawn, "elite", affixes);
     ship.maxHull = eliteMaxHull(ship.maxHull);
-    ship.hull = ship.maxHull;
+    const bonusDice = this.rules.equipEnemy(ship, affixes);
+    ship.flight = reequipFlight(ship.flight, ship.definitionId, ship.modifiers);
     ship.combatStats = {
       ...ship.combatStats,
-      attackDice: ship.combatStats.attackDice + ELITE_ATTACK_BONUS,
+      attackDice: ship.combatStats.attackDice + ELITE_ATTACK_BONUS + bonusDice,
     };
     this.addEnemy(ship, true);
+    this.labelAffixes(ship, affixes);
   }
 
   /**
-   * Spawns a milestone boss: its equipped (already scaled) build multiplied
-   * by the wave's boss multiplier, with capital-style engines/turrets/bridge
-   * subsystems splitting its final hull.
+   * Shows an elite's affixes above it and on the mode HUD.
+   *
+   * @param ship - The elite.
+   * @param affixes - Its affixes.
+   */
+  private labelAffixes(
+    ship: SurvivalShip,
+    affixes: readonly EliteAffix[],
+  ): void {
+    if (affixes.length === 0) return;
+    const text = affixLabel(affixes);
+    this.affixLabels.set(ship.id, addAffixLabel(this, text));
+    this.showMessage("ELITE", text);
+  }
+
+  /**
+   * Spawns the sector boss: its equipped (already scaled) build multiplied
+   * by the sector's boss multiplier, with capital-style engines/turrets/bridge
+   * subsystems splitting its final hull, and its phase count from the plan.
    *
    * @param spawn - The wave ship and where it enters.
    */
   private spawnBossShip(spawn: EnemySpawn): void {
-    const multiplier = bossMultiplier(this.wave);
-    const ship = this.createEnemy(spawn, "boss");
-    const caps = bossDurability(ship, this.wave);
+    const bossWave = this.rules.plan.bossWave;
+    const multiplier = bossMultiplier(bossWave);
+    const ship = this.createEnemy(spawn, "boss", []);
+    const caps = bossDurability(ship, bossWave);
     ship.maxHull = caps.maxHull;
-    ship.hull = ship.maxHull;
     ship.maxShields = caps.maxShields;
-    ship.shields = ship.maxShields;
+    this.rules.equipEnemy(ship, []);
     ship.combatStats = {
       ...ship.combatStats,
       attackDice: ship.combatStats.attackDice + Math.floor(multiplier / 2),
     };
     ship.capitalSystems = createCapitalSystems(ship.maxHull);
+    this.bossPhases.set(ship.id, 1);
     this.addEnemy(ship, false, true);
   }
 
   /**
-   * Spawns the wave: regulars along an entry arc, elites and the milestone
-   * boss up front, each flying the wave's quick-build assignment.
+   * Spawns the wave on an arc just inside the belt's safe radius, every ship
+   * facing the arena centre (SurvivalSpawnArc): regulars on the arc, elites
+   * and the boss a little further in, each flying its quick build.
+   *
+   * @param spec - The wave (faction, boss wave, tiers).
    */
-  private spawnWaveEnemies(): void {
-    const faction = this.rotatingEnemyFaction();
-    const { enemyCount, eliteCount } = this.run.waveSize(
+  private spawnWaveEnemies(spec: WaveSpec): void {
+    const plan = this.rules.plan;
+    const { enemyCount, eliteCount } = this.run.scaledWaveSize(
       this.playerShipIds.length,
+      plan.threatMultiplier,
+      plan.extraElites,
+      spec.isBossWave,
+      plan.maxRegulars,
+      REGULARS_PER_EXTRA_ELITE,
     );
-    const slots = planWaveRoster(getShipsByFaction(faction), {
+    const faction = spec.faction;
+    const slots = planWaveRoster(this.rules.roster(faction), {
       enemyCount,
       eliteCount,
-      isMilestone: this.run.isMilestone,
+      isMilestone: spec.isBossWave,
     });
-    const centerX = BATTLEFIELD_SIZE / 2;
-    let eliteIndex = 0;
-    slots.forEach((slot, index) => {
+    const layout = layoutWave({
+      center: ARENA_CENTER,
+      safeRadius: this.beltConfig.safeRadius,
+      regulars: slots.filter((s) => s.tier === "regular").length,
+      elites: slots.filter((s) => s.tier === "elite").length,
+      boss: slots.some((s) => s.tier === "boss"),
+    });
+    let regular = 0;
+    let elite = 0;
+    for (const slot of slots) {
       if (slot.tier === "regular") {
-        const at = this.spawnSlot(index, enemyCount, centerX);
-        this.spawnEnemyShip({ slot, faction, ...at });
+        this.spawnEnemyShip({
+          slot,
+          faction,
+          spec,
+          at: layout.regulars[regular++]!,
+        });
       } else if (slot.tier === "elite") {
-        const x = centerX + (eliteIndex++ - 1) * ELITE_SPACING_PX;
-        this.spawnEliteShip({ slot, faction, x, y: ELITE_ENTRY_Y });
-      } else {
-        this.spawnBossShip({ slot, faction, x: centerX, y: BOSS_ENTRY_Y });
+        this.spawnEliteShip({
+          slot,
+          faction,
+          spec,
+          at: layout.elites[elite++]!,
+        });
+      } else if (layout.boss) {
+        this.spawnBossShip({ slot, faction, spec, at: layout.boss });
       }
-    });
-  }
-
-  /** Cycles the enemy faction so successive waves feel varied. */
-  private rotatingEnemyFaction(): FactionId {
-    const factions: FactionId[] = [
-      "terran_hegemony",
-      "synthetic_collective",
-      "void_corsairs",
-      "ascendant_empire",
-    ];
-    return factions[(this.wave - 1) % factions.length]!;
-  }
-
-  /** Spread spawn point for the i-th enemy of a wave along an entry arc. */
-  private spawnSlot(
-    index: number,
-    total: number,
-    centerX: number,
-  ): { x: number; y: number } {
-    const angle = (index / Math.max(1, total)) * Math.PI - Math.PI / 2;
-    const radius = 350 + Math.random() * 120;
-    return {
-      x: centerX + Math.cos(angle) * radius,
-      y: 100 + Math.sin(angle) * 60 + index * 18,
-    };
-  }
-
-  private showDraft(): void {
-    this.enterChoicePhase();
-    const powers = this.run.draft();
-    const cards: ChoiceCard[] = powers.map((p) => ({
-      icon: p.icon,
-      name: p.name,
-      description: p.description,
-    }));
-    this.choicePanel.show("CHOOSE A POWER", cards, (index) => {
-      const chosen = powers[index];
-      if (chosen) this.onPowerChosen(chosen);
-    });
-  }
-
-  private onPowerChosen(power: Power): void {
-    this.run.choosePower(power);
-    this.applyBonusesToFleet();
-    this.showEscortChoice();
-  }
-
-  private showHangar(): void {
-    this.enterChoicePhase();
-    const options = this.run.hangar();
-    const cards: ChoiceCard[] = options.map((o) => ({
-      icon: o.icon,
-      name: o.name,
-      description: o.description,
-    }));
-    this.choicePanel.show("HANGAR", cards, (index) => {
-      const chosen = options[index];
-      if (chosen) this.onHangarChosen(chosen);
-    });
-  }
-
-  private onHangarChosen(option: HangarOption): void {
-    this.run.chooseHangar(option);
-    this.applyBonusesToFleet();
-    this.showEscortChoice();
-  }
-
-  /**
-   * Second, parallel choice each wave: the escort track. Shown after the power
-   * draft / Hangar so every wave presents two independent decisions.
-   */
-  private showEscortChoice(): void {
-    this.isChoicePhase = true;
-    const options = this.run.draftEscort();
-    const cards: ChoiceCard[] = options.map((o) => ({
-      icon: o.icon,
-      name: o.name,
-      description: o.description,
-    }));
-    this.choicePanel.show("REINFORCE WING", cards, (index) => {
-      const chosen = options[index];
-      if (chosen) this.onEscortChosen(chosen);
-    });
-  }
-
-  private onEscortChosen(option: EscortOption): void {
-    this.run.chooseEscort(option);
-    this.reconcileEscorts();
-    this.endChoicePhase();
-  }
-
-  /**
-   * Freezes the battle for a between-wave choice: camera zoom 1.0 (choice
-   * cards are scrollFactor-0 buttons, mis-hit-tested under zoom) and the
-   * battle HUD hidden under the choice panel.
-   */
-  private enterChoicePhase(): void {
-    this.isChoicePhase = true;
-    this.preChoiceZoom = this.cameras.main.zoom;
-    this.cameras.main.setZoom(1.0);
-    this.setHudVisible(false);
-  }
-
-  private endChoicePhase(): void {
-    this.isChoicePhase = false;
-    this.pilot.reset();
-    this.cameras.main.setZoom(this.preChoiceZoom);
-    this.setHudVisible(true);
-    this.startNextWave();
-  }
-
-  /**
-   * Materialises any escorts the run has earned but not yet spawned. Escorts are
-   * the faction's basic starter ship — weak bodies that do NOT inherit the
-   * flagship's drafted bonuses (their strength comes from support investment,
-   * modelled in the balance sim, not from copying the flagship). They do fly
-   * quick builds, never repeating an ace already in the squad.
-   */
-  private reconcileEscorts(): void {
-    const anchor = this.ships.get(this.playerShipIds[0] ?? "");
-    if (!anchor) return;
-    const count = Math.min(
-      this.run.pendingEscorts(),
-      MAX_FLEET - this.playerShipIds.length,
-    );
-    if (count <= 0) return;
-    const definitionId = FACTION_STARTER_SHIPS[this.playerFaction];
-    const loadouts = joiningSquadLoadouts(
-      [...this.ships.values()].filter((ship) => ship.owner === "player"),
-      new Array<string>(count).fill(definitionId),
-    );
-    for (const loadoutId of loadouts) {
-      const offset = this.playerShipIds.length * 80;
-      this.spawnPlayerShip(
-        { definitionId, x: anchor.x + offset, y: anchor.y + 50, loadoutId },
-        true,
-      );
-      this.run.markEscortSpawned();
     }
   }
 
   /**
-   * Re-applies hull/shield bonuses to the flagship fleet (escorts stay basic).
-   * combatStats holds the equipped baseline, so quick-build bonuses persist;
-   * the drafted bonuses are miniature points, scaled to real-time HP.
+   * A boss crossing a phase threshold restores its shields and calls in
+   * reinforcements (ascension 8 / the final boss add phases).
+   *
+   * @param boss - The boss just hit.
    */
-  private applyBonusesToFleet(): void {
-    const { maxHull, maxShields } = realTimeRunBonuses(this.run.bonuses);
-    for (const id of this.playerShipIds) {
-      if (this.escortShipIds.has(id)) continue;
-      const ship = this.ships.get(id);
-      if (!ship) continue;
-      ship.maxHull = ship.combatStats.maxHull + maxHull;
-      ship.maxShields = ship.combatStats.maxShields + maxShields;
-      ship.hull = Math.min(ship.hull, ship.maxHull);
-      this.healthBars.get(id)?.update(ship.hull, ship.shields);
-    }
-  }
-
-  /**
-   * Run over: freezes the battle, hides the HUD and shows the holographic
-   * result overlay. Zoom resets to 1.0 first — its buttons are
-   * scrollFactor(0) and Phaser mis-hit-tests them under zoom.
-   */
-  private gameOver(): void {
-    if (this.gameOverOverlay) return;
-    this.isPaused = true;
-    audioManager.playFactionStinger(this.playerFaction, "defeat");
-    this.setHudVisible(false);
-    this.cameras.main.setZoom(1.0);
-    this.gameOverOverlay = showResultOverlay(this, {
-      header: "Survival",
-      title: "GAME OVER",
-      accent: HOLO_PALETTE.danger,
-      lines: [
-        { text: `Wave reached: ${this.wave}`, role: "heading" },
-        {
-          text: `Final score: ${this.score.toLocaleString("en-US")}`,
-          role: "heading",
-          color: HOLO_PALETTE.warning,
-        },
-      ],
-      actions: [
-        {
-          label: "Retry",
-          variant: "primary",
-          onClick: () => this.scene.restart(),
-        },
-        {
-          label: "Menu",
-          variant: "secondary",
-          onClick: () => this.scene.start("MainMenuScene"),
-        },
-      ],
+  private checkBossPhase(boss: SurvivalShip): void {
+    const started = this.bossPhases.get(boss.id);
+    if (started === undefined || boss.hull <= 0) return;
+    if (
+      !shouldStartNextBossPhase(
+        this.rules.plan.bossPhases,
+        started,
+        boss.hull / boss.maxHull,
+      )
+    )
+      return;
+    this.bossPhases.set(boss.id, started + 1);
+    boss.shields = boss.maxShields;
+    this.showMessage(
+      `BOSS PHASE ${started + 1}`,
+      "Shields restored — reinforcements inbound!",
+    );
+    const spec = { ...this.rules.currentWave(), isBossWave: false };
+    const [slot] = planWaveRoster(this.rules.roster(spec.faction), {
+      enemyCount: BOSS_PHASE_REINFORCEMENTS,
+      eliteCount: 0,
+      isMilestone: false,
     });
+    if (!slot) return;
+    const points = reinforcementPoints(
+      boss,
+      BOSS_PHASE_REINFORCEMENTS,
+      ARENA_CENTER,
+      this.beltConfig.safeRadius,
+      BOSS_REINFORCEMENT_OFFSET_PX,
+    );
+    for (const at of points)
+      this.spawnEnemyShip({ slot, faction: spec.faction, spec, at });
   }
 
   // ==========================================
@@ -1025,8 +1024,9 @@ export class SurvivalScene extends Phaser.Scene {
    *
    * @param spawn - Ship, entry point and quick build.
    * @param isEscort - True for an escort (no drafted bonuses).
+   * @returns The spawned ship.
    */
-  private spawnPlayerShip(spawn: PlayerSpawn, isEscort = false): void {
+  private spawnPlayerShip(spawn: PlayerSpawn, isEscort = false): SurvivalShip {
     const id = `player_${this.playerShipIds.length}`;
     if (isEscort) this.escortShipIds.add(id);
     const ship = this.createShip({
@@ -1040,8 +1040,10 @@ export class SurvivalScene extends Phaser.Scene {
     if (isEscort) ship.bot = this.squadAi.createPilot(SURVIVAL_ESCORT_TIER);
     this.ships.set(id, ship);
     this.playerShipIds.push(id);
+    this.baseModifiers.set(id, ship.modifiers);
     this.createShipSprite(ship);
     this.createHealthBar(ship);
+    return ship;
   }
 
   /**
@@ -1050,30 +1052,38 @@ export class SurvivalScene extends Phaser.Scene {
    * @param spawn - The wave ship and where it enters.
    */
   private spawnEnemyShip(spawn: EnemySpawn): void {
-    this.addEnemy(this.createEnemy(spawn, "enemy"));
+    const ship = this.createEnemy(spawn, "enemy", []);
+    this.rules.equipEnemy(ship, []);
+    this.addEnemy(ship);
   }
 
   /**
    * Builds (but does not add) a wave ship record with its quick build and
-   * its BotPilot (tier from the wave and its rank — see SurvivalSteering).
+   * its BotPilot (tier from the node's effective wave, its rank and an Ace
+   * affix — see SurvivalSteering / SurvivalBattleRules).
    *
    * @param spawn - The wave ship and where it enters.
    * @param idPrefix - Id prefix naming its tier.
+   * @param affixes - Its elite affixes (empty for regulars and bosses).
    * @returns The equipped ship record.
    */
-  private createEnemy(spawn: EnemySpawn, idPrefix: string): SurvivalShip {
-    const suffix = Math.random().toString(36).substring(2, 11);
+  private createEnemy(
+    spawn: EnemySpawn,
+    idPrefix: string,
+    affixes: readonly EliteAffix[],
+  ): SurvivalShip {
     const ship = this.createShip({
-      id: `${idPrefix}_${Date.now()}_${suffix}`,
+      id: `${idPrefix}_${this.wave}_${this.enemySerial++}`,
       definitionId: spawn.slot.definitionId,
       faction: spawn.faction,
       owner: "ai",
-      pose: { x: spawn.x, y: spawn.y, angle: ENEMY_ENTRY_ANGLE },
+      pose: { ...spawn.at },
       loadoutId: spawn.slot.loadoutId,
     });
     ship.bot = this.squadAi.createPilot(
-      survivalEnemyTier(this.wave, spawn.slot.tier),
+      this.rules.tierFor(spawn.spec, spawn.slot.tier, affixes),
     );
+    this.rules.registerEnemy(ship.id, spawn.slot.tier);
     return ship;
   }
 
@@ -1142,59 +1152,10 @@ export class SurvivalScene extends Phaser.Scene {
     isElite = false,
     isBoss = false,
   ): void {
-    const container = this.add.container(
-      ship.x,
-      ship.y,
-    ) as unknown as ShipSprite;
-    container.shipId = ship.id;
-
-    let size: number = SHIP_SIZES.small;
-
-    // Boss ships are larger
-    if (isBoss) {
-      size = SHIP_SIZES.large;
-    } else if (isElite) {
-      size = SHIP_SIZES.medium;
-    }
-
-    const shipDef = getShipDefinition(ship.definitionId);
-
-    // Glow for elite/boss sits behind the ship visual.
-    if (isElite || isBoss) {
-      const glowColor = isBoss ? 0xff4444 : 0xffdd00;
-      const glow = this.add.graphics();
-      glow.fillStyle(glowColor, 0.2);
-      glow.fillCircle(0, 0, size * 0.8);
-      container.add(glow);
-    }
-
-    const visual = addShipVisual(this, container, {
-      definitionId: ship.definitionId,
-      faction: ship.faction,
-      fallbackSizeName: shipDef?.baseStats.size ?? "small",
-      size,
-      isPlayer: ship.owner === "player",
-    });
-    container.image = visual.image;
-    container.imageBaseScaleX = visual.image?.scaleX ?? 1;
-    container.imageBaseScaleY = visual.image?.scaleY ?? 1;
-    container.bankState = { ...INITIAL_BANK_STATE, lastAngle: ship.angle };
-
-    // Elite ships have a golden outline ring; boss ships have a red one, drawn on top.
-    if (isElite || isBoss) {
-      const outline = this.add.graphics();
-      outline.lineStyle(isBoss ? 4 : 3, isBoss ? 0xff4444 : 0xffdd00, 1);
-      outline.strokeCircle(0, 0, size * 1.1);
-      container.add(outline);
-    }
-
-    container.setAngle(ship.angle);
-    container.setDepth(isBoss ? 15 : 10);
-    container.setSize(size * 2, size * 2);
-    container.setInteractive();
-    ShipStatCard.attachHoverCard(this, container, ship.definitionId);
-
-    this.shipSprites.set(ship.id, container);
+    this.shipSprites.set(
+      ship.id,
+      addSurvivalShipSprite(this, ship, { isElite, isBoss }),
+    );
   }
 
   private createHealthBar(ship: SurvivalShip): void {
@@ -1207,6 +1168,8 @@ export class SurvivalScene extends Phaser.Scene {
       maxShields: ship.maxShields,
       currentHull: ship.hull,
       currentShields: ship.shields,
+      side: overlaySide(false, ship.owner === "player"),
+      definitionId: ship.definitionId,
     });
     this.healthBars.set(ship.id, healthBar);
   }
@@ -1236,12 +1199,7 @@ export class SurvivalScene extends Phaser.Scene {
         modifiers: stressModifiersOf(ship.modifiers),
       });
       this.setFlight(ship, tick.state);
-      ship.shields = regenerateShields(
-        ship.shields,
-        ship.maxShields,
-        ship.modifiers,
-        deltaMs,
-      );
+      this.repairFeedback?.selfRepair(ship, deltaMs);
       if (tick.completed) this.notifyCycleCommitted(ship, tick.state);
       this.syncShipSprite(ship, deltaMs);
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
@@ -1260,9 +1218,58 @@ export class SurvivalScene extends Phaser.Scene {
     flight: CycleFlightState,
   ): void {
     const started = flight.motion.control.currentManeuver ?? "straight";
+    if (ship.owner === "player") {
+      const difficulty = maneuverDifficultyOf(
+        ship.dial,
+        started,
+        flight.motion.control.speed,
+      );
+      this.applyTrigger(
+        ship,
+        this.rules.engine.onManeuver(
+          ship.id,
+          this.roleOf(ship),
+          difficulty,
+          this.time.now,
+        ),
+      );
+    }
     if (ship.bot) ship.bot.onCycleCommitted(started);
     else if (ship.id === this.pilotedShipId) {
       this.pilot.onCycleCommitted(started);
+    }
+  }
+
+  /**
+   * @param ship - A player ship.
+   * @returns Its relic role: the ship flown as flagship, or an escort.
+   */
+  private roleOf(ship: SurvivalShip): "flagship" | "escort" {
+    return ship.id === this.playerShipIds[0] ? "flagship" : "escort";
+  }
+
+  /**
+   * Applies a relic / mutation trigger: restores shields and calls out the
+   * buffs it started.
+   *
+   * @param ship - The player ship that triggered it.
+   * @param result - What the trigger did.
+   */
+  private applyTrigger(ship: SurvivalShip, result: TriggerResult): void {
+    if (result.shieldRestoreFraction > 0) {
+      ship.shields = Math.min(
+        ship.maxShields,
+        ship.shields + ship.maxShields * result.shieldRestoreFraction,
+      );
+      this.healthBars.get(ship.id)?.update(ship.hull, ship.shields);
+    }
+    for (const buff of result.started) {
+      this.effectsManager.showFloatingText(
+        ship.x,
+        ship.y - 50,
+        buff.toUpperCase(),
+        "#7fe7ff",
+      );
     }
   }
 
@@ -1318,6 +1325,17 @@ export class SurvivalScene extends Phaser.Scene {
   ): void {
     const isFlagship = ship.id === this.pilotedShipId;
     for (const event of events) {
+      if (ship.owner === "player") {
+        this.applyTrigger(
+          ship,
+          this.rules.engine.onFlightEvent(
+            ship.id,
+            this.roleOf(ship),
+            event,
+            this.time.now,
+          ),
+        );
+      }
       playFlightEventFx(this, {
         event,
         origin,
@@ -1343,11 +1361,20 @@ export class SurvivalScene extends Phaser.Scene {
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
 
-      if (ship.owner === "player" && regen > 0) {
+      if (
+        ship.owner === "player" &&
+        regen > 0 &&
+        this.rules.engine.passiveShieldRegen(this.roleOf(ship))
+      ) {
+        const before = { hull: ship.hull, shields: ship.shields };
         ship.shields = Math.min(
           ship.maxShields,
           ship.shields + (regen * delta) / 1000,
         );
+        this.repairFeedback?.reportRepair(ship, before, {
+          kind: "self_regen",
+          sourceShipId: null,
+        });
       }
       ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
 
@@ -1371,9 +1398,15 @@ export class SurvivalScene extends Phaser.Scene {
    * @returns Attack interval (ms).
    */
   private attackIntervalOf(ship: SurvivalShip): number {
-    const fireRate = ship.owner === "player" ? this.run.bonuses.fireRate : 0;
+    const isPlayer = ship.owner === "player";
+    const fireRate = isPlayer ? this.run.bonuses.fireRate : 0;
     const cooldownMod = Math.max(MIN_PLAYER_COOLDOWN_MOD, 1 - fireRate);
-    return attackIntervalMs(ship.combatStats.weaponCooldown * cooldownMod);
+    const mutation = isPlayer
+      ? this.rules.engine.attackIntervalMultiplier(this.roleOf(ship))
+      : 1;
+    return attackIntervalMs(
+      ship.combatStats.weaponCooldown * cooldownMod * mutation,
+    );
   }
 
   /**
@@ -1402,7 +1435,10 @@ export class SurvivalScene extends Phaser.Scene {
    */
   private findTarget(ship: SurvivalShip): SurvivalShip | null {
     const rangeBonus =
-      ship.owner === "player" ? this.run.bonuses.range * RANGE_PER_POINT : 0;
+      ship.owner === "player"
+        ? this.run.bonuses.range * RANGE_PER_POINT +
+          this.rules.engine.rangeBonusPx(this.roleOf(ship))
+        : 0;
     const now = this.time.now;
     return nearestTargetInArc(ship, this.ships.values(), {
       rangePx: ship.combatStats.weaponRange + rangeBonus,
@@ -1425,9 +1461,8 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   /**
-   * One shot: the mode's dice odds and damage (run bonuses included)
-   * resolved through both ships' quick builds; a hit stresses the target's
-   * pilot and a kill fires the pilot-ability kill effects.
+   * One attack: one bolt, or several with a Scatter Array mutation, each
+   * rolled separately; player shots carry their relic / mutation adjustments.
    *
    * @param attacker - The firing ship.
    * @param target - The ship fired at.
@@ -1438,20 +1473,64 @@ export class SurvivalScene extends Phaser.Scene {
     target: SurvivalShip,
     sides: LivingBySide,
   ): void {
+    const marked = this.squadAi.isMarkedBy(
+      attacker.owner,
+      target.id,
+      this.time.now,
+    );
+    const adjust = this.shotAdjustOf(attacker, marked);
+    for (let bolt = 0; bolt < adjust.shots && target.hull > 0; bolt++) {
+      this.fireBolt(attacker, target, sides, marked, adjust);
+    }
+  }
+
+  /**
+   * @param attacker - The firing ship.
+   * @param marked - Whether its side marked the target.
+   * @returns Relic / mutation adjustments of the shot (neutral for enemies).
+   */
+  private shotAdjustOf(attacker: SurvivalShip, marked: boolean): ShotAdjust {
+    if (attacker.owner !== "player") return NEUTRAL_SHOT;
+    return this.rules.engine.shot({
+      shooterId: attacker.id,
+      role: this.roleOf(attacker),
+      targetMarked: marked,
+      escortsAlive: Math.max(0, this.playerShipIds.length - 1),
+      nowMs: this.time.now,
+    });
+  }
+
+  /**
+   * One bolt: the mode's dice odds and damage (run bonuses and relics
+   * included) resolved through both ships' quick builds; a hit stresses the
+   * target's pilot and a kill fires the pilot-ability kill effects.
+   *
+   * @param attacker - The firing ship.
+   * @param target - The ship fired at.
+   * @param sides - Living ships per side this frame (wingman checks).
+   * @param marked - Whether its side marked the target.
+   * @param adjust - The shot's relic / mutation adjustments.
+   */
+  private fireBolt(
+    attacker: SurvivalShip,
+    target: SurvivalShip,
+    sides: LivingBySide,
+    marked: boolean,
+    adjust: ShotAdjust,
+  ): void {
     const result = resolveDiceAttack({
       attacker: combatantOf(attacker),
       target: combatantOf(target),
-      hitChance: this.hitChanceOf(attacker, target),
-      baseDamage: this.baseDamageOf(attacker),
+      hitChance: Math.min(
+        MAX_HIT_CHANCE,
+        this.hitChanceOf(attacker, target) + adjust.hitChanceBonus,
+      ),
+      baseDamage: this.baseDamageOf(attacker, adjust),
       attackerHasWingman: hasWingman(attacker, sides.get(attacker.owner) ?? []),
       targetHasWingman: hasWingman(target, sides.get(target.owner) ?? []),
       nowMs: this.time.now,
-      roll: Math.random(),
-      targetMarked: this.squadAi.isMarkedBy(
-        attacker.owner,
-        target.id,
-        this.time.now,
-      ),
+      roll: this.rules.rng.next(),
+      targetMarked: marked,
     });
     this.effectsManager.fireLaser(
       attacker.x,
@@ -1474,7 +1553,23 @@ export class SurvivalScene extends Phaser.Scene {
     }
     if (target.hull > 0) return;
     this.resolveAbilityKill(attacker, target);
+    if (attacker.owner === "player") this.restoreKillShields(attacker);
     this.destroyShip(target.id, attacker.owner === "player");
+  }
+
+  /**
+   * Reactive Shields: a kill by the flagship restores part of its shields.
+   *
+   * @param killer - The player ship that made the kill.
+   */
+  private restoreKillShields(killer: SurvivalShip): void {
+    const fraction = this.rules.engine.killShieldFraction(this.roleOf(killer));
+    if (fraction <= 0 || killer.hull <= 0) return;
+    killer.shields = Math.min(
+      killer.maxShields,
+      killer.shields + killer.maxShields * fraction,
+    );
+    this.healthBars.get(killer.id)?.update(killer.hull, killer.shields);
   }
 
   /**
@@ -1492,23 +1587,40 @@ export class SurvivalScene extends Phaser.Scene {
 
   /**
    * @param attacker - The firing ship.
+   * @param adjust - The shot's relic / mutation adjustments.
    * @returns The mode's damage before equipment: attack dice, plus the run's
-   *   damage bonus and crit roll for the player fleet.
+   *   and relics' damage bonus, mutation multiplier and crit roll for the
+   *   player fleet.
    */
-  private baseDamageOf(attacker: SurvivalShip): number {
+  private baseDamageOf(attacker: SurvivalShip, adjust: ShotAdjust): number {
     if (attacker.owner !== "player") return attacker.combatStats.attackDice;
     const { damage, critChance } = this.run.bonuses;
-    const base = attacker.combatStats.attackDice + damage;
-    return Math.random() < critChance ? base * CRIT_DAMAGE_MULTIPLIER : base;
+    const base =
+      (attacker.combatStats.attackDice + damage + adjust.damageBonus) *
+      adjust.damageMultiplier;
+    const crit = this.rules.rng.next() < critChance + adjust.critChanceBonus;
+    return crit ? base * CRIT_DAMAGE_MULTIPLIER : base;
   }
 
   /**
    * Damage taken shields first, then hull — a boss's hull is its subsystems.
+   * Player ships take less under protective relic buffs; a boss crossing a
+   * phase threshold enters its next phase.
    *
    * @param target - The ship hit.
-   * @param damage - Damage to take.
+   * @param incoming - Damage to take.
    */
-  private dealDamage(target: SurvivalShip, damage: number): void {
+  private dealDamage(target: SurvivalShip, incoming: number): void {
+    const damage =
+      target.owner === "player"
+        ? incoming *
+          this.rules.engine.incomingMultiplier(
+            target.id,
+            this.roleOf(target),
+            Math.max(0, this.playerShipIds.length - 1),
+            this.time.now,
+          )
+        : incoming;
     const after = absorbDamage(target, damage);
     const hullDamage = damage - (target.shields - after.shields);
     if (after.shields < target.shields) {
@@ -1519,6 +1631,7 @@ export class SurvivalScene extends Phaser.Scene {
       audioManager.playSoundAt("hull_hit", target.x, target.y, 0.4);
       if (target.capitalSystems) {
         this.damageSystems(target, target.capitalSystems, hullDamage);
+        this.checkBossPhase(target);
       } else {
         target.hull = after.hull;
       }
@@ -1581,9 +1694,20 @@ export class SurvivalScene extends Phaser.Scene {
     const ship = this.ships.get(shipId);
     if (!ship) return;
 
-    if (wasPlayerKill) this.score += 100;
+    if (wasPlayerKill) {
+      this.score += 100;
+      const salvage = this.rules.recordKill(shipId);
+      this.effectsManager.showFloatingText(
+        ship.x,
+        ship.y - 30,
+        `+${salvage} ⚙`,
+        "#ffd34a",
+      );
+    }
     this.hitLedger.forget(shipId);
     this.squadAi.forget(shipId);
+    this.affixLabels.get(shipId)?.destroy();
+    this.affixLabels.delete(shipId);
 
     const sprite = this.shipSprites.get(shipId);
     if (sprite) {
@@ -1613,11 +1737,36 @@ export class SurvivalScene extends Phaser.Scene {
   private updateAI(time: number, delta: number): void {
     const [flagshipId, ...escortIds] = this.playerShipIds;
     this.squadAi.command(this.ships.values(), time);
-    this.flyFlagship(flagshipId, time, delta);
+    if (this.autopilot) this.flyAutopilot(flagshipId, time, delta);
+    else this.flyFlagship(flagshipId, time, delta);
     this.applyMarkRequest(flagshipId);
     for (const id of [...this.enemyShipIds, ...escortIds]) {
       this.flyBot(id, time, delta);
     }
+  }
+
+  /**
+   * Debug / e2e: a bot flies the flagship (used to measure node durations
+   * without a human pilot) and marks its target (R) like a player would.
+   *
+   * @param shipId - The flagship's id, if any.
+   * @param time - Scene time (ms).
+   * @param delta - Frame length (ms).
+   */
+  private flyAutopilot(
+    shipId: string | undefined,
+    time: number,
+    delta: number,
+  ): void {
+    const ship = this.ships.get(shipId ?? "");
+    if (!ship || ship.hull <= 0) return;
+    ship.bot ??= this.squadAi.createPilot(SURVIVAL_ESCORT_TIER);
+    this.pilotedShipId = null;
+    this.flyBot(ship.id, time, delta);
+    const target = this.squadAi.playerMarkOf(time)
+      ? null
+      : this.hudTargetOf(ship);
+    if (target) this.squadAi.markTarget(target, time);
   }
 
   /**
@@ -1718,6 +1867,9 @@ export class SurvivalScene extends Phaser.Scene {
       if (healthBar) {
         healthBar.setPosition(ship.x, ship.y - 40);
       }
+      this.affixLabels
+        .get(id)
+        ?.setPosition(ship.x, ship.y - affixLabelOffset(false));
     }
   }
 }

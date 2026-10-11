@@ -9,17 +9,22 @@ import { LobbyScene } from "./scenes/LobbyScene";
 import { ContinuousTacticalScene } from "./scenes/ContinuousTacticalScene";
 import { SurvivalScene } from "./scenes/SurvivalScene";
 import { SurvivalSetupScene } from "./scenes/SurvivalSetupScene";
+import { SurvivalMapScene } from "./scenes/SurvivalMapScene";
+import { SurvivalSummaryScene } from "./scenes/SurvivalSummaryScene";
 import { EpicBattleScene } from "./scenes/EpicBattleScene";
 import { DogfightScene } from "./scenes/DogfightScene";
 import { AceDuelScene } from "./scenes/AceDuelScene";
 import { CampaignScene } from "./scenes/CampaignScene";
 import { CampaignBattleScene } from "./scenes/CampaignBattleScene";
 import { DebriefScene } from "./scenes/DebriefScene";
+import { CampaignCompleteScene } from "./scenes/CampaignCompleteScene";
 import { ArcadeBattleScene } from "./scenes/ArcadeBattleScene";
 import { EncyclopediaScene } from "./scenes/EncyclopediaScene";
 import { ShipPickerScene } from "./scenes/ShipPickerScene";
 import { ControlsScene } from "./scenes/ControlsScene";
 import { HudPreviewScene } from "./scenes/HudPreviewScene";
+import { FlightSchoolScene } from "./scenes/FlightSchoolScene";
+import { bootstrapPlayerPreferences } from "./ui/settings/settingsRuntime";
 
 const forceCanvas =
   typeof window !== "undefined" &&
@@ -41,16 +46,20 @@ const config: Phaser.Types.Core.GameConfig = {
     ContinuousTacticalScene,
     SurvivalScene,
     SurvivalSetupScene,
+    SurvivalMapScene,
+    SurvivalSummaryScene,
     EpicBattleScene,
     DogfightScene,
     AceDuelScene,
     CampaignScene,
     CampaignBattleScene,
     DebriefScene,
+    CampaignCompleteScene,
     ArcadeBattleScene,
     EncyclopediaScene,
     ShipPickerScene,
     ControlsScene,
+    FlightSchoolScene,
     ...(import.meta.env.DEV ? [HudPreviewScene] : []),
   ],
   physics: {
@@ -79,6 +88,9 @@ const config: Phaser.Types.Core.GameConfig = {
 };
 
 const game = new Phaser.Game(config);
+// Settings (audio buses, palettes, key profile, camera comfort) and the
+// local telemetry log apply from boot, before any scene reads them.
+bootstrapPlayerPreferences(game);
 
 // Expose for debugging and E2E testing in non-production builds
 declare global {

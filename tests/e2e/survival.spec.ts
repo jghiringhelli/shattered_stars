@@ -1,11 +1,10 @@
 /**
- * SurvivalScene E2E — roguelite leveling (ADR-0003).
+ * SurvivalScene E2E — a battle node of the Survival roguelite (ADR-0004).
  *
- * Covers the controller + choice-panel wiring that replaced the old credits shop:
- * initial state, wave spawning, the power draft after a regular wave, the
- * milestone Hangar, applying a choice, and the game-over path.
- *
- * SurvivalScene starts immediately when launched — no setup screen.
+ * Launched straight (menus, quick play) SurvivalScene starts a quick run
+ * whose first combat node is already entered: the node's waves arrive one
+ * after the other, clearing the last returns to the sector map where the
+ * power draft (with spendable rerolls) waits; losing the fleet ends the run.
  */
 
 import { test, expect } from "@playwright/test";
@@ -28,46 +27,71 @@ async function launchSurvival(page: any): Promise<void> {
   );
 }
 
-/** Clear the current wave and force the wave-complete check to run now. */
+/** Starts a run whose first node is forced to `kind`, straight into battle. */
+async function launchNode(page: any, kind: string): Promise<void> {
+  await page.goto("/");
+  await waitForMenuReady(page);
+  await page.evaluate(async (nodeKind: string) => {
+    const game = (window as any).game;
+    const { runServiceOf } =
+      await import("/src/systems/survival/RoguelikeRunService.ts");
+    const svc = runServiceOf(game.registry) as any;
+    const run = svc.startRun({
+      faction: "free_confederation",
+      flagshipId: "confed_wasp",
+      loadoutId: null,
+      ascension: 0,
+      seed: 77,
+    });
+    const first = run.map.rows[0][0].id;
+    svc.apply((r: any) => ({
+      ...r,
+      activeNodeId: first,
+      activeKind: nodeKind,
+      path: [first],
+    }));
+    game.scene.start("SurvivalScene", {
+      factionId: "free_confederation",
+      fromRun: true,
+    });
+  }, kind);
+  await waitForScene(page, "SurvivalScene");
+}
+
+/** Kills the current wave through the scene's own destroy path. */
 async function clearWave(page: any): Promise<void> {
+  await page.waitForFunction(
+    () => {
+      const s = (window as any).game.scene.getScene("SurvivalScene") as any;
+      return s?.isWaveActive === true && s.enemyShipIds.length > 0;
+    },
+    undefined,
+    { timeout: 15_000 },
+  );
   await page.evaluate(() => {
     const s = (window as any).game.scene.getScene("SurvivalScene") as any;
-    for (const id of s.enemyShipIds) {
-      const ship = s.ships.get(id);
-      if (ship) ship.hull = 0;
-    }
-    s.enemyShipIds = [];
+    for (const id of [...s.enemyShipIds]) s.destroyShip(id, true);
     s.checkWaveComplete();
   });
 }
 
-/** Trigger the first choice card by emitting its interactive pointerdown. */
-async function clickFirstCard(page: any): Promise<void> {
-  await page.evaluate(() => {
-    const s = (window as any).game.scene.getScene("SurvivalScene") as any;
-    const container = s.choicePanel.container;
-    const groups = container.list.filter((o: any) => o.type === "Container");
-    const group = groups[0];
-    const hit = group.list[group.list.length - 1];
-    hit.emit("pointerdown");
-  });
-}
-
-/**
- * Resolves every sequential choice panel of a wave. Each wave now presents two
- * parallel decisions (the power draft / Hangar, then the escort track), shown
- * one panel after the other; this clicks the first card of each until the
- * choice phase ends.
- */
-async function clickThroughChoices(page: any): Promise<void> {
-  for (let i = 0; i < 2; i++) {
-    const open = await page.evaluate(() => {
-      const s = (window as any).game.scene.getScene("SurvivalScene") as any;
-      return s?.isChoicePhase === true && s?.choicePanel?.isOpen === true;
-    });
-    if (!open) break;
-    await clickFirstCard(page);
-  }
+/** Clicks the first enabled card of the map's open choice panel. */
+async function clickMapCard(page: any, index = 0): Promise<void> {
+  await page.waitForFunction(
+    () =>
+      (window as any).game.scene.getScene("SurvivalMapScene")?.choicePanel
+        ?.isOpen === true,
+    undefined,
+    { timeout: 8_000 },
+  );
+  await page.evaluate((i: number) => {
+    const s = (window as any).game.scene.getScene("SurvivalMapScene") as any;
+    const groups = s.choicePanel.container.list.filter(
+      (o: any) => o.type === "Container",
+    );
+    const group = groups[i];
+    group.list[group.list.length - 1].emit("pointerdown");
+  }, index);
 }
 
 // ─── Initial state ────────────────────────────────────────────────────────────
@@ -94,14 +118,23 @@ test.describe("SurvivalScene — initial state", () => {
     expect(result.maxHull).toBeGreaterThan(0);
   });
 
-  test("starts at score 0 and not in a choice phase", async ({ page }) => {
+  test("starts a quick run on its first combat node", async ({ page }) => {
     await launchSurvival(page);
     const state = await page.evaluate(() => {
       const s = (window as any).game.scene.getScene("SurvivalScene") as any;
-      return { score: s.score, choicePhase: s.isChoicePhase };
+      return {
+        score: s.score,
+        kind: s.rules.plan.kind,
+        sector: s.rules.plan.sector,
+        enemy: s.rules.plan.enemyFaction,
+        saved: s.service.hasSavedRun(),
+      };
     });
     expect(state.score).toBe(0);
-    expect(state.choicePhase).toBe(false);
+    expect(state.kind).toBe("combat");
+    expect(state.sector).toBe(1);
+    expect(state.enemy).not.toBe("free_confederation");
+    expect(state.saved).toBe(true);
   });
 
   test("no page errors on load", async ({ page }) => {
@@ -114,7 +147,7 @@ test.describe("SurvivalScene — initial state", () => {
 // ─── Wave spawning ────────────────────────────────────────────────────────────
 
 test.describe("SurvivalScene — waves", () => {
-  test("wave 1 starts and spawns enemies", async ({ page }) => {
+  test("wave 1 of the node starts and spawns enemies", async ({ page }) => {
     await launchSurvival(page);
     await page.waitForFunction(
       () => {
@@ -138,165 +171,138 @@ test.describe("SurvivalScene — waves", () => {
     expect(state.active).toBe(true);
     expect(state.total).toBe(state.player + state.enemies);
   });
-});
 
-// ─── Power draft (regular level) ──────────────────────────────────────────────
-
-test.describe("SurvivalScene — power draft", () => {
-  test("clearing a regular wave opens the power draft panel", async ({
+  test("clearing a wave that is not the last sends the next one", async ({
     page,
   }) => {
-    await launchSurvival(page);
-    await page.waitForFunction(
-      () =>
-        ((window as any).game.scene.getScene("SurvivalScene") as any)
-          ?.isWaveActive === true,
-      { timeout: 8_000 },
-    );
+    await launchNode(page, "boss");
     await clearWave(page);
     await page.waitForFunction(
       () => {
         const s = (window as any).game.scene.getScene("SurvivalScene") as any;
-        return s?.isChoicePhase === true && s?.choicePanel?.isOpen === true;
+        return s?.wave === 2 && s.isWaveActive === true;
       },
-      { timeout: 6_000 },
+      undefined,
+      { timeout: 8_000 },
     );
-    const open = await page.evaluate(
+    const salvage = await page.evaluate(
       () =>
-        ((window as any).game.scene.getScene("SurvivalScene") as any)
-          ?.choicePanel?.isOpen,
+        ((window as any).game.scene.getScene("SurvivalScene") as any).rules
+          .salvageEarned,
     );
-    expect(open).toBe(true);
+    expect(salvage).toBeGreaterThan(0);
   });
+});
 
-  test("picking a power invests in the run and resumes into the next wave", async ({
+// ─── Node cleared → map + power draft ─────────────────────────────────────────
+
+test.describe("SurvivalScene — node cleared", () => {
+  test("clearing the node returns to the map with a power draft", async ({
     page,
   }) => {
     await launchSurvival(page);
-    await page.waitForFunction(
-      () =>
-        ((window as any).game.scene.getScene("SurvivalScene") as any)
-          ?.isWaveActive === true,
-      { timeout: 8_000 },
-    );
     await clearWave(page);
-    await page.waitForFunction(
-      () =>
-        ((window as any).game.scene.getScene("SurvivalScene") as any)
-          ?.choicePanel?.isOpen === true,
-      { timeout: 6_000 },
-    );
-
+    await waitForScene(page, "SurvivalMapScene", 10_000);
     const before = await page.evaluate(() => {
-      const s = (window as any).game.scene.getScene("SurvivalScene") as any;
-      const st = s.run.state;
-      const invested = Object.values(st.branch).reduce(
-        (a: number, b: any) => a + b,
-        0,
-      );
-      return { invested, escorts: st.escorts, rerolls: st.rerolls };
-    });
-
-    await clickThroughChoices(page);
-
-    await page.waitForFunction(
-      () =>
-        ((window as any).game.scene.getScene("SurvivalScene") as any)
-          ?.isChoicePhase === false,
-      { timeout: 6_000 },
-    );
-    const after = await page.evaluate(() => {
-      const s = (window as any).game.scene.getScene("SurvivalScene") as any;
-      const st = s.run.state;
-      const invested = Object.values(st.branch).reduce(
+      const map = (window as any).game.scene.getScene(
+        "SurvivalMapScene",
+      ) as any;
+      const run = map.run;
+      const invested = Object.values(run.progression.branch).reduce(
         (a: number, b: any) => a + b,
         0,
       );
       return {
         invested,
-        escorts: st.escorts,
-        rerolls: st.rerolls,
-        wave: s.wave,
-        active: s.isWaveActive,
+        pending: run.pendingRewards.map((r: any) => r.kind),
+        cleared: run.stats.nodesCleared,
       };
     });
+    expect(before.pending).toEqual(["power"]);
+    expect(before.cleared).toBe(1);
+    await clickMapCard(page, 0);
+    const after = await page.evaluate(() => {
+      const run = (
+        (window as any).game.scene.getScene("SurvivalMapScene") as any
+      ).run;
+      return {
+        invested: Object.values(run.progression.branch).reduce(
+          (a: number, b: any) => a + b,
+          0,
+        ),
+        pending: run.pendingRewards.length,
+        bonuses: run.progression.bonuses,
+      };
+    });
+    expect(after.pending).toBe(0);
+    expect(after.invested).toBeGreaterThanOrEqual(before.invested as number);
+  });
 
-    // A regular-level draft always advances the run in some way.
-    const advanced =
-      after.invested > before.invested ||
-      after.escorts > before.escorts ||
-      after.rerolls > before.rerolls;
-    expect(advanced).toBe(true);
-    expect(after.wave).toBe(2);
-    expect(after.active).toBe(true);
+  test("a reroll card spends a reroll charge and redraws", async ({ page }) => {
+    await launchSurvival(page);
+    await clearWave(page);
+    await waitForScene(page, "SurvivalMapScene", 10_000);
+    const read = () =>
+      page.evaluate(() => {
+        const run = (
+          (window as any).game.scene.getScene("SurvivalMapScene") as any
+        ).run;
+        return { rerolls: run.rerolls, spent: run.rerollsSpentHere };
+      });
+    const before = await read();
+    expect(before.rerolls).toBeGreaterThan(0);
+    await clickMapCard(page, 3);
+    const after = await read();
+    expect(after.rerolls).toBe(before.rerolls - 1);
+    expect(after.spent).toBe(1);
   });
 });
 
-// ─── Milestone Hangar ─────────────────────────────────────────────────────────
+// ─── Boss rewards (Hangar) ────────────────────────────────────────────────────
 
-test.describe("SurvivalScene — hangar", () => {
-  test("hangar opens with options and a choice resumes the run", async ({
+test.describe("SurvivalMapScene — hangar", () => {
+  test("a pending hangar reward opens the Hangar and graduates the hull", async ({
     page,
   }) => {
     await launchSurvival(page);
     await page.evaluate(() => {
       const s = (window as any).game.scene.getScene("SurvivalScene") as any;
-      s.isWaveActive = false;
-      s.showHangar();
+      s.service.apply((r: any) => ({
+        ...r,
+        activeNodeId: null,
+        activeKind: null,
+        pendingRewards: [{ kind: "hangar" }],
+      }));
+      s.scene.start("SurvivalMapScene");
     });
-    await page.waitForFunction(
+    await waitForScene(page, "SurvivalMapScene");
+    await clickMapCard(page, 0);
+    const hull = await page.evaluate(
       () =>
-        ((window as any).game.scene.getScene("SurvivalScene") as any)
-          ?.choicePanel?.isOpen === true,
-      { timeout: 6_000 },
+        ((window as any).game.scene.getScene("SurvivalMapScene") as any).run
+          .progression.hull,
     );
-    const opened = await page.evaluate(
-      () =>
-        ((window as any).game.scene.getScene("SurvivalScene") as any)
-          ?.isChoicePhase,
-    );
-    expect(opened).toBe(true);
-
-    await clickThroughChoices(page);
-    await page.waitForFunction(
-      () =>
-        ((window as any).game.scene.getScene("SurvivalScene") as any)
-          ?.isChoicePhase === false,
-      { timeout: 6_000 },
-    );
-    const resumed = await page.evaluate(
-      () =>
-        ((window as any).game.scene.getScene("SurvivalScene") as any)
-          ?.isWaveActive,
-    );
-    expect(resumed).toBe(true);
+    expect(hull).toBe("ace");
   });
 });
 
 // ─── Game over ────────────────────────────────────────────────────────────────
 
 test.describe("SurvivalScene — game over", () => {
-  test("losing all player ships ends the wave", async ({ page }) => {
+  test("losing all player ships ends the run into the summary", async ({
+    page,
+  }) => {
     await launchSurvival(page);
     await page.evaluate(() => {
       const s = (window as any).game.scene.getScene("SurvivalScene") as any;
-      for (const id of s.playerShipIds) {
-        const ship = s.ships.get(id);
-        if (ship) ship.hull = 0;
-      }
+      for (const id of [...s.playerShipIds]) s.destroyShip(id, false);
       s.checkWaveComplete();
     });
-    await page.waitForFunction(
-      () =>
-        ((window as any).game.scene.getScene("SurvivalScene") as any)
-          ?.isWaveActive !== true,
-      { timeout: 5_000 },
+    await waitForScene(page, "SurvivalSummaryScene", 10_000);
+    const meta = await page.evaluate(
+      () => (window as any).game.registry.get("survivalRunService").meta,
     );
-    const active = await page.evaluate(
-      () =>
-        ((window as any).game.scene.getScene("SurvivalScene") as any)
-          ?.isWaveActive,
-    );
-    expect(active).not.toBe(true);
+    expect(meta.history[0].outcome).toBe("defeat");
+    expect(meta.history[0].cause).toContain("Destroyed by");
   });
 });

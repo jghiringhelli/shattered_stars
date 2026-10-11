@@ -1,5 +1,6 @@
 /**
- * Survival roguelite — milestone Hangar (pure). Every 5th level opens a choice
+ * Survival roguelite — the Hangar (pure): a sector boss reward in the roguelite
+ * run (ADR-0004), every 5th level in the endless balance sim. It offers a choice
  * to graduate the hull ("saltar") or evolve the current hull. Escorts are no
  * longer offered here; they have their own parallel track (see escorts.ts).
  * See ADR-0003.

@@ -1,18 +1,22 @@
 # ADR-0003 — Survival roguelite: choice-based leveling + squad threat scaling
 
-- **Status:** Proposed
+- **Status:** Accepted — leveling, branches and threat stand; the run structure (endless
+  waves, per-wave escort track, Hangar every 5th wave) is **superseded by
+  [ADR-0004](ADR-0004-survival-roguelite-run-structure.md)** (sector map, relics, shops,
+  meta-progression).
 - **Date:** 2026-08-25
 - **Deciders:** Project owner (jghiringhelli)
-- **Related:** [ADR-0002](ADR-0002-player-progression.md), [docs/specs/progression.md](../specs/progression.md), `src/scenes/SurvivalScene.ts`
+- **Related:** [ADR-0002](ADR-0002-player-progression.md), [ADR-0004](ADR-0004-survival-roguelite-run-structure.md), [docs/specs/progression.md](../specs/progression.md), `src/scenes/SurvivalScene.ts`
 - **Inspiration:** Heroes of the Aturi Cluster 2nd Edition (Experience Tree add-on + Rulebook)
 
 ## Context
 
-### What survival does today
-`SurvivalScene` is a **credits shop**: each wave grants credits, and between waves the
-player may buy *several* upgrades if affordable (`getAvailableUpgrades` → attack/defense/
-speed/repair/recruit, each with a `cost`). Difficulty is a **fixed wave table**
-(`getWaveType`: 1–5 basic, 6–10 mixed, 11–15 elite, 16–20 epic, 21+ endless; boss every 5th).
+### What survival did before this ADR (historical)
+`SurvivalScene` was a **credits shop**: each wave granted credits, and between waves the
+player could buy *several* upgrades if affordable (attack/defense/speed/repair/recruit,
+each with a `cost`). Difficulty was a **fixed wave table** (1–5 basic, 6–10 mixed, 11–15
+elite, 16–20 epic, 21+ endless; boss every 5th). Both were removed by this ADR; the
+fixed table no longer exists anywhere in the code.
 
 Problems: credit accounting is bookkeeping, not a decision; buying "everything you can
 afford" is not a build; difficulty ignores how strong the player's fleet actually is.
@@ -189,3 +193,28 @@ the support playstyle, not a universal auto-take.
 presents the two panels sequentially each wave and spawns escorts as basic bodies without
 flagship bonuses. Anti-runaway invariant locked by unit test (brawler `p90 < SIM_MAX_LEVEL`).
 Post-redesign sweep (400 runs/policy): medians 4–5, p90 7–14, no policy near the cap.
+
+## Addendum (2026-10) — roguelite run structure (ADR-0004)
+
+The leveling model above is now the **in-battle build layer** of a structured roguelite run
+(see [ADR-0004](ADR-0004-survival-roguelite-run-structure.md)):
+
+- Drafts happen **on the sector map after each battle node**, not after every wave. The
+  power draft gains a **Reroll** card that actually **spends** a reroll charge (the old run
+  awarded charges but never consumed them — fixed; `SurvivalRunController.rerollDraft()`
+  also consumes them) and a **Skip** card (+salvage).
+- The **Hangar** is the reward of each **sector boss**, alongside a rare relic and (sectors
+  1–2) a mutation.
+- The per-wave **escort track** is not offered in the roguelite flow; escorts come from
+  shops, events, the *Wing Commander* cross power and meta escort packages. `escorts.ts`
+  stays as the escort quality/power model and for the balance sim's draft policy.
+- *Wing Commander* now respects `MAX_ESCORTS` (it used to push the run past the cap).
+- **Credits stay removed from leveling.** The roguelite's **salvage** is a *route* economy
+  (shops, repairs) — it never buys powers, so §1's "a level is one decision" holds.
+- The Drive branch's `speed` bonus (Thruster Tuning, Formation Drills +1, Afterburners +3)
+  is a real flight effect again, through the equipment path: the first point is +1
+  top-speed notch (`maxSpeedBonus`, capped one notch above the dial), every further point
+  multiplies boost recharge by 0.85 (floor 0.4). `SurvivalScene.applyBonusesToFleet` folds
+  it into each player ship's base sheet and re-applies it to the flight from the hull's
+  unmodified control state (`runFlightEquip`) — idempotent, identical for the flagship and
+  the bot-flown escorts. The balance sim values it via `driveMobility`.

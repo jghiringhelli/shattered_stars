@@ -242,10 +242,11 @@ test.describe("Survival / Ace Duel setup — quick-build chooser", () => {
     expect(
       await clickObject(page, "SurvivalSetupScene", { text: "LAUNCH" }),
     ).toBe(true);
-    await waitForScene(page, "SurvivalScene", 30_000);
+    // LAUNCH opens the Survival sector map; the run's flagship carries the pick.
+    await waitForScene(page, "SurvivalMapScene", 30_000);
     const flagship = await page.evaluate(() => {
-      const scene = (window as any).game.scene.getScene("SurvivalScene");
-      return scene.ships.get(scene.playerShipIds[0]).loadoutId;
+      const scene = (window as any).game.scene.getScene("SurvivalMapScene");
+      return scene.run.flagship.loadoutId;
     });
     expect(flagship).toBe(chosen);
   });

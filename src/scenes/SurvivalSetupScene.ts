@@ -1,14 +1,10 @@
 /**
- * Survival Setup Scene — lightweight pre-run picker.
- *
- * Survival does not need a squad builder: pick a faction, pick one of two
- * viable starter ships, launch. Everything else (power drafts, evolutions,
- * escort recruitment) is chosen progressively during the run itself — see
- * SurvivalRunController and SurvivalChoicePanel.
- *
- * Holo layout: header, faction toggles, two ship cards, the flagship's
- * quick-build chooser and LAUNCH bottom-centre (game-modes-tour clicks it at
- * (centre, height − 60)). Everything is tinted with the faction accent.
+ * Survival Setup Scene — pre-run picker for the Survival roguelite
+ * (docs/adr/ADR-0004-survival-roguelite-run-structure.md): faction, flagship
+ * (meta unlocks add heavier ones), quick build, seed and ascension, then
+ * LAUNCH a new run onto the sector map; CONTINUE / ABANDON a saved run;
+ * UNLOCKS (Star Charts) and HISTORY (last 20 runs). LAUNCH sits
+ * bottom-centre (game-modes-tour clicks (centre, height − 60)).
  */
 
 import Phaser from "phaser";
@@ -16,7 +12,18 @@ import { createHoverButton, createToggleButton } from "../ui/ButtonFactory";
 import { quickTipLine } from "../ui/ControlsReference";
 import { FACTION_COLORS, type FactionId } from "../config";
 import { getShipDefinition } from "../data/ShipDefinitions";
-import { SURVIVAL_STARTER_CHOICES } from "./SurvivalScene";
+import { starterChoices } from "../data/survival/metaUnlocks";
+import { FACTION_NAMES_SHORT } from "../data/survival/factionNames";
+import {
+  runServiceOf,
+  type RoguelikeRunService,
+} from "../systems/survival/RoguelikeRunService";
+import { RunSetupControls } from "../ui/survival/RunSetupControls";
+import { SurvivalChoicePanel } from "../ui/survival/SurvivalChoicePanel";
+import {
+  addSavedRunButtons,
+  showUnlockShop,
+} from "../ui/survival/setupRunMenus";
 import {
   cycleQuickBuild,
   selectionFor,
@@ -48,15 +55,20 @@ const SETUP_LAYOUT = {
   factionSpacing: 220,
   factionWidth: 200,
   factionHeight: 36,
-  cardsTop: 180,
+  cardsTop: 170,
   cardWidth: 320,
-  cardHeight: 216,
+  cardHeight: 200,
   cardGap: 32,
-  chooserY: 416,
+  /** Widest the ship-card row may get (px). */
+  cardsMaxWidth: 1200,
+  chooserY: 388,
   chooserWidth: 520,
   launchInset: 60,
   launchWidth: 220,
   launchHeight: 52,
+  /** CONTINUE / ABANDON sit this far left / right of LAUNCH. */
+  sideButtonOffset: 280,
+  sideButtonWidth: 230,
 } as const;
 
 const FACTION_ORDER: readonly FactionId[] = [
@@ -67,23 +79,22 @@ const FACTION_ORDER: readonly FactionId[] = [
   "ascendant_empire",
 ];
 
-const FACTION_NAMES: Record<FactionId, string> = {
-  terran_hegemony: "Terran Hegemony",
-  free_confederation: "Free Confederation",
-  synthetic_collective: "Synthetic Collective",
-  void_corsairs: "Void Corsairs",
-  ascendant_empire: "Ascendant Empire",
-};
+/** Faction toggle labels (shared with the rest of Survival). */
+const FACTION_NAMES = FACTION_NAMES_SHORT;
 
 export class SurvivalSetupScene extends Phaser.Scene {
   private selectedFaction: FactionId = "terran_hegemony";
-  private selectedShipId: string = SURVIVAL_STARTER_CHOICES.terran_hegemony[0]!;
+  private selectedShipId = "terran_viper";
   private shipCardObjects: Phaser.GameObjects.GameObject[] = [];
   private factionButtons: Phaser.GameObjects.Container[] = [];
   /** The flagship's quick-build pick (default until the player cycles it). */
   private playerBuilds: QuickBuildSelection | null = null;
   private quickBuildObjects: Phaser.GameObjects.GameObject[] = [];
   private header!: MenuHeader;
+  private service!: RoguelikeRunService;
+  /** Seed, ascension, unlocks and history row. */
+  controls!: RunSetupControls;
+  private panel!: SurvivalChoicePanel;
 
   constructor() {
     super({ key: "SurvivalSetupScene" });
@@ -92,17 +103,20 @@ export class SurvivalSetupScene extends Phaser.Scene {
   create(): void {
     this.quickBuildObjects = [];
     this.shipCardObjects = [];
+    this.service = runServiceOf(this.registry);
+    this.selectedShipId = this.starters()[0]!;
     addMenuBackdrop(this, { textureId: "starfield_deep" });
     this.header = addMenuHeader(this, {
       title: "Survival",
       subtitle:
-        "Choose a faction and a ship. Everything else — powers, evolutions, your squad — is earned as you survive.",
+        "Three sectors, one fleet. Plot your route, collect relics, repair what you can — the Nexus flagship waits at the end.",
       accent: factionAccent(this.selectedFaction),
     });
     addBackButton(this, () => this.scene.start("MainMenuScene"));
-    this.input.keyboard?.on("keydown-ESC", () =>
-      this.scene.start("MainMenuScene"),
-    );
+    this.input.keyboard?.on("keydown-ESC", () => {
+      if (!this.controls.isTyping && !this.panel.isOpen)
+        this.scene.start("MainMenuScene");
+    });
     this.add
       .text(this.scale.width / 2, SETUP_LAYOUT.factionCaptionY, "FACTION", {
         ...holoFont(HOLO_TYPE_SCALE.caption.size, "600"),
@@ -112,7 +126,49 @@ export class SurvivalSetupScene extends Phaser.Scene {
       .setOrigin(0.5);
     this.createFactionRow();
     this.renderShipChoices();
+    this.controls = new RunSetupControls(this, this.service.meta.maxAscension, {
+      onUnlocks: () =>
+        showUnlockShop(this.panel, this.service, () => this.scene.restart()),
+      onHistory: () =>
+        this.scene.start("SurvivalSummaryScene", { historyOnly: true }),
+    });
     this.createLaunchButton();
+    this.createSavedRunButtons();
+    this.panel = new SurvivalChoicePanel(this, this.selectedFaction);
+  }
+
+  /** @returns Flagships offered for the selected faction (meta unlocks included). */
+  private starters(): string[] {
+    return starterChoices(this.selectedFaction, this.service.meta.unlocked);
+  }
+
+  /**
+   * Starts a new run from the current picks and opens the sector map
+   * (also the e2e entry point).
+   */
+  launchRun(): void {
+    this.service.startRun({
+      faction: this.selectedFaction,
+      flagshipId: this.selectedShipId,
+      loadoutId:
+        selectionFor([this.selectedShipId], this.playerBuilds).loadoutIds[0] ??
+        null,
+      ascension: this.controls.ascensionLevel,
+      ...(this.controls.seed !== undefined ? { seed: this.controls.seed } : {}),
+    });
+    this.scene.start("SurvivalMapScene");
+  }
+
+  /** CONTINUE / ABANDON for a saved run (shown only when one exists). */
+  private createSavedRunButtons(): void {
+    addSavedRunButtons(this, this.service, {
+      y: this.scale.height - SETUP_LAYOUT.launchInset,
+      offset: SETUP_LAYOUT.sideButtonOffset,
+      width: SETUP_LAYOUT.sideButtonWidth,
+      height: SETUP_LAYOUT.launchHeight,
+      onContinue: () => this.scene.start("SurvivalMapScene"),
+      onAbandoned: () => this.scene.restart(),
+    });
   }
 
   private createFactionRow(): void {
@@ -141,7 +197,7 @@ export class SurvivalSetupScene extends Phaser.Scene {
 
   private selectFaction(faction: FactionId): void {
     this.selectedFaction = faction;
-    this.selectedShipId = SURVIVAL_STARTER_CHOICES[faction][0]!;
+    this.selectedShipId = this.starters()[0]!;
     this.refreshFactionButtons();
     this.renderShipChoices();
   }
@@ -167,8 +223,13 @@ export class SurvivalSetupScene extends Phaser.Scene {
   private renderShipChoices(): void {
     this.shipCardObjects.forEach((o) => o.destroy());
     this.shipCardObjects = [];
-    const { cardWidth, cardGap } = SETUP_LAYOUT;
-    const choices = SURVIVAL_STARTER_CHOICES[this.selectedFaction];
+    const { cardGap } = SETUP_LAYOUT;
+    const choices = this.starters();
+    const cardWidth = Math.min(
+      SETUP_LAYOUT.cardWidth,
+      (SETUP_LAYOUT.cardsMaxWidth - (choices.length - 1) * cardGap) /
+        choices.length,
+    );
     const totalWidth =
       choices.length * cardWidth + (choices.length - 1) * cardGap;
     const startX = this.scale.width / 2 - totalWidth / 2 + cardWidth / 2;
@@ -233,15 +294,7 @@ export class SurvivalSetupScene extends Phaser.Scene {
         label: "LAUNCH",
         font: "600 22px",
       },
-      () => {
-        this.scene.start("SurvivalScene", {
-          factionId: this.selectedFaction,
-          shipId: this.selectedShipId,
-          loadoutId:
-            selectionFor([this.selectedShipId], this.playerBuilds)
-              .loadoutIds[0] ?? null,
-        });
-      },
+      () => this.launchRun(),
     );
     btn.setDepth(10);
     addFooterHint(

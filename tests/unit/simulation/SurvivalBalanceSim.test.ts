@@ -5,8 +5,10 @@ import {
   brawlerPolicy,
 } from "../../../src/simulation/SurvivalDraftPolicy";
 import {
+  DRIVE_TOP_SPEED_FACTOR,
   SIM_MAX_LEVEL,
   THREAT_TO_POWER,
+  driveMobility,
   fleetPower,
   simulateRun,
   summarise,
@@ -40,6 +42,14 @@ describe("SurvivalBalanceSim — fleet power model", () => {
     rounded.damage = 6;
     rounded.maxHull = 12;
     expect(fleetPower(rounded, 1)).toBeGreaterThan(fleetPower(glassCannon, 1));
+  });
+
+  it("values Drive (speed) through the same mapping the battle uses, with diminishing returns", () => {
+    const at = (speed: number) => fleetPower({ ...emptyBonuses(), speed }, 1);
+    expect(at(1)).toBeGreaterThan(at(0));
+    expect(at(3)).toBeGreaterThan(at(1));
+    expect(at(20)).toBe(at(40));
+    expect(driveMobility(1)).toBeCloseTo(DRIVE_TOP_SPEED_FACTOR);
   });
 });
 

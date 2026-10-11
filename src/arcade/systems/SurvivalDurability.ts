@@ -13,10 +13,13 @@ import { DURABILITY_SCALE } from "../../config";
 /** Elite wave ships fly with this much of their equipped hull. */
 export const ELITE_HULL_MULTIPLIER = 1.5;
 
-/** Boss stat multiplier before the per-milestone growth. */
+/** Boss stat multiplier before its per-boss-wave growth. */
 export const BOSS_BASE_MULTIPLIER = 2;
 
-/** Waves per extra boss multiplier step (one per milestone). */
+/**
+ * Waves per extra boss multiplier step. Roguelite bosses use a boss wave of
+ * sector × 5 (CombatNodePlan.bossWave), so each sector's boss is one step up.
+ */
 export const WAVES_PER_BOSS_STEP = 5;
 
 /** A ship's durability caps. */
@@ -71,7 +74,7 @@ export function eliteMaxHull(equippedMaxHull: number): number {
 }
 
 /**
- * @param wave - The milestone wave number.
+ * @param wave - The boss wave number (roguelite: sector × 5).
  * @returns How many times its equipped stats a boss gets.
  */
 export function bossMultiplier(wave: number): number {
@@ -80,7 +83,7 @@ export function bossMultiplier(wave: number): number {
 
 /**
  * @param equipped - The boss's equipped (already scaled) caps.
- * @param wave - The milestone wave number.
+ * @param wave - The boss wave number (roguelite: sector × 5).
  * @returns Its boss caps.
  */
 export function bossDurability(

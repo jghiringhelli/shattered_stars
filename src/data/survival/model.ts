@@ -2,7 +2,7 @@
  * Survival roguelite — core model (pure, no Phaser, no I/O).
  *
  * See docs/adr/ADR-0003-survival-roguelite-leveling.md. Leveling is choice-based:
- * one draft per wave, powers organised into orthogonal branches, hull graduation
+ * one draft per battle node (ADR-0004), powers organised into orthogonal branches, hull graduation
  * biases branches, and two-branch thresholds unlock cross powers.
  */
 

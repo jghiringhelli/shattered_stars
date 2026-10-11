@@ -104,3 +104,65 @@ describe("SurvivalRunController wave sizing", () => {
     expect(large).toBeGreaterThanOrEqual(small);
   });
 });
+
+describe("SurvivalRunController rerolls (were never spent)", () => {
+  it("spends a reroll charge on a fresh draft", () => {
+    const c = new SurvivalRunController(1);
+    const bank = c.draftEscort().find((o) => o.kind === "bank")!;
+    c.chooseEscort(bank);
+    expect(c.rerollDraft()).toHaveLength(DRAFT_SIZE);
+    expect(c.state.rerolls).toBe(0);
+  });
+
+  it("refuses to reroll without charges", () => {
+    expect(new SurvivalRunController(1).rerollDraft()).toBeNull();
+  });
+});
+
+describe("SurvivalRunController roguelite battles", () => {
+  it("restores a saved progression without mutating it and without pending escorts", () => {
+    const source = new SurvivalRunController(1);
+    source.beginWave();
+    const recruit = source.draftEscort().find((o) => o.kind === "recruit")!;
+    source.chooseEscort(recruit);
+    const saved = structuredClone(source.state);
+    const restored = SurvivalRunController.fromState(9, saved);
+    expect(restored.level).toBe(1);
+    expect(restored.state.escorts).toBe(1);
+    expect(restored.pendingEscorts()).toBe(0);
+    restored.beginWave();
+    expect(saved.level).toBe(1);
+  });
+
+  it("scales a wave by the node's threat multiplier and extra elites", () => {
+    const c = new SurvivalRunController(1);
+    c.beginWave();
+    const base = c.scaledWaveSize(1, 1, 0, false);
+    const hard = c.scaledWaveSize(1, 3, 2, true);
+    expect(hard.enemyCount).toBeGreaterThan(base.enemyCount);
+    expect(hard.eliteCount).toBeGreaterThanOrEqual(base.eliteCount + 3);
+  });
+});
+
+describe("SurvivalRunController regular-ship cap", () => {
+  it("never fields more regulars than the node allows", () => {
+    const c = new SurvivalRunController(1);
+    for (let i = 0; i < 20; i++) c.beginWave();
+    expect(c.scaledWaveSize(6, 2, 0, false, 4).enemyCount).toBe(4);
+  });
+});
+
+describe("SurvivalRunController elite nodes", () => {
+  it("trades regulars for the node's extra elites, keeping at least one regular", () => {
+    const c = new SurvivalRunController(1);
+    for (let i = 0; i < 20; i++) c.beginWave();
+    const plain = c.scaledWaveSize(2, 1, 0, false);
+    const elite = c.scaledWaveSize(2, 1, 1, false, 40, 2);
+    expect(elite.enemyCount).toBe(Math.max(1, plain.enemyCount - 2));
+    expect(elite.eliteCount).toBe(plain.eliteCount + 1);
+    expect(
+      new SurvivalRunController(1).scaledWaveSize(1, 1, 3, false, 40, 2)
+        .enemyCount,
+    ).toBe(1);
+  });
+});

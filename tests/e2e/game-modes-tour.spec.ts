@@ -176,6 +176,12 @@ test.describe("Game modes tour — every mode launches a real battle", () => {
         await autoFillAndStartBattle(page);
       } else if (mode.needsSurvivalSetup) {
         await launchSurvivalWithDefaults(page);
+        // LAUNCH opens the sector map; travel to the first (combat) node.
+        await waitForScene(page, "SurvivalMapScene", 30_000);
+        await page.evaluate(() => {
+          const map = (window as any).game.scene.getScene("SurvivalMapScene");
+          map.travelTo(map.run.map.rows[0][0].id);
+        });
       } else if (mode.needsEpicSetup) {
         await launchEpicRaidWithDefaults(page);
       }

@@ -1,6 +1,6 @@
 /**
  * SurvivalLoadouts — who flies which quick build in Survival: each wave's
- * roster (regulars, elites, the milestone boss) with loadouts that never
+ * roster (regulars, elites, the boss of a boss wave) with loadouts that never
  * repeat a unique ace within the wave, and loadouts for ships joining the
  * player's squad that respect the aces already flying in it.
  *
@@ -16,7 +16,7 @@ export type WaveTier = "regular" | "elite" | "boss";
 /** Roles an elite is drawn from, in preference order of the roster. */
 const ELITE_ROLES: ReadonlySet<string> = new Set(["gunship", "bomber"]);
 
-/** Role a milestone boss is drawn from. */
+/** Role a boss is drawn from. */
 const BOSS_ROLE = "gunship";
 
 /** A faction ship a wave may field. */
@@ -48,7 +48,7 @@ export interface SquadMember {
 /**
  * A wave's ships, in spawn order (regulars, elites, boss), each with its
  * quick build. Regulars cycle through the roster; elites are its first
- * gunship/bomber; the milestone boss is its first gunship (else its last ship).
+ * gunship/bomber; a boss wave's boss is its first gunship (else its last ship).
  *
  * @param roster - The enemy faction's ships.
  * @param composition - Ship counts and whether a boss joins.

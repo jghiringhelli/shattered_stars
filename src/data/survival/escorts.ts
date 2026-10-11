@@ -1,12 +1,14 @@
 /**
- * Survival roguelite — escort track (pure, seedable, no I/O).
+ * Survival roguelite — escort model (pure, seedable, no I/O).
  *
- * Escorts are a SECOND, parallel progression to the power draft. Each wave the
- * pilot makes two independent decisions: one about their own ship (the power
- * draft) and one about their wing (this track).
+ * Escorts are a SECOND, parallel progression to the power draft. In the
+ * roguelite run (ADR-0004) escorts are hired in shops, won in events, granted
+ * by Wing Commander and meta escort packages; the per-wave escort-track
+ * choice below remains the endless model the balance sim's draft policy
+ * drives.
  *
  * Design intent (ADR-0003): escorts are weak, basic, cheap faction ships. Their
- * QUANTITY comes from this track; their QUALITY comes from support investment
+ * QUANTITY comes from recruitment; their QUALITY comes from support investment
  * (the fleet branch and the carrier hull), never from the escort pick itself.
  * Without support, stacking escorts yields diminishing returns instead of the
  * old runaway where every escort was a full copy of the flagship.

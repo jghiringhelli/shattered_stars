@@ -13,6 +13,7 @@ import {
   HULL_AMP_MULTIPLIER,
   isBranchAmplified,
 } from "./model";
+import { MAX_ESCORTS } from "./escorts";
 
 export type PowerTier = "atom" | "capstone" | "cross";
 
@@ -212,7 +213,7 @@ export const ATOMS: readonly Power[] = [
     "fleet_speed",
     "fleet",
     "Formation Drills",
-    "+1 speed",
+    "+1 drive (fleet): 1st = top-speed notch, then faster boost",
     "🕊️",
     "speed",
     1,
@@ -271,7 +272,15 @@ export const ATOMS: readonly Power[] = [
     "evasion",
     1,
   ),
-  atom("drv_speed", "drive", "Thruster Tuning", "+1 speed", "🚀", "speed", 1),
+  atom(
+    "drv_speed",
+    "drive",
+    "Thruster Tuning",
+    "+1 drive (fleet): 1st = top-speed notch, then faster boost",
+    "🚀",
+    "speed",
+    1,
+  ),
   atom(
     "drv_evade",
     "drive",
@@ -349,7 +358,15 @@ export const CAPSTONES: readonly Power[] = [
     "maxHull",
     6,
   ),
-  capstone("cap_drive", "drive", "Afterburners", "+3 speed", "🏆", "speed", 3),
+  capstone(
+    "cap_drive",
+    "drive",
+    "Afterburners",
+    "+3 drive (fleet): top-speed notch + faster boost",
+    "🏆",
+    "speed",
+    3,
+  ),
 ];
 
 /** Cross powers reward split builds (two branches at CROSS_THRESHOLD). */
@@ -371,10 +388,10 @@ export const CROSS_POWERS: readonly Power[] = [
     "fleet",
     "gunnery",
     "Wing Commander",
-    "Fleet + guns: +1 escort, +2 dmg",
+    "Fleet + guns: +1 escort (wing cap 5), +2 dmg",
     "🌟",
     (b, s) => {
-      s.escorts += 1;
+      s.escorts = Math.min(MAX_ESCORTS, s.escorts + 1);
       b.damage += 2;
     },
   ),
