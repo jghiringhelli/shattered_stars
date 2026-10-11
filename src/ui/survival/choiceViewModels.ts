@@ -9,6 +9,7 @@ import type { HangarOption } from "../../data/survival/hangar";
 import type { Mutation } from "../../data/survival/mutations";
 import type { Relic } from "../../data/survival/relics";
 import { ARCHETYPE_SETS, ARCHETYPE_SET_SIZE } from "../../data/survival/relics";
+import { relicHint } from "../../data/roleHints";
 import {
   archetypeCounts,
   synergyMatches,
@@ -73,6 +74,7 @@ export function relicCard(relic: Relic, owned: readonly string[]): ChoiceCard {
     name: `${relic.name} (${relic.rarity})`,
     description: `${relic.description}  [${relic.tags.join("] [")}]`,
     note: matches > 0 ? `${setNote} · synergy ×${matches}` : setNote,
+    hint: relicHint(relic),
   };
 }
 

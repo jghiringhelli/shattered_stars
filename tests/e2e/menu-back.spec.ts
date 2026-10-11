@@ -22,6 +22,8 @@ const MENU_SCREENS = [
   "EncyclopediaScene",
   "SquadBuilderScene",
   "LobbyScene",
+  "DogfightScene",
+  "AceDuelScene",
 ] as const;
 
 async function openScreen(
@@ -73,6 +75,14 @@ test.describe("menu back affordance", () => {
 
   test("gamepad B goes back from Credits", async ({ page }) => {
     await openScreen(page, "CreditsScene");
+    await injectFakeGamepad(page);
+    await page.waitForTimeout(200);
+    await tapFakeGamepadButton(page, 1);
+    await waitForScene(page, "MainMenuScene", 5_000);
+  });
+
+  test("gamepad B leaves Flight School", async ({ page }) => {
+    await openScreen(page, "FlightSchoolScene");
     await injectFakeGamepad(page);
     await page.waitForTimeout(200);
     await tapFakeGamepadButton(page, 1);

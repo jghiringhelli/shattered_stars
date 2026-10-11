@@ -6,7 +6,12 @@
 
 import type Phaser from "phaser";
 import type { ShipDefinition } from "../../core/types";
-import { getEquippableLoadouts } from "../../data/ShipLoadouts";
+import { quickBuildHint } from "../../data/roleHints";
+import {
+  getEquippableLoadouts,
+  type ShipLoadout,
+} from "../../data/ShipLoadouts";
+import { attachHintTooltip } from "../menu/HintTooltip";
 import { HOLO_PALETTE, HOLO_SPACING } from "../theme/HoloTheme";
 import { createLoadoutToggle, createPageArrow } from "./LoadoutToggle";
 import { addPickerText } from "./pickerStyle";
@@ -42,6 +47,8 @@ interface LoadoutOption {
   readonly id: string | null;
   readonly label: string;
   readonly pointCost: number;
+  /** The build (absent for BASE) — its role hint shows on hover. */
+  readonly loadout?: ShipLoadout;
 }
 
 /**
@@ -66,6 +73,7 @@ function loadoutPage(
         id: ld.id,
         label: ld.name.toUpperCase(),
         pointCost: ld.pointCost,
+        loadout: ld,
       })),
   ];
   return { options, page, pages };
@@ -112,9 +120,12 @@ export function drawLoadoutRow(
       active: args.selectedLoadoutId === option.id,
       accent: args.accent,
     };
-    container.add(
-      createLoadoutToggle(scene, spec, () => args.onSelect(option.id)),
+    const toggle = createLoadoutToggle(scene, spec, () =>
+      args.onSelect(option.id),
     );
+    if (option.loadout)
+      attachHintTooltip(scene, toggle, quickBuildHint(option.loadout));
+    container.add(toggle);
   });
   if (pages > 1) {
     const arrowRect = {

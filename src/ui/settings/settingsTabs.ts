@@ -25,6 +25,7 @@ import { holoFont } from "../theme/holoFont";
 import { HOLO_PALETTE } from "../theme/HoloTheme";
 import { toCssColor } from "../theme/colorMath";
 import { downloadTextFile } from "./downloadFile";
+import { openTelemetryStats } from "../telemetry/TelemetryStatsScene";
 import { PalettePreview } from "./PalettePreview";
 import { SettingsChoiceRow } from "./settingsChoiceRows";
 import { SettingsSliderRow, SettingsSwitchRow } from "./settingsRows";
@@ -273,4 +274,5 @@ export function buildAdvancedTab(ctx: SettingsTabContext): void {
     ctx.notify("All settings restored to defaults.", "warning");
     ctx.rebuild();
   });
+  button(buttonY + 156, "VIEW STATS", () => openTelemetryStats(ctx.scene));
 }

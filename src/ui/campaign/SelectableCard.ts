@@ -95,8 +95,10 @@ export class SelectableCard extends Phaser.GameObjects.Container {
   }
 
   private bindPointer(width: number, height: number): void {
+    // A sized Container hit-tests in 0..width space (Phaser adds its
+    // displayOrigin, width / 2), so the area starts at 0, not -width / 2.
     this.setInteractive(
-      new Phaser.Geom.Rectangle(-width / 2, -height / 2, width, height),
+      new Phaser.Geom.Rectangle(0, 0, width, height),
       Phaser.Geom.Rectangle.Contains,
     );
     if (this.input) this.input.cursor = "pointer";

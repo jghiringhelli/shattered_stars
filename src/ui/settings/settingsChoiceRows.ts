@@ -108,12 +108,14 @@ export class SettingsKeyRow extends SettingsRowBase {
    * @param config - Placement and label (compact height).
    * @param keyLabel - Current key label.
    * @param onRequestCapture - Called when the player wants to rebind.
+   * @param captureLabel - Chip text while waiting for input.
    */
   constructor(
     scene: Phaser.Scene,
     config: SettingsRowConfig,
     keyLabel: string,
     private readonly onRequestCapture: (row: SettingsKeyRow) => void,
+    private readonly captureLabel = "PRESS A KEY",
   ) {
     super(scene, config);
     const midY = config.y + this.rowHeight / 2;
@@ -163,7 +165,7 @@ export class SettingsKeyRow extends SettingsRowBase {
   }
 
   private render(): void {
-    const text = this.capturing ? "PRESS A KEY" : this.keyLabel;
+    const text = this.capturing ? this.captureLabel : this.keyLabel;
     this.keyText
       .setText(text)
       .setColor(

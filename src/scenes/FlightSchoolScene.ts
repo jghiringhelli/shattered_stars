@@ -9,7 +9,7 @@
  * lesson advances only when the player's actual flight state proves the
  * input (FlightSchoolSteps); prompts name the player's bound keys. Deaths
  * respawn (no fail state). Completion is saved (FlightSchoolProgress).
- * Keys: N skip lesson, ESC leave.
+ * Keys: N skip lesson, ESC / gamepad B / right-click leave.
  */
 
 import Phaser from "phaser";
@@ -45,7 +45,11 @@ import {
 } from "../tutorial/FlightSchoolSteps";
 import { BattleHud } from "../ui/hud/BattleHud";
 import { cameraViewFrom } from "../ui/hud/hudMath";
-import { goToScene, playUiPress } from "../ui/menu/menuTransitions";
+import {
+  bindMenuBack,
+  goToScene,
+  playUiPress,
+} from "../ui/menu/menuTransitions";
 import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import { buildDuelHudSnapshot, playerTargetId } from "./duel/duelHudSnapshot";
 import { LessonPanel } from "./flightSchool/LessonPanel";
@@ -59,7 +63,7 @@ const WATCHED: ReadonlySet<ActionIntent> = new Set([
   "FIRE_SECONDARY",
 ]);
 const COMPLETE_TEXT =
-  "You are cleared for combat, pilot.\nEvery key you learned can be rebound in Settings › Controls.\n\nPress ENTER or ESC to return to the menu.";
+  "You are cleared for combat, pilot.\nEvery key and button you learned can be rebound in Settings › Controls / Gamepad.\n\nPress ENTER or ESC to return to the menu.";
 
 export class FlightSchoolScene extends Phaser.Scene {
   private readonly pilot = new PlayerFlightPilot(InputManager);
@@ -139,7 +143,7 @@ export class FlightSchoolScene extends Phaser.Scene {
       }),
     ];
     const keyboard = this.input.keyboard;
-    keyboard?.on("keydown-ESC", () => this.leave());
+    bindMenuBack(this, () => this.leave());
     keyboard?.on("keydown-N", () => this.skipLesson());
     keyboard?.on("keydown-ENTER", () => {
       if (this.finished) this.returnToMenu();

@@ -3,6 +3,7 @@
  * (docs/adr/ADR-0004-survival-roguelite-run-structure.md): faction, flagship
  * (meta unlocks add heavier ones), quick build, seed and ascension, then
  * LAUNCH a new run onto the sector map; CONTINUE / ABANDON a saved run;
+ * DAILY (today's fixed-seed challenge + local best / history);
  * UNLOCKS (Star Charts) and HISTORY (last 20 runs). LAUNCH sits
  * bottom-centre (game-modes-tour clicks (centre, height − 60)).
  */
@@ -20,6 +21,11 @@ import {
 } from "../systems/survival/RoguelikeRunService";
 import { RunSetupControls } from "../ui/survival/RunSetupControls";
 import { SurvivalChoicePanel } from "../ui/survival/SurvivalChoicePanel";
+import { addDailyButton, openDailyPanel } from "../ui/survival/dailyMenu";
+import {
+  dailyChallengeFor,
+  dailyRunRequest,
+} from "../systems/survival/DailyChallenge";
 import {
   addSavedRunButtons,
   showUnlockShop,
@@ -135,6 +141,17 @@ export class SurvivalSetupScene extends Phaser.Scene {
     this.createLaunchButton();
     this.createSavedRunButtons();
     this.panel = new SurvivalChoicePanel(this, this.selectedFaction);
+    addDailyButton(this, () =>
+      openDailyPanel(this.panel, this.service.meta.history, () =>
+        this.launchDaily(),
+      ),
+    );
+  }
+
+  /** Starts today's Daily challenge run (also the e2e entry point). */
+  launchDaily(): void {
+    this.service.startRun(dailyRunRequest(dailyChallengeFor(new Date())));
+    this.scene.start("SurvivalMapScene");
   }
 
   /** @returns Flagships offered for the selected faction (meta unlocks included). */
@@ -272,6 +289,7 @@ export class SurvivalSetupScene extends Phaser.Scene {
       loadoutId: this.playerBuilds.loadoutIds[0] ?? null,
       name: "survivalQuickBuild",
       accentColor: factionAccent(this.selectedFaction),
+      compact: true,
       onCycle: (step) => {
         if (!this.playerBuilds) return;
         this.playerBuilds = cycleQuickBuild(this.playerBuilds, 0, step);

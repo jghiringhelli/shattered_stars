@@ -1,9 +1,9 @@
 /**
  * QuickBuildDetailView — the "what this quick build really is" block of the
  * ship picker's detail panel: the pilot (name, initiative, unique marker)
- * and ability (card text + real-time summary) on the left; the slot bar
- * (filled vs empty by category, pilot slots edged in gold) and each
- * upgrade's real-time summary on the right.
+ * and ability (card text + real-time summary + role / best-with hint) on
+ * the left; the slot bar (filled vs empty by category, pilot slots edged
+ * in gold) and each upgrade's real-time summary and role on the right.
  *
  * Display only (nothing interactive), so it is safe inside the panel's
  * container. All text comes from src/data/quickBuildDetails.ts.
@@ -18,7 +18,9 @@ import {
   type QuickBuildDetails,
 } from "../../data/quickBuildDetails";
 import { ROOKIE_INITIATIVE } from "../../data/pilotPricing";
+import { pilotAbilityHint, upgradeHint } from "../../data/roleHints";
 import type { ShipLoadout } from "../../data/ShipLoadouts";
+import { UPGRADE_DEFINITIONS } from "../../systems/UpgradeSystem";
 import { HOLO_PALETTE } from "../theme/HoloTheme";
 import { toCssColor } from "../theme/colorMath";
 import { holoFont } from "../theme/holoFont";
@@ -38,6 +40,15 @@ const CAPTION_SPACING = PICKER_TYPE.caption.letterSpacing;
 const MUTED_ITALIC = pickerTextStyle("small", HOLO_PALETTE.textMuted, {
   fontStyle: "italic",
 });
+/** Role-hint line (P2-1): "Flanker — strikes from behind". */
+const HINT_ROLE_STYLE = (w: number): TextStyle =>
+  pickerTextStyle("micro", HOLO_PALETTE.accent, { wordWrap: { width: w } });
+/** "Best with …" line under a role hint. */
+const HINT_BEST_STYLE = (w: number): TextStyle =>
+  pickerTextStyle("micro", HOLO_PALETTE.textMuted, {
+    fontStyle: "400",
+    wordWrap: { width: w },
+  });
 
 /** Where to draw and what. */
 export interface QuickBuildDetailArgs {
@@ -176,7 +187,7 @@ export class QuickBuildDetailView {
         }),
       );
     }
-    return this.addText(
+    const cy2 = this.addText(
       x,
       cy,
       `\u25b8 ${ability.summary || "No real-time effect"}`,
@@ -185,6 +196,9 @@ export class QuickBuildDetailView {
         wordWrap: { width: w },
       }),
     );
+    const hint = pilotAbilityHint(ability.id);
+    const roleY = this.addText(x, cy2, hint.role, HINT_ROLE_STYLE(w));
+    return this.addText(x, roleY, hint.bestWith, HINT_BEST_STYLE(w));
   }
 
   /**
@@ -260,6 +274,11 @@ export class QuickBuildDetailView {
           wordWrap: { width: w },
         }),
       );
+      const card = UPGRADE_DEFINITIONS[upgrade.id];
+      if (card) {
+        const role = `   ${upgradeHint(card).role}`;
+        cy = this.addText(x, cy, role, HINT_ROLE_STYLE(w));
+      }
     }
     return cy;
   }

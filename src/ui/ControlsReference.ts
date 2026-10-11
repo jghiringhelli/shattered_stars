@@ -4,16 +4,23 @@
  * Row labels/grouping are hand-curated for readability, but the actual key/
  * button/gesture shown for each row is always derived live from the
  * bindings — keyboard from the player's active profile (DefaultBindings.ts
- * plus Settings rebinding overrides), gamepad/touch from DefaultBindings.ts
+ * plus Settings rebinding overrides), gamepad likewise (Settings › Gamepad),
+ * touch from DefaultBindings.ts
  * — never hardcoded, so this can never drift out of sync with real input.
  */
 
-import type { ActionIntent, KeyboardBinding } from "../input/InputTypes";
+import type {
+  ActionIntent,
+  GamepadBinding,
+  KeyboardBinding,
+} from "../input/InputTypes";
+import { DEFAULT_TOUCH_BINDINGS } from "../input/DefaultBindings";
+import { gamepadButtonLabel } from "../input/GamepadBindings";
 import {
-  DEFAULT_GAMEPAD_BINDINGS,
-  DEFAULT_TOUCH_BINDINGS,
-} from "../input/DefaultBindings";
-import { activeKeyboardBindings, boundKeyLabel } from "../input/boundKeyLabel";
+  activeGamepadBindings,
+  activeKeyboardBindings,
+  boundKeyLabel,
+} from "../input/boundKeyLabel";
 
 export interface ControlRow {
   readonly label: string;
@@ -110,25 +117,6 @@ const NICE_KEY_NAMES: Record<string, string> = {
   FIVE: "5",
 };
 
-const GAMEPAD_BUTTON_NAMES: Record<number, string> = {
-  0: "A",
-  1: "B",
-  2: "X",
-  3: "Y",
-  4: "LB",
-  5: "RB",
-  6: "LT",
-  7: "RT",
-  8: "Back",
-  9: "Start",
-  10: "L3",
-  11: "R3",
-  12: "D-Up",
-  13: "D-Down",
-  14: "D-Left",
-  15: "D-Right",
-};
-
 const GAMEPAD_AXIS_NAMES: Record<number, string> = {
   0: "Left Stick",
   1: "Left Stick",
@@ -201,17 +189,25 @@ export function keyboardLabelFor(
   return uniqueJoin(labels.flat());
 }
 
-export function gamepadLabelFor(intents: readonly ActionIntent[]): string {
+/**
+ * @param intents - Intents of one reference row.
+ * @param bindings - Gamepad bindings (default: the player's live profile,
+ *   so rebound buttons show everywhere).
+ * @returns The row's gamepad label.
+ */
+export function gamepadLabelFor(
+  intents: readonly ActionIntent[],
+  bindings: readonly GamepadBinding[] = activeGamepadBindings(),
+): string {
   if (intents.length === 0) return "Automatic";
-  const labels = DEFAULT_GAMEPAD_BINDINGS.filter((b) =>
-    intents.includes(b.intent),
-  ).map((b) => {
-    if (b.button !== undefined)
-      return GAMEPAD_BUTTON_NAMES[b.button] ?? `Btn ${b.button}`;
-    if (b.axis !== undefined)
-      return GAMEPAD_AXIS_NAMES[b.axis] ?? `Axis ${b.axis}`;
-    return "";
-  });
+  const labels = bindings
+    .filter((b) => intents.includes(b.intent))
+    .map((b) => {
+      if (b.button !== undefined) return gamepadButtonLabel(b.button);
+      if (b.axis !== undefined)
+        return GAMEPAD_AXIS_NAMES[b.axis] ?? `Axis ${b.axis}`;
+      return "";
+    });
   return uniqueJoin(labels);
 }
 

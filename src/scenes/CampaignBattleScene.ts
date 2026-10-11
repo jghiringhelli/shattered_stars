@@ -100,6 +100,12 @@ import {
   type CombatModifiers,
 } from "../core/CombatModifiers";
 import { random } from "../utils/random";
+import {
+  trackDeath,
+  trackModeEnd,
+  trackModeStart,
+} from "../telemetry/telemetry";
+import { matchStats } from "../telemetry/matchTelemetry";
 import { addShipVisual } from "../rendering/ShipVisual";
 import type { CampaignMission, MissionEnemy } from "../data/CampaignData";
 import { FACTION_CAMPAIGNS } from "../data/CampaignData";
@@ -128,6 +134,7 @@ import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
+import { applyAllyAuraRepairs } from "../systems/aura/AllyAuraRepair";
 import { PauseMenu } from "../ui/PauseMenu";
 import {
   createPerformanceState,
@@ -379,6 +386,11 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.createHUD();
     this.setupInput();
 
+    trackModeStart("campaign", {
+      mission: this.mission.id,
+      faction: this.factionId,
+    });
+    matchStats.start("campaign", { mission: this.mission.id }, this.events);
     this.spawnInitialShips();
 
     if (ShipTelemetry.isEnabled()) {
@@ -665,6 +677,7 @@ export class CampaignBattleScene extends Phaser.Scene {
       else ship.bot = this.squadAi.createPilot(CAMPAIGN_ESCORT_TIER);
       this.ships.set(ship.id, ship);
       this.playerShipIds.push(ship.id);
+      matchStats.record({ kind: "deploy", friendly: true, shipId: ship.id });
       this.createShipSprite(ship);
       this.createHealthBar(ship);
     });
@@ -784,6 +797,11 @@ export class CampaignBattleScene extends Phaser.Scene {
       );
     }
     this.ships.set(ship.id, ship);
+    matchStats.record({
+      kind: "deploy",
+      friendly: req.owner === "player",
+      shipId: ship.id,
+    });
     if (req.owner === "ai") this.enemyShipIds.push(ship.id);
     this.createShipSprite(ship, req.isAce, req.isBoss);
     this.createHealthBar(ship);
@@ -1113,8 +1131,16 @@ export class CampaignBattleScene extends Phaser.Scene {
       this.setFlight(ship, tick.state);
       this.regenerateShipShields(ship, deltaMs);
       if (tick.completed) this.notifyCycleCommitted(ship, tick.state);
+      if (tick.completed && ship.id === this.pilotedShipId)
+        matchStats.record({
+          kind: "cycle",
+          dial: ship.dial,
+          direction: tick.completed.direction,
+          speed: tick.completed.speed,
+        });
       this.syncShipVisuals(ship);
     }
+    applyAllyAuraRepairs(this.ships.values(), this.repairFeedback, deltaMs);
   }
 
   /**
@@ -1295,6 +1321,12 @@ export class CampaignBattleScene extends Phaser.Scene {
       attacker.faction,
       result.hit,
     );
+    matchStats.record({
+      kind: "shot",
+      friendly: attacker.owner === "player",
+      weapon: "primary",
+      hit: result.hit,
+    });
     if (!result.hit) return;
 
     this.setFlight(target, {
@@ -1321,6 +1353,12 @@ export class CampaignBattleScene extends Phaser.Scene {
       this.director.powers.damageTakenMultiplier(target.id, this.time.now);
     const after = absorbDamage(target, damage);
     const hullDamage = damage - (target.shields - after.shields);
+    matchStats.record({
+      kind: "damage",
+      toFriendly: target.owner === "player",
+      shield: target.shields - after.shields,
+      hull: Math.min(target.hull, hullDamage),
+    });
     if (after.shields < target.shields) {
       audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);
     }
@@ -1383,6 +1421,8 @@ export class CampaignBattleScene extends Phaser.Scene {
     );
     const caught = deathBlastTargets(combatantOf(victim), enemies);
     const blastDamage = deathBlastDamage(combatantOf(victim));
+    if (victim.id === this.pilotedShipId)
+      trackDeath("campaign", killer.definitionId, { mission: this.mission.id });
     this.destroyShip(victim.id, killer.owner === "player");
     for (const ship of caught) {
       if (!this.ships.has(ship.id)) continue;
@@ -1409,6 +1449,12 @@ export class CampaignBattleScene extends Phaser.Scene {
     if (ship.owner === "ai" && wasPlayerKill) this.totalKills++;
     if (!expired && ship.tags.includes("squad")) this.playerShipsLost++;
     if (!expired) this.director.recordDestroyed(ship);
+    if (!expired)
+      matchStats.record({
+        kind: "kill",
+        victimFriendly: ship.owner === "player",
+        victimIsPlayer: shipId === this.pilotedShipId,
+      });
     this.hitLedger.forget(shipId);
     this.squadAi.forget(shipId);
 
@@ -1474,6 +1520,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     }
     const targetId = this.hudTargetOf(flagship);
     if (targetId) this.squadAi.markTarget(targetId, this.time.now);
+    if (targetId) matchStats.record({ kind: "mark" });
   }
 
   /**
@@ -1526,6 +1573,12 @@ export class CampaignBattleScene extends Phaser.Scene {
       worldSize: BATTLEFIELD_SIZE,
     });
     this.applyControls(ship, result, origin);
+    matchStats.record({ kind: "flight", events: result.events });
+    matchStats.record({
+      kind: "stress",
+      ms: delta,
+      stressed: result.stress.isStressed,
+    });
   }
 
   // ==========================================
@@ -1568,6 +1621,8 @@ export class CampaignBattleScene extends Phaser.Scene {
    */
   private triggerMissionVictory(): void {
     this.missionComplete = true;
+    trackModeEnd("campaign", "victory", { mission: this.mission.id });
+    matchStats.finish("victory");
     audioManager.playFactionStinger(this.factionId, "victory");
     const { bonuses, storyFlags } = this.director.finalizeVictory();
     const victory = missionVictoryRecord({
@@ -1630,6 +1685,8 @@ export class CampaignBattleScene extends Phaser.Scene {
    */
   private triggerMissionFailed(reason: string): void {
     this.missionFailed = true;
+    trackModeEnd("campaign", "defeat", { mission: this.mission.id, reason });
+    matchStats.finish("defeat");
     audioManager.playFactionStinger(this.factionId, "defeat");
     this.cameras.main.setZoom(1.0);
     this.setHudVisible(false);

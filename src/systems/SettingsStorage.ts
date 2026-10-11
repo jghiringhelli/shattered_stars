@@ -13,6 +13,7 @@ import {
   type GameSettings,
 } from "./settingsSchema";
 import type { KeyOverrides } from "../input/KeyBindings";
+import type { GamepadOverrides } from "../input/GamepadBindings";
 
 export * from "./settingsSchema";
 
@@ -76,6 +77,38 @@ export function withActiveKeyOverrides(
       activeProfile,
       profiles: profiles.map((p, i) =>
         i === activeProfile ? { ...p, keyboard } : p,
+      ),
+    },
+  };
+}
+
+/**
+ * @param settings - Settings.
+ * @returns The active profile's gamepad button overrides.
+ */
+export function activeGamepadOverrides(
+  settings: GameSettings,
+): GamepadOverrides {
+  const { activeProfile, profiles } = settings.controls;
+  return profiles[activeProfile]?.gamepad ?? {};
+}
+
+/**
+ * @param settings - Settings.
+ * @param gamepad - New gamepad overrides for the active profile.
+ * @returns Settings with only the active profile's gamepad changed.
+ */
+export function withActiveGamepadOverrides(
+  settings: GameSettings,
+  gamepad: GamepadOverrides,
+): GameSettings {
+  const { activeProfile, profiles } = settings.controls;
+  return {
+    ...settings,
+    controls: {
+      activeProfile,
+      profiles: profiles.map((p, i) =>
+        i === activeProfile ? { ...p, gamepad } : p,
       ),
     },
   };

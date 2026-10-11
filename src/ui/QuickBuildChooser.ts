@@ -1,8 +1,9 @@
 /**
  * QuickBuildChooser — a compact "cycle this ship's quick builds" card for
  * setup screens (Dogfight, Ace Duel, Survival): ◀ build name · price ▶,
- * then the pilot (★ unique, initiative), the pilot ability's real-time
- * summary and the upgrades it carries.
+ * then the build's role / best-with hint, the pilot (★ unique,
+ * initiative), the pilot ability's real-time summary and the upgrades it
+ * carries.
  *
  * Every object is created as a direct scene child and returned to the
  * caller, which tracks/destroys them like its other setup objects (the
@@ -18,6 +19,8 @@ import {
   type QuickBuildDetails,
 } from "../data/quickBuildDetails";
 import { getLoadoutById } from "../data/ShipLoadouts";
+import { quickBuildHint, type RoleHint } from "../data/roleHints";
+import { attachHintTooltip } from "./menu/HintTooltip";
 import { createHoverButton } from "./ButtonFactory";
 import { drawHoloFrame } from "./menu/holoChrome";
 import { holoFont } from "./theme/holoFont";
@@ -40,6 +43,12 @@ export interface QuickBuildChooserOptions {
   readonly name: string;
   /** Border colour. */
   readonly accentColor?: number;
+  /**
+   * Tight layouts (Survival setup): the role rides in the heading row and
+   * the best-with line moves to the build title's hover tooltip, so the
+   * card is no taller than without hints.
+   */
+  readonly compact?: boolean;
   readonly onCycle: (step: CycleStep) => void;
 }
 
@@ -96,11 +105,17 @@ export function renderQuickBuildChooser(
     })
     .setOrigin(1, 0);
   objects.push(heading, counter);
+  const hint = loadout ? quickBuildHint(loadout) : null;
+  if (hint && options.compact)
+    objects.push(compactRole(scene, hint, counter, heading));
 
   const rowY = heading.y + heading.height + ROW_GAP;
-  objects.push(...renderBuildRow(scene, options, details, rowY, choices));
+  const row = renderBuildRow(scene, options, details, rowY, choices);
+  if (hint && row[0]) attachHintTooltip(scene, row[0], hint);
+  objects.push(...row);
   let cy = rowY + ARROW_SIZE + ROW_GAP;
-  for (const line of detailLines(details, choices.length > 0)) {
+  const inlineHint = options.compact ? null : hint;
+  for (const line of detailLines(details, choices.length > 0, inlineHint)) {
     const text = scene.add.text(x + PADDING, cy, line.text, {
       ...holoFont(DETAIL_SIZE, line.weight),
       color: line.color,
@@ -117,6 +132,33 @@ export function renderQuickBuildChooser(
     { accent: options.accentColor ?? DEFAULT_ACCENT },
   );
   return { objects, height };
+}
+
+/**
+ * The role line in the heading row, right-aligned before the counter and
+ * shrunk to the space between heading and counter.
+ * @param scene - Owning scene.
+ * @param hint - The build's hint.
+ * @param counter - The "1/3" counter (right edge).
+ * @param heading - The card heading (left edge).
+ * @returns The role text.
+ */
+function compactRole(
+  scene: Phaser.Scene,
+  hint: RoleHint,
+  counter: Phaser.GameObjects.Text,
+  heading: Phaser.GameObjects.Text,
+): Phaser.GameObjects.Text {
+  const right = counter.x - counter.width - ROW_GAP * 2;
+  const text = scene.add
+    .text(right, counter.y, hint.role, {
+      ...holoFont(DETAIL_SIZE, "600"),
+      color: ABILITY_COLOR,
+    })
+    .setOrigin(1, 0);
+  const room = right - (heading.x + heading.width + ROW_GAP * 2);
+  if (text.width > room && room > 0) text.setScale(room / text.width);
+  return text;
 }
 
 /**
@@ -191,14 +233,16 @@ interface DetailLine {
 }
 
 /**
- * Pilot, ability summary and upgrades of the current pick.
+ * Role hint, pilot, ability summary and upgrades of the current pick.
  * @param details - The current pick (null = bare hull).
  * @param hasChoices - Whether the ship offers any quick build.
+ * @param hint - The pick's role / best-with hint (null = bare hull).
  * @returns The lines to draw, top to bottom.
  */
 function detailLines(
   details: QuickBuildDetails | null,
   hasChoices: boolean,
+  hint: RoleHint | null,
 ): DetailLine[] {
   if (!details) {
     const text = hasChoices
@@ -208,6 +252,10 @@ function detailLines(
   }
   const pilot = details.pilot;
   const lines: DetailLine[] = [];
+  if (hint) {
+    lines.push({ text: hint.role, weight: "600", color: ABILITY_COLOR });
+    lines.push({ text: hint.bestWith, weight: "italic", color: MUTED_TEXT });
+  }
   if (pilot) {
     lines.push({
       text: `${pilot.isUnique ? "\u2605 " : ""}${pilot.name}  \u00b7  Initiative ${pilot.initiative}`,

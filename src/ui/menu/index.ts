@@ -3,7 +3,8 @@
  *
  * Scenes build on MenuScaffold (backdrop, header, BACK, footer), draw panels
  * with HoloPanel (../hud) or holoChrome, use ButtonFactory / HoloButton for
- * actions, MenuIcons for glyphs and MenuFocus for keyboard focus.
+ * actions, MenuIcons for glyphs, MenuFocus for keyboard / gamepad focus,
+ * footerKeys for the footer hint format and HintTooltip for role hints.
  */
 
 export {
@@ -36,3 +37,15 @@ export {
 } from "./MenuFocus";
 export { drawMenuIcon, createMenuIcon, type MenuIconName } from "./MenuIcons";
 export { holoFont, holoFontFromCss, parseCssFont } from "../theme/holoFont";
+export { FOOTER_PAIR_GAP, footerKeys } from "./footerKeys";
+export {
+  attachHintTooltip,
+  shownHintText,
+  type HintContent,
+} from "./HintTooltip";
+export {
+  tooltipPosition,
+  TOOLTIP_MARGIN,
+  TOOLTIP_OFFSET,
+} from "./hintTooltipLayout";
+export { SettingsDefaultPick, raidDifficultyFor } from "./setupDefaults";

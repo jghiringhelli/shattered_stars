@@ -27,6 +27,7 @@ import {
   type ModeCombatStats,
 } from "../data/ModeBalancing";
 import type { AIDifficultyLevel } from "../ai/AIDifficulty";
+import { defaultDifficulty } from "../systems/SettingsStorage";
 import { createCycleFlight } from "../arcade/systems/CycleFlight";
 import { difficultyToTier } from "../arcade/ai";
 import {
@@ -61,6 +62,7 @@ import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { InputManager } from "../input/InputManager";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import { trackModeEnd, trackModeStart } from "../telemetry/telemetry";
+import { matchStats } from "../telemetry/matchTelemetry";
 import {
   createSideScore,
   creditKill,
@@ -235,6 +237,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     this.performanceState = createPerformanceState();
 
     renderBattleStarfield(this, BATTLEFIELD_SIZE, { includeNebula: false });
+    matchStats.start("continuous", {}, this.events);
     this.spawnShips();
     this.createHealthBars();
     this.createRepairFeedback();
@@ -558,6 +561,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     const ship = this.selectedShip();
     const targetId = ship ? this.hudTargetId(ship) : null;
     if (targetId) this.bots.mark(this.playerFaction, targetId, this.time.now);
+    if (targetId) matchStats.record({ kind: "mark" });
   }
 
   /**
@@ -581,9 +585,9 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     const battleConfig = this.registry.get("battleConfig") as
       TacticalBattleConfig | undefined;
 
-    if (battleConfig?.aiDifficulty) {
-      this.aiDifficulty = battleConfig.aiDifficulty;
-    }
+    // The Squad Builder sets it; a config without one (direct starts)
+    // falls back to Settings › Default Difficulty.
+    this.aiDifficulty = battleConfig?.aiDifficulty ?? defaultDifficulty();
 
     if (battleConfig && battleConfig.factions.length > 0) {
       this.spawnFromConfig(battleConfig);
@@ -741,6 +745,11 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
    */
   private registerShip(ship: TacticalShip): void {
     this.ships.set(ship.id, ship);
+    matchStats.record({
+      kind: "deploy",
+      friendly: ship.owner === "player",
+      shipId: ship.id,
+    });
     this.effectsManager.registerEngineTrail(
       ship.id,
       ship.faction,
@@ -1154,6 +1163,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     if (this.isPaused) return;
     this.isPaused = true;
     trackModeEnd("continuous", isPlayerVictory ? "victory" : "defeat");
+    matchStats.finish(isPlayerVictory ? "victory" : "defeat");
     audioManager.playFactionStinger(
       this.playerFaction,
       isPlayerVictory ? "victory" : "defeat",

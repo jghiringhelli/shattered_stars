@@ -18,6 +18,7 @@ import {
   HOLO_RADIUS,
 } from "../theme/HoloTheme";
 import { toCssColor } from "../theme/colorMath";
+import { holoFontFromCss } from "../theme/holoFont";
 import { createHoloText } from "./holoPrimitives";
 import {
   BUTTON_VARIANTS,
@@ -87,7 +88,15 @@ export class HoloButton extends Phaser.GameObjects.Container {
       config.label.toUpperCase(),
       "heading",
     );
-    if (config.font !== undefined) this.labelText.setFont(config.font);
+    // holoFontFromCss, not setFont: Phaser splits the shorthand on spaces,
+    // so a multi-word family ("Segoe UI", …) fell back to a serif face.
+    if (config.font !== undefined) {
+      const font = holoFontFromCss(config.font);
+      this.labelText
+        .setFontFamily(font.fontFamily)
+        .setFontSize(font.fontSize)
+        .setFontStyle(font.fontStyle);
+    }
     this.add([this.bg, this.labelText]);
     this.setSize(config.width, config.height);
     this.setInteractive({ useHandCursor: true });

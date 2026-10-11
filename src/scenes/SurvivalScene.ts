@@ -31,6 +31,7 @@ import {
 } from "../systems/arena/ArenaBoundary";
 import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
+import { applyAllyAuraRepairs } from "../systems/aura/AllyAuraRepair";
 import { BattleHud, cameraViewFrom } from "../ui/hud";
 import { SurvivalModeHud } from "../ui/modeHud/SurvivalModeHud";
 import {
@@ -118,6 +119,12 @@ import {
   REGULARS_PER_EXTRA_ELITE,
   shouldStartNextBossPhase,
 } from "../systems/survival/CombatNodePlan";
+import {
+  trackDeath,
+  trackModeEnd,
+  trackModeStart,
+} from "../telemetry/telemetry";
+import { matchStats } from "../telemetry/matchTelemetry";
 import {
   layoutWave,
   reinforcementPoints,
@@ -479,6 +486,19 @@ export class SurvivalScene extends Phaser.Scene {
     this.playerShipIds = [];
     this.enemyShipIds = [];
     this.escortShipIds.clear();
+    trackModeStart("survival", {
+      node: this.rules.plan.kind,
+      sector: this.rules.plan.sector,
+    });
+    matchStats.start(
+      "survival",
+      {
+        node: this.rules.plan.kind,
+        sector: this.rules.plan.sector,
+        row: this.rules.plan.row,
+      },
+      this.events,
+    );
     this.spawnFleet();
     this.battleStartMs = this.time.now;
   }
@@ -782,6 +802,8 @@ export class SurvivalScene extends Phaser.Scene {
       if (damage <= 0) continue;
       ship.hull = Math.max(0, ship.hull - damage);
       this.healthBars.get(ship.id)?.update(ship.hull, ship.shields);
+      if (ship.hull <= 0 && ship.id === this.pilotedShipId)
+        trackDeath("survival", "belt", { sector: this.rules.plan.sector });
       if (ship.hull <= 0) this.destroyShip(ship.id, false);
     }
   }
@@ -829,6 +851,12 @@ export class SurvivalScene extends Phaser.Scene {
       this.rules.outcome(survivors, this.run.level, durationMs),
     );
     const won = run?.status === "victory" || this.service.run === null;
+    trackModeEnd("survival", "victory", {
+      node: this.rules.plan.kind,
+      sector: this.rules.plan.sector,
+      runWon: won,
+    });
+    matchStats.finish("victory", { runWon: won });
     this.showMessage(
       won ? "VICTORY" : "SECTOR NODE CLEARED",
       won ? "The Nexus flagship is down" : "Returning to the map",
@@ -855,6 +883,11 @@ export class SurvivalScene extends Phaser.Scene {
       this.rules.killCount,
     );
     this.showMessage("FLEET DESTROYED", "The run is over");
+    trackModeEnd("survival", "defeat", {
+      node: this.rules.plan.kind,
+      sector: this.rules.plan.sector,
+    });
+    matchStats.finish("defeat");
     this.time.delayedCall(RETURN_TO_MAP_DELAY_MS, () =>
       this.scene.start("SurvivalSummaryScene"),
     );
@@ -1039,6 +1072,7 @@ export class SurvivalScene extends Phaser.Scene {
     });
     if (isEscort) ship.bot = this.squadAi.createPilot(SURVIVAL_ESCORT_TIER);
     this.ships.set(id, ship);
+    matchStats.record({ kind: "deploy", friendly: true, shipId: id });
     this.playerShipIds.push(id);
     this.baseModifiers.set(id, ship.modifiers);
     this.createShipSprite(ship);
@@ -1096,6 +1130,7 @@ export class SurvivalScene extends Phaser.Scene {
    */
   private addEnemy(ship: SurvivalShip, isElite = false, isBoss = false): void {
     this.ships.set(ship.id, ship);
+    matchStats.record({ kind: "deploy", friendly: false, shipId: ship.id });
     this.enemyShipIds.push(ship.id);
     this.createShipSprite(ship, isElite, isBoss);
     this.createHealthBar(ship);
@@ -1201,9 +1236,17 @@ export class SurvivalScene extends Phaser.Scene {
       this.setFlight(ship, tick.state);
       this.repairFeedback?.selfRepair(ship, deltaMs);
       if (tick.completed) this.notifyCycleCommitted(ship, tick.state);
+      if (tick.completed && ship.id === this.pilotedShipId)
+        matchStats.record({
+          kind: "cycle",
+          dial: ship.dial,
+          direction: tick.completed.direction,
+          speed: tick.completed.speed,
+        });
       this.syncShipSprite(ship, deltaMs);
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
+    applyAllyAuraRepairs(this.ships.values(), this.repairFeedback, deltaMs);
   }
 
   /**
@@ -1540,6 +1583,12 @@ export class SurvivalScene extends Phaser.Scene {
       attacker.faction,
       result.hit,
     );
+    matchStats.record({
+      kind: "shot",
+      friendly: attacker.owner === "player",
+      weapon: "primary",
+      hit: result.hit,
+    });
     if (!result.hit) return;
     if (result.stressOnTarget > 0) {
       this.setFlight(target, {
@@ -1554,6 +1603,10 @@ export class SurvivalScene extends Phaser.Scene {
     if (target.hull > 0) return;
     this.resolveAbilityKill(attacker, target);
     if (attacker.owner === "player") this.restoreKillShields(attacker);
+    if (target.id === this.pilotedShipId)
+      trackDeath("survival", attacker.definitionId, {
+        sector: this.rules.plan.sector,
+      });
     this.destroyShip(target.id, attacker.owner === "player");
   }
 
@@ -1623,6 +1676,12 @@ export class SurvivalScene extends Phaser.Scene {
         : incoming;
     const after = absorbDamage(target, damage);
     const hullDamage = damage - (target.shields - after.shields);
+    matchStats.record({
+      kind: "damage",
+      toFriendly: target.owner === "player",
+      shield: target.shields - after.shields,
+      hull: Math.min(target.hull, hullDamage),
+    });
     if (after.shields < target.shields) {
       audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);
     }
@@ -1693,6 +1752,11 @@ export class SurvivalScene extends Phaser.Scene {
   private destroyShip(shipId: string, wasPlayerKill: boolean): void {
     const ship = this.ships.get(shipId);
     if (!ship) return;
+    matchStats.record({
+      kind: "kill",
+      victimFriendly: ship.owner === "player",
+      victimIsPlayer: shipId === this.pilotedShipId,
+    });
 
     if (wasPlayerKill) {
       this.score += 100;
@@ -1781,6 +1845,7 @@ export class SurvivalScene extends Phaser.Scene {
     if (!flagship || flagship.hull <= 0) return;
     const targetId = this.hudTargetOf(flagship);
     if (targetId) this.squadAi.markTarget(targetId, this.time.now);
+    if (targetId) matchStats.record({ kind: "mark" });
   }
 
   /**
@@ -1815,6 +1880,12 @@ export class SurvivalScene extends Phaser.Scene {
       worldSize: BATTLEFIELD_SIZE,
     });
     this.applyControls(ship, result, origin);
+    matchStats.record({ kind: "flight", events: result.events });
+    matchStats.record({
+      kind: "stress",
+      ms: delta,
+      stressed: result.stress.isStressed,
+    });
   }
 
   /**

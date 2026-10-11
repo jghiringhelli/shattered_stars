@@ -14,6 +14,7 @@ import { ShipStatCard } from "../ui/ShipStatCard";
 import { InputManager } from "../input/InputManager";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import { trackModeEnd, trackModeStart } from "../telemetry/telemetry";
+import { matchStats } from "../telemetry/matchTelemetry";
 import { addShipVisual } from "../rendering/ShipVisual";
 import type { FactionId } from "../config";
 import {
@@ -34,6 +35,7 @@ import {
 } from "../data/ModeBalancing";
 import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
+import { applyAllyAuraRepairs } from "../systems/aura/AllyAuraRepair";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
@@ -123,6 +125,13 @@ import {
   raidDifficultyMultiplier,
 } from "./epicRaid/bossDefinitions";
 import { buildRaidSetupScreen } from "./epicRaid/RaidSetupScreen";
+import {
+  SettingsDefaultPick,
+  raidDifficultyFor,
+} from "../ui/menu/setupDefaults";
+import { defaultDifficulty } from "../systems/SettingsStorage";
+import { raidBriefing, showSortieBriefing } from "../ui/briefing";
+import { FACTION_NAMES_SHORT } from "../data/survival/factionNames";
 import { RaidHud } from "./epicRaid/RaidHud";
 import { BOSS_CONTACT_ID, raidContacts } from "./epicRaid/raidHudSnapshot";
 import {
@@ -284,6 +293,10 @@ export class EpicBattleScene extends Phaser.Scene {
   private bossSectionBars: Map<string, HealthBar> = new Map();
   private selectedBossFaction: FactionId = "terran_hegemony";
   private difficulty: EpicDifficulty = "medium";
+  /** Preselects Settings › Default Difficulty (kept across retries). */
+  private readonly difficultyDefault = new SettingsDefaultPick(
+    raidDifficultyFor,
+  );
 
   // Player settings
   private playerFaction: FactionId = "free_confederation";
@@ -384,6 +397,8 @@ export class EpicBattleScene extends Phaser.Scene {
     this.background.startShootingStars();
 
     this.resetState();
+    this.difficulty =
+      this.difficultyDefault.next(defaultDifficulty()) ?? this.difficulty;
     this.showSetupScreen();
 
     if (ShipTelemetry.isEnabled()) {
@@ -446,8 +461,24 @@ export class EpicBattleScene extends Phaser.Scene {
         this.difficulty = difficulty;
         this.showSetupScreen();
       },
-      onStart: () => this.startBattle(),
+      onStart: () => this.briefSortie(),
       onBack: () => this.scene.start("MainMenuScene"),
+    });
+  }
+
+  /** The pre-sortie briefing (≤ 3 s, skippable); the raid starts when it closes. */
+  private briefSortie(): void {
+    const boss = BOSS_DEFINITIONS[this.selectedBossFaction];
+    showSortieBriefing(this, {
+      briefing: raidBriefing({
+        bossName: boss.name,
+        bossFaction: FACTION_NAMES_SHORT[this.selectedBossFaction],
+        difficulty: this.difficulty,
+        clockMs: EpicBattleScene.RAID_DURATION_MS,
+        escorts: boss.escortCount,
+      }),
+      accent: HOLO_PALETTE.danger,
+      onLaunch: () => this.startBattle(),
     });
   }
 
@@ -456,6 +487,11 @@ export class EpicBattleScene extends Phaser.Scene {
     this.setupRoot = null;
     this.isSetupPhase = false;
     trackModeStart("boss_raid");
+    matchStats.start(
+      "boss_raid",
+      { difficulty: this.difficulty, boss: this.selectedBossFaction },
+      this.events,
+    );
     this.cameras.main.setZoom(RAID_ZOOM.battle);
 
     audioManager.playMusic("combat_high");
@@ -684,6 +720,11 @@ export class EpicBattleScene extends Phaser.Scene {
     };
 
     this.createBossSprite();
+    matchStats.record({
+      kind: "deploy",
+      friendly: false,
+      shipId: BOSS_CONTACT_ID,
+    });
   }
 
   /**
@@ -871,6 +912,7 @@ export class EpicBattleScene extends Phaser.Scene {
     });
     this.ships.set(id, ship);
     this.playerShipIds.push(id);
+    matchStats.record({ kind: "deploy", friendly: true, shipId: id });
     this.crewShip(id, "wingman", RAID_PLAYER_SIDE);
     this.createShipSprite(ship);
     this.createHealthBar(ship);
@@ -990,6 +1032,7 @@ export class EpicBattleScene extends Phaser.Scene {
     });
     this.ships.set(id, ship);
     this.escortShipIds.push(id);
+    matchStats.record({ kind: "deploy", friendly: false, shipId: id });
     this.crewShip(id, "escort", squadKey);
     this.createShipSprite(ship);
     this.createHealthBar(ship);
@@ -1097,6 +1140,13 @@ export class EpicBattleScene extends Phaser.Scene {
       if (tick.completed) {
         const started = tick.state.motion.control.currentManeuver ?? "straight";
         if (ship.id === this.pilotedShipId)
+          matchStats.record({
+            kind: "cycle",
+            dial: ship.dial,
+            direction: tick.completed.direction,
+            speed: tick.completed.speed,
+          });
+        if (ship.id === this.pilotedShipId)
           this.pilot.onCycleCommitted(started);
         else this.bots.onCycleCommitted(ship.id, started);
       }
@@ -1106,6 +1156,7 @@ export class EpicBattleScene extends Phaser.Scene {
         .setAngle(ship.angle);
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
+    applyAllyAuraRepairs(this.ships.values(), this.repairFeedback, deltaMs);
   }
 
   /**
@@ -1293,6 +1344,7 @@ export class EpicBattleScene extends Phaser.Scene {
       targetMarked: this.markedTargetOf(attacker) === this.boss.id,
     });
     const hit = damage > 0;
+    matchStats.record({ kind: "shot", friendly: true, weapon: "primary", hit });
     if (hit) this.damageBoss(this.boss, damage);
 
     this.effectsManager.fireLaser(
@@ -1321,6 +1373,12 @@ export class EpicBattleScene extends Phaser.Scene {
       remaining -= shieldDmg;
       audioManager.playSoundAt("shield_hit", boss.x, boss.y, 0.4);
     }
+    matchStats.record({
+      kind: "damage",
+      toFriendly: false,
+      shield: damage - remaining,
+      hull: remaining,
+    });
 
     if (remaining > 0) {
       audioManager.playSoundAt("hull_hit", boss.x, boss.y, 0.4);
@@ -1395,6 +1453,12 @@ export class EpicBattleScene extends Phaser.Scene {
       attacker.faction,
       result.hit,
     );
+    matchStats.record({
+      kind: "shot",
+      friendly: attacker.owner === "player",
+      weapon: "primary",
+      hit: result.hit,
+    });
     if (!result.hit) return false;
     this.setFlight(target, {
       ...target.flight,
@@ -1418,6 +1482,15 @@ export class EpicBattleScene extends Phaser.Scene {
     killer: EpicShip | null = null,
   ): void {
     if (ship.hull <= 0) return;
+    matchStats.record({
+      kind: "damage",
+      toFriendly: ship.owner === "player",
+      shield: Math.min(Math.max(0, ship.shields), damage),
+      hull: Math.min(
+        ship.hull,
+        Math.max(0, damage - Math.max(0, ship.shields)),
+      ),
+    });
     if (ship.shields > 0) {
       const shieldDmg = Math.min(ship.shields, damage);
       ship.shields -= shieldDmg;
@@ -1486,6 +1559,11 @@ export class EpicBattleScene extends Phaser.Scene {
     if (!ship) return;
     this.hitLedger.forget(shipId);
     this.bots.remove(shipId);
+    matchStats.record({
+      kind: "kill",
+      victimFriendly: ship.owner === "player",
+      victimIsPlayer: shipId === this.pilotedShipId,
+    });
 
     if (ship.owner === "player") {
       this.enemySideScore = creditKill(this.enemySideScore, ship.definitionId);
@@ -1571,6 +1649,7 @@ export class EpicBattleScene extends Phaser.Scene {
     if (!this.pilot.takeMarkRequest() || !flagship) return;
     const targetId = this.flagshipTargetId(flagship);
     if (targetId) this.bots.mark(RAID_PLAYER_SIDE, targetId, this.time.now);
+    if (targetId) matchStats.record({ kind: "mark" });
   }
 
   /** @returns Every living ship and the standing boss, as the AI sees them. */
@@ -1635,6 +1714,12 @@ export class EpicBattleScene extends Phaser.Scene {
     });
     this.setFlight(ship, { motion: result.motion, stress: result.stress });
     this.playFlightEvents(ship, result.events, origin);
+    matchStats.record({ kind: "flight", events: result.events });
+    matchStats.record({
+      kind: "stress",
+      ms: delta,
+      stressed: result.stress.isStressed,
+    });
   }
 
   private updateSprites(): void {
@@ -1746,6 +1831,7 @@ export class EpicBattleScene extends Phaser.Scene {
    */
   private showResult(victory: boolean, subtitle: string): void {
     trackModeEnd("boss_raid", victory ? "victory" : "defeat");
+    matchStats.finish(victory ? "victory" : "defeat");
     const boss = this.boss;
     const bossHullPct = boss
       ? Math.floor((Math.max(0, boss.totalHull) / boss.maxTotalHull) * 100)

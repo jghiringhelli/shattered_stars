@@ -70,7 +70,8 @@ export class ControlsScene extends Phaser.Scene {
     addMenuBackdrop(this, { textureId: "starfield_deep" });
     addMenuHeader(this, {
       title: "Controls",
-      subtitle: "Your current bindings · rebind keys in Settings › Controls",
+      subtitle:
+        "Your current bindings · rebind in Settings › Controls / Gamepad",
     });
     addBackButton(this, () => this.goBack());
     this.createTablePanel();

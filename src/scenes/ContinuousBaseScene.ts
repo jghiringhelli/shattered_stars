@@ -51,9 +51,11 @@ import {
 import { applyInstantStress } from "../arcade/ArcadeStress";
 import type { CombatModifiers } from "../core/CombatModifiers";
 import { random } from "../utils/random";
+import { matchStats } from "../telemetry/matchTelemetry";
 import type { ShipTelemetry } from "../debug/ShipTelemetry";
 import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback } from "../ui/hud/overlay";
+import { applyAllyAuraRepairs } from "../systems/aura/AllyAuraRepair";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
@@ -199,6 +201,12 @@ export abstract class ContinuousBaseScene<
       result.hit,
     );
     if (result.hit) this.landShot(attacker, target, result);
+    matchStats.record({
+      kind: "shot",
+      friendly: attacker.owner === "player",
+      weapon: "primary",
+      hit: result.hit,
+    });
   }
 
   /**
@@ -331,6 +339,12 @@ export abstract class ContinuousBaseScene<
     const shieldsBefore = target.shields;
     const absorbed = absorbDamage(target, damage);
     const hullDamage = damage - (shieldsBefore - absorbed.shields);
+    matchStats.record({
+      kind: "damage",
+      toFriendly: target.owner === "player",
+      shield: shieldsBefore - absorbed.shields,
+      hull: Math.min(target.hull, hullDamage),
+    });
     target.shields = absorbed.shields;
     if (shieldsBefore > 0) {
       audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);
@@ -345,6 +359,10 @@ export abstract class ContinuousBaseScene<
     }
     this.healthBars.get(target.id)?.update(target.hull, target.shields);
     if (target.hull <= 0) {
+      matchStats.record({
+        kind: "kill",
+        victimFriendly: target.owner === "player",
+      });
       this.hitLedger.forget(target.id);
       this.bots.remove(target.id);
       this.resolveAbilityKill(attacker, target);
@@ -455,6 +473,13 @@ export abstract class ContinuousBaseScene<
         modifiers: stressModifiersOf(ship.modifiers),
       });
       this.setFlight(ship, tick.state);
+      if (tick.completed && ship.owner === "player")
+        matchStats.record({
+          kind: "cycle",
+          dial: ship.dial,
+          direction: tick.completed.direction,
+          speed: tick.completed.speed,
+        });
       if (tick.completed) {
         this.bots.onCycleCommitted(
           ship.id,
@@ -467,6 +492,7 @@ export abstract class ContinuousBaseScene<
         .setAngle(ship.angle);
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
+    applyAllyAuraRepairs(this.ships.values(), this.repairFeedback, deltaMs);
   }
 
   /**

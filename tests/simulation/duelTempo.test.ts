@@ -113,6 +113,10 @@ describe("medianDurationMs", () => {
     winner: durationMs === null ? null : 1,
     attacks: { 1: 0, 2: 0 },
     hitTimes: new Map(),
+    hits: { 1: 0, 2: 0 },
+    damage: { 1: 0, 2: 0 },
+    firstKillMs: durationMs,
+    specialsUsed: 0,
   });
 
   it("ignores timed-out rounds", () => {

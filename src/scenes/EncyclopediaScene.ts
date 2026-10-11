@@ -23,6 +23,7 @@ import {
   addMenuHeader,
   type MenuHeader,
 } from "../ui/menu/MenuScaffold";
+import { footerKeys } from "../ui/menu/footerKeys";
 import { factionAccent } from "../ui/theme/HoloTheme";
 import {
   bindMenuBack,
@@ -65,7 +66,11 @@ export class EncyclopediaScene extends Phaser.Scene {
     addBackButton(this, () => this.returnToMenu());
     addFooterHint(
       this,
-      "↑ ↓  browse ships   ·   wheel  scroll   ·   ESC  back",
+      footerKeys([
+        ["↑ ↓", "browse ships"],
+        ["WHEEL", "scroll"],
+        ["ESC", "back"],
+      ]),
     );
     this.factionChips = new FactionFilterChips(this, regions.chips, (faction) =>
       this.onFactionFilter(faction),

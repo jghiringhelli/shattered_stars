@@ -11,6 +11,8 @@ import {
   type ArmoryMod,
 } from "../../data/campaign/armory";
 import { createHoloPanel, type HoloPanel } from "../hud/HoloPanel";
+import { PLAYSTYLES, armoryHint } from "../../data/roleHints";
+import { attachHintTooltip } from "../menu/HintTooltip";
 import { HOLO_PALETTE } from "../theme/HoloTheme";
 import { CAMPAIGN_TEXT, addHoloText } from "./campaignUi";
 import { SelectableCard } from "./SelectableCard";
@@ -130,11 +132,20 @@ function modCard(
   const state = installed
     ? "INSTALLED · CLICK TO REFUND"
     : `BUY · ${mod.cost} CR${affordable ? "" : " (NEED MORE)"}`;
+  const hint = armoryHint(mod);
+  attachHintTooltip(scene, card, hint);
   card.add([
     addHoloText(scene, left, -L.cardHeight / 2 + 8, mod.name, {
       size: 14,
       weight: "600",
     }),
+    addHoloText(
+      scene,
+      place.width / 2 - 10,
+      -L.cardHeight / 2 + 10,
+      PLAYSTYLES[hint.playstyle].label.toUpperCase(),
+      { ...CAMPAIGN_TEXT.caption, color: HOLO_PALETTE.textMuted },
+    ).setOrigin(1, 0),
     addHoloText(scene, left, -L.cardHeight / 2 + 28, mod.description, {
       ...CAMPAIGN_TEXT.body,
       size: 12,

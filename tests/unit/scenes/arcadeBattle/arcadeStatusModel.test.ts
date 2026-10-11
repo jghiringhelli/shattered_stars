@@ -13,6 +13,7 @@ import {
   formatSeconds,
   matchClockTone,
   READY_LABEL,
+  ROSTER_MAX_PIPS,
   rosterTeams,
 } from "../../../../src/scenes/arcadeBattle/arcadeStatusModel";
 import {
@@ -121,5 +122,28 @@ describe("rosterTeams", () => {
   it("labels factions in plain words", () => {
     const teams = rosterTeams([HudShipBuilder.anEnemy().build()], "x", null);
     expect(teams[0]!.label).toBe("VOID CORSAIRS");
+  });
+
+  it("drops the oldest fallen ships past one line of pips (reinforcement battles)", () => {
+    const fallen = Array.from({ length: ROSTER_MAX_PIPS }, (_, i) =>
+      HudShipBuilder.anEnemy().withHull(0).build(),
+    );
+    const living = [1, 2, 3].map((i) => HudShipBuilder.anEnemy().build());
+    const [team] = rosterTeams([...fallen, ...living], "x", null);
+    expect(team!.pips).toHaveLength(ROSTER_MAX_PIPS);
+    expect(team!.pips.filter((p) => p.alive)).toHaveLength(3);
+  });
+
+  it("keeps every living ship even past one line", () => {
+    const living = Array.from({ length: ROSTER_MAX_PIPS + 2 }, (_, i) =>
+      HudShipBuilder.anEnemy().build(),
+    );
+    const [team] = rosterTeams(
+      [HudShipBuilder.anEnemy().withHull(0).build(), ...living],
+      "x",
+      null,
+    );
+    expect(team!.pips).toHaveLength(ROSTER_MAX_PIPS + 2);
+    expect(team!.pips.every((p) => p.alive)).toBe(true);
   });
 });

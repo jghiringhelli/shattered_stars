@@ -47,6 +47,11 @@ export interface SettingsTabContext {
   addFocus(target: FocusTarget): void;
   /** Wait for the next key chord (ESC cancels → callback not called). */
   captureKey(onChord: (chord: KeyChord) => void, onDone: () => void): void;
+  /**
+   * Wait for the next gamepad button (ESC or B cancels → callback not
+   * called).
+   */
+  captureButton(onButton: (button: number) => void, onDone: () => void): void;
   /** Show a one-line notice under the panel. */
   notify(message: string, tone?: NoticeTone): void;
 }

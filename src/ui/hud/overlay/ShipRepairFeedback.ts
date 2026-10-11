@@ -27,6 +27,7 @@ import type {
 } from "../../../arcade/systems/repair/RepairEvents";
 import { RepairDronePool } from "../../../rendering/repairDrones/RepairDronePool";
 import { RepairDroneView } from "../../../rendering/repairDrones/RepairDroneView";
+import { matchStats } from "../../../telemetry/matchTelemetry";
 import {
   droneOrbitRadius,
   selfRepairKey,
@@ -234,6 +235,12 @@ export class ShipRepairFeedback {
   private deliver(event: RepairEvent): void {
     this.deliveredEvents++;
     this.lastEvent = event;
+    if (event.kind === "hull")
+      matchStats.record({
+        kind: "repair",
+        hull: event.amount,
+        shipId: event.shipId,
+      });
     this.options.overlayOf(event.shipId)?.showRepair(event);
     const definitionId = this.options.shipOf(event.shipId)?.definitionId;
     this.drones.requestSortie(event, droneOrbitRadius(definitionId));

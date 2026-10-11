@@ -34,6 +34,7 @@ import {
   MENU_CLEAR_COLOR,
   MENU_LAYOUT,
 } from "../ui/menu/MenuScaffold";
+import { footerKeys } from "../ui/menu/footerKeys";
 import {
   factionAccent,
   HOLO_PALETTE,
@@ -121,7 +122,11 @@ export class ShipPickerScene extends Phaser.Scene {
     });
     addFooterHint(
       this,
-      "ESC  Done   \u00b7   Mouse wheel  Scroll ships   \u00b7   Hover a squad row for details",
+      footerKeys([
+        ["ESC", "done"],
+        ["WHEEL", "scroll ships"],
+        ["HOVER", "squad row details"],
+      ]),
     );
     bindMenuBack(this, () => this.finish());
     this.maybeShowWelcomeBanner(accent);

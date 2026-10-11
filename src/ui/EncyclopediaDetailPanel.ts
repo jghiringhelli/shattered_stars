@@ -3,15 +3,16 @@
  *
  * The right-side panel in EncyclopediaScene: a HoloPanel bordered in the
  * selected ship's faction accent (faction name in the header strip), framed
- * cinematic art, the ship name as a heading, a role chip, lore body text
- * fitted to its column (never overlapping the stats), and the combat stat
- * gauges below.
+ * cinematic art, the ship name as a heading, a role chip, the signature
+ * build's role / best-with hint, lore body text fitted to its column (never
+ * overlapping the stats), and the combat stat gauges below.
  */
 
 import Phaser from "phaser";
 import type { FactionId } from "../config";
 import type { EncyclopediaEntry } from "../data/ShipEncyclopedia";
 import { getShipDefinition } from "../data/ShipDefinitions";
+import { shipHint } from "../data/roleHints";
 import { addContainedImage } from "./picker/catalogHelpers";
 import { createHoloPanel, type HoloPanel } from "./hud/HoloPanel";
 import { drawHoloFrame, type HoloRect } from "./menu/holoChrome";
@@ -68,6 +69,8 @@ export class EncyclopediaDetailPanel {
   private readonly nameText: Phaser.GameObjects.Text;
   private readonly roleBadge: Phaser.GameObjects.Graphics;
   private readonly roleText: Phaser.GameObjects.Text;
+  /** Role / best-with hint of the ship's signature build (P2-1). */
+  private readonly hintText: Phaser.GameObjects.Text;
   private readonly loreText: Phaser.GameObjects.Text;
   private readonly stats: EncyclopediaStatBlock;
 
@@ -103,6 +106,7 @@ export class EncyclopediaDetailPanel {
     this.nameText = this.createNameText();
     this.roleBadge = scene.add.graphics();
     this.roleText = this.createRoleText();
+    this.hintText = this.createHintText();
     this.loreText = this.createLoreText();
     const statsTop = top + DETAIL_LAYOUT.artHeight + DETAIL_LAYOUT.statsGap;
     this.stats = new EncyclopediaStatBlock(
@@ -158,6 +162,14 @@ export class EncyclopediaDetailPanel {
       .setOrigin(0, 0.5);
   }
 
+  private createHintText(): Phaser.GameObjects.Text {
+    return this.scene.add.text(this.textColumn.x, 0, "", {
+      ...holoFont(HOLO_TYPE_SCALE.caption.size + 1, "600"),
+      color: toCssColor(HOLO_PALETTE.accent),
+      wordWrap: { width: this.textColumn.width, useAdvancedWrap: true },
+    });
+  }
+
   private createLoreText(): Phaser.GameObjects.Text {
     return this.scene.add.text(this.textColumn.x, 0, "", {
       ...holoFont(LORE_STYLE.sizes[0], "400"),
@@ -211,7 +223,11 @@ export class EncyclopediaDetailPanel {
     this.nameText.setText(def?.name ?? entry.shipId);
     const chipTop = this.nameText.y + this.nameText.height + HOLO_SPACING.sm;
     this.drawRoleChip(def?.role, chipTop);
-    const loreTop = chipTop + DETAIL_LAYOUT.chipHeight + HOLO_SPACING.md;
+    const hint = shipHint(entry.shipId);
+    this.hintText
+      .setText(`${hint.role}\n${hint.bestWith}`)
+      .setY(chipTop + DETAIL_LAYOUT.chipHeight + HOLO_SPACING.sm);
+    const loreTop = this.hintText.y + this.hintText.height + HOLO_SPACING.md;
     this.loreText.setY(loreTop);
     fitLoreText(
       this.loreText,

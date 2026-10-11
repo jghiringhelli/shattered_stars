@@ -34,11 +34,11 @@ acceptance criteria; the status column tracks delivery.
 
 | # | Item | Acceptance criteria | Status |
 |---|---|---|---|
-| P0-1 | Per-ship hull/shield overlay with repair feedback | Readable within 200 ms of a hit; shield segments; damage vs repair cues visually distinct; repair drones from the source ship; never color-only. | In progress (overlay workstream) |
+| P0-1 | Per-ship hull/shield overlay with repair feedback | Readable within 200 ms of a hit; shield segments; damage vs repair cues visually distinct; repair drones from the source ship; never color-only. | In progress (overlay workstream). Ally repair auras now resolve in every mode (Boss Raid, Continuous, Survival, Campaign — `src/systems/aura/AllyAuraRepair.ts`, per side so a mirror match never heals the enemy) and feed `ShipRepairFeedback`, so ally-to-ally drones fly outside Skirmish too |
 | P0-2 | Flight School tutorial | Scripted steps that verify real inputs (throttle, cycle steering, specials, fire, mark, radar), shows the bound key, skippable, completion persisted. | In progress (polish workstream) |
-| P0-3 | Accessibility & settings | Full rebinding with conflict detection, 3 colorblind modes through theme tokens, separate master/music/SFX/UI volumes, flash/shake reduction, text size. | In progress (polish workstream) |
+| P0-3 | Accessibility & settings | Full rebinding with conflict detection, 3 colorblind modes through theme tokens, separate master/music/SFX/UI volumes, flash/shake reduction, text size. | In progress (polish workstream). Gamepad rebinding added: Settings › Gamepad, per control profile, same conflict rules as the keyboard (swap on a shared button + context; B / Start reserved; buttons fixed menu / tactical intents need are refused) — `src/input/GamepadBindings.ts`. Gameplay › Default Difficulty is preselected by the Dogfight, Ace Duel and Boss Raid setups (kept across rematches) and by Continuous starts without a squad-builder difficulty; the Squad Builder (Skirmish / Continuous) still starts at Normal |
 | P0-4 | Local telemetry | Privacy-respecting local event log (mode start/end/outcome, deaths, tutorial drop-off, errors) with export; external playtest cadence before each mode ships. | In progress (polish workstream) |
-| P0-5 | Menu juice & consistency | Hover + press feedback (visual + audio) on every control, transitions ≤ 400 ms, one back affordance everywhere. | In progress (polish workstream) |
+| P0-5 | Menu juice & consistency | Hover + press feedback (visual + audio) on every control, transitions ≤ 400 ms, one back affordance everywhere. | In progress (polish workstream). Gamepad D-pad + A drive every menu's focus ring (`MenuFocus`); Dogfight / Ace Duel setups and Flight School joined the shared ESC / B / right-click back |
 
 ## P1 — second wave
 
@@ -48,17 +48,17 @@ acceptance criteria; the status column tracks delivery.
 | P1-2 | Campaign like StarCraft II | Hub with ≥ 2 missions open, Armory + Research with exclusive choices, hero active powers (V / B), ≥ 4 mission archetypes beyond "destroy all", bonus objectives, persistent consequences, completion state. | In progress (campaign workstream) |
 | P1-3 | X-Wing 2.0 scenario mode | ≥ 2 of Satellite Array / Chance Engagement / Salvage / Scramble with real-time scoring, objective state on HUD + radar, carried salvage visible and dropped on boost / roll / death, score threshold or time limit. | Done — all 4 scenarios: Squad Builder › SCENARIO picker → `battleConfig.scenario`; rules in `src/arcade/scenarios/`, scene glue in `src/scenes/scenario/` (6 s rounds = DURABILITY_SCALE cycles, control range 400 px = range 0–1, first to 20 or 5 min) |
 | P1-4 | Escort / bonus-objective archetype | Escort HP on HUD/radar, ≥ 3 wingman orders, immediate clear failure, ≤ 3 critical escorts. | In progress (campaign objectives, reusable in `src/arcade/objectives/`) |
-| P1-5 | Ranked seasons + daily challenges (online 1v1) | Placement matches, soft reset, widening MMR tolerance, ≥ 3 daily challenges. | Planned |
+| P1-5 | Ranked seasons + daily challenges (online 1v1) | Placement matches, soft reset, widening MMR tolerance, ≥ 3 daily challenges. | Partly — offline Daily in Survival setup (DAILY: seed, faction, base starter and ascension 1–3 derived from the local date, ascension applies even before it is unlocked; score = 1000/sector + 100/node + 10/kill + 5000 on victory; local best + last 30 results) — `src/systems/survival/DailyChallenge.ts`. Online ranked seasons still planned |
 
 ## P2 — differentiation
 
 | # | Item | Acceptance criteria | Status |
 |---|---|---|---|
-| P2-1 | Role / synergy hints | Every pilot ability and upgrade card shows a one-line "best with" or role hint. | Planned |
+| P2-1 | Role / synergy hints | Every pilot ability and upgrade card shows a one-line "best with" or role hint. | Done — `src/data/roleHints/` derives a play style from each effect's knobs, weapon and stat bonuses (never authored per card) → role line ("Flanker — strikes from behind") + "best with" (hull roles + up to 2 complementary catalogue cards). Shown: ship picker (ability + each upgrade inline, quick-build toggles on hover), Dogfight / Ace Duel / Survival quick-build chooser, encyclopedia (signature build), Survival relic cards and Campaign armory mods (hover tooltip, `src/ui/menu/HintTooltip.ts`) |
 | P2-2 | Mutations in Survival | ≥ 2 systems with a mutually exclusive behaviour branch, described as a behaviour change. | In progress (survival workstream) |
 | P2-3 | Stealth / evasion | Bots can lose track of a cloaked or out-of-sight player; some encounters can be bypassed. | Planned |
-| P2-4 | Briefing atmosphere | Terse, mood-driven briefings with a music stinger before every sortie. | Partly (campaign hub) |
-| P2-5 | UI / art cohesion audit | Menus, icons and fonts share the HUD's holographic language. | Planned |
+| P2-4 | Briefing atmosphere | Terse, mood-driven briefings with a music stinger before every sortie. | Done — shared sortie card (`src/ui/briefing/`) before Dogfight, Ace Duel and Boss Raid: deterministic codename, one-line objective, ≤ 3 intel lines, mood stinger (tense / rivalry / dread) on the UI bus; auto-launches after 2.6 s (cap 3 s), ENTER / SPACE / A / click launch at once. Campaign keeps its hub briefing |
+| P2-5 | UI / art cohesion audit | Menus, icons and fonts share the HUD's holographic language. | Done for the shared kit and owned screens: duel setups use the standard header + BACK; HoloButton font overrides always resolve to the holo family (fixed serif labels on the Boss Raid setup); one footer format (`footerKeys`); campaign cards hit-test their whole area. Open (other owners): Boss Raid setup still has its own "< BACK" / title; Survival history uses a monospace list and no top-left BACK; setup footers built with `quickTipLine` keep the "Label: key" format; Lobby has no footer hint; `src/ui/GameOverScreen.ts` is unused Arial legacy code |
 
 ## Red flags we check before every release
 

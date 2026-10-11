@@ -61,6 +61,11 @@ import {
   type QuickBuildSelection,
 } from "../arcade/systems/QuickBuildChoice";
 import { renderQuickBuildChooser } from "../ui/QuickBuildChooser";
+import { SettingsDefaultPick } from "../ui/menu/setupDefaults";
+import { defaultDifficulty } from "../systems/SettingsStorage";
+import { dogfightBriefing, showSortieBriefing } from "../ui/briefing";
+import { bindMenuBack } from "../ui/menu/menuTransitions";
+import { FACTION_NAMES_SHORT } from "../data/survival/factionNames";
 import {
   absorbDamage,
   combatantOf,
@@ -106,6 +111,7 @@ import {
   trackModeEnd,
   trackModeStart,
 } from "../telemetry/telemetry";
+import { matchStats } from "../telemetry/matchTelemetry";
 import {
   random,
   setDefaultRng,
@@ -218,6 +224,10 @@ export class DogfightScene extends Phaser.Scene {
   private playerShipId = "confed_falcon";
   private enemyShipId = "terran_raptor";
   private difficulty: "easy" | "normal" | "hard" | "brutal" = "normal";
+  /** Preselects Settings › Default Difficulty (kept across rematches). */
+  private readonly difficultyDefault = new SettingsDefaultPick(
+    (level) => level,
+  );
   /**
    * The player's quick-build pick from the setup screen. Null (online, or
    * never touched) means the default assignQuickBuilds would give; a pick
@@ -341,7 +351,13 @@ export class DogfightScene extends Phaser.Scene {
       this.setupNetworking();
       this.startMatch();
     } else {
+      this.difficulty =
+        this.difficultyDefault.next(defaultDifficulty()) ?? this.difficulty;
       this.showSetupScreen();
+      // The one back affordance (ESC / gamepad B / right-click), setup only.
+      bindMenuBack(this, () => this.scene.start("MainMenuScene"), {
+        isActive: () => this.isSetupPhase,
+      });
     }
 
     if (ShipTelemetry.isEnabled()) {
@@ -543,9 +559,28 @@ export class DogfightScene extends Phaser.Scene {
         }),
       selectDifficulty: (difficulty) =>
         choose(() => (this.difficulty = difficulty)),
-      start: () => this.startMatch(),
+      start: () => this.briefSortie(),
       back: () => this.scene.start("MainMenuScene"),
     };
+  }
+
+  /**
+   * The pre-sortie briefing (≤ 3 s, skippable); the match starts when it
+   * closes. (Online matches skip the setup screen, so they skip this too.)
+   */
+  private briefSortie(): void {
+    const nameOf = (id: string): string => getShipDefinition(id)?.name ?? id;
+    showSortieBriefing(this, {
+      briefing: dogfightBriefing({
+        playerShip: nameOf(this.playerShipId),
+        enemyShip: nameOf(this.enemyShipId),
+        enemyFaction: FACTION_NAMES_SHORT[this.enemyFaction],
+        difficulty: this.difficulty,
+        roundsToWin: this.winsNeeded(),
+      }),
+      accent: factionAccent(this.playerFaction),
+      onLaunch: () => this.startMatch(),
+    });
   }
 
   /**
@@ -629,6 +664,11 @@ export class DogfightScene extends Phaser.Scene {
       difficulty: this.difficulty,
       online: this.isOnlineMode,
     });
+    matchStats.start(
+      "dogfight",
+      { difficulty: this.difficulty, online: this.isOnlineMode },
+      this.events,
+    );
 
     audioManager.playFactionMusic(this.playerFaction, "combat");
 
@@ -766,6 +806,7 @@ export class DogfightScene extends Phaser.Scene {
       worldSize: BATTLEFIELD_SIZE,
     });
     if (targetId) this.crew?.markTarget(PLAYER_SIDE, targetId, this.time.now);
+    if (targetId) matchStats.record({ kind: "mark" });
   }
 
   /**
@@ -908,6 +949,11 @@ export class DogfightScene extends Phaser.Scene {
     ship.flight = equipFlight(ship.flight, ship.modifiers);
 
     this.ships.set(id, ship);
+    matchStats.record({
+      kind: "deploy",
+      friendly: owner === "player",
+      shipId: id,
+    });
 
     if (owner === "player") {
       this.playerShipIds.push(id);
@@ -984,6 +1030,13 @@ export class DogfightScene extends Phaser.Scene {
       this.setFlight(ship, tick.state);
       this.repairFeedback?.selfRepair(ship, deltaMs);
       if (tick.completed) this.onCycleCommitted(ship, tick.state);
+      if (tick.completed && ship.owner === "player")
+        matchStats.record({
+          kind: "cycle",
+          dial: ship.dial,
+          direction: tick.completed.direction,
+          speed: tick.completed.speed,
+        });
       this.shipSprites
         .get(ship.id)
         ?.setPosition(ship.x, ship.y)
@@ -1111,6 +1164,12 @@ export class DogfightScene extends Phaser.Scene {
         this.crew?.isMarkedShot(attacker.id, target.id, this.time.now) ?? false,
     });
     if (result.hit) this.applyHit(attacker, target, result);
+    matchStats.record({
+      kind: "shot",
+      friendly: attacker.owner === "player",
+      weapon: "primary",
+      hit: result.hit,
+    });
     this.effectsManager.fireLaser(
       attacker.x,
       attacker.y,
@@ -1153,6 +1212,12 @@ export class DogfightScene extends Phaser.Scene {
       stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
     });
     const after = absorbDamage(target, result.damage);
+    matchStats.record({
+      kind: "damage",
+      toFriendly: target.owner === "player",
+      hull: target.hull - after.hull,
+      shield: target.shields - after.shields,
+    });
     if (after.shields < target.shields) {
       audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);
     }
@@ -1176,6 +1241,11 @@ export class DogfightScene extends Phaser.Scene {
   private onShipDestroyed(killer: DogfightShip, victim: DogfightShip): void {
     this.hitLedger.forget(victim.id);
     this.crew?.forget(victim.id);
+    matchStats.record({
+      kind: "kill",
+      victimFriendly: victim.owner === "player",
+      victimIsPlayer: victim.owner === "player",
+    });
     if (victim.owner === "player") {
       trackDeath("dogfight", killer.definitionId, { round: this.currentRound });
       this.enemySideScore = creditKill(
@@ -1290,6 +1360,12 @@ export class DogfightScene extends Phaser.Scene {
     });
     this.setFlight(ship, { motion: result.motion, stress: result.stress });
     this.playFlightEvents(ship, result.events, origin);
+    matchStats.record({ kind: "flight", events: result.events });
+    matchStats.record({
+      kind: "stress",
+      ms: delta,
+      stressed: result.stress.isStressed,
+    });
     const { control } = result.motion;
     this.sendManeuver(
       control.nextManeuver ?? "straight",
@@ -1434,6 +1510,9 @@ export class DogfightScene extends Phaser.Scene {
 
     const playerWon = this.playerWins > this.enemyWins;
     trackModeEnd("dogfight", playerWon ? "victory" : "defeat", {
+      rounds: this.currentRound,
+    });
+    matchStats.finish(playerWon ? "victory" : "defeat", {
       rounds: this.currentRound,
     });
     audioManager.playFactionStinger(

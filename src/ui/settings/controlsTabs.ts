@@ -1,6 +1,7 @@
 /**
- * Settings › Controls (keyboard rebinding with profiles, conflict swap and
- * reset) and Settings › Gamepad (read-only layout).
+ * Settings › Controls: keyboard rebinding with profiles, conflict swap and
+ * reset. Also the shared profile header and row grid the Gamepad tab
+ * (gamepadTab.ts) reuses.
  */
 
 import { DEFAULT_KEYBOARD_BINDINGS } from "../../input/DefaultBindings";
@@ -13,19 +14,21 @@ import {
   rebindIntent,
   type KeyChord,
 } from "../../input/KeyBindings";
-import { REBINDABLE_INTENTS } from "../../input/RebindableIntents";
+import {
+  REBINDABLE_INTENTS,
+  type RebindableIntent,
+} from "../../input/RebindableIntents";
 import {
   CONTROL_PROFILE_COUNT,
   activeKeyOverrides,
   profileName,
   withActiveKeyOverrides,
+  type GameSettings,
 } from "../../systems/SettingsStorage";
 import { createHoverButton } from "../ButtonFactory";
-import { CONTROL_GROUPS, gamepadLabelFor } from "../ControlsReference";
-import { holoFont } from "../theme/holoFont";
 import { HOLO_PALETTE } from "../theme/HoloTheme";
-import { toCssColor } from "../theme/colorMath";
 import { SettingsChoiceRow, SettingsKeyRow } from "./settingsChoiceRows";
+import type { SettingsRowConfig } from "./settingsRows";
 import {
   gridRow,
   type RowGrid,
@@ -35,7 +38,6 @@ import {
 const HEADER_GRID: RowGrid = { columns: 2, rowHeight: 44, gap: 0 };
 const KEY_GRID: RowGrid = { columns: 2, rowHeight: 30, gap: 4, top: 56 };
 const RESET_BUTTON = { width: 220, height: 36, font: "600 13px" } as const;
-const GAMEPAD_ROW = { height: 22, labelSize: 13, top: 8, notePad: 20 } as const;
 
 const LABELS: ReadonlyMap<ActionIntent, string> = new Map(
   REBINDABLE_INTENTS.map((r) => [r.intent, r.label]),
@@ -71,15 +73,13 @@ export function buildControlsTab(ctx: SettingsTabContext): void {
     const bindings = effective();
     rows.forEach((row, intent) => row.setKeyLabel(chipLabel(intent, bindings)));
   };
-  addProfileHeader(ctx, refresh);
-  const perColumn = Math.ceil(REBINDABLE_INTENTS.length / KEY_GRID.columns);
+  addProfileHeader(ctx, refresh, {
+    label: "Keyboard Profile",
+    reset: (s) => withActiveKeyOverrides(s, {}),
+    resetNotice: "Profile reset to the default keys.",
+  });
   const bindings = effective();
-  REBINDABLE_INTENTS.forEach((entry, i) => {
-    const config = gridRow(ctx.area, KEY_GRID, {
-      column: Math.floor(i / perColumn),
-      row: i % perColumn,
-      label: entry.label,
-    });
+  addRebindRows(ctx, REBINDABLE_INTENTS, (entry, config) => {
     const row = new SettingsKeyRow(
       ctx.scene,
       config,
@@ -87,17 +87,65 @@ export function buildControlsTab(ctx: SettingsTabContext): void {
       (r) => startRebind(ctx, entry.intent, r, refresh),
     );
     rows.set(entry.intent, row);
+    return row;
   });
-  // Focus order: reading order across the two columns.
+}
+
+/**
+ * Lay rebinding rows out in two columns under the header (flight, then
+ * combat, then system) and register them for focus in reading order.
+ *
+ * @param ctx - Tab context.
+ * @param entries - Rebindable intents, in display order.
+ * @param createRow - Builds one row at its grid placement.
+ */
+export function addRebindRows(
+  ctx: SettingsTabContext,
+  entries: readonly RebindableIntent[],
+  createRow: (
+    entry: RebindableIntent,
+    config: SettingsRowConfig,
+  ) => SettingsKeyRow,
+): void {
+  const perColumn = Math.ceil(entries.length / KEY_GRID.columns);
+  const rows = entries.map((entry, i) =>
+    createRow(
+      entry,
+      gridRow(ctx.area, KEY_GRID, {
+        column: Math.floor(i / perColumn),
+        row: i % perColumn,
+        label: entry.label,
+      }),
+    ),
+  );
   for (let r = 0; r < perColumn; r++)
     for (let c = 0; c < KEY_GRID.columns; c++) {
-      const entry = REBINDABLE_INTENTS[c * perColumn + r];
-      const row = entry ? rows.get(entry.intent) : undefined;
+      const row = rows[c * perColumn + r];
       if (row) ctx.addFocus(row);
     }
 }
 
-function addProfileHeader(ctx: SettingsTabContext, refresh: () => void): void {
+/** What a profile header's reset button clears. */
+export interface ProfileHeaderOptions {
+  readonly label: string;
+  /** Settings with the active profile's bindings for this device cleared. */
+  readonly reset: (settings: GameSettings) => GameSettings;
+  readonly resetNotice: string;
+}
+
+/**
+ * Header row of a rebinding tab: the active profile chooser and a reset
+ * button (profiles hold keyboard and gamepad bindings together).
+ *
+ * @param ctx - Tab context.
+ * @param refresh - Re-reads the rows' labels.
+ * @param options - Row label and what reset clears.
+ */
+export function addProfileHeader(
+  ctx: SettingsTabContext,
+  refresh: () => void,
+  options: ProfileHeaderOptions,
+): void {
   const profiles = Array.from({ length: CONTROL_PROFILE_COUNT }, (_, i) => ({
     value: i,
     label: profileName(i),
@@ -108,7 +156,7 @@ function addProfileHeader(ctx: SettingsTabContext, refresh: () => void): void {
       gridRow(ctx.area, HEADER_GRID, {
         column: 0,
         row: 0,
-        label: "Keyboard Profile",
+        label: options.label,
       }),
       profiles,
       ctx.settings().controls.activeProfile,
@@ -138,9 +186,9 @@ function addProfileHeader(ctx: SettingsTabContext, refresh: () => void): void {
         variant: "secondary",
       },
       () => {
-        ctx.update(withActiveKeyOverrides(ctx.settings(), {}));
+        ctx.update(options.reset(ctx.settings()));
         refresh();
-        ctx.notify("Profile reset to the default keys.");
+        ctx.notify(options.resetNotice);
       },
     ),
   );
@@ -198,49 +246,4 @@ function applyRebind(
     `Conflict: ${chordLabel(chord)} was in use. Swapped: ${moved}.`,
     "warning",
   );
-}
-
-/**
- * Gamepad tab: the standard-layout bindings (read-only).
- *
- * @param ctx - Tab context.
- */
-export function buildGamepadTab(ctx: SettingsTabContext): void {
-  const { area, scene } = ctx;
-  const rows = CONTROL_GROUPS.flatMap((g) => g.rows).filter(
-    (row) => gamepadLabelFor(row.intents) !== "—",
-  );
-  const perColumn = Math.ceil(rows.length / 2);
-  const columnWidth = area.width / 2;
-  rows.forEach((row, i) => {
-    const x = area.x + Math.floor(i / perColumn) * columnWidth;
-    const y = area.y + GAMEPAD_ROW.top + (i % perColumn) * GAMEPAD_ROW.height;
-    const style = {
-      ...holoFont(GAMEPAD_ROW.labelSize, "400"),
-      color: toCssColor(HOLO_PALETTE.textSecondary),
-    };
-    scene.add.text(x, y, row.label, style);
-    scene.add
-      .text(
-        x + columnWidth - GAMEPAD_ROW.notePad,
-        y,
-        gamepadLabelFor(row.intents),
-        {
-          ...style,
-          color: toCssColor(HOLO_PALETTE.textPrimary),
-        },
-      )
-      .setOrigin(1, 0);
-  });
-  scene.add
-    .text(
-      area.x + area.width / 2,
-      area.y + area.height - GAMEPAD_ROW.notePad,
-      "Standard (Xbox) layout · B = back in every menu · gamepad rebinding is not available yet",
-      {
-        ...holoFont(GAMEPAD_ROW.labelSize, "400"),
-        color: toCssColor(HOLO_PALETTE.textMuted),
-      },
-    )
-    .setOrigin(0.5, 1);
 }

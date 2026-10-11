@@ -5,12 +5,21 @@
  */
 
 import { InputManager } from "./InputManager";
-import type { ActionIntent, KeyboardBinding } from "./InputTypes";
+import type {
+  ActionIntent,
+  GamepadBinding,
+  KeyboardBinding,
+} from "./InputTypes";
 import { chordLabel, primaryChord } from "./KeyBindings";
 
 /** @returns The live profile's keyboard bindings. */
 export function activeKeyboardBindings(): readonly KeyboardBinding[] {
   return InputManager.getProfile().keyboard;
+}
+
+/** @returns The live profile's gamepad bindings. */
+export function activeGamepadBindings(): readonly GamepadBinding[] {
+  return InputManager.getProfile().gamepad;
 }
 
 /**

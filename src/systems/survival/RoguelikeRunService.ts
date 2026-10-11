@@ -43,6 +43,8 @@ export interface StartRunRequest {
   readonly ascension: number;
   /** Fixed seed; omitted = random. */
   readonly seed?: number;
+  /** Daily challenge: start at `ascension` even if not unlocked yet. */
+  readonly uncappedAscension?: boolean;
 }
 
 export class RoguelikeRunService {
@@ -109,10 +111,12 @@ export class RoguelikeRunService {
         faction: request.faction,
         flagshipId: request.flagshipId,
         loadoutId: request.loadoutId,
-        ascension: Math.min(
-          clampAscension(request.ascension),
-          this.profile.maxAscension,
-        ),
+        ascension: request.uncappedAscension
+          ? clampAscension(request.ascension)
+          : Math.min(
+              clampAscension(request.ascension),
+              this.profile.maxAscension,
+            ),
         unlocked: this.profile.unlocked,
         now: this.clock(),
       }),

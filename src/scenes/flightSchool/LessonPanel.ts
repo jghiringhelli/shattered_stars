@@ -17,7 +17,10 @@ const CARD = {
   height: 118,
   promptSize: 15,
   titleSize: 12,
+  hintSize: 11,
 } as const;
+/** Corner hint: the course's skip / leave keys (same format as menu footers). */
+const KEY_HINT = "N  SKIP LESSON      ESC / B  LEAVE";
 const BEAT = {
   y: 152,
   width: 420,
@@ -67,7 +70,7 @@ export class LessonPanel {
         lineSpacing: HOLO_SPACING.xxs,
       })
       .setOrigin(0, 0);
-    this.card.add([this.title, this.prompt]);
+    this.card.add([this.title, this.prompt, this.keyHint()]);
     this.beat = scene.add.graphics();
     this.beatLabel = scene.add
       .text(cx, BEAT.y + BEAT.labelGap, "", {
@@ -85,6 +88,21 @@ export class LessonPanel {
     for (const obj of [this.card, this.beat, this.beatLabel, this.toast])
       obj.setScrollFactor(0).setDepth(UI_DEPTH);
     this.card.setScrollFactor(0, 0, true);
+  }
+
+  /** @returns The card's corner hint: how to skip a lesson or leave. */
+  private keyHint(): Phaser.GameObjects.Text {
+    return this.scene.add
+      .text(
+        CARD.width / 2 - HOLO_SPACING.lg,
+        CARD.height / 2 - HOLO_SPACING.sm,
+        KEY_HINT,
+        {
+          ...holoFont(CARD.hintSize, "600"),
+          color: toCssColor(HOLO_PALETTE.textMuted),
+        },
+      )
+      .setOrigin(1, 1);
   }
 
   /**

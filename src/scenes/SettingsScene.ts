@@ -1,7 +1,8 @@
 /**
  * Settings Scene — every player preference in one screen, saved on change.
  *
- * Tabs: Audio · Controls (keyboard rebinding, profiles) · Gamepad ·
+ * Tabs: Audio · Controls (keyboard rebinding, profiles) · Gamepad (button
+ * rebinding, same profiles) ·
  * Accessibility (colour vision, high contrast, shake, flashes, text size) ·
  * Gameplay · Advanced (local telemetry export/clear, reset all).
  * Keys: 1–6 tabs, ↑/↓ select, ←/→ adjust, ENTER toggle/rebind, ESC / B /
@@ -11,7 +12,6 @@
 
 import Phaser from "phaser";
 import { rebuildSceneInput } from "../input/activeBindings";
-import { chordFromKeyEvent, type KeyChord } from "../input/KeyBindings";
 import { loadSettings, type GameSettings } from "../systems/SettingsStorage";
 import { createHoloPanel } from "../ui/hud/HoloPanel";
 import { MenuFocus, type FocusTarget } from "../ui/menu/MenuFocus";
@@ -26,7 +26,8 @@ import {
   fadeInMenu,
   goToScene,
 } from "../ui/menu/menuTransitions";
-import { buildControlsTab, buildGamepadTab } from "../ui/settings/controlsTabs";
+import { buildControlsTab } from "../ui/settings/controlsTabs";
+import { buildGamepadTab } from "../ui/settings/gamepadTab";
 import { commitSettings } from "../ui/settings/settingsRuntime";
 import { SettingsChoiceRow } from "../ui/settings/settingsChoiceRows";
 import { SettingsSliderRow } from "../ui/settings/settingsRows";
@@ -43,6 +44,7 @@ import {
   type SettingsTabId,
 } from "../ui/settings/settingsTabContext";
 import { createSettingsTabBar } from "../ui/settings/SettingsTabBar";
+import { SettingsInputCapture } from "../ui/settings/SettingsInputCapture";
 import { holoFont } from "../ui/theme/holoFont";
 import { HOLO_PALETTE } from "../ui/theme/HoloTheme";
 import { toCssColor } from "../ui/theme/colorMath";
@@ -56,8 +58,6 @@ const PANEL = {
   noticeY: 676,
 } as const;
 const NOTICE_SIZE = 13;
-/** DOM keyCode of Escape (cancels key capture). */
-const ESC_KEY_CODE = 27;
 
 /**
  * Phaser can deliver one physical key event more than once — even re-emit
@@ -105,7 +105,7 @@ export class SettingsScene extends Phaser.Scene {
   private controlsChanged = false;
   private targets: FocusTarget[] = [];
   private focus: MenuFocus | null = null;
-  private capturing = false;
+  private capture: SettingsInputCapture | null = null;
   private notice: Phaser.GameObjects.Text | null = null;
 
   constructor() {
@@ -116,12 +116,19 @@ export class SettingsScene extends Phaser.Scene {
     this.returnScene = data.returnScene ?? null;
     this.tab = data.tab ?? "audio";
     this.instant = data.instant ?? false;
-    this.capturing = false;
+  }
+
+  /** True while a rebinding row waits for a key or button. */
+  private get capturing(): boolean {
+    return this.capture?.capturing ?? false;
   }
 
   create(): void {
     this.settings = loadSettings();
     this.targets = [];
+    this.capture = new SettingsInputCapture(this, (message) =>
+      this.showNotice(message),
+    );
     addMenuBackdrop(this, { textureId: "nebula_blue" });
     addMenuHeader(this, {
       title: "Settings",
@@ -184,7 +191,10 @@ export class SettingsScene extends Phaser.Scene {
       update: (next) => this.updateSettings(next),
       rebuild: () => this.openTab(this.tab),
       addFocus: (target) => this.targets.push(target),
-      captureKey: (onChord, onDone) => this.captureKey(onChord, onDone),
+      captureKey: (onChord, onDone) =>
+        this.capture?.captureKey(onChord, onDone),
+      captureButton: (onButton, onDone) =>
+        this.capture?.captureButton(onButton, onDone),
       notify: (message, tone) => this.showNotice(message, tone),
     };
   }
@@ -208,44 +218,6 @@ export class SettingsScene extends Phaser.Scene {
     const color =
       tone === "warning" ? HOLO_PALETTE.warning : HOLO_PALETTE.accent;
     this.notice?.setText(message).setColor(toCssColor(color));
-  }
-
-  /**
-   * Wait for the next real key chord; modifiers alone keep waiting, ESC
-   * cancels. Armed on the next tick so the ENTER that opened it is ignored.
-   *
-   * @param onChord - Receives the chord pressed.
-   * @param onDone - Called when capture ends (chord or cancel).
-   */
-  private captureKey(
-    onChord: (chord: KeyChord) => void,
-    onDone: () => void,
-  ): void {
-    const keyboard = this.input.keyboard;
-    if (!keyboard || this.capturing) return;
-    this.capturing = true;
-    const finish = (): void => {
-      keyboard.off("keydown", listener);
-      onDone();
-      // Cleared next tick so the same ESC press does not also leave Settings.
-      this.time.delayedCall(0, () => (this.capturing = false));
-    };
-    const armedAt = performance.now();
-    const listener = (event: KeyboardEvent): void => {
-      // Ignore re-delivered events from before capture was armed.
-      if (event.timeStamp < armedAt) return;
-      event.preventDefault();
-      if (event.keyCode === ESC_KEY_CODE) {
-        this.showNotice("Rebinding cancelled.");
-        finish();
-        return;
-      }
-      const chord = chordFromKeyEvent(event);
-      if (!chord) return;
-      onChord(chord);
-      finish();
-    };
-    this.time.delayedCall(0, () => keyboard.on("keydown", listener));
   }
 
   private setupInput(): void {

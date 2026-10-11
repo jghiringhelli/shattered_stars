@@ -13,6 +13,11 @@ import Phaser from "phaser";
 import { createHoloButton, type HoloButton } from "../../ui/hud/HoloButton";
 import { createHoloPanel, type HoloPanel } from "../../ui/hud/HoloPanel";
 import { createHoloText } from "../../ui/hud/holoPrimitives";
+import type { HoloPressButton } from "../../ui/menu/HoloPressButton";
+import {
+  addBackButton as addMenuBackButton,
+  addMenuHeader,
+} from "../../ui/menu/MenuScaffold";
 import { HOLO_PALETTE, HOLO_SPACING } from "../../ui/theme/HoloTheme";
 import { duelControlsLine } from "./duelControls";
 
@@ -23,15 +28,6 @@ export type TrackSetupObject = (obj: Phaser.GameObjects.GameObject) => void;
 const BACKGROUND_DEPTH = 1999;
 /** Battlefield dim over the painted background. */
 const BACKDROP_ALPHA = 0.62;
-/** Title / subtitle geometry. */
-const TITLE = {
-  y: 46,
-  sizePx: 44,
-  letterSpacing: 12,
-  subtitleGap: 34,
-} as const;
-/** BACK button geometry. */
-const BACK = { x: 74, y: 44, width: 108, height: 34 } as const;
 /** Footer distance from the bottom edge. */
 const FOOTER_BOTTOM = 18;
 /** Default toggle label size (px). */
@@ -78,7 +74,8 @@ export function addSetupBackdrop(
 }
 
 /**
- * Screen title with a caption subtitle under it.
+ * Screen header — the shared menu header (title, subtitle, accent rule), so
+ * the duel setups read like every other menu screen.
  *
  * @param scene - The setup scene.
  * @param title - e.g. "DOGFIGHT".
@@ -91,26 +88,15 @@ export function addSetupTitle(
   subtitle: string,
   track: TrackSetupObject,
 ): void {
-  const centerX = scene.scale.width / 2;
-  track(
-    createHoloText(scene, centerX, TITLE.y, title.toUpperCase(), "title")
-      .setFontSize(TITLE.sizePx)
-      .setLetterSpacing(TITLE.letterSpacing),
-  );
-  track(
-    createHoloText(
-      scene,
-      centerX,
-      TITLE.y + TITLE.subtitleGap,
-      subtitle.toUpperCase(),
-      "caption",
-      HOLO_PALETTE.accent,
-    ),
-  );
+  const header = addMenuHeader(scene, { title, subtitle });
+  track(header.title);
+  if (header.subtitle) track(header.subtitle);
+  track(header.rule);
 }
 
 /**
- * BACK button in the top-left corner.
+ * The standard top-left BACK button (MenuScaffold: chevron icon, secondary
+ * variant, same place and size as every other menu).
  *
  * @param scene - The setup scene.
  * @param onBack - Leaves the screen.
@@ -121,15 +107,8 @@ export function addBackButton(
   scene: Phaser.Scene,
   onBack: () => void,
   track: TrackSetupObject,
-): HoloButton {
-  const button = createHoloButton(
-    scene,
-    BACK.x,
-    BACK.y,
-    { width: BACK.width, height: BACK.height, label: "\u2039 Back" },
-    onBack,
-  );
-  sizeHoloLabel(button, TOGGLE_FONT_PX);
+): HoloPressButton {
+  const button = addMenuBackButton(scene, onBack);
   track(button);
   return button;
 }

@@ -19,6 +19,10 @@ import {
   type KeyOverrides,
 } from "../input/KeyBindings";
 import { isRebindableIntent } from "../input/RebindableIntents";
+import {
+  parseGamepadOverrides,
+  type GamepadOverrides,
+} from "../input/GamepadBindings";
 
 /** Current schema version. */
 export const SETTINGS_VERSION = 2;
@@ -70,6 +74,8 @@ export interface GameplayPrefs {
 export interface ControlProfile {
   readonly name: string;
   readonly keyboard: KeyOverrides;
+  /** Gamepad button overrides (Settings › Gamepad); {} = default layout. */
+  readonly gamepad: GamepadOverrides;
 }
 
 export interface ControlsPrefs {
@@ -93,6 +99,7 @@ export interface GameSettings {
 }
 
 const EMPTY_OVERRIDES: KeyOverrides = {};
+const EMPTY_GAMEPAD_OVERRIDES: GamepadOverrides = {};
 
 /**
  * @param index - Profile slot.
@@ -104,7 +111,11 @@ export function profileName(index: number): string {
 
 const DEFAULT_PROFILES: readonly ControlProfile[] = Array.from(
   { length: CONTROL_PROFILE_COUNT },
-  (_, i) => ({ name: profileName(i), keyboard: EMPTY_OVERRIDES }),
+  (_, i) => ({
+    name: profileName(i),
+    keyboard: EMPTY_OVERRIDES,
+    gamepad: EMPTY_GAMEPAD_OVERRIDES,
+  }),
 );
 
 /** Defaults for a fresh install. */
@@ -215,6 +226,7 @@ function parseControls(raw: Json): ControlsPrefs {
   const profiles = DEFAULT_PROFILES.map((fallback, i) => ({
     name: fallback.name,
     keyboard: parseOverrides(asObject(stored[i]).keyboard),
+    gamepad: parseGamepadOverrides(asObject(stored[i]).gamepad),
   }));
   const active = raw.activeProfile;
   const valid =

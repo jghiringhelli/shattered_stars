@@ -7,8 +7,12 @@
 
 import type Phaser from "phaser";
 import { audioManager } from "../../audio/AudioManager";
-import { applyKeyboardOverrides } from "../../input/activeBindings";
 import {
+  applyGamepadButtonOverrides,
+  applyKeyboardOverrides,
+} from "../../input/activeBindings";
+import {
+  activeGamepadOverrides,
   activeKeyOverrides,
   legacyRegistrySettings,
   loadSettings,
@@ -41,6 +45,7 @@ export function applySettings(
   audioManager.setUiVolume(audio.ui);
   applyThemePreferences(accessibility);
   applyKeyboardOverrides(activeKeyOverrides(settings));
+  applyGamepadButtonOverrides(activeGamepadOverrides(settings));
   setCameraComfort({
     shakeScale: accessibility.screenShake,
     reduceFlashes: accessibility.reduceFlashes,

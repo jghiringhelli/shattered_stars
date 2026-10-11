@@ -29,6 +29,7 @@ import {
 import { createHoloText } from "../hud/holoPrimitives";
 import { HoloPanel } from "../hud/HoloPanel";
 import { pinTree } from "../modeHud/screenSpace";
+import { attachHintTooltip, type HintContent } from "../menu/HintTooltip";
 
 /** A single selectable option as seen by the player. */
 export interface ChoiceCard {
@@ -39,6 +40,8 @@ export interface ChoiceCard {
   disabled?: boolean;
   /** Right-aligned note: a price, a requirement, a synergy hint. */
   note?: string;
+  /** Hover tooltip: role + "best with" (relics). */
+  hint?: HintContent;
 }
 
 /** Optional extras of one overlay. */
@@ -208,7 +211,9 @@ export class SurvivalChoicePanel {
     group.add(this.cardDescription(card.description, height));
     if (card.note) group.add(this.cardNote(card.note, card.disabled === true));
     if (card.disabled) group.setAlpha(DISABLED_ALPHA);
-    group.add(this.cardHitArea(group, height, card.disabled === true, onPick));
+    const hit = this.cardHitArea(group, height, card.disabled === true, onPick);
+    group.add(hit);
+    if (card.hint) attachHintTooltip(this.scene, hit, card.hint);
     this.container.add(group);
   }
 

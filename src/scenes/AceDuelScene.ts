@@ -73,6 +73,10 @@ import {
   type AceDuelDifficulty,
   type AceDuelSetupActions,
 } from "./duel/AceDuelSetupView";
+import { SettingsDefaultPick } from "../ui/menu/setupDefaults";
+import { defaultDifficulty } from "../systems/SettingsStorage";
+import { aceDuelBriefing, showSortieBriefing } from "../ui/briefing";
+import { bindMenuBack } from "../ui/menu/menuTransitions";
 import { cameraViewFrom } from "../ui/hud/hudMath";
 import { HOLO_PALETTE, factionAccent } from "../ui/theme/HoloTheme";
 import { applyInstantStress } from "../arcade/ArcadeStress";
@@ -101,7 +105,12 @@ import { ACE_MATCHUPS, type AceMatchup } from "../data/AceMatchups";
 import { PauseMenu } from "../ui/PauseMenu";
 import { InputManager } from "../input/InputManager";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
-import { trackModeEnd, trackModeStart } from "../telemetry/telemetry";
+import {
+  trackDeath,
+  trackModeEnd,
+  trackModeStart,
+} from "../telemetry/telemetry";
+import { matchStats } from "../telemetry/matchTelemetry";
 import {
   createSideScore,
   creditKill,
@@ -212,6 +221,10 @@ export class AceDuelScene extends Phaser.Scene {
 
   // Settings
   private difficulty: AceDuelDifficulty = "normal";
+  /** Preselects Settings › Default Difficulty (kept across rematches). */
+  private readonly difficultyDefault = new SettingsDefaultPick(
+    (level): AceDuelDifficulty => level,
+  );
   /**
    * The player's quick-build picks for their side's ships. Null (never
    * touched) means the defaults assignQuickBuilds would give; picks made
@@ -295,7 +308,13 @@ export class AceDuelScene extends Phaser.Scene {
 
     this.loadCompletedMatchups();
     this.resetMatchState();
+    this.difficulty =
+      this.difficultyDefault.next(defaultDifficulty()) ?? this.difficulty;
     this.showSetupScreen();
+    // The one back affordance (ESC / gamepad B / right-click), setup only.
+    bindMenuBack(this, () => this.scene.start("MainMenuScene"), {
+      isActive: () => this.isSetupPhase,
+    });
 
     if (ShipTelemetry.isEnabled()) {
       this.telemetry = new ShipTelemetry();
@@ -450,9 +469,29 @@ export class AceDuelScene extends Phaser.Scene {
         this.difficulty = difficulty;
         rerender();
       },
-      start: () => this.startDuel(),
+      start: () => this.briefSortie(),
       back: () => this.scene.start("MainMenuScene"),
     };
+  }
+
+  /** The pre-sortie briefing (≤ 3 s, skippable); the duel starts when it closes. */
+  private briefSortie(): void {
+    const matchup = this.selectedMatchup;
+    const [mine, rival] =
+      this.playerSide === 1
+        ? [matchup.side1, matchup.side2]
+        : [matchup.side2, matchup.side1];
+    showSortieBriefing(this, {
+      briefing: aceDuelBriefing({
+        matchupName: matchup.name,
+        playerAce: mine.name,
+        rivalAce: rival.name,
+        rivalShips: rival.ships.map((id) => getShipDefinition(id)?.name ?? id),
+        difficulty: this.difficulty,
+      }),
+      accent: factionAccent(this.playerSideFaction()),
+      onLaunch: () => this.startDuel(),
+    });
   }
 
   /** The ships the player flies in the selected matchup. */
@@ -532,6 +571,11 @@ export class AceDuelScene extends Phaser.Scene {
     this.setupObjects = [];
     this.isSetupPhase = false;
     trackModeStart("ace_duel", { matchup: this.selectedMatchup.name });
+    matchStats.start(
+      "ace_duel",
+      { matchup: this.selectedMatchup.name },
+      this.events,
+    );
 
     audioManager.playFactionMusic(
       this.playerSide === 1
@@ -663,6 +707,7 @@ export class AceDuelScene extends Phaser.Scene {
     });
     if (!targetId) return;
     this.crew?.markTarget(this.playerSideKey, targetId, this.time.now);
+    matchStats.record({ kind: "mark" });
   }
 
   /**
@@ -834,6 +879,11 @@ export class AceDuelScene extends Phaser.Scene {
     ship.flight = equipFlight(ship.flight, ship.modifiers);
 
     this.ships.set(id, ship);
+    matchStats.record({
+      kind: "deploy",
+      friendly: spawn.owner === "player",
+      shipId: id,
+    });
 
     if (spawn.side === 1) {
       this.side1ShipIds.push(id);
@@ -908,6 +958,13 @@ export class AceDuelScene extends Phaser.Scene {
       this.setFlight(ship, tick.state);
       this.regenerateShieldsOf(ship, deltaMs);
       if (tick.completed) this.onCycleCommitted(ship);
+      if (tick.completed && ship.id === this.flagshipId)
+        matchStats.record({
+          kind: "cycle",
+          dial: ship.dial,
+          direction: tick.completed.direction,
+          speed: tick.completed.speed,
+        });
       this.shipSprites
         .get(ship.id)
         ?.setPosition(ship.x, ship.y)
@@ -1047,6 +1104,12 @@ export class AceDuelScene extends Phaser.Scene {
         this.crew?.isMarkedShot(attacker.id, target.id, this.time.now) ?? false,
     });
     if (result.hit) this.applyHit(attacker, target, result);
+    matchStats.record({
+      kind: "shot",
+      friendly: this.isPlayerSide(attacker.id),
+      weapon: "primary",
+      hit: result.hit,
+    });
     this.effectsManager.fireLaser(
       attacker.x,
       attacker.y,
@@ -1076,6 +1139,12 @@ export class AceDuelScene extends Phaser.Scene {
       stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
     });
     const after = absorbDamage(target, result.damage);
+    matchStats.record({
+      kind: "damage",
+      toFriendly: this.isPlayerSide(target.id),
+      hull: target.hull - after.hull,
+      shield: target.shields - after.shields,
+    });
     if (after.shields < target.shields) {
       audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);
     }
@@ -1100,6 +1169,13 @@ export class AceDuelScene extends Phaser.Scene {
   private onShipDestroyed(killer: AceDuelShip, victim: AceDuelShip): void {
     this.hitLedger.forget(victim.id);
     this.crew?.forget(victim.id);
+    matchStats.record({
+      kind: "kill",
+      victimFriendly: this.isPlayerSide(victim.id),
+      victimIsPlayer: victim.id === this.flagshipId,
+    });
+    if (victim.id === this.flagshipId)
+      trackDeath("ace_duel", killer.definitionId);
     if (this.side1ShipIds.includes(victim.id)) {
       this.side2Score = creditKill(this.side2Score, victim.definitionId);
     } else {
@@ -1211,6 +1287,12 @@ export class AceDuelScene extends Phaser.Scene {
     });
     this.setFlight(ship, { motion: result.motion, stress: result.stress });
     this.playFlightEvents(ship, result.events, origin);
+    matchStats.record({ kind: "flight", events: result.events });
+    matchStats.record({
+      kind: "stress",
+      ms: delta,
+      stressed: result.stress.isStressed,
+    });
   }
 
   private updateSprites(): void {
@@ -1283,6 +1365,7 @@ export class AceDuelScene extends Phaser.Scene {
     const enemyWins = this.playerSide === 1 ? this.side2Wins : this.side1Wins;
     const playerWon = playerWins > enemyWins;
     trackModeEnd("ace_duel", playerWon ? "victory" : "defeat");
+    matchStats.finish(playerWon ? "victory" : "defeat");
     const playerMatchupFaction =
       this.playerSide === 1
         ? this.selectedMatchup.side1?.faction
