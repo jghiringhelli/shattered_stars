@@ -9,6 +9,7 @@ import type { GestureState } from "../ArcadeInputGestures";
 import type { StressState } from "../ArcadeStress";
 import type { HeldSteering } from "../SteeringIntent";
 import type { MotionState } from "./ShipMotion";
+import type { ThrottleMemory } from "./PilotThrottle";
 
 /** Edge-triggered flight intents (fired once per key press). */
 export type FlightEdge =
@@ -40,6 +41,10 @@ export interface FlightInput {
 export interface PilotControlState {
   readonly gesture: GestureState;
   readonly steering: HeldSteering;
+  /** Speeds before the latest ↑/↓ taps, to undo them if a ↑↑/↓↓ gesture fires. */
+  readonly throttle: ThrottleMemory;
+  /** A barrel roll fired: arrows steer nothing until both are released. */
+  readonly rollLatched: boolean;
 }
 
 /** The ship being flown, as far as flight controls care. */
