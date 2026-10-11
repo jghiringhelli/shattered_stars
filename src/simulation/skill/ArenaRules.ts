@@ -19,6 +19,7 @@ import { calculateHitChance } from "../../data/ModeBalancing";
 import { attackIntervalMs } from "../../arcade/systems/CombatTempo";
 import { DEFAULT_SHOT_LEVERS, type ShotLevers } from "../../arcade/ShotLevers";
 import type { ArcPosition } from "../../arcade/ai/AiGeometry";
+import type { ResolvedTempo } from "../TempoVariant";
 
 /** Combat rules and lever settings. */
 export interface ArenaRules {
@@ -120,11 +121,18 @@ export function shotStressBonus(shot: ShotContext, rules: ArenaRules): number {
 /**
  * @param weaponCooldownMs - The weapon's own cooldown (ms).
  * @param rules - Rules in force.
- * @returns Time until the weapon may attack again (ms).
+ * @param tempo - What-if tempo (flight clock), if any.
+ * @returns Time until the weapon may attack again (ms, on combat's clock).
  */
 export function attackInterval(
   weaponCooldownMs: number,
   rules: ArenaRules,
+  tempo?: ResolvedTempo,
 ): number {
-  return rules.attackIntervalOverrideMs ?? attackIntervalMs(weaponCooldownMs);
+  if (!tempo) {
+    return rules.attackIntervalOverrideMs ?? attackIntervalMs(weaponCooldownMs);
+  }
+  return rules.attackIntervalOverrideMs !== null
+    ? rules.attackIntervalOverrideMs * tempo.flightScale
+    : tempo.attackIntervalMs(weaponCooldownMs);
 }

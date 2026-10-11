@@ -28,6 +28,7 @@ import {
   spawnShips,
 } from "./ArenaRound";
 import { contactOf } from "./ArenaShip";
+import { immunityLedgerFor, resolveTempo } from "../TempoVariant";
 import {
   DEFAULT_TIME_LIMIT_MS,
   TICK_MS,
@@ -54,9 +55,10 @@ export function runBattle(spec: BattleSpec): BattleResult {
   const random = createSeededRng(spec.seed).next;
   const ships = spawnShips(spec, random);
   const squads = createSquads(spec);
+  const tempo = spec.tempo ? resolveTempo(spec.tempo) : undefined;
   const state: CombatState = {
     ships,
-    ledger: new HitImmunityLedger(),
+    ledger: tempo ? immunityLedgerFor(tempo) : new HitImmunityLedger(),
     rules: spec.rules ?? ENGINE_RULES,
     worldSize: BATTLEFIELD_SIZE,
     random,
@@ -64,17 +66,20 @@ export function runBattle(spec: BattleSpec): BattleResult {
     tallies: { A: emptyTally(), B: emptyTally() },
     recentHits: new Map(),
     marks: NO_SQUAD_MARKS,
+    ...(tempo ? { tempo } : {}),
   };
   const limit = spec.timeLimitMs ?? DEFAULT_TIME_LIMIT_MS;
+  // Flight, AI and combat run on the flight clock (k = 1 for the engine tempo).
+  const k = tempo?.flightScale ?? 1;
   let nowMs = 0;
   while (nowMs < limit) {
     const contacts = ships.map(contactOf);
-    commandSquads(squads, contacts, state, nowMs);
+    commandSquads(squads, contacts, state, nowMs * k);
     for (const ship of ships)
-      if (ship.alive) pilotShip(ship, contacts, squads, nowMs);
-    for (const ship of ships) if (ship.alive) flyShip(ship);
+      if (ship.alive) pilotShip(ship, contacts, squads, nowMs * k, TICK_MS * k);
+    for (const ship of ships) if (ship.alive) flyShip(ship, tempo);
     nowMs += TICK_MS;
-    resolveCombatTick(state, nowMs, TICK_MS);
+    resolveCombatTick(state, nowMs * k, TICK_MS * k);
     const winner = eliminationWinner(ships, state);
     if (winner) return resultOf(spec.seed, winner, "elimination", nowMs, state);
   }

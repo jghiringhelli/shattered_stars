@@ -75,6 +75,15 @@ export interface AscensionRules {
 const ELITE_WEIGHT_BOOST = 1.6;
 /** Effective-wave shift from Veteran Wings (one tier band earlier). */
 const VETERAN_TIER_SHIFT = 3;
+/**
+ * Enemy hull at ascension 0, as a fraction of the survival-mode hull.
+ * Tuned with the node-based run sim (SurvivalRunSim, ADR-0004): at 1.0 an
+ * average pilot's lone flagship beat a single sector-1 novice only ~70% of
+ * the time and no run was ever won.
+ */
+export const BASE_ENEMY_HULL_MULTIPLIER = 0.7;
+/** Hardened Hulls (ascension 5): enemy hull ×1.15 on top of the base. */
+const HARDENED_HULLS_MULTIPLIER = 1.15;
 
 /**
  * @param level - Ascension level (clamped to 0..MAX_ASCENSION).
@@ -88,7 +97,8 @@ export function ascensionRules(level: number): AscensionRules {
     extraBeltSqueezes: at(2) ? 2 : 0,
     tierWaveShift: at(3) ? VETERAN_TIER_SHIFT : 0,
     salvageMultiplier: at(4) ? 0.8 : 1,
-    enemyHullMultiplier: at(5) ? 1.15 : 1,
+    enemyHullMultiplier:
+      BASE_ENEMY_HULL_MULTIPLIER * (at(5) ? HARDENED_HULLS_MULTIPLIER : 1),
     shopPriceMultiplier: at(6) ? 1.25 : 1,
     eliteAffixCount: at(7) ? 2 : 1,
     extraBossPhases: at(8) ? 1 : 0,

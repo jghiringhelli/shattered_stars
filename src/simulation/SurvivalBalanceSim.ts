@@ -10,6 +10,10 @@
  * runs) are unit-tested — not its absolute realism.
  *
  * See docs/adr/ADR-0003-survival-roguelite-leveling.md.
+ *
+ * The node-based roguelite run (ADR-0004: sector maps, battle nodes fought on
+ * the real engine, events, shops, docks) is simulated by
+ * `simulation/survival/SurvivalRunSim` — `npm run telemetry:survival`.
  */
 
 import { createSeededRng } from "../utils/random";

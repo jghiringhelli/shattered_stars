@@ -65,6 +65,7 @@ export function resolveCombatTick(
     ship.weaponCooldownMs = attackInterval(
       ship.combatStats.weaponCooldown,
       state.rules,
+      state.tempo,
     );
   }
 }
@@ -175,6 +176,7 @@ function destroy(
   nowMs: number,
 ): void {
   victim.alive = false;
+  state.firstKillAtMs ??= nowMs;
   state.ledger.forget(victim.id);
   state.recentHits.delete(victim.id);
   state.marks = forgetMarkedTarget(state.marks, victim.id);

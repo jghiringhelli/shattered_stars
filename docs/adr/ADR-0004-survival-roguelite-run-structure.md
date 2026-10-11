@@ -151,3 +151,65 @@ pilot. `tests/e2e/survival-node-duration.spec.ts` re-measures (it needs a quiet 
   are pure modules with unit tests (`tests/unit/**/survival*`).
 - Remaining tuning: threat scale/caps and elite strength are initial values from bot
   measurements and should be swept with the headless sim; relic magnitudes likewise.
+  First sweep done 2026-10-11 — see below; the run-level targets need the structural
+  decisions listed there.
+
+## Headless balance sweep (2026-10-11)
+
+**Tool.** `npm run telemetry:survival -- --runs 200 [--belt-aware] [--ascension N]`
+(`src/simulation/survival/*`). Whole runs are played through the game's own pure run operations
+(`createRun`, `enterNode`, event / shop / dock / reward resolvers, `completeCombat` / `failRun`);
+every battle node is fought on the real engine the way `SurvivalScene` fights it —
+`SurvivalBattleRules` (persisted damage, relics, mutations, upgrades), wave sizing
+(`scaledWaveSize` + `planWaveRoster`), the spawn arc, `SquadBattleAi` (orders, marks, belt retreat
+points), cycle flight, the belt's damage, and the scene's combat (run bonuses, relic shot
+adjustments, crits, evasion, kill rewards, boss phases). The flagship is flown by an average-tier
+bot that marks its target (the scene's autopilot); `--belt-aware` models a pilot who never strays
+into the belt. Route / reward policy of the "average player": repairs when below 60 % hull, elites
+only above 75 %, generalist draft picks, first relic / Hangar / mutation, first affordable event
+choice, shop repair → escort (up to 2) → relic. Deterministic per seed; ~0.4 s per run.
+
+**Targets** (average-tier player, ascension 0): sector-1 node clear ≥ 80 %, sector 2 ≥ 65 %,
+sector 3 ≥ 50 %, run win 25–40 %, node length 45–90 s. Note that with permadeath and ~13 battles
+per run, a 25–40 % run win needs ~90 %+ clears on average, so the per-sector numbers are floors.
+
+**Results** (200 runs each, seeds 1–200):
+
+| Config | Pilot | S1 clear | combat | elite | boss | S2 reached | run win | node length p10/med/p90 |
+|---|---|---|---|---|---|---|---|---|
+| enemy hull ×1.0 (before) | autopilot | 60 % | 67 % | 6 % | 0 % | 0 / 200 | 0 % | 28 / 65 / 135 s |
+| enemy hull ×1.0 (before) | belt-aware | 73 % | 90 % | 13 % | 2 % | 2 / 200 | 0 % | 27 / 77 / 275 s |
+| **enemy hull ×0.7 (now)** | autopilot | 65 % | 76 % | 8 % | 0 % | 0 / 200 | 0 % | 26 / 54 / 115 s |
+| **enemy hull ×0.7 (now)** | belt-aware | 75 % | 92 % | 16 % | 4 % | 4 / 200 | 0 % | 22 / 60 / 198 s |
+
+**Changed:** `BASE_ENEMY_HULL_MULTIPLIER = 0.7` (`src/data/survival/ascension.ts`; ascension 5 is
+still ×1.15 on top). It brings node length into the 45–90 s band (median 54–60 s instead of
+65–78 s, shorter tails) and lifts regular combat clears (+9 / +2 pts). Pushing it further (0.5)
+does not help: hull is not what decides the lost nodes.
+
+**Why the targets are not met — findings (measured):**
+1. **The belt kills the flagship.** Every lost regular combat node of the autopilot was a belt
+   death: the safe zone (radius 2 600 px on a 6 000 px torus) ends where 1v1 chases wander, and the
+   belt deals up to 36 HP/s (3/s × DURABILITY_SCALE) — 2 s for a 72-HP Viper. A belt-aware pilot
+   clears 92 % of combat nodes. This matches the live measurement above (opening 1v1: 2/3 cleared).
+2. **Elite and boss nodes are walls (4–16 % cleared).** A sector-1 elite node fields a gunship /
+   bomber elite (e.g. Pelican: 176 hull, ×1.5 elite hull) plus a regular; the sector-1 boss wave
+   fields an *expert* elite (`sizeWave` adds one elite to every boss wave) plus the expert boss
+   (×3 hull, +1 die) plus regulars — against a fleet of ~1.1 (elite) / ~1.5 (boss) ships.
+   Halving boss hull (`BOSS_BASE_MULTIPLIER` 2 → 0) or elite hull (1.5 → 1.0) barely moved the
+   clear rate (boss 2–4 %, elite 22–24 %): the fleet dies first.
+3. **Squad marks punish a lone flagship.** Any enemy wave of 2+ flies as a squad and marks
+   (+0.35 hit, +5 damage per hit); a fleet of one has no squad and no mark. Elite losses come in
+   9–28 s. Escorts are scarce (fleet averages 1.1 ships at elites; shop escorts cost 75 and shops
+   are 8 % of nodes): cheaper escorts (40) raised boss clears only to 8 %.
+
+**Recommended next steps (structural, owner decision — not done here):**
+- Bot belt avoidance (BotPilot/SquadBattleAi retreat earlier) or a gentler belt ramp
+  (`SURVIVAL_BASE_BELT.maxDamagePerSecond` / a wider safe zone) — the biggest single win for
+  regular nodes.
+- Boss waves without the bonus elite in the roguelite (`sizeWave(…, isBossWave)` is shared with
+  the old endless mode and pinned by `threat.test.ts`), and elites drawn from fighters rather than
+  gunships in sector 1.
+- A guaranteed early wingman (start with one escort, or a row-0/1 escort reward) so the player
+  has a squad (and marks) when the first elite appears.
+- Re-run this sweep after each change; adopt only when the run win rate lands in 25–40 %.

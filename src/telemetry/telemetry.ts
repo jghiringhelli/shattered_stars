@@ -115,6 +115,15 @@ export function trackTutorialExit(stepId: string, completed: boolean): void {
   telemetryLog().record("tutorial_exit", { step: stepId, completed });
 }
 
+/**
+ * One battle's combat stats (see matchStats.ts / matchTelemetry.ts).
+ *
+ * @param summary - The flat match summary.
+ */
+export function trackMatchSummary(summary: TelemetryData): void {
+  telemetryLog().record("match_summary", summary);
+}
+
 /** @returns Every stored event. */
 export function telemetryEvents(): readonly TelemetryEvent[] {
   return telemetryLog().events();

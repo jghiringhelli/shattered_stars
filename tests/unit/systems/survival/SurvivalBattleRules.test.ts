@@ -9,9 +9,13 @@ import { NEUTRAL_MODIFIERS } from "../../../../src/core/CombatModifiers";
 import { DURABILITY_SCALE } from "../../../../src/config";
 import { getShipDial } from "../../../../src/data/ShipDefinitions";
 import { getAffix } from "../../../../src/data/survival/affixes";
+import { BASE_ENEMY_HULL_MULTIPLIER } from "../../../../src/data/survival/ascension";
 import { SALVAGE_PER_KILL } from "../../../../src/data/survival/economy";
 import type { RunState } from "../../../../src/systems/survival/RunTypes";
 import { RunBuilder, atActiveNode } from "./survivalRunBuilder";
+
+/** Hardened Hulls (ascension 5): enemy hull ×1.15 on top of the base. */
+const HARDENED_HULLS = 1.15;
 
 function rulesFor(run: RunState): SurvivalBattleRules {
   return new SurvivalBattleRules(run, planCombat(run)!);
@@ -103,7 +107,9 @@ describe("SurvivalBattleRules — waves and enemies", () => {
       getAffix("marksman")!,
       getAffix("swift")!,
     ]);
-    expect(target.maxHull).toBe(Math.round(48 * 1.15));
+    expect(target.maxHull).toBe(
+      Math.round(48 * BASE_ENEMY_HULL_MULTIPLIER * HARDENED_HULLS),
+    );
     expect(target.maxShields).toBe(48);
     expect(dice).toBe(1);
     expect(target.modifiers.maxSpeedBonus).toBe(1);

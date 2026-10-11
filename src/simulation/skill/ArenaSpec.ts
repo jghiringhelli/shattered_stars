@@ -8,6 +8,7 @@
 import type { BotTier, PilotBot } from "../../arcade/ai/BotTypes";
 import type { CoordinationOptions } from "../../arcade/ai/SquadCoordinator";
 import type { SideScore } from "../../systems/arena/BattleScore";
+import type { TempoVariant } from "../TempoVariant";
 import type { SideId, SideTally } from "./ArenaCombatState";
 import type { ArenaRules } from "./ArenaRules";
 
@@ -53,6 +54,8 @@ export interface BattleSpec {
   readonly seed: number;
   readonly timeLimitMs?: number;
   readonly rules?: ArenaRules;
+  /** What-if tempo (experiments); omitted = the engine's. */
+  readonly tempo?: TempoVariant;
 }
 
 /** How a battle ended. */
@@ -60,8 +63,13 @@ export interface BattleResult {
   readonly seed: number;
   readonly winner: SideId | "draw";
   readonly endedBy: "elimination" | "timeout";
+  /** Battle length (real ms). */
   readonly durationMs: number;
   readonly scores: Readonly<Record<SideId, SideScore>>;
   readonly tallies: Readonly<Record<SideId, SideTally>>;
   readonly survivors: Readonly<Record<SideId, number>>;
+  /** Real time of the first kill (ms), or null when nobody died. */
+  readonly firstKillMs: number | null;
+  /** Special actions (K-turn, Segnor, Tallon, boost, barrel roll) flown, all ships. */
+  readonly specialsUsed: number;
 }

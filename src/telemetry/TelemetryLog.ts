@@ -31,6 +31,7 @@ export type TelemetryEventType =
   | "death"
   | "tutorial_step"
   | "tutorial_exit"
+  | "match_summary"
   | "error";
 
 /** A primitive event field value. */

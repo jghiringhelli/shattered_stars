@@ -52,6 +52,8 @@ export interface ArenaShip {
   weaponCooldownMs: number;
   alive: boolean;
   readonly pilot: BotPilot;
+  /** Special actions this ship's pilot has flown (telemetry). */
+  specialsUsed: number;
 }
 
 /** What spawning a ship needs. */
@@ -97,6 +99,7 @@ export function spawnArenaShip(spec: ArenaShipSpec): ArenaShip {
     weaponCooldownMs: 0,
     alive: true,
     pilot: spec.pilot,
+    specialsUsed: 0,
   };
   ship.modifiers = equipQuickBuild(ship, loadoutId);
   ship.flight = equipFlight(ship.flight, ship.modifiers);

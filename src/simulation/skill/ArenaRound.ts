@@ -21,6 +21,12 @@ import { resolveByPoints } from "../../systems/arena/BattleScore";
 import type { CombatState, SideId } from "./ArenaCombatState";
 import { spawnLayout } from "./ArenaLayout";
 import { setArenaFlight, spawnArenaShip, type ArenaShip } from "./ArenaShip";
+import { countSpecialActions } from "../../telemetry/matchStatTypes";
+import {
+  resolveTempo,
+  scaleControlCooldowns,
+  type ResolvedTempo,
+} from "../TempoVariant";
 import {
   SIDES,
   TICK_MS,
@@ -43,26 +49,40 @@ export function spawnShips(
     BATTLEFIELD_SIZE,
     random,
   );
+  const tempo = spec.tempo ? resolveTempo(spec.tempo) : null;
   return SIDES.flatMap((side) =>
-    spec[side].ships.map((entry, index) =>
-      spawnArenaShip({
+    spec[side].ships.map((entry, index) => {
+      const reactionScale = tempo
+        ? tempo.reactionScale(entry.reactionScale ?? 1)
+        : entry.reactionScale;
+      const ship = spawnArenaShip({
         id: `${side}${index}`,
         side,
         definitionId: entry.definitionId,
         pose: layout[side][index]!,
         pilot: new BotPilot(entry.tier, {
           random,
-          ...(entry.reactionScale !== undefined
-            ? { reactionScale: entry.reactionScale }
-            : {}),
+          ...(reactionScale !== undefined ? { reactionScale } : {}),
           ...(entry.bot ? { bot: entry.bot } : {}),
         }),
         ...(entry.loadoutId !== undefined
           ? { loadoutId: entry.loadoutId }
           : {}),
-      }),
-    ),
+      });
+      if (tempo) applyTempoToShip(ship, tempo);
+      return ship;
+    }),
   );
+}
+
+/**
+ * Express a ship's real-ms action recharge on the tempo's flight clock.
+ * @param ship - A freshly spawned ship (mutated).
+ * @param tempo - The resolved tempo.
+ */
+export function applyTempoToShip(ship: ArenaShip, tempo: ResolvedTempo): void {
+  const control = scaleControlCooldowns(ship.flight.motion.control, tempo);
+  ship.flight = { ...ship.flight, motion: { ...ship.flight.motion, control } };
 }
 
 /**
@@ -110,13 +130,15 @@ export function commandSquads(
  * @param ship - The ship.
  * @param contacts - Every ship as the AI sees it (index-aligned with ships).
  * @param squads - Squad layer per side.
- * @param nowMs - Arena time (ms).
+ * @param nowMs - Arena time (ms, flight clock).
+ * @param deltaMs - Frame length on the flight clock (ms).
  */
 export function pilotShip(
   ship: ArenaShip,
   contacts: readonly BotContact[],
   squads: ReadonlyMap<SideId, SquadCommand>,
   nowMs: number,
+  deltaMs: number = TICK_MS,
 ): void {
   const self = contacts.find((c) => c.id === ship.id)!;
   const result = ship.pilot.fly({
@@ -126,22 +148,24 @@ export function pilotShip(
     contacts: contacts.filter((c) => c.id !== ship.id),
     order: squads.get(ship.side)?.orderFor(ship.id) ?? null,
     nowMs,
-    deltaMs: TICK_MS,
+    deltaMs,
     worldSize: BATTLEFIELD_SIZE,
   });
+  ship.specialsUsed += countSpecialActions(result.events);
   setArenaFlight(ship, { motion: result.motion, stress: result.stress });
 }
 
 /**
  * Fly one tick on the cycle engine; tell the pilot when a cycle commits.
  * @param ship - The ship.
+ * @param tempo - What-if tempo (flight clock); omitted = the engine's.
  */
-export function flyShip(ship: ArenaShip): void {
+export function flyShip(ship: ArenaShip, tempo?: ResolvedTempo): void {
   const tick = tickCycleFlight(ship.flight, {
-    deltaMs: TICK_MS,
+    deltaMs: tempo ? TICK_MS * tempo.flightScale : TICK_MS,
     worldSize: BATTLEFIELD_SIZE,
     dial: ship.dial,
-    cycleMs: CYCLE_DURATION_MS,
+    cycleMs: tempo ? tempo.cycleMs : CYCLE_DURATION_MS,
     modifiers: stressModifiersOf(ship.modifiers),
   });
   setArenaFlight(ship, tick.state);
@@ -201,6 +225,7 @@ export function resultOf(
 ): BattleResult {
   const survivors = (side: SideId): number =>
     state.ships.filter((s) => s.alive && s.side === side).length;
+  const flightScale = state.tempo?.flightScale ?? 1;
   return {
     seed,
     winner,
@@ -209,5 +234,10 @@ export function resultOf(
     scores: state.scores,
     tallies: state.tallies,
     survivors: { A: survivors("A"), B: survivors("B") },
+    firstKillMs:
+      state.firstKillAtMs === undefined
+        ? null
+        : state.firstKillAtMs / flightScale,
+    specialsUsed: state.ships.reduce((sum, s) => sum + s.specialsUsed, 0),
   };
 }

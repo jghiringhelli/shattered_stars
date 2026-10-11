@@ -62,7 +62,8 @@ state proves the input. Deaths respawn. N skips a lesson, ESC leaves. Progress:
 Ring buffer (500 events) in `localStorage["ss_telemetry_v1"]`, never sent anywhere; export/clear
 in Settings › Advanced; gated by `privacy.telemetryEnabled` (default on).
 Events: `session_start/end`, `mode_start/end` (with `durationMs`, outcome), `death` (cause),
-`tutorial_step`, `tutorial_exit` (drop-off), `error` (window error / unhandled rejection).
+`tutorial_step`, `tutorial_exit` (drop-off), `match_summary` (one per battle, below),
+`error` (window error / unhandled rejection).
 
 One-line API for mode scenes (`telemetry/telemetry.ts`):
 
@@ -72,8 +73,43 @@ trackModeEnd("survival", "defeat", { wave: 7 });      // victory | defeat | draw
 trackDeath("survival", killerDefinitionId, { wave }); // player ship destroyed
 ```
 
-Wired: Skirmish, Dogfight, Ace Duel, Boss Raid, Continuous, Flight School.
-Not yet wired (owned elsewhere): **Survival**, **Campaign**.
+Wired: Skirmish, Dogfight, Ace Duel, Boss Raid, Continuous, Flight School, Survival (one mode
+per battle node), Campaign (one per mission).
+
+### Match combat stats (`telemetry/matchStats.ts`, `matchTelemetry.ts`)
+
+A pure per-match accumulator; scenes add one-line `matchStats.record(...)` calls and one
+`matchStats.finish(outcome)`, which emits a flat `match_summary` event:
+
+```ts
+matchStats.start("dogfight", { difficulty }, this.events); // shutdown before finish → "quit"
+matchStats.record({ kind: "shot", friendly, weapon: "primary", hit });
+matchStats.record({ kind: "damage", toFriendly, hull, shield });
+matchStats.record({ kind: "kill", victimFriendly, victimIsPlayer });
+matchStats.finish("victory", { rounds });
+```
+
+Fields: `durationMs`, `firstKillMs`, `kills` / `losses` / `playerDeaths`, shots / hits (primary,
+ordnance, enemy), damage dealt / taken (hull vs shields), the player's maneuvers by dial colour
+(`mvGreen/White/Red`), specials (`kturn`, `segnor`, `tallon`, `boost`, `barrelRoll`, `specials`),
+`marks`, `stressMs`, `repairs` / `repairHull` (friendly hull repair pulses, via
+`ShipRepairFeedback`), `deployedFriendly` / `deployedHostile`, plus the start/finish details.
+"Friendly" = the player's side. Wired in Dogfight, Ace Duel, Boss Raid, Continuous, Survival,
+Campaign; Skirmish/Epic/Scenarios (`ArcadeBattleScene`) record start, end, laser/ordnance fire,
+projectile hits + damage and kills (deploy / flight / mark hooks pending its reinforcement rework).
+
+### Stats panel (`ui/telemetry/*`)
+
+Settings › Advanced › **VIEW STATS** opens `TelemetryStatsScene` (registered on first use) over
+Settings: matches per mode, win rate, median / mean duration, K / D, accuracy, specials per
+minute, most common death causes, the Flight School drop-off step. Aggregation is pure
+(`telemetry/telemetryStats.ts` → `telemetryStatsViewModel.ts`); ESC / B / right-click close.
+
+### Headless battery
+
+`npm run telemetry:report` (bot-vs-bot per mode × tier → `docs/telemetry/latest-report.md`),
+`npm run telemetry:tempo` (cycle / special-recharge experiment → `docs/telemetry/tempo-experiment*.md`),
+`npm run telemetry:survival` (node-based roguelite sweep, ADR-0004).
 
 ## Menu juice / navigation (`ui/menu/menuTransitions.ts`)
 

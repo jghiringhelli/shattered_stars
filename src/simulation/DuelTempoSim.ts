@@ -8,32 +8,39 @@
  * Measures how long a round lasts so the DURABILITY_SCALE / tempo decisions
  * can be judged in numbers.
  *
+ * An optional {@link TempoVariant} replays the round at a what-if cycle /
+ * special-recharge / attack-cap tempo on a flight clock (see TempoVariant);
+ * without one the round is the engine's, bit for bit.
+ *
  * Not modelled: wingman bonuses and death blasts (they change nothing
  * before the first kill in a 1v1), Ace Duel ad-hoc dice abilities.
  */
 
-import { BATTLEFIELD_SIZE, CYCLE_DURATION_MS, LOGIC_DELTA } from "../config";
-import { applyInstantStress } from "../arcade/ArcadeStress";
+import { BATTLEFIELD_SIZE, LOGIC_DELTA } from "../config";
 import type { BotContact, BotTier } from "../arcade/ai";
-import { HitImmunityLedger } from "../arcade/systems/CombatTempo";
 import { tickCycleFlight } from "../arcade/systems/CycleFlight";
-import {
-  absorbDamage,
-  combatantOf,
-  resolveDiceAttack,
-} from "../arcade/systems/DiceAttack";
 import { DuelBotCrew } from "../arcade/systems/DuelBotCrew";
-import {
-  primaryCooldownAfterShot,
-  primaryShotTarget,
-} from "../arcade/systems/DuelPrimaryFire";
 import {
   regenerateShields,
   stressModifiersOf,
 } from "../arcade/systems/QuickBuildEquip";
-import { calculateHitChance } from "../data/ModeBalancing";
-import { createSeededRng, type RandomGenerator } from "../utils/random";
+import { countSpecialActions } from "../telemetry/matchStatTypes";
+import { createSeededRng } from "../utils/random";
 import { spawnDuelSide, type DuelSimShip } from "./duelSimShips";
+import {
+  fireIfReady,
+  flightNow,
+  living,
+  type RoundState,
+} from "./duelRoundCombat";
+import {
+  ENGINE_TEMPO,
+  immunityLedgerFor,
+  resolveTempo,
+  scaleControlCooldowns,
+  type ResolvedTempo,
+  type TempoVariant,
+} from "./TempoVariant";
 
 /** The ROUND banner (ms) during which ships close in with weapons cold. */
 export const DUEL_BANNER_MS = 1500;
@@ -51,11 +58,15 @@ export interface DuelTempoConfig {
   readonly seed: number;
   /** Bot tier of every pilot (equal pilots). Default {@link DEFAULT_DUEL_TIER}. */
   readonly tier?: BotTier;
+  /** Side 2's tier when it differs from side 1's (`tier`). */
+  readonly side2Tier?: BotTier;
   /** Reaction multiplier of every pilot (Brutal: 0.5). Default 1. */
   readonly reactionScale?: number;
+  /** What-if tempo (experiments); omitted = the engine's. */
+  readonly tempo?: TempoVariant;
 }
 
-/** What happened in a round. */
+/** What happened in a round (times in real ms). */
 export interface DuelTempoResult {
   /** Time from weapons-live to the last kill (ms); null when it timed out. */
   readonly durationMs: number | null;
@@ -64,39 +75,63 @@ export interface DuelTempoResult {
   readonly attacks: Readonly<Record<1 | 2, number>>;
   /** Scene time (ms) of every damaging hit, keyed "attacker>target". */
   readonly hitTimes: ReadonlyMap<string, readonly number[]>;
-}
-
-interface RoundState {
-  readonly ships: DuelSimShip[];
-  readonly crew: DuelBotCrew;
-  readonly ledger: HitImmunityLedger;
-  readonly rng: RandomGenerator;
-  readonly attacks: Record<1 | 2, number>;
-  readonly hitTimes: Map<string, number[]>;
-  nowMs: number;
+  /** Hits landed by each side. */
+  readonly hits: Readonly<Record<1 | 2, number>>;
+  /** Damage dealt by each side (shields + hull). */
+  readonly damage: Readonly<Record<1 | 2, number>>;
+  /** Time from weapons-live to the first kill (ms); null when nobody died. */
+  readonly firstKillMs: number | null;
+  /** Special actions flown by every pilot. */
+  readonly specialsUsed: number;
 }
 
 /**
  * Fly and fight one duel round at the fixed logic step.
  *
- * @param config - Sides, seed and pilot tier.
- * @returns Duration, winner, attack counts and hit log.
+ * @param config - Sides, seed, pilot tiers and tempo.
+ * @returns Duration, winner, attack / hit / damage counts and hit log.
  */
 export function simulateDuelRound(config: DuelTempoConfig): DuelTempoResult {
+  const tempo = resolveTempo(config.tempo ?? ENGINE_TEMPO);
   const ships = [
     ...spawnDuelSide(1, config.side1),
     ...spawnDuelSide(2, config.side2),
   ];
+  for (const ship of ships) applyTempo(ship, tempo);
   const rng = createSeededRng(config.seed);
   const state: RoundState = {
     ships,
-    crew: crewFor(ships, config, () => rng.next()),
-    ledger: new HitImmunityLedger(),
+    crew: crewFor(ships, config, tempo, () => rng.next()),
+    ledger: immunityLedgerFor(tempo),
     rng,
+    tempo,
     attacks: { 1: 0, 2: 0 },
+    hits: { 1: 0, 2: 0 },
+    damage: { 1: 0, 2: 0 },
     hitTimes: new Map(),
     nowMs: 0,
+    firstKillMs: null,
+    specialsUsed: 0,
   };
+  const winner = playRound(state);
+  return {
+    durationMs: winner === null ? null : state.nowMs - DUEL_BANNER_MS,
+    winner,
+    attacks: state.attacks,
+    hitTimes: state.hitTimes,
+    hits: state.hits,
+    damage: state.damage,
+    firstKillMs:
+      state.firstKillMs === null ? null : state.firstKillMs - DUEL_BANNER_MS,
+    specialsUsed: state.specialsUsed,
+  };
+}
+
+/**
+ * @param state - The round.
+ * @returns The winning side, or null when the round timed out.
+ */
+function playRound(state: RoundState): 1 | 2 | null {
   const endMs = DUEL_BANNER_MS + DUEL_ROUND_LIMIT_MS;
   let winner: 1 | 2 | null = null;
   while (state.nowMs < endMs && winner === null) {
@@ -104,12 +139,7 @@ export function simulateDuelRound(config: DuelTempoConfig): DuelTempoResult {
     stepRound(state);
     winner = survivingSide(state.ships);
   }
-  return {
-    durationMs: winner === null ? null : state.nowMs - DUEL_BANNER_MS,
-    winner,
-    attacks: state.attacks,
-    hitTimes: state.hitTimes,
-  };
+  return winner;
 }
 
 /**
@@ -133,25 +163,38 @@ export function medianDurationMs(
 }
 
 /**
+ * Express a ship's real-ms action recharge on the tempo's flight clock.
+ * @param ship - A freshly spawned ship (mutated).
+ * @param tempo - The resolved tempo.
+ */
+function applyTempo(ship: DuelSimShip, tempo: ResolvedTempo): void {
+  const control = scaleControlCooldowns(ship.flight.motion.control, tempo);
+  ship.flight = { ...ship.flight, motion: { ...ship.flight.motion, control } };
+}
+
+/**
  * @param ships - Every ship of the round.
- * @param config - Pilot tier and reaction.
+ * @param config - Pilot tiers and reaction.
+ * @param tempo - The tempo (reaction stays fixed in real ms).
  * @param random - The round's seeded source (pilots draw from it).
- * @returns An all-AI crew: every ship a bot of the tier.
+ * @returns An all-AI crew: every ship a bot of its side's tier.
  */
 function crewFor(
   ships: readonly DuelSimShip[],
   config: DuelTempoConfig,
+  tempo: ResolvedTempo,
   random: () => number,
 ): DuelBotCrew {
-  const skill = {
-    tier: config.tier ?? DEFAULT_DUEL_TIER,
-    reactionScale: config.reactionScale ?? 1,
-  };
+  const tier1 = config.tier ?? DEFAULT_DUEL_TIER;
+  const reactionScale = tempo.reactionScale(config.reactionScale ?? 1);
   return new DuelBotCrew({
     roster: ships.map((ship) => ({
       shipId: ship.id,
-      side: sideKey(ship.side),
-      skill,
+      side: `side${ship.side}`,
+      skill: {
+        tier: ship.side === 1 ? tier1 : (config.side2Tier ?? tier1),
+        reactionScale,
+      },
     })),
     playerSide: null,
     random,
@@ -159,17 +202,9 @@ function crewFor(
   });
 }
 
-/**
- * @param side - A duel side.
- * @returns Its side key (as the Ace Duel scene names it).
- */
-function sideKey(side: 1 | 2): string {
-  return `side${side}`;
-}
-
 function stepRound(state: RoundState): void {
   const contacts = state.crew.contactsOf(state.ships);
-  state.crew.command(contacts, state.nowMs);
+  state.crew.command(contacts, flightNow(state));
   for (const ship of living(state.ships)) pilot(state, ship, contacts);
   for (const ship of living(state.ships)) fly(state, ship);
   if (state.nowMs <= DUEL_BANNER_MS) return;
@@ -187,16 +222,19 @@ function pilot(
   ship: DuelSimShip,
   contacts: readonly BotContact[],
 ): void {
-  const result = state.crew.fly(ship, contacts, state.nowMs, LOGIC_DELTA);
-  if (result) setFlight(ship, result.motion, result.stress);
+  const deltaMs = LOGIC_DELTA * state.tempo.flightScale;
+  const result = state.crew.fly(ship, contacts, flightNow(state), deltaMs);
+  if (!result) return;
+  state.specialsUsed += countSpecialActions(result.events);
+  setFlight(ship, result.motion, result.stress);
 }
 
 function fly(state: RoundState, ship: DuelSimShip): void {
   const tick = tickCycleFlight(ship.flight, {
-    deltaMs: LOGIC_DELTA,
+    deltaMs: LOGIC_DELTA * state.tempo.flightScale,
     worldSize: BATTLEFIELD_SIZE,
     dial: ship.dial,
-    cycleMs: CYCLE_DURATION_MS,
+    cycleMs: state.tempo.cycleMs,
     modifiers: stressModifiersOf(ship.modifiers),
   });
   setFlight(ship, tick.state.motion, tick.state.stress);
@@ -224,60 +262,6 @@ function setFlight(
   ship.x = motion.x;
   ship.y = motion.y;
   ship.angle = motion.angle;
-}
-
-function fireIfReady(state: RoundState, ship: DuelSimShip): void {
-  ship.weaponCooldown = Math.max(0, ship.weaponCooldown - LOGIC_DELTA);
-  if (ship.weaponCooldown > 0) return;
-  const target = primaryShotTarget({
-    gunner: ship,
-    candidates: state.ships,
-    isEnemy: (other) => other.side !== ship.side,
-    ledger: state.ledger,
-    nowMs: state.nowMs,
-    preferredId: state.crew.targetOf(ship.id),
-  });
-  if (!target) return;
-  attack(state, ship, target);
-  ship.weaponCooldown = primaryCooldownAfterShot(ship);
-}
-
-function attack(
-  state: RoundState,
-  attacker: DuelSimShip,
-  target: DuelSimShip,
-): void {
-  state.attacks[attacker.side] += 1;
-  const result = resolveDiceAttack({
-    attacker: combatantOf(attacker),
-    target: combatantOf(target),
-    hitChance: calculateHitChance(
-      attacker.combatStats.attackDice,
-      target.combatStats.agilityDice,
-    ),
-    baseDamage: attacker.combatStats.attackDice,
-    attackerHasWingman: false,
-    targetHasWingman: false,
-    nowMs: state.nowMs,
-    roll: state.rng.next(),
-    targetMarked: state.crew.isMarkedShot(attacker.id, target.id, state.nowMs),
-  });
-  if (!result.hit) return;
-  target.flight = {
-    ...target.flight,
-    stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
-  };
-  Object.assign(target, absorbDamage(target, result.damage));
-  state.ledger.recordHit(attacker.id, target.id, state.nowMs);
-  const key = `${attacker.id}>${target.id}`;
-  state.hitTimes.set(key, [...(state.hitTimes.get(key) ?? []), state.nowMs]);
-  if (target.hull > 0) return;
-  state.ledger.forget(target.id);
-  state.crew.forget(target.id);
-}
-
-function living(ships: readonly DuelSimShip[]): DuelSimShip[] {
-  return ships.filter((ship) => ship.hull > 0);
 }
 
 function survivingSide(ships: readonly DuelSimShip[]): 1 | 2 | null {

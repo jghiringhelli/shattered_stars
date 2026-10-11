@@ -13,6 +13,7 @@ import type { ArcPosition } from "../../arcade/ai/AiGeometry";
 import type { ArenaRules } from "./ArenaRules";
 import type { ArenaShip } from "./ArenaShip";
 import type { SideId } from "./ArenaSide";
+import type { ResolvedTempo } from "../TempoVariant";
 
 export type { SideId } from "./ArenaSide";
 
@@ -71,4 +72,8 @@ export interface CombatState {
   readonly recentHits: Map<string, Map<string, RecentHit>>;
   /** Each coordinated side's squad mark (SquadMark); replaced on every change. */
   marks: SquadMarks;
+  /** What-if tempo (experiments); omitted = the engine's. */
+  readonly tempo?: ResolvedTempo;
+  /** Clock time of the first kill (combat's clock), once one happened. */
+  firstKillAtMs?: number;
 }
