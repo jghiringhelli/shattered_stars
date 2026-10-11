@@ -25,6 +25,8 @@ const END_PANEL = { width: 440, height: 280 } as const;
 const BUTTON = { width: 200, height: 44 } as const;
 /** Vertical pitch of the pause menu buttons. */
 const BUTTON_PITCH = 60;
+/** Vertical pitch of the end screen's detail lines. */
+const DETAIL_LINE_PITCH = 18;
 /** Vertical pitch of the controls reference lines. */
 const CONTROL_LINE_PITCH = 19;
 /** Width of the key column in the controls reference. */
@@ -65,6 +67,10 @@ export interface EndOverlayContent {
   readonly pointsDestroyed: number;
   /** Squad points of the player's ships lost. */
   readonly pointsLost: number;
+  /** Headline override ("DRAW"); default VICTORY / DEFEATED. */
+  readonly outcomeLabel?: string;
+  /** Extra summary lines under the points (reinforcement battles). */
+  readonly details?: readonly string[];
   readonly onRetry: () => void;
   readonly onMenu: () => void;
 }
@@ -178,17 +184,32 @@ export function createEndOverlay(
   content: EndOverlayContent,
 ): Phaser.GameObjects.Container {
   const root = modalRoot(scene, HOLO_DEPTH.menuPanel);
+  const details = content.details ?? [];
+  const height = END_PANEL.height + details.length * DETAIL_LINE_PITCH;
   const accent = content.victory ? HOLO_PALETTE.success : HOLO_PALETTE.danger;
   const panel = pinnedPanel(scene, root, {
-    ...END_PANEL,
+    width: END_PANEL.width,
+    height,
     accentColor: accent,
     title: content.victory ? "Battle won" : "Battle lost",
   });
+  addEndTexts(scene, panel, -height / 2 + END_PANEL.height / 2, content);
+  addEndButtons(scene, panel, height / 2, content);
+  return root;
+}
+
+function addEndTexts(
+  scene: Phaser.Scene,
+  panel: HoloPanel,
+  top: number,
+  content: EndOverlayContent,
+): void {
+  const accent = content.victory ? HOLO_PALETTE.success : HOLO_PALETTE.danger;
   const headline = createHoloText(
     scene,
     0,
-    -HOLO_SPACING.xxl - HOLO_SPACING.sm,
-    content.victory ? "VICTORY" : "DEFEATED",
+    top - HOLO_SPACING.xxl - HOLO_SPACING.sm,
+    content.outcomeLabel ?? (content.victory ? "VICTORY" : "DEFEATED"),
     "title",
     accent,
   );
@@ -196,20 +217,40 @@ export function createEndOverlay(
   const score = createHoloText(
     scene,
     0,
-    HOLO_SPACING.md,
+    top + HOLO_SPACING.md,
     `SCORE  ${content.score}`,
     "heading",
   );
+  const pointsY = top + HOLO_SPACING.xxl + HOLO_SPACING.sm;
   const points = createHoloText(
     scene,
     0,
-    HOLO_SPACING.xxl + HOLO_SPACING.sm,
+    pointsY,
     `DESTROYED ${content.pointsDestroyed} PTS  ·  LOST ${content.pointsLost} PTS`,
     "caption",
     HOLO_PALETTE.textSecondary,
   );
   addPinned(panel, headline, score, points);
-  const buttonY = END_PANEL.height / 2 - HOLO_SPACING.lg - BUTTON.height / 2;
+  (content.details ?? []).forEach((line, i) => {
+    const text = createHoloText(
+      scene,
+      0,
+      pointsY + (i + 1) * DETAIL_LINE_PITCH,
+      line,
+      "caption",
+      HOLO_PALETTE.textSecondary,
+    );
+    addPinned(panel, text);
+  });
+}
+
+function addEndButtons(
+  scene: Phaser.Scene,
+  panel: HoloPanel,
+  bottom: number,
+  content: EndOverlayContent,
+): void {
+  const buttonY = bottom - HOLO_SPACING.lg - BUTTON.height / 2;
   const half = BUTTON.width / 2 + HOLO_SPACING.sm;
   const retry = createHoloButton(
     scene,
@@ -229,5 +270,4 @@ export function createEndOverlay(
     button.setScrollFactor(0, 0, true);
     panel.add(button);
   }
-  return root;
 }

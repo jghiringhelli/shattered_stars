@@ -61,6 +61,11 @@ export interface ScenarioFrame {
   /** Living ships. */
   readonly ships: readonly ScenarioShip[];
   readonly events: readonly ScenarioEvent[];
+  /**
+   * Reinforced battles: whether each side can still field a ship. A side
+   * with no living ship is only annihilated when it cannot.
+   */
+  readonly reserves?: Readonly<Record<ScenarioSide, boolean>>;
 }
 
 /** How a scenario's objectives score. */

@@ -19,6 +19,7 @@ import {
   MULTI_TEAM_MODES,
 } from "../core/squadTypes";
 import type { AIDifficultyLevel } from "../ai/AIDifficulty";
+import { defaultDifficulty } from "../systems/SettingsStorage";
 import { FormatPanel } from "../ui/squad/FormatPanel";
 import type { FormatPanelState } from "../ui/squad/FormatPanel";
 import { SquadListPanel } from "../ui/squad/SquadListPanel";
@@ -44,6 +45,7 @@ import {
 } from "../ui/squad/squadBuilderChrome";
 import { FLASH_COLORS } from "../ui/squad/squadBuilderStyle";
 import { ScenarioPicker } from "./scenario/ScenarioPicker";
+import { SquadReinforcementSetup } from "../ui/squad/SquadReinforcementSetup";
 
 type ShipsPickedEvent = {
   slotIndex: number;
@@ -77,6 +79,8 @@ export class SquadBuilderScene extends Phaser.Scene {
   private menuFocus: MenuFocus | null = null;
   /** Skirmish only: the X-Wing 2.0 scenario selector (header, left of the mode toggle). */
   private scenarioPicker: ScenarioPicker | null = null;
+  /** Exposed for E2E tests — Classic / Reinforcements, strategy and reserve (Skirmish, Epic, Scenario). */
+  public reinforcementSetup: SquadReinforcementSetup | null = null;
 
   constructor() {
     super({ key: "SquadBuilderScene" });
@@ -104,6 +108,8 @@ export class SquadBuilderScene extends Phaser.Scene {
       this.gameMode = data.initialMode as GameMode;
     }
     this.pointLimit = this.gameMode === "epic" ? 400 : 200;
+    // Settings › Gameplay › Default difficulty preselects the opposition.
+    this.aiDifficulty = defaultDifficulty();
     // Simple mode only fits a single-ship, single-squad flow — other formats
     // (multi-squad epic, online, continuous) need the advanced builder.
     this.simpleMode = this.gameMode === "arcade";
@@ -120,6 +126,14 @@ export class SquadBuilderScene extends Phaser.Scene {
     this.backButton = addBackButton(this, () => this.goBack());
     this.scenarioPicker =
       this.gameMode === "arcade" ? new ScenarioPicker(this) : null;
+    this.reinforcementSetup = new SquadReinforcementSetup(this, {
+      mode: () => this.gameMode,
+      hasScenario: () => Boolean(this.scenarioPicker?.selected),
+      playerFaction: () =>
+        this.simpleFlow?.faction ??
+        this.squads.find((s) => s.controller === "player")?.factionId ??
+        "terran_hegemony",
+    });
     this.renderBuilderMode();
     this.setupInput();
     this.listenForShipsPicked();
@@ -159,13 +173,16 @@ export class SquadBuilderScene extends Phaser.Scene {
   private wireMenuFocus(): void {
     const targets = [
       this.backButton,
+      ...(this.reinforcementSetup?.focusTargets() ?? []),
       ...(this.scenarioPicker ? [this.scenarioPicker.button] : []),
       ...(this.modeToggleButton ? [this.modeToggleButton] : []),
       ...this.bottomBarObjects,
     ];
     this.menuFocus = new MenuFocus(this, targets, {
       columns: targets.length,
-      isActive: () => !this.scene.isActive("ShipPickerScene"),
+      isActive: () =>
+        !this.scene.isActive("ShipPickerScene") &&
+        !this.reinforcementSetup?.isEditing,
     });
   }
 
@@ -324,6 +341,7 @@ export class SquadBuilderScene extends Phaser.Scene {
       }
     }
     this.squadListPanel.update({ gameMode: this.gameMode });
+    this.reinforcementSetup?.refresh();
   }
 
   /** Remove capital and huge ships from all squads when leaving epic mode. */
@@ -364,7 +382,9 @@ export class SquadBuilderScene extends Phaser.Scene {
     // One back affordance (ESC / gamepad B / right-click), inert while the
     // ship picker overlay owns the screen.
     bindMenuBack(this, () => this.goBack(), {
-      isActive: () => !this.scene.isActive("ShipPickerScene"),
+      isActive: () =>
+        !this.scene.isActive("ShipPickerScene") &&
+        !this.reinforcementSetup?.isEditing,
     });
   }
 
@@ -464,6 +484,7 @@ export class SquadBuilderScene extends Phaser.Scene {
       ...(this.gameMode === "arcade" && this.scenarioPicker?.selected
         ? { scenario: this.scenarioPicker.selected }
         : {}),
+      ...this.reinforcementSetup?.battleConfigFields(factions),
     });
     this.navigateToBattle();
   }

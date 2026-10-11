@@ -56,6 +56,11 @@ export {
   type DeployPose,
 } from "./scenarioDeployment";
 export {
+  REINFORCED_SCENARIO_THRESHOLDS,
+  REINFORCED_SCENARIO_POINTS_PER_SQUAD_POINT,
+  reinforcedScenarioDefinition,
+} from "./reinforcedScenario";
+export {
   HOLD_LEASH_FRACTION,
   HUNT_LEASH_PX,
   STICKY_ASSIGNMENT_PX,

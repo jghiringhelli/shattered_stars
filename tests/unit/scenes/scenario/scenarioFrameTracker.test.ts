@@ -36,6 +36,21 @@ describe("isEvasiveFlightEvent", () => {
 });
 
 describe("ScenarioFrameTracker", () => {
+  it("values ships at the given scenario rate (reinforced variant)", () => {
+    const tracker = new ScenarioFrameTracker(PLAYER, 6000, 0.04);
+    const [ship] = tracker.build([source({ id: "p" })], 16).ships;
+    expect(ship?.value).toBe(
+      scenarioShipValue(shipPointCost("confed_kestrel"), 0.04),
+    );
+  });
+
+  it("passes each side's reinforcement reserves into the frame", () => {
+    const tracker = new ScenarioFrameTracker(PLAYER, 6000);
+    const reserves = { player: true, enemy: false };
+    expect(tracker.build([], 16, reserves).reserves).toEqual(reserves);
+    expect(tracker.build([], 16).reserves).toBeUndefined();
+  });
+
   it("maps the player's faction to the player side and every other to the enemy", () => {
     const tracker = new ScenarioFrameTracker(PLAYER, 6000);
     const frame = tracker.build(

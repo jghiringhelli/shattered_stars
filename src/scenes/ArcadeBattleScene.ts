@@ -13,13 +13,10 @@ import {
   type BankState,
 } from "../rendering/ShipBanking";
 import { showConfirmDialog } from "../ui/ConfirmDialog";
-import type { ShipState } from "../core/types";
 import {
-  createControlState,
   updateCooldowns,
   processCommand,
   canFire,
-  type ShipControlState,
 } from "../core/ArcadeControls";
 import {
   createProjectile,
@@ -45,47 +42,25 @@ import {
 import { InputManager } from "../input/InputManager";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import { trackModeEnd, trackModeStart } from "../telemetry/telemetry";
+import { matchStats } from "../telemetry/matchTelemetry";
 import type { ActionIntent } from "../input/InputTypes";
 import {
-  buildOrdnanceSlots,
   tickOrdnanceCooldowns,
   canFireOrdnance,
-  type ArcadeOrdnanceSlot,
 } from "../arcade/ArcadeOrdnance";
 import {
-  buildTurretSlot,
   tickTurretCooldown,
   canFireTurret,
   consumeTurretShot,
-  type ArcadeTurretSlot,
 } from "../arcade/ArcadeTurret";
 import {
-  loadoutUpgradeIds,
-  resolveLoadoutModifiers,
-  applyControlModifiers,
-  applyOrdnanceModifiers,
-  applyTurretModifiers,
-} from "../arcade/ArcadeUpgradeEffects";
-import {
-  NEUTRAL_MODIFIERS,
   MIN_DAMAGE_TAKEN_MULTIPLIER,
   laserDamageWithModifiers,
   type CombatModifiers,
 } from "../core/CombatModifiers";
-import {
-  getShipDefinition,
-  getShipDial,
-  getMovementProfile,
-} from "../data/ShipDefinitions";
+import { getShipDefinition } from "../data/ShipDefinitions";
 import { distance } from "../systems/MovementSystem";
-import type { ShipRole } from "../core/types";
-import type { ManeuverDefinition } from "../core/types";
-import {
-  type StressState,
-  INITIAL_STRESS,
-  applyInstantStress,
-  accrueCycleStress,
-} from "../arcade/ArcadeStress";
+import { applyInstantStress, accrueCycleStress } from "../arcade/ArcadeStress";
 import {
   deathBlastDamage,
   deathBlastTargets,
@@ -105,7 +80,6 @@ import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
 import { CapitalSystemsIndicator } from "../ui/CapitalSystemsIndicator";
 import {
-  createCapitalSystems,
   applyCapitalSystemDamage,
   repairCapitalSystem,
   mostDamagedSystem,
@@ -114,14 +88,10 @@ import {
   turretDamageMultiplier,
   sumSystemsHull,
   SYSTEM_LABELS,
-  type CapitalSystemsState,
 } from "../systems/CapitalSystems";
 import {
-  type CrewRole,
-  type CommanderOrders,
   getAvailableCrewRoles,
   nextCrewRole,
-  createCommanderOrders,
   issueConcentrateFire,
   concentrateFireMultiplier,
   nextPowerFocus,
@@ -166,7 +136,6 @@ import {
   type PerformanceState,
 } from "../systems/PerformanceSystem";
 import { renderBattleStarfield } from "../rendering/Starfield";
-import { applyLoadoutEffects } from "../systems/BattleHelpers";
 import { stepMotion } from "../arcade/systems/ShipMotion";
 import {
   applyPilotFlightInput,
@@ -191,7 +160,6 @@ const FLIGHT_EDGES: readonly FlightEdge[] = [
   "TALLON_RIGHT",
   "BOOST",
 ];
-import { uniquePilotOf } from "../data/squadRules";
 import { audioManager } from "../audio/AudioManager";
 import { syncListenerToCamera } from "../audio/CameraListener";
 import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
@@ -201,21 +169,14 @@ import {
   type AuraShip,
   type ActiveAura,
 } from "../systems/SupportAura";
-import {
-  attackIntervalMs,
-  HitImmunityLedger,
-} from "../arcade/systems/CombatTempo";
+import { HitImmunityLedger } from "../arcade/systems/CombatTempo";
 import {
   DEFAULT_SQUAD_DURABILITY,
   EMERGENCY_HULL_REPAIR,
   EMERGENCY_SHIELD_REPAIR,
   ENGINE_REPAIR_PER_SECOND,
   MAIN_BEAM_HIT_DAMAGE,
-  PLAYER_HULL_FLOOR,
-  PLAYER_SHIELD_FLOOR,
   POWER_SHIELD_REGEN_PER_SECOND,
-  WINGMAN_HULL_FLOOR,
-  realTimeDurability,
   regenerateScaledShields,
 } from "./arcadeBattle/arcadeDurability";
 import {
@@ -249,36 +210,18 @@ import {
 } from "./scenario/ScenarioController";
 import type { ScenarioReadout } from "./scenario/scenarioReadout";
 import type { ScreenRect } from "../ui/hud/screenRect";
-
-interface ArcadeShip extends ShipState {
-  control: ShipControlState;
-  /** Secondary weapon slots (1/2/3 keys). */
-  ordnanceSlots: ArcadeOrdnanceSlot[];
-  /** Turret slot if the ship has a turret upgrade equipped. */
-  turretSlot: ArcadeTurretSlot | null;
-  /** 'pilot' flies the ship; 'gunner' controls the turret; 'commander' issues ship orders (capital only). */
-  crewMode: CrewRole;
-  /** Ship role cached from ShipDefinition — drives support auras. */
-  role: ShipRole;
-  /** Current pilot stress state — built from this ship's maneuver dial. */
-  stress: StressState;
-  /** Maneuver dial for this ship; drives stress classification each frame. */
-  shipDial: readonly ManeuverDefinition[];
-  /** Seconds remaining while cloak is active (0 = not cloaked). */
-  cloakTimer: number;
-  /** Subsystem damage state (engines/turrets/bridge) — only set for capital-role ships. */
-  capitalSystems: CapitalSystemsState | null;
-  /** Commander order state (concentrate fire/power redirect/main beam/repair) — only set for capital-role ships. */
-  commanderOrders: CommanderOrders | null;
-  /** Upgrade ids equipped by this ship's loadout. */
-  upgradeIds: ReadonlyArray<string>;
-  /** Real-time effects of those upgrades, folded into one sheet. */
-  modifiers: CombatModifiers;
-  /** True when a named (unique) pilot flies this ship — projects a hero aura. */
-  isUniquePilot: boolean;
-  /** Scene time (ms) until which a kill-frenzy pilot ability is active. */
-  frenzyUntilMs: number;
-}
+import {
+  createArcadeShip,
+  spawnArcadeShip,
+  type ArcadeShip,
+} from "./arcadeBattle/arcadeShipFactory";
+import {
+  createReinforcementController,
+  type ReinforcementController,
+} from "./arcadeBattle/reinforcements/ReinforcementController";
+import type { ReinforcementSceneLink } from "./arcadeBattle/reinforcements/reinforcementLink";
+import type { ReinforcementReadout } from "./arcadeBattle/reinforcements/reinforcementReadout";
+import { reinforcementShipIds } from "./arcadeBattle/reinforcements/reinforcementSetup";
 
 interface ShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
@@ -448,6 +391,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
   /** X-Wing 2.0 scenario (battleConfig.scenario), or null for a plain Skirmish. */
   private scenario: ScenarioController | null = null;
 
+  /** Reinforcement-pool battle (battleConfig.battle), or null for a classic one. */
+  private reinforcements: ReinforcementController | null = null;
+
+  /** Debug / measurement hooks: AI flies the player's ship; battle-time speed-up. */
+  debugAutopilot = false;
+  debugTimeScale = 1;
+
   constructor() {
     super({ key: "ArcadeBattleScene" });
   }
@@ -500,6 +450,11 @@ export class ArcadeBattleScene extends Phaser.Scene {
     return this.scenario?.readout ?? null;
   }
 
+  /** The reinforcement battle's pools, picker and result (e2e), or null in a classic battle. */
+  get reinforcementReadout(): ReinforcementReadout | null {
+    return this.reinforcements?.readout ?? null;
+  }
+
   /** @returns What the scenario controller reads from (and reports to) this scene. */
   private scenarioLink(): ScenarioSceneLink {
     return {
@@ -508,11 +463,44 @@ export class ArcadeBattleScene extends Phaser.Scene {
       playerShipId: () => this.playerShipId,
       playerMarkedTargetId: () => this.playerMarkedTargetId,
       radarRect: () => this.hud?.layoutRects()["radar"],
+      reserves: () => this.reinforcements?.reserves() ?? null,
       onEnd: () => {
         this.gameEnded = true;
         this.showEndScreen(this.scenario?.playerWon ?? false);
       },
     };
+  }
+
+  /** @returns What the reinforcement controller reads from (and asks of) this scene. */
+  private reinforcementLink(): ReinforcementSceneLink {
+    return {
+      worldSize: BATTLEFIELD_SIZE,
+      playerFaction: this.playerFaction,
+      ships: this.ships,
+      hasScenario: this.scenario !== null,
+      adopt: (ship) => this.adoptShip(ship),
+      onEnd: (victory) => {
+        this.gameEnded = true;
+        this.showEndScreen(victory);
+      },
+    };
+  }
+
+  /**
+   * A reinforcement warped in: its record, sprite and overlay, an AI pilot
+   * (squad membership comes with its faction), or the player's view.
+   *
+   * @param ship - The new ship.
+   */
+  private adoptShip(ship: ArcadeShip): void {
+    this.ships.set(ship.id, ship);
+    if (ship.owner === "player") {
+      this.playerShipId = ship.id;
+      this.selectedWeaponSlot = -1;
+      this.pilotControl = INITIAL_PILOT_CONTROL;
+    } else this.botFleet?.enlist(ship.id, ship.faction);
+    this.createShipSprite(ship);
+    this.createHealthBar(ship);
   }
 
   shutdown(): void {
@@ -522,6 +510,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.hitLedger.clear();
     this.hud?.destroy();
     this.hud = null;
+    this.reinforcements?.destroy();
+    this.reinforcements = null;
     teardownSceneInput();
   }
 
@@ -552,6 +542,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       for (const slot of battleConfig.factions) {
         for (const shipId of slot.ships) loadIfMissing(shipId);
       }
+      reinforcementShipIds(battleConfig).forEach(loadIfMissing);
     } else {
       loadIfMissing("confed_sparrow");
       loadIfMissing("confed_wasp");
@@ -576,6 +567,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.damageNumbersEnabled = this.userWantsDamageNumbers;
     this.resetBattleState();
     trackModeStart("skirmish");
+    matchStats.start("skirmish", {}, this.events);
 
     // No setBounds — we manage the camera manually for seamless toroid wrapping.
     this.cameras.main.setBackgroundColor(0x050510);
@@ -602,6 +594,11 @@ export class ArcadeBattleScene extends Phaser.Scene {
       sizeOf: (definitionId) => shipSizeOf(definitionId),
     });
     audioManager.playFactionMusic(this.playerFaction, "combat");
+    this.reinforcements = createReinforcementController(
+      this,
+      this.registry.get("battleConfig"),
+      this.reinforcementLink(),
+    );
 
     if (ShipTelemetry.isEnabled()) {
       this.telemetry = new ShipTelemetry();
@@ -656,34 +653,32 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   private createHealthBars(): void {
-    for (const [id, ship] of this.ships) {
-      const healthBar = new HealthBar({
-        scene: this,
-        x: ship.x,
-        y: ship.y - 30,
-        faction: ship.faction as FactionId,
-        maxHull: ship.maxHull,
-        maxShields: ship.maxShields,
-        currentHull: ship.hull,
-        currentShields: ship.shields,
-        side: overlaySide(
-          id === this.playerShipId,
-          ship.faction === this.playerFaction,
-        ),
-        definitionId: ship.definitionId,
-      });
-      this.healthBars.set(id, healthBar);
+    for (const ship of this.ships.values()) this.createHealthBar(ship);
+  }
 
-      if (ship.capitalSystems) {
-        const indicator = new CapitalSystemsIndicator(
-          this,
-          ship.x,
-          ship.y - 42,
-        );
-        indicator.update(ship.capitalSystems);
-        this.capitalIndicators.set(id, indicator);
-      }
-    }
+  /** @param ship - A ship that needs its hull / shield overlay (and capital systems). */
+  private createHealthBar(ship: ArcadeShip): void {
+    const id = ship.id;
+    const healthBar = new HealthBar({
+      scene: this,
+      x: ship.x,
+      y: ship.y - 30,
+      faction: ship.faction as FactionId,
+      maxHull: ship.maxHull,
+      maxShields: ship.maxShields,
+      currentHull: ship.hull,
+      currentShields: ship.shields,
+      side: overlaySide(
+        id === this.playerShipId,
+        ship.faction === this.playerFaction,
+      ),
+      definitionId: ship.definitionId,
+    });
+    this.healthBars.set(id, healthBar);
+    if (!ship.capitalSystems) return;
+    const indicator = new CapitalSystemsIndicator(this, ship.x, ship.y - 42);
+    indicator.update(ship.capitalSystems);
+    this.capitalIndicators.set(id, indicator);
   }
 
   update(time: number): void {
@@ -712,9 +707,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.prevThrustDownHeld = thrustDownHeld;
 
     // Clamp to prevent spiral-of-death on tab-switch or long pause
-    this.accumulator += Math.min(deltaMs, 250);
+    this.accumulator += Math.min(deltaMs, 250) * this.debugTimeScale;
 
-    while (this.accumulator >= ArcadeBattleScene.FIXED_DT) {
+    while (this.accumulator >= ArcadeBattleScene.FIXED_DT && !this.gameEnded) {
       this.tickLogic(ArcadeBattleScene.FIXED_DT);
       this.accumulator -= ArcadeBattleScene.FIXED_DT;
     }
@@ -740,14 +735,15 @@ export class ArcadeBattleScene extends Phaser.Scene {
     }
     this.frameCache = buildFrameCache(this.ships.values());
     this.damageThisFrame = false;
-    this.handleInput(dt);
+    if (!this.debugAutopilot) this.handleInput(dt);
     this.updateAI(dt);
     this.updateShips(dt);
     this.updateAuras(dt);
     this.updateProjectiles(dt);
     this.updateTurrets();
     this.checkCollisions();
-    if (this.scenario?.tick(dt, this.battleClockMs)) return;
+    const reinforced = this.reinforcements?.tick(dt, this.battleClockMs);
+    if (this.scenario?.tick(dt, this.battleClockMs) || reinforced) return;
     this.updateFleeDetector(dt);
     this.checkVictory();
     this.updateMatchTimer(dt);
@@ -761,7 +757,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
    * @remarks Called every frame; replaces Phaser's built-in startFollow.
    */
   private updateCameraFollow(): void {
-    const ship = this.ships.get(this.playerShipId!);
+    // While the player's ship is down, the reinforcement picker points the camera at a wingman.
+    const ship =
+      this.reinforcements?.cameraFocus() ?? this.ships.get(this.playerShipId!);
     if (!ship) return;
 
     // Shortest-path delta — pick the direction that doesn't cross the whole map.
@@ -834,6 +832,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.cameras.main.setZoom(1.0);
     this.hud?.setVisible(false);
     this.scenario?.setHudVisible(false);
+    this.reinforcements?.setHudVisible(false);
     this.pauseOverlay = createPauseOverlay(this, {
       onResume: () => this.resumeBattle(),
       onSettings: () =>
@@ -856,6 +855,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.pauseOverlay = null;
     this.hud?.setVisible(true);
     this.scenario?.setHudVisible(true);
+    this.reinforcements?.setHudVisible(true);
   }
 
   private handleInput(deltaMs: number): void {
@@ -1236,7 +1236,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
    * @param damage - Blast damage (already at ordnance scale).
    */
   private applyBlastDamage(target: ArcadeShip, damage: number): void {
-    if (target.hull <= 0) return;
+    if (target.hull <= 0 || this.isArrivalShielded(target)) return;
     const absorbed = Math.min(target.shields, damage);
     target.shields -= absorbed;
     const toHull = damage - absorbed;
@@ -1263,6 +1263,11 @@ export class ArcadeBattleScene extends Phaser.Scene {
    * @param target - The ship just destroyed.
    */
   private recordDestruction(target: ArcadeShip): void {
+    matchStats.record({
+      kind: "kill",
+      victimFriendly: target.faction === this.playerFaction,
+      victimIsPlayer: target.id === this.playerShipId,
+    });
     if (target.faction === this.playerFaction) {
       this.enemySideScore = creditKill(
         this.enemySideScore,
@@ -1362,7 +1367,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
       [...this.ships.values()].map(toBotContact),
     );
     for (const ship of this.ships.values()) {
-      if (ship.owner === "player" || ship.hull <= 0) continue;
+      if (ship.hull <= 0) continue;
+      if (ship.owner === "player" && !this.debugAutopilot) continue;
       this.flyAiShip(fleet, ship, deltaMs);
       this.fireAiWeapons(fleet, ship);
     }
@@ -1539,6 +1545,12 @@ export class ArcadeBattleScene extends Phaser.Scene {
     };
 
     this.projectiles.push(proj);
+    matchStats.record({
+      kind: "shot",
+      friendly: ship.faction === this.playerFaction,
+      weapon: "primary",
+      hit: false,
+    });
 
     // Create sprite — a rounded, rimmed bolt aligned with travel direction
     const sprite = this.add.graphics();
@@ -1593,6 +1605,12 @@ export class ArcadeBattleScene extends Phaser.Scene {
       { stressOnHit: slot.stressOnHit, bonusDamageVsUnshielded: 0 },
     );
     this.projectiles.push(proj);
+    matchStats.record({
+      kind: "shot",
+      friendly: ship.faction === this.playerFaction,
+      weapon: "ordnance",
+      hit: false,
+    });
 
     const sprite = this.add.graphics();
     const isPlayerFaction = ship.faction === this.playerFaction;
@@ -1634,7 +1652,20 @@ export class ArcadeBattleScene extends Phaser.Scene {
    * @returns True while the target ignores this attacker (struck this cycle).
    */
   private isImmuneTo(attacker: ArcadeShip, target: ArcadeShip): boolean {
-    return this.hitLedger.isImmune(attacker.id, target.id, this.battleClockMs);
+    return (
+      this.hitLedger.isImmune(attacker.id, target.id, this.battleClockMs) ||
+      this.isArrivalShielded(target)
+    );
+  }
+
+  /**
+   * @param ship - A ship.
+   * @returns True while a reinforcement that just warped in cannot be hit.
+   */
+  private isArrivalShielded(ship: ArcadeShip): boolean {
+    return (
+      this.reinforcements?.isShielded(ship.id, this.battleClockMs) ?? false
+    );
   }
 
   private checkCollisions(): void {
@@ -1676,13 +1707,27 @@ export class ArcadeBattleScene extends Phaser.Scene {
    */
   private resolveProjectileHit(proj: Projectile, ship: ArcadeShip): void {
     const now = this.battleClockMs;
-    if (this.hitLedger.isImmune(proj.ownerId, ship.id, now)) {
+    if (
+      this.hitLedger.isImmune(proj.ownerId, ship.id, now) ||
+      this.isArrivalShielded(ship)
+    ) {
       spawnDeflectFlash(this, proj.x, proj.y);
       return;
     }
     this.hitLedger.recordHit(proj.ownerId, ship.id, now);
     const attacker = this.ships.get(proj.ownerId);
     const damage = this.projectileHitDamage(proj, attacker, ship);
+    matchStats.record({
+      kind: "hit",
+      friendly: proj.ownerFaction === this.playerFaction,
+      weapon: proj.isLaser ? "primary" : "ordnance",
+    });
+    matchStats.record({
+      kind: "damage",
+      toFriendly: ship.faction === this.playerFaction,
+      shield: ship.shields > 0 ? Math.min(ship.shields, damage) : 0,
+      hull: ship.shields > 0 ? 0 : Math.min(ship.hull, damage),
+    });
     ship.stress = applyInstantStress(ship.stress, proj.stressOnHit ?? 0);
     ship.isCloaked = false;
     ship.cloakTimer = 0;
@@ -1841,24 +1886,16 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
     // Spawn player-controlled ship (first in player slot)
     const playerShipId = playerSlot.ships[0] ?? "confed_sparrow";
-    const playerShip = this.createShip(
-      "player_0",
-      playerShipId,
-      playerSlot.factionId,
-      "player",
-      BATTLEFIELD_SIZE / 2,
-      BATTLEFIELD_SIZE / 2 + 50,
-      0,
-    );
-    playerShip.hull = playerShip.maxHull = Math.max(
-      PLAYER_HULL_FLOOR,
-      playerShip.maxHull,
-    );
-    playerShip.shields = playerShip.maxShields = Math.max(
-      PLAYER_SHIELD_FLOOR,
-      playerShip.maxShields,
-    );
-    this.equipLoadout(playerShip, playerSlot.loadoutChoices?.["0"]);
+    const playerShip = spawnArcadeShip({
+      id: "player_0",
+      definitionId: playerShipId,
+      loadoutId: playerSlot.loadoutChoices?.["0"] ?? null,
+      faction: playerSlot.factionId,
+      pilot: "player",
+      x: BATTLEFIELD_SIZE / 2,
+      y: BATTLEFIELD_SIZE / 2 + 50,
+      angle: 0,
+    });
     this.ships.set(playerShip.id, playerShip);
     this.playerShipId = playerShip.id;
 
@@ -1870,19 +1907,16 @@ export class ArcadeBattleScene extends Phaser.Scene {
     ];
     playerSlot.ships.slice(1).forEach((shipId, i) => {
       const offset = wingOffsets[i] ?? { x: (i - 1) * 160, y: 400 };
-      const ally = this.createShip(
-        `ally_${i}`,
-        shipId,
-        playerSlot.factionId,
-        "ai",
-        BATTLEFIELD_SIZE / 2 + offset.x,
-        BATTLEFIELD_SIZE / 2 + offset.y,
-        0,
-      );
-      this.equipLoadout(ally, playerSlot.loadoutChoices?.[String(i + 1)]);
-      // Arcade wingman hull floor — glass-cannon light fighters (hull 2) get
-      // one-shot by any decent burst. Bumps floor so wingmen survive a hit.
-      ally.hull = ally.maxHull = Math.max(WINGMAN_HULL_FLOOR, ally.maxHull);
+      const ally = spawnArcadeShip({
+        id: `ally_${i}`,
+        definitionId: shipId,
+        loadoutId: playerSlot.loadoutChoices?.[String(i + 1)] ?? null,
+        faction: playerSlot.factionId,
+        pilot: "wingman",
+        x: BATTLEFIELD_SIZE / 2 + offset.x,
+        y: BATTLEFIELD_SIZE / 2 + offset.y,
+        angle: 0,
+      });
       this.ships.set(ally.id, ally);
     });
 
@@ -1893,63 +1927,32 @@ export class ArcadeBattleScene extends Phaser.Scene {
       slot.ships.forEach((shipId, shipIdx) => {
         const angle = (enemyIndex / Math.max(totalEnemies, 1)) * Math.PI * 2;
         const radius = 1200;
-        const enemy = this.createShip(
-          `enemy_${enemyIndex}`,
-          shipId,
-          slot.factionId,
-          "ai",
-          BATTLEFIELD_SIZE / 2 + Math.cos(angle) * radius,
-          BATTLEFIELD_SIZE / 2 + Math.sin(angle) * radius - 1000,
-          180,
-        );
-        this.equipLoadout(enemy, slot.loadoutChoices?.[String(shipIdx)]);
+        const enemy = spawnArcadeShip({
+          id: `enemy_${enemyIndex}`,
+          definitionId: shipId,
+          loadoutId: slot.loadoutChoices?.[String(shipIdx)] ?? null,
+          faction: slot.factionId,
+          pilot: "ai",
+          x: BATTLEFIELD_SIZE / 2 + Math.cos(angle) * radius,
+          y: BATTLEFIELD_SIZE / 2 + Math.sin(angle) * radius - 1000,
+          angle: 180,
+        });
         this.ships.set(enemy.id, enemy);
         enemyIndex++;
       });
     }
   }
 
-  /**
-   * Equips a loadout on a freshly created ship: stat bonuses, the real-time
-   * modifier sheet (upgrades + the pilot's ability), upgraded maneuver recharge times, and the
-   * ordnance/turret weapons with their reload modifiers baked in.
-   *
-   * @param ship - The ship to equip (mutated in place, before first update).
-   * @param loadoutId - Chosen loadout id, or undefined for the bare ship.
-   */
-  private equipLoadout(ship: ArcadeShip, loadoutId: string | undefined): void {
-    applyLoadoutEffects(ship, loadoutId);
-    const upgradeIds = loadoutUpgradeIds(ship.definitionId, loadoutId);
-    const modifiers = resolveLoadoutModifiers(ship.definitionId, loadoutId);
-    ship.upgradeIds = upgradeIds;
-    ship.modifiers = modifiers;
-    ship.isUniquePilot = uniquePilotOf(loadoutId ?? null) !== null;
-    ship.control = applyControlModifiers(ship.control, modifiers);
-    ship.ordnanceSlots = applyOrdnanceModifiers(
-      buildOrdnanceSlots(upgradeIds),
-      modifiers,
-    ).map((slot) => ({
-      ...slot,
-      cooldownMax: attackIntervalMs(slot.cooldownMax),
-    }));
-    const turret = applyTurretModifiers(buildTurretSlot(upgradeIds), modifiers);
-    // One attack per maneuver cycle: no weapon may reload faster than that.
-    ship.turretSlot = turret && {
-      ...turret,
-      cooldownMax: attackIntervalMs(turret.cooldownMax),
-    };
-  }
-
   private spawnDefaultShips(): void {
-    const playerShip = this.createShip(
-      "player_0",
-      "confed_sparrow",
-      "free_confederation",
-      "player",
-      BATTLEFIELD_SIZE / 2,
-      BATTLEFIELD_SIZE / 2 + 50,
-      0,
-    );
+    const playerShip = createArcadeShip({
+      id: "player_0",
+      definitionId: "confed_sparrow",
+      faction: "free_confederation",
+      owner: "player",
+      x: BATTLEFIELD_SIZE / 2,
+      y: BATTLEFIELD_SIZE / 2 + 50,
+      angle: 0,
+    });
     playerShip.hull = playerShip.maxHull = DEFAULT_SQUAD_DURABILITY.player.hull;
     playerShip.shields = playerShip.maxShields =
       DEFAULT_SQUAD_DURABILITY.player.shields;
@@ -1962,15 +1965,15 @@ export class ArcadeBattleScene extends Phaser.Scene {
     ];
     for (let i = 0; i < wingOffsets.length; i++) {
       const offset = wingOffsets[i]!;
-      const ally = this.createShip(
-        `ally_${i}`,
-        "confed_wasp",
-        "free_confederation",
-        "ai",
-        BATTLEFIELD_SIZE / 2 + offset.x,
-        BATTLEFIELD_SIZE / 2 + offset.y,
-        0,
-      );
+      const ally = createArcadeShip({
+        id: `ally_${i}`,
+        definitionId: "confed_wasp",
+        faction: "free_confederation",
+        owner: "ai",
+        x: BATTLEFIELD_SIZE / 2 + offset.x,
+        y: BATTLEFIELD_SIZE / 2 + offset.y,
+        angle: 0,
+      });
       ally.hull = ally.maxHull = DEFAULT_SQUAD_DURABILITY.wingman.hull;
       ally.shields = ally.maxShields = DEFAULT_SQUAD_DURABILITY.wingman.shields;
       this.ships.set(ally.id, ally);
@@ -1979,79 +1982,17 @@ export class ArcadeBattleScene extends Phaser.Scene {
     for (let i = 0; i < 3; i++) {
       const angle = (i / 3) * Math.PI * 2;
       const radius = 1200;
-      const enemy = this.createShip(
-        `enemy_${i}`,
-        i === 0 ? "terran_gladius" : "terran_viper",
-        "terran_hegemony",
-        "ai",
-        BATTLEFIELD_SIZE / 2 + Math.cos(angle) * radius,
-        BATTLEFIELD_SIZE / 2 + Math.sin(angle) * radius - 1000,
-        180,
-      );
+      const enemy = createArcadeShip({
+        id: `enemy_${i}`,
+        definitionId: i === 0 ? "terran_gladius" : "terran_viper",
+        faction: "terran_hegemony",
+        owner: "ai",
+        x: BATTLEFIELD_SIZE / 2 + Math.cos(angle) * radius,
+        y: BATTLEFIELD_SIZE / 2 + Math.sin(angle) * radius - 1000,
+        angle: 180,
+      });
       this.ships.set(enemy.id, enemy);
     }
-  }
-
-  private createShip(
-    id: string,
-    defId: string,
-    faction: FactionId,
-    owner: "player" | "ai",
-    x: number,
-    y: number,
-    angle: number,
-  ): ArcadeShip {
-    const def = getShipDefinition(defId);
-    const durability = realTimeDurability(def?.baseStats);
-    const baseShip: ShipState = {
-      id,
-      definitionId: defId,
-      faction,
-      owner,
-      x,
-      y,
-      angle,
-      hull: durability.hull,
-      maxHull: durability.hull,
-      shields: durability.shields,
-      maxShields: durability.shields,
-      isStressed: false,
-      hasFocus: false,
-      hasEvade: false,
-      hasTargetLock: null,
-      isCloaked: false,
-      currentManeuver: null,
-      maneuverProgress: 0,
-      mobileArcDirection: "front",
-      charges: 0,
-      maxCharges: 0,
-    };
-
-    const ship: ArcadeShip = {
-      ...baseShip,
-      control: createControlState(
-        baseShip,
-        SHIP_SIZES[def?.baseStats.size ?? "small"] ?? 32,
-        getMovementProfile(defId),
-        def?.baseStats.speed ?? { min: 1, max: 5 },
-      ),
-      ordnanceSlots: [],
-      turretSlot: null,
-      crewMode: "pilot",
-      role: def?.role ?? "heavy_fighter",
-      stress: INITIAL_STRESS,
-      shipDial: getShipDial(defId),
-      cloakTimer: 0,
-      capitalSystems:
-        def?.role === "capital" ? createCapitalSystems(baseShip.hull) : null,
-      commanderOrders: def?.role === "capital" ? createCommanderOrders() : null,
-      upgradeIds: [],
-      modifiers: NEUTRAL_MODIFIERS,
-      isUniquePilot: false,
-      frenzyUntilMs: 0,
-    };
-
-    return ship;
   }
 
   private createShipSprite(ship: ArcadeShip): void {
@@ -2206,7 +2147,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
       selectedWeaponSlot: this.selectedWeaponSlot,
       camera: this.cameras.main,
       score: this.score,
-      remainingMs: this.scenario?.remainingMs ?? this.matchTimer.remainingMs,
+      remainingMs:
+        this.scenario?.remainingMs ??
+        this.reinforcements?.remainingMs ??
+        this.matchTimer.remainingMs,
       nowMs: this.time.now,
       markedId: this.playerMarkedTargetId,
     });
@@ -2670,9 +2614,16 @@ export class ArcadeBattleScene extends Phaser.Scene {
    * @param victory - Whether the player's side won.
    */
   private showEndScreen(victory: boolean): void {
+    const reinforced = this.reinforcements?.telemetryDetails() ?? {};
     trackModeEnd("skirmish", victory ? "victory" : "defeat", {
       score: this.score,
+      ...reinforced,
     });
+    matchStats.finish(victory ? "victory" : "defeat", {
+      score: this.score,
+      ...reinforced,
+    });
+    this.reinforcements?.finish();
     this.cameras.main.setZoom(1.0);
     audioManager.playFactionStinger(
       this.playerFaction,
@@ -2693,6 +2644,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       score: this.score,
       pointsDestroyed: this.playerSideScore.destroyedPoints,
       pointsLost: this.enemySideScore.destroyedPoints,
+      ...this.reinforcements?.endOverlayExtras(),
       onRetry,
       onMenu,
     });

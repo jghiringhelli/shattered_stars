@@ -10,6 +10,7 @@
  */
 
 import {
+  SCENARIO_POINTS_PER_SQUAD_POINT,
   controlWeight,
   scenarioShipValue,
   type ScenarioEvent,
@@ -52,10 +53,12 @@ export class ScenarioFrameTracker {
   /**
    * @param playerFaction - The human player's faction (the "player" side).
    * @param worldSize - Torus side length.
+   * @param pointsPerSquadPoint - Scenario value of one squad point.
    */
   constructor(
     private readonly playerFaction: string,
     private readonly worldSize: number,
+    private readonly pointsPerSquadPoint: number = SCENARIO_POINTS_PER_SQUAD_POINT,
   ) {}
 
   /**
@@ -78,9 +81,14 @@ export class ScenarioFrameTracker {
   /**
    * @param ships - Every ship record (living and destroyed).
    * @param deltaMs - Tick length.
+   * @param reserves - Reinforced battles: whether each side can still field a ship.
    * @returns This tick's frame.
    */
-  build(ships: Iterable<ScenarioShipSource>, deltaMs: number): ScenarioFrame {
+  build(
+    ships: Iterable<ScenarioShipSource>,
+    deltaMs: number,
+    reserves?: ScenarioFrame["reserves"],
+  ): ScenarioFrame {
     const living: ScenarioShip[] = [];
     const events = this.pending;
     this.pending = [];
@@ -92,7 +100,8 @@ export class ScenarioFrameTracker {
         events.push(this.destroyed(ship));
       }
     }
-    return { deltaMs, worldSize: this.worldSize, ships: living, events };
+    const frame = { deltaMs, worldSize: this.worldSize, ships: living, events };
+    return reserves ? { ...frame, reserves } : frame;
   }
 
   /** @returns The ship as the rules see it. */
@@ -110,12 +119,20 @@ export class ScenarioFrameTracker {
       ),
       tags: [],
       stressed: ship.stress.isStressed,
-      value: scenarioShipValue(shipPointCost(ship.definitionId)),
+      value: this.valueOf(ship),
       healthFraction:
         max > 0
           ? (Math.max(0, ship.hull) + Math.max(0, ship.shields)) / max
           : 0,
     };
+  }
+
+  /** @returns What destroying the ship is worth (scenario points). */
+  private valueOf(ship: ScenarioShipSource): number {
+    return scenarioShipValue(
+      shipPointCost(ship.definitionId),
+      this.pointsPerSquadPoint,
+    );
   }
 
   /** @returns The destroyed event of a ship that just died. */
@@ -124,7 +141,7 @@ export class ScenarioFrameTracker {
       kind: "destroyed",
       shipId: ship.id,
       side: this.sideOf(ship),
-      value: scenarioShipValue(shipPointCost(ship.definitionId)),
+      value: this.valueOf(ship),
       x: ship.x,
       y: ship.y,
     };

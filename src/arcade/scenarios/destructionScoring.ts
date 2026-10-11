@@ -22,12 +22,16 @@ export interface DestructionStep {
 
 /**
  * @param pointCost - A ship's squad cost.
+ * @param pointsPerSquadPoint - Scenario points per squad point.
  * @returns What destroying it is worth (scenario points).
  */
-export function scenarioShipValue(pointCost: number): number {
+export function scenarioShipValue(
+  pointCost: number,
+  pointsPerSquadPoint: number = SCENARIO_POINTS_PER_SQUAD_POINT,
+): number {
   return Math.max(
     MIN_SHIP_SCENARIO_VALUE,
-    Math.round(pointCost * SCENARIO_POINTS_PER_SQUAD_POINT),
+    Math.round(pointCost * pointsPerSquadPoint),
   );
 }
 

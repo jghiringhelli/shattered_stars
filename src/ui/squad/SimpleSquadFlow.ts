@@ -68,6 +68,11 @@ export class SimpleSquadFlow extends Phaser.Events.EventEmitter {
     this.selectedFaction = initialFaction;
   }
 
+  /** The faction selected in the faction row. */
+  get faction(): FactionId {
+    return this.selectedFaction;
+  }
+
   /** Render (or re-render) the faction row and the catalog. */
   render(): void {
     this.factionButtons.forEach((b) => b.destroy());

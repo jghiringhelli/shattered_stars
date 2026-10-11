@@ -525,6 +525,13 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
   K-turn + boost instant spikes, hysteresis thresholds, HUD color helpers)
 - **ArcadeOrdnance.ts** - Arcade ordnance slots, cooldowns, homing
 - **ArcadeTurret.ts** - 360° auto-targeting turrets with ms-based cooldowns
+- **reinforcements/** - Reinforcement-pool battles (default for Skirmish, Epic, Scenario;
+  Classic stays a Squad Builder toggle): per-side pool (1000; Epic 1200) spent on every
+  deploy, on-field cap (250; Epic 500), category quotas (bombers / aces / capitals), strategy
+  presets + AI planner, the player's reserve + replacement picker (auto-accepts in 5 s),
+  pool exhaustion or 3:00 destroyed points decide. Pure `ReinforcementDirector`; scene glue in
+  src/scenes/arcadeBattle/reinforcements/ (ReinforcementController, HUD panel, picker).
+  Reinforced scenarios play to higher thresholds (reinforcedScenario.ts).
 - **scenarios/** - X-Wing 2.0 Scenario mode rules (Satellite Array, Chance Engagement,
   Salvage, Scramble): control (medium+ count double), round scoring (12-cycle rounds),
   half/full destruction points, first to 20; AI objective roles (scenarioAi). Scene glue:

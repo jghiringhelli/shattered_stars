@@ -131,7 +131,7 @@ export function stepScenario(
   };
   next = endRounds(next, state.roundElapsedMs + frame.deltaMs);
   const alive = (side: ScenarioSide): boolean =>
-    frame.ships.some((s) => s.side === side);
+    frame.ships.some((s) => s.side === side) || frame.reserves?.[side] === true;
   const result = decideOutcome({
     points: next.points,
     threshold: next.definition.threshold,

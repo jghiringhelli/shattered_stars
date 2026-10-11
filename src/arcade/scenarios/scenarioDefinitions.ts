@@ -43,6 +43,12 @@ export interface ScenarioDefinition {
   readonly threshold: number;
   /** Time limit (ms). */
   readonly timeLimitMs: number;
+  /**
+   * Scenario points per squad point of a destroyed ship (default:
+   * SCENARIO_POINTS_PER_SQUAD_POINT; the reinforced variant values ships
+   * against the whole pool).
+   */
+  readonly pointsPerSquadPoint?: number;
 }
 
 /** Satellites / nodes are spread this far apart along the centre line (px): range 3. */

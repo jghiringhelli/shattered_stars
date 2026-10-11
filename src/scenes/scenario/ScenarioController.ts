@@ -13,13 +13,16 @@ import {
   SCENARIO_DEFINITIONS,
   createScenarioState,
   isScenarioId,
+  reinforcedScenarioDefinition,
   stepScenario,
   totalPoints,
   withBonusPoints,
+  type ScenarioDefinition,
   type ScenarioResult,
   type ScenarioSide,
   type ScenarioState,
 } from "../../arcade/scenarios";
+import { REINFORCEMENTS_BATTLE } from "../../arcade/reinforcements/reinforcementConfig";
 import type { FlightEvent } from "../../arcade/systems/PilotFlightTypes";
 import type { CameraLike } from "../../ui/hud";
 import type { ScreenRect } from "../../ui/hud/screenRect";
@@ -57,25 +60,38 @@ export interface ScenarioSceneLink {
   readonly playerMarkedTargetId: () => string | null;
   /** The Skirmish radar's rect (HUD-root px). */
   readonly radarRect: () => ScreenRect | undefined;
+  /**
+   * Reinforced battles: whether each side can still field a ship (a side
+   * with none alive is only annihilated when it cannot); null otherwise.
+   */
+  readonly reserves?: () => Readonly<Record<ScenarioSide, boolean>> | null;
   /** Called once when the match ends. */
   readonly onEnd: (result: ScenarioResult) => void;
 }
 
 /**
  * @param scene - The battle scene.
- * @param battleConfig - The registry's battle config (its `scenario` field).
+ * @param battleConfig - The registry's battle config (its `scenario` field;
+ *   `battle: "reinforcements"` plays the reinforced variant).
  * @param link - Scene accessors.
  * @returns A controller when the config names a scenario, else null.
  */
 export function createScenarioController(
   scene: Phaser.Scene,
-  battleConfig: { readonly scenario?: unknown } | undefined,
+  battleConfig:
+    { readonly scenario?: unknown; readonly battle?: unknown } | undefined,
   link: ScenarioSceneLink,
 ): ScenarioController | null {
   const id = battleConfig?.scenario;
-  return isScenarioId(id)
-    ? new ScenarioController(scene, SCENARIO_DEFINITIONS[id], link)
-    : null;
+  if (!isScenarioId(id)) return null;
+  const definition = SCENARIO_DEFINITIONS[id];
+  return new ScenarioController(
+    scene,
+    battleConfig?.battle === REINFORCEMENTS_BATTLE
+      ? reinforcedScenarioDefinition(definition)
+      : definition,
+    link,
+  );
 }
 
 export class ScenarioController {
@@ -95,7 +111,7 @@ export class ScenarioController {
    */
   constructor(
     private readonly scene: Phaser.Scene,
-    definition: (typeof SCENARIO_DEFINITIONS)[keyof typeof SCENARIO_DEFINITIONS],
+    definition: ScenarioDefinition,
     private readonly link: ScenarioSceneLink,
   ) {
     this.state = createScenarioState(definition, link.worldSize);
@@ -131,6 +147,7 @@ export class ScenarioController {
     const tracker = new ScenarioFrameTracker(
       playerFaction,
       this.link.worldSize,
+      this.state.definition.pointsPerSquadPoint,
     );
     this.tracker = tracker;
     deployShips(ships, (ship) => tracker.sideOf(ship), this.link.worldSize);
@@ -174,7 +191,11 @@ export class ScenarioController {
   tick(deltaMs: number, nowMs: number): true {
     if (this.ended || !this.tracker) return true;
     const ships = [...this.link.ships()];
-    this.state = stepScenario(this.state, this.tracker.build(ships, deltaMs));
+    const reserves = this.link.reserves?.() ?? undefined;
+    this.state = stepScenario(
+      this.state,
+      this.tracker.build(ships, deltaMs, reserves),
+    );
     this.director.update({
       nowMs,
       state: this.state,

@@ -179,9 +179,17 @@ export interface RosterTeam {
 }
 
 /**
+ * Pips a faction keeps at most while some are fallen ships: one roster line
+ * (184 px panel − 2 × 12 px padding, 14 px per pip). Reinforcement battles
+ * deploy many ships; the oldest fallen pips go first, living ships stay.
+ */
+export const ROSTER_MAX_PIPS = 11;
+
+/**
  * Ships grouped by faction, the player's side first.
  *
- * @param ships - Every ship in the battle (dead ones show as empty pips).
+ * @param ships - Every ship in the battle (dead ones show as empty pips,
+ *   the oldest dropped past {@link ROSTER_MAX_PIPS}).
  * @param playerFaction - The player's faction.
  * @param playerId - The player's ship id.
  * @returns One team per faction.
@@ -206,9 +214,19 @@ export function rosterTeams(
     factionId,
     label: factionId.replace(/_/g, " ").toUpperCase(),
     isPlayerSide: factionId === playerFaction,
-    pips,
+    pips: withoutOldestFallen(pips),
   }));
   return teams.sort((a, b) => Number(b.isPlayerSide) - Number(a.isPlayerSide));
+}
+
+/** @returns The pips minus the oldest fallen ones past {@link ROSTER_MAX_PIPS}. */
+function withoutOldestFallen(pips: readonly RosterPip[]): RosterPip[] {
+  let excess = pips.length - ROSTER_MAX_PIPS;
+  return pips.filter((pip) => {
+    if (excess <= 0 || pip.alive) return true;
+    excess--;
+    return false;
+  });
 }
 
 function fraction(value: number, max: number): number {
