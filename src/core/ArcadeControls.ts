@@ -64,6 +64,20 @@ export interface ShipControlState {
 }
 
 /**
+ * Recharge times of the red specials and actions (ms). From the tempo
+ * experiment (docs/telemetry/tempo-experiment.md): boost and barrel roll
+ * recharge x1.5 (3 -> 4.5 s, 2 -> 3 s) lengthen matches without the DPS
+ * and skill loss of a longer maneuver cycle. The K-turn family stays at 5 s:
+ * slowing it dropped expert-vs-novice pairs below skill gate 1 (85%).
+ */
+/** K-turn, Segnor loop and Tallon roll share this recharge (ms). */
+export const KTURN_RECHARGE_MS = 5000;
+/** Boost recharge (ms). */
+export const BOOST_RECHARGE_MS = 4500;
+/** Barrel roll recharge (ms). */
+export const BARREL_ROLL_RECHARGE_MS = 3000;
+
+/**
  * Creates initial control state and immediately starts a straight maneuver
  * so the ship is never idle.
  *
@@ -94,11 +108,11 @@ export function createControlState(
     nextManeuver: null,
     firedLaserThisCycle: false,
     kturnCooldown: 0,
-    kturnCooldownMax: 5000,
+    kturnCooldownMax: KTURN_RECHARGE_MS,
     barrelRollCooldown: 0,
-    barrelRollCooldownMax: 2000,
+    barrelRollCooldownMax: BARREL_ROLL_RECHARGE_MS,
     boostCooldown: 0,
-    boostCooldownMax: 3000,
+    boostCooldownMax: BOOST_RECHARGE_MS,
   };
   return startManeuver(ship, base, "straight");
 }

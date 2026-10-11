@@ -79,3 +79,11 @@ Sampling noise (binomial / bootstrap at these sizes): gate 1 ±1 pt, gate 2 ±3�
   at the cost of gate 2 dropping to ~74 % (re-run `npm run test:skill` before adopting).
 
 The constants were not changed in this task (owner decision).
+
+## Decision (applied)
+
+Boost 3 -> 4.5 s and barrel roll 2 -> 3 s (`BOOST_RECHARGE_MS`, `BARREL_ROLL_RECHARGE_MS` in
+src/core/ArcadeControls.ts); the maneuver cycle stays at 500 ms. The K-turn / Segnor / Tallon
+recharge stays at 5 s: with 6-7.5 s the gate-1 smoke pairs (confed_raven vs ascendant_crusader,
+synth_interceptor_drone vs synth_stalker) fell to 75-84% expert wins, below the 85% gate.
+Match length is mainly addressed by reinforcement battles (Skirmish / Epic / Scenarios).

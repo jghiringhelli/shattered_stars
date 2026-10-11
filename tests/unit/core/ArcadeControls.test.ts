@@ -565,3 +565,19 @@ describe("ArcadeControls", () => {
     });
   });
 });
+
+describe("special maneuver recharge (tempo experiment)", () => {
+  const pose = { x: 0, y: 0, angle: 0 };
+
+  it("keeps K-turn / Segnor / Tallon at 5 s (the expert's tool: slower costs skill gate 1)", () => {
+    expect(createControlState(pose).kturnCooldownMax).toBe(5000);
+  });
+
+  it("recharges boost in 4.5 s", () => {
+    expect(createControlState(pose).boostCooldownMax).toBe(4500);
+  });
+
+  it("recharges barrel roll in 3 s", () => {
+    expect(createControlState(pose).barrelRollCooldownMax).toBe(3000);
+  });
+});
