@@ -32,12 +32,18 @@ import {
   addMenuHeader,
 } from "../ui/menu/MenuScaffold";
 import { MenuFocus } from "../ui/menu/MenuFocus";
+import {
+  bindMenuBack,
+  fadeInMenu,
+  goToScene,
+} from "../ui/menu/menuTransitions";
 import type { HoloPressButton } from "../ui/menu/HoloPressButton";
 import {
   createActionBar,
   createModeToggle,
 } from "../ui/squad/squadBuilderChrome";
 import { FLASH_COLORS } from "../ui/squad/squadBuilderStyle";
+import { ScenarioPicker } from "./scenario/ScenarioPicker";
 
 type ShipsPickedEvent = {
   slotIndex: number;
@@ -69,6 +75,8 @@ export class SquadBuilderScene extends Phaser.Scene {
   private backButton!: HoloPressButton;
   private modeToggleButton: HoloPressButton | null = null;
   private menuFocus: MenuFocus | null = null;
+  /** Skirmish only: the X-Wing 2.0 scenario selector (header, left of the mode toggle). */
+  private scenarioPicker: ScenarioPicker | null = null;
 
   constructor() {
     super({ key: "SquadBuilderScene" });
@@ -109,12 +117,13 @@ export class SquadBuilderScene extends Phaser.Scene {
     this.bottomBarObjects = [];
     this.buildDefaultSquads();
     this.createTitle();
-    this.backButton = addBackButton(this, () =>
-      this.scene.start("MainMenuScene"),
-    );
+    this.backButton = addBackButton(this, () => this.goBack());
+    this.scenarioPicker =
+      this.gameMode === "arcade" ? new ScenarioPicker(this) : null;
     this.renderBuilderMode();
     this.setupInput();
     this.listenForShipsPicked();
+    fadeInMenu(this);
   }
 
   /** Shows the simple single-ship flow or the advanced multi-squad builder, per simpleMode. */
@@ -150,6 +159,7 @@ export class SquadBuilderScene extends Phaser.Scene {
   private wireMenuFocus(): void {
     const targets = [
       this.backButton,
+      ...(this.scenarioPicker ? [this.scenarioPicker.button] : []),
       ...(this.modeToggleButton ? [this.modeToggleButton] : []),
       ...this.bottomBarObjects,
     ];
@@ -351,9 +361,15 @@ export class SquadBuilderScene extends Phaser.Scene {
   }
 
   private setupInput(): void {
-    this.input.keyboard!.on("keydown-ESC", () =>
-      this.scene.start("MainMenuScene"),
-    );
+    // One back affordance (ESC / gamepad B / right-click), inert while the
+    // ship picker overlay owns the screen.
+    bindMenuBack(this, () => this.goBack(), {
+      isActive: () => !this.scene.isActive("ShipPickerScene"),
+    });
+  }
+
+  private goBack(): void {
+    goToScene(this, "MainMenuScene");
   }
 
   private randomizeAll(): void {
@@ -445,6 +461,9 @@ export class SquadBuilderScene extends Phaser.Scene {
       gameMode: this.gameMode,
       pointLimit: this.pointLimit,
       aiDifficulty: this.aiDifficulty,
+      ...(this.gameMode === "arcade" && this.scenarioPicker?.selected
+        ? { scenario: this.scenarioPicker.selected }
+        : {}),
     });
     this.navigateToBattle();
   }

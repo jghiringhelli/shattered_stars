@@ -46,7 +46,7 @@ acceptance criteria; the status column tracks delivery.
 |---|---|---|---|
 | P1-1 | Survival as a full roguelite | Branching sector map (≥ 5 node types), relic archetypes with synergy tags, ascension, meta-unlocks on every run, run save/resume, run history, seeded runs, final boss. | In progress (survival workstream) |
 | P1-2 | Campaign like StarCraft II | Hub with ≥ 2 missions open, Armory + Research with exclusive choices, hero active powers (V / B), ≥ 4 mission archetypes beyond "destroy all", bonus objectives, persistent consequences, completion state. | In progress (campaign workstream) |
-| P1-3 | X-Wing 2.0 scenario mode | ≥ 2 of Satellite Array / Chance Engagement / Salvage / Scramble with real-time scoring, objective state on HUD + radar, carried salvage visible and dropped on boost / roll / death, score threshold or time limit. | Planned (after overlay) |
+| P1-3 | X-Wing 2.0 scenario mode | ≥ 2 of Satellite Array / Chance Engagement / Salvage / Scramble with real-time scoring, objective state on HUD + radar, carried salvage visible and dropped on boost / roll / death, score threshold or time limit. | Done — all 4 scenarios: Squad Builder › SCENARIO picker → `battleConfig.scenario`; rules in `src/arcade/scenarios/`, scene glue in `src/scenes/scenario/` (6 s rounds = DURABILITY_SCALE cycles, control range 400 px = range 0–1, first to 20 or 5 min) |
 | P1-4 | Escort / bonus-objective archetype | Escort HP on HUD/radar, ≥ 3 wingman orders, immediate clear failure, ≤ 3 critical escorts. | In progress (campaign objectives, reusable in `src/arcade/objectives/`) |
 | P1-5 | Ranked seasons + daily challenges (online 1v1) | Placement matches, soft reset, widening MMR tolerance, ≥ 3 daily challenges. | Planned |
 

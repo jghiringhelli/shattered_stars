@@ -14,8 +14,8 @@
  * focus (novice squads focus without marking — focus fire is a skill); the
  * player's faction has none — the player marks (R), and the wingmen focus
  * the player's mark, or mark the coordinator's choice while there is none
- * (mark assist). A side down to one living ship flies on its own (no
- * orders, no mark), as SquadMark defines.
+ * (mark assist — Settings › Gameplay › Wingmen Mark Assist). A side down to
+ * one living ship flies on its own (no orders, no mark), as SquadMark defines.
  *
  * Pure: no Phaser.
  */
@@ -29,10 +29,12 @@ import {
   type BotContact,
   type BotSkill,
   type BotTier,
+  type Point,
   type SquadOrder,
 } from "../../arcade/ai";
 import type { CycleFlightState } from "../../arcade/systems/CycleFlight";
 import type { FlightControlResult } from "../../arcade/systems/PilotFlightTypes";
+import { isMarkAssistEnabled } from "../../systems/SettingsStorage";
 import {
   NO_SQUAD_MARKS,
   clearMark,
@@ -80,6 +82,7 @@ export class ArcadeBotFleet {
   private readonly squadCommands = new Map<string, SquadCommand>();
   private marks: SquadMarks = NO_SQUAD_MARKS;
   private contacts: readonly BotContact[] = [];
+  private goalOf: ((shipId: string) => Point | null) | null = null;
 
   /** @param options - Difficulty, player faction, random source, world size. */
   constructor(private readonly options: ArcadeBotFleetOptions) {
@@ -180,7 +183,18 @@ export class ArcadeBotFleet {
       nowMs: input.nowMs,
       deltaMs: input.deltaMs,
       worldSize: this.options.worldSize,
+      safePoint: this.goalOf?.(self.id) ?? null,
     });
+  }
+
+  /**
+   * Scenario mode: a ship whose goal source names a point steers for it
+   * (BotPilot's safe-point path — no specials, boosts or rolls) and keeps
+   * shooting; null = fly the squad's orders as usual.
+   * @param source - Ship id → goal point, or null to clear the source.
+   */
+  setGoalSource(source: ((shipId: string) => Point | null) | null): void {
+    this.goalOf = source;
   }
 
   /**
@@ -267,7 +281,7 @@ export class ArcadeBotFleet {
     squad = new SquadCommand({
       side,
       aiLeader: !isPlayerSide && skill.tier !== "novice",
-      assistMark: isPlayerSide,
+      assistMark: isPlayerSide && isMarkAssistEnabled(),
       reactionMs: botProfile(skill.tier, skill.reactionScale).reactionMs,
       worldSize: this.options.worldSize,
     });

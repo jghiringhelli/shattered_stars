@@ -518,6 +518,10 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
   K-turn + boost instant spikes, hysteresis thresholds, HUD color helpers)
 - **ArcadeOrdnance.ts** - Arcade ordnance slots, cooldowns, homing
 - **ArcadeTurret.ts** - 360° auto-targeting turrets with ms-based cooldowns
+- **scenarios/** - X-Wing 2.0 Scenario mode rules (Satellite Array, Chance Engagement,
+  Salvage, Scramble): control (medium+ count double), round scoring (12-cycle rounds),
+  half/full destruction points, first to 20; AI objective roles (scenarioAi). Scene glue:
+  src/scenes/scenario/ (ScenarioController hooks in ArcadeBattleScene, HUD, picker).
 
 
 ### Menu UI (src/ui/menu/, src/ui/theme/)
