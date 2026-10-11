@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { botContactOf } from "../../../../src/scenes/battleUi/botContacts";
+import { botContactOf } from "../../../../src/arcade/ai/SceneContact";
 import { createCycleFlight } from "../../../../src/arcade/systems/CycleFlight";
 import { getModeCombatStats } from "../../../../src/data/ModeBalancing";
 

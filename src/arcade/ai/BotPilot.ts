@@ -15,7 +15,7 @@
 import type { ManeuverDefinition, ManeuverDirection } from "../../core/types";
 import { createSeededRng } from "../../utils/random";
 import type { CycleFlightState } from "../systems/CycleFlight";
-import { canHullKTurn } from "../systems/AiPursuit";
+import { canHullKTurn } from "./HullAgility";
 import type { FlightControlResult } from "../systems/PilotFlightTypes";
 import { offNoseDeg, type Point } from "./AiGeometry";
 import { botProfile } from "./BotDifficulty";

@@ -13,6 +13,7 @@ import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
 import { InputManager } from "../input/InputManager";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
+import { trackModeEnd, trackModeStart } from "../telemetry/telemetry";
 import { addShipVisual } from "../rendering/ShipVisual";
 import type { FactionId } from "../config";
 import {
@@ -32,6 +33,7 @@ import {
   type ModeCombatStats,
 } from "../data/ModeBalancing";
 import { HealthBar } from "../ui/HealthBar";
+import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
@@ -56,7 +58,6 @@ import {
   assignQuickBuilds,
   equipFlight,
   equipQuickBuild,
-  regenerateShields,
   stressModifiersOf,
 } from "../arcade/systems/QuickBuildEquip";
 import { combatantOf, resolveDiceAttack } from "../arcade/systems/DiceAttack";
@@ -141,7 +142,7 @@ import {
   primaryWeaponSlot,
 } from "./battleUi/hudSnapshot";
 import { BattleBots } from "./battleUi/BattleBots";
-import { botContactOf } from "./battleUi/botContacts";
+import { botContactOf } from "../arcade/ai/SceneContact";
 import { pickShotTarget } from "./battleUi/shotPreference";
 
 interface BossSection {
@@ -271,6 +272,8 @@ export class EpicBattleScene extends Phaser.Scene {
   private ships: Map<string, EpicShip> = new Map();
   private shipSprites: Map<string, ShipSprite> = new Map();
   private healthBars: Map<string, HealthBar> = new Map();
+  /** Repair mechanic + overlay shimmer + repair drones (built in create). */
+  private repairFeedback: ShipRepairFeedback | null = null;
 
   private playerShipIds: string[] = [];
   private escortShipIds: string[] = [];
@@ -358,6 +361,12 @@ export class EpicBattleScene extends Phaser.Scene {
     audioManager.initialize();
 
     this.effectsManager = new EffectsManager(this);
+    this.repairFeedback = new ShipRepairFeedback({
+      scene: this,
+      shipOf: (id) => this.ships.get(id),
+      overlayOf: (id) => this.healthBars.get(id),
+      particleScale: () => this.performanceState.effectSettings.particleCount,
+    });
     const savedSettings = this.registry.get("settings") as
       { cameraShake: boolean; showDamageNumbers: boolean } | undefined;
     if (savedSettings) {
@@ -446,6 +455,7 @@ export class EpicBattleScene extends Phaser.Scene {
     this.setupRoot?.destroy();
     this.setupRoot = null;
     this.isSetupPhase = false;
+    trackModeStart("boss_raid");
     this.cameras.main.setZoom(RAID_ZOOM.battle);
 
     audioManager.playMusic("combat_high");
@@ -1057,6 +1067,11 @@ export class EpicBattleScene extends Phaser.Scene {
       maxShields: ship.maxShields,
       currentHull: ship.hull,
       currentShields: ship.shields,
+      side: overlaySide(
+        ship.id === this.pilotedShipId,
+        ship.owner === "player",
+      ),
+      definitionId: ship.definitionId,
     });
     this.healthBars.set(ship.id, healthBar);
   }
@@ -1456,22 +1471,14 @@ export class EpicBattleScene extends Phaser.Scene {
   }
 
   /**
-   * Regenerates a ship's shields for one frame (equipment / pilot ability)
-   * and refreshes its health bar when they grew.
+   * Applies a ship's own shield regen and hull repair for one frame
+   * (equipment / pilot ability); the repair feedback refreshes its overlay.
    *
    * @param ship - The ship.
    * @param deltaMs - Frame length (ms).
    */
   private regenerateShipShields(ship: EpicShip, deltaMs: number): void {
-    const shields = regenerateShields(
-      ship.shields,
-      ship.maxShields,
-      ship.modifiers,
-      deltaMs,
-    );
-    if (shields === ship.shields) return;
-    ship.shields = shields;
-    this.healthBars.get(ship.id)?.update(ship.hull, ship.shields);
+    this.repairFeedback?.selfRepair(ship, deltaMs);
   }
 
   private destroyShip(shipId: string): void {
@@ -1635,6 +1642,9 @@ export class EpicBattleScene extends Phaser.Scene {
       const healthBar = this.healthBars.get(id);
       if (healthBar) {
         healthBar.setPosition(ship.x, ship.y - 40);
+        healthBar.setSide(
+          overlaySide(id === this.pilotedShipId, ship.owner === "player"),
+        );
       }
     }
   }
@@ -1735,6 +1745,7 @@ export class EpicBattleScene extends Phaser.Scene {
    * @param subtitle - One-line outcome.
    */
   private showResult(victory: boolean, subtitle: string): void {
+    trackModeEnd("boss_raid", victory ? "victory" : "defeat");
     const boss = this.boss;
     const bossHullPct = boss
       ? Math.floor((Math.max(0, boss.totalHull) / boss.maxTotalHull) * 100)

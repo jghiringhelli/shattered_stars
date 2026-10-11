@@ -376,17 +376,3 @@ export function getQuickBuild(
 export function toSimSpecs(squad: QuickBuildSquad): SquadShipSpec[] {
   return squad.ships.map(specFor);
 }
-
-/** Minimal ship config compatible with AIShipConfig (avoids circular import). */
-export interface AIShipConfigLike {
-  readonly shipId: string;
-  readonly pilotId?: string;
-  readonly loadoutId?: string;
-}
-
-/**
- * Convert a quick-build squad to AIShipConfig[] for AIShipFactory.createAISquad.
- */
-export function toAIConfigs(squad: QuickBuildSquad): AIShipConfigLike[] {
-  return squad.ships.map(specFor);
-}

@@ -131,3 +131,16 @@ describe("SquadCommand — the player's side with mark assist", () => {
     expect(command.orderFor("a2")?.focusTargetId).toBe("b1");
   });
 });
+
+describe("SquadCommand — mark assist never overrides the player", () => {
+  it("keeps the player's mark even when the squad cannot see that target", () => {
+    const command = new SquadCommand({
+      side: "red",
+      aiLeader: false,
+      assistMark: true,
+    });
+    const marked = placeMark(NO_SQUAD_MARKS, "red", "hidden_boss", 0);
+    const marks = run(command, battle(), marked, 1000);
+    expect(markedTargetOf(marks, "red", 1000)).toBe("hidden_boss");
+  });
+});

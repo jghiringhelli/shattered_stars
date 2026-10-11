@@ -149,6 +149,8 @@ export class SquadCommand {
     this.orders = this.coordinator.plan(own, enemies, playerMark);
     this.focus = [...this.orders.values()][0]?.focusTargetId ?? null;
     if (!this.aiLeader && !this.assistMark) return frame.marks;
+    if (playerMark)
+      return placeMark(frame.marks, this.side, playerMark, frame.nowMs);
     return this.focus
       ? placeMark(frame.marks, this.side, this.focus, frame.nowMs)
       : clearMark(frame.marks, this.side);

@@ -6,13 +6,8 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  AI_FULL_DEFLECTION_DEG,
-  AI_KTURN_ERROR_DEG,
-  AI_SLOW_TURN_ERROR_DEG,
-  pursuitSpeed,
   createCycleFlight,
   createShipControl,
-  steerAiFlight,
   tickCycleFlight,
   type CycleFlightState,
   type FlightTickInput,
@@ -172,121 +167,5 @@ describe("tickCycleFlight — the ship ends each cycle where X-Wing rules put it
     expect(mid.state.stress).toEqual(fast.stress);
     const { state } = fly(fast, () => "turn_left", 2);
     expect(state.stress.level).toBeGreaterThan(0);
-  });
-});
-
-describe("steerAiFlight — response scales with the heading error", () => {
-  const flight = createCycleFlight(SHIP_ID, START);
-  const steer = (headingErrorDeg: number, state = flight) =>
-    steerAiFlight(state, {
-      headingErrorDeg,
-      desiredSpeed: null,
-      cycleCommitted: false,
-    }).state.motion.control.nextManeuver;
-
-  it("on course: flies straight", () => {
-    expect(steer(0)).toBeNull();
-  });
-
-  it("small error to the right: drifts right", () => {
-    expect(steer(0.2 * AI_FULL_DEFLECTION_DEG)).toBe("drift_right");
-  });
-
-  it("moderate error to the left: banks left", () => {
-    expect(steer(-0.5 * AI_FULL_DEFLECTION_DEG)).toBe("bank_left");
-  });
-
-  it("large error behind to the right: turns right", () => {
-    expect(steer(170)).toBe("turn_right");
-  });
-
-  it("a stressed pilot banks instead of turning", () => {
-    expect(
-      steer(170, { ...flight, stress: { level: 0.8, isStressed: true } }),
-    ).toBe("bank_right");
-  });
-
-  it("keeps a queued K-turn", () => {
-    const queued = {
-      ...flight,
-      motion: {
-        ...flight.motion,
-        control: { ...flight.motion.control, nextManeuver: "kturn" as const },
-      },
-    };
-    expect(steer(170, queued)).toBe("kturn");
-  });
-});
-
-describe("steerAiFlight — speed", () => {
-  const flight = createCycleFlight(SHIP_ID, START);
-  const speedAfter = (desiredSpeed: number, cycleCommitted: boolean) =>
-    steerAiFlight(flight, { headingErrorDeg: 0, desiredSpeed, cycleCommitted })
-      .state.motion.control.speed;
-
-  it("steps one notch toward the wanted speed when a cycle commits", () => {
-    expect(speedAfter(flight.motion.control.maxSpeed, true)).toBe(
-      flight.motion.control.speed + 1,
-    );
-  });
-
-  it("does not change speed mid-cycle", () => {
-    expect(speedAfter(flight.motion.control.maxSpeed, false)).toBe(
-      flight.motion.control.speed,
-    );
-  });
-});
-
-describe("steerAiFlight — K-turn onto a target behind", () => {
-  const flight = createCycleFlight(SHIP_ID, START);
-  const behind = (state: CycleFlightState, allowKTurn = true) =>
-    steerAiFlight(state, {
-      headingErrorDeg: AI_KTURN_ERROR_DEG + 5,
-      desiredSpeed: null,
-      cycleCommitted: false,
-      allowKTurn,
-    });
-
-  it("queues a K-turn, adds stress and reports it", () => {
-    const result = behind(flight);
-    expect(result.state.motion.control.nextManeuver).toBe("kturn");
-    expect(result.state.stress.level).toBeGreaterThan(0);
-    expect(result.events).toEqual(["kturn"]);
-  });
-
-  it("turns instead when K-turns are not allowed", () => {
-    expect(behind(flight, false).state.motion.control.nextManeuver).toBe(
-      "turn_right",
-    );
-  });
-
-  it("turns instead while the K-turn is on cooldown", () => {
-    const cooling = {
-      ...flight,
-      motion: {
-        ...flight.motion,
-        control: { ...flight.motion.control, kturnCooldown: 1 },
-      },
-    };
-    expect(behind(cooling).events).toEqual([]);
-  });
-
-  it("a stressed pilot does not K-turn", () => {
-    const stressed = { ...flight, stress: { level: 0.8, isStressed: true } };
-    expect(behind(stressed).state.motion.control.nextManeuver).toBe(
-      "bank_right",
-    );
-  });
-});
-
-describe("pursuitSpeed", () => {
-  const bounds = { minSpeed: 1, maxSpeed: 5 };
-
-  it("slows to the minimum to turn tight on a goal well off the nose", () => {
-    expect(pursuitSpeed(bounds, -AI_SLOW_TURN_ERROR_DEG)).toBe(1);
-  });
-
-  it("cruises mid-range when lined up", () => {
-    expect(pursuitSpeed(bounds, 10)).toBe(3);
   });
 });

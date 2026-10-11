@@ -60,6 +60,9 @@ export const DEFAULT_KEYBOARD_BINDINGS: readonly KeyboardBinding[] = [
   { key: "T", intent: "TALLON_RIGHT", modifiers: { shift: true } },
   // Squad: mark the HUD target as the squad's focus (SquadMark)
   { key: "R", intent: "MARK_TARGET" },
+  // Hero pilot active powers (Campaign)
+  { key: "V", intent: "HERO_POWER_1" },
+  { key: "B", intent: "HERO_POWER_2" },
   // Other
   { key: "P", intent: "PAUSE" },
   { key: "ESC", intent: "PAUSE" },
@@ -119,6 +122,9 @@ export const DEFAULT_GAMEPAD_BINDINGS: readonly GamepadBinding[] = [
   { button: 9, intent: "PAUSE" }, // Start
   // Right-stick click: mark the HUD target as the squad's focus
   { button: 11, intent: "MARK_TARGET" }, // R3
+  // Hero pilot active powers (Campaign)
+  { button: 3, intent: "HERO_POWER_1" }, // Y / Triangle (flight scenes)
+  { button: 10, intent: "HERO_POWER_2" }, // L3
 ];
 
 export const DEFAULT_INPUT_PROFILE: InputProfile = {

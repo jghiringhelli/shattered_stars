@@ -1,12 +1,14 @@
 /**
- * botContacts — a battle scene's ships as the AI sees them (BotContact):
- * pose, health, primary arc and range, throttle and stress.
+ * SceneContact — a cycle-engine scene ship as the AI sees it (BotContact):
+ * pose, health, primary arc and range, throttle and stress. Shared by every
+ * scene whose ships carry a CycleFlightState (duels, Epic, Continuous,
+ * Survival, Campaign).
  *
  * Pure: no Phaser.
  */
 
-import type { BotContact } from "../../arcade/ai";
-import type { CycleFlightState } from "../../arcade/systems/CycleFlight";
+import type { CycleFlightState } from "../systems/CycleFlight";
+import type { BotContact } from "./BotView";
 
 /** What the AI reads from a flying scene ship. */
 export interface BotShipSource {

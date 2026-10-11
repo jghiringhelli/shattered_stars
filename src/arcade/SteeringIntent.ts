@@ -21,17 +21,6 @@ export { SUSTAINED_TURN_DEGREES_PER_CYCLE };
 export type SteerInput = "none" | "left" | "right";
 
 /**
- * Deflection thresholds for AI heading correction, as a fraction of the
- * maximum turn the ship can request. Below {@link AI_DEADBAND} the AI holds
- * course rather than dithering between left and right every cycle.
- */
-export const AI_DEADBAND = 0.05;
-/** Above this the AI escalates from a shallow drift to a 45° bank. */
-export const AI_BANK_THRESHOLD = 0.3;
-/** Above this the AI commits to a 90° dial turn. */
-export const AI_TURN_THRESHOLD = 0.65;
-
-/**
  * Resolves the maneuver a player's steering input should queue.
  *
  * A plain held key produces a sustained shallow turn so the ship keeps
@@ -48,30 +37,6 @@ export function resolveSteeringManeuver(
   if (input === "none") return null;
   if (input === "left") return hardTurn ? "turn_left" : "drift_left";
   return hardTurn ? "turn_right" : "drift_right";
-}
-
-/**
- * Resolves the maneuver an AI ship should queue to correct its heading.
- *
- * Scales the response to the size of the error so pursuit reads as flying
- * rather than as a stack of hard turns: small errors get a shallow drift,
- * moderate errors a bank, and only a large error justifies a dial turn.
- *
- * @param deflectionRatio - Signed heading error, -1..1. Positive steers left.
- * @returns The maneuver to queue, or null when already on course.
- */
-export function resolveAiSteeringManeuver(
-  deflectionRatio: number,
-): ManeuverDirection | null {
-  const magnitude = Math.abs(deflectionRatio);
-  if (magnitude < AI_DEADBAND) return null;
-
-  const isLeft = deflectionRatio > 0;
-  if (magnitude >= AI_TURN_THRESHOLD)
-    return isLeft ? "turn_left" : "turn_right";
-  if (magnitude >= AI_BANK_THRESHOLD)
-    return isLeft ? "bank_left" : "bank_right";
-  return isLeft ? "drift_left" : "drift_right";
 }
 
 // ============================================

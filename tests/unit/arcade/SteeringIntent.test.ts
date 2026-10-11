@@ -13,7 +13,6 @@
 import { describe, it, expect } from "vitest";
 import {
   resolveSteeringManeuver,
-  resolveAiSteeringManeuver,
   SUSTAINED_TURN_DEGREES_PER_CYCLE,
   BANK_HOLD_MS,
   IDLE_STEERING,
@@ -157,29 +156,6 @@ describe("sustained steering stress", () => {
 
   it("lets stress drain while holding a shallow turn at cruise speed", () => {
     expect(getManeuverDifficulty("drift_left", 2)).toBe("green");
-  });
-});
-
-describe("resolveAiSteeringManeuver", () => {
-  it("holds course when the heading error is negligible", () => {
-    expect(resolveAiSteeringManeuver(0.01)).toBeNull();
-  });
-
-  it("uses a shallow turn for small heading corrections", () => {
-    expect(resolveAiSteeringManeuver(0.15)).toBe("drift_left");
-  });
-
-  it("uses a bank for moderate heading corrections", () => {
-    expect(resolveAiSteeringManeuver(0.45)).toBe("bank_left");
-  });
-
-  it("uses a full dial turn only for large heading corrections", () => {
-    expect(resolveAiSteeringManeuver(0.8)).toBe("turn_left");
-  });
-
-  it("mirrors direction for negative deflection", () => {
-    expect(resolveAiSteeringManeuver(-0.15)).toBe("drift_right");
-    expect(resolveAiSteeringManeuver(-0.8)).toBe("turn_right");
   });
 });
 

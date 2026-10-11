@@ -56,6 +56,9 @@ export type ActionIntent =
   // Squad — mark the HUD target as the squad's focus (SquadMark): player-side
   // AI wingmen attack it, and the squad's shots on it gain the mark bonus.
   | "MARK_TARGET"
+  // Hero pilot active powers (Campaign heroes; cooldown-based)
+  | "HERO_POWER_1"
+  | "HERO_POWER_2"
   // Continuous flight — advanced (large/capital ships)
   | "CREW_CYCLE"
   | "CLOAK"

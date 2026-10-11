@@ -25,6 +25,8 @@ import { BotPilot } from "../ai/BotPilot";
 import type { BotTier } from "../ai/BotTypes";
 import type { BotContact } from "../ai/BotView";
 import { SquadCommand } from "../ai/SquadCommand";
+import { isMarkAssistEnabled } from "../../systems/SettingsStorage";
+import { botContactOf } from "../ai/SceneContact";
 import type { ManeuverDefinition } from "../../core/types";
 import type { CycleFlightState } from "./CycleFlight";
 import type { FlightControlResult } from "./PilotFlightTypes";
@@ -83,6 +85,11 @@ export interface SquadBattleAiOptions {
     x: number,
     y: number,
   ) => { x: number; y: number } | null;
+  /**
+   * Wingmen mark their own focus while the player has no mark. Default:
+   * Settings › Gameplay › Wingmen Mark Assist.
+   */
+  readonly assistMark?: boolean;
 }
 
 /**
@@ -90,23 +97,7 @@ export interface SquadBattleAiOptions {
  * @returns It as the AI sees it (sided by owner, so mirror matches work).
  */
 export function squadContactOf(ship: SquadAiShip): BotContact {
-  return {
-    id: ship.id,
-    side: ship.owner,
-    definitionId: ship.definitionId,
-    x: ship.x,
-    y: ship.y,
-    angle: ship.angle,
-    alive: ship.hull > 0,
-    hull: ship.hull,
-    maxHull: ship.maxHull,
-    shields: ship.shields,
-    maxShields: ship.maxShields,
-    firingArcDeg: ship.combatStats.firingArc,
-    weaponRange: ship.combatStats.weaponRange,
-    speed: ship.flight.motion.control.speed,
-    isStressed: ship.flight.stress.isStressed,
-  };
+  return botContactOf(ship, ship.owner);
 }
 
 export class SquadBattleAi {
@@ -125,7 +116,7 @@ export class SquadBattleAi {
     this.playerSquad = new SquadCommand({
       side: PLAYER_SIDE,
       aiLeader: false,
-      assistMark: true,
+      assistMark: options.assistMark ?? isMarkAssistEnabled(),
       worldSize,
     });
     this.enemySquad = new SquadCommand({

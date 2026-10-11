@@ -26,12 +26,7 @@ import {
   getModeCombatStats,
   type ModeCombatStats,
 } from "../data/ModeBalancing";
-import {
-  type AIDifficultyLevel,
-  getModifiedHitChance,
-  getModifiedDamage,
-  getModifiedCooldown,
-} from "../ai/AIDifficulty";
+import type { AIDifficultyLevel } from "../ai/AIDifficulty";
 import { createCycleFlight } from "../arcade/systems/CycleFlight";
 import { difficultyToTier } from "../arcade/ai";
 import {
@@ -49,6 +44,7 @@ import {
   type PreviewPose,
 } from "../arcade/systems/TacticalOrders";
 import { HealthBar } from "../ui/HealthBar";
+import { overlaySide } from "../ui/hud/overlay";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { renderBattleStarfield } from "../rendering/Starfield";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
@@ -64,6 +60,7 @@ import {
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { InputManager } from "../input/InputManager";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
+import { trackModeEnd, trackModeStart } from "../telemetry/telemetry";
 import {
   createSideScore,
   creditKill,
@@ -80,7 +77,6 @@ import {
   createCapitalSystems,
   turretDamageMultiplier,
 } from "../systems/CapitalSystems";
-import { attackIntervalMs } from "../arcade/systems/CombatTempo";
 import { cameraViewFrom } from "../ui/hud/hudMath";
 import {
   markContacts,
@@ -241,6 +237,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     renderBattleStarfield(this, BATTLEFIELD_SIZE, { includeNebula: false });
     this.spawnShips();
     this.createHealthBars();
+    this.createRepairFeedback();
     this.hud = new TacticalHud(this, BATTLEFIELD_SIZE);
     this.setupInput();
 
@@ -248,6 +245,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     this.cameras.main.setZoom(TACTICAL_ZOOM.battle);
 
     this.battleStartTime = this.time.now;
+    trackModeStart("continuous");
     this.stats = { shipsDestroyed: 0, shipsLost: 0, damageDealt: 0 };
     this.matchTimer = createMatchTimer(
       ContinuousTacticalScene.MATCH_DURATION_MS,
@@ -432,8 +430,8 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   }
 
   /**
-   * The continuous dice model with AI difficulty on the hit chance and
-   * damage, and a capital attacker's turret damage.
+   * The continuous dice model with a capital attacker's turret damage.
+   * Difficulty is the bots' piloting skill, never a stat bonus.
    *
    * @param attacker - The ship firing.
    * @param target - The ship fired at.
@@ -445,39 +443,21 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   ): ShotDice {
     const dice = super.shotDice(attacker, target);
     return {
-      hitChance:
-        attacker.owner === "ai"
-          ? getModifiedHitChance(dice.hitChance, this.aiDifficulty)
-          : dice.hitChance,
-      baseDamage: this.modeDamage(attacker, target, dice.baseDamage),
+      hitChance: dice.hitChance,
+      baseDamage: this.turretDamage(attacker, dice.baseDamage),
     };
   }
 
   /**
-   * Dice damage scaled by AI difficulty and the attacker's turret systems.
+   * Dice damage scaled by the attacker's turret systems.
    *
    * @param attacker - The ship firing.
-   * @param target - The ship fired at.
    * @param damage - The mode's dice damage.
    * @returns Damage before equipment.
    */
-  private modeDamage(
-    attacker: TacticalShip,
-    target: TacticalShip,
-    damage: number,
-  ): number {
-    let scaled = damage;
-    if (attacker.owner === "ai") {
-      scaled = getModifiedDamage(scaled, this.aiDifficulty, true);
-    } else if (target.owner === "ai") {
-      scaled = getModifiedDamage(scaled, this.aiDifficulty, false);
-    }
-    if (attacker.capitalSystems) {
-      scaled = Math.round(
-        scaled * turretDamageMultiplier(attacker.capitalSystems),
-      );
-    }
-    return scaled;
+  private turretDamage(attacker: TacticalShip, damage: number): number {
+    if (!attacker.capitalSystems) return damage;
+    return Math.round(damage * turretDamageMultiplier(attacker.capitalSystems));
   }
 
   /**
@@ -590,22 +570,6 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       this.findWeaponTarget(ship)?.id ??
       battleFindClosestEnemy(ship, this.ships)?.id ??
       null
-    );
-  }
-
-  /**
-   * The weapon cooldown with AI difficulty applied, never faster than one
-   * attack per maneuver cycle.
-   *
-   * @param ship - The ship that just fired.
-   * @returns Attack interval (ms).
-   */
-  protected override attackIntervalOf(ship: TacticalShip): number {
-    const cooldown = ship.combatStats.weaponCooldown;
-    return attackIntervalMs(
-      ship.owner === "ai"
-        ? getModifiedCooldown(cooldown, this.aiDifficulty)
-        : cooldown,
     );
   }
 
@@ -907,6 +871,8 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
         maxShields: ship.maxShields,
         currentHull: ship.hull,
         currentShields: ship.shields,
+        side: overlaySide(false, this.playerShipIds.includes(id)),
+        definitionId: ship.definitionId,
       });
       this.healthBars.set(id, healthBar);
     }
@@ -1187,6 +1153,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   private showGameOver(isPlayerVictory: boolean, winner: string): void {
     if (this.isPaused) return;
     this.isPaused = true;
+    trackModeEnd("continuous", isPlayerVictory ? "victory" : "defeat");
     audioManager.playFactionStinger(
       this.playerFaction,
       isPlayerVictory ? "victory" : "defeat",

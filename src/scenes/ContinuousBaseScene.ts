@@ -30,7 +30,6 @@ import { playFlightEventFx } from "../arcade/ArcadeFX";
 import {
   equipFlight,
   equipQuickBuild,
-  regenerateShields,
   stressModifiersOf,
 } from "../arcade/systems/QuickBuildEquip";
 import {
@@ -54,6 +53,7 @@ import type { CombatModifiers } from "../core/CombatModifiers";
 import { random } from "../utils/random";
 import type { ShipTelemetry } from "../debug/ShipTelemetry";
 import { HealthBar } from "../ui/HealthBar";
+import { ShipRepairFeedback } from "../ui/hud/overlay";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
@@ -73,7 +73,7 @@ import {
   type CapitalSystemsState,
 } from "../systems/CapitalSystems";
 import { BattleBots } from "./battleUi/BattleBots";
-import { botContactOf } from "./battleUi/botContacts";
+import { botContactOf } from "../arcade/ai/SceneContact";
 import { pickShotTarget } from "./battleUi/shotPreference";
 
 /** Minimum ship data required by the shared combat loop. */
@@ -136,6 +136,8 @@ export abstract class ContinuousBaseScene<
   protected ships: Map<string, T> = new Map();
   protected shipSprites: Map<string, S> = new Map();
   protected healthBars: Map<string, HealthBar> = new Map();
+  /** Repair mechanic + overlay shimmer + repair drones ({@link createRepairFeedback}). */
+  protected repairFeedback: ShipRepairFeedback | null = null;
 
   protected isPaused = false;
   protected isActive = false;
@@ -468,21 +470,26 @@ export abstract class ContinuousBaseScene<
   }
 
   /**
-   * Regenerates a ship's shields for a frame (shield-regen equipment only).
+   * Applies a ship's own shield regen and hull repair for a frame
+   * (equipment); the repair feedback refreshes its overlay.
    *
    * @param ship - A living ship.
    * @param deltaMs - Frame length (ms).
    */
   private regenerateShipShields(ship: T, deltaMs: number): void {
-    const shields = regenerateShields(
-      ship.shields,
-      ship.maxShields,
-      ship.modifiers,
-      deltaMs,
-    );
-    if (shields === ship.shields) return;
-    ship.shields = shields;
-    this.healthBars.get(ship.id)?.update(ship.hull, ship.shields);
+    this.repairFeedback?.selfRepair(ship, deltaMs);
+  }
+
+  /**
+   * Build the scene's repair feedback (call in create, after the overlays).
+   */
+  protected createRepairFeedback(): void {
+    this.repairFeedback = new ShipRepairFeedback({
+      scene: this,
+      shipOf: (id) => this.ships.get(id),
+      overlayOf: (id) => this.healthBars.get(id),
+      particleScale: () => this.performanceState.effectSettings.particleCount,
+    });
   }
 
   /**
