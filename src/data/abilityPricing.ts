@@ -28,6 +28,7 @@ const ADDITIVE_POINTS: Partial<Record<keyof CombatModifiers, number>> = {
   killFrenzyLaserBonus: 3,
   shieldsPerKill: 3,
   shieldRegenPerSecond: 20,
+  hullRepairPerSecond: 30,
   stressReliefTiers: 3,
   ordnanceBonusCharges: 3,
   stressOnHit: 30,

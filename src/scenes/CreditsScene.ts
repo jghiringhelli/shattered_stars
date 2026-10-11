@@ -13,6 +13,11 @@ import {
   addMenuBackdrop,
   MENU_LAYOUT,
 } from "../ui/menu/MenuScaffold";
+import {
+  bindMenuBack,
+  fadeInMenu,
+  goToScene,
+} from "../ui/menu/menuTransitions";
 import { holoFont } from "../ui/theme/holoFont";
 import { HOLO_PALETTE } from "../ui/theme/HoloTheme";
 import { toCssColor } from "../ui/theme/colorMath";
@@ -152,9 +157,14 @@ export class CreditsScene extends Phaser.Scene {
   create(): void {
     addMenuBackdrop(this, { textureId: "galaxy_spiral", scrimAlpha: 0.45 });
     this.createCredits();
-    addBackButton(this, () => this.scene.start("MainMenuScene"));
+    addBackButton(this, () => this.goBack());
     addFooterHint(this, "↑  FASTER        ↓  REWIND        ESC  BACK");
     this.setupInput();
+    fadeInMenu(this);
+  }
+
+  private goBack(): void {
+    goToScene(this, "MainMenuScene");
   }
 
   update(): void {
@@ -219,8 +229,7 @@ export class CreditsScene extends Phaser.Scene {
 
   private setupInput(): void {
     const keyboard = this.input.keyboard!;
-    keyboard.on("keydown-ESC", () => this.scene.start("MainMenuScene"));
-    keyboard.on("keydown-SPACE", () => this.scene.start("MainMenuScene"));
+    bindMenuBack(this, () => this.goBack());
     // Speed up / rewind the roll with arrow keys
     keyboard.on("keydown-UP", () => (this.scrollSpeed = SCROLL.fast));
     keyboard.on("keyup-UP", () => (this.scrollSpeed = SCROLL.normal));

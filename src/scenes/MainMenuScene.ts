@@ -23,6 +23,13 @@ import {
   type MainMenuEntry,
 } from "../ui/menu/mainMenuEntries";
 import { MainMenuBriefing } from "../ui/menu/MainMenuBriefing";
+import { FlightSchoolCard } from "../ui/menu/FlightSchoolCard";
+import {
+  fadeInMenu,
+  goToScene,
+  playUiHover,
+  playUiPress,
+} from "../ui/menu/menuTransitions";
 import {
   MAIN_MENU_LAYOUT,
   addMainMenuChrome,
@@ -74,12 +81,22 @@ export class MainMenuScene extends Phaser.Scene {
       MAIN_MENU_LAYOUT.briefingY,
     );
     this.createMenuItems();
+    const flightSchool = new FlightSchoolCard(this, () =>
+      this.startFlightSchool(),
+    );
     this.createFooter();
     this.setupInput();
-    this.playEntrance();
+    this.playEntrance(flightSchool.container);
+    fadeInMenu(this);
   }
 
-  private playEntrance(): void {
+  /** Main menu → Flight School (card button or F). */
+  private startFlightSchool(): void {
+    playUiPress();
+    goToScene(this, "FlightSchoolScene");
+  }
+
+  private playEntrance(card: Phaser.GameObjects.Container): void {
     const centerX = this.scale.width / 2;
     this.titleText.setAlpha(0);
     this.tweens.add({
@@ -102,8 +119,9 @@ export class MainMenuScene extends Phaser.Scene {
       });
     });
     const briefing = this.briefing.container.setAlpha(0);
+    card.setAlpha(0);
     this.tweens.add({
-      targets: briefing,
+      targets: [briefing, card],
       alpha: 1,
       delay: ENTRANCE.briefingDelayMs,
       duration: ENTRANCE.rowMs,
@@ -112,7 +130,10 @@ export class MainMenuScene extends Phaser.Scene {
 
   private createFooter(): void {
     const { width, height } = this.scale;
-    addFooterHint(this, "↑ ↓  NAVIGATE        ENTER  SELECT");
+    addFooterHint(
+      this,
+      "↑ ↓  NAVIGATE        ENTER  SELECT        F  FLIGHT SCHOOL",
+    );
     const muted = MAIN_MENU_LAYOUT.footerColor;
     this.add
       .text(width - MAIN_MENU_LAYOUT.margin, height - 16, "v0.1.0 ALPHA", muted)
@@ -148,7 +169,7 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private startEntry(entry: MainMenuEntry): void {
-    this.scene.start(entry.target, entry.data);
+    goToScene(this, entry.target, entry.data);
   }
 
   /**
@@ -168,11 +189,13 @@ export class MainMenuScene extends Phaser.Scene {
     );
     if (container.input) container.input.cursor = "pointer";
     container.on("pointerover", () => {
-      this.selectedIndex = this.menuItems.indexOf(container);
+      const index = this.menuItems.indexOf(container);
+      if (index !== this.selectedIndex) playUiHover();
+      this.selectedIndex = index;
       this.refreshSelection();
     });
-    container.on("pointerdown", () => {
-      this.selectMenuItem();
+    container.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (!pointer.rightButtonDown()) this.selectMenuItem();
     });
   }
 
@@ -187,7 +210,7 @@ export class MainMenuScene extends Phaser.Scene {
     do {
       this.selectedIndex = (this.selectedIndex + step + count) % count;
     } while (!this.menuItems[this.selectedIndex]?.getData("enabled"));
-    audioManager.playSound("ui_hover", 0.5);
+    playUiHover();
     this.refreshSelection();
   }
 
@@ -200,6 +223,7 @@ export class MainMenuScene extends Phaser.Scene {
     this.input.keyboard!.on("keydown-SPACE", () => {
       this.selectMenuItem();
     });
+    this.input.keyboard!.on("keydown-F", () => this.startFlightSchool());
   }
 
   private selectMenuItem(): void {
@@ -207,7 +231,7 @@ export class MainMenuScene extends Phaser.Scene {
     if (!item) return;
     if (!(item.getData("enabled") as boolean)) return;
 
-    audioManager.playSound("ui_select", 0.7);
+    playUiPress();
     this.cameras.main.flash(100, 20, 60, 90, false);
     punch(this, item, { scale: 1.04, durationMs: 160 });
     (item.getData("action") as () => void)();

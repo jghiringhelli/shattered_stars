@@ -76,6 +76,8 @@ interface AudioSettings {
   masterVolume: number;
   sfxVolume: number;
   musicVolume: number;
+  /** Menu/UI feedback bus (hover, press, back), independent of SFX. */
+  uiVolume: number;
   muted: boolean;
 }
 
@@ -117,11 +119,13 @@ export class AudioManager {
   private masterGain: GainNode | null = null;
   private sfxGain: GainNode | null = null;
   private musicGain: GainNode | null = null;
+  private uiGain: GainNode | null = null;
 
   private settings: AudioSettings = {
     masterVolume: 0.7,
     sfxVolume: 0.8,
     musicVolume: 0.5,
+    uiVolume: 0.8,
     muted: false,
   };
 
@@ -181,6 +185,10 @@ export class AudioManager {
       this.musicGain = this.context.createGain();
       this.musicGain.connect(this.masterGain);
       this.musicGain.gain.value = this.settings.musicVolume;
+
+      this.uiGain = this.context.createGain();
+      this.uiGain.connect(this.masterGain);
+      this.uiGain.gain.value = this.settings.uiVolume;
 
       console.log("[AudioManager] Initialized");
     } catch (e) {
@@ -242,6 +250,20 @@ export class AudioManager {
     if (!design) return;
 
     playVoice(this.context, this.sfxGain, design, volume, pan);
+  }
+
+  /**
+   * Play a menu/UI feedback sound on the UI bus (its own volume slider), so
+   * menu clicks stay audible when combat SFX are turned down and vice versa.
+   *
+   * @param type - A `ui_*` effect.
+   * @param volume - Peak amplitude in [0, 1].
+   */
+  playUiSound(type: SoundEffectType, volume: number = 1): void {
+    if (!this.context || !this.uiGain || this.settings.muted) return;
+    if (volume <= 0 || this.isRetriggeringTooFast(type)) return;
+    const design = VOICE_DESIGNS[type];
+    if (design) playVoice(this.context, this.uiGain, design, volume, 0);
   }
 
   /**
@@ -547,6 +569,20 @@ export class AudioManager {
       this.musicGain.gain.value = this.settings.musicVolume;
     }
     this.saveSettings();
+  }
+
+  /**
+   * @param volume - UI feedback bus level in [0, 1].
+   */
+  setUiVolume(volume: number): void {
+    this.settings.uiVolume = Math.max(0, Math.min(1, volume));
+    if (this.uiGain) this.uiGain.gain.value = this.settings.uiVolume;
+    this.saveSettings();
+  }
+
+  /** @returns UI feedback bus level in [0, 1]. */
+  getUiVolume(): number {
+    return this.settings.uiVolume;
   }
 
   toggleMute(): void {

@@ -553,6 +553,15 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       description: "Durable defender with shield regeneration",
       role: "defense",
     },
+    {
+      id: "falcon_patcher",
+      name: "Falcon Patcher",
+      shipId: "confed_falcon",
+      pilotId: "falcon_pilot",
+      upgrades: ["patch_astromech", "shield_upgrade"],
+      description: "Steady fighter whose droid welds the hull between passes",
+      role: "defense",
+    },
   ],
 
   confed_raven: [
@@ -598,6 +607,15 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       pilotId: "phoenix_crew",
       upgrades: ["tactical_officer", "ion_turret", "shield_upgrade"],
       description: "Ion control platform with coordination",
+      role: "support",
+    },
+    {
+      id: "phoenix_tender",
+      name: "Phoenix Tender",
+      shipId: "confed_phoenix",
+      pilotId: "phoenix_crew",
+      upgrades: ["mechanic", "twin_laser_turret", "hull_upgrade"],
+      description: "Turret gunship with a mechanic who patches the hull",
       role: "support",
     },
   ],

@@ -114,6 +114,9 @@ const KNOB_PHRASES: Readonly<Record<keyof CombatModifiers, KnobPhrase>> = {
   shieldRegenPerSecond: additive(
     (v) => `regenerates ${formatNumber(v)} shields/s`,
   ),
+  hullRepairPerSecond: additive(
+    (v) => `repairs ${formatNumber(v)} hull/s out of fire`,
+  ),
   shieldsPerKill: additive((v) => `${signed(v)} shields per kill`),
   stressRateMultiplier: scaled((n, dir) => `${n}% ${dir} maneuver stress`),
   stressReliefTiers: additive(

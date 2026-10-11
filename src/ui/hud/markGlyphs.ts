@@ -12,8 +12,15 @@ import { bracketSegments, crosshairTicks, type Segment } from "./markMath";
 
 type Graphics = Phaser.GameObjects.Graphics;
 
-/** The squad-mark colour (red — distinct from the amber locked target). */
-export const MARK_COLOR = HOLO_PALETTE.danger;
+/**
+ * The squad-mark colour — HOLO_PALETTE.mark (red by default — distinct from
+ * the amber locked target), read live so colour-vision palettes apply.
+ *
+ * @returns The current mark colour.
+ */
+export function markColor(): number {
+  return HOLO_PALETTE.mark;
+}
 
 /** Edge-arrow bracket half-size, in arrow-size units. */
 const ARROW_BRACKET_RADIUS = 1.3;
@@ -45,7 +52,7 @@ export function drawMarkReticle(
   radius: number,
   lineWidth: number,
 ): void {
-  g.lineStyle(lineWidth, MARK_COLOR, 1);
+  g.lineStyle(lineWidth, markColor(), 1);
   strokeSegments(g, bracketSegments(cx, cy, radius));
   strokeSegments(g, crosshairTicks(cx, cy, radius));
 }

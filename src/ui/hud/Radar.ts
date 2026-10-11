@@ -22,6 +22,7 @@ import { addPinned, createScreenContainer } from "./holoPrimitives";
 import { drawDiamond, fillBlip } from "./HudIcons";
 import { projectToRadar } from "./hudMath";
 import { drawMarkReticle } from "./markGlyphs";
+import { drawSideFrame } from "./sideGlyphs";
 import type { ScreenRect } from "./screenRect";
 import type { ContactHudState, HudPose, HudSizeClass } from "./types";
 
@@ -166,6 +167,13 @@ export class Radar {
         p.y,
         blipRadius,
         (contact.pose.angle - player.angle) * DEG_TO_RAD,
+      );
+      drawSideFrame(
+        this.blips,
+        contact.side,
+        { x: p.x, y: p.y, radius: blipRadius },
+        SIDE_COLORS[contact.side],
+        alpha,
       );
       if (contact.isTarget) {
         drawDiamond(

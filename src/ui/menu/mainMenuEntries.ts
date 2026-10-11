@@ -101,7 +101,8 @@ export const MAIN_MENU_ENTRIES: ReadonlyArray<MainMenuEntry> = [
   {
     label: "SETTINGS",
     icon: "gear",
-    description: "Audio levels and visual options.",
+    description:
+      "Audio, key rebinding, accessibility, gameplay and privacy options.",
     target: "SettingsScene",
     group: "system",
   },

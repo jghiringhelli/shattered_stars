@@ -20,6 +20,7 @@ import {
   HOLO_TYPE_SCALE,
 } from "../theme/HoloTheme";
 import { toCssColor } from "../theme/colorMath";
+import { playUiHover, playUiPress } from "../menu/menuTransitions";
 
 /** Row geometry shared by sliders and switches. */
 export const SETTINGS_ROW = {
@@ -48,10 +49,12 @@ export interface SettingsRowConfig {
   readonly y: number;
   readonly width: number;
   readonly label: string;
+  /** Row height. Default: SETTINGS_ROW.height. */
+  readonly height?: number;
 }
 
 /** Base row: focus/hover frame + label. */
-abstract class SettingsRowBase implements FocusTarget {
+export abstract class SettingsRowBase implements FocusTarget {
   protected readonly frame: Phaser.GameObjects.Graphics;
   protected readonly labelText: Phaser.GameObjects.Text;
   private focused = false;
@@ -75,6 +78,11 @@ abstract class SettingsRowBase implements FocusTarget {
       .setOrigin(0, 0);
   }
 
+  /** Row height in px. */
+  protected get rowHeight(): number {
+    return this.config.height ?? SETTINGS_ROW.height;
+  }
+
   /**
    * Show or hide the keyboard-focus frame.
    *
@@ -89,6 +97,7 @@ abstract class SettingsRowBase implements FocusTarget {
   abstract activate(): void;
 
   protected setHovered(hovered: boolean): void {
+    if (hovered && !this.hovered) playUiHover();
     this.hovered = hovered;
     this.drawFrame();
   }
@@ -98,7 +107,7 @@ abstract class SettingsRowBase implements FocusTarget {
       x: this.config.x,
       y: this.config.y,
       width: this.config.width,
-      height: SETTINGS_ROW.height,
+      height: this.rowHeight,
     };
   }
 
@@ -162,6 +171,7 @@ export class SettingsSliderRow extends SettingsRowBase {
    * @param steps - +1 / -1 per key press.
    */
   adjust(steps: number): void {
+    playUiHover();
     this.setValue(this.value + steps * SETTINGS_ROW.sliderStep);
   }
 
@@ -226,7 +236,7 @@ export class SettingsSwitchRow extends SettingsRowBase {
     private readonly onChange: (value: boolean) => void,
   ) {
     super(scene, config);
-    const midY = config.y + SETTINGS_ROW.height / 2;
+    const midY = config.y + this.rowHeight / 2;
     this.labelText.setY(midY).setOrigin(0, 0.5);
     this.track = scene.add.graphics();
     this.stateText = scene.add
@@ -247,9 +257,15 @@ export class SettingsSwitchRow extends SettingsRowBase {
 
   /** Flip the switch. */
   activate(): void {
+    playUiPress();
     this.value = !this.value;
     this.render();
     this.onChange(this.value);
+  }
+
+  /** Current state. */
+  get checked(): boolean {
+    return this.value;
   }
 
   private switchLeft(): number {
@@ -261,7 +277,7 @@ export class SettingsSwitchRow extends SettingsRowBase {
     const w = SETTINGS_ROW.switchWidth;
     const h = SETTINGS_ROW.switchHeight;
     const x = this.switchLeft();
-    const y = this.config.y + (SETTINGS_ROW.height - h) / 2;
+    const y = this.config.y + (this.rowHeight - h) / 2;
     const on = this.value;
     this.track.clear();
     drawHoloFrame(

@@ -15,11 +15,12 @@
  */
 
 import Phaser from "phaser";
-import { HOLO_PALETTE, SIDE_COLORS } from "../theme/HoloTheme";
+import { HOLO_PALETTE, SIDE_COLORS, type HoloSide } from "../theme/HoloTheme";
 import { addPinned, createScreenContainer } from "./holoPrimitives";
 import { drawArrowGlyph, drawTargetArrowGlyph } from "./HudIcons";
 import { placeEdgeArrow, type EdgeInsets } from "./hudMath";
 import { drawMarkArrowGlyph } from "./markGlyphs";
+import { drawSideTail } from "./sideGlyphs";
 import { closenessStyle, type ClosenessOptions } from "./hudStyleMath";
 import { inflateRect, pullOutOfRect, type ScreenRect } from "./screenRect";
 import type { CameraViewSnapshot, ContactHudState, HudPoint } from "./types";
@@ -43,9 +44,7 @@ export const DEFAULT_EDGE_CLOSENESS: ClosenessOptions = {
   maxAlpha: 1,
 };
 /** Glyph cache key: no glyph drawn yet. */
-const NO_GLYPH = -1;
-/** Multiplier applied to the side colour to form a glyph cache key (3 glyph kinds). */
-const KEY_STRIDE = 3;
+const NO_GLYPH = "";
 /** Obstacle clearance in arrow-size units — covers the target ring at max scale. */
 const OBSTACLE_CLEARANCE = 1.5;
 
@@ -63,7 +62,7 @@ export interface EdgeIndicatorsConfig {
 
 interface PooledArrow {
   readonly graphics: Phaser.GameObjects.Graphics;
-  glyphKey: number;
+  glyphKey: string;
 }
 
 /** Pooled off-screen ship arrows. */
@@ -154,7 +153,7 @@ export class EdgeIndicators {
         continue;
       const position = this.avoidObstacles(center, placement);
       const arrow = this.acquire(used++);
-      this.ensureGlyph(arrow, SIDE_COLORS[contact.side], glyphKind(contact));
+      this.ensureGlyph(arrow, contact.side, glyphKind(contact));
       arrow.graphics
         .setPosition(position.x, position.y)
         .setRotation(placement.angle)
@@ -192,10 +191,13 @@ export class EdgeIndicators {
 
   private ensureGlyph(
     arrow: PooledArrow,
-    color: number,
+    side: HoloSide,
     kind: GlyphKind,
   ): void {
-    const key = color * KEY_STRIDE + kind;
+    const color = SIDE_COLORS[side];
+    // Live palette colours are part of the key, so a colour-vision switch
+    // mid-battle redraws pooled glyphs.
+    const key = `${color}:${kind}:${side}:${HOLO_PALETTE.target}:${HOLO_PALETTE.mark}`;
     if (arrow.glyphKey === key) return;
     arrow.glyphKey = key;
     arrow.graphics.clear();
@@ -209,6 +211,7 @@ export class EdgeIndicators {
         HOLO_PALETTE.target,
       );
     else drawArrowGlyph(arrow.graphics, this.arrowSize, color);
+    drawSideTail(arrow.graphics, side, this.arrowSize, color);
   }
 }
 

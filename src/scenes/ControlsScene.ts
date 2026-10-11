@@ -1,8 +1,9 @@
 /**
  * Controls Scene — reference screen listing every input intent across
  * keyboard, gamepad, and touch. Row data comes from ControlsReference.ts,
- * which derives the actual key/button/gesture labels live from
- * DefaultBindings.ts so this screen can't drift out of sync with real input.
+ * which derives the labels live from the bindings — the keyboard column
+ * shows the player's ACTIVE profile (defaults + Settings rebinding), so a
+ * rebound key shows here immediately. R opens Settings › Controls.
  *
  * Holo layout: one full-width translucent table with icon column headers,
  * accent group captions and zebra-striped rows.
@@ -23,6 +24,11 @@ import {
 } from "../ui/menu/MenuScaffold";
 import { createHoloPanel } from "../ui/hud/HoloPanel";
 import { drawMenuIcon, type MenuIconName } from "../ui/menu/MenuIcons";
+import {
+  bindMenuBack,
+  fadeInMenu,
+  goToScene,
+} from "../ui/menu/menuTransitions";
 import { holoFont } from "../ui/theme/holoFont";
 import {
   HOLO_PALETTE,
@@ -31,7 +37,7 @@ import {
 } from "../ui/theme/HoloTheme";
 import { toCssColor } from "../ui/theme/colorMath";
 
-const ROW_HEIGHT = 19;
+const ROW_HEIGHT = 18;
 const GROUP_HEADING_HEIGHT = 24;
 const GROUP_GAP = 6;
 const TABLE_TOP = 100;
@@ -64,13 +70,18 @@ export class ControlsScene extends Phaser.Scene {
     addMenuBackdrop(this, { textureId: "starfield_deep" });
     addMenuHeader(this, {
       title: "Controls",
-      subtitle: "Every action on keyboard, gamepad and touch",
+      subtitle: "Your current bindings · rebind keys in Settings › Controls",
     });
-    addBackButton(this, () => this.scene.start("MainMenuScene"));
+    addBackButton(this, () => this.goBack());
     this.createTablePanel();
     this.createColumnHeaders();
     this.createTable();
     this.setupInput();
+    fadeInMenu(this);
+  }
+
+  private goBack(): void {
+    goToScene(this, "MainMenuScene");
   }
 
   private createTablePanel(): void {
@@ -163,11 +174,10 @@ export class ControlsScene extends Phaser.Scene {
   }
 
   private setupInput(): void {
-    this.input.keyboard!.on("keydown-ESC", () =>
-      this.scene.start("MainMenuScene"),
-    );
-    this.input.keyboard!.on("keydown-SPACE", () =>
-      this.scene.start("MainMenuScene"),
+    bindMenuBack(this, () => this.goBack());
+    // "R" jumps straight to rebinding (Settings › Controls).
+    this.input.keyboard?.on("keydown-R", () =>
+      goToScene(this, "SettingsScene", { tab: "controls" }),
     );
   }
 }

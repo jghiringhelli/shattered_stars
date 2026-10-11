@@ -725,6 +725,9 @@ for live status + next action. Full concern→file index: [docs/spec-map.md](doc
   src/systems/PlayerProfile.ts, src/data/ProgressionData.ts, src/systems/CampaignSaveManager.ts.
 - **Verify loop** → docs/specs/verify-loop.md, scripts/verify_loop.ts, scripts/vqa_helpers.ts.
 - **Squad building** → src/systems/SquadBuilder.ts, src/scenes/SquadBuilderScene.ts, ShipPickerScene.ts.
+- **Settings / rebinding / accessibility / Flight School / local telemetry** →
+  docs/specs/player-preferences.md, src/systems/SettingsStorage.ts, src/input/KeyBindings.ts,
+  src/ui/theme/signalPalettes.ts, src/tutorial/, src/telemetry/telemetry.ts.
 - **Bound prompts** (unit of work) → DEVELOPMENT_PROMPTS.md.
 
 ## Known Pitfalls

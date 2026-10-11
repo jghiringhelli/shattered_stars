@@ -20,6 +20,7 @@ import {
 import { drawHoloButtonFace } from "./holoChrome";
 import { drawMenuIcon, type MenuIconName } from "./MenuIcons";
 import { punch, tweenScale } from "../UIJuice";
+import { playUiHover, playUiPress } from "./menuTransitions";
 
 /** Punch tween applied on press (matches the legacy factory feel). */
 const PRESS_PUNCH = { scale: 1.04, durationMs: 140 } as const;
@@ -151,25 +152,34 @@ export class HoloPressButton extends Phaser.GameObjects.Container {
 
   /** Activate as if pressed (keyboard / gamepad confirm). */
   activate(): void {
-    if (this.isEnabled) this.onPress();
+    if (!this.isEnabled) return;
+    playUiPress();
+    this.onPress();
   }
 
   private bindPointer(): void {
     const hoverScale = this.config.hoverScale ?? 1;
     this.on(Phaser.Input.Events.GAMEOBJECT_POINTER_OVER, () => {
       this.setInteraction("hover");
-      if (this.isEnabled) tweenScale(this.scene, this.labelText, hoverScale);
+      if (!this.isEnabled) return;
+      playUiHover();
+      tweenScale(this.scene, this.labelText, hoverScale);
     });
     this.on(Phaser.Input.Events.GAMEOBJECT_POINTER_OUT, () => {
       this.setInteraction("idle");
       tweenScale(this.scene, this.labelText, 1);
     });
-    this.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () => {
-      if (!this.isEnabled) return;
-      this.setInteraction("pressed");
-      punch(this.scene, this, PRESS_PUNCH);
-      this.onPress();
-    });
+    this.on(
+      Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN,
+      (pointer?: Phaser.Input.Pointer) => {
+        // Right-click is the menus' "back" gesture, never a press.
+        if (!this.isEnabled || pointer?.rightButtonDown()) return;
+        this.setInteraction("pressed");
+        punch(this.scene, this, PRESS_PUNCH);
+        playUiPress();
+        this.onPress();
+      },
+    );
     this.on(Phaser.Input.Events.GAMEOBJECT_POINTER_UP, () =>
       this.setInteraction("hover"),
     );

@@ -25,6 +25,7 @@ import {
   type ModeCombatStats,
 } from "../data/ModeBalancing";
 import { HealthBar } from "../ui/HealthBar";
+import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
@@ -52,7 +53,6 @@ import {
   assignQuickBuilds,
   equipFlight,
   equipQuickBuild,
-  regenerateShields,
   stressModifiersOf,
 } from "../arcade/systems/QuickBuildEquip";
 import {
@@ -101,6 +101,11 @@ import { PauseMenu } from "../ui/PauseMenu";
 import { networkService } from "../services/NetworkService";
 import { InputManager } from "../input/InputManager";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
+import {
+  trackDeath,
+  trackModeEnd,
+  trackModeStart,
+} from "../telemetry/telemetry";
 import {
   random,
   setDefaultRng,
@@ -187,6 +192,8 @@ export class DogfightScene extends Phaser.Scene {
   private ships: Map<string, DogfightShip> = new Map();
   private shipSprites: Map<string, ShipSprite> = new Map();
   private healthBars: Map<string, HealthBar> = new Map();
+  /** Repair mechanic + overlay shimmer + repair drones (built in create). */
+  private repairFeedback: ShipRepairFeedback | null = null;
 
   private playerShipIds: string[] = [];
   private enemyShipIds: string[] = [];
@@ -303,6 +310,12 @@ export class DogfightScene extends Phaser.Scene {
     audioManager.initialize();
 
     this.effectsManager = new EffectsManager(this);
+    this.repairFeedback = new ShipRepairFeedback({
+      scene: this,
+      shipOf: (id) => this.ships.get(id),
+      overlayOf: (id) => this.healthBars.get(id),
+      particleScale: () => this.performanceState.effectSettings.particleCount,
+    });
     const savedSettings = this.registry.get("settings") as
       { cameraShake: boolean; showDamageNumbers: boolean } | undefined;
     if (savedSettings) {
@@ -612,6 +625,10 @@ export class DogfightScene extends Phaser.Scene {
     this.setupObjects.forEach((o) => o.destroy());
     this.setupObjects = [];
     this.isSetupPhase = false;
+    trackModeStart("dogfight", {
+      difficulty: this.difficulty,
+      online: this.isOnlineMode,
+    });
 
     audioManager.playFactionMusic(this.playerFaction, "combat");
 
@@ -932,6 +949,7 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   private createHealthBar(ship: DogfightShip): void {
+    const isPlayers = ship.owner === "player";
     const healthBar = new HealthBar({
       scene: this,
       x: ship.x,
@@ -941,6 +959,8 @@ export class DogfightScene extends Phaser.Scene {
       maxShields: ship.maxShields,
       currentHull: ship.hull,
       currentShields: ship.shields,
+      side: overlaySide(isPlayers, isPlayers),
+      definitionId: ship.definitionId,
     });
     this.healthBars.set(ship.id, healthBar);
   }
@@ -962,12 +982,7 @@ export class DogfightScene extends Phaser.Scene {
         modifiers: stressModifiersOf(ship.modifiers),
       });
       this.setFlight(ship, tick.state);
-      ship.shields = regenerateShields(
-        ship.shields,
-        ship.maxShields,
-        ship.modifiers,
-        deltaMs,
-      );
+      this.repairFeedback?.selfRepair(ship, deltaMs);
       if (tick.completed) this.onCycleCommitted(ship, tick.state);
       this.shipSprites
         .get(ship.id)
@@ -1162,6 +1177,7 @@ export class DogfightScene extends Phaser.Scene {
     this.hitLedger.forget(victim.id);
     this.crew?.forget(victim.id);
     if (victim.owner === "player") {
+      trackDeath("dogfight", killer.definitionId, { round: this.currentRound });
       this.enemySideScore = creditKill(
         this.enemySideScore,
         victim.definitionId,
@@ -1351,10 +1367,13 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   private updateSprites(): void {
+    const markedId =
+      this.crew?.markedTargetOf(PLAYER_SIDE, this.time.now) ?? null;
     for (const [id, ship] of this.ships) {
       const healthBar = this.healthBars.get(id);
       if (healthBar) {
         healthBar.setPosition(ship.x, ship.y - 50);
+        healthBar.setTargeted(id === markedId);
       }
     }
   }
@@ -1414,6 +1433,9 @@ export class DogfightScene extends Phaser.Scene {
     this.hud?.setVisible(false);
 
     const playerWon = this.playerWins > this.enemyWins;
+    trackModeEnd("dogfight", playerWon ? "victory" : "defeat", {
+      rounds: this.currentRound,
+    });
     audioManager.playFactionStinger(
       this.playerFaction,
       playerWon ? "victory" : "defeat",

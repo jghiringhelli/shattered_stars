@@ -10,6 +10,7 @@
  */
 
 import type Phaser from "phaser";
+import { playUiHover } from "./menuTransitions";
 
 /** A control the focus ring can land on. */
 export interface FocusTarget {
@@ -44,6 +45,7 @@ export class MenuFocus {
   private index = -1;
   private lastEvent: KeyboardEvent | null = null;
   private lastSignature = "";
+  private lastTimeStamp = -Infinity;
   private readonly handlers: Array<[string, (e?: KeyboardEvent) => void]> = [];
 
   /**
@@ -79,20 +81,26 @@ export class MenuFocus {
   }
 
   /**
-   * Phaser can deliver one physical key event more than once in a frame;
-   * only the first delivery moves focus.
+   * Phaser can deliver one physical key event more than once — in the same
+   * frame, or re-emit an older queued event a frame later; only the first
+   * delivery of the newest event moves focus.
    *
    * @param keyEvent - The DOM keyboard event, when provided.
-   * @returns True when this exact event was already handled.
+   * @returns True when this event (or a newer one) was already handled.
    */
   private isRepeatDelivery(keyEvent: KeyboardEvent | undefined): boolean {
     if (!keyEvent) return false;
     const signature = `${keyEvent.keyCode}@${keyEvent.timeStamp}`;
-    if (keyEvent === this.lastEvent || signature === this.lastSignature) {
+    if (
+      keyEvent === this.lastEvent ||
+      signature === this.lastSignature ||
+      keyEvent.timeStamp < this.lastTimeStamp
+    ) {
       return true;
     }
     this.lastEvent = keyEvent;
     this.lastSignature = signature;
+    this.lastTimeStamp = keyEvent.timeStamp;
     return false;
   }
 
@@ -142,6 +150,7 @@ export class MenuFocus {
       next = (next + step + count * Math.abs(step)) % count;
       if (this.usable(this.targets[next])) {
         this.focus(next);
+        playUiHover();
         return;
       }
     }

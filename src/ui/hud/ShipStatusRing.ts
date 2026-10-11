@@ -32,17 +32,25 @@ const GAUGES = {
 } as const;
 /** Above this many shield points the shield gauge is continuous. */
 const MAX_SHIELD_SEGMENTS = 10;
-/** Calm → building → stressed colour ramp. */
-const STRESS_RAMP = [
-  HOLO_PALETTE.textSecondary,
-  HOLO_PALETTE.warning,
-  HOLO_PALETTE.danger,
-] as const;
-const HULL_COLORS = {
-  healthy: HOLO_PALETTE.success,
-  damaged: HOLO_PALETTE.warning,
-  critical: HOLO_PALETTE.danger,
-} as const;
+/** Calm → building → stressed colour ramp (live tokens). */
+function stressRamp(): readonly number[] {
+  return [
+    HOLO_PALETTE.textSecondary,
+    HOLO_PALETTE.warning,
+    HOLO_PALETTE.danger,
+  ];
+}
+/** Hull status colours (live tokens). */
+function hullColor(status: "healthy" | "damaged" | "critical"): number {
+  if (status === "healthy") return HOLO_PALETTE.success;
+  return status === "damaged" ? HOLO_PALETTE.warning : HOLO_PALETTE.danger;
+}
+/**
+ * Critical hull blinks (a non-colour backup for colourblind players):
+ * the hull gauge alternates between full and dimmed alpha at this period.
+ */
+const CRITICAL_BLINK_MS = 500;
+const CRITICAL_BLINK_DIM_ALPHA = 0.35;
 /** Default ring radius in world px. */
 const DEFAULT_RADIUS = 32;
 /** Gauge opacity — subtle overlay on the ship. */
@@ -121,10 +129,11 @@ export class ShipStatusRing {
     g.setPosition(state.pose.x, state.pose.y);
     this.drawShields(state, px);
     const hullFraction = gaugeFraction(state.hull, state.maxHull);
+    const status = hullStatus(hullFraction);
     this.drawGauge(
       GAUGES.hull,
       hullFraction,
-      HULL_COLORS[hullStatus(hullFraction)],
+      { color: hullColor(status), alpha: this.hullAlpha(status) },
       GAUGES.hull.width * px,
       true,
     );
@@ -136,14 +145,14 @@ export class ShipStatusRing {
     this.drawGauge(
       GAUGES.stress,
       state.stress,
-      mixColorStops(STRESS_RAMP, blend),
+      { color: mixColorStops(stressRamp(), blend) },
       stressWidth,
       true,
     );
     this.drawGauge(
       GAUGES.speed,
       gaugeFraction(state.speed, state.maxSpeed),
-      HOLO_PALETTE.textSecondary,
+      { color: HOLO_PALETTE.textSecondary },
       GAUGES.speed.width * px,
       false,
     );
@@ -154,10 +163,21 @@ export class ShipStatusRing {
     this.graphics.destroy();
   }
 
+  /**
+   * @param status - Hull status.
+   * @returns Gauge alpha — critical hull blinks so it never relies on colour alone.
+   */
+  private hullAlpha(status: "healthy" | "damaged" | "critical"): number {
+    if (status !== "critical") return GAUGE_ALPHA;
+    const now = this.graphics.scene?.time?.now ?? 0;
+    const lit = Math.floor(now / CRITICAL_BLINK_MS) % 2 === 0;
+    return lit ? GAUGE_ALPHA : CRITICAL_BLINK_DIM_ALPHA;
+  }
+
   private drawGauge(
     gauge: { readonly centerDeg: number; readonly sweepDeg: number },
     fill: number,
-    color: number,
+    style: { readonly color: number; readonly alpha?: number },
     width: number,
     fromEnd: boolean,
   ): void {
@@ -170,8 +190,8 @@ export class ShipStatusRing {
     this.strokeArc(
       gaugeArc(gauge.centerDeg, gauge.sweepDeg, fill, fromEnd),
       width,
-      color,
-      GAUGE_ALPHA,
+      style.color,
+      style.alpha ?? GAUGE_ALPHA,
     );
   }
 
@@ -183,7 +203,7 @@ export class ShipStatusRing {
       this.drawGauge(
         GAUGES.shield,
         gaugeFraction(state.shields, state.maxShields),
-        HOLO_PALETTE.shield,
+        { color: HOLO_PALETTE.shield },
         width,
         false,
       );

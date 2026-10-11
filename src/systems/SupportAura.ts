@@ -25,6 +25,7 @@ import {
   type AuraShip,
   type FactionAura,
 } from "./aura/FactionAuras";
+import { auraHullRepairRate, strongerRepairSource } from "./aura/AuraRepair";
 
 export {
   FACTION_AURAS,
@@ -55,6 +56,10 @@ export interface ActiveAura {
   readonly stressReliefTiers: number;
   /** Shield points regenerated per second. */
   readonly shieldRegenPerSecond: number;
+  /** Miniature hull points repaired per second (support/capital repair fields). */
+  readonly hullRepairPerSecond: number;
+  /** Id of the strongest repairing projector covering the ship, if any. */
+  readonly repairSourceId: string | null;
 }
 
 /** A ship receiving no aura effects. */
@@ -63,6 +68,8 @@ export const NEUTRAL_AURA: ActiveAura = {
   damageTakenMultiplier: 1,
   stressReliefTiers: 0,
   shieldRegenPerSecond: 0,
+  hullRepairPerSecond: 0,
+  repairSourceId: null,
 };
 
 /** Result of resolving all support auras for a single tick. */
@@ -84,6 +91,10 @@ interface SourceInfo {
   readonly magnitude: number;
   /** Precomputed swarm reduction (0 for non-swarm auras). */
   readonly swarmReduction: number;
+  /** Aura effect kind (repair-source pick). */
+  readonly effect: FactionAura["effect"];
+  /** Hull repair rate this source grants (0 unless a repair platform). */
+  readonly hullRepair: number;
 }
 
 /**
@@ -164,6 +175,8 @@ function buildSources(ships: ReadonlyArray<AuraShip>): SourceInfo[] {
       aura,
       magnitude,
       swarmReduction,
+      effect: aura.effect,
+      hullRepair: auraHullRepairRate(aura.effect, projection.kind, magnitude),
     });
   }
   return sources;
@@ -181,6 +194,7 @@ function accumulate(acc: ActiveAura, source: SourceInfo): ActiveAura {
   let damageTakenMultiplier = acc.damageTakenMultiplier;
   let stressReliefTiers = acc.stressReliefTiers;
   let shieldRegenPerSecond = acc.shieldRegenPerSecond;
+  let hullRepairPerSecond = acc.hullRepairPerSecond;
   switch (aura.effect) {
     case "damage":
       damageBonus += Math.round(magnitude);
@@ -199,6 +213,7 @@ function accumulate(acc: ActiveAura, source: SourceInfo): ActiveAura {
       break;
     case "shield_regen":
       shieldRegenPerSecond += magnitude;
+      hullRepairPerSecond += source.hullRepair;
       break;
   }
   return {
@@ -209,6 +224,8 @@ function accumulate(acc: ActiveAura, source: SourceInfo): ActiveAura {
     ),
     stressReliefTiers,
     shieldRegenPerSecond,
+    hullRepairPerSecond,
+    repairSourceId: acc.repairSourceId,
   };
 }
 
@@ -232,6 +249,7 @@ export function resolveSupportAuras(
     if (ally.hull <= 0) continue;
     let aura = NEUTRAL_AURA;
     let covered = false;
+    let repairSource: SourceInfo | null = null;
     for (const source of sources) {
       if (source.id === ally.id || source.faction !== ally.faction) continue;
       if (
@@ -242,10 +260,11 @@ export function resolveSupportAuras(
       }
       covered = true;
       aura = accumulate(aura, source);
+      repairSource = strongerRepairSource(repairSource, source);
     }
     if (covered) {
       coveredShipIds.add(ally.id);
-      buffs.set(ally.id, aura);
+      buffs.set(ally.id, { ...aura, repairSourceId: repairSource?.id ?? null });
     }
   }
 

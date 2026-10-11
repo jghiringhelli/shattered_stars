@@ -2,17 +2,18 @@
  * ControlsReference — curated, data-driven "how do I do X" reference.
  *
  * Row labels/grouping are hand-curated for readability, but the actual key/
- * button/gesture shown for each row is always derived live from
- * DefaultBindings.ts — never hardcoded — so this can never drift out of
- * sync with the real bindings.
+ * button/gesture shown for each row is always derived live from the
+ * bindings — keyboard from the player's active profile (DefaultBindings.ts
+ * plus Settings rebinding overrides), gamepad/touch from DefaultBindings.ts
+ * — never hardcoded, so this can never drift out of sync with real input.
  */
 
 import type { ActionIntent, KeyboardBinding } from "../input/InputTypes";
 import {
-  DEFAULT_KEYBOARD_BINDINGS,
   DEFAULT_GAMEPAD_BINDINGS,
   DEFAULT_TOUCH_BINDINGS,
 } from "../input/DefaultBindings";
+import { activeKeyboardBindings, boundKeyLabel } from "../input/boundKeyLabel";
 
 export interface ControlRow {
   readonly label: string;
@@ -41,6 +42,10 @@ export const CONTROL_GROUPS: readonly ControlGroup[] = [
       { label: "Segnor Loop", intents: ["SEGNOR_LEFT", "SEGNOR_RIGHT"] },
       { label: "Tallon Roll", intents: ["TALLON_LEFT", "TALLON_RIGHT"] },
       { label: "Mark Target (squad focus)", intents: ["MARK_TARGET"] },
+      {
+        label: "Hero Powers (Campaign)",
+        intents: ["HERO_POWER_1", "HERO_POWER_2"],
+      },
       { label: "Fire Secondary / Bomb", intents: ["FIRE_SECONDARY"] },
       { label: "Cycle Weapon", intents: ["WEAPON_CYCLE"] },
       { label: "Cloak", intents: ["CLOAK"] },
@@ -145,11 +150,12 @@ const TOUCH_SPECIAL_LABELS: Partial<Record<ActionIntent, string>> = {
 
 /** BOOST/BARREL_ROLL have no direct KeyboardBinding entry — they're produced
  * by ArcadeInputGestures.ts's hold/double-tap/chord state machine on the
- * same steer/thrust keys, not a dedicated key. See keyboardLabelFor(). */
-const KEYBOARD_SPECIAL_LABELS: Partial<Record<ActionIntent, string>> = {
-  BOOST: "Double-tap ↑",
-  BARREL_ROLL: "Hold ← + →",
-};
+ * same steer/thrust keys, not a dedicated key — so their label is built
+ * from those (possibly rebound) keys by boundKeyLabel(). */
+const KEYBOARD_GESTURE_INTENTS: ReadonlySet<ActionIntent> = new Set([
+  "BOOST",
+  "BARREL_ROLL",
+]);
 
 const TOUCH_GESTURE_NAMES: Record<string, string> = {
   tap: "Tap action zone",
@@ -174,14 +180,23 @@ function formatKeyboardBinding(binding: KeyboardBinding): string {
   return prefix + key;
 }
 
-export function keyboardLabelFor(intents: readonly ActionIntent[]): string {
+/**
+ * @param intents - Intents of one reference row.
+ * @param bindings - Keyboard bindings (default: the player's live profile,
+ *   so rebound keys show everywhere).
+ * @returns The row's keyboard label.
+ */
+export function keyboardLabelFor(
+  intents: readonly ActionIntent[],
+  bindings: readonly KeyboardBinding[] = activeKeyboardBindings(),
+): string {
   if (intents.length === 0) return "Automatic";
   const labels = intents.map((intent) => {
-    if (KEYBOARD_SPECIAL_LABELS[intent])
-      return KEYBOARD_SPECIAL_LABELS[intent]!;
-    return DEFAULT_KEYBOARD_BINDINGS.filter((b) => b.intent === intent).map(
-      formatKeyboardBinding,
-    );
+    if (KEYBOARD_GESTURE_INTENTS.has(intent))
+      return boundKeyLabel(intent, bindings);
+    return bindings
+      .filter((b) => b.intent === intent)
+      .map(formatKeyboardBinding);
   });
   return uniqueJoin(labels.flat());
 }

@@ -10,6 +10,7 @@
 
 import Phaser from "phaser";
 import { getShipsByFaction } from "../data/ShipDefinitions";
+import { bindMenuBack } from "../ui/menu/menuTransitions";
 import type { ShipDefinition } from "../core/types";
 import type { FactionId } from "../config";
 import { ShipCatalogPanel, CAT_X, CAT_W } from "../ui/picker/ShipCatalogPanel";
@@ -122,7 +123,7 @@ export class ShipPickerScene extends Phaser.Scene {
       this,
       "ESC  Done   \u00b7   Mouse wheel  Scroll ships   \u00b7   Hover a squad row for details",
     );
-    this.input.keyboard!.on("keydown-ESC", () => this.finish());
+    bindMenuBack(this, () => this.finish());
     this.maybeShowWelcomeBanner(accent);
   }
 

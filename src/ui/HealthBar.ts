@@ -1,209 +1,260 @@
 /**
- * Health Bar Component
- * Displays ship health (shields + hull) above ships
+ * HealthBar — the per-ship hull/shield overlay (holographic HUD style).
+ *
+ * Shields read as discrete segments (one per X-Wing shield token) above a
+ * hull bar ticked per miniature hull point. Damage flashes white and leaves
+ * a draining ghost trail; repair sweeps a shimmer along the restored bar's
+ * edge with a "+" glyph. Player / ally / enemy differ by marker SHAPE
+ * (chevron / diamond / reticle brackets) as well as colour, and the bar
+ * scales with ship size. Full-health, untargeted enemies are hidden.
+ *
+ * Thin Phaser view: segment math and cue timing live in ./hud/overlay
+ * (pure, unit-tested). Callers keep the old API: construct, `update(hull,
+ * shields)`, `setPosition`, `destroy`.
  */
 
 import Phaser from "phaser";
-import type { FactionId } from "../config";
-import { factionAccent, HOLO_PALETTE } from "./theme/HoloTheme";
+import type { FactionId, ShipSize } from "../config";
+import { HOLO_DEPTH, type HoloSide } from "./theme/HoloTheme";
+import {
+  createChannel,
+  flashStrength,
+  isChannelAnimating,
+  setChannelValue,
+  shimmerStrength,
+  stepChannel,
+  triggerShimmer,
+  type ChannelAnimation,
+} from "./hud/overlay/overlayAnimator";
+import { drawShipOverlay } from "./hud/overlay/overlayDraw";
+import {
+  hullTickCount,
+  layoutOverlayRows,
+  overlayVisible,
+  segmentFill,
+  shieldSegmentCount,
+  type OverlayGeometry,
+  type OverlayRowLayout,
+} from "./hud/overlay/overlayLayout";
+import {
+  fractionOf,
+  overlayGeometryFor,
+  type OverlayRepairNote,
+  type ShipOverlayState,
+} from "./hud/overlay/overlayState";
 
-/** Hull fraction above which the bar reads healthy / below which critical. */
-const HULL_HEALTHY = 0.6;
-const HULL_CRITICAL = 0.3;
-/** Frame and track opacities (holo look: dark translucent frame, faint track). */
-const FRAME_ALPHA = 0.7;
-const FRAME_BORDER_ALPHA = 0.6;
-const FILL_ALPHA = 0.95;
+export type {
+  OverlayRepairNote,
+  ShipOverlayState,
+} from "./hud/overlay/overlayState";
 
 export interface HealthBarConfig {
   scene: Phaser.Scene;
   x: number;
   y: number;
+  /** Overrides the size-based bar width. */
   width?: number;
+  /** Overrides the size-based hull bar height. */
   height?: number;
   faction: FactionId;
   maxHull: number;
   maxShields: number;
   currentHull: number;
   currentShields: number;
+  /** Allegiance relative to the local player (default neutral: hidden at full). */
+  side?: HoloSide;
+  /** Hull size class; defaults to the definition's size. */
+  size?: ShipSize;
+  /** Ship definition id, used to look up the size class. */
+  definitionId?: string;
 }
 
 export class HealthBar extends Phaser.GameObjects.Container {
-  private background: Phaser.GameObjects.Graphics;
-  private shieldBar: Phaser.GameObjects.Graphics;
-  private hullBar: Phaser.GameObjects.Graphics;
-  private flashTween: Phaser.Tweens.Tween | null = null;
-
-  private barWidth: number;
-  private barHeight: number;
-  private maxHull: number;
-  private maxShields: number;
+  private readonly graphics: Phaser.GameObjects.Graphics;
+  private readonly geometry: OverlayGeometry;
+  private readonly layout: OverlayRowLayout;
+  private side: HoloSide;
+  private readonly segmentCount: number;
+  private readonly hullTicks: number;
+  private readonly maxHull: number;
+  private readonly maxShields: number;
+  private readonly shieldChannel: ChannelAnimation;
+  private readonly hullChannel: ChannelAnimation;
   private currentHull: number;
   private currentShields: number;
-  private faction: FactionId;
+  private targeted = false;
+  private dirty = true;
+  private lastRepair: OverlayRepairNote | null = null;
+  private repairCount = 0;
 
   constructor(config: HealthBarConfig) {
     super(config.scene, config.x, config.y);
-
-    this.barWidth = config.width ?? 40;
-    this.barHeight = config.height ?? 4;
+    this.geometry = overlayGeometryFor(config);
+    this.side = config.side ?? "neutral";
     this.maxHull = config.maxHull;
     this.maxShields = config.maxShields;
     this.currentHull = config.currentHull;
     this.currentShields = config.currentShields;
-    this.faction = config.faction;
-
-    // Background (dark)
-    this.background = config.scene.add.graphics();
-    this.add(this.background);
-
-    // Shield bar (faction color, on top)
-    this.shieldBar = config.scene.add.graphics();
-    this.add(this.shieldBar);
-
-    // Hull bar (red/green gradient based on health)
-    this.hullBar = config.scene.add.graphics();
-    this.add(this.hullBar);
-
-    this.draw();
+    this.segmentCount = shieldSegmentCount(config.maxShields);
+    this.hullTicks = hullTickCount(config.maxHull);
+    this.layout = layoutOverlayRows(this.geometry, this.segmentCount > 0);
+    this.shieldChannel = createChannel(
+      fractionOf(config.currentShields, config.maxShields),
+    );
+    this.hullChannel = createChannel(
+      fractionOf(config.currentHull, config.maxHull),
+    );
+    this.graphics = config.scene.add.graphics();
+    this.add(this.graphics);
+    this.setDepth(HOLO_DEPTH.worldOverlay);
     config.scene.add.existing(this);
+    this.redraw();
   }
 
-  private draw(): void {
-    const totalHeight =
-      this.maxShields > 0 ? this.barHeight * 2 + 1 : this.barHeight;
-    const yOffset = -totalHeight / 2;
-
-    // Clear previous
-    this.background.clear();
-    this.shieldBar.clear();
-    this.hullBar.clear();
-
-    // Background frame
-    this.background.fillStyle(HOLO_PALETTE.panelFill, FRAME_ALPHA);
-    this.background.fillRect(
-      -this.barWidth / 2 - 1,
-      yOffset - 1,
-      this.barWidth + 2,
-      totalHeight + 2,
-    );
-    this.background.lineStyle(1, HOLO_PALETTE.border, FRAME_BORDER_ALPHA);
-    this.background.strokeRect(
-      -this.barWidth / 2 - 1,
-      yOffset - 1,
-      this.barWidth + 2,
-      totalHeight + 2,
-    );
-
-    // Shield bar (if ship has shields)
-    if (this.maxShields > 0) {
-      const shieldPercent = this.currentShields / this.maxShields;
-      const shieldColor = factionAccent(this.faction);
-
-      // Background for shield
-      this.shieldBar.fillStyle(HOLO_PALETTE.track, HOLO_PALETTE.trackAlpha);
-      this.shieldBar.fillRect(
-        -this.barWidth / 2,
-        yOffset,
-        this.barWidth,
-        this.barHeight,
-      );
-
-      // Filled portion
-      if (shieldPercent > 0) {
-        this.shieldBar.fillStyle(shieldColor, FILL_ALPHA);
-        this.shieldBar.fillRect(
-          -this.barWidth / 2,
-          yOffset,
-          this.barWidth * shieldPercent,
-          this.barHeight,
-        );
-      }
-    }
-
-    // Hull bar
-    const hullPercent = this.currentHull / this.maxHull;
-    const hullYOffset =
-      this.maxShields > 0 ? yOffset + this.barHeight + 1 : yOffset;
-
-    // Hull color: healthy / caution / critical from the holo palette
-    let hullColor: number;
-    if (hullPercent > HULL_HEALTHY) {
-      hullColor = HOLO_PALETTE.success;
-    } else if (hullPercent > HULL_CRITICAL) {
-      hullColor = HOLO_PALETTE.warning;
-    } else {
-      hullColor = HOLO_PALETTE.danger;
-    }
-
-    // Background for hull
-    this.hullBar.fillStyle(HOLO_PALETTE.track, HOLO_PALETTE.trackAlpha);
-    this.hullBar.fillRect(
-      -this.barWidth / 2,
-      hullYOffset,
-      this.barWidth,
-      this.barHeight,
-    );
-
-    // Filled portion
-    if (hullPercent > 0) {
-      this.hullBar.fillStyle(hullColor, FILL_ALPHA);
-      this.hullBar.fillRect(
-        -this.barWidth / 2,
-        hullYOffset,
-        this.barWidth * hullPercent,
-        this.barHeight,
-      );
-    }
-  }
-
+  /**
+   * Feed the ship's current hull and shields. Losses start the damage
+   * cues, gains the repair shimmer.
+   * @param currentHull - Current hull.
+   * @param currentShields - Current shields.
+   */
   update(currentHull: number, currentShields: number): void {
-    const tookDamage =
-      currentHull < this.currentHull || currentShields < this.currentShields;
-
     this.currentHull = currentHull;
     this.currentShields = currentShields;
-    this.draw();
+    const shieldChange = setChannelValue(
+      this.shieldChannel,
+      fractionOf(currentShields, this.maxShields),
+    );
+    const hullChange = setChannelValue(
+      this.hullChannel,
+      fractionOf(currentHull, this.maxHull),
+    );
+    if (shieldChange !== "none" || hullChange !== "none") this.dirty = true;
+    this.refreshVisibility();
+  }
 
-    // Flash on damage
-    if (tookDamage) {
-      this.flash();
-    }
+  /**
+   * Show a repair delivered by the repair event channel (shimmer + "+").
+   * @param repair - What was restored and by whom.
+   */
+  showRepair(repair: OverlayRepairNote): void {
+    triggerShimmer(
+      repair.kind === "hull" ? this.hullChannel : this.shieldChannel,
+    );
+    this.lastRepair = { kind: repair.kind, sourceKind: repair.sourceKind };
+    this.repairCount++;
+    this.dirty = true;
+    this.refreshVisibility();
+  }
 
-    // Hide when at full health (declutter)
-    const atFullHealth =
+  /**
+   * Mark or unmark the ship as the player's target (amber brackets; keeps
+   * a full-health enemy's overlay visible).
+   * @param targeted - Whether it is targeted.
+   */
+  setTargeted(targeted: boolean): void {
+    if (this.targeted === targeted) return;
+    this.targeted = targeted;
+    this.dirty = true;
+    this.refreshVisibility();
+  }
+
+  /**
+   * Change the overlay's allegiance (e.g. the player took over another ship).
+   * @param side - New side.
+   */
+  setSide(side: HoloSide): void {
+    if (this.side === side) return;
+    this.side = side;
+    this.dirty = true;
+    this.refreshVisibility();
+  }
+
+  /**
+   * Phaser update-list hook: advance the cues and redraw while animating.
+   * @param _time - Scene time (unused).
+   * @param delta - Frame length (ms).
+   */
+  preUpdate(_time: number, delta: number): void {
+    const wasAnimating = this.isAnimating();
+    stepChannel(this.shieldChannel, delta);
+    stepChannel(this.hullChannel, delta);
+    if (wasAnimating || this.dirty) this.redraw();
+    if (wasAnimating) this.refreshVisibility();
+  }
+
+  /**
+   * Snapshot of the overlay for specs and debugging.
+   * @returns Current overlay state.
+   */
+  getOverlayState(): ShipOverlayState {
+    const fill = segmentFill(
+      this.currentShields,
+      this.maxShields,
+      this.segmentCount,
+    );
+    return {
+      side: this.side,
+      visible: this.visible,
+      targeted: this.targeted,
+      width: this.geometry.width,
+      segmentCount: this.segmentCount,
+      litSegments: fill.lit,
+      partialSegment: fill.partial,
+      hullFraction: this.hullChannel.value,
+      hullTicks: this.hullTicks,
+      damageFlash:
+        flashStrength(this.shieldChannel) > 0 ||
+        flashStrength(this.hullChannel) > 0,
+      shieldShimmer: shimmerStrength(this.shieldChannel) > 0,
+      hullShimmer: shimmerStrength(this.hullChannel) > 0,
+      lastRepair: this.lastRepair,
+      repairCount: this.repairCount,
+    };
+  }
+
+  /**
+   * Whether any cue is playing on either channel.
+   * @returns True while flashing, shimmering or draining a ghost.
+   */
+  private isAnimating(): boolean {
+    return (
+      isChannelAnimating(this.shieldChannel) ||
+      isChannelAnimating(this.hullChannel)
+    );
+  }
+
+  /** Apply the visibility rule (side, full health, target, animation). */
+  private refreshVisibility(): void {
+    const atFull =
       this.currentHull >= this.maxHull &&
       this.currentShields >= this.maxShields;
-    this.setVisible(!atFullHealth);
+    this.setVisible(
+      overlayVisible({
+        side: this.side,
+        atFull,
+        targeted: this.targeted,
+        animating: this.isAnimating(),
+      }),
+    );
   }
 
-  private flash(): void {
-    if (this.flashTween) {
-      this.flashTween.stop();
-    }
-
-    this.setAlpha(1);
-    this.flashTween = this.scene.tweens.add({
-      targets: this,
-      alpha: { from: 1, to: 0.3 },
-      duration: 100,
-      yoyo: true,
-      repeat: 2,
-      onComplete: () => {
-        this.setAlpha(1);
-      },
+  /** Redraw the overlay graphics from the current state. */
+  private redraw(): void {
+    this.dirty = false;
+    drawShipOverlay(this.graphics, {
+      geometry: this.geometry,
+      layout: this.layout,
+      side: this.side,
+      targeted: this.targeted,
+      segmentCount: this.segmentCount,
+      shieldFill: segmentFill(
+        this.currentShields,
+        this.maxShields,
+        this.segmentCount,
+      ),
+      hullTicks: this.hullTicks,
+      shield: this.shieldChannel,
+      hull: this.hullChannel,
     });
-  }
-
-  setPosition(x: number, y: number): this {
-    super.setPosition(x, y);
-    return this;
-  }
-
-  destroy(): void {
-    if (this.flashTween) {
-      this.flashTween.stop();
-    }
-    super.destroy();
   }
 }

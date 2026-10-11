@@ -26,11 +26,13 @@ const VALUE_GAP = 12;
 const SPEED_PIPS = { max: 6, width: 7, height: 4, gap: 3 } as const;
 const STAT_COLUMN_WIDTH = 72;
 const NO_VALUE = "–";
-const HULL_COLORS = {
-  healthy: HOLO_PALETTE.success,
-  damaged: HOLO_PALETTE.warning,
-  critical: HOLO_PALETTE.danger,
-} as const;
+/** Hull status colours (live tokens, so colour-vision palettes apply). */
+function hullColor(status: "healthy" | "damaged" | "critical"): number {
+  if (status === "healthy") return HOLO_PALETTE.success;
+  return status === "damaged" ? HOLO_PALETTE.warning : HOLO_PALETTE.danger;
+}
+/** Non-colour backup for critical hull: a "!" after the hull value. */
+const CRITICAL_SUFFIX = " !";
 
 /** Speed / maneuver / shield / hull readout. */
 export class FlightReadout {
@@ -134,12 +136,15 @@ export class FlightReadout {
     const g = this.glyphs;
     g.clear();
     const glyphX = this.left + HOLO_SPACING.md + GLYPH_SIZE / 2;
-    const hullColor = player
-      ? HULL_COLORS[hullStatus(gaugeFraction(player.hull, player.maxHull))]
+    const hullState = player
+      ? hullStatus(gaugeFraction(player.hull, player.maxHull))
+      : null;
+    const hullColorNow = hullState
+      ? hullColor(hullState)
       : HOLO_PALETTE.textMuted;
     this.glyph("speed", glyphX, -ROW_OFFSET, HOLO_PALETTE.textSecondary);
     this.glyph("shield", glyphX, ROW_OFFSET, HOLO_PALETTE.shield);
-    this.glyph("hull", glyphX + STAT_COLUMN_WIDTH, ROW_OFFSET, hullColor);
+    this.glyph("hull", glyphX + STAT_COLUMN_WIDTH, ROW_OFFSET, hullColorNow);
     setIfChanged(
       this.speedText,
       player ? String(Math.round(player.speed)) : NO_VALUE,
@@ -151,7 +156,10 @@ export class FlightReadout {
     );
     setIfChanged(
       this.hullText,
-      player ? `${Math.ceil(player.hull)}/${player.maxHull}` : NO_VALUE,
+      player
+        ? `${Math.ceil(player.hull)}/${player.maxHull}` +
+            (hullState === "critical" ? CRITICAL_SUFFIX : "")
+        : NO_VALUE,
     );
     if (player) this.drawSpeedPips(player.speed, player.maxSpeed);
   }

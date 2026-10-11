@@ -25,6 +25,11 @@ import {
 } from "../ui/menu/MenuScaffold";
 import { factionAccent } from "../ui/theme/HoloTheme";
 import {
+  bindMenuBack,
+  fadeInMenu,
+  goToScene,
+} from "../ui/menu/menuTransitions";
+import {
   ENCYCLOPEDIA_LAYOUT,
   encyclopediaRegions,
   snakeToLabel,
@@ -72,10 +77,11 @@ export class EncyclopediaScene extends Phaser.Scene {
     this.activeFaction = null;
     this.rebuildList();
     this.setupInput();
+    fadeInMenu(this);
   }
 
   private returnToMenu(): void {
-    this.scene.start(MENU_SCENE);
+    goToScene(this, MENU_SCENE);
   }
 
   private onFactionFilter(faction: FactionId | null): void {
@@ -133,7 +139,7 @@ export class EncyclopediaScene extends Phaser.Scene {
 
   private setupInput(): void {
     const keyboard = this.input.keyboard!;
-    keyboard.on("keydown-ESC", () => this.returnToMenu());
+    bindMenuBack(this, () => this.returnToMenu());
     let lastStepEvent: KeyboardEvent | null = null;
     const step = (delta: number) => (event: KeyboardEvent) => {
       // Phaser can re-emit one queued native event across scene steps.

@@ -91,6 +91,16 @@ export const CREW_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
     requiredShipSize: ["medium", "large", "huge"],
     realtime: { ordnanceBonusCharges: 1 },
   },
+  mechanic: {
+    id: "mechanic",
+    name: "Mechanic",
+    slotType: "crew",
+    description:
+      "Patches 1 hull every ~12 seconds once the ship is out of fire.",
+    pointCost: 4,
+    creditCost: 200,
+    realtime: { hullRepairPerSecond: 0.08 },
+  },
   skilled_gunner: {
     id: "skilled_gunner",
     name: "Skilled Gunner",
@@ -112,6 +122,16 @@ export const ASTROMECH_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
     pointCost: 4,
     creditCost: 200,
     realtime: { shieldRegenPerSecond: 0.12 },
+  },
+  patch_astromech: {
+    id: "patch_astromech",
+    name: "Patch Astromech",
+    slotType: "astromech",
+    description:
+      "Welds 1 hull back every ~20 seconds once the ship is out of fire.",
+    pointCost: 3,
+    creditCost: 150,
+    realtime: { hullRepairPerSecond: 0.05 },
   },
   targeting_astromech: {
     id: "targeting_astromech",

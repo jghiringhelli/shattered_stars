@@ -40,7 +40,6 @@ import {
   assignQuickBuilds,
   equipFlight,
   equipQuickBuild,
-  regenerateShields,
   stressModifiersOf,
 } from "../arcade/systems/QuickBuildEquip";
 import {
@@ -85,6 +84,7 @@ import { playFlightEventFx } from "../arcade/ArcadeFX";
 import type { ShipPose } from "../core/ArcadeControls";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { HealthBar } from "../ui/HealthBar";
+import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
@@ -101,6 +101,7 @@ import { ACE_MATCHUPS, type AceMatchup } from "../data/AceMatchups";
 import { PauseMenu } from "../ui/PauseMenu";
 import { InputManager } from "../input/InputManager";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
+import { trackModeEnd, trackModeStart } from "../telemetry/telemetry";
 import {
   createSideScore,
   creditKill,
@@ -183,6 +184,8 @@ export class AceDuelScene extends Phaser.Scene {
   private ships: Map<string, AceDuelShip> = new Map();
   private shipSprites: Map<string, ShipSprite> = new Map();
   private healthBars: Map<string, HealthBar> = new Map();
+  /** Repair mechanic + overlay shimmer + repair drones (built in create). */
+  private repairFeedback: ShipRepairFeedback | null = null;
 
   private side1ShipIds: string[] = [];
   private side2ShipIds: string[] = [];
@@ -268,6 +271,12 @@ export class AceDuelScene extends Phaser.Scene {
     audioManager.initialize();
 
     this.effectsManager = new EffectsManager(this);
+    this.repairFeedback = new ShipRepairFeedback({
+      scene: this,
+      shipOf: (id) => this.ships.get(id),
+      overlayOf: (id) => this.healthBars.get(id),
+      particleScale: () => this.performanceState.effectSettings.particleCount,
+    });
     const savedSettings = this.registry.get("settings") as
       { cameraShake: boolean; showDamageNumbers: boolean } | undefined;
     if (savedSettings) {
@@ -522,6 +531,7 @@ export class AceDuelScene extends Phaser.Scene {
     this.setupObjects.forEach((o) => o.destroy());
     this.setupObjects = [];
     this.isSetupPhase = false;
+    trackModeStart("ace_duel", { matchup: this.selectedMatchup.name });
 
     audioManager.playFactionMusic(
       this.playerSide === 1
@@ -873,6 +883,8 @@ export class AceDuelScene extends Phaser.Scene {
       maxShields: ship.maxShields,
       currentHull: ship.hull,
       currentShields: ship.shields,
+      side: overlaySide(false, ship.owner === "player"),
+      definitionId: ship.definitionId,
     });
     this.healthBars.set(ship.id, healthBar);
   }
@@ -905,22 +917,14 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   /**
-   * Regenerates a ship's shields for a frame (shield-regen upgrades and
-   * abilities on its sheet) and refreshes its health bar when they changed.
+   * Applies a ship's own shield regen and hull repair for a frame (upgrades
+   * and abilities on its sheet); the repair feedback refreshes its overlay.
    *
    * @param ship - The ship.
    * @param deltaMs - Frame length (ms).
    */
   private regenerateShieldsOf(ship: AceDuelShip, deltaMs: number): void {
-    const shields = regenerateShields(
-      ship.shields,
-      ship.maxShields,
-      ship.modifiers,
-      deltaMs,
-    );
-    if (shields === ship.shields) return;
-    ship.shields = shields;
-    this.healthBars.get(ship.id)?.update(ship.hull, ship.shields);
+    this.repairFeedback?.selfRepair(ship, deltaMs);
   }
 
   /**
@@ -1210,10 +1214,13 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   private updateSprites(): void {
+    const markedId =
+      this.crew?.markedTargetOf(this.playerSideKey, this.time.now) ?? null;
     for (const [id, ship] of this.ships) {
       const healthBar = this.healthBars.get(id);
       if (healthBar) {
         healthBar.setPosition(ship.x, ship.y - 50);
+        healthBar.setTargeted(id === markedId);
       }
     }
   }
@@ -1275,6 +1282,7 @@ export class AceDuelScene extends Phaser.Scene {
     const playerWins = this.playerSide === 1 ? this.side1Wins : this.side2Wins;
     const enemyWins = this.playerSide === 1 ? this.side2Wins : this.side1Wins;
     const playerWon = playerWins > enemyWins;
+    trackModeEnd("ace_duel", playerWon ? "victory" : "defeat");
     const playerMatchupFaction =
       this.playerSide === 1
         ? this.selectedMatchup.side1?.faction

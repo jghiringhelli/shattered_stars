@@ -41,6 +41,12 @@ import {
   type LaunchContext,
   type PlayerSource,
 } from "../ui/lobby/lobbyLaunch";
+import {
+  bindMenuBack,
+  fadeInMenu,
+  goToScene,
+  playUiBack,
+} from "../ui/menu/menuTransitions";
 
 /** Painted backdrop behind the lobby. */
 const BACKDROP_TEXTURE = "nebula_teal";
@@ -107,6 +113,7 @@ export class LobbyScene extends Phaser.Scene {
     this.setupInput();
     this.setupChatKeyboard();
     this.registerNetworkHandlers();
+    fadeInMenu(this);
 
     // Connect in local simulation mode (no URL = no server required)
     networkService.connect();
@@ -550,11 +557,17 @@ export class LobbyScene extends Phaser.Scene {
     if (this.currentView === "room") {
       networkService.leaveRoom();
     } else {
-      this.scene.start("MainMenuScene");
+      goToScene(this, "MainMenuScene");
     }
   }
 
   private setupInput(): void {
+    // ESC is handled below (it closes the text prompt / chat first);
+    // gamepad B and right-click share the same back action.
+    bindMenuBack(this, () => this.goBack(), {
+      escape: false,
+      isActive: () => !this.textPrompt.isOpen && !this.chatFocused,
+    });
     this.input.keyboard!.on("keydown-ESC", (event: KeyboardEvent) => {
       if (this.textPrompt.isOpen || this.textPrompt.handled(event)) return;
       if (event === this.lastEscKey) return;
@@ -564,6 +577,7 @@ export class LobbyScene extends Phaser.Scene {
         this.updateRoomView();
         return;
       }
+      playUiBack();
       this.goBack();
     });
   }

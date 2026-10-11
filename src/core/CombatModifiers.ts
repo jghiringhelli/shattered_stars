@@ -26,6 +26,11 @@ export interface CombatModifiers {
   readonly damageTakenMultiplier: number;
   /** Shield points regenerated per second while below max shields. */
   readonly shieldRegenPerSecond: number;
+  /**
+   * Miniature hull points repaired per second while below max hull, paused
+   * for a few seconds after the ship takes damage (src/arcade/systems/repair).
+   */
+  readonly hullRepairPerSecond: number;
   /** Multiplier on stress accrued from flying maneuvers (<1 = calmer pilot). */
   readonly stressRateMultiplier: number;
   /** Maneuver-difficulty tiers eased toward green when accruing stress. */
@@ -88,6 +93,7 @@ export const NEUTRAL_MODIFIERS: CombatModifiers = {
   bonusDamageVsUnshielded: 0,
   damageTakenMultiplier: 1,
   shieldRegenPerSecond: 0,
+  hullRepairPerSecond: 0,
   stressRateMultiplier: 1,
   stressReliefTiers: 0,
   boostCooldownMultiplier: 1,
@@ -138,6 +144,7 @@ const ADDITIVE_KEYS = [
   "calmLaserDamageBonus",
   "bonusDamageVsUnshielded",
   "shieldRegenPerSecond",
+  "hullRepairPerSecond",
   "stressReliefTiers",
   "ordnanceBonusCharges",
   "homingTurnBonus",

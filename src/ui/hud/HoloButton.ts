@@ -25,6 +25,7 @@ import {
   type ButtonVisual,
   type HoloButtonVariant,
 } from "./holoButtonStyle";
+import { playUiHover, playUiPress } from "../menu/menuTransitions";
 
 export type { HoloButtonVariant } from "./holoButtonStyle";
 
@@ -155,13 +156,16 @@ export class HoloButton extends Phaser.GameObjects.Container {
 
   /** Activate as if clicked (keyboard / gamepad confirm). No-op while disabled. */
   activate(): void {
-    if (this.isEnabled) this.onClick();
+    if (!this.isEnabled) return;
+    playUiPress();
+    this.onClick();
   }
 
   private bindPointer(): void {
-    this.on(Phaser.Input.Events.GAMEOBJECT_POINTER_OVER, () =>
-      this.setInteraction("hover"),
-    );
+    this.on(Phaser.Input.Events.GAMEOBJECT_POINTER_OVER, () => {
+      this.setInteraction("hover");
+      if (this.isEnabled) playUiHover();
+    });
     this.on(Phaser.Input.Events.GAMEOBJECT_POINTER_OUT, () =>
       this.setInteraction("idle"),
     );

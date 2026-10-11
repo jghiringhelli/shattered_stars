@@ -15,8 +15,36 @@ import { liftColor, toCssColor } from "./colorMath";
 export const HOLO_FONT_FAMILY =
   '"Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
-/** Neutral palette shared by every holographic surface. */
-export const HOLO_PALETTE = {
+/** Colour/opacity tokens of the holographic palette. */
+export interface HoloPaletteTokens {
+  readonly panelFill: number;
+  readonly panelAlpha: number;
+  readonly panelFillRaised: number;
+  readonly border: number;
+  readonly borderAlpha: number;
+  readonly textPrimary: number;
+  readonly textSecondary: number;
+  readonly textMuted: number;
+  readonly accent: number;
+  readonly success: number;
+  readonly warning: number;
+  readonly danger: number;
+  readonly shield: number;
+  readonly target: number;
+  readonly mark: number;
+  readonly track: number;
+  readonly trackAlpha: number;
+}
+
+/**
+ * Neutral palette shared by every holographic surface.
+ *
+ * LIVE tokens: Settings › Accessibility (colour-vision palette, high-contrast
+ * HUD) rewrites these values in place via `applyThemePreferences`
+ * (signalPalettes.ts), so read them when drawing — don't copy them into
+ * module-level constants.
+ */
+export const HOLO_PALETTE: HoloPaletteTokens = {
   /** Panel interior fill (used with `panelAlpha`). */
   panelFill: 0x06111b,
   /** Panel fill opacity — translucent so the battlefield shows through. */
@@ -45,16 +73,18 @@ export const HOLO_PALETTE = {
   shield: 0x5cc8ff,
   /** Locked-target marker colour. */
   target: 0xffb347,
+  /** Squad-mark brackets (red by default — a mark is a hostile, never the amber lock). */
+  mark: 0xff4d5e,
   /** Background track drawn under gauges (used with `trackAlpha`). */
   track: 0xbfe6ff,
   /** Gauge track opacity. */
   trackAlpha: 0.14,
-} as const;
+};
 
 /** Allegiance of a ship relative to the local player. */
 export type HoloSide = "player" | "ally" | "enemy" | "neutral";
 
-/** Side colours: blips, edge arrows, contact markers. */
+/** Side colours: blips, edge arrows, contact markers. LIVE (see HOLO_PALETTE). */
 export const SIDE_COLORS: Readonly<Record<HoloSide, number>> = {
   player: 0x7fe8ff,
   ally: 0x3f9dff,
@@ -161,6 +191,19 @@ export const HOLO_DEPTH = {
   modal: 3000,
 } as const;
 
+/** HUD text scale (Settings › Accessibility › Text size); 1 = design size. */
+let hudTextScale = 1;
+
+/**
+ * Scale every type-scale role built by {@link holoTextStyle} (applies to
+ * text created afterwards).
+ *
+ * @param scale - Multiplier, e.g. 1.15.
+ */
+export function setHudTextScale(scale: number): void {
+  hudTextScale = scale > 0 ? scale : 1;
+}
+
 /**
  * Build a Phaser text style for a type-scale role.
  *
@@ -175,7 +218,7 @@ export function holoTextStyle(
   const step = HOLO_TYPE_SCALE[role];
   return {
     fontFamily: HOLO_FONT_FAMILY,
-    fontSize: `${step.size}px`,
+    fontSize: `${Math.round(step.size * hudTextScale)}px`,
     fontStyle: step.weight,
     color: toCssColor(color),
   };

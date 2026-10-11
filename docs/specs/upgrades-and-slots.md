@@ -21,13 +21,38 @@ Every card MUST change real-time combat (tested in `UpgradeCatalog.test.ts`):
 | Turret / ordnance | `weapon` → `WeaponProfile` | `ArcadeTurret`, `ArcadeOrdnance` |
 
 `CombatModifiers` knobs: laser damage (flat, calm-only, vs unshielded), damage
-taken, shield regen, maneuver stress rate and relief tiers, boost / barrel
+taken, shield regen, hull repair, maneuver stress rate and relief tiers, boost / barrel
 roll / K-turn recharge, ordnance reload / charges / homing, turret rate of
 fire, stress inflicted per laser hit, cloak duration, aura projection and aura
 radius (command cards widen the aura on ships that already project one).
 Stacking: additive bonuses sum, multipliers multiply, then clamp
 (damage taken ≥ 0.5×, recharge ≥ 0.4×, stress rate ≥ 0.5×, relief ≤ 2 tiers,
 aura radius ≤ +50%).
+
+### Repair (`src/arcade/systems/repair/`)
+
+Rates are authored in miniature points per second and scaled by
+`DURABILITY_SCALE` to real-time HP; repairs never exceed max values and never
+revive a destroyed ship.
+
+| Source | Knob / rule | Cards |
+|---|---|---|
+| Own shield regen | `shieldRegenPerSecond` (no pause) | Repair Astromech (R2-style, 0.12/s), Jury-Rigged Deflectors, Regenerative Shields, ability regen |
+| Own hull repair | `hullRepairPerSecond`, paused `HULL_REPAIR_DAMAGE_PAUSE_MS` (3 s) after any hit | Mechanic crew (0.08/s), Patch Astromech (R5-style, 0.05/s) |
+| Repair field | Ascendant Aegis Field: shield regen; projected by a support or capital ship it also repairs allied hull at `AURA_HULL_REPAIR_RATIO` (¼) of its rate, same 3 s pause (`src/systems/aura/AuraRepair.ts`) | — |
+| Damage control | A capital's emergency repair / power-to-engines order (Skirmish) | — |
+
+Hull repair cards stay below 0.1 hull/s (tested) so repair patches a hull
+between engagements and never out-heals incoming fire.
+
+Every repair is reported as a `RepairEvent {shipId, kind: hull|shield, amount,
+sourceShipId, sourceKind}` on a `RepairEventChannel`, which folds per-frame
+trickles into one pulse per 500 ms per source (the first trickle is delivered
+at once). Scenes wire it through `ShipRepairFeedback`
+(`src/ui/hud/overlay/`): the per-ship overlay shimmers the restored bar's
+edge with a "+", and repair drones fly — from the allied projector for a
+repair field, from the ship itself for astromech (1), mechanic crew (2) or
+damage control (3); plain shield regen only shimmers.
 
 ### Invariants (tested)
 - No two cards in the same slot play identically (no reskins at different prices).
@@ -39,7 +64,8 @@ aura radius ≤ +50%).
 ### Price rule (fixed point values)
 +1 hull = 3 · +1 shield = 4 · +1 laser damage = 5 (cannon) or 3 with a drawback ·
 40% faster recharge on one maneuver = 3 · 15% less damage taken ≈ 5–6 ·
-aura projection = 4 · trade-off configuration = 2 · illicit = clean equivalent − 1.
+aura projection = 4 · trade-off configuration = 2 · illicit = clean equivalent − 1 ·
+shield regen ≈ 0.12/s = 4 · hull repair (out of fire) 0.05/s = 3, 0.08/s = 4.
 
 ## 2. Slots (`SHIP_SLOTS` in `src/data/ShipSlots.ts`)
 
