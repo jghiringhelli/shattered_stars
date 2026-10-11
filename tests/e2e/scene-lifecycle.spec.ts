@@ -11,7 +11,7 @@ import {
   clickMenuItem,
   suppressWebGLNoise,
 } from "./helpers/game";
-import { ALL_BATTLES } from "./helpers/battleEntry";
+import { ACE_DUEL, ALL_BATTLES, DOGFIGHT } from "./helpers/battleEntry";
 
 /** Live InputManager subscription count, read through the Dogfight pilot. */
 async function subscriptionCount(page: Page): Promise<number> {
@@ -102,5 +102,36 @@ for (const battle of ALL_BATTLES) {
     );
     await page.waitForTimeout(1_500);
     expect(errors).toEqual([]);
+  });
+}
+
+for (const battle of [DOGFIGHT, ACE_DUEL]) {
+  test(`${battle.sceneKey}: nobody fires during the ROUND banner`, async ({
+    page,
+  }) => {
+    await battle.enter(page);
+    const durability = () =>
+      page.evaluate(
+        (key) =>
+          [...(window as any).game.scene.getScene(key).ships.values()].map(
+            (ship: any) => [ship.hull, Math.floor(ship.shields)],
+          ),
+        battle.sceneKey,
+      );
+    const atSpawn = await durability();
+    await page
+      .waitForFunction(
+        (key) =>
+          (window as any).game.scene.getScene(key).isRoundActive === true,
+        battle.sceneKey,
+        { polling: 16, timeout: 5_000 },
+      )
+      .catch(() => undefined);
+    const beforeFight = await page.evaluate((key) => {
+      const scene = (window as any).game.scene.getScene(key);
+      return { active: scene.isRoundActive, round: scene.currentRound };
+    }, battle.sceneKey);
+    expect(beforeFight.round).toBe(1);
+    expect(await durability()).toEqual(atSpawn);
   });
 }

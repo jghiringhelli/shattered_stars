@@ -885,7 +885,8 @@ export class DogfightScene extends Phaser.Scene {
 
     this.updateAI(time, delta);
     this.flyShips(delta);
-    this.processCombat(delta);
+    // Ships close in during the ROUND banner; weapons go live with the round.
+    if (this.isRoundActive) this.processCombat(delta);
     this.updateSprites();
     this.updateCameraFollow();
     this.checkRoundEnd();
