@@ -19,6 +19,7 @@ import { ArcadeBattleScene } from "./scenes/ArcadeBattleScene";
 import { EncyclopediaScene } from "./scenes/EncyclopediaScene";
 import { ShipPickerScene } from "./scenes/ShipPickerScene";
 import { ControlsScene } from "./scenes/ControlsScene";
+import { HudPreviewScene } from "./scenes/HudPreviewScene";
 
 const forceCanvas =
   typeof window !== "undefined" &&
@@ -50,6 +51,7 @@ const config: Phaser.Types.Core.GameConfig = {
     EncyclopediaScene,
     ShipPickerScene,
     ControlsScene,
+    ...(import.meta.env.DEV ? [HudPreviewScene] : []),
   ],
   physics: {
     // We don't use physics - movement is chart-based
