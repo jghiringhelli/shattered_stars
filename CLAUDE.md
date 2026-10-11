@@ -499,9 +499,8 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 
 ### Arcade Systems (src/arcade/)
 - **systems/CycleFlight.ts** - The X-Wing cycle engine for every battle scene: spawn control from the
-  definition, tick motion + cycle stress, AI steering by heading error (drift/bank/turn, K-turn)
+  definition, tick motion + cycle stress (AI ships fly BotPilots through the same controls)
 - **systems/PlayerFlightPilot.ts** / **PilotFlightControls.ts** - Player flight input shared by all scenes
-- **systems/AiPursuit.ts** - Shared AI pursuit rules (capitals never K-turn, seek order, duel judgement)
 - **systems/QuickBuildEquip.ts** / **DiceAttack.ts** - Equip quick builds (upgrades + pilot ability) and
   resolve dice-mode shots with them; **ShotConditions.ts** / **PilotAbilityCombat.ts** - conditional ability knobs
 - **ShotLevers.ts** - Position levers on every dice shot (rear arc +hit/+dmg, head-on joust −hit) and the squad-mark
@@ -513,7 +512,15 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
   shape as PlayerFlightPilot; flies only through applyPilotFlightInput) with the tier from
   **difficultyToTier** (easy=novice, normal=average, hard=expert, brutal=expert ×0.5 reaction), and each
   squad side a **SquadCommand** (orders + SquadMark; `aiLeader: false` on the player's side, where the
-  player marks with MARK_TARGET — R / R3 — read via `PlayerFlightPilot.takeMarkRequest()`)
+  player marks with MARK_TARGET — R / R3 — read via `PlayerFlightPilot.takeMarkRequest()`; `assistMark`
+  lets wingmen mark their own focus while the player has none, never overriding a live player mark).
+  Novice squads focus without marking; the mark bonus needs 2+ living ships on the side.
+  **SquadBattleAi** (Survival/Campaign) adds hazard escape (`safePointFor` → BotPilot `safePoint`)
+- **systems/repair/** - Repair events (hull/shield, source kind + ship) consumed by the per-ship overlay
+  (src/ui/hud/overlay, `ShipRepairFeedback`) and pooled repair drones (src/rendering/repairDrones);
+  `hullRepairPerSecond` knob (pauses after hits)
+- **objectives/** - Pure objective models (escort, defend, capture/hold, assassinate, route/race,
+  sabotage, salvage, survive, stealth) shared by Campaign and Scenarios
 - **ArcadeStress.ts** - Pilot stress driven by ship dial difficulty (green/white/red rates,
   K-turn + boost instant spikes, hysteresis thresholds, HUD color helpers)
 - **ArcadeOrdnance.ts** - Arcade ordnance slots, cooldowns, homing
@@ -522,6 +529,18 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
   Salvage, Scramble): control (medium+ count double), round scoring (12-cycle rounds),
   half/full destruction points, first to 20; AI objective roles (scenarioAi). Scene glue:
   src/scenes/scenario/ (ScenarioController hooks in ArcadeBattleScene, HUD, picker).
+
+
+### Modes (beyond the battle scenes)
+- **Survival roguelite** - src/systems/survival/* (seeded sector maps, run state/persistence, shop,
+  repair dock, events, relics, meta-progression, history), src/data/survival/*, SurvivalMapScene /
+  SurvivalSummaryScene. Spec: docs/adr/ADR-0004-survival-roguelite-run-structure.md
+- **Campaign (SC2-style)** - src/campaign/* (scripting interpreter, hero powers V/B, armory, research,
+  hub mission graph, hazards, save v3), src/data/campaign/*, CampaignCompleteScene. Spec: docs/specs/campaign.md
+- **Flight School** - FlightSchoolScene + src/tutorial/* (input-verified lessons, bound keys in prompts)
+- **Settings / accessibility** - SettingsScene tabs, src/input/KeyBindings.ts (rebinding profiles),
+  src/ui/theme/signalPalettes.ts (colorblind), src/systems/settingsSchema.ts; local telemetry src/telemetry/
+  (spec: docs/specs/player-preferences.md). Plan: docs/PROFESSIONALIZATION_PLAN.md
 
 
 ### Menu UI (src/ui/menu/, src/ui/theme/)
@@ -579,7 +598,7 @@ Run tests before committing:
 npm test -- --run
 ```
 
-All tests must pass. Current: 3309 unit/balance/sim tests + 299 e2e tests.
+All tests must pass. Current: 4159 unit/balance/sim tests + 374 e2e tests (`npm run test:skill`: 24 gate tests).
 
 Piloting gates (src/simulation/skill — the game's own AI from src/arcade/ai, BotPilot + SquadCommand,
 flying the real engine through the player's inputs): fast smoke versions run in the unit suite (tests/unit/simulation/skill); the full
@@ -712,9 +731,11 @@ Surfaced by the verify loop (`npm run verify:loop`) — tracked SHOULD findings,
 
 ## Next Steps
 
-- Wingman formation AI (Phase 4): flagship + wing offset AI, formation hold/break signals
-- E2E tests for arcade stress + cloak (Playwright: verify stress bar HUD, alpha, cloak timer)
-- Balance re-run: `npx tsx scripts/headless_sim.ts --matrix --battles 50` after action redistribution
+- Survival balance sweep (threat, elites, relic values) with the headless simulator (ADR-0004 initial values)
+- Combat pace: ~0.5 dmg/s vs 70-95 HP fighters makes some nodes slow; revisit with duel_tempo_report
+- Gamepad rebinding; Survival/Campaign telemetry one-liners; default-difficulty setting consumer
+- Ally repair auras outside Skirmish; Scenario mode online (Lobby) and a main-menu entry
+- Professionalization P1-5 / P2 items (docs/PROFESSIONALIZATION_PLAN.md)
 - Vercel/GitHub Pages publish (user-directed when ready)
 
 

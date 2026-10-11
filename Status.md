@@ -1,5 +1,20 @@
 # Status.md
 
+### 2026-10-11 — One AI everywhere; roguelite Survival; SC2 campaign; scenarios; polish
+- Every battle mode's AI is the skill-gate bots (BotPilot + SquadCommand + squad mark);
+  old AI stack and difficulty stat cheats removed. Mark assist for wingmen; novice squads
+  don't mark; bots flee the Survival belt; campaign act 1 is the learning act.
+- Per-ship holo overlay (shield segments, hull ticks, damage/repair cues, side by shape),
+  repair events + repair drones, hull repair knob (Mechanic, Patch Astromech, auras).
+- Survival roguelite: seeded sector maps, shops/docks/events/relics/mutations, ascension,
+  meta-progression, save/resume, history; spawn-in-belt bug and speed power fixed.
+- Campaign: real objectives, mission scripting, 78 missions redesigned, hero powers (V/B),
+  armory + research, hub, save v3 with consequences, completion epilogue.
+- X-Wing 2.0 Scenario mode in Skirmish (4 scenarios, control + destruction scoring).
+- P0 polish: settings/rebinding/colorblind/volumes, Flight School, menu juice, local
+  telemetry. Plan: docs/PROFESSIONALIZATION_PLAN.md.
+- Tests: 4159 unit/balance/sim + 374 e2e (4 skipped) + 24 skill-gate tests green.
+
 ### 2026-10-10 — One flight engine, real-time pilots, quick builds everywhere
 - Every battle mode (Skirmish, Dogfight, Ace Duel, Survival, Campaign, Boss Raid,
   Continuous) flies the X-Wing cycle engine (`src/arcade/systems/CycleFlight.ts`,

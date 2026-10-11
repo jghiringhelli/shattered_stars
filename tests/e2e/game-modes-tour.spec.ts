@@ -103,10 +103,14 @@ async function launchSurvivalWithDefaults(page: Page): Promise<void> {
 async function launchEpicRaidWithDefaults(page: Page): Promise<void> {
   await page.waitForFunction(
     () => {
-      const s = (window as unknown as { game: any }).game.scene.getScene(
-        "EpicBattleScene",
+      const game = (window as unknown as { game: any }).game;
+      const s = game.scene.getScene("EpicBattleScene");
+      // The menu fades out first: wait until the raid scene is the one on screen.
+      return (
+        game.scene.isActive("EpicBattleScene") &&
+        !game.scene.isActive("MainMenuScene") &&
+        s?.isSetupPhase === true
       );
-      return s?.isSetupPhase === true;
     },
     { timeout: 10_000 },
   );
