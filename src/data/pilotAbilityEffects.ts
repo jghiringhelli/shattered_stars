@@ -101,7 +101,12 @@ export const PILOT_ABILITY_REALTIME: Readonly<Record<string, RealtimeEffect>> =
     force_guidance: { projectsAura: true, auraRadiusBonus: 0.15 },
     force_heal: { projectsAura: true, shieldRegenPerSecond: 0.2 },
     force_push: { stressOnHit: 0.1 },
-    force_shield: { shieldRegenPerSecond: 0.3 },
+    // Card: "When a friendly ship at range 0-1 defends, spend 1 Force: the
+    // defender adds 1 evade" — protection for ships flying together, not
+    // self-healing. The old self-regen reading (0.3 shield/s, x DURABILITY_SCALE)
+    // out-healed most fighters' fire at x12 HP: expert pilots could not
+    // finish a novice Paladin in 3 minutes (skill gate 1). Same price (6).
+    force_shield: { projectsAura: true, wingmanDamageTakenMultiplier: 0.88 },
     force_suppression: { stressOnHit: 0.15 },
 
     // --- Campaign pilots (unlocked by level; not on pilot cards) -------------

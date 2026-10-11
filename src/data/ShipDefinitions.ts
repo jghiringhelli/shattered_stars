@@ -1314,7 +1314,9 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 4 },
       size: "small",
       actions: ["calculate", "target_lock", "barrel_roll", "jam"],
-      pointCost: 54,
+      // Priced to the shipPricing heuristic (was 54, 3 under it): a novice
+      // in a Hunter beat expert interceptors costing 23% less (skill gate 1).
+      pointCost: 57,
     },
     spriteKey: "ship_synth_hunter",
     description: "Advanced combat unit with precise targeting.",

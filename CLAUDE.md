@@ -504,6 +504,10 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 - **systems/AiPursuit.ts** - Shared AI pursuit rules (capitals never K-turn, seek order, duel judgement)
 - **systems/QuickBuildEquip.ts** / **DiceAttack.ts** - Equip quick builds (upgrades + pilot ability) and
   resolve dice-mode shots with them; **ShotConditions.ts** / **PilotAbilityCombat.ts** - conditional ability knobs
+- **ShotLevers.ts** - Position levers on every dice shot (rear arc +hit/+dmg, head-on joust −hit) and the squad-mark
+  bonus; applied inside resolveDiceAttack (callers pass `targetMarked` to opt into the mark)
+- **systems/SquadMark.ts** - One marked target per side (leader/player marks, expires on death or timeout);
+  focus fire is what lets a coordinated squad beat solo aces (skill gate 2)
 - **ArcadeStress.ts** - Pilot stress driven by ship dial difficulty (green/white/red rates,
   K-turn + boost instant spikes, hysteresis thresholds, HUD color helpers)
 - **ArcadeOrdnance.ts** - Arcade ordnance slots, cooldowns, homing
@@ -565,7 +569,13 @@ Run tests before committing:
 npm test -- --run
 ```
 
-All tests must pass. Current: 2904 unit/balance/sim tests + 278 e2e tests.
+All tests must pass. Current: 3309 unit/balance/sim tests + 299 e2e tests.
+
+Piloting gates (src/simulation/skill — novice/average/expert bots flying the real engine through the
+player's inputs): fast smoke versions run in the unit suite (tests/unit/simulation/skill); the full
+gates run with `npm run test:skill` (`SKILL_PAIRS=all` for the whole fighter matrix). Gate 1: expert
+beats novice >= 85% in any fighter pair (novice ship up to +30% points). Gate 2: coordinated average
+squad beats equal points of solo experts >= 70%. Never move the thresholds — tune the levers.
 
 
 ## Development Workflow

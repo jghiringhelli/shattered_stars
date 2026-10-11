@@ -27,6 +27,16 @@ import {
 } from "../../../../src/core/CombatModifiers";
 import { INITIAL_STRESS } from "../../../../src/arcade/ArcadeStress";
 import type { AbilityCombatant } from "../../../../src/arcade/PilotAbilityCombat";
+import {
+  HEAD_ON_HIT_PENALTY,
+  NO_SHOT_LEVERS,
+  REAR_ARC_DAMAGE_BONUS,
+  REAR_ARC_HIT_BONUS,
+} from "../../../../src/arcade/ShotLevers";
+import {
+  SQUAD_MARK_DAMAGE_BONUS,
+  SQUAD_MARK_HIT_BONUS,
+} from "../../../../src/arcade/systems/SquadMark";
 
 /** corsair_fang's first quick build is flown by a unique ace (Poison Fang). */
 const FANG = "corsair_fang";
@@ -137,11 +147,20 @@ function combatant(
   };
 }
 
-/** Target 300 px ahead of the attacker, facing away (attacker behind it). */
+/**
+ * Target 300 px ahead of the attacker, flying across its nose (the attacker
+ * sits on its beam: no rear-arc or head-on lever applies).
+ */
 const ahead = (
   effect: RealtimeEffect = {},
   overrides: Partial<AbilityCombatant> = {},
-) => combatant(effect, { id: "t", y: 700, ...overrides });
+) => combatant(effect, { id: "t", y: 700, angle: 90, ...overrides });
+
+/** The same target flying away from the attacker (attacker on its tail). */
+const fleeing = (effect: RealtimeEffect = {}) => ahead(effect, { angle: 0 });
+
+/** The same target flying straight at the attacker (head-on). */
+const oncoming = (effect: RealtimeEffect = {}) => ahead(effect, { angle: 180 });
 
 function shot(overrides: Partial<DiceAttackInput>): DiceAttackInput {
   return {
@@ -199,9 +218,56 @@ describe("resolveDiceAttack", () => {
 
   it("a rear-arc ability pays when shooting from behind", () => {
     expect(
-      resolveDiceAttack(shot({ attacker: combatant({ rearArcLaserBonus: 1 }) }))
-        .damage,
+      resolveDiceAttack(
+        shot({
+          attacker: combatant({ rearArcLaserBonus: 1 }),
+          target: fleeing(),
+          levers: NO_SHOT_LEVERS,
+        }),
+      ).damage,
     ).toBe(3);
+  });
+
+  it("the rear-arc lever adds odds and damage from the target's tail", () => {
+    const fromTail = shot({
+      target: fleeing(),
+      roll: 0.6 + REAR_ARC_HIT_BONUS / 2,
+    });
+    expect(resolveDiceAttack(fromTail)).toMatchObject({
+      hit: true,
+      damage: 2 + REAR_ARC_DAMAGE_BONUS,
+    });
+  });
+
+  it("the head-on lever lowers the odds of a joust", () => {
+    const joust = shot({
+      target: oncoming(),
+      roll: 0.6 - HEAD_ON_HIT_PENALTY / 2,
+    });
+    expect(resolveDiceAttack(joust).hit).toBe(false);
+    expect(resolveDiceAttack({ ...joust, target: ahead() }).hit).toBe(true);
+  });
+
+  it("the squad mark adds odds and damage only when the target is marked", () => {
+    const marked = shot({
+      targetMarked: true,
+      roll: 0.6 + SQUAD_MARK_HIT_BONUS / 2,
+    });
+    expect(resolveDiceAttack(marked)).toMatchObject({
+      hit: true,
+      damage: 2 + SQUAD_MARK_DAMAGE_BONUS,
+    });
+    expect(resolveDiceAttack({ ...marked, targetMarked: false }).hit).toBe(
+      false,
+    );
+  });
+
+  it("omitted lever fields keep the old contract on a neutral shot", () => {
+    expect(resolveDiceAttack(shot({ roll: 0.59 }))).toEqual({
+      hit: true,
+      damage: 2,
+      stressOnTarget: 0,
+    });
   });
 
   it("the target's wingman protection mitigates", () => {

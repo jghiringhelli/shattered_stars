@@ -1,9 +1,11 @@
 /**
  * DiceAttack — one shot in the dice-based battle modes (Dogfight, Ace
- * Duel, Survival, Campaign, Boss Raid, Continuous), with the attacker's
- * equipment and pilot ability applied: flat and calm laser bonuses, the bonus
- * against an unshielded target, conditional ability bonuses judged at the
- * moment of the shot, the defender's damage mitigation, and stress on hit.
+ * Duel, Survival, Campaign, Boss Raid, Continuous), with the shot levers
+ * (rear-arc bonus, head-on penalty, squad mark — ShotLevers) and the
+ * attacker's equipment and pilot ability applied: flat and calm laser
+ * bonuses, the bonus against an unshielded target, conditional ability
+ * bonuses judged at the moment of the shot, the defender's damage
+ * mitigation, and stress on hit.
  *
  * Pure: the caller rolls (seeded or not) and applies the result.
  */
@@ -15,6 +17,12 @@ import {
 import type { CycleFlightState } from "./CycleFlight";
 import { laserHitBonus, type AbilityCombatant } from "../PilotAbilityCombat";
 import { incomingDamageMultiplier } from "../ShotConditions";
+import {
+  DEFAULT_SHOT_LEVERS,
+  leverShot,
+  shotPosition,
+  type ShotLevers,
+} from "../ShotLevers";
 
 /** One shot. */
 export interface DiceAttackInput {
@@ -28,8 +36,15 @@ export interface DiceAttackInput {
   readonly targetHasWingman: boolean;
   /** Scene time (ms), for the kill-frenzy window. */
   readonly nowMs: number;
-  /** Uniform roll in [0, 1): the shot hits when roll < hitChance. */
+  /** Uniform roll in [0, 1): the shot hits when roll < the levered hit chance. */
   readonly roll: number;
+  /**
+   * The target is the one the attacker's side marked (SquadMark). Omitted =
+   * not marked.
+   */
+  readonly targetMarked?: boolean;
+  /** Lever values; omitted = {@link DEFAULT_SHOT_LEVERS} (simulations sweep these). */
+  readonly levers?: ShotLevers;
 }
 
 /** What the shot did. */
@@ -69,14 +84,24 @@ export function combatantOf(ship: EquippedShip): AbilityCombatant {
 const MISS: DiceAttackResult = { hit: false, damage: 0, stressOnTarget: 0 };
 
 /**
- * Resolve one shot.
+ * Resolve one shot: the mode's odds and damage, moved by the attacker's
+ * position (rear arc / head-on) and its squad's mark (ShotLevers), then the
+ * attacker's equipment and ability and the defender's mitigation.
  *
  * @param input - Attacker, target, dice odds and damage, context and roll.
  * @returns Hit, damage after equipment and mitigation, stress inflicted.
  */
 export function resolveDiceAttack(input: DiceAttackInput): DiceAttackResult {
-  if (input.roll >= input.hitChance) return MISS;
   const { attacker, target } = input;
+  const levered = leverShot(
+    {
+      hitChance: input.hitChance,
+      position: shotPosition(attacker, target),
+      marked: input.targetMarked === true,
+    },
+    input.levers ?? DEFAULT_SHOT_LEVERS,
+  );
+  if (input.roll >= levered.hitChance) return MISS;
   const modifiers = attacker.modifiers;
   const exposed = target.shields <= 0 ? modifiers.bonusDamageVsUnshielded : 0;
   const raw =
@@ -86,6 +111,7 @@ export function resolveDiceAttack(input: DiceAttackInput): DiceAttackResult {
       attacker.stress.isStressed,
     ) +
     exposed +
+    levered.damageBonus +
     laserHitBonus({
       attacker,
       target,

@@ -1432,15 +1432,9 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
   // ==========================================
 
   corsair_blade: [
-    {
-      id: "blade_raider",
-      name: "Blade Raider",
-      shipId: "corsair_blade",
-      pilotId: "red_jenna",
-      upgrades: ["predator", "concussion_missile", "engine_upgrade"],
-      description: "Hit-and-run striker with reinforced hull",
-      role: "offense",
-    },
+    // Default build (first): the dice modes fire no ordnance, so the
+    // Raider's concussion missile is dead weight there — an expert in the
+    // Raider build lost to novice heavies (skill gate 1); the Ace build holds.
     {
       id: "blade_ace",
       name: "Blade Ace",
@@ -1449,6 +1443,15 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       upgrades: ["elusive", "stealth_device"],
       description: "Elusive ace pilot build",
       role: "defense",
+    },
+    {
+      id: "blade_raider",
+      name: "Blade Raider",
+      shipId: "corsair_blade",
+      pilotId: "red_jenna",
+      upgrades: ["predator", "concussion_missile", "engine_upgrade"],
+      description: "Hit-and-run striker with reinforced hull",
+      role: "offense",
     },
   ],
 
