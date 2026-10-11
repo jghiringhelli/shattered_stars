@@ -25,7 +25,6 @@ import {
 import { getShipDefinition, getShipDial } from "../data/ShipDefinitions";
 import {
   getModeCombatStats,
-  calculateHitChance,
   type ModeCombatStats,
 } from "../data/ModeBalancing";
 import {
@@ -39,6 +38,35 @@ import { PlayerFlightPilot } from "../arcade/systems/PlayerFlightPilot";
 import type { FlightEvent } from "../arcade/systems/PilotFlightTypes";
 import { closestPoint, planDuelSteer } from "../arcade/systems/AiPursuit";
 import { shieldsAfterCycle } from "../arcade/systems/AceDuelPilotAi";
+import {
+  adHocAbilities,
+  duelModifiers,
+  duelShotOdds,
+  marksmanshipDamage,
+} from "../arcade/systems/AceDuelAbilities";
+import {
+  assignQuickBuilds,
+  equipFlight,
+  equipQuickBuild,
+  regenerateShields,
+  stressModifiersOf,
+} from "../arcade/systems/QuickBuildEquip";
+import {
+  absorbDamage,
+  combatantOf,
+  resolveDiceAttack,
+  type DiceAttackResult,
+} from "../arcade/systems/DiceAttack";
+import {
+  deathBlastTargets,
+  hasWingman,
+  rewardKill,
+} from "../arcade/PilotAbilityCombat";
+import { applyInstantStress } from "../arcade/ArcadeStress";
+import {
+  NEUTRAL_MODIFIERS,
+  type CombatModifiers,
+} from "../core/CombatModifiers";
 import { playFlightEventFx } from "../arcade/ArcadeFX";
 import type { ShipPose } from "../core/ArcadeControls";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
@@ -92,74 +120,49 @@ interface AceDuelShip {
   /** True on the frame this ship's maneuver cycle committed. */
   cycleCommitted: boolean;
   weaponCooldown: number;
+  /** The duel ace's pilot abilities (preset by the matchup). */
   abilities: string[];
+  /** Quick build flown (upgrades + pilot), or null for the bare hull. */
+  loadoutId: string | null;
+  /** Real-time effects of the quick build and the ace's sheet abilities. */
+  modifiers: CombatModifiers;
+  /** Scene time (ms) until which a kill-frenzy ability is active. */
+  frenzyUntilMs: number;
 }
 
 interface ShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
 }
 
-interface AbilityBonuses {
-  atkBonus: number;
-  defBonus: number;
-  rerollAtk: number;
-  rerollDef: number;
-  extraDmg: number;
-}
+/** AI hit-chance multiplier per difficulty setting. */
+const AI_HIT_CHANCE_BY_DIFFICULTY = {
+  easy: 0.7,
+  normal: 1,
+  hard: 1.1,
+  brutal: 1.2,
+} as const;
 
-/**
- * Computes effective combat bonuses from attacker's pilot abilities for a single attack.
- * Conditions like 'behind_target' and 'outnumbered' are simplified or always-active in AceDuel.
- */
-function computeAbilityBonuses(
-  attacker: AceDuelShip,
-  target: AceDuelShip,
-): AbilityBonuses {
-  const bonuses: AbilityBonuses = {
-    atkBonus: 0,
-    defBonus: 0,
-    rerollAtk: 0,
-    rerollDef: 0,
-    extraDmg: 0,
-  };
-  const hullPct = attacker.hull / attacker.maxHull;
-  const targetDamaged = target.hull < target.maxHull;
-  for (const abilityId of attacker.abilities) {
-    switch (abilityId) {
-      case "marksmanship":
-        bonuses.extraDmg += 0.5;
-        break;
-      case "lone_wolf":
-        bonuses.rerollAtk += 1;
-        bonuses.rerollDef += 1;
-        break;
-      case "predator":
-        bonuses.rerollAtk += 1;
-        break;
-      case "outmaneuver":
-        bonuses.atkBonus += 1;
-        break;
-      case "fearless":
-        bonuses.atkBonus += 1;
-        break;
-      case "tenacity":
-        if (hullPct < 0.5) {
-          bonuses.atkBonus += 1;
-          bonuses.defBonus += 1;
-        }
-        break;
-      case "predatory_instinct":
-        if (targetDamaged) bonuses.atkBonus += 1;
-        break;
-      case "supernatural_reflexes":
-        bonuses.defBonus += 1;
-        break;
-      case "stealth_device":
-        if (attacker.hull >= attacker.maxHull) bonuses.defBonus += 1;
-        break;
-    }
-  }
-  return bonuses;
+/** AI difficulty settings a duel can be fought at. */
+type DuelDifficulty = keyof typeof AI_HIT_CHANCE_BY_DIFFICULTY;
+
+/** Distance (px) from the battlefield centre at which each side spawns. */
+const SPAWN_DISTANCE = 200;
+
+/** Gap (px) between ships of the same side at spawn. */
+const SPAWN_SPACING = 60;
+
+/** A ship to spawn at round start. */
+interface ShipSpawn {
+  readonly id: string;
+  readonly defId: string;
+  readonly faction: FactionId;
+  readonly owner: "player" | "ai";
+  readonly x: number;
+  readonly y: number;
+  readonly angle: number;
+  readonly side: 1 | 2;
+  readonly abilities: readonly string[];
+  readonly loadoutId: string | null;
 }
 
 export class AceDuelScene extends Phaser.Scene {
@@ -190,7 +193,7 @@ export class AceDuelScene extends Phaser.Scene {
   private side2Score: SideScore = createSideScore();
 
   // Settings
-  private difficulty: "easy" | "normal" | "hard" | "brutal" = "normal";
+  private difficulty: DuelDifficulty = "normal";
 
   // Game state
   private isPaused = false;
@@ -479,12 +482,7 @@ export class AceDuelScene extends Phaser.Scene {
       .setOrigin(0.5);
     this.track(diffLabel);
 
-    const difficulties: Array<"easy" | "normal" | "hard" | "brutal"> = [
-      "easy",
-      "normal",
-      "hard",
-      "brutal",
-    ];
+    const difficulties: DuelDifficulty[] = ["easy", "normal", "hard", "brutal"];
     difficulties.forEach((diff, i) => {
       const btn = this.createSmallButton(
         centerX - 120 + i * 80,
@@ -759,45 +757,8 @@ export class AceDuelScene extends Phaser.Scene {
     this.roundText.setText(`ROUND ${this.currentRound}`);
     this.updateScoreDisplay();
 
-    const centerX = BATTLEFIELD_SIZE / 2;
-    const centerY = BATTLEFIELD_SIZE / 2;
-    const spawnDistance = 200;
-
-    // Spawn side 1 ships
-    const side1 = this.selectedMatchup.side1;
-    side1.ships.forEach((shipId, i) => {
-      const offsetX = (i - (side1.ships.length - 1) / 2) * 60;
-      const owner: "player" | "ai" = this.playerSide === 1 ? "player" : "ai";
-      this.spawnShip(
-        `side1_${i}`,
-        shipId,
-        side1.faction,
-        owner,
-        centerX + offsetX,
-        centerY + spawnDistance,
-        0,
-        1,
-        side1.abilities,
-      );
-    });
-
-    // Spawn side 2 ships
-    const side2 = this.selectedMatchup.side2;
-    side2.ships.forEach((shipId, i) => {
-      const offsetX = (i - (side2.ships.length - 1) / 2) * 60;
-      const owner: "player" | "ai" = this.playerSide === 2 ? "player" : "ai";
-      this.spawnShip(
-        `side2_${i}`,
-        shipId,
-        side2.faction,
-        owner,
-        centerX + offsetX,
-        centerY - spawnDistance,
-        180,
-        2,
-        side2.abilities,
-      );
-    });
+    this.spawnSide(1);
+    this.spawnSide(2);
 
     this.showRoundStart();
 
@@ -886,7 +847,8 @@ export class AceDuelScene extends Phaser.Scene {
 
     this.updateAI(time, delta);
     this.flyShips(delta);
-    this.processCombat(delta);
+    // Ships close in during the ROUND banner; weapons go live with the round.
+    if (this.isRoundActive) this.processCombat(delta);
     this.updateSprites();
     this.updateCameraFollow();
     this.checkRoundEnd();
@@ -1063,24 +1025,51 @@ export class AceDuelScene extends Phaser.Scene {
     }
   }
 
-  private spawnShip(
-    id: string,
-    defId: string,
-    faction: FactionId,
-    owner: "player" | "ai",
-    x: number,
-    y: number,
-    angle: number,
-    side: 1 | 2,
-    abilities: readonly string[] = [],
-  ): void {
+  /**
+   * Spawns one side of the matchup in a line facing the other side, each
+   * ship flying a quick build (no unique pilot repeated within the side).
+   *
+   * @param side - Which side of the matchup to spawn.
+   */
+  private spawnSide(side: 1 | 2): void {
+    const matchupSide =
+      side === 1 ? this.selectedMatchup.side1 : this.selectedMatchup.side2;
+    const center = BATTLEFIELD_SIZE / 2;
+    const y = center + (side === 1 ? SPAWN_DISTANCE : -SPAWN_DISTANCE);
+    const loadouts = assignQuickBuilds(matchupSide.ships);
+    const owner = this.playerSide === side ? "player" : "ai";
+    const lastIndex = matchupSide.ships.length - 1;
+    matchupSide.ships.forEach((defId, i) => {
+      this.spawnShip({
+        id: `side${side}_${i}`,
+        defId,
+        faction: matchupSide.faction,
+        owner,
+        x: center + (i - lastIndex / 2) * SPAWN_SPACING,
+        y,
+        angle: side === 1 ? 0 : 180,
+        side,
+        abilities: matchupSide.abilities,
+        loadoutId: loadouts[i] ?? null,
+      });
+    });
+  }
+
+  /**
+   * Builds a ship, equips its quick build and the ace's sheet abilities, and
+   * creates its sprite and health bar.
+   *
+   * @param spawn - Who, where and with what.
+   */
+  private spawnShip(spawn: ShipSpawn): void {
+    const { id, defId, x, y, angle } = spawn;
     const combatStats = getModeCombatStats(defId, "continuous");
 
     const ship: AceDuelShip = {
       id,
       definitionId: defId,
-      faction,
-      owner,
+      faction: spawn.faction,
+      owner: spawn.owner,
       x,
       y,
       angle,
@@ -1093,12 +1082,21 @@ export class AceDuelScene extends Phaser.Scene {
       dial: getShipDial(defId),
       cycleCommitted: false,
       weaponCooldown: 0,
-      abilities: [...abilities],
+      abilities: [...spawn.abilities],
+      loadoutId: spawn.loadoutId,
+      modifiers: NEUTRAL_MODIFIERS,
+      frenzyUntilMs: 0,
     };
+    ship.modifiers = duelModifiers(
+      equipQuickBuild(ship, spawn.loadoutId),
+      ship.abilities,
+      spawn.loadoutId,
+    );
+    ship.flight = equipFlight(ship.flight, ship.modifiers);
 
     this.ships.set(id, ship);
 
-    if (side === 1) {
+    if (spawn.side === 1) {
       this.side1ShipIds.push(id);
     } else {
       this.side2ShipIds.push(id);
@@ -1163,8 +1161,10 @@ export class AceDuelScene extends Phaser.Scene {
         worldSize: BATTLEFIELD_SIZE,
         dial: ship.dial,
         cycleMs: CYCLE_DURATION_MS,
+        modifiers: stressModifiersOf(ship.modifiers),
       });
       this.setFlight(ship, tick.state);
+      this.regenerateShieldsOf(ship, deltaMs);
       ship.cycleCommitted = tick.completed !== null;
       if (ship.cycleCommitted) this.onCycleCommitted(ship);
       this.shipSprites
@@ -1176,8 +1176,28 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   /**
+   * Regenerates a ship's shields for a frame (shield-regen upgrades and
+   * abilities on its sheet) and refreshes its health bar when they changed.
+   *
+   * @param ship - The ship.
+   * @param deltaMs - Frame length (ms).
+   */
+  private regenerateShieldsOf(ship: AceDuelShip, deltaMs: number): void {
+    const shields = regenerateShields(
+      ship.shields,
+      ship.maxShields,
+      ship.modifiers,
+      deltaMs,
+    );
+    if (shields === ship.shields) return;
+    ship.shields = shields;
+    this.healthBars.get(ship.id)?.update(ship.hull, ship.shields);
+  }
+
+  /**
    * End-of-cycle bookkeeping: the player's pilot learns which maneuver the
-   * new cycle started, and regenerative_shields restores a shield.
+   * new cycle started, and regenerative_shields restores a shield (unless
+   * it acts through the modifier sheet as steady regeneration instead).
    *
    * @param ship - The ship whose cycle just committed.
    */
@@ -1189,7 +1209,7 @@ export class AceDuelScene extends Phaser.Scene {
     const shields = shieldsAfterCycle(
       ship.shields,
       ship.maxShields,
-      ship.abilities,
+      adHocAbilities(ship.abilities),
     );
     if (shields === ship.shields) return;
     ship.shields = shields;
@@ -1284,72 +1304,113 @@ export class AceDuelScene extends Phaser.Scene {
     return null;
   }
 
+  /**
+   * Fires the primary weapon: the duel-only abilities set the dice odds,
+   * difficulty scales the AI's aim, and DiceAttack applies the quick build
+   * and sheet abilities to one uniform roll.
+   *
+   * @param attacker - The firing ship.
+   * @param target - The ship fired at.
+   */
   private fireAt(attacker: AceDuelShip, target: AceDuelShip): void {
-    const atkB = computeAbilityBonuses(attacker, target);
-    const defB = computeAbilityBonuses(target, attacker);
-    const atkDice =
-      attacker.combatStats.attackDice +
-      atkB.atkBonus +
-      Math.round(atkB.rerollAtk * 0.5);
-    const defDice =
-      target.combatStats.agilityDice +
-      defB.defBonus +
-      Math.round(defB.rerollDef * 0.5);
-    let hitChance = calculateHitChance(atkDice, defDice);
+    const odds = duelShotOdds(attacker, target);
+    const hitChance =
+      attacker.owner === "ai"
+        ? odds.hitChance * AI_HIT_CHANCE_BY_DIFFICULTY[this.difficulty]
+        : odds.hitChance;
+    const roll = Math.random();
+    const result = resolveDiceAttack({
+      attacker: combatantOf(attacker),
+      target: combatantOf(target),
+      hitChance,
+      baseDamage:
+        attacker.combatStats.attackDice +
+        marksmanshipDamage(roll, hitChance, odds.extraDamageChance),
+      attackerHasWingman: this.fliesWithWingman(attacker),
+      targetHasWingman: this.fliesWithWingman(target),
+      nowMs: this.time.now,
+      roll,
+    });
+    if (result.hit) this.applyHit(attacker, target, result);
+    this.effectsManager.fireLaser(
+      attacker.x,
+      attacker.y,
+      target.x,
+      target.y,
+      attacker.faction,
+      result.hit,
+    );
+  }
 
-    if (attacker.owner === "ai") {
-      const diffMod = { easy: 0.7, normal: 1, hard: 1.1, brutal: 1.2 }[
-        this.difficulty
-      ];
-      hitChance *= diffMod;
+  /**
+   * Lands a hit: stress on the target's pilot, damage shields first then
+   * hull, and the kill if it was the last hull point.
+   *
+   * @param attacker - The firing ship.
+   * @param target - The ship hit.
+   * @param result - The resolved shot.
+   */
+  private applyHit(
+    attacker: AceDuelShip,
+    target: AceDuelShip,
+    result: DiceAttackResult,
+  ): void {
+    this.setFlight(target, {
+      ...target.flight,
+      stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
+    });
+    const after = absorbDamage(target, result.damage);
+    if (after.shields < target.shields) {
+      audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);
     }
+    if (after.hull < target.hull) {
+      audioManager.playSoundAt("hull_hit", target.x, target.y, 0.4);
+    }
+    const wasAlive = target.hull > 0;
+    Object.assign(target, after);
+    this.healthBars.get(target.id)?.update(target.hull, target.shields);
+    if (wasAlive && target.hull <= 0) this.onShipDestroyed(attacker, target);
+  }
 
-    const hit = Math.random() < hitChance;
-
-    if (hit) {
-      let damage = attacker.combatStats.attackDice;
-      if (atkB.extraDmg > 0 && Math.random() < atkB.extraDmg) damage += 1;
-
-      if (target.shields > 0) {
-        const shieldDmg = Math.min(target.shields, damage);
-        target.shields -= shieldDmg;
-        damage -= shieldDmg;
-        audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);
-      }
-      if (damage > 0) {
-        audioManager.playSoundAt("hull_hit", target.x, target.y, 0.4);
-        const wasAlive = target.hull > 0;
-        target.hull = Math.max(0, target.hull - damage);
-        if (wasAlive && target.hull <= 0) {
-          if (this.side1ShipIds.includes(target.id)) {
-            this.side2Score = creditKill(this.side2Score, target.definitionId);
-          } else {
-            this.side1Score = creditKill(this.side1Score, target.definitionId);
-          }
-        }
-      }
-
-      this.effectsManager.fireLaser(
-        attacker.x,
-        attacker.y,
-        target.x,
-        target.y,
-        attacker.faction,
-        true,
-      );
-
-      const healthBar = this.healthBars.get(target.id);
-      healthBar?.update(target.hull, target.shields);
+  /**
+   * A ship was destroyed: its point cost goes to the other side's round
+   * score, the killer collects its pilot-ability reward, and the victim's
+   * death blast (if any) hits enemies nearby — possibly destroying them too.
+   *
+   * @param killer - The ship credited with the kill.
+   * @param victim - The ship destroyed.
+   */
+  private onShipDestroyed(killer: AceDuelShip, victim: AceDuelShip): void {
+    if (this.side1ShipIds.includes(victim.id)) {
+      this.side2Score = creditKill(this.side2Score, victim.definitionId);
     } else {
-      this.effectsManager.fireLaser(
-        attacker.x,
-        attacker.y,
-        target.x,
-        target.y,
-        attacker.faction,
-        false,
-      );
+      this.side1Score = creditKill(this.side1Score, victim.definitionId);
     }
+    if (killer.hull > 0) {
+      Object.assign(killer, rewardKill(combatantOf(killer), this.time.now));
+      this.healthBars.get(killer.id)?.update(killer.hull, killer.shields);
+    }
+    const blastDamage = victim.modifiers.deathBlastDamage;
+    const caught = deathBlastTargets(
+      combatantOf(victim),
+      this.livingEnemiesOf(victim),
+    );
+    for (const ship of caught) {
+      Object.assign(ship, absorbDamage(ship, blastDamage));
+      this.healthBars.get(ship.id)?.update(ship.hull, ship.shields);
+      if (ship.hull <= 0) this.onShipDestroyed(victim, ship);
+    }
+  }
+
+  /**
+   * @param ship - The ship asking.
+   * @returns Whether another living ship of its side flies within wingman range.
+   */
+  private fliesWithWingman(ship: AceDuelShip): boolean {
+    const allies = [...this.ships.values()].filter(
+      (other) => other.faction === ship.faction && other.hull > 0,
+    );
+    return hasWingman(ship, allies);
   }
 
   /** Id of the ship the human flies; every other ship is AI-piloted. */

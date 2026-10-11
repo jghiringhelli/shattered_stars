@@ -57,6 +57,29 @@ import {
 import { PlayerFlightPilot } from "../arcade/systems/PlayerFlightPilot";
 import type { FlightEvent } from "../arcade/systems/PilotFlightTypes";
 import { playFlightEventFx } from "../arcade/ArcadeFX";
+import {
+  assignQuickBuilds,
+  equipFlight,
+  equipQuickBuild,
+  regenerateShields,
+  stressModifiersOf,
+} from "../arcade/systems/QuickBuildEquip";
+import { combatantOf, resolveDiceAttack } from "../arcade/systems/DiceAttack";
+import {
+  mitigateBossDamage,
+  resolveBossShot,
+} from "../arcade/systems/EpicRaidCombat";
+import {
+  deathBlastTargets,
+  hasWingman,
+  rewardKill,
+} from "../arcade/PilotAbilityCombat";
+import { applyInstantStress } from "../arcade/ArcadeStress";
+import {
+  NEUTRAL_MODIFIERS,
+  type CombatModifiers,
+} from "../core/CombatModifiers";
+import { random } from "../utils/random";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import {
   mayAiKTurn,
@@ -138,6 +161,26 @@ interface EpicShip {
   /** True on the frame this ship's maneuver cycle committed. */
   cycleCommitted: boolean;
   weaponCooldown: number;
+  /** Quick build flown (upgrades + pilot), or null for the bare hull. */
+  loadoutId: string | null;
+  /** Real-time effects of the quick build. */
+  modifiers: CombatModifiers;
+  /** Scene time (ms) until which a kill-frenzy ability is active. */
+  frenzyUntilMs: number;
+}
+
+/** Agility dice the boss rolls against every bolt fired at it. */
+const BOSS_AGILITY_DICE = 2;
+
+/** What {@link EpicBattleScene.createShip} needs to build a flying ship. */
+interface ShipSpawn {
+  readonly id: string;
+  readonly defId: string;
+  readonly faction: FactionId;
+  readonly owner: "player" | "ai";
+  readonly pose: Pose;
+  /** Quick build it flies, or null for the bare hull. */
+  readonly loadoutId: string | null;
 }
 
 /** A pose on the battlefield. */
@@ -951,7 +994,11 @@ export class EpicBattleScene extends Phaser.Scene {
               ship.y,
             );
             if (dist < 400) {
-              const damage = bossBroadsideDamage(boss.phase);
+              const damage = mitigateBossDamage(
+                bossBroadsideDamage(boss.phase),
+                ship.modifiers,
+                this.fliesWithWingman(ship),
+              );
               this.damageShip(ship, damage);
               this.effectsManager.fireLaser(
                 boss.x,
@@ -982,12 +1029,14 @@ export class EpicBattleScene extends Phaser.Scene {
             ) ?? ships[0];
 
           if (escortDef) {
-            for (let i = 0; i < escortCount; i++) {
+            const positions = Array.from({ length: escortCount }, (_, i) => {
               const angle = (i / escortCount) * Math.PI - Math.PI / 2;
-              const x = boss.x + Math.cos(angle) * 100;
-              const y = boss.y + 100 + Math.sin(angle) * 50;
-              this.spawnEscort(escortDef.id, boss.faction, x, y);
-            }
+              return {
+                x: boss.x + Math.cos(angle) * 100,
+                y: boss.y + 100 + Math.sin(angle) * 50,
+              };
+            });
+            this.spawnEscortGroup(escortDef.id, boss.faction, positions);
           }
         },
       },
@@ -1059,32 +1108,44 @@ export class EpicBattleScene extends Phaser.Scene {
     // Spawn a squad within point budget
     let pointsUsed = 0;
     const maxShips = 5;
-    let shipCount = 0;
+    const squad: { defId: string; x: number; y: number }[] = [];
 
     for (const shipDef of ships) {
-      if (shipCount >= maxShips) break;
+      if (squad.length >= maxShips) break;
       if (pointsUsed + 50 > this.playerSquadPoints) break;
 
-      const x = centerX + (shipCount - 2) * 80;
-      const y = startY + (shipCount % 2) * 60;
+      const x = centerX + (squad.length - 2) * 80;
+      const y = startY + (squad.length % 2) * 60;
 
-      this.spawnPlayerShip(shipDef.id, x, y);
+      squad.push({ defId: shipDef.id, x, y });
       pointsUsed += 50;
-      shipCount++;
     }
+
+    const loadoutIds = assignQuickBuilds(squad.map((slot) => slot.defId));
+    squad.forEach((slot, index) =>
+      this.spawnPlayerShip(slot.defId, slot, loadoutIds[index] ?? null),
+    );
   }
 
-  private spawnPlayerShip(defId: string, x: number, y: number): void {
+  /**
+   * @param defId - Ship definition id.
+   * @param at - Spawn position.
+   * @param loadoutId - Quick build it flies, or null for the bare hull.
+   */
+  private spawnPlayerShip(
+    defId: string,
+    at: Readonly<{ x: number; y: number }>,
+    loadoutId: string | null,
+  ): void {
     const id = `player_${this.playerShipIds.length}`;
-    const ship = this.createShip(
+    const ship = this.createShip({
       id,
       defId,
-      this.playerFaction,
-      "player",
-      x,
-      y,
-      0,
-    );
+      faction: this.playerFaction,
+      owner: "player",
+      pose: { x: at.x, y: at.y, angle: 0 },
+      loadoutId,
+    });
     this.ships.set(id, ship);
     this.playerShipIds.push(id);
     this.createShipSprite(ship);
@@ -1106,61 +1167,100 @@ export class EpicBattleScene extends Phaser.Scene {
 
     if (!escortDef) return;
 
-    for (let i = 0; i < bossDef.escortCount; i++) {
+    const boss = this.boss;
+    const positions = Array.from({ length: bossDef.escortCount }, (_, i) => {
       const angle = (i / bossDef.escortCount) * Math.PI * 2;
       const radius = 150 + Math.random() * 50;
-      const x = this.boss.x + Math.cos(angle) * radius;
-      const y = this.boss.y + 100 + (Math.sin(angle) * radius) / 2;
-
-      this.spawnEscort(escortDef.id, this.boss.faction, x, y);
-    }
+      return {
+        x: boss.x + Math.cos(angle) * radius,
+        y: boss.y + 100 + (Math.sin(angle) * radius) / 2,
+      };
+    });
+    this.spawnEscortGroup(escortDef.id, boss.faction, positions);
   }
 
+  /**
+   * Spawns one wave of boss escorts; the wave's quick builds are assigned
+   * together so no unique ace flies twice in it.
+   *
+   * @param defId - Ship definition id of every escort in the wave.
+   * @param faction - The boss's faction.
+   * @param positions - One spawn position per escort.
+   */
+  private spawnEscortGroup(
+    defId: string,
+    faction: FactionId,
+    positions: readonly Readonly<{ x: number; y: number }>[],
+  ): void {
+    const loadoutIds = assignQuickBuilds(positions.map(() => defId));
+    positions.forEach((at, index) =>
+      this.spawnEscort(defId, faction, at, loadoutIds[index] ?? null),
+    );
+  }
+
+  /**
+   * @param defId - Ship definition id.
+   * @param faction - The boss's faction.
+   * @param at - Spawn position.
+   * @param loadoutId - Quick build it flies, or null for the bare hull.
+   */
   private spawnEscort(
     defId: string,
     faction: FactionId,
-    x: number,
-    y: number,
+    at: Readonly<{ x: number; y: number }>,
+    loadoutId: string | null,
   ): void {
     const id = `escort_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const ship = this.createShip(id, defId, faction, "ai", x, y, 180);
+    const ship = this.createShip({
+      id,
+      defId,
+      faction,
+      owner: "ai",
+      pose: { x: at.x, y: at.y, angle: 180 },
+      loadoutId,
+    });
     this.ships.set(id, ship);
     this.escortShipIds.push(id);
     this.createShipSprite(ship);
     this.createHealthBar(ship);
   }
 
-  private createShip(
-    id: string,
-    defId: string,
-    faction: FactionId,
-    owner: "player" | "ai",
-    x: number,
-    y: number,
-    angle: number,
-  ): EpicShip {
+  /**
+   * Builds a flying ship record with its quick build equipped: stat bonuses,
+   * modifier sheet, and faster action recharges / top speed on its flight.
+   *
+   * @param spawn - Identity, side, pose and loadout of the new ship.
+   * @returns The equipped ship record.
+   */
+  private createShip(spawn: ShipSpawn): EpicShip {
+    const { id, defId, pose } = spawn;
     const combatStats = getModeCombatStats(defId, "continuous");
 
-    return {
+    const ship: EpicShip = {
       id,
       definitionId: defId,
-      faction,
-      owner,
-      x,
-      y,
-      angle,
+      faction: spawn.faction,
+      owner: spawn.owner,
+      x: pose.x,
+      y: pose.y,
+      angle: pose.angle,
       hull: combatStats.hull,
       maxHull: combatStats.maxHull,
       shields: combatStats.shields,
       maxShields: combatStats.maxShields,
       combatStats,
-      flight: createCycleFlight(defId, { x, y, angle }),
+      flight: createCycleFlight(defId, pose),
       dial: getShipDial(defId),
       cycleCommitted: false,
       weaponCooldown: 0,
+      loadoutId: spawn.loadoutId,
+      modifiers: NEUTRAL_MODIFIERS,
+      frenzyUntilMs: 0,
     };
+    ship.modifiers = equipQuickBuild(ship, spawn.loadoutId);
+    ship.flight = equipFlight(ship.flight, ship.modifiers);
+    return ship;
   }
-
   private createShipSprite(ship: EpicShip): void {
     const container = this.add.container(
       ship.x,
@@ -1216,8 +1316,10 @@ export class EpicBattleScene extends Phaser.Scene {
         worldSize: BATTLEFIELD_SIZE,
         dial: ship.dial,
         cycleMs: CYCLE_DURATION_MS,
+        modifiers: stressModifiersOf(ship.modifiers),
       });
       this.setFlight(ship, tick.state);
+      this.regenerateShipShields(ship, deltaMs);
       ship.cycleCommitted = tick.completed !== null;
       if (tick.completed && ship.id === this.pilotedShipId) {
         this.pilot.onCycleCommitted(
@@ -1368,68 +1470,78 @@ export class EpicBattleScene extends Phaser.Scene {
     return best;
   }
 
+  /**
+   * One bolt at the boss, carrying the attacker's laser bonuses; the boss's
+   * pose stands in as the target for the pilot's conditional bonuses.
+   *
+   * @param attacker - The firing player-side ship.
+   */
   private attackBoss(attacker: EpicShip): void {
     if (!this.boss) return;
 
-    const hitChance = calculateHitChance(attacker.combatStats.attackDice, 2);
-    const hit = Math.random() < hitChance;
+    const damage = resolveBossShot({
+      attacker: combatantOf(attacker),
+      boss: this.boss,
+      hitChance: calculateHitChance(
+        attacker.combatStats.attackDice,
+        BOSS_AGILITY_DICE,
+      ),
+      baseDamage: attacker.combatStats.attackDice,
+      attackerHasWingman: this.fliesWithWingman(attacker),
+      nowMs: this.time.now,
+      roll: random.next(),
+    });
+    const hit = damage > 0;
+    if (hit) this.damageBoss(this.boss, damage);
 
-    if (hit) {
-      let damage = Math.max(
-        1,
-        attacker.combatStats.attackDice - this.boss.armor,
-      );
-
-      // Damage shields first
-      if (this.boss.shields > 0) {
-        const shieldDmg = Math.min(this.boss.shields, damage);
-        this.boss.shields -= shieldDmg;
-        damage -= shieldDmg;
-        audioManager.playSoundAt("shield_hit", this.boss.x, this.boss.y, 0.4);
-      }
-
-      // Then damage a random active section
-      if (damage > 0) {
-        audioManager.playSoundAt("hull_hit", this.boss.x, this.boss.y, 0.4);
-        const activeSections = this.boss.sections.filter(
-          (s) => !s.isDisabled && s.hull > 0,
-        );
-        if (activeSections.length > 0) {
-          const targetSection =
-            activeSections[Math.floor(Math.random() * activeSections.length)]!;
-          targetSection.hull = Math.max(0, targetSection.hull - damage);
-
-          if (targetSection.hull <= 0) {
-            targetSection.isDisabled = true;
-            this.showMessage(`${targetSection.name} DISABLED!`);
-          }
-        }
-
-        this.boss.totalHull = sumSectionHull(this.boss.sections);
-        this.checkBossPhaseTransition();
-      }
-
-      this.effectsManager.fireLaser(
-        attacker.x,
-        attacker.y,
-        this.boss.x,
-        this.boss.y,
-        attacker.faction,
-        true,
-      );
-      this.updateBossHealthBar();
-    } else {
-      this.effectsManager.fireLaser(
-        attacker.x,
-        attacker.y,
-        this.boss.x,
-        this.boss.y,
-        attacker.faction,
-        false,
-      );
-    }
+    this.effectsManager.fireLaser(
+      attacker.x,
+      attacker.y,
+      this.boss.x,
+      this.boss.y,
+      attacker.faction,
+      hit,
+    );
   }
 
+  /**
+   * Damage taken by the boss: shields first, then a random active section
+   * (which may disable it and move the boss to its next phase).
+   *
+   * @param boss - The boss.
+   * @param damage - Damage after the attacker's bonuses and the boss's armor.
+   */
+  private damageBoss(boss: BossShip, damage: number): void {
+    let remaining = damage;
+    if (boss.shields > 0) {
+      const shieldDmg = Math.min(boss.shields, remaining);
+      boss.shields -= shieldDmg;
+      remaining -= shieldDmg;
+      audioManager.playSoundAt("shield_hit", boss.x, boss.y, 0.4);
+    }
+
+    if (remaining > 0) {
+      audioManager.playSoundAt("hull_hit", boss.x, boss.y, 0.4);
+      const activeSections = boss.sections.filter(
+        (s) => !s.isDisabled && s.hull > 0,
+      );
+      if (activeSections.length > 0) {
+        const targetSection =
+          activeSections[Math.floor(Math.random() * activeSections.length)]!;
+        targetSection.hull = Math.max(0, targetSection.hull - remaining);
+
+        if (targetSection.hull <= 0) {
+          targetSection.isDisabled = true;
+          this.showMessage(`${targetSection.name} DISABLED!`);
+        }
+      }
+
+      boss.totalHull = sumSectionHull(boss.sections);
+      this.checkBossPhaseTransition();
+    }
+
+    this.updateBossHealthBar();
+  }
   private checkBossPhaseTransition(): void {
     if (!this.boss) return;
 
@@ -1453,15 +1565,35 @@ export class EpicBattleScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * One ship-vs-ship bolt resolved with both ships' equipment: laser and
+   * ability bonuses, the target's mitigation, stress on hit, and the
+   * pilot-ability effects of a kill.
+   *
+   * @param attacker - The firing ship.
+   * @param target - The ship fired at.
+   */
   private attackShip(attacker: EpicShip, target: EpicShip): void {
-    const hitChance = calculateHitChance(
-      attacker.combatStats.attackDice,
-      target.combatStats.agilityDice,
-    );
-    const hit = Math.random() < hitChance;
+    const result = resolveDiceAttack({
+      attacker: combatantOf(attacker),
+      target: combatantOf(target),
+      hitChance: calculateHitChance(
+        attacker.combatStats.attackDice,
+        target.combatStats.agilityDice,
+      ),
+      baseDamage: attacker.combatStats.attackDice,
+      attackerHasWingman: this.fliesWithWingman(attacker),
+      targetHasWingman: this.fliesWithWingman(target),
+      nowMs: this.time.now,
+      roll: random.next(),
+    });
 
-    if (hit) {
-      this.damageShip(target, attacker.combatStats.attackDice);
+    if (result.hit) {
+      this.setFlight(target, {
+        ...target.flight,
+        stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
+      });
+      this.damageShip(target, result.damage, attacker);
       this.effectsManager.fireLaser(
         attacker.x,
         attacker.y,
@@ -1482,7 +1614,20 @@ export class EpicBattleScene extends Phaser.Scene {
     }
   }
 
-  private damageShip(ship: EpicShip, damage: number): void {
+  /**
+   * Damage taken shields first, then hull; a kill removes the ship and
+   * resolves the pilot-ability effects of it.
+   *
+   * @param ship - The ship hit.
+   * @param damage - Damage after equipment and mitigation.
+   * @param killer - The ship that dealt it, or null (boss, death blast).
+   */
+  private damageShip(
+    ship: EpicShip,
+    damage: number,
+    killer: EpicShip | null = null,
+  ): void {
+    if (ship.hull <= 0) return;
     if (ship.shields > 0) {
       const shieldDmg = Math.min(ship.shields, damage);
       ship.shields -= shieldDmg;
@@ -1500,7 +1645,58 @@ export class EpicBattleScene extends Phaser.Scene {
 
     if (ship.hull <= 0) {
       this.destroyShip(ship.id);
+      this.resolveAbilityKill(killer, ship);
     }
+  }
+
+  /**
+   * @param ship - The ship asking.
+   * @returns Whether another living ship of its side flies within wingman range.
+   */
+  private fliesWithWingman(ship: EpicShip): boolean {
+    const allies = [...this.ships.values()].filter(
+      (other) => other.owner === ship.owner && other.hull > 0,
+    );
+    return hasWingman(ship, allies);
+  }
+
+  /**
+   * Pilot-ability effects of a kill: the killer's reward (shields, frenzy)
+   * and the victim's death blast on enemies nearby.
+   *
+   * @param killer - The ship that made the kill, or null (boss, blast).
+   * @param victim - The ship destroyed.
+   */
+  private resolveAbilityKill(killer: EpicShip | null, victim: EpicShip): void {
+    if (killer && killer.hull > 0) {
+      Object.assign(killer, rewardKill(combatantOf(killer), this.time.now));
+      this.healthBars.get(killer.id)?.update(killer.hull, killer.shields);
+    }
+    const enemies = [...this.ships.values()].filter(
+      (other) => other.owner !== victim.owner && other.hull > 0,
+    );
+    for (const caught of deathBlastTargets(combatantOf(victim), enemies)) {
+      this.damageShip(caught, victim.modifiers.deathBlastDamage, victim);
+    }
+  }
+
+  /**
+   * Regenerates a ship's shields for one frame (equipment / pilot ability)
+   * and refreshes its health bar when they grew.
+   *
+   * @param ship - The ship.
+   * @param deltaMs - Frame length (ms).
+   */
+  private regenerateShipShields(ship: EpicShip, deltaMs: number): void {
+    const shields = regenerateShields(
+      ship.shields,
+      ship.maxShields,
+      ship.modifiers,
+      deltaMs,
+    );
+    if (shields === ship.shields) return;
+    ship.shields = shields;
+    this.healthBars.get(ship.id)?.update(ship.hull, ship.shields);
   }
 
   private destroyShip(shipId: string): void {

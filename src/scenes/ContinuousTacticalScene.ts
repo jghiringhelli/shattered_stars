@@ -25,7 +25,6 @@ import { BATTLEFIELD_SIZE, SHIP_SIZES } from "../config";
 import { getShipDefinition, getShipDial } from "../data/ShipDefinitions";
 import {
   getModeCombatStats,
-  calculateHitChance,
   type ModeCombatStats,
 } from "../data/ModeBalancing";
 import {
@@ -38,6 +37,12 @@ import {
   shouldPickOptimalManeuver,
 } from "../ai/AIDifficulty";
 import { createCycleFlight } from "../arcade/systems/CycleFlight";
+import {
+  squadQuickBuilds,
+  type LoadoutChoices,
+} from "../arcade/systems/SquadQuickBuilds";
+import type { DiceAttackResult } from "../arcade/systems/DiceAttack";
+import { NEUTRAL_MODIFIERS } from "../core/CombatModifiers";
 import {
   calmOrderIfStressed,
   chooseAiHeadingError,
@@ -57,13 +62,11 @@ import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
 import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import { createPerformanceState } from "../systems/PerformanceSystem";
-import {
-  findClosestEnemy as battleFindClosestEnemy,
-  applyLoadoutEffects,
-} from "../systems/BattleHelpers";
+import { findClosestEnemy as battleFindClosestEnemy } from "../systems/BattleHelpers";
 import {
   ContinuousBaseScene,
   type ContinuousShip,
+  type ShotDice,
 } from "./ContinuousBaseScene";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { InputManager } from "../input/InputManager";
@@ -81,12 +84,31 @@ import {
   type MatchTimerState,
 } from "../systems/arena/MatchTimer";
 import {
-  applyCapitalSystemDamage,
   createCapitalSystems,
-  sumSystemsHull,
   turretDamageMultiplier,
-  SYSTEM_LABELS,
 } from "../systems/CapitalSystems";
+
+/** One faction slot of the squad builder's battle config. */
+interface TacticalFactionSlot {
+  readonly factionId: FactionId;
+  readonly controller: "player" | "ai";
+  readonly ships: readonly string[];
+  /** Quick builds chosen in the squad builder, by ship index. */
+  readonly loadoutChoices?: LoadoutChoices;
+}
+
+/** The squad builder's battle config (registry `battleConfig`). */
+interface TacticalBattleConfig {
+  readonly factions: readonly TacticalFactionSlot[];
+  readonly aiDifficulty?: AIDifficultyLevel;
+}
+
+/** Distance (px) from the battlefield center to each faction's spawn point. */
+const FACTION_SPAWN_RADIUS = 300;
+/** Spacing (px) between ships of a squad at spawn. */
+const SQUAD_SHIP_SPACING = 60;
+/** Damage from which a hit's damage number is shown as a critical. */
+const HEAVY_HIT_DAMAGE = 3;
 
 interface TacticalShip extends ShipState, ContinuousShip {
   pilotSkill: number;
@@ -402,95 +424,81 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     return this.enemyShipIds;
   }
 
-  protected override performAttack(
+  /**
+   * The continuous dice model with AI difficulty on the hit chance and
+   * damage, and a capital attacker's turret damage.
+   *
+   * @param attacker - The ship firing.
+   * @param target - The ship fired at.
+   * @returns Hit chance and base damage before equipment.
+   */
+  protected override shotDice(
     attacker: TacticalShip,
     target: TacticalShip,
-  ): void {
-    let hitChance = calculateHitChance(
-      attacker.combatStats.attackDice,
-      target.combatStats.agilityDice,
-    );
+  ): ShotDice {
+    const dice = super.shotDice(attacker, target);
+    return {
+      hitChance:
+        attacker.owner === "ai"
+          ? getModifiedHitChance(dice.hitChance, this.aiDifficulty)
+          : dice.hitChance,
+      baseDamage: this.modeDamage(attacker, target, dice.baseDamage),
+    };
+  }
 
+  /**
+   * Dice damage scaled by AI difficulty and the attacker's turret systems.
+   *
+   * @param attacker - The ship firing.
+   * @param target - The ship fired at.
+   * @param damage - The mode's dice damage.
+   * @returns Damage before equipment.
+   */
+  private modeDamage(
+    attacker: TacticalShip,
+    target: TacticalShip,
+    damage: number,
+  ): number {
+    let scaled = damage;
     if (attacker.owner === "ai") {
-      hitChance = getModifiedHitChance(hitChance, this.aiDifficulty);
-    }
-
-    const hit = Math.random() < hitChance;
-
-    this.effectsManager.fireLaser(
-      attacker.x,
-      attacker.y,
-      target.x,
-      target.y,
-      attacker.faction as FactionId,
-      hit,
-    );
-
-    if (!hit) return;
-
-    let damage = attacker.combatStats.attackDice;
-    if (attacker.owner === "ai") {
-      damage = getModifiedDamage(damage, this.aiDifficulty, true);
+      scaled = getModifiedDamage(scaled, this.aiDifficulty, true);
     } else if (target.owner === "ai") {
-      damage = getModifiedDamage(damage, this.aiDifficulty, false);
+      scaled = getModifiedDamage(scaled, this.aiDifficulty, false);
     }
     if (attacker.capitalSystems) {
-      damage = Math.round(
-        damage * turretDamageMultiplier(attacker.capitalSystems),
+      scaled = Math.round(
+        scaled * turretDamageMultiplier(attacker.capitalSystems),
       );
     }
+    return scaled;
+  }
 
-    let shieldDamage = 0;
-    if (target.shields > 0) {
-      shieldDamage = Math.min(target.shields, damage);
-      target.shields -= shieldDamage;
-      const hullDamage = damage - shieldDamage;
-      if (hullDamage > 0) {
-        target.hull = Math.max(0, target.hull - hullDamage);
-        audioManager.playSoundAt("hull_hit", target.x, target.y, 0.4);
-      }
-    } else if (target.capitalSystems) {
-      const result = applyCapitalSystemDamage(target.capitalSystems, damage);
-      target.capitalSystems = result.systems;
-      target.hull = sumSystemsHull(result.systems);
-      audioManager.playSoundAt("hull_hit", target.x, target.y, 0.4);
-      if (result.justDisabled && result.hitSystemId) {
-        this.effectsManager.showFloatingText(
-          target.x,
-          target.y - 45,
-          `${SYSTEM_LABELS[result.hitSystemId]} DISABLED!`,
-          "#ff8800",
-        );
-      }
-    } else {
-      target.hull = Math.max(0, target.hull - damage);
-      audioManager.playSoundAt("hull_hit", target.x, target.y, 0.4);
-    }
-
+  /**
+   * Hit feedback (damage number, shield impact) and the player's damage
+   * tally, then the hit itself.
+   *
+   * @param attacker - The ship that fired.
+   * @param target - The ship hit.
+   * @param result - The resolved shot.
+   */
+  protected override landShot(
+    attacker: TacticalShip,
+    target: TacticalShip,
+    result: DiceAttackResult,
+  ): void {
     if (attacker.owner === "player") {
-      this.stats.damageDealt += damage;
+      this.stats.damageDealt += result.damage;
     }
-
     this.effectsManager.showDamageNumber(
       target.x,
       target.y,
-      damage,
-      damage >= 3,
+      result.damage,
+      result.damage >= HEAVY_HIT_DAMAGE,
     );
-    if (shieldDamage > 0) {
-      this.effectsManager.shieldImpact(
-        target.x,
-        target.y,
-        0,
-        target.faction as FactionId,
-      );
+    if (target.shields > 0) {
+      this.effectsManager.shieldImpact(target.x, target.y, 0, target.faction);
     }
-
-    this.healthBars.get(target.id)?.update(target.hull, target.shields);
-
-    if (target.hull <= 0) {
-      this.onShipDestroyed(target.id, attacker.id);
-    }
+    super.landShot(attacker, target, result);
   }
 
   /** Steers the AI ships, then latches every player ship's standing order. */
@@ -585,16 +593,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
 
   private spawnShips(): void {
     const battleConfig = this.registry.get("battleConfig") as
-      | {
-          factions: Array<{
-            factionId: FactionId;
-            controller: "player" | "ai";
-            ships: string[];
-            loadoutChoices?: Record<string, string>;
-          }>;
-          aiDifficulty?: AIDifficultyLevel;
-        }
-      | undefined;
+      TacticalBattleConfig | undefined;
 
     if (battleConfig?.aiDifficulty) {
       this.aiDifficulty = battleConfig.aiDifficulty;
@@ -612,53 +611,81 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     }
   }
 
-  private spawnFromConfig(config: {
-    factions: Array<{
-      factionId: FactionId;
-      controller: "player" | "ai";
-      ships: string[];
-      loadoutChoices?: Record<string, string>;
-    }>;
-  }): void {
-    const centerX = BATTLEFIELD_SIZE / 2;
-    const centerY = BATTLEFIELD_SIZE / 2;
-    const spawnRadius = 300;
-
+  /**
+   * Spawns every faction of the configured battle, evenly around the
+   * battlefield center, facing it.
+   *
+   * @param config - The squad builder's battle config.
+   */
+  private spawnFromConfig(config: TacticalBattleConfig): void {
     config.factions.forEach((faction, factionIndex) => {
       const factionAngle =
         (factionIndex / config.factions.length) * Math.PI * 2;
-      const factionX = centerX + Math.cos(factionAngle) * spawnRadius;
-      const factionY = centerY + Math.sin(factionAngle) * spawnRadius;
-      const facingAngle = ((factionAngle * 180) / Math.PI + 180) % 360;
+      const ships = this.spawnFaction(faction, factionAngle);
+      this.equipSquad(ships, faction.loadoutChoices);
+      ships.forEach((ship) => this.registerShip(ship));
 
-      faction.ships.forEach((shipDefId, shipIndex) => {
-        const shipOffset = (shipIndex - (faction.ships.length - 1) / 2) * 60;
-        const perpAngle = factionAngle + Math.PI / 2;
-        const shipX = factionX + Math.cos(perpAngle) * shipOffset;
-        const shipY = factionY + Math.sin(perpAngle) * shipOffset;
-
-        const ship = this.createShip(
-          `${faction.factionId}_${shipIndex}`,
-          shipDefId,
-          faction.factionId,
-          faction.controller,
-          shipX,
-          shipY,
-          facingAngle,
-          3 + Math.floor(Math.random() * 4),
-        );
-
-        this.registerShip(ship);
-        applyLoadoutEffects(ship, faction.loadoutChoices?.[String(shipIndex)]);
-
-        if (faction.controller === "player") {
-          this.playerFaction = faction.factionId;
-          this.playerShipIds.push(ship.id);
-        } else {
-          this.enemyShipIds.push(ship.id);
-        }
-      });
+      const ids = ships.map((ship) => ship.id);
+      if (faction.controller === "player") {
+        this.playerFaction = faction.factionId;
+        this.playerShipIds.push(...ids);
+      } else {
+        this.enemyShipIds.push(...ids);
+      }
     });
+  }
+
+  /**
+   * Builds one faction's ships in a line across its spawn bearing.
+   *
+   * @param faction - The faction slot.
+   * @param factionAngle - Bearing (rad) of its spawn point from the center.
+   * @returns Its new (unregistered, unequipped) ships, in squad order.
+   */
+  private spawnFaction(
+    faction: TacticalFactionSlot,
+    factionAngle: number,
+  ): TacticalShip[] {
+    const center = BATTLEFIELD_SIZE / 2;
+    const factionX = center + Math.cos(factionAngle) * FACTION_SPAWN_RADIUS;
+    const factionY = center + Math.sin(factionAngle) * FACTION_SPAWN_RADIUS;
+    const facingAngle = ((factionAngle * 180) / Math.PI + 180) % 360;
+    const perpAngle = factionAngle + Math.PI / 2;
+
+    return faction.ships.map((shipDefId, shipIndex) => {
+      const shipOffset =
+        (shipIndex - (faction.ships.length - 1) / 2) * SQUAD_SHIP_SPACING;
+      return this.createShip(
+        `${faction.factionId}_${shipIndex}`,
+        shipDefId,
+        faction.factionId,
+        faction.controller,
+        factionX + Math.cos(perpAngle) * shipOffset,
+        factionY + Math.sin(perpAngle) * shipOffset,
+        facingAngle,
+        3 + Math.floor(Math.random() * 4),
+      );
+    });
+  }
+
+  /**
+   * Equips a squad with quick builds: the ones chosen in the squad builder,
+   * a default for every other ship.
+   *
+   * @param ships - The squad, in squad order.
+   * @param loadoutChoices - Loadouts chosen by ship index, if any.
+   */
+  private equipSquad(
+    ships: readonly TacticalShip[],
+    loadoutChoices?: LoadoutChoices,
+  ): void {
+    const loadouts = squadQuickBuilds(
+      ships.map((ship) => ship.definitionId),
+      loadoutChoices,
+    );
+    ships.forEach((ship, index) =>
+      this.equipShip(ship, loadouts[index] ?? null),
+    );
   }
 
   private spawnDefaultShips(): void {
@@ -708,6 +735,16 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       this.registerShip(enemy);
       this.enemyShipIds.push(enemy.id);
     }
+    this.equipSquad(this.squadShips(this.playerShipIds));
+    this.equipSquad(this.squadShips(this.enemyShipIds));
+  }
+
+  /**
+   * @param shipIds - Ship ids, in squad order.
+   * @returns The ships with those ids that exist.
+   */
+  private squadShips(shipIds: readonly string[]): TacticalShip[] {
+    return shipIds.flatMap((id) => this.ships.get(id) ?? []);
   }
 
   /**
@@ -769,6 +806,9 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       order: initialOrder(dial, flight.motion.control.speed),
       weaponCooldown: 0,
       capitalSystems: isCapital ? createCapitalSystems(combatStats.hull) : null,
+      loadoutId: null,
+      modifiers: NEUTRAL_MODIFIERS,
+      frenzyUntilMs: 0,
     };
   }
 

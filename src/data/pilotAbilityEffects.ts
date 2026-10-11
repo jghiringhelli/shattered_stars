@@ -10,8 +10,13 @@
  * - Support abilities that act on friendlies project the faction aura.
  * - Force "Action:" abilities fire on their own on a recharge, read as a
  *   steady rate (shield regeneration, stress inflicted per hit).
+ * - "While no friendly is near" reads as protection that a nearby wingman
+ *   cancels (a wingman damage-taken drawback).
  *
- * A pilot's price is derived from this effect (abilityPricing.ts).
+ * Campaign pilots collect several of these as they level up
+ * (src/arcade/systems/CampaignPilotEquip.ts). A pilot card's price is
+ * derived from its ability's effect (abilityPricing.ts); campaign-only
+ * entries price no card.
  */
 
 import type { RealtimeEffect } from "../core/CombatModifiers";
@@ -98,4 +103,32 @@ export const PILOT_ABILITY_REALTIME: Readonly<Record<string, RealtimeEffect>> =
     force_push: { stressOnHit: 0.1 },
     force_shield: { shieldRegenPerSecond: 0.3 },
     force_suppression: { stressOnHit: 0.15 },
+
+    // --- Campaign pilots (unlocked by level; not on pilot cards) -------------
+    predatory_instinct: { bonusDamageVsUnshielded: 1, killFrenzyLaserBonus: 1 },
+    fanatical: { damagedLaserBonus: 1 },
+    tenacity: { damagedLaserBonus: 1, damageTakenMultiplier: 0.95 },
+    outmaneuver: { rearArcLaserBonus: 1, kturnCooldownMultiplier: 0.85 },
+    target_lock_mastery: { homingTurnBonus: 60, bullseyeLaserBonus: 1 },
+    focus_mastery: { calmLaserDamageBonus: 1, stressRateMultiplier: 0.9 },
+    lone_wolf: {
+      damageTakenMultiplier: 0.9,
+      wingmanDamageTakenMultiplier: 1.1,
+    },
+    sense: { damageTakenMultiplier: 0.95, kturnCooldownMultiplier: 0.8 },
+    evade_mastery: { damageTakenMultiplier: 0.88 },
+    defensive_flying: {
+      damageTakenMultiplier: 0.92,
+      barrelRollCooldownMultiplier: 0.9,
+    },
+    shield_upgrade: { shieldRegenPerSecond: 0.1 },
+    regenerative_shields: { shieldRegenPerSecond: 0.2 },
+    barrel_roll_efficiency: { barrelRollCooldownMultiplier: 0.75 },
+    boost_expertise: {
+      boostCooldownMultiplier: 0.85,
+      turretCooldownMultiplier: 0.9,
+    },
+    stress_recovery: { stressRateMultiplier: 0.8 },
+    wingman: { projectsAura: true, wingmanDamageTakenMultiplier: 0.95 },
+    squad_leader: { projectsAura: true, auraRadiusBonus: 0.3 },
   };

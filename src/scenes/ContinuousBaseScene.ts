@@ -2,11 +2,13 @@
  * ContinuousBaseScene — shared update loop for all real-time combat scenes.
  *
  * Handles: X-Wing cycle-engine flight (template arcs, cycle-boundary commits,
- * stress), weapon cooldown/firing, AI steering, sprite + health-bar
- * repositioning.
+ * stress), quick builds (upgrades + pilot ability: stat bonuses, flight,
+ * cycle stress, shield regen, dice shots, kill rewards and death blasts),
+ * weapon cooldown/firing, AI steering, sprite + health-bar repositioning.
  *
- * Subclasses implement `onShipDestroyed` and `checkRoundEnd`.
- * Individual hooks (`performAttack`, `steerAiShip`, etc.) can be
+ * Subclasses implement `onShipDestroyed` and `checkRoundEnd`, and equip
+ * every ship they spawn with `equipShip`.
+ * Individual hooks (`shotDice`, `landShot`, `steerAiShip`, etc.) can be
  * overridden for scene-specific behaviour.
  */
 
@@ -26,6 +28,26 @@ import {
 import { canHullKTurn } from "../arcade/systems/AiPursuit";
 import type { FlightEvent } from "../arcade/systems/PilotFlightTypes";
 import { playFlightEventFx } from "../arcade/ArcadeFX";
+import {
+  equipFlight,
+  equipQuickBuild,
+  regenerateShields,
+  stressModifiersOf,
+} from "../arcade/systems/QuickBuildEquip";
+import {
+  absorbDamage,
+  combatantOf,
+  resolveDiceAttack,
+  type DiceAttackResult,
+} from "../arcade/systems/DiceAttack";
+import {
+  deathBlastTargets,
+  hasWingman,
+  rewardKill,
+} from "../arcade/PilotAbilityCombat";
+import { applyInstantStress } from "../arcade/ArcadeStress";
+import type { CombatModifiers } from "../core/CombatModifiers";
+import { random } from "../utils/random";
 import type { ShipTelemetry } from "../debug/ShipTelemetry";
 import { findClosestEnemy } from "../systems/BattleHelpers";
 import { HealthBar } from "../ui/HealthBar";
@@ -41,6 +63,7 @@ import {
 } from "../systems/PerformanceSystem";
 import {
   applyCapitalSystemDamage,
+  createCapitalSystems,
   isEnginesOffline,
   sumSystemsHull,
   SYSTEM_LABELS,
@@ -72,6 +95,20 @@ export interface ContinuousShip {
   combatStats: ModeCombatStats;
   /** Present only for capital-role ships; null/undefined for everything else. */
   capitalSystems?: CapitalSystemsState | null;
+  /** Quick build flown (upgrades + pilot), or null for the bare hull. */
+  loadoutId: string | null;
+  /** Real-time effects of the quick build; set by {@link ContinuousBaseScene.equipShip}. */
+  modifiers: CombatModifiers;
+  /** Scene time (ms) until which a kill-frenzy ability is active. */
+  frenzyUntilMs: number;
+}
+
+/** The mode's dice for one shot, before equipment. */
+export interface ShotDice {
+  /** Hit probability (difficulty included). */
+  readonly hitChance: number;
+  /** Damage on a hit (difficulty and system damage included). */
+  readonly baseDamage: number;
 }
 
 /** Minimal sprite container shape used by the base scene. */
@@ -130,26 +167,57 @@ export abstract class ContinuousBaseScene<
   }
 
   /**
-   * Fire a single attack from attacker → target.
-   * Override for ability bonuses, difficulty modifiers, stats tracking, etc.
+   * Fire a single attack from attacker → target: one dice roll with the
+   * attacker's equipment and pilot ability applied.
+   * Override {@link shotDice} / {@link landShot} for scene-specific odds and
+   * hit feedback.
+   *
+   * @param attacker - The ship firing.
+   * @param target - The ship fired at.
    */
   protected performAttack(attacker: T, target: T): void {
-    const hitChance = calculateHitChance(
-      attacker.combatStats.attackDice,
-      target.combatStats.agilityDice,
-    );
-    const hit = Math.random() < hitChance;
+    const result = this.rollShot(attacker, target);
     this.effectsManager.fireLaser(
       attacker.x,
       attacker.y,
       target.x,
       target.y,
       attacker.faction,
-      hit,
+      result.hit,
     );
-    if (hit) {
-      this.applyDamage(attacker, target, attacker.combatStats.attackDice);
-    }
+    if (result.hit) this.landShot(attacker, target, result);
+  }
+
+  /**
+   * The mode's dice for a shot. Default: the continuous dice model.
+   *
+   * @param attacker - The ship firing.
+   * @param target - The ship fired at.
+   * @returns Hit chance and base damage before equipment.
+   */
+  protected shotDice(attacker: T, target: T): ShotDice {
+    return {
+      hitChance: calculateHitChance(
+        attacker.combatStats.attackDice,
+        target.combatStats.agilityDice,
+      ),
+      baseDamage: attacker.combatStats.attackDice,
+    };
+  }
+
+  /**
+   * A shot that hit: stress on the target's pilot, then the damage.
+   *
+   * @param attacker - The ship that fired.
+   * @param target - The ship hit.
+   * @param result - The resolved shot.
+   */
+  protected landShot(attacker: T, target: T, result: DiceAttackResult): void {
+    this.setFlight(target, {
+      ...target.flight,
+      stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
+    });
+    this.applyDamage(attacker, target, result.damage);
   }
 
   /**
@@ -169,37 +237,124 @@ export abstract class ContinuousBaseScene<
   // ──────────────────────────────────────────────
 
   /**
+   * Equip a freshly built ship with its quick build: stat bonuses, the
+   * modifier sheet (upgrades + pilot ability) and its flight changes. Call
+   * once, before the ship fights (stat bonuses stack if called twice).
+   *
+   * @param ship - The new ship (bumped in place).
+   * @param loadoutId - Its quick build, or null for the bare hull.
+   */
+  protected equipShip(ship: T, loadoutId: string | null): void {
+    ship.loadoutId = loadoutId;
+    ship.modifiers = equipQuickBuild(ship, loadoutId);
+    this.setFlight(ship, equipFlight(ship.flight, ship.modifiers));
+    if (ship.capitalSystems) {
+      ship.capitalSystems = createCapitalSystems(ship.hull);
+    }
+  }
+
+  /**
+   * Roll one shot from the scene RNG with the attacker's equipment.
+   *
+   * @param attacker - The ship firing.
+   * @param target - The ship fired at.
+   * @returns Hit, damage after equipment and mitigation, stress inflicted.
+   */
+  protected rollShot(attacker: T, target: T): DiceAttackResult {
+    return resolveDiceAttack({
+      ...this.shotDice(attacker, target),
+      attacker: combatantOf(attacker),
+      target: combatantOf(target),
+      attackerHasWingman: this.fliesWithWingman(attacker),
+      targetHasWingman: this.fliesWithWingman(target),
+      nowMs: this.time.now,
+      roll: random.next(),
+    });
+  }
+
+  /**
+   * @param ship - The ship asking.
+   * @returns Whether another living ship of its side flies within wingman range.
+   */
+  protected fliesWithWingman(ship: T): boolean {
+    const allies = [...this.ships.values()].filter(
+      (other) => other.faction === ship.faction && other.hull > 0,
+    );
+    return hasWingman(ship, allies);
+  }
+
+  /**
+   * Pilot-ability effects of a kill: the killer's reward (shields, frenzy)
+   * and the victim's death blast on enemies nearby (which can kill in turn).
+   *
+   * @param killer - The ship that made the kill.
+   * @param victim - The ship destroyed.
+   */
+  protected resolveAbilityKill(killer: T, victim: T): void {
+    if (killer.hull > 0) {
+      Object.assign(killer, rewardKill(combatantOf(killer), this.time.now));
+      this.healthBars.get(killer.id)?.update(killer.hull, killer.shields);
+    }
+    const enemies = [...this.ships.values()].filter(
+      (other) => other.faction !== victim.faction && other.hull > 0,
+    );
+    for (const caught of deathBlastTargets(combatantOf(victim), enemies)) {
+      this.applyDamage(victim, caught, victim.modifiers.deathBlastDamage);
+    }
+  }
+
+  /**
    * Apply damage from attacker to target with shield absorption,
-   * update the health bar, and trigger destruction if hull ≤ 0.
+   * update the health bar, and trigger destruction (with the pilot-ability
+   * kill effects) if hull ≤ 0. A ship already destroyed takes nothing.
+   *
+   * @param attacker - The ship credited with the damage.
+   * @param target - The ship taking it.
+   * @param damage - Damage (shields first, then hull or capital systems).
    */
   protected applyDamage(attacker: T, target: T, damage: number): void {
-    if (target.shields > 0) {
-      const absorbed = Math.min(target.shields, damage);
-      target.shields -= absorbed;
-      damage -= absorbed;
+    if (target.hull <= 0) return;
+    const shieldsBefore = target.shields;
+    const absorbed = absorbDamage(target, damage);
+    const hullDamage = damage - (shieldsBefore - absorbed.shields);
+    target.shields = absorbed.shields;
+    if (shieldsBefore > 0) {
       audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);
     }
-    if (damage > 0) {
+    if (hullDamage > 0) {
       audioManager.playSoundAt("hull_hit", target.x, target.y, 0.4);
       if (target.capitalSystems) {
-        const result = applyCapitalSystemDamage(target.capitalSystems, damage);
-        target.capitalSystems = result.systems;
-        target.hull = sumSystemsHull(result.systems);
-        if (result.justDisabled && result.hitSystemId) {
-          this.effectsManager.showFloatingText(
-            target.x,
-            target.y - 45,
-            `${SYSTEM_LABELS[result.hitSystemId]} DISABLED!`,
-            "#ff8800",
-          );
-        }
+        this.damageCapitalSystems(target, hullDamage);
       } else {
-        target.hull = Math.max(0, target.hull - damage);
+        target.hull = absorbed.hull;
       }
     }
     this.healthBars.get(target.id)?.update(target.hull, target.shields);
     if (target.hull <= 0) {
+      this.resolveAbilityKill(attacker, target);
       this.onShipDestroyed(target.id, attacker.id);
+    }
+  }
+
+  /**
+   * Hull damage to a capital ship lands on one of its systems; announces a
+   * system it just disabled.
+   *
+   * @param target - The capital ship.
+   * @param damage - Hull damage past its shields.
+   */
+  private damageCapitalSystems(target: T, damage: number): void {
+    if (!target.capitalSystems) return;
+    const result = applyCapitalSystemDamage(target.capitalSystems, damage);
+    target.capitalSystems = result.systems;
+    target.hull = sumSystemsHull(result.systems);
+    if (result.justDisabled && result.hitSystemId) {
+      this.effectsManager.showFloatingText(
+        target.x,
+        target.y - 45,
+        `${SYSTEM_LABELS[result.hitSystemId]} DISABLED!`,
+        "#ff8800",
+      );
     }
   }
 
@@ -260,6 +415,7 @@ export abstract class ContinuousBaseScene<
    */
   protected flyShips(deltaMs: number): void {
     for (const ship of this.ships.values()) {
+      if (ship.hull > 0) this.regenerateShipShields(ship, deltaMs);
       if (!this.canFly(ship)) {
         ship.cycleCommitted = false;
         continue;
@@ -269,6 +425,7 @@ export abstract class ContinuousBaseScene<
         worldSize: BATTLEFIELD_SIZE,
         dial: ship.dial,
         cycleMs: CYCLE_DURATION_MS,
+        modifiers: stressModifiersOf(ship.modifiers),
       });
       this.setFlight(ship, tick.state);
       ship.cycleCommitted = tick.completed !== null;
@@ -278,6 +435,24 @@ export abstract class ContinuousBaseScene<
         .setAngle(ship.angle);
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
+  }
+
+  /**
+   * Regenerates a ship's shields for a frame (shield-regen equipment only).
+   *
+   * @param ship - A living ship.
+   * @param deltaMs - Frame length (ms).
+   */
+  private regenerateShipShields(ship: T, deltaMs: number): void {
+    const shields = regenerateShields(
+      ship.shields,
+      ship.maxShields,
+      ship.modifiers,
+      deltaMs,
+    );
+    if (shields === ship.shields) return;
+    ship.shields = shields;
+    this.healthBars.get(ship.id)?.update(ship.hull, ship.shields);
   }
 
   /**

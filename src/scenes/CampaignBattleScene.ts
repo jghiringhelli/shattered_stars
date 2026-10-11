@@ -38,6 +38,34 @@ import { wrapCoordinate } from "../arcade/systems/ShipMotion";
 import type { FlightEvent } from "../arcade/systems/PilotFlightTypes";
 import { canHullKTurn, seekSteerOrder } from "../arcade/systems/AiPursuit";
 import { playFlightEventFx } from "../arcade/ArcadeFX";
+import {
+  assignQuickBuilds,
+  equipFlight,
+  equipQuickBuild,
+  regenerateShields,
+  stressModifiersOf,
+} from "../arcade/systems/QuickBuildEquip";
+import {
+  absorbDamage,
+  combatantOf,
+  resolveDiceAttack,
+} from "../arcade/systems/DiceAttack";
+import {
+  campaignAbilityIds,
+  campaignPilotModifiers,
+  seatCampaignPilots,
+} from "../arcade/systems/CampaignPilotEquip";
+import {
+  deathBlastTargets,
+  hasWingman,
+  rewardKill,
+} from "../arcade/PilotAbilityCombat";
+import { applyInstantStress } from "../arcade/ArcadeStress";
+import {
+  NEUTRAL_MODIFIERS,
+  type CombatModifiers,
+} from "../core/CombatModifiers";
+import { random } from "../utils/random";
 import { addShipVisual } from "../rendering/ShipVisual";
 import type {
   CampaignMission,
@@ -98,8 +126,27 @@ interface CampaignShip {
   /** Whether the AI may K-turn this hull (false for capitals). */
   allowKTurn: boolean;
   weaponCooldown: number;
+  /** Quick build flown (upgrades + pilot), or null for the bare hull. */
+  loadoutId: string | null;
+  /** Real-time effects of the quick build and its campaign pilot's abilities. */
+  modifiers: CombatModifiers;
+  /** Scene time (ms) until which a kill-frenzy ability is active. */
+  frenzyUntilMs: number;
   /** Present only for boss-tier ships. */
   capitalSystems?: CapitalSystemsState | null;
+}
+
+/** What a new ship is and how it is equipped. */
+interface ShipSpawn {
+  readonly id: string;
+  readonly definitionId: string;
+  readonly faction: FactionId;
+  readonly owner: "player" | "ai";
+  /** Spawn pose (may lie off the battlefield edge). */
+  readonly pose: Pose;
+  readonly loadoutId: string | null;
+  /** Abilities of the campaign pilot flying it (none for AI-only ships). */
+  readonly pilotAbilityIds?: readonly string[];
 }
 
 /** Vertical offset (px) of a ship's health bar above its sprite. */
@@ -128,6 +175,8 @@ interface SceneData {
   mission: CampaignMission;
   saveData: CampaignSaveData;
   selectedShips?: string[];
+  /** Quick builds chosen for selectedShips (by index); the rest get defaults. */
+  selectedLoadouts?: (string | null)[];
 }
 
 export class CampaignBattleScene extends Phaser.Scene {
@@ -143,6 +192,7 @@ export class CampaignBattleScene extends Phaser.Scene {
   private mission!: CampaignMission;
   private saveData!: CampaignSaveData;
   private selectedShips: string[] = [];
+  private selectedLoadouts: (string | null)[] = [];
   private objectiveStates: ObjectiveState[] = [];
   private missionStartTime = 0;
   private totalKills = 0;
@@ -186,6 +236,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.selectedShips =
       data.selectedShips ??
       this.mission.playerShips.slice(0, this.mission.maxSquadSize);
+    this.selectedLoadouts = data.selectedLoadouts ?? [];
 
     this.objectiveStates = this.mission.objectives.map((obj) => ({
       objective: obj,
@@ -475,23 +526,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     const centerX = BATTLEFIELD_SIZE / 2;
     const centerY = BATTLEFIELD_SIZE / 2;
 
-    // Player squad — flagship (index 0, keyboard-controlled) + escorts (AI).
-    const flagshipCount = this.selectedShips.length;
-    const spacing = 90;
-    const startX = centerX - ((flagshipCount - 1) * spacing) / 2;
-    this.selectedShips.forEach((defId, i) => {
-      const id = `player_${i}`;
-      const ship = this.createShip(id, defId, this.factionId, "player", {
-        x: startX + i * spacing,
-        y: centerY + 220,
-        angle: 270,
-      });
-      if (i === 0) this.applyProtagonistBonuses(ship);
-      this.ships.set(id, ship);
-      this.playerShipIds.push(id);
-      this.createShipSprite(ship);
-      this.createHealthBar(ship);
-    });
+    this.spawnPlayerSquad(centerX, centerY + 220);
 
     // Immediate enemy spawns (delayed ones are queued via pendingEnemySpawns).
     const immediateEnemies = this.mission.enemies.filter(
@@ -508,6 +543,46 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.spawnEnemyGroup(immediateEnemies, centerX, centerY - 220, 90);
   }
 
+  /**
+   * Spawns the player squad on a line: the flagship (index 0, flown by the
+   * player) and the AI escorts. Each ship flies its quick build, plus the
+   * abilities of the campaign pilot seated in it.
+   *
+   * @param centerX - Center of the line.
+   * @param y - Line height.
+   */
+  private spawnPlayerSquad(centerX: number, y: number): void {
+    const squadSize = this.selectedShips.length;
+    const spacing = 90;
+    const startX = centerX - ((squadSize - 1) * spacing) / 2;
+    const loadouts = assignQuickBuilds(
+      this.selectedShips,
+      this.selectedLoadouts,
+    );
+    const seats = seatCampaignPilots(
+      this.saveData.campaignPilots,
+      CAMPAIGN_PILOTS[this.factionId] ?? [],
+      squadSize,
+    );
+    this.selectedShips.forEach((defId, i) => {
+      const seat = seats[i];
+      const ship = this.createShip({
+        id: `player_${i}`,
+        definitionId: defId,
+        faction: this.factionId,
+        owner: "player",
+        pose: { x: startX + i * spacing, y, angle: 270 },
+        loadoutId: loadouts[i] ?? null,
+        pilotAbilityIds: seat ? campaignAbilityIds(seat) : [],
+      });
+      if (i === 0) this.applyProtagonistBonuses(ship);
+      this.ships.set(ship.id, ship);
+      this.playerShipIds.push(ship.id);
+      this.createShipSprite(ship);
+      this.createHealthBar(ship);
+    });
+  }
+
   /** Spawns one or more enemy groups spread along a horizontal line. */
   private spawnEnemyGroup(
     enemies: MissionEnemy[],
@@ -519,6 +594,9 @@ export class CampaignBattleScene extends Phaser.Scene {
     if (totalCount === 0) return;
     const spacing = 80;
     const startX = centerX - ((totalCount - 1) * spacing) / 2;
+    const loadouts = assignQuickBuilds(
+      enemies.flatMap((enemy) => Array<string>(enemy.count).fill(enemy.shipId)),
+    );
     let slot = 0;
 
     for (const enemy of enemies) {
@@ -526,7 +604,8 @@ export class CampaignBattleScene extends Phaser.Scene {
         const id = `enemy_${Date.now()}_${slot}_${Math.random().toString(36).slice(2, 7)}`;
         const x = startX + slot * spacing;
         const yJitter = y + (Math.random() - 0.5) * 60;
-        this.spawnEnemyShip(id, enemy, { x, y: yJitter, angle });
+        const pose = { x, y: yJitter, angle };
+        this.spawnEnemyShip(id, enemy, pose, loadouts[slot] ?? null);
         slot++;
       }
     }
@@ -539,6 +618,9 @@ export class CampaignBattleScene extends Phaser.Scene {
     const cx = flagship?.x ?? BATTLEFIELD_SIZE / 2;
     const cy = flagship?.y ?? BATTLEFIELD_SIZE / 2;
     const spawnRadius = 500;
+    const loadouts = assignQuickBuilds(
+      Array<string>(enemy.count).fill(enemy.shipId),
+    );
 
     for (let i = 0; i < enemy.count; i++) {
       const id = `reinforcement_${Date.now()}_${i}`;
@@ -546,7 +628,8 @@ export class CampaignBattleScene extends Phaser.Scene {
       const x = cx + Math.cos(angle) * spawnRadius;
       const y = cy + Math.sin(angle) * spawnRadius;
       const facing = (Phaser.Math.RadToDeg(angle) + 180) % 360;
-      this.spawnEnemyShip(id, enemy, { x, y, angle: facing });
+      const pose = { x, y, angle: facing };
+      this.spawnEnemyShip(id, enemy, pose, loadouts[i] ?? null);
     }
   }
 
@@ -556,12 +639,25 @@ export class CampaignBattleScene extends Phaser.Scene {
    * @param id - Ship id.
    * @param enemy - Mission enemy entry.
    * @param spawn - Spawn pose.
+   * @param loadoutId - Its quick build, or null for the bare hull.
    */
-  private spawnEnemyShip(id: string, enemy: MissionEnemy, spawn: Pose): void {
+  private spawnEnemyShip(
+    id: string,
+    enemy: MissionEnemy,
+    spawn: Pose,
+    loadoutId: string | null,
+  ): void {
     const def = getShipDefinition(enemy.shipId);
     if (!def) return;
 
-    const ship = this.createShip(id, enemy.shipId, enemy.faction, "ai", spawn);
+    const ship = this.createShip({
+      id,
+      definitionId: enemy.shipId,
+      faction: enemy.faction,
+      owner: "ai",
+      pose: spawn,
+      loadoutId,
+    });
     if (enemy.isAce) {
       ship.maxHull = Math.floor(ship.maxHull * 1.5);
       ship.hull = ship.maxHull;
@@ -631,33 +727,25 @@ export class CampaignBattleScene extends Phaser.Scene {
 
   /**
    * Builds a ship record flying the cycle engine from its spawn pose
-   * (wrapped onto the toroidal battlefield).
+   * (wrapped onto the toroidal battlefield), with its quick build — and
+   * its campaign pilot's abilities — equipped.
    *
-   * @param id - Ship id.
-   * @param defId - Ship definition id.
-   * @param faction - Owning faction.
-   * @param owner - Player squad or AI.
-   * @param spawn - Spawn pose (may lie off the battlefield edge).
+   * @param spawn - Identity, owner, pose and equipment of the new ship.
    * @returns The new ship record.
    */
-  private createShip(
-    id: string,
-    defId: string,
-    faction: FactionId,
-    owner: "player" | "ai",
-    spawn: Pose,
-  ): CampaignShip {
-    const combatStats = getModeCombatStats(defId, "continuous");
-    const flight = createCycleFlight(defId, {
-      x: wrapCoordinate(spawn.x, BATTLEFIELD_SIZE),
-      y: wrapCoordinate(spawn.y, BATTLEFIELD_SIZE),
-      angle: spawn.angle,
+  private createShip(spawn: ShipSpawn): CampaignShip {
+    const { definitionId, pose } = spawn;
+    const combatStats = getModeCombatStats(definitionId, "continuous");
+    const flight = createCycleFlight(definitionId, {
+      x: wrapCoordinate(pose.x, BATTLEFIELD_SIZE),
+      y: wrapCoordinate(pose.y, BATTLEFIELD_SIZE),
+      angle: pose.angle,
     });
-    return {
-      id,
-      definitionId: defId,
-      faction,
-      owner,
+    const ship: CampaignShip = {
+      id: spawn.id,
+      definitionId,
+      faction: spawn.faction,
+      owner: spawn.owner,
       x: flight.motion.x,
       y: flight.motion.y,
       angle: flight.motion.angle,
@@ -667,11 +755,25 @@ export class CampaignBattleScene extends Phaser.Scene {
       maxShields: combatStats.maxShields,
       combatStats,
       flight,
-      dial: getShipDial(defId),
+      dial: getShipDial(definitionId),
       cycleCommitted: false,
-      allowKTurn: canHullKTurn(defId),
+      allowKTurn: canHullKTurn(definitionId),
       weaponCooldown: 0,
+      loadoutId: spawn.loadoutId,
+      modifiers: NEUTRAL_MODIFIERS,
+      frenzyUntilMs: 0,
     };
+    ship.modifiers = equipQuickBuild(ship, spawn.loadoutId);
+    const abilityIds = spawn.pilotAbilityIds ?? [];
+    if (abilityIds.length > 0) {
+      ship.modifiers = campaignPilotModifiers(
+        definitionId,
+        spawn.loadoutId,
+        abilityIds,
+      );
+    }
+    ship.flight = equipFlight(ship.flight, ship.modifiers);
+    return ship;
   }
 
   private createShipSprite(
@@ -763,8 +865,10 @@ export class CampaignBattleScene extends Phaser.Scene {
         worldSize: BATTLEFIELD_SIZE,
         dial: ship.dial,
         cycleMs: CYCLE_DURATION_MS,
+        modifiers: stressModifiersOf(ship.modifiers),
       });
       this.setFlight(ship, tick.state);
+      this.regenerateShipShields(ship, deltaMs);
       ship.cycleCommitted = tick.completed !== null;
       if (tick.completed && ship.id === this.pilotedShipId) {
         const { control } = tick.state.motion;
@@ -772,6 +876,25 @@ export class CampaignBattleScene extends Phaser.Scene {
       }
       this.syncShipVisuals(ship);
     }
+  }
+
+  /**
+   * Regenerates a ship's shields for a frame (equipment and abilities that
+   * restore shields) and refreshes its health bar when they changed.
+   *
+   * @param ship - The ship.
+   * @param deltaMs - Frame length (ms).
+   */
+  private regenerateShipShields(ship: CampaignShip, deltaMs: number): void {
+    const shields = regenerateShields(
+      ship.shields,
+      ship.maxShields,
+      ship.modifiers,
+      deltaMs,
+    );
+    if (shields === ship.shields) return;
+    ship.shields = shields;
+    this.healthBars.get(ship.id)?.update(ship.hull, ship.shields);
   }
 
   /**
@@ -880,12 +1003,27 @@ export class CampaignBattleScene extends Phaser.Scene {
     return best;
   }
 
+  /**
+   * One shot: the attacker's equipment and pilot abilities shape the hit
+   * and its damage; a hit stresses the target per the attacker's sheet.
+   *
+   * @param attacker - The ship firing.
+   * @param target - The ship fired at.
+   */
   private fireAt(attacker: CampaignShip, target: CampaignShip): void {
-    const hitChance = calculateHitChance(
-      attacker.combatStats.attackDice,
-      target.combatStats.agilityDice,
-    );
-    const hit = Math.random() < hitChance;
+    const result = resolveDiceAttack({
+      attacker: combatantOf(attacker),
+      target: combatantOf(target),
+      hitChance: calculateHitChance(
+        attacker.combatStats.attackDice,
+        target.combatStats.agilityDice,
+      ),
+      baseDamage: attacker.combatStats.attackDice,
+      attackerHasWingman: this.fliesWithWingman(attacker),
+      targetHasWingman: this.fliesWithWingman(target),
+      nowMs: this.time.now,
+      roll: random.next(),
+    });
 
     this.effectsManager.fireLaser(
       attacker.x,
@@ -893,39 +1031,94 @@ export class CampaignBattleScene extends Phaser.Scene {
       target.x,
       target.y,
       attacker.faction,
-      hit,
+      result.hit,
     );
-    if (!hit) return;
+    if (!result.hit) return;
 
-    let damage = attacker.combatStats.attackDice;
-    if (target.shields > 0) {
-      const shieldDmg = Math.min(target.shields, damage);
-      target.shields -= shieldDmg;
-      damage -= shieldDmg;
+    this.setFlight(target, {
+      ...target.flight,
+      stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
+    });
+    this.applyDamage(target, result.damage);
+    if (target.hull <= 0) this.killShip(target, attacker);
+  }
+
+  /**
+   * Damage taken shields first, then hull — or, on a boss, its capital
+   * systems (announcing a system knocked out).
+   *
+   * @param target - The ship taking damage.
+   * @param damage - Damage to take.
+   */
+  private applyDamage(target: CampaignShip, damage: number): void {
+    const after = absorbDamage(target, damage);
+    const hullDamage = damage - (target.shields - after.shields);
+    if (after.shields < target.shields) {
       audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);
     }
-    if (damage > 0) {
+    target.shields = after.shields;
+    if (hullDamage > 0) {
       audioManager.playSoundAt("hull_hit", target.x, target.y, 0.4);
-      if (target.capitalSystems) {
-        const result = applyCapitalSystemDamage(target.capitalSystems, damage);
-        target.capitalSystems = result.systems;
-        target.hull = sumSystemsHull(result.systems);
-        if (result.justDisabled && result.hitSystemId) {
-          this.effectsManager.showFloatingText(
-            target.x,
-            target.y - 45,
-            `${SYSTEM_LABELS[result.hitSystemId]} DISABLED!`,
-            "#ff8800",
-          );
-        }
-      } else {
-        target.hull = Math.max(0, target.hull - damage);
-      }
+      if (target.capitalSystems) this.damageCapitalSystems(target, hullDamage);
+      else target.hull = after.hull;
     }
-
     this.healthBars.get(target.id)?.update(target.hull, target.shields);
-    if (target.hull <= 0) {
-      this.destroyShip(target.id, attacker.owner === "player");
+  }
+
+  /**
+   * Routes hull damage into a boss's capital systems.
+   *
+   * @param target - The boss.
+   * @param damage - Hull damage to take.
+   */
+  private damageCapitalSystems(target: CampaignShip, damage: number): void {
+    if (!target.capitalSystems) return;
+    const result = applyCapitalSystemDamage(target.capitalSystems, damage);
+    target.capitalSystems = result.systems;
+    target.hull = sumSystemsHull(result.systems);
+    if (result.justDisabled && result.hitSystemId) {
+      this.effectsManager.showFloatingText(
+        target.x,
+        target.y - 45,
+        `${SYSTEM_LABELS[result.hitSystemId]} DISABLED!`,
+        "#ff8800",
+      );
+    }
+  }
+
+  /**
+   * @param ship - The ship asking.
+   * @returns Whether another living ship of its side flies within wingman range.
+   */
+  private fliesWithWingman(ship: CampaignShip): boolean {
+    const allies = [...this.ships.values()].filter(
+      (other) => other.faction === ship.faction && other.hull > 0,
+    );
+    return hasWingman(ship, allies);
+  }
+
+  /**
+   * Resolves a destruction: the killer's ability reward (shields, frenzy),
+   * the victim's removal (kill credit to the killer's side), then the
+   * victim's death blast on enemies nearby — whose kills it is credited with.
+   *
+   * @param victim - The ship destroyed.
+   * @param killer - The ship that destroyed it.
+   */
+  private killShip(victim: CampaignShip, killer: CampaignShip): void {
+    if (killer.hull > 0) {
+      Object.assign(killer, rewardKill(combatantOf(killer), this.time.now));
+      this.healthBars.get(killer.id)?.update(killer.hull, killer.shields);
+    }
+    const enemies = [...this.ships.values()].filter(
+      (other) => other.faction !== victim.faction && other.hull > 0,
+    );
+    const caught = deathBlastTargets(combatantOf(victim), enemies);
+    this.destroyShip(victim.id, killer.owner === "player");
+    for (const ship of caught) {
+      if (!this.ships.has(ship.id)) continue;
+      this.applyDamage(ship, victim.modifiers.deathBlastDamage);
+      if (ship.hull <= 0) this.killShip(ship, victim);
     }
   }
 

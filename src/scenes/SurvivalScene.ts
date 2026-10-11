@@ -64,6 +64,32 @@ import {
 } from "../arcade/systems/SurvivalSteering";
 import { playFlightEventFx } from "../arcade/ArcadeFX";
 import {
+  equipFlight,
+  equipQuickBuild,
+  regenerateShields,
+  stressModifiersOf,
+} from "../arcade/systems/QuickBuildEquip";
+import {
+  absorbDamage,
+  combatantOf,
+  resolveDiceAttack,
+} from "../arcade/systems/DiceAttack";
+import {
+  joiningSquadLoadouts,
+  planWaveRoster,
+  type WaveSlot,
+} from "../arcade/systems/SurvivalLoadouts";
+import {
+  deathBlastTargets,
+  hasWingman,
+  rewardKill,
+} from "../arcade/PilotAbilityCombat";
+import { applyInstantStress } from "../arcade/ArcadeStress";
+import {
+  NEUTRAL_MODIFIERS,
+  type CombatModifiers,
+} from "../core/CombatModifiers";
+import {
   applyCapitalSystemDamage,
   createCapitalSystems,
   isEnginesOffline,
@@ -134,6 +160,28 @@ const BASE_BELT: BeltConfig = {
   maxDamagePerSecond: 3,
 };
 
+/** Elite wave ships fly with this much of their equipped hull. */
+const ELITE_HULL_MULTIPLIER = 1.5;
+
+/** Extra attack dice an elite wave ship rolls. */
+const ELITE_ATTACK_BONUS = 1;
+
+/** Boss stat multiplier before the per-5-waves growth. */
+const BOSS_BASE_MULTIPLIER = 2;
+
+/** Horizontal gap (px) between elites entering side by side. */
+const ELITE_SPACING_PX = 120;
+
+/** Entry row (px from the top) for elites and the boss. */
+const ELITE_ENTRY_Y = 160;
+const BOSS_ENTRY_Y = 150;
+
+/** Wave ships enter facing down the arena. */
+const ENEMY_ENTRY_ANGLE = 180;
+
+/** Damage multiplier of a crit drafted by the player fleet. */
+const CRIT_DAMAGE_MULTIPLIER = 2;
+
 interface SurvivalShip {
   id: string;
   definitionId: string;
@@ -153,6 +201,12 @@ interface SurvivalShip {
   /** True on the frame this ship's maneuver cycle committed. */
   cycleCommitted: boolean;
   weaponCooldown: number;
+  /** Quick build flown (upgrades + pilot), or null for the bare hull. */
+  loadoutId: string | null;
+  /** Real-time effects of the quick build. */
+  modifiers: CombatModifiers;
+  /** Scene time (ms) until which a kill-frenzy ability is active. */
+  frenzyUntilMs: number;
   /** Present only for boss-tier ships — Survival's closest analog to a capital. */
   capitalSystems?: CapitalSystemsState | null;
 }
@@ -163,6 +217,35 @@ interface Pose {
   readonly y: number;
   readonly angle: number;
 }
+
+/** Everything needed to build one ship record. */
+interface ShipSpawn {
+  readonly id: string;
+  readonly definitionId: string;
+  readonly faction: FactionId;
+  readonly owner: "player" | "ai";
+  readonly pose: Pose;
+  readonly loadoutId: string | null;
+}
+
+/** A player ship about to spawn at a point. */
+interface PlayerSpawn {
+  readonly definitionId: string;
+  readonly x: number;
+  readonly y: number;
+  readonly loadoutId: string | null;
+}
+
+/** A wave ship about to spawn at a point. */
+interface EnemySpawn {
+  readonly slot: WaveSlot;
+  readonly faction: FactionId;
+  readonly x: number;
+  readonly y: number;
+}
+
+/** Living ships per side this frame (wingman checks). */
+type LivingBySide = ReadonlyMap<SurvivalShip["owner"], readonly SurvivalShip[]>;
 
 interface ShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
@@ -320,11 +403,15 @@ export class SurvivalScene extends Phaser.Scene {
     this.escortShipIds.clear();
 
     // Spawn initial player ship based on chosen faction (+ optional flagship choice)
-    this.spawnPlayerShip(
-      this.starterShipId ?? FACTION_STARTER_SHIPS[this.playerFaction],
-      BATTLEFIELD_SIZE / 2,
-      BATTLEFIELD_SIZE / 2 + 100,
-    );
+    const definitionId =
+      this.starterShipId ?? FACTION_STARTER_SHIPS[this.playerFaction];
+    const [loadoutId] = joiningSquadLoadouts([], [definitionId]);
+    this.spawnPlayerShip({
+      definitionId,
+      x: BATTLEFIELD_SIZE / 2,
+      y: BATTLEFIELD_SIZE / 2 + 100,
+      loadoutId: loadoutId ?? null,
+    });
   }
 
   /** Fresh, unpredictable seed for a run's deterministic draft sequence. */
@@ -599,37 +686,31 @@ export class SurvivalScene extends Phaser.Scene {
     }
   }
 
-  private spawnEliteShip(
-    defId: string,
-    faction: FactionId,
-    x: number,
-    y: number,
-  ): void {
-    const id = `elite_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const ship = this.createShip(id, defId, faction, "ai", x, y, 180);
-    // Elite ships have +50% hull and +1 attack
-    ship.maxHull = Math.floor(ship.maxHull * 1.5);
+  /**
+   * Spawns an elite wave ship: its equipped build with +50% hull and +1 attack.
+   *
+   * @param spawn - The wave ship and where it enters.
+   */
+  private spawnEliteShip(spawn: EnemySpawn): void {
+    const ship = this.createEnemy(spawn, "elite");
+    ship.maxHull = Math.floor(ship.maxHull * ELITE_HULL_MULTIPLIER);
     ship.hull = ship.maxHull;
     ship.combatStats = {
       ...ship.combatStats,
-      attackDice: ship.combatStats.attackDice + 1,
+      attackDice: ship.combatStats.attackDice + ELITE_ATTACK_BONUS,
     };
-    this.ships.set(id, ship);
-    this.enemyShipIds.push(id);
-    this.createShipSprite(ship, true);
-    this.createHealthBar(ship);
+    this.addEnemy(ship, true);
   }
 
-  private spawnBossShip(
-    defId: string,
-    faction: FactionId,
-    x: number,
-    y: number,
-    multiplier: number,
-  ): void {
-    const id = `boss_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const ship = this.createShip(id, defId, faction, "ai", x, y, 180);
-    // Boss ships scale with multiplier
+  /**
+   * Spawns a milestone boss: its equipped build scaled by the wave's boss
+   * multiplier, with capital-style engines/turrets/bridge subsystems.
+   *
+   * @param spawn - The wave ship and where it enters.
+   */
+  private spawnBossShip(spawn: EnemySpawn): void {
+    const multiplier = BOSS_BASE_MULTIPLIER + Math.floor(this.wave / 5);
+    const ship = this.createEnemy(spawn, "boss");
     ship.maxHull = ship.maxHull * multiplier;
     ship.hull = ship.maxHull;
     ship.maxShields = ship.maxShields * multiplier;
@@ -638,43 +719,37 @@ export class SurvivalScene extends Phaser.Scene {
       ...ship.combatStats,
       attackDice: ship.combatStats.attackDice + Math.floor(multiplier / 2),
     };
-    // Boss-tier ships get capital-style engines/turrets/bridge subsystems.
     ship.capitalSystems = createCapitalSystems(ship.maxHull);
-    this.ships.set(id, ship);
-    this.enemyShipIds.push(id);
-    this.createShipSprite(ship, false, true);
-    this.createHealthBar(ship);
+    this.addEnemy(ship, false, true);
   }
 
+  /**
+   * Spawns the wave: regulars along an entry arc, elites and the milestone
+   * boss up front, each flying the wave's quick-build assignment.
+   */
   private spawnWaveEnemies(): void {
-    const enemyFaction = this.rotatingEnemyFaction();
-    const roster = getShipsByFaction(enemyFaction);
-    if (roster.length === 0) return;
-
+    const faction = this.rotatingEnemyFaction();
     const { enemyCount, eliteCount } = this.run.waveSize(
       this.playerShipIds.length,
     );
+    const slots = planWaveRoster(getShipsByFaction(faction), {
+      enemyCount,
+      eliteCount,
+      isMilestone: this.run.isMilestone,
+    });
     const centerX = BATTLEFIELD_SIZE / 2;
-
-    for (let i = 0; i < enemyCount; i++) {
-      const def = roster[i % roster.length]!;
-      const slot = this.spawnSlot(i, enemyCount, centerX);
-      this.spawnEnemyShip(def.id, enemyFaction, slot.x, slot.y);
-    }
-
-    for (let i = 0; i < eliteCount; i++) {
-      const def =
-        roster.find((s) => s.role === "gunship" || s.role === "bomber") ??
-        roster[0]!;
-      this.spawnEliteShip(def.id, enemyFaction, centerX + (i - 1) * 120, 160);
-    }
-
-    if (this.run.isMilestone) {
-      const boss =
-        roster.find((s) => s.role === "gunship") ?? roster[roster.length - 1]!;
-      const multiplier = 2 + Math.floor(this.wave / 5);
-      this.spawnBossShip(boss.id, enemyFaction, centerX, 150, multiplier);
-    }
+    let eliteIndex = 0;
+    slots.forEach((slot, index) => {
+      if (slot.tier === "regular") {
+        const at = this.spawnSlot(index, enemyCount, centerX);
+        this.spawnEnemyShip({ slot, faction, ...at });
+      } else if (slot.tier === "elite") {
+        const x = centerX + (eliteIndex++ - 1) * ELITE_SPACING_PX;
+        this.spawnEliteShip({ slot, faction, x, y: ELITE_ENTRY_Y });
+      } else {
+        this.spawnBossShip({ slot, faction, x: centerX, y: BOSS_ENTRY_Y });
+      }
+    });
   }
 
   /** Cycles the enemy faction so successive waves feel varied. */
@@ -781,27 +856,36 @@ export class SurvivalScene extends Phaser.Scene {
    * Materialises any escorts the run has earned but not yet spawned. Escorts are
    * the faction's basic starter ship — weak bodies that do NOT inherit the
    * flagship's drafted bonuses (their strength comes from support investment,
-   * modelled in the balance sim, not from copying the flagship).
+   * modelled in the balance sim, not from copying the flagship). They do fly
+   * quick builds, never repeating an ace already in the squad.
    */
   private reconcileEscorts(): void {
     const anchor = this.ships.get(this.playerShipIds[0] ?? "");
     if (!anchor) return;
-    while (
-      this.run.pendingEscorts() > 0 &&
-      this.playerShipIds.length < MAX_FLEET
-    ) {
+    const count = Math.min(
+      this.run.pendingEscorts(),
+      MAX_FLEET - this.playerShipIds.length,
+    );
+    if (count <= 0) return;
+    const definitionId = FACTION_STARTER_SHIPS[this.playerFaction];
+    const loadouts = joiningSquadLoadouts(
+      [...this.ships.values()].filter((ship) => ship.owner === "player"),
+      new Array<string>(count).fill(definitionId),
+    );
+    for (const loadoutId of loadouts) {
       const offset = this.playerShipIds.length * 80;
       this.spawnPlayerShip(
-        FACTION_STARTER_SHIPS[this.playerFaction],
-        anchor.x + offset,
-        anchor.y + 50,
+        { definitionId, x: anchor.x + offset, y: anchor.y + 50, loadoutId },
         true,
       );
       this.run.markEscortSpawned();
     }
   }
 
-  /** Re-applies hull/shield bonuses to the flagship fleet (escorts stay basic). */
+  /**
+   * Re-applies hull/shield bonuses to the flagship fleet (escorts stay basic).
+   * combatStats holds the equipped baseline, so quick-build bonuses persist.
+   */
   private applyBonusesToFleet(): void {
     const { maxHull, maxShields } = this.run.bonuses;
     for (const id of this.playerShipIds) {
@@ -905,78 +989,115 @@ export class SurvivalScene extends Phaser.Scene {
   // SHIP MANAGEMENT
   // ==========================================
 
-  private spawnPlayerShip(
-    defId: string,
-    x: number,
-    y: number,
-    isEscort = false,
-  ): void {
+  /**
+   * Spawns a player ship (the flagship, or an escort) flying its quick build.
+   *
+   * @param spawn - Ship, entry point and quick build.
+   * @param isEscort - True for an escort (no drafted bonuses).
+   */
+  private spawnPlayerShip(spawn: PlayerSpawn, isEscort = false): void {
     const id = `player_${this.playerShipIds.length}`;
     if (isEscort) this.escortShipIds.add(id);
-    const ship = this.createShip(
+    const ship = this.createShip({
       id,
-      defId,
-      this.playerFaction,
-      "player",
-      x,
-      y,
-      0,
-    );
+      definitionId: spawn.definitionId,
+      faction: this.playerFaction,
+      owner: "player",
+      pose: { x: spawn.x, y: spawn.y, angle: 0 },
+      loadoutId: spawn.loadoutId,
+    });
     this.ships.set(id, ship);
     this.playerShipIds.push(id);
     this.createShipSprite(ship);
     this.createHealthBar(ship);
   }
 
-  private spawnEnemyShip(
-    defId: string,
-    faction: FactionId,
-    x: number,
-    y: number,
-  ): void {
-    const id = `enemy_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const ship = this.createShip(id, defId, faction, "ai", x, y, 180);
-    this.ships.set(id, ship);
-    this.enemyShipIds.push(id);
-    this.createShipSprite(ship);
+  /**
+   * Spawns a regular wave ship flying its quick build.
+   *
+   * @param spawn - The wave ship and where it enters.
+   */
+  private spawnEnemyShip(spawn: EnemySpawn): void {
+    this.addEnemy(this.createEnemy(spawn, "enemy"));
+  }
+
+  /**
+   * Builds (but does not add) a wave ship record with its quick build.
+   *
+   * @param spawn - The wave ship and where it enters.
+   * @param idPrefix - Id prefix naming its tier.
+   * @returns The equipped ship record.
+   */
+  private createEnemy(spawn: EnemySpawn, idPrefix: string): SurvivalShip {
+    const suffix = Math.random().toString(36).substring(2, 11);
+    return this.createShip({
+      id: `${idPrefix}_${Date.now()}_${suffix}`,
+      definitionId: spawn.slot.definitionId,
+      faction: spawn.faction,
+      owner: "ai",
+      pose: { x: spawn.x, y: spawn.y, angle: ENEMY_ENTRY_ANGLE },
+      loadoutId: spawn.slot.loadoutId,
+    });
+  }
+
+  /**
+   * Registers a wave ship and gives it a sprite and health bar.
+   *
+   * @param ship - The built wave ship.
+   * @param isElite - Draw the elite glow/outline.
+   * @param isBoss - Draw the boss glow/outline at boss size.
+   */
+  private addEnemy(ship: SurvivalShip, isElite = false, isBoss = false): void {
+    this.ships.set(ship.id, ship);
+    this.enemyShipIds.push(ship.id);
+    this.createShipSprite(ship, isElite, isBoss);
     this.createHealthBar(ship);
   }
 
-  private createShip(
-    id: string,
-    defId: string,
-    faction: FactionId,
-    owner: "player" | "ai",
-    x: number,
-    y: number,
-    angle: number,
-  ): SurvivalShip {
-    const combatStats = getModeCombatStats(defId, "survival");
-
-    // Escorts are weak basic bodies: they never inherit the flagship's drafted
-    // bonuses. Only the flagship (a non-escort player ship) gets them.
-    const isFlagship = owner === "player" && !this.escortShipIds.has(id);
-    const hullBonus = isFlagship ? this.run.bonuses.maxHull : 0;
-    const shieldBonus = isFlagship ? this.run.bonuses.maxShields : 0;
-
-    return {
+  /**
+   * Builds a ship record flying its quick build. Its combatStats become the
+   * equipped baseline (bare stats + upgrades) so drafted run bonuses, which
+   * only the flagship receives, stack on top and can be re-applied later.
+   *
+   * @param spawn - Identity, side, pose and quick build.
+   * @returns The equipped ship record.
+   */
+  private createShip(spawn: ShipSpawn): SurvivalShip {
+    const { id, definitionId, pose } = spawn;
+    const combatStats = getModeCombatStats(definitionId, "survival");
+    const ship: SurvivalShip = {
       id,
-      definitionId: defId,
-      faction,
-      owner,
-      x,
-      y,
-      angle,
-      hull: combatStats.hull + hullBonus,
-      maxHull: combatStats.maxHull + hullBonus,
-      shields: combatStats.shields + shieldBonus,
-      maxShields: combatStats.maxShields + shieldBonus,
+      definitionId,
+      faction: spawn.faction,
+      owner: spawn.owner,
+      ...pose,
+      hull: combatStats.hull,
+      maxHull: combatStats.maxHull,
+      shields: combatStats.shields,
+      maxShields: combatStats.maxShields,
       combatStats,
-      flight: createCycleFlight(defId, { x, y, angle }),
-      dial: getShipDial(defId),
+      flight: createCycleFlight(definitionId, pose),
+      dial: getShipDial(definitionId),
       cycleCommitted: false,
       weaponCooldown: 0,
+      loadoutId: spawn.loadoutId,
+      modifiers: NEUTRAL_MODIFIERS,
+      frenzyUntilMs: 0,
     };
+    ship.modifiers = equipQuickBuild(ship, spawn.loadoutId);
+    ship.flight = equipFlight(ship.flight, ship.modifiers);
+    const { hull, maxHull, shields, maxShields } = ship;
+    ship.combatStats = { ...combatStats, hull, maxHull, shields, maxShields };
+
+    const isFlagship = spawn.owner === "player" && !this.escortShipIds.has(id);
+    if (isFlagship) {
+      const bonuses = this.run.bonuses;
+      ship.hull += bonuses.maxHull;
+      ship.maxHull += bonuses.maxHull;
+      ship.shields += bonuses.maxShields;
+      ship.maxShields += bonuses.maxShields;
+    }
+    return ship;
   }
 
   private createShipSprite(
@@ -1076,8 +1197,15 @@ export class SurvivalScene extends Phaser.Scene {
         worldSize: BATTLEFIELD_SIZE,
         dial: ship.dial,
         cycleMs: CYCLE_DURATION_MS,
+        modifiers: stressModifiersOf(ship.modifiers),
       });
       this.setFlight(ship, tick.state);
+      ship.shields = regenerateShields(
+        ship.shields,
+        ship.maxShields,
+        ship.modifiers,
+        deltaMs,
+      );
       ship.cycleCommitted = tick.completed !== null;
       if (tick.completed && ship.id === this.pilotedShipId) {
         const { control } = tick.state.motion;
@@ -1152,9 +1280,16 @@ export class SurvivalScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * One frame of weapons: the run's shield regen for the player fleet,
+   * cooldowns, and autofire at the nearest target in range and arc.
+   *
+   * @param delta - Frame length (ms).
+   */
   private processCombat(delta: number): void {
     const { fireRate, shieldRegen } = this.run.bonuses;
     const playerCooldownMod = Math.max(0.5, 1 - fireRate);
+    let sides: LivingBySide | null = null;
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
 
@@ -1170,12 +1305,28 @@ export class SurvivalScene extends Phaser.Scene {
         // Primary weapon always autofires once in range/arc — flagship, escorts, and AI alike.
         const target = this.findTarget(ship);
         if (target) {
-          this.fireAt(ship, target);
+          sides ??= this.livingBySide();
+          this.fireAt(ship, target, sides);
           const mod = ship.owner === "player" ? playerCooldownMod : 1;
           ship.weaponCooldown = ship.combatStats.weaponCooldown * mod;
         }
       }
     }
+  }
+
+  /**
+   * @returns Living ships grouped by side, for this frame's wingman checks.
+   */
+  private livingBySide(): LivingBySide {
+    const player: SurvivalShip[] = [];
+    const ai: SurvivalShip[] = [];
+    for (const ship of this.ships.values()) {
+      if (ship.hull > 0) (ship.owner === "player" ? player : ai).push(ship);
+    }
+    return new Map([
+      ["player", player],
+      ["ai", ai],
+    ]);
   }
 
   private findTarget(ship: SurvivalShip): SurvivalShip | null {
@@ -1215,78 +1366,148 @@ export class SurvivalScene extends Phaser.Scene {
     return best;
   }
 
-  private fireAt(attacker: SurvivalShip, target: SurvivalShip): void {
-    const bonuses = this.run.bonuses;
-    const targetAgility =
-      target.combatStats.agilityDice +
-      (target.owner === "player" ? bonuses.evasion : 0);
-    const hitChance = calculateHitChance(
-      attacker.combatStats.attackDice,
-      targetAgility,
+  /**
+   * One shot: the mode's dice odds and damage (run bonuses included)
+   * resolved through both ships' quick builds; a hit stresses the target's
+   * pilot and a kill fires the pilot-ability kill effects.
+   *
+   * @param attacker - The firing ship.
+   * @param target - The ship fired at.
+   * @param sides - Living ships per side this frame (wingman checks).
+   */
+  private fireAt(
+    attacker: SurvivalShip,
+    target: SurvivalShip,
+    sides: LivingBySide,
+  ): void {
+    const result = resolveDiceAttack({
+      attacker: combatantOf(attacker),
+      target: combatantOf(target),
+      hitChance: this.hitChanceOf(attacker, target),
+      baseDamage: this.baseDamageOf(attacker),
+      attackerHasWingman: hasWingman(attacker, sides.get(attacker.owner) ?? []),
+      targetHasWingman: hasWingman(target, sides.get(target.owner) ?? []),
+      nowMs: this.time.now,
+      roll: Math.random(),
+    });
+    this.effectsManager.fireLaser(
+      attacker.x,
+      attacker.y,
+      target.x,
+      target.y,
+      attacker.faction,
+      result.hit,
     );
+    if (!result.hit) return;
+    if (result.stressOnTarget > 0) {
+      this.setFlight(target, {
+        ...target.flight,
+        stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
+      });
+    }
+    this.dealDamage(target, result.damage);
+    if (target.hull > 0) return;
+    this.resolveAbilityKill(attacker, target);
+    this.destroyShip(target.id, attacker.owner === "player");
+  }
 
-    const hit = Math.random() < hitChance;
+  /**
+   * @param attacker - The firing ship.
+   * @param target - The ship fired at.
+   * @returns The mode's dice hit chance, with the run's evasion for the player fleet.
+   */
+  private hitChanceOf(attacker: SurvivalShip, target: SurvivalShip): number {
+    const evasion = target.owner === "player" ? this.run.bonuses.evasion : 0;
+    return calculateHitChance(
+      attacker.combatStats.attackDice,
+      target.combatStats.agilityDice + evasion,
+    );
+  }
 
-    if (hit) {
-      let damage =
-        attacker.combatStats.attackDice +
-        (attacker.owner === "player" ? bonuses.damage : 0);
-      if (attacker.owner === "player" && Math.random() < bonuses.critChance) {
-        damage *= 2;
+  /**
+   * @param attacker - The firing ship.
+   * @returns The mode's damage before equipment: attack dice, plus the run's
+   *   damage bonus and crit roll for the player fleet.
+   */
+  private baseDamageOf(attacker: SurvivalShip): number {
+    if (attacker.owner !== "player") return attacker.combatStats.attackDice;
+    const { damage, critChance } = this.run.bonuses;
+    const base = attacker.combatStats.attackDice + damage;
+    return Math.random() < critChance ? base * CRIT_DAMAGE_MULTIPLIER : base;
+  }
+
+  /**
+   * Damage taken shields first, then hull — a boss's hull is its subsystems.
+   *
+   * @param target - The ship hit.
+   * @param damage - Damage to take.
+   */
+  private dealDamage(target: SurvivalShip, damage: number): void {
+    const after = absorbDamage(target, damage);
+    const hullDamage = damage - (target.shields - after.shields);
+    if (after.shields < target.shields) {
+      audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);
+    }
+    target.shields = after.shields;
+    if (hullDamage > 0) {
+      audioManager.playSoundAt("hull_hit", target.x, target.y, 0.4);
+      if (target.capitalSystems) {
+        this.damageSystems(target, target.capitalSystems, hullDamage);
+      } else {
+        target.hull = after.hull;
       }
+    }
+    this.healthBars.get(target.id)?.update(target.hull, target.shields);
+  }
 
-      if (target.shields > 0) {
-        const shieldDmg = Math.min(target.shields, damage);
-        target.shields -= shieldDmg;
-        damage -= shieldDmg;
-        audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);
-      }
-      if (damage > 0) {
-        audioManager.playSoundAt("hull_hit", target.x, target.y, 0.4);
-        if (target.capitalSystems) {
-          const result = applyCapitalSystemDamage(
-            target.capitalSystems,
-            damage,
-          );
-          target.capitalSystems = result.systems;
-          target.hull = sumSystemsHull(result.systems);
-          if (result.justDisabled && result.hitSystemId) {
-            this.effectsManager.showFloatingText(
-              target.x,
-              target.y - 45,
-              `${SYSTEM_LABELS[result.hitSystemId]} DISABLED!`,
-              "#ff8800",
-            );
-          }
-        } else {
-          target.hull = Math.max(0, target.hull - damage);
-        }
-      }
-
-      this.effectsManager.fireLaser(
-        attacker.x,
-        attacker.y,
+  /**
+   * Hull damage to a boss lands on a subsystem; its hull is their sum.
+   *
+   * @param target - The boss hit.
+   * @param systems - Its subsystems.
+   * @param damage - Hull damage to take.
+   */
+  private damageSystems(
+    target: SurvivalShip,
+    systems: CapitalSystemsState,
+    damage: number,
+  ): void {
+    const result = applyCapitalSystemDamage(systems, damage);
+    target.capitalSystems = result.systems;
+    target.hull = sumSystemsHull(result.systems);
+    if (result.justDisabled && result.hitSystemId) {
+      this.effectsManager.showFloatingText(
         target.x,
-        target.y,
-        attacker.faction,
-        true,
+        target.y - 45,
+        `${SYSTEM_LABELS[result.hitSystemId]} DISABLED!`,
+        "#ff8800",
       );
+    }
+  }
 
-      const healthBar = this.healthBars.get(target.id);
-      healthBar?.update(target.hull, target.shields);
-
-      if (target.hull <= 0) {
-        this.destroyShip(target.id, attacker.owner === "player");
+  /**
+   * Pilot-ability effects of a kill: the killer's reward (shields, frenzy)
+   * and the victim's death blast on enemies nearby. Ships the blast destroys
+   * count as kills for the victim's side (no chained blasts).
+   *
+   * @param killer - The ship that made the kill.
+   * @param victim - The ship destroyed.
+   */
+  private resolveAbilityKill(killer: SurvivalShip, victim: SurvivalShip): void {
+    if (killer.hull > 0) {
+      Object.assign(killer, rewardKill(combatantOf(killer), this.time.now));
+      this.healthBars.get(killer.id)?.update(killer.hull, killer.shields);
+    }
+    const blastDamage = victim.modifiers.deathBlastDamage;
+    if (blastDamage <= 0) return;
+    const enemies = [...this.ships.values()].filter(
+      (other) => other.owner !== victim.owner && other.hull > 0,
+    );
+    for (const caught of deathBlastTargets(combatantOf(victim), enemies)) {
+      this.dealDamage(caught, blastDamage);
+      if (caught.hull <= 0) {
+        this.destroyShip(caught.id, victim.owner === "player");
       }
-    } else {
-      this.effectsManager.fireLaser(
-        attacker.x,
-        attacker.y,
-        target.x,
-        target.y,
-        attacker.faction,
-        false,
-      );
     }
   }
 
