@@ -2,8 +2,10 @@
  * ShipDetailPanel — big persistent panel to the right of the ship list.
  * Shows the selected ship's full art (aspect-ratio preserved), stats,
  * actions, description, and the loadout submenu (Base + up to a few
- * payload options) with each loadout's playstyle/usage tips — replacing
- * the old small hover tooltip and the cramped bottom loadout strip.
+ * quick builds). For the selected quick build it shows what the build
+ * really is — pilot (name, initiative, unique), pilot ability (card text +
+ * real-time summary), the slot bar filled vs empty, and each upgrade's
+ * real-time effect (see QuickBuildDetailView).
  */
 
 import Phaser from "phaser";
@@ -22,7 +24,7 @@ import {
   computeLoadoutBonuses,
   buildStatLine,
 } from "./catalogHelpers";
-import type { LoadoutBonuses } from "./types";
+import { QuickBuildDetailView } from "./QuickBuildDetailView";
 
 const STAT_DEFS = [
   { key: "attack", label: "ATTACK", color: 0xff6655 },
@@ -31,7 +33,16 @@ const STAT_DEFS = [
   { key: "shields", label: "SHIELDS", color: 0x4488ff },
 ] as const;
 
-const ART_H = 150;
+/** Art box height at the full panel height — compact so the quick-build block fits. */
+const ART_H = 88;
+/** Panel height the layout is designed for; shorter panels shrink the art. */
+const FULL_PANEL_H = 570;
+/** The art never shrinks below this. */
+const MIN_ART_H = 56;
+/** Longest lore excerpt shown (characters) before an ellipsis. */
+const LORE_MAX_CHARS = 120;
+/** Space between the build's stat line and its description. */
+const DESCRIPTION_GAP = 12;
 const LOADOUT_BTN_W = 150;
 const LOADOUT_BTN_H = 40;
 const LOADOUT_BTN_GAP = 8;
@@ -105,7 +116,8 @@ export class ShipDetailPanel {
     bg.strokeRoundedRect(x, y, w, h, 10);
 
     let cy = y + 12;
-    cy = this.drawArtAndHeader(def, x, cy, w) + 8;
+    const artH = Math.max(MIN_ART_H, ART_H - Math.max(0, FULL_PANEL_H - h));
+    cy = this.drawArtAndHeader(def, x, cy, w, artH) + 8;
     cy = this.drawStats(def, staging, x, cy, w) + 8;
     cy = this.drawActions(def, x, cy, w) + 6;
     cy = this.drawDescription(def, x, cy, w) + 8;
@@ -130,6 +142,7 @@ export class ShipDetailPanel {
     x: number,
     y: number,
     w: number,
+    artH: number,
   ): number {
     const c = this.container!;
     const artKey = `ship_art_${def.id}`;
@@ -139,13 +152,13 @@ export class ShipDetailPanel {
         this.scene,
         imgKey,
         x + w / 2,
-        y + ART_H / 2,
+        y + artH / 2,
         w - 32,
-        ART_H,
+        artH,
       ),
     );
 
-    let cy = y + ART_H + 6;
+    let cy = y + artH + 6;
     c.add(
       this.scene.add
         .text(x + w / 2, cy, def.name, {
@@ -270,7 +283,10 @@ export class ShipDetailPanel {
   ): number {
     const entry = getEncyclopediaEntry(def.id);
     const full = entry?.lore ?? def.description;
-    const desc = full.length > 150 ? `${full.slice(0, 147)}…` : full;
+    const desc =
+      full.length > LORE_MAX_CHARS
+        ? `${full.slice(0, LORE_MAX_CHARS - 3)}…`
+        : full;
     const t = this.scene.add.text(x + 16, y, desc, {
       font: "12px Arial",
       color: "#8ab0cc",
@@ -347,78 +363,55 @@ export class ShipDetailPanel {
       );
     }
 
+    this.drawLoadoutDetails(def, staging, x, btnY + LOADOUT_BTN_H + 8, w);
+  }
+
+  /**
+   * The selected build's price/stat line and description, then what the
+   * quick build really is: pilot, ability, slot bar and upgrade effects.
+   *
+   * @param def - The selected ship.
+   * @param staging - Current ship/loadout selection.
+   * @param x - Panel left.
+   * @param y - Top of the block.
+   * @param w - Panel width.
+   */
+  private drawLoadoutDetails(
+    def: ShipDefinition,
+    staging: StagingSelection,
+    x: number,
+    y: number,
+    w: number,
+  ): void {
+    const c = this.container!;
     // Resolve against the full catalogue: a squadron preset may have selected a
     // loadout the button row above does not offer.
     const selLd = getShipLoadouts(def.id).find(
       (l) => l.id === staging.getSelectedLoadoutId(),
     );
-    let cy = btnY + LOADOUT_BTN_H + 8;
     const bonuses = computeLoadoutBonuses(selLd?.upgrades ?? []);
-    c.add(
-      this.scene.add.text(
-        x + 16,
-        cy,
-        buildStatLine(bonuses, selLd?.pointCost ?? def.baseStats.pointCost),
-        { font: "bold 12px Arial", color: selLd ? "#88cc55" : "#6688aa" },
-      ),
+    const statT = this.scene.add.text(
+      x + 16,
+      y,
+      buildStatLine(bonuses, selLd?.pointCost ?? def.baseStats.pointCost),
+      { font: "bold 12px Arial", color: selLd ? "#88cc55" : "#6688aa" },
     );
-    cy += 16;
-    const description =
-      selLd?.description ?? "Stock loadout \u2014 no upgrades equipped.";
-    const descT = this.scene.add.text(x + 16, cy, description, {
+    const description = selLd
+      ? `${selLd.description} \u2014 ${getLoadoutPlaystyle(selLd.role)}`
+      : "Stock ship flown by a rookie \u2014 no pilot ability, no upgrades.";
+    const descX = statT.x + statT.width + DESCRIPTION_GAP;
+    const descT = this.scene.add.text(descX, y, description, {
       font: "12px Arial",
       color: "#7090a8",
-      wordWrap: { width: w - 32 },
+      wordWrap: { width: x + w - 16 - descX },
     });
-    c.add(descT);
-    cy += descT.height + 4;
-    if (selLd) {
-      const styleT = this.scene.add.text(
-        x + 16,
-        cy,
-        getLoadoutPlaystyle(selLd.role),
-        {
-          font: "italic 12px Arial",
-          color: "#ddaa55",
-          wordWrap: { width: w - 32 },
-        },
-      );
-      c.add(styleT);
-      cy += styleT.height + 6;
-    }
-    this.drawUsageTips(bonuses, x, cy, w);
-  }
-
-  private drawUsageTips(
-    bonuses: LoadoutBonuses,
-    x: number,
-    y: number,
-    w: number,
-  ): void {
-    const tips: Array<{ text: string; color: string }> = [];
-    if (bonuses.actions.length > 0)
-      tips.push({
-        text: `+ Abilities: ${bonuses.actions.join(", ")} \u2014 activate in battle`,
-        color: "#558844",
-      });
-    if (bonuses.rerolls > 0)
-      tips.push({
-        text: `+ Hit bonus: +${bonuses.rerolls * 5}% accuracy`,
-        color: "#ffcc66",
-      });
-    if (bonuses.charges > 0)
-      tips.push({
-        text: `+ ${bonuses.charges} charge${bonuses.charges > 1 ? "s" : ""} \u2014 spend when firing ordnance or activating an ability`,
-        color: "#cc88ff",
-      });
-    tips.forEach((tip, i) => {
-      this.container!.add(
-        this.scene.add.text(x + 16, y + i * 16, tip.text, {
-          font: "11px Arial",
-          color: tip.color,
-          wordWrap: { width: w - 32 },
-        }),
-      );
+    c.add([statT, descT]);
+    new QuickBuildDetailView(this.scene, c).render({
+      shipId: def.id,
+      loadout: selLd,
+      x: x + 16,
+      y: y + Math.max(statT.height, descT.height) + 6,
+      width: w - 32,
     });
   }
 

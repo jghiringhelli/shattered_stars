@@ -16,6 +16,16 @@ import { FACTION_COLORS, type FactionId } from "../config";
 import { getShipDefinition } from "../data/ShipDefinitions";
 import { getRoleProsCons } from "../data/ShipRoleProfiles";
 import { SURVIVAL_STARTER_CHOICES } from "./SurvivalScene";
+import {
+  cycleQuickBuild,
+  selectionFor,
+  type QuickBuildSelection,
+} from "../arcade/systems/QuickBuildChoice";
+import { renderQuickBuildChooser } from "../ui/QuickBuildChooser";
+
+/** The flagship's quick-build chooser, centred below the ship cards. */
+const QUICK_BUILD_CHOOSER_Y = 476;
+const QUICK_BUILD_CHOOSER_W = 520;
 
 const FACTION_ORDER: readonly FactionId[] = [
   "terran_hegemony",
@@ -38,12 +48,16 @@ export class SurvivalSetupScene extends Phaser.Scene {
   private selectedShipId: string = SURVIVAL_STARTER_CHOICES.terran_hegemony[0]!;
   private shipCardObjects: Phaser.GameObjects.GameObject[] = [];
   private factionButtons: Phaser.GameObjects.Container[] = [];
+  /** The flagship's quick-build pick (default until the player cycles it). */
+  private playerBuilds: QuickBuildSelection | null = null;
+  private quickBuildObjects: Phaser.GameObjects.GameObject[] = [];
 
   constructor() {
     super({ key: "SurvivalSetupScene" });
   }
 
   create(): void {
+    this.quickBuildObjects = [];
     this.cameras.main.setBackgroundColor(0x050510);
     addSceneBackground(this);
     renderMenuStarfield(this, {
@@ -147,6 +161,34 @@ export class SurvivalSetupScene extends Phaser.Scene {
         shipId,
       );
     });
+    this.renderQuickBuildChoice(centerX);
+  }
+
+  /**
+   * The flagship's quick-build chooser below the ship cards. Defaults to
+   * what the run would hand out, so launching untouched changes nothing.
+   *
+   * @param centerX - Horizontal centre of the chooser.
+   */
+  private renderQuickBuildChoice(centerX: number): void {
+    this.quickBuildObjects.forEach((o) => o.destroy());
+    this.playerBuilds = selectionFor([this.selectedShipId], this.playerBuilds);
+    const chooser = renderQuickBuildChooser(this, {
+      x: centerX - QUICK_BUILD_CHOOSER_W / 2,
+      y: QUICK_BUILD_CHOOSER_Y,
+      width: QUICK_BUILD_CHOOSER_W,
+      heading: "FLAGSHIP QUICK BUILD",
+      shipId: this.selectedShipId,
+      loadoutId: this.playerBuilds.loadoutIds[0] ?? null,
+      name: "survivalQuickBuild",
+      accentColor: 0x66aaff,
+      onCycle: (step) => {
+        if (!this.playerBuilds) return;
+        this.playerBuilds = cycleQuickBuild(this.playerBuilds, 0, step);
+        this.renderQuickBuildChoice(centerX);
+      },
+    });
+    this.quickBuildObjects = chooser.objects;
   }
 
   private createShipCard(
@@ -257,6 +299,9 @@ export class SurvivalSetupScene extends Phaser.Scene {
         this.scene.start("SurvivalScene", {
           factionId: this.selectedFaction,
           shipId: this.selectedShipId,
+          loadoutId:
+            selectionFor([this.selectedShipId], this.playerBuilds)
+              .loadoutIds[0] ?? null,
         });
       },
     ).setScrollFactor(0);

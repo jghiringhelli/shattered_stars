@@ -75,6 +75,7 @@ import {
   resolveDiceAttack,
 } from "../arcade/systems/DiceAttack";
 import {
+  flagshipLoadout,
   joiningSquadLoadouts,
   planWaveRoster,
   type WaveSlot,
@@ -313,14 +314,21 @@ export class SurvivalScene extends Phaser.Scene {
   private telemetry: ShipTelemetry | null = null;
   /** Flagship override from the setup screen; falls back to the faction default. */
   private starterShipId: string | null = null;
+  /** The flagship's quick build picked on the setup screen (null = default). */
+  private starterLoadoutId: string | null = null;
 
   constructor() {
     super({ key: "SurvivalScene" });
   }
 
-  init(data: { factionId?: FactionId; shipId?: string }): void {
+  init(data: {
+    factionId?: FactionId;
+    shipId?: string;
+    loadoutId?: string | null;
+  }): void {
     if (data?.factionId) this.playerFaction = data.factionId;
     this.starterShipId = data?.shipId ?? null;
+    this.starterLoadoutId = data?.loadoutId ?? null;
   }
 
   create(): void {
@@ -405,12 +413,12 @@ export class SurvivalScene extends Phaser.Scene {
     // Spawn initial player ship based on chosen faction (+ optional flagship choice)
     const definitionId =
       this.starterShipId ?? FACTION_STARTER_SHIPS[this.playerFaction];
-    const [loadoutId] = joiningSquadLoadouts([], [definitionId]);
+    const loadoutId = flagshipLoadout(definitionId, this.starterLoadoutId);
     this.spawnPlayerShip({
       definitionId,
       x: BATTLEFIELD_SIZE / 2,
       y: BATTLEFIELD_SIZE / 2 + 100,
-      loadoutId: loadoutId ?? null,
+      loadoutId,
     });
   }
 

@@ -60,6 +60,12 @@ import {
   stressModifiersOf,
 } from "../arcade/systems/QuickBuildEquip";
 import {
+  cycleQuickBuild,
+  selectionFor,
+  type QuickBuildSelection,
+} from "../arcade/systems/QuickBuildChoice";
+import { renderQuickBuildChooser } from "../ui/QuickBuildChooser";
+import {
   absorbDamage,
   combatantOf,
   resolveDiceAttack,
@@ -146,6 +152,11 @@ interface ShipSprite extends Phaser.GameObjects.Container {
 
 type MatchFormat = "best_of_3" | "best_of_5";
 
+/** The player's quick-build chooser box on the setup screen (left of "Your Ship"). */
+const QUICK_BUILD_CHOOSER_X = 24;
+const QUICK_BUILD_CHOOSER_Y = 226;
+const QUICK_BUILD_CHOOSER_W = 316;
+
 export class DogfightScene extends Phaser.Scene {
   private ships: Map<string, DogfightShip> = new Map();
   private shipSprites: Map<string, ShipSprite> = new Map();
@@ -172,6 +183,12 @@ export class DogfightScene extends Phaser.Scene {
   private playerShipId = "confed_falcon";
   private enemyShipId = "terran_raptor";
   private difficulty: "easy" | "normal" | "hard" | "brutal" = "normal";
+  /**
+   * The player's quick-build pick from the setup screen. Null (online, or
+   * never touched) means the default assignQuickBuilds would give; a pick
+   * made for another ship is ignored (see selectionFor).
+   */
+  private playerBuilds: QuickBuildSelection | null = null;
 
   // Game state
   private isPaused = false;
@@ -496,6 +513,7 @@ export class DogfightScene extends Phaser.Scene {
       this.track(btn);
       yPos += 40;
     });
+    this.renderPlayerQuickBuild();
 
     // Ship selection - Enemy
     const enemyLabel = this.add
@@ -675,6 +693,48 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   /**
+   * The player's quick-build chooser, left of the ship list: cycles the
+   * selected ship's quick builds (pilot, ability summary, price). Defaults
+   * to what assignQuickBuilds would give, so untouched it changes nothing.
+   */
+  private renderPlayerQuickBuild(): void {
+    this.playerBuilds = selectionFor([this.playerShipId], this.playerBuilds);
+    const chooser = renderQuickBuildChooser(this, {
+      x: QUICK_BUILD_CHOOSER_X,
+      y: QUICK_BUILD_CHOOSER_Y,
+      width: QUICK_BUILD_CHOOSER_W,
+      heading: "YOUR QUICK BUILD",
+      shipId: this.playerShipId,
+      loadoutId: this.playerBuilds.loadoutIds[0] ?? null,
+      name: "dogfightQuickBuild",
+      accentColor: 0x44ff44,
+      onCycle: (step) => {
+        if (!this.playerBuilds) return;
+        this.playerBuilds = cycleQuickBuild(this.playerBuilds, 0, step);
+        this.showSetupScreen();
+      },
+    });
+    chooser.objects.forEach((obj) => this.track(obj));
+  }
+
+  /**
+   * The quick build a ship spawns with: the player's pick for their ship
+   * (default when untouched or picked for another ship), the default
+   * otherwise.
+   *
+   * @param defId - Ship definition id.
+   * @param owner - Who flies it.
+   * @returns The loadout id, or null for the bare hull.
+   */
+  private quickBuildFor(defId: string, owner: "player" | "ai"): string | null {
+    const chosen =
+      owner === "player"
+        ? (selectionFor([defId], this.playerBuilds).loadoutIds[0] ?? null)
+        : null;
+    return assignQuickBuilds([defId], [chosen])[0] ?? null;
+  }
+
+  /**
    * Registers a setup-screen object for fixed-position rendering and later
    * cleanup. Objects are kept as direct scene children (never reparented
    * into a shared container) — reparenting an already-interactive Container
@@ -683,13 +743,24 @@ export class DogfightScene extends Phaser.Scene {
    * button still worked, but an actual mouse click at the same screen
    * coordinates did not) even though the identical pattern works fine for
    * top-level containers (compare MainMenuScene's menu buttons).
+   * The scroll factor is pushed down to container children too: Phaser
+   * hit-tests each interactive object with its OWN scroll factor, so a
+   * button whose hit rectangle is a child (createSelectionButton,
+   * createToggleButton) ignored real clicks while the camera is scrolled
+   * to the battlefield centre.
    */
   private track(obj: Phaser.GameObjects.GameObject): void {
     const withTransform = obj as unknown as {
       setScrollFactor?: (x: number) => unknown;
       setDepth?: (d: number) => unknown;
+      list?: Phaser.GameObjects.GameObject[];
     };
     withTransform.setScrollFactor?.(0);
+    withTransform.list?.forEach((child) =>
+      (
+        child as unknown as { setScrollFactor?: (x: number) => unknown }
+      ).setScrollFactor?.(0),
+    );
     withTransform.setDepth?.(2000);
     this.setupObjects.push(obj);
   }
@@ -1057,7 +1128,7 @@ export class DogfightScene extends Phaser.Scene {
   ): void {
     const id = `${owner}_0`;
     const combatStats = getModeCombatStats(defId, "continuous");
-    const loadoutId = assignQuickBuilds([defId])[0] ?? null;
+    const loadoutId = this.quickBuildFor(defId, owner);
 
     const ship: DogfightShip = {
       id,

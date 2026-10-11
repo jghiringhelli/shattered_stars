@@ -1,7 +1,8 @@
 /**
  * quick-builds.spec.ts — every battle mode flies quick builds: each ship
- * carries a modifier sheet (upgrades + pilot ability) and, in modes without
- * a loadout picker, ships get their default quick build automatically.
+ * carries a modifier sheet (upgrades + pilot ability) and, wherever the
+ * player has not picked one (no picker, or chooser left untouched), ships
+ * get their default quick build automatically.
  */
 
 import { test, expect } from "@playwright/test";
@@ -15,7 +16,7 @@ import {
   type BattleEntry,
 } from "./helpers/battleEntry";
 
-/** Modes that hand out default quick builds (no loadout picker yet). */
+/** Modes entered without touching a quick-build chooser: default builds. */
 const DEFAULT_BUILD_MODES: readonly BattleEntry[] = [
   DOGFIGHT,
   ACE_DUEL,

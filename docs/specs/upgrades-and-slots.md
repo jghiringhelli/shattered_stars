@@ -46,7 +46,8 @@ aura projection = 4 · trade-off configuration = 2 · illicit = clean equivalent
 `SHIP_SLOTS` is the single source of truth for a ship's slot bar. Same-chassis
 variants across factions are differentiated by their slot bar (plus hull,
 shields, speed, dial and size), not by action lists, which have no real-time
-effect.
+effect. The differentiation rule and the bare-hull price heuristic live in
+[ship-variants.md](ship-variants.md).
 
 Structural rule: large and huge hulls carry two modification slots.
 
@@ -63,7 +64,8 @@ Every loadout MUST (tested in `ShipLoadouts.test.ts`, rules in
 Every loadout is a quick build: ship + one pilot + upgrades.
 
 `loadout.pointCost = ship.baseStats.pointCost + pilot surcharge + Σ card.pointCost`
-(`src/data/loadoutPricing.ts`).
+(`src/data/loadoutPricing.ts`). The bare-ship price itself comes from the hull
+heuristic (`src/data/shipPricing.ts`, [ship-variants.md](ship-variants.md)).
 
 Pilot surcharge (`src/data/pilotPricing.ts`, derived, never authored):
 `(initiative − 1) × 1 + abilityPointValue(ability's real-time effect)`
@@ -101,3 +103,24 @@ loadout's modifier sheet is its upgrades plus its pilot's ability
 Conditional knobs: range 1 (`RANGE_1`), rear arc (±45° behind the
 target), bullseye (±10° off the nose), wingman (a friendly within
 `RANGE_2`). Hooks live in `src/arcade/PilotAbilityCombat.ts`.
+
+## 5. Showing and choosing quick builds
+
+- **Player-facing summaries are derived, never authored.**
+  `summarizeRealtimeEffect` (`src/data/realtimeEffectSummary.ts`) reads any
+  real-time effect as one line ("+1 laser dmg from behind the target",
+  "boost recharges 40% faster", "projects faction aura"). Every
+  `CombatModifiers` knob has a phrase (enforced by the type and tested);
+  every pilot ability and every card with `realtime` reads as ≥1 phrase.
+- `describeQuickBuild` (`src/data/quickBuildDetails.ts`) gives the pilot
+  (name, initiative, unique), the ability (card text + summary), the slot
+  bar (ship slots + the pilot's extra slots, each filled or empty) and each
+  upgrade's summary (stat bonuses, weapon profile, real-time knobs).
+- The ship picker's detail panel shows all of the above for the selected
+  build (`src/ui/picker/QuickBuildDetailView.ts`).
+- Dogfight, Ace Duel and Survival setup screens let the player cycle each
+  of their ships' quick builds (`src/ui/QuickBuildChooser.ts`,
+  `src/arcade/systems/QuickBuildChoice.ts`). The default pick is exactly
+  what `assignQuickBuilds` would hand out, so an untouched chooser changes
+  nothing; cycling skips builds whose unique pilot already flies elsewhere
+  in the squad. Online Dogfight skips the setup screen and flies defaults.

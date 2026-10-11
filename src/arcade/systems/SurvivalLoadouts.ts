@@ -8,6 +8,7 @@
  */
 
 import { assignQuickBuilds } from "./QuickBuildEquip";
+import { selectionFor } from "./QuickBuildChoice";
 
 /** How hard a wave ship hits: plain, elite (+hull, +attack) or boss. */
 export type WaveTier = "regular" | "elite" | "boss";
@@ -99,4 +100,20 @@ export function joiningSquadLoadouts(
     squad.map((member) => member.loadoutId),
   );
   return loadouts.slice(squad.length);
+}
+
+/**
+ * The flagship's quick build: the one picked on the setup screen when the
+ * ship offers it, otherwise the default a new squad would get.
+ *
+ * @param definitionId - The flagship's ship id.
+ * @param picked - The setup screen's pick, if any.
+ * @returns The loadout id, or null when the ship flies bare.
+ */
+export function flagshipLoadout(
+  definitionId: string,
+  picked: string | null,
+): string | null {
+  const previous = { shipIds: [definitionId], loadoutIds: [picked] };
+  return selectionFor([definitionId], previous).loadoutIds[0] ?? null;
 }

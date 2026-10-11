@@ -498,6 +498,12 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 
 
 ### Arcade Systems (src/arcade/)
+- **systems/CycleFlight.ts** - The X-Wing cycle engine for every battle scene: spawn control from the
+  definition, tick motion + cycle stress, AI steering by heading error (drift/bank/turn, K-turn)
+- **systems/PlayerFlightPilot.ts** / **PilotFlightControls.ts** - Player flight input shared by all scenes
+- **systems/AiPursuit.ts** - Shared AI pursuit rules (capitals never K-turn, seek order, duel judgement)
+- **systems/QuickBuildEquip.ts** / **DiceAttack.ts** - Equip quick builds (upgrades + pilot ability) and
+  resolve dice-mode shots with them; **ShotConditions.ts** / **PilotAbilityCombat.ts** - conditional ability knobs
 - **ArcadeStress.ts** - Pilot stress driven by ship dial difficulty (green/white/red rates,
   K-turn + boost instant spikes, hysteresis thresholds, HUD color helpers)
 - **ArcadeOrdnance.ts** - Arcade ordnance slots, cooldowns, homing
@@ -509,6 +515,7 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 - **ModeBalancing.ts** - Per-mode stat adjustments
 - **upgrades/** - Upgrade catalog by category; every card has a real-time effect (spec: docs/specs/upgrades-and-slots.md)
 - **ShipSlots.ts** - Slot bar per ship (single source); **ShipLoadouts.ts** - quick-build loadouts, validated by **loadoutRules.ts**
+- **shipPricing.ts** - Bare-hull price heuristic (role anchor + lever deltas); variants must differ on real-time levers (spec: docs/specs/ship-variants.md, gate: ShipVariants.test.ts)
 
 
 ### Core Types (src/core/)
@@ -548,7 +555,7 @@ Run tests before committing:
 npm test -- --run
 ```
 
-All tests must pass. Current: 1738 unit tests + 183 e2e tests (82%+ line coverage).
+All tests must pass. Current: 2904 unit/balance/sim tests + 278 e2e tests.
 
 
 ## Development Workflow

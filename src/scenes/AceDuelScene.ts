@@ -52,6 +52,12 @@ import {
   stressModifiersOf,
 } from "../arcade/systems/QuickBuildEquip";
 import {
+  cycleQuickBuild,
+  selectionFor,
+  type QuickBuildSelection,
+} from "../arcade/systems/QuickBuildChoice";
+import { renderQuickBuildChooser } from "../ui/QuickBuildChooser";
+import {
   absorbDamage,
   combatantOf,
   resolveDiceAttack,
@@ -151,6 +157,12 @@ const SPAWN_DISTANCE = 200;
 /** Gap (px) between ships of the same side at spawn. */
 const SPAWN_SPACING = 60;
 
+/** The player's quick-build choosers on the setup screen (right of the matchups). */
+const QUICK_BUILD_CHOOSER_X = 940;
+const QUICK_BUILD_CHOOSER_Y = 110;
+const QUICK_BUILD_CHOOSER_W = 316;
+const QUICK_BUILD_CHOOSER_GAP = 8;
+
 /** A ship to spawn at round start. */
 interface ShipSpawn {
   readonly id: string;
@@ -194,6 +206,12 @@ export class AceDuelScene extends Phaser.Scene {
 
   // Settings
   private difficulty: DuelDifficulty = "normal";
+  /**
+   * The player's quick-build picks for their side's ships. Null (never
+   * touched) means the defaults assignQuickBuilds would give; picks made
+   * for another matchup/side are ignored (see selectionFor).
+   */
+  private playerBuilds: QuickBuildSelection | null = null;
 
   // Game state
   private isPaused = false;
@@ -562,6 +580,51 @@ export class AceDuelScene extends Phaser.Scene {
       })
       .setOrigin(1, 0.5);
     this.track(completionText);
+    this.renderPlayerQuickBuilds();
+  }
+
+  /** The ships the player flies in the selected matchup. */
+  private playerSideShips(): readonly string[] {
+    return this.playerSide === 1
+      ? this.selectedMatchup.side1.ships
+      : this.selectedMatchup.side2.ships;
+  }
+
+  /**
+   * One quick-build chooser per ship of the player's side, right of the
+   * matchup list. Defaults to what assignQuickBuilds would give.
+   */
+  private renderPlayerQuickBuilds(): void {
+    const ships = this.playerSideShips();
+    this.playerBuilds = selectionFor(ships, this.playerBuilds);
+    let y = QUICK_BUILD_CHOOSER_Y;
+    ships.forEach((shipId, index) => {
+      const shipName = getShipDefinition(shipId)?.name ?? shipId;
+      const chooser = renderQuickBuildChooser(this, {
+        x: QUICK_BUILD_CHOOSER_X,
+        y,
+        width: QUICK_BUILD_CHOOSER_W,
+        heading: `YOUR ${ships.length > 1 ? `SHIP ${index + 1}` : "SHIP"} \u2014 ${shipName}`,
+        shipId,
+        loadoutId: this.playerBuilds?.loadoutIds[index] ?? null,
+        name: `aceDuelQuickBuild${index}`,
+        accentColor: FACTION_COLORS[this.playerSideFaction()],
+        onCycle: (step) => {
+          if (!this.playerBuilds) return;
+          this.playerBuilds = cycleQuickBuild(this.playerBuilds, index, step);
+          this.showSetupScreen();
+        },
+      });
+      chooser.objects.forEach((obj) => this.track(obj));
+      y += chooser.height + QUICK_BUILD_CHOOSER_GAP;
+    });
+  }
+
+  /** The faction the player flies in the selected matchup. */
+  private playerSideFaction(): FactionId {
+    return this.playerSide === 1
+      ? this.selectedMatchup.side1.faction
+      : this.selectedMatchup.side2.faction;
   }
 
   /**
@@ -571,14 +634,23 @@ export class AceDuelScene extends Phaser.Scene {
    * found to independently break real pointer-click hit-testing on the
    * identical DogfightScene setup screen (reparenting an already-interactive
    * Container into another Container, and relying on an ancestor's
-   * scrollFactor(0) instead of the object's own).
+   * scrollFactor(0) instead of the object's own). Container children get
+   * scrollFactor(0) too: Phaser hit-tests each interactive object with its
+   * OWN scroll factor, so buttons whose hit rectangle is a child ignored
+   * real clicks while the camera sits at the battlefield centre.
    */
   private track(obj: Phaser.GameObjects.GameObject): void {
     const withTransform = obj as unknown as {
       setScrollFactor?: (x: number) => unknown;
       setDepth?: (d: number) => unknown;
+      list?: Phaser.GameObjects.GameObject[];
     };
     withTransform.setScrollFactor?.(0);
+    withTransform.list?.forEach((child) =>
+      (
+        child as unknown as { setScrollFactor?: (x: number) => unknown }
+      ).setScrollFactor?.(0),
+    );
     withTransform.setDepth?.(2000);
     this.setupObjects.push(obj);
   }
@@ -1036,8 +1108,12 @@ export class AceDuelScene extends Phaser.Scene {
       side === 1 ? this.selectedMatchup.side1 : this.selectedMatchup.side2;
     const center = BATTLEFIELD_SIZE / 2;
     const y = center + (side === 1 ? SPAWN_DISTANCE : -SPAWN_DISTANCE);
-    const loadouts = assignQuickBuilds(matchupSide.ships);
     const owner = this.playerSide === side ? "player" : "ai";
+    const chosen =
+      owner === "player"
+        ? selectionFor(matchupSide.ships, this.playerBuilds).loadoutIds
+        : [];
+    const loadouts = assignQuickBuilds(matchupSide.ships, chosen);
     const lastIndex = matchupSide.ships.length - 1;
     matchupSide.ships.forEach((defId, i) => {
       this.spawnShip({

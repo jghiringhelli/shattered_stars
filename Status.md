@@ -1,5 +1,32 @@
 # Status.md
 
+### 2026-10-10 — One flight engine, real-time pilots, quick builds everywhere
+- Every battle mode (Skirmish, Dogfight, Ace Duel, Survival, Campaign, Boss Raid,
+  Continuous) flies the X-Wing cycle engine (`src/arcade/systems/CycleFlight.ts`,
+  `PlayerFlightPilot.ts`, `AiPursuit.ts`); the template-lerp engine is gone
+  (the turn-based balance sim keeps its own `SimManeuvers`).
+- Controls fix: Q/E hard turns and K-turn/Segnor/Tallon stay queued until they
+  fly; holding a key banks once, then drifts.
+- All 55 pilot-card abilities (+17 campaign abilities) act in real time
+  (`pilotAbilityEffects.ts`, conditional knobs in `ShotConditions.ts`); pilot
+  surcharge derived from the effect (`abilityPricing.ts`).
+- Every mode equips quick builds (`QuickBuildEquip.ts`, `DiceAttack.ts`);
+  Dogfight/Ace Duel/Survival setups let the player pick them; the picker shows
+  slots, pilot, initiative and ability summaries.
+- Lifecycle fixes: scenes bind shutdown() (no stacked input handlers), Dogfight
+  restarts clean, weapons go live with the round (not during the banner).
+- Tests: 2904 unit/balance/sim + 278 e2e green.
+
+### 2026-10-10 — Ship variants rebalance (phase 5)
+- New `src/data/shipPricing.ts` (+ `dialPermissiveness.ts`): bare-hull price =
+  role anchor + catalogue-priced lever deltas; spec `docs/specs/ship-variants.md`.
+- Reskin clusters differentiated with hull/shield/speed/dial/stat trades
+  (`tuneDial` variant dials); 52 hull prices set from the heuristic.
+- `ShipVariants.test.ts` gates: no identical variants, no dominated variant at
+  ≤ price, every price within max(3, 5%) of the heuristic.
+- Presets recomposed (th_300, sc_150, sc_300, vc_200). Headless 500-battle
+  matrix: faction spread 60/18 → 37/24 (no >60% outliers left).
+
 ## Last Updated: 2026-09-17 (Campaign real-time conversion + SFX/balance session)
 ## Session Summary
 Continuation of extensive playthrough-driven QA across all 6 game modes (Skirmish,

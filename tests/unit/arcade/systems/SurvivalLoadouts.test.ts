@@ -5,11 +5,13 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  flagshipLoadout,
   joiningSquadLoadouts,
   planWaveRoster,
   type RosterShip,
 } from "../../../../src/arcade/systems/SurvivalLoadouts";
 import { assignQuickBuilds } from "../../../../src/arcade/systems/QuickBuildEquip";
+import { getEquippableLoadouts } from "../../../../src/data/ShipLoadouts";
 import { uniquePilotOf } from "../../../../src/data/squadRules";
 
 /** corsair_fang's first quick build is flown by a unique ace (Poison Fang). */
@@ -131,5 +133,22 @@ describe("joiningSquadLoadouts", () => {
       { definitionId: "no_such_ship", loadoutId: null },
     ];
     expect(joiningSquadLoadouts(squad, [FANG])).not.toContain("fang_raider");
+  });
+});
+
+describe("flagshipLoadout", () => {
+  it("without a pick flies the default quick build", () => {
+    expect(flagshipLoadout(FANG, null)).toBe(assignQuickBuilds([FANG])[0]);
+  });
+
+  it("flies the quick build picked on the setup screen", () => {
+    const last = getEquippableLoadouts(FANG).at(-1)!.id;
+    expect(flagshipLoadout(FANG, last)).toBe(last);
+  });
+
+  it("ignores a pick that is not one of the ship's quick builds", () => {
+    expect(flagshipLoadout(FANG, "viper_ace")).toBe(
+      assignQuickBuilds([FANG])[0],
+    );
   });
 });
