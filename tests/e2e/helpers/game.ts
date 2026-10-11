@@ -374,6 +374,9 @@ export async function setFakeGamepadButton(
   );
 }
 
+/** Wait after a fake button release so the next press is a new edge (ms). */
+const RELEASE_SETTLE_MS = 80;
+
 /** Tap a fake gamepad button (press, hold, release) for edge-triggered intents. */
 export async function tapFakeGamepadButton(
   page: Page,
@@ -383,6 +386,9 @@ export async function tapFakeGamepadButton(
   await setFakeGamepadButton(page, button, true);
   await page.waitForTimeout(holdMs);
   await setFakeGamepadButton(page, button, false);
+  // Let Phaser poll the release, or a press right after it lands in the
+  // same frame and never registers as a new "down".
+  await page.waitForTimeout(RELEASE_SETTLE_MS);
 }
 
 /** Set fake gamepad axes: [leftX, leftY, rightX, rightY], range -1..1. */
