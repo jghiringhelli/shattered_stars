@@ -96,6 +96,7 @@ export class CampaignModeHud {
    * @param states - Every objective with its progress, in mission order.
    */
   updateObjectives(states: readonly ObjectiveProgress[]): void {
+    this.ensureObjectiveRows(states.length);
     states.forEach((state, index) => {
       const text = this.objectiveTexts[index];
       if (!text) return;
@@ -199,6 +200,27 @@ export class CampaignModeHud {
     }
     this.layoutObjectives(panel);
     return panel;
+  }
+
+  /**
+   * Grows the tracker when objectives are added or revealed mid-mission
+   * (scripted beats); never shrinks — finished rows stay listed.
+   *
+   * @param count - Rows needed.
+   */
+  private ensureObjectiveRows(count: number): void {
+    const wrapWidth = OBJECTIVE_PANEL_WIDTH - HOLO_SPACING.md * 2;
+    while (this.objectiveTexts.length < count) {
+      const text = this.scene.add
+        .text(0, 0, "", {
+          ...holoTextStyle("body"),
+          wordWrap: { width: wrapWidth },
+        })
+        .setOrigin(0, 0)
+        .setScrollFactor(0, 0);
+      this.objectivePanel.add(text);
+      this.objectiveTexts.push(text);
+    }
   }
 
   /** Stack the rows and fit the tracker to them, top-anchored. */

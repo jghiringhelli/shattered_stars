@@ -11,7 +11,6 @@ import { CampaignSaveManager } from "../../../../src/systems/CampaignSaveManager
 import { XP_THRESHOLDS } from "../../../../src/systems/CampaignPilotManager";
 import {
   currentActGroups,
-  missionStatus,
   xpProgress,
 } from "../../../../src/ui/campaign/campaignProgress";
 import {
@@ -48,24 +47,6 @@ function pilot(overrides: Partial<CampaignPilotState>): CampaignPilotState {
 function saveWith(pilots: CampaignPilotState[]): CampaignSaveData {
   return CampaignSaveManager.createNew("terran_hegemony", pilots);
 }
-
-describe("missionStatus", () => {
-  it("marks completed missions as completed even when behind the cursor", () => {
-    expect(missionStatus(mission(1), 3, [mission(1).id])).toBe("completed");
-  });
-
-  it("marks skipped earlier missions as not_taken", () => {
-    expect(missionStatus(mission(1), 3, [])).toBe("not_taken");
-  });
-
-  it("marks the current mission as available", () => {
-    expect(missionStatus(mission(3), 3, [])).toBe("available");
-  });
-
-  it("marks future missions as locked", () => {
-    expect(missionStatus(mission(4), 3, [])).toBe("locked");
-  });
-});
 
 describe("currentActGroups", () => {
   it("returns only the current act's missions in mission-number order", () => {

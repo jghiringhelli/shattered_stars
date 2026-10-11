@@ -1,48 +1,63 @@
 /**
  * Campaign Save Manager
  *
- * Handles saving and loading campaign progress to localStorage.
- * Versioned save schema for future compatibility.
+ * Persists one campaign playthrough per faction in localStorage
+ * (`shattered_stars_campaign_<faction>`). Loads validate and migrate any
+ * older version (v1/v2 → v3) without losing data; unreadable JSON is backed
+ * up under `<key>_corrupt` before the slot is treated as empty. Every
+ * mission completion autosaves.
  */
 
-import type { FactionId } from '../config';
+import type { FactionId } from "../config";
+import {
+  CAMPAIGN_SAVE_VERSION,
+  type CampaignPilotState,
+  type CampaignSaveData,
+} from "../campaign/save/campaignSaveTypes";
+import {
+  freshV3Fields,
+  migrateCampaignSave,
+} from "../campaign/save/campaignSaveSchema";
+import {
+  applyMissionCompletion,
+  type CompletionResult,
+  type MissionCompletionRecord,
+} from "../campaign/save/missionCompletion";
 
-export interface CampaignPilotState {
-  pilotId: string;
-  currentShipId: string;
-  pilotSkill: number;          // 1-6, derived from xp
-  xp: number;
-  unlockedAbilityIds: string[];
-  equippedAbilityIds: string[];
-  statBonuses: { hull: number; shields: number; attack: number; agility: number };
-  evolutionChoiceIds: string[];
+export type { CampaignPilotState, CampaignSaveData };
+
+const SAVE_KEY_PREFIX = "shattered_stars_campaign_";
+/** Suffix of the backup written when a save cannot be parsed. */
+export const CORRUPT_BACKUP_SUFFIX = "_corrupt";
+
+const ALL_FACTIONS: readonly FactionId[] = [
+  "terran_hegemony",
+  "free_confederation",
+  "synthetic_collective",
+  "void_corsairs",
+  "ascendant_empire",
+];
+
+/**
+ * @param factionId - Faction.
+ * @returns Its localStorage key.
+ */
+function keyOf(factionId: FactionId): string {
+  return SAVE_KEY_PREFIX + factionId;
 }
-
-export interface CampaignSaveData {
-  version: number;
-  factionId: FactionId;
-  currentMission: number;
-  completedMissions: string[];
-  totalXp: number;
-  credits: number;
-  totalKills: number;
-  shipsLost: number;
-  unlockedShips: string[];
-  lastPlayed: number;
-  campaignPilots: CampaignPilotState[];
-  pendingEvolution: boolean;
-}
-
-const SAVE_VERSION = 2;
-const SAVE_KEY_PREFIX = 'shattered_stars_campaign_';
 
 export const CampaignSaveManager = {
   /**
-   * Create new campaign save data
+   * @param factionId - Faction.
+   * @param initialPilots - Starting campaign pilots.
+   * @returns A brand-new playthrough.
    */
-  createNew(factionId: FactionId, initialPilots: CampaignPilotState[] = []): CampaignSaveData {
+  createNew(
+    factionId: FactionId,
+    initialPilots: CampaignPilotState[] = [],
+  ): CampaignSaveData {
     return {
-      version: SAVE_VERSION,
+      version: CAMPAIGN_SAVE_VERSION,
       factionId,
       currentMission: 1,
       completedMissions: [],
@@ -54,84 +69,90 @@ export const CampaignSaveManager = {
       lastPlayed: Date.now(),
       campaignPilots: initialPilots,
       pendingEvolution: false,
+      ...freshV3Fields(factionId),
     };
   },
 
-  /**
-   * Save campaign progress
-   */
+  /** @param data - Playthrough to persist (lastPlayed is stamped). */
   save(data: CampaignSaveData): void {
     try {
       const toSave = { ...data, lastPlayed: Date.now() };
-      const key = SAVE_KEY_PREFIX + toSave.factionId;
-      localStorage.setItem(key, JSON.stringify(toSave));
+      localStorage.setItem(keyOf(toSave.factionId), JSON.stringify(toSave));
     } catch (e) {
-      console.error('Failed to save campaign:', e);
+      console.error("Failed to save campaign:", e);
     }
   },
 
   /**
-   * Load campaign progress
+   * @param factionId - Faction.
+   * @returns Its playthrough (validated, migrated), or null when none.
    */
   load(factionId: FactionId): CampaignSaveData | null {
+    let saved: string | null;
     try {
-      const key = SAVE_KEY_PREFIX + factionId;
-      const saved = localStorage.getItem(key);
-      if (!saved) return null;
-
-      const data = JSON.parse(saved) as CampaignSaveData;
-
-      // Version migration if needed
-      if (data.version < SAVE_VERSION) {
-        return this.migrate(data);
-      }
-
-      return data;
+      saved = localStorage.getItem(keyOf(factionId));
     } catch (e) {
-      console.error('Failed to load campaign:', e);
+      console.error("Failed to read campaign:", e);
+      return null;
+    }
+    if (!saved) return null;
+    try {
+      return migrateCampaignSave(JSON.parse(saved), factionId);
+    } catch (e) {
+      console.error("Campaign save unreadable; backed up:", e);
+      try {
+        localStorage.setItem(keyOf(factionId) + CORRUPT_BACKUP_SUFFIX, saved);
+      } catch {
+        // Storage full: the original stays in place, nothing else to do.
+      }
       return null;
     }
   },
 
-  /**
-   * Delete campaign save
-   */
+  /** @param factionId - Faction whose playthrough to delete. */
   delete(factionId: FactionId): void {
     try {
-      const key = SAVE_KEY_PREFIX + factionId;
-      localStorage.removeItem(key);
+      localStorage.removeItem(keyOf(factionId));
     } catch (e) {
-      console.error('Failed to delete campaign:', e);
+      console.error("Failed to delete campaign:", e);
     }
   },
 
   /**
-   * Check if campaign exists
+   * @param factionId - Faction.
+   * @returns Whether a playthrough is stored.
    */
   exists(factionId: FactionId): boolean {
-    const key = SAVE_KEY_PREFIX + factionId;
-    return localStorage.getItem(key) !== null;
+    return localStorage.getItem(keyOf(factionId)) !== null;
   },
 
-  /**
-   * Get all campaign saves
-   */
+  /** @returns Every stored playthrough, most recently played first. */
   getAllSaves(): CampaignSaveData[] {
-    const saves: CampaignSaveData[] = [];
-    const factions: FactionId[] = ['terran_hegemony', 'free_confederation', 'synthetic_collective', 'void_corsairs', 'ascendant_empire'];
-
-    for (const factionId of factions) {
-      const save = this.load(factionId);
-      if (save) {
-        saves.push(save);
-      }
-    }
-
-    return saves.sort((a, b) => b.lastPlayed - a.lastPlayed);
+    return ALL_FACTIONS.map((f) => this.load(f))
+      .filter((s): s is CampaignSaveData => s !== null)
+      .sort((a, b) => b.lastPlayed - a.lastPlayed);
   },
 
   /**
-   * Update campaign after mission completion
+   * Folds a won mission into the playthrough and autosaves.
+   *
+   * @param data - Save before the mission.
+   * @param record - What the mission earned.
+   * @returns The new save and the bonus payout.
+   */
+  recordVictory(
+    data: CampaignSaveData,
+    record: MissionCompletionRecord,
+  ): CompletionResult {
+    const result = applyMissionCompletion(data, record);
+    this.save(result.save);
+    return result;
+  },
+
+  /**
+   * Legacy completion API (no flags/bonuses); autosaves.
+   *
+   * @returns The updated save.
    */
   completeMission(
     data: CampaignSaveData,
@@ -142,44 +163,30 @@ export const CampaignSaveManager = {
     shipsLost: number,
     newUnlocks: string[],
     pilotUpdates?: CampaignPilotState[],
-    pendingEvolution?: boolean
+    pendingEvolution?: boolean,
   ): CampaignSaveData {
-    const updated = { ...data };
-
-    if (!updated.completedMissions.includes(missionId)) {
-      updated.completedMissions.push(missionId);
-      updated.currentMission++;
-    }
-
-    updated.totalXp += xpEarned;
-    updated.credits += creditsEarned;
-    updated.totalKills += kills;
-    updated.shipsLost += shipsLost;
-
-    for (const unlock of newUnlocks) {
-      if (!updated.unlockedShips.includes(unlock)) {
-        updated.unlockedShips.push(unlock);
-      }
-    }
-
-    if (pilotUpdates !== undefined) {
-      updated.campaignPilots = pilotUpdates;
-    }
-
-    if (pendingEvolution !== undefined) {
-      updated.pendingEvolution = pendingEvolution;
-    }
-
-    this.save(updated);
-    return updated;
+    return this.recordVictory(data, {
+      missionId,
+      xp: xpEarned,
+      credits: creditsEarned,
+      kills,
+      shipsLost,
+      unlocks: newUnlocks,
+      pilots: pilotUpdates,
+      pendingEvolution,
+    }).save;
   },
 
   /**
-   * Apply a pilot's evolution choice and save
+   * Applies a pilot's evolution choice and saves.
+   *
+   * @param data - Save.
+   * @param updatedPilots - Pilots after the choice.
+   * @returns The updated save.
    */
   applyEvolutionChoice(
     data: CampaignSaveData,
-    updatedPilots: CampaignPilotState[]
+    updatedPilots: CampaignPilotState[],
   ): CampaignSaveData {
     const updated = {
       ...data,
@@ -191,18 +198,17 @@ export const CampaignSaveManager = {
   },
 
   /**
-   * Migrate old save to new version
+   * Migrates an older save object to the current schema.
+   *
+   * @param oldData - A save of any older version.
+   * @returns It in the current schema.
    */
-  migrate(oldData: CampaignSaveData): CampaignSaveData {
-    // v1 → v2: add pilot state fields
-    if (oldData.version < 2) {
-      return {
-        ...oldData,
-        version: SAVE_VERSION,
-        campaignPilots: [],
-        pendingEvolution: false,
-      };
-    }
-    return { ...oldData, version: SAVE_VERSION };
+  migrate(
+    oldData: Partial<CampaignSaveData> & Pick<CampaignSaveData, "factionId">,
+  ): CampaignSaveData {
+    return (
+      migrateCampaignSave(oldData, oldData.factionId) ??
+      this.createNew(oldData.factionId)
+    );
   },
 };

@@ -20,6 +20,10 @@ export interface DebriefSceneData {
   shipsLost: number;
   protagonistBonusXp: number;
   levelUpEvents: LevelUpEvent[];
+  /** Research points the bonus objectives paid out (campaign v3). */
+  researchEarned?: number | undefined;
+  /** Descriptions of the bonus objectives completed. */
+  bonusObjectives?: readonly string[] | undefined;
 }
 
 /** Layout of the two stats panels (screen coordinates). */

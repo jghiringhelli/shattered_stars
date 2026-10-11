@@ -146,8 +146,9 @@ test.describe("CampaignBattleScene — bot pilots", () => {
   }) => {
     await CAMPAIGN.enter(page, { peaceful: true });
     for (const pilot of await readPilots(page)) {
-      // heg_1_3 (act 1, mission 3): regular enemies and the escort are average.
-      expect(pilot.tier).toBe(pilot.isFlagship ? null : "average");
+      // heg_1_3 (act 1 = learning act): escorts average, regular enemies novice.
+      const expected = pilot.owner === "player" ? "average" : "novice";
+      expect(pilot.tier).toBe(pilot.isFlagship ? null : expected);
     }
   });
 

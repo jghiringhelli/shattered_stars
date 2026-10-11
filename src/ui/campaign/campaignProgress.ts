@@ -1,40 +1,22 @@
 /**
- * campaignProgress — pure (Phaser-free) campaign progress rules used by the
- * campaign map and the debrief: mission status, current-act grouping and
- * XP-bar fractions.
+ * campaignProgress — pure (Phaser-free) campaign progress helpers used by the
+ * hub mission board and the debrief: act grouping and XP-bar fractions.
+ * Mission availability lives in src/campaign/hub/missionGraph.ts.
  */
 
 import type { CampaignMission, FactionCampaign } from "../../data/CampaignData";
 import type { CampaignPilotState } from "../../systems/CampaignSaveManager";
 import { XP_THRESHOLDS } from "../../systems/CampaignPilotManager";
+import type { HubMissionStatus } from "../../campaign/hub/missionGraph";
 
-/** Progress state of a mission relative to the save. */
-export type MissionStatus = "completed" | "not_taken" | "available" | "locked";
-
-/**
- * Classify a mission against campaign progress.
- *
- * @param mission - Mission to classify.
- * @param currentMission - Save's current mission number.
- * @param completedIds - Ids of completed missions.
- * @returns The mission's status.
- */
-export function missionStatus(
-  mission: CampaignMission,
-  currentMission: number,
-  completedIds: readonly string[],
-): MissionStatus {
-  if (completedIds.includes(mission.id)) return "completed";
-  if (mission.missionNumber < currentMission) return "not_taken";
-  if (mission.missionNumber === currentMission) return "available";
-  return "locked";
-}
+/** Hub state of a mission (rules in missionGraph). */
+export type MissionStatus = HubMissionStatus;
 
 /**
- * Missions of the save's current act, grouped by mission number in order.
+ * Missions of one act, grouped by mission number in order.
  *
  * @param campaign - Faction campaign.
- * @param currentMission - Save's current mission number.
+ * @param currentMission - A mission number inside the act to show.
  * @returns Groups (one entry, or two for a branch pair).
  */
 export function currentActGroups(

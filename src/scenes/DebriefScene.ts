@@ -32,6 +32,7 @@ import {
 } from "../ui/campaign/debriefTypes";
 import { createDebriefStatsView } from "../ui/campaign/DebriefStatsView";
 import { createEvolutionView } from "../ui/campaign/DebriefEvolutionView";
+import { isFinaleMission } from "../campaign/hub/missionGraph";
 
 type DebriefState =
   | "dialogue_typing"
@@ -314,18 +315,22 @@ export class DebriefScene extends Phaser.Scene {
   }
 
   private transitionToCampaign(): void {
+    // Forced: a continue during the backdrop's fade-in must not be dropped.
     this.cameras.main.fade(
       EXIT_FADE_MS,
       0,
       0,
       0,
-      false,
+      true,
       (_cam: Phaser.Cameras.Scene2D.Camera, progress: number) => {
-        if (progress === 1) {
-          this.scene.start("CampaignScene", {
-            factionId: this.data_.factionId,
-          });
-        }
+        if (progress !== 1) return;
+        const { factionId, updatedSave, mission } = this.data_;
+        const finale =
+          updatedSave.campaignComplete &&
+          isFinaleMission(mission, FACTION_CAMPAIGNS[factionId]);
+        this.scene.start(finale ? "CampaignCompleteScene" : "CampaignScene", {
+          factionId,
+        });
       },
     );
   }

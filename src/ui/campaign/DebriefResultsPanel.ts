@@ -33,15 +33,28 @@ const RESULT_TILE = {
 /**
  * Mission-result rows for the debrief numbers.
  *
- * @param stats - Kills, losses, XP and credits.
- * @returns The four result rows.
+ * @param stats - Kills, losses, XP, credits and (campaign v3) research.
+ * @returns The result rows (a research row when research was reported).
  */
 export function missionResultItems(stats: {
   readonly kills: number;
   readonly shipsLost: number;
   readonly xpEarned: number;
   readonly creditsEarned: number;
+  readonly researchEarned?: number | undefined;
+  readonly bonusObjectives?: readonly string[] | undefined;
 }): ResultItem[] {
+  const research: ResultItem[] =
+    stats.researchEarned === undefined
+      ? []
+      : [
+          {
+            label: `RESEARCH · ${stats.bonusObjectives?.length ?? 0} BONUS`,
+            value: `+${stats.researchEarned}`,
+            icon: "network",
+            tint: HOLO_PALETTE.shield,
+          },
+        ];
   return [
     {
       label: "ENEMY SHIPS DESTROYED",
@@ -67,6 +80,7 @@ export function missionResultItems(stats: {
       icon: "crown",
       tint: HOLO_PALETTE.warning,
     },
+    ...research,
   ];
 }
 

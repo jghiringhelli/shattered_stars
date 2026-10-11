@@ -31,6 +31,8 @@ export const BRIEFING_LAYOUT = {
   portraitHeight: 120,
   portraitGap: 24,
   bodySize: 15,
+  taglineSize: 18,
+  taglineHeight: 32,
   lineSpacing: 6,
   objectiveRowHeight: 28,
   bulletRadius: 4,
@@ -96,16 +98,30 @@ function createBriefingPanel(
     scene,
     { x: L.left, y: L.briefingTop, width: L.width, height: L.briefingHeight },
     config.accent,
-    "BRIEFING",
+    config.mission.style
+      ? `BRIEFING · ${config.mission.style.toUpperCase()}`
+      : "BRIEFING",
   );
   const left = -L.width / 2 + L.padding;
   const top = panel.contentTop + HOLO_RADIUS.sm;
   addProtagonistPortrait(scene, panel, config, { x: left, y: top });
   const textX = left + L.portraitWidth + L.portraitGap;
-  const text = addHoloText(scene, textX, top, config.mission.briefing, {
+  const tagline = config.mission.tagline ?? "";
+  if (tagline) {
+    panel.add(
+      addHoloText(scene, textX, top, tagline.toUpperCase(), {
+        size: L.taglineSize,
+        weight: "600",
+        color: config.accent,
+        wrapWidth: L.width - L.padding - textX - L.width / 2,
+      }),
+    );
+  }
+  const textTop = tagline ? top + L.taglineHeight : top;
+  const text = addHoloText(scene, textX, textTop, config.mission.briefing, {
     size: L.bodySize,
     color: HOLO_PALETTE.textPrimary,
-    wrapWidth: L.width / 2 - L.padding - textX,
+    wrapWidth: L.width - L.padding - textX - L.width / 2,
     lineSpacing: L.lineSpacing,
   });
   panel.add(text);
@@ -156,12 +172,18 @@ function createObjectivesPanel(
   const left = -width / 2 + L.padding;
   const bullets = scene.add.graphics();
   panel.add(bullets);
-  config.mission.objectives.forEach((obj, i) => {
+  const visible = config.mission.objectives.filter(
+    (obj) => !("hidden" in obj && obj.hidden === true),
+  );
+  visible.forEach((obj, i) => {
     const y = panel.contentTop + (i + 0.5) * L.objectiveRowHeight;
     const tint = obj.optional ? HOLO_PALETTE.textMuted : HOLO_PALETTE.success;
     bullets.fillStyle(tint, 1);
     bullets.fillCircle(left + L.bulletRadius, y, L.bulletRadius);
-    const label = obj.description + (obj.optional ? " (Optional)" : "");
+    const research = "reward" in obj ? (obj.reward?.research ?? 1) : 1;
+    const label =
+      obj.description +
+      (obj.optional ? `  (Bonus · +${research} research)` : "");
     panel.add(
       addHoloText(scene, left + L.bulletTextGap, y, label, {
         ...CAMPAIGN_TEXT.body,

@@ -12,7 +12,13 @@ import { drawHoloGauge } from "../menu/holoChrome";
 import { HOLO_PALETTE } from "../theme/HoloTheme";
 import { CAMPAIGN_TEXT, addHoloText } from "./campaignUi";
 import { MISSION_ROW_LAYOUT, createMissionRow } from "./MissionRow";
-import { currentActGroups, missionStatus } from "./campaignProgress";
+import { currentActGroups } from "./campaignProgress";
+import {
+  availableMissions,
+  hubMissionStatus,
+  slotCount,
+  ACT_LENGTH,
+} from "../../campaign/hub/missionGraph";
 import type { SelectableCard } from "./SelectableCard";
 
 /** Act headings, indexed by act number. */
@@ -28,7 +34,7 @@ const ACT_NAMES = [
 export const MISSION_MAP_LAYOUT = {
   x: 32,
   top: 104,
-  width: 920,
+  width: 640,
   headerHeight: 28,
   padding: 24,
   progressLabelHeight: 16,
@@ -77,7 +83,7 @@ export function createMissionMapPanel(
 ): MissionMapPanel {
   const L = MISSION_MAP_LAYOUT;
   const { campaign, save } = config;
-  const groups = currentActGroups(campaign, save.currentMission);
+  const groups = currentActGroups(campaign, hubActStart(campaign, save));
   const act = groups[0]?.[0]?.act ?? 1;
   const rowsHeight =
     groups.reduce((sum, g) => sum + groupHeight(g), 0) +
@@ -103,6 +109,26 @@ export function createMissionMapPanel(
   return { panel, focusTargets };
 }
 
+/**
+ * First mission slot of the act the hub shows: the earliest act with a
+ * mission available now (the last act once the campaign is complete).
+ *
+ * @param campaign - Faction campaign.
+ * @param save - Campaign save.
+ * @returns A mission number inside that act.
+ */
+function hubActStart(
+  campaign: FactionCampaign,
+  save: CampaignSaveData,
+): number {
+  const open = availableMissions(campaign, save);
+  const act =
+    open.length > 0
+      ? Math.min(...open.map((m) => m.act))
+      : Math.max(...campaign.missions.map((m) => m.act));
+  return (act - 1) * ACT_LENGTH + 1;
+}
+
 function addProgress(
   scene: Phaser.Scene,
   panel: HoloPanel,
@@ -114,12 +140,17 @@ function addProgress(
   const L = MISSION_MAP_LAYOUT;
   const left = -L.width / 2 + L.padding;
   const innerWidth = L.width - L.padding * 2;
-  const total = campaign.missions.length;
+  const total = slotCount(campaign);
+  const done = new Set(
+    campaign.missions
+      .filter((m) => save.completedMissions.includes(m.id))
+      .map((m) => m.missionNumber),
+  ).size;
   const label = addHoloText(
     scene,
     left,
     top,
-    `Mission ${save.currentMission} of ${total}`.toUpperCase(),
+    `Missions ${done} of ${total}`.toUpperCase(),
     CAMPAIGN_TEXT.caption,
   );
   const completed = addHoloText(
@@ -138,7 +169,7 @@ function addProgress(
       width: innerWidth,
       height: L.gaugeHeight,
     },
-    (save.currentMission - 1) / total,
+    done / total,
     accent,
   );
   panel.add([gauge, label, completed]);
@@ -185,11 +216,7 @@ function buildRow(
     {
       ...place,
       mission,
-      status: missionStatus(
-        mission,
-        save.currentMission,
-        save.completedMissions,
-      ),
+      status: hubMissionStatus(mission, config.campaign, save),
       accent: config.accent,
     },
     () => config.onSelectMission(mission),

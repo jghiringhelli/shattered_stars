@@ -1,14 +1,15 @@
 /**
  * Campaign Scene
  *
- * Faction selection and mission progression for story campaigns.
- * Features:
- * - 5 faction campaigns with unique storylines
- * - Mission map showing progression
- * - Save/load campaign progress
- * - Mission briefing before battles
+ * Faction selection, the campaign hub and mission briefings:
+ * - 5 faction campaigns (15 mission slots each, three acts)
+ * - Hub (SC2-style): non-linear mission board (≥2 missions open at once in
+ *   most of each act), ARMORY tab (credits → campaign-only ship mods, free
+ *   respec), RESEARCH tab (permanent A/B choices), hero card with powers
+ * - Terse, mood-driven briefing before launch (story-flag variants applied)
  *
- * Drawing lives in src/ui/campaign/; this scene owns the phase flow.
+ * Drawing lives in src/ui/campaign/; rules in src/campaign/; this scene owns
+ * the phase flow and persists hub actions.
  */
 
 import Phaser from "phaser";
@@ -18,6 +19,8 @@ import {
   type FactionCampaign,
   type CampaignMission,
 } from "../data/CampaignData";
+import type { ArmoryMod } from "../data/campaign/armory";
+import type { ResearchPick, ResearchTier } from "../data/campaign/research";
 import { audioManager } from "../audio/AudioManager";
 import {
   CampaignSaveManager,
@@ -39,9 +42,16 @@ import {
   FACTION_CARD_LAYOUT,
   createFactionCampaignCard,
 } from "../ui/campaign/FactionCampaignCard";
-import { createMissionMapPanel } from "../ui/campaign/CampaignMissionMap";
 import { createCampaignSidebar } from "../ui/campaign/CampaignSquadPanel";
 import { createBriefingPanels } from "../ui/campaign/CampaignBriefing";
+import { createCampaignHub, type HubTab } from "../ui/campaign/CampaignHub";
+import { availableMissions, slotCount } from "../campaign/hub/missionGraph";
+import {
+  pickResearch,
+  respecArmory,
+  toggleArmoryMod,
+} from "../campaign/hub/hubActions";
+import { briefedMission } from "../campaign/mission/briefingPreview";
 
 type CampaignPhase = "faction_select" | "mission_map" | "briefing";
 
@@ -56,12 +66,15 @@ const FACTION_ORDER: readonly FactionId[] = [
 
 /** Painted background behind every campaign phase. */
 const BACKDROP_TEXTURE = "planet_rocky";
-
 /** Bottom of the area the faction list is centred in (above the footer). */
 const FACTION_LIST_BOTTOM = 672;
-
 /** Primary LAUNCH button on the briefing screen. */
 const LAUNCH_BUTTON = { width: 240, height: 48, font: "600 16px" } as const;
+
+/** Scene input (optional): open straight into a faction's hub. */
+interface CampaignSceneData {
+  readonly factionId?: FactionId;
+}
 
 export class CampaignScene extends Phaser.Scene {
   private currentPhase: CampaignPhase = "faction_select";
@@ -69,64 +82,49 @@ export class CampaignScene extends Phaser.Scene {
   private selectedMission: CampaignMission | null = null;
   private campaignData: FactionCampaign | null = null;
   private saveData: CampaignSaveData | null = null;
-
-  // UI containers — one per phase, rebuilt on entry
-  private factionSelectContainer: Phaser.GameObjects.Container | null = null;
-  private missionMapContainer: Phaser.GameObjects.Container | null = null;
-  private briefingContainer: Phaser.GameObjects.Container | null = null;
+  private hubTab: HubTab = "missions";
+  /** Research option awaiting a confirming second click ("tierId:A"). */
+  private pendingResearch: string | null = null;
+  private phaseContainer: Phaser.GameObjects.Container | null = null;
   private menuFocus: MenuFocus | null = null;
 
   constructor() {
     super({ key: "CampaignScene" });
   }
 
-  create(): void {
-    this.factionSelectContainer = null;
-    this.missionMapContainer = null;
-    this.briefingContainer = null;
+  create(data?: CampaignSceneData): void {
+    this.phaseContainer = null;
     this.menuFocus = null;
+    this.hubTab = "missions";
+    this.pendingResearch = null;
     addMenuBackdrop(this, { textureId: BACKDROP_TEXTURE });
-
     audioManager.initialize();
     audioManager.playMusic("menu_theme");
-
     this.input.keyboard?.on("keydown-ESC", this.goBack, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.keyboard?.off("keydown-ESC", this.goBack, this);
       this.menuFocus?.destroy();
       this.menuFocus = null;
     });
-    this.showFactionSelect();
+    if (data?.factionId) this.selectFaction(data.factionId);
+    else this.showFactionSelect();
   }
 
-  /** ESC steps back one phase (briefing → map → factions → main menu). */
+  /** ESC steps back one phase (briefing → hub → factions → main menu). */
   private goBack(): void {
     if (this.currentPhase === "briefing") this.showMissionMap();
     else if (this.currentPhase === "mission_map") this.showFactionSelect();
     else this.scene.start("MainMenuScene");
   }
 
-  /**
-   * Tear down the previous phase UI and open a fresh container.
-   *
-   * @param phase - Phase being entered.
-   * @returns The new phase container.
-   */
+  /** Tear down the previous phase UI and open a fresh container. */
   private enterPhase(phase: CampaignPhase): Phaser.GameObjects.Container {
     this.currentPhase = phase;
     this.menuFocus?.destroy();
     this.menuFocus = null;
-    this.factionSelectContainer?.destroy();
-    this.missionMapContainer?.destroy();
-    this.briefingContainer?.destroy();
-    this.factionSelectContainer = null;
-    this.missionMapContainer = null;
-    this.briefingContainer = null;
-    const container = this.add.container(0, 0);
-    if (phase === "faction_select") this.factionSelectContainer = container;
-    else if (phase === "mission_map") this.missionMapContainer = container;
-    else this.briefingContainer = container;
-    return container;
+    this.phaseContainer?.destroy();
+    this.phaseContainer = this.add.container(0, 0);
+    return this.phaseContainer;
   }
 
   private headerObjects(header: MenuHeader): Phaser.GameObjects.GameObject[] {
@@ -141,9 +139,7 @@ export class CampaignScene extends Phaser.Scene {
     });
   }
 
-  // ==========================================
-  // FACTION SELECT
-  // ==========================================
+  // ── Faction select ─────────────────────────────────────────────────────
 
   private showFactionSelect(): void {
     const container = this.enterPhase("faction_select");
@@ -180,33 +176,30 @@ export class CampaignScene extends Phaser.Scene {
     label: string;
     inProgress: boolean;
   } {
-    const saveData = CampaignSaveManager.load(campaign.factionId);
-    return saveData
-      ? {
-          label: `Mission ${saveData.currentMission} / ${campaign.missions.length}`,
-          inProgress: true,
-        }
-      : { label: "New Campaign", inProgress: false };
+    const save = CampaignSaveManager.load(campaign.factionId);
+    if (!save) return { label: "New Campaign", inProgress: false };
+    if (save.campaignComplete)
+      return { label: "Campaign Complete", inProgress: true };
+    const total = slotCount(campaign);
+    return {
+      label: `Mission ${Math.min(total, save.currentMission)} / ${total}`,
+      inProgress: true,
+    };
   }
 
   private selectFaction(factionId: FactionId): void {
     this.selectedFaction = factionId;
     this.campaignData = FACTION_CAMPAIGNS[factionId];
     this.saveData = CampaignSaveManager.load(factionId);
-
-    // Create new save if none exists
     if (!this.saveData) {
       this.saveData = CampaignSaveManager.createNew(factionId);
       CampaignSaveManager.save(this.saveData);
     }
-
     audioManager.playSound("ui_select", 0.7);
     this.showMissionMap();
   }
 
-  // ==========================================
-  // MISSION MAP
-  // ==========================================
+  // ── Hub ────────────────────────────────────────────────────────────────
 
   private showMissionMap(): void {
     const container = this.enterPhase("mission_map");
@@ -224,15 +217,84 @@ export class CampaignScene extends Phaser.Scene {
       () => this.showFactionSelect(),
       "FACTIONS",
     );
-    const map = createMissionMapPanel(this, {
+    const hub = createCampaignHub(this, {
       campaign,
       save,
       accent,
+      tab: this.hubTab,
+      pendingResearch: this.pendingResearch,
+      onSelectTab: (tab) => this.selectHubTab(tab),
       onSelectMission: (mission) => this.selectMission(mission),
+      onToggleMod: (mod) => this.toggleMod(mod),
+      onRespec: () => this.respec(),
+      onPickResearch: (tier, pick) => this.chooseResearch(tier, pick),
+      onEpilogue: () =>
+        this.scene.start("CampaignCompleteScene", { factionId }),
     });
     const sidebar = createCampaignSidebar(this, factionId, save, accent);
-    container.add([...this.headerObjects(header), back, map.panel, ...sidebar]);
-    this.focusPhase("mission_map", [...map.focusTargets, back]);
+    container.add([
+      ...this.headerObjects(header),
+      back,
+      ...hub.objects,
+      ...sidebar,
+    ]);
+    this.focusPhase("mission_map", [...hub.focusTargets, back]);
+  }
+
+  /** @returns Ids of the missions the hub offers now (debug / tests). */
+  availableMissionIds(): string[] {
+    if (!this.campaignData || !this.saveData) return [];
+    return availableMissions(this.campaignData, this.saveData).map((m) => m.id);
+  }
+
+  /** @param tab - Hub tab to show. */
+  selectHubTab(tab: HubTab): void {
+    this.hubTab = tab;
+    this.pendingResearch = null;
+    audioManager.playSound("ui_select", 0.5);
+    this.showMissionMap();
+  }
+
+  /** @param mod - Armory mod to buy, or refund when installed. */
+  private toggleMod(mod: ArmoryMod): void {
+    const result = toggleArmoryMod(this.saveData!, mod.id);
+    this.commit(result.save, result.ok);
+  }
+
+  /** Free respec: refund every armory mod. */
+  private respec(): void {
+    this.commit(respecArmory(this.saveData!), true);
+  }
+
+  /**
+   * First click marks an option; a second click on it makes it permanent.
+   *
+   * @param tier - Research tier.
+   * @param pick - Option clicked.
+   */
+  private chooseResearch(tier: ResearchTier, pick: ResearchPick): void {
+    const key = `${tier.id}:${pick}`;
+    if (this.pendingResearch !== key) {
+      this.pendingResearch = key;
+      this.showMissionMap();
+      return;
+    }
+    this.pendingResearch = null;
+    const result = pickResearch(this.saveData!, tier.id, pick);
+    this.commit(result.save, result.ok);
+  }
+
+  /**
+   * @param save - Save after a hub action.
+   * @param ok - Whether it was accepted.
+   */
+  private commit(save: CampaignSaveData, ok: boolean): void {
+    audioManager.playSound(ok ? "ui_select" : "ui_back", 0.6);
+    if (ok) {
+      this.saveData = save;
+      CampaignSaveManager.save(save);
+    }
+    this.showMissionMap();
   }
 
   private selectMission(mission: CampaignMission): void {
@@ -241,21 +303,23 @@ export class CampaignScene extends Phaser.Scene {
     this.showBriefing();
   }
 
-  // ==========================================
-  // MISSION BRIEFING
-  // ==========================================
+  // ── Briefing ───────────────────────────────────────────────────────────
 
   private showBriefing(): void {
     const container = this.enterPhase("briefing");
     const factionId = this.selectedFaction!;
-    const mission = this.selectedMission!;
+    const mission = briefedMission(
+      this.selectedMission!,
+      this.saveData?.storyFlags ?? {},
+      factionId,
+    );
     const accent = factionAccent(factionId);
     const header = addMenuHeader(this, {
       title: mission.title,
       subtitle: `MISSION ${mission.missionNumber}`,
       accent,
     });
-    const back = addBackButton(this, () => this.showMissionMap(), "MAP");
+    const back = addBackButton(this, () => this.showMissionMap(), "HUB");
     const panels = createBriefingPanels(this, { factionId, mission, accent });
     const launch = createHoverButton(
       this,
@@ -277,7 +341,6 @@ export class CampaignScene extends Phaser.Scene {
   }
 
   private launchMission(): void {
-    // Store mission data for the battle scene
     this.scene.start("CampaignBattleScene", {
       factionId: this.selectedFaction,
       mission: this.selectedMission,

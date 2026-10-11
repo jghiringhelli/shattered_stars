@@ -70,6 +70,7 @@ function createStatsPanel(
   const rows = [
     { label: "XP", value: save.totalXp.toString() },
     { label: "Credits", value: save.credits.toString() },
+    { label: "Research", value: (save.researchPoints ?? 0).toString() },
     { label: "Kills", value: save.totalKills.toString() },
   ];
   const height = L.headerHeight + L.padding * 2 + rows.length * L.statRowHeight;

@@ -34,7 +34,8 @@ import {
   type CycleFlightState,
 } from "../arcade/systems/CycleFlight";
 import { PlayerFlightPilot } from "../arcade/systems/PlayerFlightPilot";
-import { wrapCoordinate } from "../arcade/systems/ShipMotion";
+import { shiftMotion, wrapCoordinate } from "../arcade/systems/ShipMotion";
+import { torusAxisDelta } from "../core/Torus";
 import type {
   FlightControlResult,
   FlightEvent,
@@ -50,7 +51,6 @@ import {
   assignQuickBuilds,
   equipFlight,
   equipQuickBuild,
-  regenerateShields,
   stressModifiersOf,
 } from "../arcade/systems/QuickBuildEquip";
 import {
@@ -87,13 +87,13 @@ import {
   type DurabilityCaps,
 } from "../arcade/systems/CampaignDurability";
 import { BattleHud, cameraViewFrom } from "../ui/hud";
-import { HOLO_PALETTE } from "../ui/theme/HoloTheme";
 import { CampaignModeHud } from "../ui/modeHud/CampaignModeHud";
+import type { ResultOverlay } from "../ui/modeHud/HoloResultOverlay";
 import {
-  showResultOverlay,
-  type ResultLine,
-  type ResultOverlay,
-} from "../ui/modeHud/HoloResultOverlay";
+  showCampaignFailure,
+  showCampaignVictoryFlash,
+  type MissionTally,
+} from "../ui/campaign/CampaignResultScreens";
 import { applyInstantStress } from "../arcade/ArcadeStress";
 import {
   NEUTRAL_MODIFIERS,
@@ -101,14 +101,24 @@ import {
 } from "../core/CombatModifiers";
 import { random } from "../utils/random";
 import { addShipVisual } from "../rendering/ShipVisual";
-import type {
-  CampaignMission,
-  MissionObjective,
-  MissionEnemy,
-} from "../data/CampaignData";
+import type { CampaignMission, MissionEnemy } from "../data/CampaignData";
+import { FACTION_CAMPAIGNS } from "../data/CampaignData";
 import type { CampaignSaveData } from "../systems/CampaignSaveManager";
 import { CampaignSaveManager } from "../systems/CampaignSaveManager";
-import { distributeMissionXp } from "../systems/CampaignPilotManager";
+import { CampaignMissionDirector } from "../campaign/battle/CampaignMissionDirector";
+import type {
+  BattleSpawnRequest,
+  CampaignBattleBridge,
+} from "../campaign/battle/battleTypes";
+import { factionOfShip } from "../campaign/battle/missionSpawns";
+import {
+  compileMission,
+  type MissionPlan,
+} from "../campaign/mission/compileMission";
+import { campaignBonuses } from "../campaign/armory/campaignBonuses";
+import type { CampaignShipBonuses } from "../campaign/armory/bonusTypes";
+import { withCampaignBonuses } from "../arcade/systems/CampaignLoadoutBonuses";
+import { missionVictoryRecord } from "../arcade/systems/CampaignVictory";
 import { CAMPAIGN_PILOTS } from "../data/PilotData";
 import { audioManager } from "../audio/AudioManager";
 import { syncListenerToCamera } from "../audio/CameraListener";
@@ -117,6 +127,7 @@ import { renderBattleStarfield } from "../rendering/Starfield";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { HealthBar } from "../ui/HealthBar";
+import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
 import { PauseMenu } from "../ui/PauseMenu";
 import {
   createPerformanceState,
@@ -166,6 +177,10 @@ interface CampaignShip {
   capitalSystems?: CapitalSystemsState | null;
   /** Its AI pilot (enemies, escorts), or null when the player flies it. */
   bot: BotPilot | null;
+  /** Mission tags (squad, wingman, transport, boss, ally squadron…). */
+  tags: string[];
+  /** Moved by an objective (transports, stations), never flown. */
+  scripted: boolean;
 }
 
 /** What a new ship is and how it is equipped. */
@@ -184,11 +199,6 @@ interface ShipSpawn {
 /** Vertical offset (px) of a ship's health bar above its sprite. */
 const HEALTH_BAR_OFFSET_Y = 40;
 
-/** Victory panel fade-in, hold, then camera fade-out before the debrief (ms). */
-const RESULT_FADE_IN_MS = 400;
-const VICTORY_HOLD_MS = 1600;
-const CAMERA_FADE_MS = 400;
-
 /** A pose on the battlefield. */
 interface Pose {
   readonly x: number;
@@ -200,12 +210,8 @@ interface ShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
 }
 
-interface ObjectiveState {
-  objective: MissionObjective;
-  completed: boolean;
-  progress: number;
-  target: number;
-}
+/** Player squad start offset below the battlefield centre (px). */
+const PLAYER_START_OFFSET_Y = 220;
 
 interface SceneData {
   factionId: FactionId;
@@ -220,6 +226,8 @@ export class CampaignBattleScene extends Phaser.Scene {
   private ships: Map<string, CampaignShip> = new Map();
   private shipSprites: Map<string, ShipSprite> = new Map();
   private healthBars: Map<string, HealthBar> = new Map();
+  /** Repair mechanic + overlay shimmer + repair drones (built in create). */
+  private repairFeedback: ShipRepairFeedback | null = null;
   private playerShipIds: string[] = [];
   private enemyShipIds: string[] = [];
   private inputSubscriptionIds: number[] = [];
@@ -230,10 +238,15 @@ export class CampaignBattleScene extends Phaser.Scene {
   private saveData!: CampaignSaveData;
   private selectedShips: string[] = [];
   private selectedLoadouts: (string | null)[] = [];
-  private objectiveStates: ObjectiveState[] = [];
-  private missionStartTime = 0;
+  /** The mission compiled for this launch (variants, flags, geometry). */
+  private plan!: MissionPlan;
+  /** Objectives, script, hazards, hero powers and campaign HUD extras. */
+  private director!: CampaignMissionDirector;
+  /** Armory + research bonuses the squad flies with. */
+  private bonuses!: CampaignShipBonuses;
   private totalKills = 0;
   private playerShipsLost = 0;
+  /** Legacy timed enemy groups, due at mission time (ms). */
   private pendingEnemySpawns: { enemy: MissionEnemy; spawnAt: number }[] = [];
   private missionComplete = false;
   private missionFailed = false;
@@ -280,13 +293,27 @@ export class CampaignBattleScene extends Phaser.Scene {
       data.selectedShips ??
       this.mission.playerShips.slice(0, this.mission.maxSquadSize);
     this.selectedLoadouts = data.selectedLoadouts ?? [];
-
-    this.objectiveStates = this.mission.objectives.map((obj) => ({
-      objective: obj,
-      completed: false,
-      progress: 0,
-      target: obj.count ?? 1,
-    }));
+    const centre = { x: BATTLEFIELD_SIZE / 2, y: BATTLEFIELD_SIZE / 2 };
+    this.plan = compileMission(
+      this.mission,
+      this.saveData.storyFlags ?? {},
+      centre,
+      this.factionId,
+    );
+    this.bonuses = campaignBonuses(
+      this.saveData.armory ?? { installed: {} },
+      this.saveData.research ?? {},
+    );
+    this.director = new CampaignMissionDirector({
+      bridge: this.createBridge(),
+      plan: this.plan,
+      save: this.saveData,
+      bonuses: this.bonuses,
+      playerStart: { x: centre.x, y: centre.y + PLAYER_START_OFFSET_Y },
+      enemyFaction:
+        this.plan.enemies[0]?.faction ??
+        factionOfShip(this.mission.enemies[0]?.shipId ?? ""),
+    });
 
     this.totalKills = 0;
     this.playerShipsLost = 0;
@@ -310,6 +337,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.inputSubscriptionIds = [];
     teardownSceneInput();
     this.pilot.detach();
+    this.director?.destroy();
     this.battleHud?.destroy();
     this.battleHud = null;
     this.resultOverlay = null;
@@ -325,6 +353,12 @@ export class CampaignBattleScene extends Phaser.Scene {
     audioManager.playFactionMusic(this.factionId, "combat");
 
     this.effectsManager = new EffectsManager(this);
+    this.repairFeedback = new ShipRepairFeedback({
+      scene: this,
+      shipOf: (id) => this.ships.get(id),
+      overlayOf: (id) => this.healthBars.get(id),
+      particleScale: () => this.performanceState.effectSettings.particleCount,
+    });
     const savedSettings = this.registry.get("settings") as
       { cameraShake: boolean; showDamageNumbers: boolean } | undefined;
     if (savedSettings) {
@@ -361,8 +395,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.cameras.main.centerOn(this.cameraVirtualX, this.cameraVirtualY);
     this.cameras.main.setZoom(1.0);
 
-    this.missionStartTime = Date.now();
-    this.modeHud.showBriefing(this.factionId, this.mission);
+    this.modeHud.showBriefing(this.factionId, this.briefingMission());
   }
 
   update(time: number, delta: number): void {
@@ -371,6 +404,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     // looking at, so a distant firefight sounds distant.
     syncListenerToCamera(this.cameras.main);
     this.modeHud.sync(this.cameras.main);
+    this.director.sync(this.cameras.main);
     if (this.isPaused || this.missionComplete || this.missionFailed) return;
 
     this.performanceState = updateFPS(this.performanceState, delta);
@@ -381,12 +415,13 @@ export class CampaignBattleScene extends Phaser.Scene {
 
     this.background.update();
 
+    this.director.update(time, delta);
     this.updateAI(time, delta);
     this.flyShips(delta);
     this.processCombat(delta);
     this.updateCameraFollow();
-    this.checkDelayedSpawns();
-    this.checkObjectives();
+    this.checkDelayedSpawns(delta);
+    this.checkObjectives(delta);
     this.updateHud();
   }
 
@@ -403,35 +438,53 @@ export class CampaignBattleScene extends Phaser.Scene {
 
   /** Holographic battle HUD (flagship ring, radar, weapons) + mission readouts. */
   private createHUD(): void {
-    this.modeHud = new CampaignModeHud(this, this.factionId, this.mission);
+    this.modeHud = new CampaignModeHud(
+      this,
+      this.factionId,
+      this.briefingMission(),
+    );
     this.battleHud = new BattleHud(this, { worldSize: BATTLEFIELD_SIZE });
+    this.director.create();
+  }
+
+  /** @returns The mission as briefed: this launch's title, briefing and visible objectives. */
+  private briefingMission(): CampaignMission {
+    return {
+      ...this.mission,
+      title: this.plan.title,
+      briefing: this.plan.briefing,
+      objectives: this.plan.objectives.filter((o) => !o.hidden),
+    };
   }
 
   /**
    * Refreshes the battle HUD from this frame's state: the flagship as the
    * player (its status ring replaces its health bar), escorts as allies,
-   * mission enemies as enemies, its primary's cooldown and the objectives.
+   * mission enemies as enemies, objective markers as neutral contacts (radar
+   * + edge arrows), its primary's cooldown and the objective tracker.
    */
   private updateHud(): void {
-    this.modeHud.updateObjectives(this.objectiveStates);
+    this.modeHud.updateObjectives(this.director.tracker());
     const flagship = this.ships.get(this.playerShipIds[0] ?? "") ?? null;
     if (flagship) {
       this.healthBars.get(flagship.id)?.destroy();
       this.healthBars.delete(flagship.id);
     }
-    this.battleHud?.update(
-      squadHudSnapshot({
-        flagship,
-        ships: this.ships.values(),
-        targetId: flagship ? this.hudTargetOf(flagship) : null,
-        markedId: this.squadAi.playerMarkOf(this.time.now),
-        cooldownRemainingMs: flagship?.weaponCooldown ?? 0,
-        attackIntervalMs: flagship
-          ? attackIntervalMs(flagship.combatStats.weaponCooldown)
-          : 0,
-        camera: cameraViewFrom(this.cameras.main),
-      }),
-    );
+    const snapshot = squadHudSnapshot({
+      flagship,
+      ships: this.ships.values(),
+      targetId: flagship ? this.hudTargetOf(flagship) : null,
+      markedId: this.squadAi.playerMarkOf(this.time.now),
+      cooldownRemainingMs: flagship?.weaponCooldown ?? 0,
+      attackIntervalMs: flagship
+        ? attackIntervalMs(flagship.combatStats.weaponCooldown)
+        : 0,
+      camera: cameraViewFrom(this.cameras.main),
+    });
+    this.battleHud?.update({
+      ...snapshot,
+      contacts: [...snapshot.contacts, ...this.director.contacts()],
+    });
   }
 
   /**
@@ -455,6 +508,7 @@ export class CampaignBattleScene extends Phaser.Scene {
   private setHudVisible(visible: boolean): void {
     this.battleHud?.setVisible(visible);
     this.modeHud.setVisible(visible);
+    this.director.setVisible(visible);
   }
 
   private showMessage(title: string, subtitle: string): void {
@@ -553,27 +607,30 @@ export class CampaignBattleScene extends Phaser.Scene {
     const centerX = BATTLEFIELD_SIZE / 2;
     const centerY = BATTLEFIELD_SIZE / 2;
 
-    this.spawnPlayerSquad(centerX, centerY + 220);
+    this.spawnPlayerSquad(centerX, centerY + PLAYER_START_OFFSET_Y);
 
-    // Immediate enemy spawns (delayed ones are queued via pendingEnemySpawns).
-    const immediateEnemies = this.mission.enemies.filter(
+    // Immediate enemy spawns; timed groups wait for their mission time.
+    const immediateEnemies = this.plan.enemies.filter(
       (e) => !e.spawnDelay || e.spawnDelay <= 0,
     );
-    for (const enemy of this.mission.enemies) {
+    for (const enemy of this.plan.enemies) {
       if (enemy.spawnDelay && enemy.spawnDelay > 0) {
-        this.pendingEnemySpawns.push({
-          enemy,
-          spawnAt: Date.now() + enemy.spawnDelay,
-        });
+        this.pendingEnemySpawns.push({ enemy, spawnAt: enemy.spawnDelay });
       }
     }
-    this.spawnEnemyGroup(immediateEnemies, centerX, centerY - 220, 90);
+    this.spawnEnemyGroup(
+      immediateEnemies,
+      centerX,
+      centerY - PLAYER_START_OFFSET_Y,
+      90,
+    );
   }
 
   /**
    * Spawns the player squad on a line: the flagship (index 0, flown by the
    * player) and the AI escorts. Each ship flies its quick build, plus the
-   * abilities of the campaign pilot seated in it.
+   * abilities of the campaign pilot seated in it and the squad's Armory /
+   * Research bonuses.
    *
    * @param centerX - Center of the line.
    * @param y - Line height.
@@ -602,6 +659,8 @@ export class CampaignBattleScene extends Phaser.Scene {
         loadoutId: loadouts[i] ?? null,
         pilotAbilityIds: seat ? campaignAbilityIds(seat) : [],
       });
+      ship.tags = ["squad", i === 0 ? "flagship" : "wingman"];
+      this.applyCampaignBonuses(ship, i === 0);
       if (i === 0) this.applyProtagonistBonuses(ship);
       else ship.bot = this.squadAi.createPilot(CAMPAIGN_ESCORT_TIER);
       this.ships.set(ship.id, ship);
@@ -611,9 +670,25 @@ export class CampaignBattleScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Armory mods and research choices for a player-side ship.
+   *
+   * @param ship - A freshly created player ship.
+   * @param isFlagship - Whether it is the hero's flagship.
+   */
+  private applyCampaignBonuses(ship: CampaignShip, isFlagship: boolean): void {
+    const next = withCampaignBonuses(ship, this.bonuses, isFlagship);
+    ship.combatStats = next.combatStats;
+    ship.modifiers = next.modifiers;
+    this.setDurability(ship, {
+      maxHull: next.maxHull,
+      maxShields: next.maxShields,
+    });
+  }
+
   /** Spawns one or more enemy groups spread along a horizontal line. */
   private spawnEnemyGroup(
-    enemies: MissionEnemy[],
+    enemies: readonly MissionEnemy[],
     centerX: number,
     y: number,
     angle: number,
@@ -622,42 +697,40 @@ export class CampaignBattleScene extends Phaser.Scene {
     if (totalCount === 0) return;
     const spacing = 80;
     const startX = centerX - ((totalCount - 1) * spacing) / 2;
-    const loadouts = assignQuickBuilds(
-      enemies.flatMap((enemy) => Array<string>(enemy.count).fill(enemy.shipId)),
-    );
     let slot = 0;
-
     for (const enemy of enemies) {
       for (let i = 0; i < enemy.count; i++) {
-        const id = `enemy_${Date.now()}_${slot}_${Math.random().toString(36).slice(2, 7)}`;
-        const x = startX + slot * spacing;
+        const id = `enemy_${slot}_${Math.random().toString(36).slice(2, 7)}`;
         const yJitter = y + (Math.random() - 0.5) * 60;
-        const pose = { x, y: yJitter, angle };
-        this.spawnEnemyShip(id, enemy, pose, loadouts[slot] ?? null);
+        this.spawnEnemyShip(id, enemy, {
+          x: startX + slot * spacing,
+          y: yJitter,
+          angle,
+        });
         slot++;
       }
     }
   }
 
-  /** Spawns reinforcements around the flagship's current position (no fixed arena center anymore). */
+  /** Spawns a timed group around the flagship's current position. */
   private spawnReinforcements(enemy: MissionEnemy): void {
     this.showMessage("REINFORCEMENTS", "Enemy reinforcements incoming!");
     const flagship = this.ships.get(this.playerShipIds[0] ?? "");
     const cx = flagship?.x ?? BATTLEFIELD_SIZE / 2;
     const cy = flagship?.y ?? BATTLEFIELD_SIZE / 2;
     const spawnRadius = 500;
-    const loadouts = assignQuickBuilds(
-      Array<string>(enemy.count).fill(enemy.shipId),
-    );
-
     for (let i = 0; i < enemy.count; i++) {
-      const id = `reinforcement_${Date.now()}_${i}`;
       const angle = Math.random() * Math.PI * 2;
-      const x = cx + Math.cos(angle) * spawnRadius;
-      const y = cy + Math.sin(angle) * spawnRadius;
-      const facing = (Phaser.Math.RadToDeg(angle) + 180) % 360;
-      const pose = { x, y, angle: facing };
-      this.spawnEnemyShip(id, enemy, pose, loadouts[i] ?? null);
+      const pose = {
+        x: cx + Math.cos(angle) * spawnRadius,
+        y: cy + Math.sin(angle) * spawnRadius,
+        angle: (Phaser.Math.RadToDeg(angle) + 180) % 360,
+      };
+      this.spawnEnemyShip(
+        `reinforcement_${Math.random().toString(36).slice(2, 7)}_${i}`,
+        enemy,
+        pose,
+      );
     }
   }
 
@@ -666,35 +739,77 @@ export class CampaignBattleScene extends Phaser.Scene {
    *
    * @param id - Ship id.
    * @param enemy - Mission enemy entry.
-   * @param spawn - Spawn pose.
-   * @param loadoutId - Its quick build, or null for the bare hull.
+   * @param pose - Spawn pose.
    */
-  private spawnEnemyShip(
-    id: string,
-    enemy: MissionEnemy,
-    spawn: Pose,
-    loadoutId: string | null,
-  ): void {
-    const def = getShipDefinition(enemy.shipId);
-    if (!def) return;
-
-    const ship = this.createShip({
+  private spawnEnemyShip(id: string, enemy: MissionEnemy, pose: Pose): void {
+    this.spawnFromRequest({
       id,
       definitionId: enemy.shipId,
       faction: enemy.faction,
       owner: "ai",
-      pose: spawn,
-      loadoutId,
+      pose,
+      tags: [
+        ...(enemy.isAce ? ["ace"] : []),
+        ...(enemy.isBoss ? ["boss"] : []),
+      ],
+      hullScale: 1,
+      scripted: false,
+      piloted: true,
+      isAce: enemy.isAce === true,
+      isBoss: enemy.isBoss === true,
+      lifetimeMs: null,
     });
-    ship.bot = this.squadAi.createPilot(campaignEnemyTier(this.mission, enemy));
-    if (enemy.isAce) {
+  }
+
+  /**
+   * Puts any requested ship on the field: mission enemies, scripted waves,
+   * allied squadrons, objective entities (transports, stations, targets) and
+   * summoned drones.
+   *
+   * @param req - What to spawn.
+   */
+  private spawnFromRequest(req: BattleSpawnRequest): void {
+    if (!getShipDefinition(req.definitionId) || this.ships.has(req.id)) return;
+    const [loadoutId] = assignQuickBuilds([req.definitionId]);
+    const ship = this.createShip({ ...req, loadoutId: loadoutId ?? null });
+    ship.tags = [...req.tags];
+    ship.scripted = req.scripted;
+    if (req.owner === "player") this.applyCampaignBonuses(ship, false);
+    this.applyRank(ship, req);
+    if (req.piloted) {
+      ship.bot = this.squadAi.createPilot(
+        req.owner === "player"
+          ? CAMPAIGN_ESCORT_TIER
+          : campaignEnemyTier(this.mission, req),
+      );
+    }
+    this.ships.set(ship.id, ship);
+    if (req.owner === "ai") this.enemyShipIds.push(ship.id);
+    this.createShipSprite(ship, req.isAce, req.isBoss);
+    this.createHealthBar(ship);
+  }
+
+  /**
+   * Hull scale, ace and boss stat bumps (bosses get capital systems).
+   *
+   * @param ship - A freshly created ship.
+   * @param req - Its spawn request.
+   */
+  private applyRank(ship: CampaignShip, req: BattleSpawnRequest): void {
+    if (req.hullScale !== 1) {
+      this.setDurability(ship, {
+        maxHull: Math.round(ship.maxHull * req.hullScale),
+        maxShields: Math.round(ship.maxShields * req.hullScale),
+      });
+    }
+    if (req.isAce) {
       this.setDurability(ship, aceDurability(ship));
       ship.combatStats = {
         ...ship.combatStats,
         attackDice: ship.combatStats.attackDice + ACE_ATTACK_BONUS,
       };
     }
-    if (enemy.isBoss) {
+    if (req.isBoss) {
       this.setDurability(ship, bossDurability(ship));
       ship.combatStats = {
         ...ship.combatStats,
@@ -702,13 +817,7 @@ export class CampaignBattleScene extends Phaser.Scene {
       };
       ship.capitalSystems = createCapitalSystems(ship.maxHull);
     }
-
-    this.ships.set(id, ship);
-    this.enemyShipIds.push(id);
-    this.createShipSprite(ship, enemy.isAce, enemy.isBoss);
-    this.createHealthBar(ship);
   }
-
   /**
    * Applies the protagonist pilot's evolution bonuses to the flagship. The
    * old turn-based scene only ever applied hull/shields — attack/agility were
@@ -748,19 +857,108 @@ export class CampaignBattleScene extends Phaser.Scene {
     ship.shields = caps.maxShields;
   }
 
-  private checkDelayedSpawns(): void {
-    const now = Date.now();
-    const toSpawn: MissionEnemy[] = [];
-    this.pendingEnemySpawns = this.pendingEnemySpawns.filter((spawn) => {
-      if (now >= spawn.spawnAt) {
-        toSpawn.push(spawn.enemy);
-        return false;
-      }
-      return true;
-    });
-    for (const enemy of toSpawn) this.spawnReinforcements(enemy);
+  /**
+   * The scene operations the mission director (objectives, scripts,
+   * hazards, hero powers) may use.
+   *
+   * @returns The bridge.
+   */
+  private createBridge(): CampaignBattleBridge {
+    return {
+      scene: this,
+      factionId: this.factionId,
+      worldSize: BATTLEFIELD_SIZE,
+      ships: () => this.ships.values(),
+      ship: (id) => this.ships.get(id),
+      flagship: () => this.ships.get(this.playerShipIds[0] ?? "") ?? null,
+      focusTargetId: () => this.focusTargetId(),
+      spawn: (request) => this.spawnFromRequest(request),
+      remove: (id) => this.destroyShip(id, false, true),
+      damage: (id, amount, ignoreShields) =>
+        this.damageById(id, amount, ignoreShields),
+      repair: (id, amount) =>
+        this.adjustShip(
+          id,
+          (s) => (s.hull = Math.min(s.maxHull, s.hull + amount)),
+        ),
+      setShields: (id, value) =>
+        this.adjustShip(
+          id,
+          (s) => (s.shields = Math.max(0, Math.min(s.maxShields, value))),
+        ),
+      addStress: (id, amount) =>
+        this.adjustShip(id, (s) =>
+          this.setFlight(s, {
+            ...s.flight,
+            stress: applyInstantStress(s.flight.stress, amount),
+          }),
+        ),
+      setPose: (id, x, y, angle) =>
+        this.adjustShip(id, (s) => {
+          const dx = torusAxisDelta(s.x, x, BATTLEFIELD_SIZE);
+          const dy = torusAxisDelta(s.y, y, BATTLEFIELD_SIZE);
+          // Carry the cycle in progress so the next tick does not snap back.
+          const motion = shiftMotion(s.flight.motion, dx, dy, BATTLEFIELD_SIZE);
+          this.setFlight(s, { ...s.flight, motion: { ...motion, angle } });
+          this.syncShipVisuals(s);
+        }),
+      banner: (title, subtitle) => this.showMessage(title, subtitle),
+      effects: () => this.effectsManager,
+    };
   }
 
+  /** @returns The player's mark, else the flagship's HUD target. */
+  private focusTargetId(): string | null {
+    const mark = this.squadAi.playerMarkOf(this.time.now);
+    if (mark) return mark;
+    const flagship = this.ships.get(this.playerShipIds[0] ?? "");
+    return flagship ? this.hudTargetOf(flagship) : null;
+  }
+
+  /**
+   * @param id - A living ship.
+   * @param change - Mutation to apply (its overlay is refreshed after).
+   */
+  private adjustShip(id: string, change: (ship: CampaignShip) => void): void {
+    const ship = this.ships.get(id);
+    if (!ship || ship.hull <= 0) return;
+    change(ship);
+    this.healthBars.get(id)?.update(ship.hull, ship.shields);
+  }
+
+  /**
+   * Mission damage (hazards, hero powers): through shields unless piercing;
+   * a ship it destroys counts as a kill for the side that did not lose it.
+   *
+   * @param id - Target ship.
+   * @param amount - Damage.
+   * @param ignoreShields - Shield-piercing (psionic lance).
+   */
+  private damageById(id: string, amount: number, ignoreShields: boolean): void {
+    const ship = this.ships.get(id);
+    if (!ship || ship.hull <= 0) return;
+    if (!ignoreShields) this.applyDamage(ship, amount);
+    else if (ship.capitalSystems) this.damageCapitalSystems(ship, amount);
+    else ship.hull = Math.max(0, ship.hull - amount);
+    this.healthBars.get(id)?.update(ship.hull, ship.shields);
+    if (ship.hull <= 0) this.destroyShip(id, ship.owner === "ai");
+  }
+
+  /**
+   * Timed legacy groups (mission clock, pause-safe) and one step of the
+   * mission script and hazards. Calm e2e runs stub this out.
+   *
+   * @param deltaMs - Frame length.
+   */
+  private checkDelayedSpawns(deltaMs = 0): void {
+    const now = this.director.runtime.elapsedMs;
+    const due = this.pendingEnemySpawns.filter((spawn) => now >= spawn.spawnAt);
+    this.pendingEnemySpawns = this.pendingEnemySpawns.filter(
+      (spawn) => now < spawn.spawnAt,
+    );
+    for (const spawn of due) this.spawnReinforcements(spawn.enemy);
+    this.director.stepScript(deltaMs);
+  }
   /**
    * Builds a ship record flying the cycle engine from its spawn pose
    * (wrapped onto the toroidal battlefield), with its quick build — and
@@ -797,6 +995,8 @@ export class CampaignBattleScene extends Phaser.Scene {
       modifiers: NEUTRAL_MODIFIERS,
       frenzyUntilMs: 0,
       bot: null,
+      tags: [],
+      scripted: false,
     };
     ship.modifiers = equipQuickBuild(ship, spawn.loadoutId);
     const abilityIds = spawn.pilotAbilityIds ?? [];
@@ -866,6 +1066,8 @@ export class CampaignBattleScene extends Phaser.Scene {
       maxShields: ship.maxShields,
       currentHull: ship.hull,
       currentShields: ship.shields,
+      side: overlaySide(false, ship.owner === "player"),
+      definitionId: ship.definitionId,
     });
     this.healthBars.set(ship.id, healthBar);
   }
@@ -882,21 +1084,27 @@ export class CampaignBattleScene extends Phaser.Scene {
    * @returns True if the ship's flight should advance.
    */
   private canFly(ship: CampaignShip): boolean {
-    if (ship.hull <= 0) return false;
+    if (ship.hull <= 0 || this.director.isScripted(ship)) return false;
     return !(ship.capitalSystems && isEnginesOffline(ship.capitalSystems));
   }
 
   /**
    * Flies every ship one frame on the X-Wing cycle engine (template arcs,
    * cycle-boundary commits, stress) and syncs sprites to the new poses.
+   * A hero's time-slow scales the enemy side's frame.
    *
    * @param deltaMs - Frame length (ms).
    */
   private flyShips(deltaMs: number): void {
+    const enemyScale = this.director.powers.timeScaleFor(
+      "enemy",
+      this.time.now,
+    );
     for (const ship of this.ships.values()) {
       if (!this.canFly(ship)) continue;
+      const shipDelta = ship.owner === "ai" ? deltaMs * enemyScale : deltaMs;
       const tick = tickCycleFlight(ship.flight, {
-        deltaMs,
+        deltaMs: shipDelta,
         worldSize: BATTLEFIELD_SIZE,
         dial: ship.dial,
         cycleMs: CYCLE_DURATION_MS,
@@ -928,22 +1136,14 @@ export class CampaignBattleScene extends Phaser.Scene {
   }
 
   /**
-   * Regenerates a ship's shields for a frame (equipment and abilities that
-   * restore shields) and refreshes its health bar when they changed.
+   * Applies a ship's own shield regen and hull repair for a frame
+   * (equipment and abilities); the repair feedback refreshes its overlay.
    *
    * @param ship - The ship.
    * @param deltaMs - Frame length (ms).
    */
   private regenerateShipShields(ship: CampaignShip, deltaMs: number): void {
-    const shields = regenerateShields(
-      ship.shields,
-      ship.maxShields,
-      ship.modifiers,
-      deltaMs,
-    );
-    if (shields === ship.shields) return;
-    ship.shields = shields;
-    this.healthBars.get(ship.id)?.update(ship.hull, ship.shields);
+    this.repairFeedback?.selfRepair(ship, deltaMs);
   }
 
   /**
@@ -990,6 +1190,9 @@ export class CampaignBattleScene extends Phaser.Scene {
   ): void {
     const isPiloted = ship.id === this.pilotedShipId;
     for (const event of events) {
+      if (event === "boost" || event === "barrel_roll") {
+        this.director.recordEvasive(ship.id);
+      }
       playFlightEventFx(this, {
         event,
         origin,
@@ -1013,16 +1216,20 @@ export class CampaignBattleScene extends Phaser.Scene {
    * @param delta - Frame length (ms).
    */
   private processCombat(delta: number): void {
+    const now = this.time.now;
+    const enemyScale = this.director.powers.timeScaleFor("enemy", now);
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
-      ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
+      const shipDelta = ship.owner === "ai" ? delta * enemyScale : delta;
+      ship.weaponCooldown = Math.max(0, ship.weaponCooldown - shipDelta);
+      if (this.director.powers.weaponsDisabled(ship.id, now)) continue;
       if (ship.weaponCooldown <= 0) {
         const target = this.findTarget(ship);
         if (target) {
           this.fireAt(ship, target);
-          ship.weaponCooldown = attackIntervalMs(
-            ship.combatStats.weaponCooldown,
-          );
+          ship.weaponCooldown =
+            attackIntervalMs(ship.combatStats.weaponCooldown) *
+            this.director.powers.attackIntervalMultiplier(ship.id, now);
         }
       }
     }
@@ -1044,7 +1251,9 @@ export class CampaignBattleScene extends Phaser.Scene {
       rangePx: ship.combatStats.weaponRange,
       arcDeg: ship.combatStats.firingArc,
       isHostile: (other) => other.owner !== ship.owner,
-      isEligible: (other) => !this.hitLedger.isImmune(ship.id, other.id, now),
+      isEligible: (other) =>
+        !this.hitLedger.isImmune(ship.id, other.id, now) &&
+        !this.director.powers.isCloaked(other.id, now),
       preferredId: ship.bot
         ? ship.bot.targetId
         : this.squadAi.playerMarkOf(now),
@@ -1101,12 +1310,15 @@ export class CampaignBattleScene extends Phaser.Scene {
 
   /**
    * Damage taken shields first, then hull — or, on a boss, its capital
-   * systems (announcing a system knocked out).
+   * systems (announcing a system knocked out). A hero's overcharge reduces it.
    *
    * @param target - The ship taking damage.
-   * @param damage - Damage to take.
+   * @param rawDamage - Damage to take.
    */
-  private applyDamage(target: CampaignShip, damage: number): void {
+  private applyDamage(target: CampaignShip, rawDamage: number): void {
+    const damage =
+      rawDamage *
+      this.director.powers.damageTakenMultiplier(target.id, this.time.now);
     const after = absorbDamage(target, damage);
     const hullDamage = damage - (target.shields - after.shields);
     if (after.shields < target.shields) {
@@ -1179,18 +1391,31 @@ export class CampaignBattleScene extends Phaser.Scene {
     }
   }
 
-  private destroyShip(shipId: string, wasPlayerKill: boolean): void {
+  /**
+   * Removes a ship from the battle and reports it to the mission.
+   *
+   * @param shipId - The ship.
+   * @param wasPlayerKill - Whether the player's side gets the kill.
+   * @param expired - A summoned ship timing out (no loss, no event).
+   */
+  private destroyShip(
+    shipId: string,
+    wasPlayerKill: boolean,
+    expired = false,
+  ): void {
     const ship = this.ships.get(shipId);
     if (!ship) return;
 
     if (ship.owner === "ai" && wasPlayerKill) this.totalKills++;
-    if (ship.owner === "player") this.playerShipsLost++;
+    if (!expired && ship.tags.includes("squad")) this.playerShipsLost++;
+    if (!expired) this.director.recordDestroyed(ship);
     this.hitLedger.forget(shipId);
     this.squadAi.forget(shipId);
 
     const sprite = this.shipSprites.get(shipId);
     if (sprite) {
-      this.effectsManager.createExplosion(sprite.x, sprite.y, "medium");
+      if (!expired)
+        this.effectsManager.createExplosion(sprite.x, sprite.y, "medium");
       sprite.destroy();
       this.shipSprites.delete(shipId);
     }
@@ -1307,279 +1532,114 @@ export class CampaignBattleScene extends Phaser.Scene {
   // OBJECTIVES / MISSION OUTCOME
   // ==========================================
 
-  private checkObjectives(): void {
-    const elapsedSeconds = (Date.now() - this.missionStartTime) / 1000;
-
-    let playerShipsAlive = 0;
-    let enemyShipsAlive = 0;
-    for (const ship of this.ships.values()) {
-      if (ship.hull <= 0) continue;
-      if (ship.owner === "player") playerShipsAlive++;
-      else enemyShipsAlive++;
-    }
-
-    for (const objState of this.objectiveStates) {
-      if (objState.completed) continue;
-      const obj = objState.objective;
-
-      switch (obj.type) {
-        case "eliminate":
-          objState.progress = this.totalKills;
-          if (objState.progress >= objState.target) objState.completed = true;
-          break;
-
-        case "survive":
-          if (obj.timeLimit && elapsedSeconds >= obj.timeLimit) {
-            if (playerShipsAlive > 0) {
-              objState.completed = true;
-            } else if (!obj.optional) {
-              this.triggerMissionFailed("Your ships were destroyed");
-              return;
-            }
-          }
-          objState.progress = Math.floor(elapsedSeconds);
-          break;
-
-        case "defend":
-          if (obj.timeLimit && elapsedSeconds >= obj.timeLimit) {
-            if (playerShipsAlive > 0) {
-              objState.completed = true;
-            } else if (!obj.optional) {
-              this.triggerMissionFailed("The defense was overwhelmed");
-              return;
-            }
-          }
-          objState.progress = Math.floor(elapsedSeconds);
-          break;
-
-        case "assassinate":
-          if (enemyShipsAlive === 0 && this.pendingEnemySpawns.length === 0) {
-            objState.completed = true;
-          }
-          break;
-
-        case "escort":
-          if (enemyShipsAlive === 0 && this.pendingEnemySpawns.length === 0) {
-            if (playerShipsAlive > 0) {
-              objState.completed = true;
-            } else if (!obj.optional) {
-              this.triggerMissionFailed("The escort was lost");
-              return;
-            }
-          }
-          break;
-
-        case "capture":
-          if (enemyShipsAlive === 0 && this.pendingEnemySpawns.length === 0) {
-            if (playerShipsAlive > 0) {
-              objState.completed = true;
-            } else if (!obj.optional) {
-              this.triggerMissionFailed("The capture failed");
-              return;
-            }
-          }
-          break;
-      }
-    }
-
-    const requiredObjectives = this.objectiveStates.filter(
-      (o) => !o.objective.optional,
+  /**
+   * Steps the mission's objectives and ends the mission on victory or defeat
+   * (a required objective failed, or the whole squad is down). Calm e2e
+   * runs stub this out.
+   *
+   * @param deltaMs - Frame length.
+   */
+  private checkObjectives(deltaMs = 0): void {
+    if (this.missionComplete || this.missionFailed) return;
+    const outcome = this.director.stepObjectives(deltaMs);
+    const squadAlive = [...this.ships.values()].some(
+      (ship) => ship.hull > 0 && ship.tags.includes("squad"),
     );
-    if (requiredObjectives.every((o) => o.completed) && !this.missionComplete) {
-      this.triggerMissionVictory();
-    }
-
-    if (playerShipsAlive === 0 && !this.missionFailed) {
-      this.triggerMissionFailed("All ships destroyed");
-    }
+    if (!squadAlive) this.triggerMissionFailed("All ships destroyed");
+    else if (outcome === "defeat")
+      this.triggerMissionFailed(this.failureReason());
+    else if (outcome === "victory") this.triggerMissionVictory();
   }
 
+  /** @returns The first failed required objective, as the failure reason. */
+  private failureReason(): string {
+    const failed = this.director.runtime.objectives.find(
+      (s) => s.status === "failed" && s.def.optional !== true,
+    );
+    return failed
+      ? `Objective failed: ${failed.def.description}`
+      : "Objectives not completed";
+  }
+
+  /**
+   * Seals the victory: bonus objectives and story flags from the mission,
+   * rewards (with Armory/Research bonuses) folded into the save (autosave),
+   * then the debrief.
+   */
   private triggerMissionVictory(): void {
     this.missionComplete = true;
     audioManager.playFactionStinger(this.factionId, "victory");
-
-    const optionalComplete = this.objectiveStates.filter(
-      (o) => o.objective.optional && o.completed,
-    );
-    let bonusXp = 0;
-    for (const obj of optionalComplete) bonusXp += obj.objective.xpBonus ?? 50;
-
-    const totalXp = this.mission.rewards.xp + bonusXp;
-    const totalCredits = this.mission.rewards.credits;
-
-    const pilotDefs = CAMPAIGN_PILOTS[this.factionId] ?? [];
-    const { updatedPilots, levelUpEvents } = distributeMissionXp(
-      this.saveData.campaignPilots,
-      pilotDefs,
-      this.mission.rewards.xp,
-      bonusXp,
-    );
-
-    const pendingEvolution = !!this.mission.evolutionChoice;
+    const { bonuses, storyFlags } = this.director.finalizeVictory();
+    const victory = missionVictoryRecord({
+      mission: this.mission,
+      campaign: FACTION_CAMPAIGNS[this.factionId],
+      save: this.saveData,
+      bonuses,
+      storyFlags,
+      kills: this.totalKills,
+      shipsLost: this.playerShipsLost,
+      bonusesActive: this.bonuses,
+    });
     const preMissionSave = this.saveData;
-    const updatedSave = CampaignSaveManager.completeMission(
+    const result = CampaignSaveManager.recordVictory(
       this.saveData,
-      this.mission.id,
-      totalXp,
-      totalCredits,
-      this.totalKills,
-      this.playerShipsLost,
-      this.mission.rewards.unlocks ?? [],
-      updatedPilots,
-      pendingEvolution,
+      victory.record,
     );
-
     this.showMissionCompleteFlash(() => {
       this.scene.start("DebriefScene", {
         factionId: this.factionId,
         mission: this.mission,
         preMissionSave,
-        updatedSave,
-        xpEarned: totalXp,
-        creditsEarned: totalCredits,
+        updatedSave: result.save,
+        xpEarned: victory.record.xp,
+        creditsEarned: victory.record.credits + result.bonusCredits,
         kills: this.totalKills,
         shipsLost: this.playerShipsLost,
-        protagonistBonusXp: bonusXp,
-        levelUpEvents,
+        protagonistBonusXp: victory.bonusXp,
+        levelUpEvents: victory.levelUpEvents,
+        researchEarned: result.researchEarned,
+        bonusObjectives: bonuses.map((b) => b.description),
       });
     });
   }
 
   /**
-   * Victory beat before the debrief: HUD hidden, a holographic MISSION
-   * COMPLETE panel fades in, then the camera fades out.
+   * Victory beat before the debrief (MISSION COMPLETE, then camera fade).
    *
    * @param onComplete - Called once the fade finishes.
    */
   private showMissionCompleteFlash(onComplete: () => void): void {
     this.setHudVisible(false);
-    this.resultOverlay = showResultOverlay(this, {
-      header: this.mission.title,
-      title: "MISSION COMPLETE",
-      accent: HOLO_PALETTE.success,
-      lines: this.missionTallyLines(),
-      actions: [],
-    });
-    const { panel } = this.resultOverlay;
-    panel.setAlpha(0);
-    this.tweens.add({
-      targets: panel,
-      alpha: 1,
-      duration: RESULT_FADE_IN_MS,
-      onComplete: () => {
-        this.time.delayedCall(VICTORY_HOLD_MS, () => {
-          this.cameras.main.fade(
-            CAMERA_FADE_MS,
-            0,
-            0,
-            0,
-            false,
-            (_cam: Phaser.Cameras.Scene2D.Camera, progress: number) => {
-              if (progress === 1) onComplete();
-            },
-          );
-        });
-      },
-    });
+    this.resultOverlay = showCampaignVictoryFlash(
+      this,
+      this.plan.title,
+      this.tally(),
+      onComplete,
+    );
   }
 
-  /** @returns Kill / loss lines shared by the result panels. */
-  private missionTallyLines(): ResultLine[] {
-    return [
-      { text: `Enemies destroyed: ${this.totalKills}` },
-      { text: `Ships lost: ${this.playerShipsLost}` },
-    ];
+  /** @returns Kills and squad losses so far. */
+  private tally(): MissionTally {
+    return { kills: this.totalKills, shipsLost: this.playerShipsLost };
   }
 
+  /**
+   * Ends the mission as failed: MISSION FAILED with the reason, RETRY / QUIT.
+   *
+   * @param reason - Why it failed.
+   */
   private triggerMissionFailed(reason: string): void {
     this.missionFailed = true;
     audioManager.playFactionStinger(this.factionId, "defeat");
-    this.showResultScreen(false, 0, 0, reason);
-  }
-
-  /**
-   * Holographic result overlay (failure: RETRY / QUIT; victory: CONTINUE).
-   * Zoom resets to 1.0 first — its buttons are scrollFactor(0) and Phaser
-   * mis-hit-tests them under zoom.
-   *
-   * @param victory - Whether the mission was won.
-   * @param xpEarned - XP shown on a victory.
-   * @param creditsEarned - Credits shown on a victory.
-   * @param failReason - Why the mission failed.
-   */
-  private showResultScreen(
-    victory: boolean,
-    xpEarned: number,
-    creditsEarned: number,
-    failReason?: string,
-  ): void {
     this.cameras.main.setZoom(1.0);
     this.setHudVisible(false);
-    const toCampaign = (): void => {
-      this.scene.start("CampaignScene", { factionId: this.factionId });
-    };
-    this.resultOverlay = showResultOverlay(this, {
-      header: this.mission.title,
-      title: victory ? "MISSION COMPLETE" : "MISSION FAILED",
-      accent: victory ? HOLO_PALETTE.success : HOLO_PALETTE.danger,
-      lines: victory
-        ? this.victoryLines(xpEarned, creditsEarned)
-        : this.failureLines(failReason),
-      actions: victory
-        ? [{ label: "Continue", variant: "primary", onClick: toCampaign }]
-        : [
-            {
-              label: "Retry",
-              variant: "primary",
-              onClick: () => this.scene.restart(),
-            },
-            { label: "Quit", variant: "secondary", onClick: toCampaign },
-          ],
+    this.resultOverlay = showCampaignFailure(this, {
+      title: this.plan.title,
+      reason,
+      tally: this.tally(),
+      onRetry: () => this.scene.restart(),
+      onQuit: () =>
+        this.scene.start("CampaignScene", { factionId: this.factionId }),
     });
-  }
-
-  /**
-   * @param xpEarned - XP earned.
-   * @param creditsEarned - Credits earned.
-   * @returns Reward, tally and unlock lines for a victory.
-   */
-  private victoryLines(xpEarned: number, creditsEarned: number): ResultLine[] {
-    const unlocks = this.mission.rewards.unlocks ?? [];
-    return [
-      {
-        text: `XP earned: ${xpEarned}`,
-        role: "heading",
-        color: HOLO_PALETTE.success,
-      },
-      {
-        text: `Credits: ${creditsEarned}`,
-        role: "heading",
-        color: HOLO_PALETTE.warning,
-      },
-      ...this.missionTallyLines(),
-      ...unlocks.map((unlock) => ({
-        text: `Unlocked: ${unlock}`,
-        color: HOLO_PALETTE.accent,
-      })),
-    ];
-  }
-
-  /**
-   * @param failReason - Why the mission failed.
-   * @returns Reason and advice lines for a failure.
-   */
-  private failureLines(failReason?: string): ResultLine[] {
-    return [
-      {
-        text: failReason ?? "Objectives not completed",
-        role: "heading",
-        color: HOLO_PALETTE.danger,
-      },
-      ...this.missionTallyLines(),
-      {
-        text: "Try different tactics or ship loadouts",
-        color: HOLO_PALETTE.textMuted,
-      },
-    ];
   }
 }

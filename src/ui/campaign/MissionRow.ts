@@ -154,7 +154,10 @@ function createRowTitle(
 ): Phaser.GameObjects.Container {
   const L = MISSION_ROW_LAYOUT;
   const x = card.left + L.titleX;
-  const tag = config.branch === true ? config.mission.branchTag : undefined;
+  const tag =
+    config.branch === true
+      ? config.mission.branchTag
+      : config.mission.style?.toUpperCase();
   const titleY = tag !== undefined ? L.titleOffsetY : 0;
   const title = addHoloText(scene, x, titleY, config.mission.title, {
     size: L.titleSize,
