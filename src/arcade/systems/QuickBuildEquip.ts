@@ -8,6 +8,7 @@
  * like applyLoadoutEffects (called right after the ship is built).
  */
 
+import { DURABILITY_SCALE } from "../../config";
 import type { CombatModifiers } from "../../core/CombatModifiers";
 import { getEquippableLoadouts } from "../../data/ShipLoadouts";
 import { uniquePilotOf } from "../../data/squadRules";
@@ -96,7 +97,8 @@ export function stressModifiersOf(modifiers: CombatModifiers): StressModifiers {
 }
 
 /**
- * Shields after regenerating for a frame.
+ * Shields after regenerating for a frame (the effect's rate is in
+ * miniature shield points per second, scaled to real-time HP).
  *
  * @param shields - Current shields.
  * @param maxShields - Shield cap.
@@ -115,6 +117,7 @@ export function regenerateShields(
   }
   return Math.min(
     maxShields,
-    shields + (modifiers.shieldRegenPerSecond * deltaMs) / 1000,
+    shields +
+      (modifiers.shieldRegenPerSecond * DURABILITY_SCALE * deltaMs) / 1000,
   );
 }

@@ -17,6 +17,9 @@ import {
   calculateHitChance,
   type ModeCombatStats,
 } from "../data/ModeBalancing";
+
+/** Abstract simulators stay on miniature hull/shield points. */
+const MINIATURE_SCALE = 1;
 import { applyManeuver, getManeuverTemplate } from "./SimManeuvers";
 import type { ManeuverDirection } from "../core/types";
 import { getLoadoutById } from "../data/ShipLoadouts";
@@ -382,7 +385,7 @@ export class BattleSimulator {
     }
 
     const combatStats = {
-      ...getModeCombatStats(spec.shipId, this.config.mode),
+      ...getModeCombatStats(spec.shipId, this.config.mode, MINIATURE_SCALE),
     };
     let maxHull = def.baseStats.hull;
     let maxShields = def.baseStats.shields;

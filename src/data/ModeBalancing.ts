@@ -7,6 +7,7 @@
  */
 
 import { getShipDefinition } from "./ShipDefinitions";
+import { DURABILITY_SCALE } from "../config";
 
 export type GameMode = "arcade" | "continuous" | "survival";
 
@@ -170,16 +171,23 @@ const MODE_BASE_STATS: Record<GameMode, ModeBaseStats> = {
 };
 
 /**
- * Get combat stats for a ship in a specific game mode
+ * Get combat stats for a ship in a specific game mode.
+ *
+ * @param shipDefId - Ship definition id.
+ * @param mode - Game mode.
+ * @param durabilityScale - Real-time HP per miniature hull/shield point
+ *   (abstract simulators pass 1 to stay on miniature numbers).
+ * @returns The ship's combat stats in that mode.
  */
 export function getModeCombatStats(
   shipDefId: string,
   mode: GameMode,
+  durabilityScale: number = DURABILITY_SCALE,
 ): ModeCombatStats {
   const shipDef = getShipDefinition(shipDefId);
   if (!shipDef) {
     // Return default stats if ship not found
-    return getDefaultStats(mode);
+    return getDefaultStats(mode, durabilityScale);
   }
 
   const baseStats = shipDef.baseStats;
@@ -188,14 +196,16 @@ export function getModeCombatStats(
   const modeStats = MODE_BASE_STATS[mode];
 
   // Calculate hull and shields
-  const hull = Math.round(
-    baseStats.hull * modeStats.hullMultiplier * (roleModifiers?.hullMod ?? 1),
-  );
-  const shields = Math.round(
-    baseStats.shields *
-      modeStats.shieldMultiplier *
-      (roleModifiers?.shieldMod ?? 1),
-  );
+  const hull =
+    Math.round(
+      baseStats.hull * modeStats.hullMultiplier * (roleModifiers?.hullMod ?? 1),
+    ) * durabilityScale;
+  const shields =
+    Math.round(
+      baseStats.shields *
+        modeStats.shieldMultiplier *
+        (roleModifiers?.shieldMod ?? 1),
+    ) * durabilityScale;
 
   // Calculate attack value (dice or damage)
   const attackDice = Math.round(
@@ -239,13 +249,18 @@ export function getModeCombatStats(
   };
 }
 
-function getDefaultStats(mode: GameMode): ModeCombatStats {
+function getDefaultStats(
+  mode: GameMode,
+  durabilityScale: number,
+): ModeCombatStats {
   const modeStats = MODE_BASE_STATS[mode];
+  const hull = Math.round(4 * modeStats.hullMultiplier) * durabilityScale;
+  const shields = Math.round(2 * modeStats.shieldMultiplier) * durabilityScale;
   return {
-    hull: Math.round(4 * modeStats.hullMultiplier),
-    maxHull: Math.round(4 * modeStats.hullMultiplier),
-    shields: Math.round(2 * modeStats.shieldMultiplier),
-    maxShields: Math.round(2 * modeStats.shieldMultiplier),
+    hull,
+    maxHull: hull,
+    shields,
+    maxShields: shields,
     attackDice: modeStats.attackBase,
     weaponCooldown: modeStats.baseWeaponCooldown,
     weaponRange: modeStats.baseWeaponRange,

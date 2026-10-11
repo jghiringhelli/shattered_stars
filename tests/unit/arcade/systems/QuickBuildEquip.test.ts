@@ -3,6 +3,7 @@
  * builds in every mode and resolving dice-mode shots with equipment.
  */
 
+import { DURABILITY_SCALE } from "../../../../src/config";
 import { describe, it, expect } from "vitest";
 import {
   assignQuickBuilds,
@@ -107,10 +108,12 @@ describe("equipFlight / stressModifiersOf / regenerateShields", () => {
     });
   });
 
-  it("regenerateShields adds the per-second rate, capped", () => {
-    expect(regenerateShields(1, 3, sheet, 1000)).toBeCloseTo(1.5);
-    expect(regenerateShields(3, 3, sheet, 1000)).toBe(3);
-    expect(regenerateShields(1, 3, NEUTRAL_MODIFIERS, 1000)).toBe(1);
+  it("regenerateShields adds the per-second rate in scaled miniature points, capped", () => {
+    expect(regenerateShields(4, 12, sheet, 1000)).toBeCloseTo(
+      4 + 0.5 * DURABILITY_SCALE,
+    );
+    expect(regenerateShields(12, 12, sheet, 1000)).toBe(12);
+    expect(regenerateShields(4, 12, NEUTRAL_MODIFIERS, 1000)).toBe(4);
   });
 });
 

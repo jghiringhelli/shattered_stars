@@ -17,6 +17,9 @@ import type { FactionId } from "../config";
 import { SHIP_DEFINITIONS, getShipDefinition } from "../data/ShipDefinitions";
 import { getModeCombatStats, calculateHitChance } from "../data/ModeBalancing";
 
+/** Abstract simulators stay on miniature hull/shield points. */
+const MINIATURE_SCALE = 1;
+
 // ============================================
 // Types
 // ============================================
@@ -227,7 +230,11 @@ export class GameplayMetricsAnalyzer {
     );
 
     for (const ship of ships) {
-      const combatStats = getModeCombatStats(ship.id, this.mode);
+      const combatStats = getModeCombatStats(
+        ship.id,
+        this.mode,
+        MINIATURE_SCALE,
+      );
 
       // Calculate effective health (hull + shields)
       const effectiveHealth = ship.baseStats.hull + ship.baseStats.shields;

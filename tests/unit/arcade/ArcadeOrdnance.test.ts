@@ -3,6 +3,7 @@
  * Covers slot extraction, cooldown ticking, fire gating, charge consumption, and reload.
  */
 
+import { ORDNANCE_DAMAGE_SCALE } from "../../../src/config";
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   extractOrdnanceSlots,
@@ -208,7 +209,7 @@ describe("buildOrdnanceSlots", () => {
     const [slot] = buildOrdnanceSlots(["concussion_missile"]);
     expect(slot).toMatchObject({
       ordnanceClass: "missile",
-      damage: 3,
+      damage: 3 * ORDNANCE_DAMAGE_SCALE,
       cooldownMax: 4000,
       charges: 3,
       isHoming: true,

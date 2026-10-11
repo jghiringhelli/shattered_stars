@@ -3,6 +3,7 @@
  * hooks of pilot abilities.
  */
 
+import { DURABILITY_SCALE } from "../../../src/config";
 import { describe, it, expect } from "vitest";
 import {
   deathBlastTargets,
@@ -119,8 +120,11 @@ describe("laserHitBonus", () => {
 });
 
 describe("rewardKill", () => {
-  it("restores shields per kill, capped at max", () => {
-    expect(rewardKill(pilot({ shieldsPerKill: 1 }), 0).shields).toBe(2);
+  it("restores shields per kill (scaled miniature points), capped at max", () => {
+    const roomy = { shields: 1, maxShields: 12 };
+    expect(rewardKill(pilot({ shieldsPerKill: 1 }, roomy), 0).shields).toBe(
+      1 + DURABILITY_SCALE,
+    );
     expect(
       rewardKill(pilot({ shieldsPerKill: 1 }, { shields: 3 }), 0).shields,
     ).toBe(3);

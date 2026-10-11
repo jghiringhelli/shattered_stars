@@ -6,6 +6,7 @@
  * Pure functions — no Phaser dependency.
  */
 
+import { ORDNANCE_DAMAGE_SCALE } from "../config";
 import { getShipLoadouts } from "../data/ShipLoadouts";
 import { UPGRADE_DEFINITIONS } from "../systems/UpgradeSystem";
 
@@ -79,7 +80,7 @@ function buildOrdnanceSlot(
     slotIndex,
     name: upgrade.name,
     ordnanceClass,
-    damage: weapon.damage,
+    damage: weapon.damage * ORDNANCE_DAMAGE_SCALE,
     isHoming: ordnanceClass !== "bomb",
     homingTurnRate: weapon.homingTurnRate ?? 0,
     homingTurnBudget: weapon.homingTurnBudget ?? 0,

@@ -8,6 +8,7 @@
 
 import { getShipLoadouts } from "../data/ShipLoadouts";
 import { UPGRADE_DEFINITIONS } from "./UpgradeSystem";
+import { DURABILITY_SCALE } from "../config";
 
 // ============================================
 // Target Finding
@@ -99,12 +100,12 @@ export function applyLoadoutEffects(
     } = upg.effects;
 
     if (hullBonus) {
-      ship.hull += hullBonus;
-      ship.maxHull += hullBonus;
+      ship.hull += hullBonus * DURABILITY_SCALE;
+      ship.maxHull += hullBonus * DURABILITY_SCALE;
     }
     if (shieldBonus) {
-      ship.shields += shieldBonus;
-      ship.maxShields += shieldBonus;
+      ship.shields += shieldBonus * DURABILITY_SCALE;
+      ship.maxShields += shieldBonus * DURABILITY_SCALE;
     }
     if (attackBonus && ship.combatStats) {
       ship.combatStats.attackDice = Math.max(

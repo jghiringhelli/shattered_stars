@@ -6,6 +6,7 @@
  * Pure: no Phaser. Scenes call these at their hit / kill points.
  */
 
+import { DURABILITY_SCALE, ORDNANCE_DAMAGE_SCALE } from "../config";
 import type { ShipPose } from "../core/ArcadeControls";
 import type { CombatModifiers } from "../core/CombatModifiers";
 import type { StressState } from "./ArcadeStress";
@@ -88,8 +89,9 @@ export interface KillReward {
 }
 
 /**
- * Reward for a kill: shields restored and a fresh frenzy window (only for
- * pilots whose ability grants them).
+ * Reward for a kill: shields restored (miniature points, scaled to
+ * real-time HP) and a fresh frenzy window (only for pilots whose ability
+ * grants them).
  *
  * @param attacker - The ship that made the kill.
  * @param nowMs - Scene time of the kill.
@@ -103,7 +105,7 @@ export function rewardKill(
   return {
     shields: Math.min(
       attacker.maxShields,
-      attacker.shields + modifiers.shieldsPerKill,
+      attacker.shields + modifiers.shieldsPerKill * DURABILITY_SCALE,
     ),
     frenzyUntilMs:
       modifiers.killFrenzyLaserBonus > 0
@@ -129,4 +131,14 @@ export function deathBlastTargets<T extends PositionedShip>(
       Math.hypot(enemy.x - victim.x, enemy.y - victim.y) <=
       DEATH_BLAST_RADIUS_PX,
   );
+}
+
+/**
+ * Damage a destroyed ship's death blast deals to each ship caught in it.
+ *
+ * @param victim - The ship just destroyed.
+ * @returns Blast damage (card damage at ordnance scale; 0 without a blast).
+ */
+export function deathBlastDamage(victim: AbilityCombatant): number {
+  return victim.modifiers.deathBlastDamage * ORDNANCE_DAMAGE_SCALE;
 }
