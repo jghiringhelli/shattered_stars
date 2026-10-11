@@ -91,15 +91,15 @@ test.describe("ArcadeBattleScene — stress HUD", () => {
       const ship = scene.ships.get(scene.playerShipId);
       if (ship) ship.stress = { level: 0.9, isStressed: true };
     });
-    await page.waitForTimeout(200);
-
-    const text = await page.evaluate(() => {
-      const scene = (window as any).game.scene.getScene(
-        "ArcadeBattleScene",
-      ) as any;
-      return scene?.stressLevelText?.text ?? "";
-    });
-    expect(text).toContain("STRESSED");
+    // The label pulses (shown/blank every 350 ms) — wait for a shown phase.
+    await page.waitForFunction(
+      () =>
+        (window as any).game.scene
+          .getScene("ArcadeBattleScene")
+          ?.stressLevelText?.text?.includes("STRESSED"),
+      undefined,
+      { timeout: 2_000 },
+    );
   });
 
   test("stressLevelText is empty when stress level is low", async ({

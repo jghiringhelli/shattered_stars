@@ -145,6 +145,8 @@ test.describe("ArcadeBattleScene — keyboard playthrough", () => {
     const afterOnePress = (await getPlayerShip(page)).control.speed;
     expect(afterOnePress).toBe(before + 1);
 
+    // Wait out the double-tap window: a second ↑ inside it is a boost gesture.
+    await page.waitForTimeout(400);
     await holdGameKey(page, "ArrowUp", 700); // long hold — still exactly ONE more step
     await page.waitForTimeout(100);
     const afterLongHold = (await getPlayerShip(page)).control.speed;
