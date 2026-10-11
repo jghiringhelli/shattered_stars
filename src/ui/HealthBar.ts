@@ -3,9 +3,17 @@
  * Displays ship health (shields + hull) above ships
  */
 
-import Phaser from 'phaser';
-import type { FactionId } from '../config';
-import { FACTION_COLORS } from '../config';
+import Phaser from "phaser";
+import type { FactionId } from "../config";
+import { factionAccent, HOLO_PALETTE } from "./theme/HoloTheme";
+
+/** Hull fraction above which the bar reads healthy / below which critical. */
+const HULL_HEALTHY = 0.6;
+const HULL_CRITICAL = 0.3;
+/** Frame and track opacities (holo look: dark translucent frame, faint track). */
+const FRAME_ALPHA = 0.7;
+const FRAME_BORDER_ALPHA = 0.6;
+const FILL_ALPHA = 0.95;
 
 export interface HealthBarConfig {
   scene: Phaser.Scene;
@@ -62,7 +70,8 @@ export class HealthBar extends Phaser.GameObjects.Container {
   }
 
   private draw(): void {
-    const totalHeight = this.maxShields > 0 ? this.barHeight * 2 + 1 : this.barHeight;
+    const totalHeight =
+      this.maxShields > 0 ? this.barHeight * 2 + 1 : this.barHeight;
     const yOffset = -totalHeight / 2;
 
     // Clear previous
@@ -70,57 +79,80 @@ export class HealthBar extends Phaser.GameObjects.Container {
     this.shieldBar.clear();
     this.hullBar.clear();
 
-    // Background
-    this.background.fillStyle(0x000000, 0.6);
-    this.background.fillRect(-this.barWidth / 2 - 1, yOffset - 1, this.barWidth + 2, totalHeight + 2);
+    // Background frame
+    this.background.fillStyle(HOLO_PALETTE.panelFill, FRAME_ALPHA);
+    this.background.fillRect(
+      -this.barWidth / 2 - 1,
+      yOffset - 1,
+      this.barWidth + 2,
+      totalHeight + 2,
+    );
+    this.background.lineStyle(1, HOLO_PALETTE.border, FRAME_BORDER_ALPHA);
+    this.background.strokeRect(
+      -this.barWidth / 2 - 1,
+      yOffset - 1,
+      this.barWidth + 2,
+      totalHeight + 2,
+    );
 
     // Shield bar (if ship has shields)
     if (this.maxShields > 0) {
       const shieldPercent = this.currentShields / this.maxShields;
-      const shieldColor = FACTION_COLORS[this.faction] ?? 0x00aaff;
+      const shieldColor = factionAccent(this.faction);
 
       // Background for shield
-      this.shieldBar.fillStyle(0x333366, 0.5);
-      this.shieldBar.fillRect(-this.barWidth / 2, yOffset, this.barWidth, this.barHeight);
+      this.shieldBar.fillStyle(HOLO_PALETTE.track, HOLO_PALETTE.trackAlpha);
+      this.shieldBar.fillRect(
+        -this.barWidth / 2,
+        yOffset,
+        this.barWidth,
+        this.barHeight,
+      );
 
       // Filled portion
       if (shieldPercent > 0) {
-        this.shieldBar.fillStyle(shieldColor, 0.9);
+        this.shieldBar.fillStyle(shieldColor, FILL_ALPHA);
         this.shieldBar.fillRect(
           -this.barWidth / 2,
           yOffset,
           this.barWidth * shieldPercent,
-          this.barHeight
+          this.barHeight,
         );
       }
     }
 
     // Hull bar
     const hullPercent = this.currentHull / this.maxHull;
-    const hullYOffset = this.maxShields > 0 ? yOffset + this.barHeight + 1 : yOffset;
+    const hullYOffset =
+      this.maxShields > 0 ? yOffset + this.barHeight + 1 : yOffset;
 
-    // Hull color: green when full, yellow when half, red when low
+    // Hull color: healthy / caution / critical from the holo palette
     let hullColor: number;
-    if (hullPercent > 0.6) {
-      hullColor = 0x44cc44; // Green
-    } else if (hullPercent > 0.3) {
-      hullColor = 0xcccc44; // Yellow
+    if (hullPercent > HULL_HEALTHY) {
+      hullColor = HOLO_PALETTE.success;
+    } else if (hullPercent > HULL_CRITICAL) {
+      hullColor = HOLO_PALETTE.warning;
     } else {
-      hullColor = 0xcc4444; // Red
+      hullColor = HOLO_PALETTE.danger;
     }
 
     // Background for hull
-    this.hullBar.fillStyle(0x333333, 0.5);
-    this.hullBar.fillRect(-this.barWidth / 2, hullYOffset, this.barWidth, this.barHeight);
+    this.hullBar.fillStyle(HOLO_PALETTE.track, HOLO_PALETTE.trackAlpha);
+    this.hullBar.fillRect(
+      -this.barWidth / 2,
+      hullYOffset,
+      this.barWidth,
+      this.barHeight,
+    );
 
     // Filled portion
     if (hullPercent > 0) {
-      this.hullBar.fillStyle(hullColor, 0.9);
+      this.hullBar.fillStyle(hullColor, FILL_ALPHA);
       this.hullBar.fillRect(
         -this.barWidth / 2,
         hullYOffset,
         this.barWidth * hullPercent,
-        this.barHeight
+        this.barHeight,
       );
     }
   }
@@ -140,7 +172,8 @@ export class HealthBar extends Phaser.GameObjects.Container {
 
     // Hide when at full health (declutter)
     const atFullHealth =
-      this.currentHull >= this.maxHull && this.currentShields >= this.maxShields;
+      this.currentHull >= this.maxHull &&
+      this.currentShields >= this.maxShields;
     this.setVisible(!atFullHealth);
   }
 

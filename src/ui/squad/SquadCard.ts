@@ -1,7 +1,9 @@
 /**
- * SquadCard — renders one squad slot in SquadBuilderScene.
- * Always shows ship list. Clicking any non-button area on the card opens the
- * ship editor (emits 'editShips'). Buttons and team chips work independently.
+ * SquadCard — renders one squad slot in SquadBuilderScene as a holo card:
+ * faction-accented frame with a header strip (faction, points, remove),
+ * team chips, an action row and the ship list. Clicking any non-control
+ * area opens the ship editor (emits 'editShips'). Buttons and team chips
+ * work independently.
  *
  * Emits: 'changed' | 'factionChanged' | 'teamChanged' teamId |
  *        'autoFill' | 'editShips' | 'remove'
@@ -9,24 +11,42 @@
 
 import Phaser from "phaser";
 import type { SquadEntry } from "../../core/squadTypes";
-import { TEAM_COLORS, TEAM_LABELS } from "../../core/squadTypes";
-import { FACTION_COLORS } from "../../config";
 import type { FactionId } from "../../config";
 import { SHIP_DEFINITIONS } from "../../data/ShipDefinitions";
-import { getShipLoadouts } from "../../data/ShipLoadouts";
+import { HOLO_BORDER, HOLO_PALETTE, HOLO_TYPE_SCALE } from "../theme/HoloTheme";
+import { toCssColor } from "../theme/colorMath";
+import {
+  CARD_LAYOUT,
+  CARD_W,
+  MAX_SHOWN_SHIPS,
+  SHIP_ROW_H,
+  SHIP_ROW_LAYOUT,
+  squadCardHeight,
+} from "./squadCardLayout";
+import {
+  createCardAction,
+  createRemoveControl,
+  createShipRow,
+  createTeamChips,
+  drawCardChrome,
+} from "./squadCardParts";
+import {
+  SQUAD_TYPE,
+  addCaption,
+  addSquadText,
+  squadAccent,
+  truncateText,
+} from "./squadBuilderStyle";
 
-export const CARD_W = 260;
-export const CARD_H_COLLAPSED = 100;
-export const SHIP_ROW_H = 38;
-export const MAX_SHOWN_SHIPS = 3;
+export {
+  CARD_W,
+  CARD_H_COLLAPSED,
+  SHIP_ROW_H,
+  MAX_SHOWN_SHIPS,
+} from "./squadCardLayout";
 
-const TEAM_ROW_Y = 42;
-const ACTION_Y = 68;
-const BTN_W = 80;
-const BTN_H = 22;
-const CHIP_W = 28;
-const CHIP_H = 16;
-const DIVIDER_Y = CARD_H_COLLAPSED + 4;
+/** Opacity of the divider above the ship list. */
+const DIVIDER_ALPHA = 0.4;
 
 const FACTION_IDS: FactionId[] = [
   "terran_hegemony",
@@ -42,19 +62,14 @@ const FACTION_SHORT: Record<FactionId, string> = {
   void_corsairs: "Corsair",
   ascendant_empire: "Ascend",
 };
-const FACTION_FULL: Record<FactionId, string> = {
-  terran_hegemony: "Terran Hegemony",
-  free_confederation: "Free Confederation",
-  synthetic_collective: "Synthetic Collective",
-  void_corsairs: "Void Corsairs",
-  ascendant_empire: "Ascendant Empire",
-};
 
+/** Construction options for {@link SquadCard}. */
 export interface SquadCardConfig {
   squad: SquadEntry;
   pointLimit: number;
 }
 
+/** One squad slot card. */
 export class SquadCard extends Phaser.Events.EventEmitter {
   private readonly scene: Phaser.Scene;
   private readonly squad: SquadEntry;
@@ -66,6 +81,10 @@ export class SquadCard extends Phaser.Events.EventEmitter {
     return this.container;
   }
 
+  /**
+   * @param scene - Owning scene.
+   * @param config - Squad (mutated by faction / controller controls) and point limit.
+   */
   constructor(scene: Phaser.Scene, config: SquadCardConfig) {
     super();
     this.scene = scene;
@@ -75,107 +94,109 @@ export class SquadCard extends Phaser.Events.EventEmitter {
 
   /** Total card height including ship rows */
   get height(): number {
-    const shown = Math.min(
-      Math.max(this.squad.ships.length, 1),
-      MAX_SHOWN_SHIPS,
-    );
-    return CARD_H_COLLAPSED + 12 + shown * SHIP_ROW_H + 10;
+    return squadCardHeight(this.squad);
   }
 
-  /** Render or re-render at position */
+  /**
+   * Render or re-render at position.
+   *
+   * @param x - Left edge in the parent container.
+   * @param y - Top edge in the parent container.
+   */
   render(x: number, y: number): void {
     this.container?.destroy();
     this.container = this.scene.add.container(x, y);
     this.drawBackground();
     this.drawHeader();
-    this.drawTeamRow();
+    this.container.add(
+      createTeamChips(this.scene, this.squad.teamId, (teamId) =>
+        this.emit("teamChanged", teamId),
+      ),
+    );
     this.drawActionRow();
     this.drawShipList();
   }
 
+  /** Destroy the card's display objects and listeners. */
   destroy(): void {
     this.container?.destroy();
     super.destroy();
   }
 
+  private get accent(): number {
+    return squadAccent(this.squad.factionId);
+  }
+
   private drawBackground(): void {
-    const h = this.height;
-    const fCol = this.squad.factionId
-      ? FACTION_COLORS[this.squad.factionId]
-      : 0x334455;
-    const bg = this.scene.add.graphics();
-    bg.fillStyle(0x1e2a3a, 0.97);
-    bg.fillRoundedRect(0, 0, CARD_W, h, 6);
-    bg.lineStyle(2, fCol, 0.65);
-    bg.strokeRoundedRect(0, 0, CARD_W, h, 6);
-
-    // Decorative header strip (visual only)
-    const strip = this.scene.add.rectangle(
-      CARD_W / 2,
-      19,
-      CARD_W - 4,
-      36,
-      fCol,
-      0.1,
-    );
-
-    // Transparent click zone covering the whole card body (excludes rightmost 28px where ✕ sits).
-    // Team chips, action buttons, and ✕ are added later in z-order so they receive events first.
+    const height = this.height;
+    const chrome = this.scene.add.graphics();
+    const featured = this.squad.controller === "player";
+    const paint = (hovered: boolean): void =>
+      drawCardChrome(chrome, {
+        height,
+        accent: this.accent,
+        hovered,
+        featured,
+      });
+    paint(false);
+    const editHint = addCaption(
+      this.scene,
+      CARD_W - CARD_LAYOUT.pad,
+      CARD_LAYOUT.chipRowY + CARD_LAYOUT.chipH / 2,
+      "Edit ships",
+      HOLO_PALETTE.textMuted,
+    ).setOrigin(1, 0.5);
+    // Transparent click zone covering the whole card. Team chips, action
+    // buttons and the remove control are added later in z-order so they
+    // receive events first.
     const editZone = this.scene.add
-      .rectangle((CARD_W - 28) / 2, h / 2, CARD_W - 28, h, 0x000000, 0)
+      .rectangle(CARD_W / 2, height / 2, CARD_W, height, 0x000000, 0)
       .setInteractive({ useHandCursor: true });
-    editZone.on("pointerover", () => strip.setAlpha(0.18));
-    editZone.on("pointerout", () => strip.setAlpha(0.1));
+    editZone.on("pointerover", () => {
+      paint(true);
+      editHint.setColor(toCssColor(this.accent));
+    });
+    editZone.on("pointerout", () => {
+      paint(false);
+      editHint.setColor(toCssColor(HOLO_PALETTE.textMuted));
+    });
     editZone.on("pointerdown", () => this.emit("editShips"));
-    this.container.add([bg, strip, editZone]);
+    this.container.add([chrome, editZone, editHint]);
   }
 
   private drawHeader(): void {
-    const fCol = this.squad.factionId
-      ? FACTION_COLORS[this.squad.factionId]
-      : 0x334455;
-    const hexCol = `#${fCol.toString(16).padStart(6, "0")}`;
-    // Use abbreviated name so it never runs into the points counter on the right
+    const { pad, titleY, summaryY, closeBox } = CARD_LAYOUT;
     const name = this.squad.factionId
       ? FACTION_SHORT[this.squad.factionId]
       : "Select Faction";
-    this.container.add(
-      this.scene.add.text(10, 5, name, {
-        font: "bold 13px Arial",
-        color: hexCol,
-      }),
-    );
     const over = this.squad.pointsUsed > this.pointLimit;
-    this.container.add(
-      this.scene.add
-        .text(CARD_W - 28, 5, `${this.squad.pointsUsed}/${this.pointLimit}pt`, {
-          font: "11px Arial",
-          color: over ? "#ff5544" : "#44ff88",
-        })
-        .setOrigin(1, 0),
-    );
-    this.container.add(
-      this.scene.add.text(10, 22, this.buildShipSummary(), {
-        font: "11px Arial",
-        color: "#7a8fa8",
+    this.container.add([
+      addSquadText(this.scene, pad, titleY, name.toUpperCase(), {
+        size: SQUAD_TYPE.body,
+        weight: "600",
+        color: this.accent,
+        letterSpacing: HOLO_TYPE_SCALE.caption.letterSpacing,
       }),
-    );
-    this.container.add(
-      this.scene.add
-        .text(CARD_W - 28, 22, "✏ edit ships", {
-          font: "9px Arial",
-          color: "#3a5066",
-        })
-        .setOrigin(1, 0),
-    );
-    const rm = this.scene.add
-      .text(CARD_W - 6, 4, "✕", { font: "bold 13px Arial", color: "#885555" })
-      .setOrigin(1, 0)
-      .setInteractive({ useHandCursor: true });
-    rm.on("pointerover", () => rm.setColor("#ff7777"));
-    rm.on("pointerout", () => rm.setColor("#885555"));
-    rm.on("pointerdown", () => this.emit("remove"));
-    this.container.add(rm);
+      addSquadText(
+        this.scene,
+        CARD_W - closeBox,
+        titleY,
+        `${this.squad.pointsUsed}/${this.pointLimit}pt`,
+        {
+          size: SQUAD_TYPE.label,
+          weight: "600",
+          color: over ? HOLO_PALETTE.danger : HOLO_PALETTE.success,
+        },
+      ).setOrigin(1, 0),
+      addSquadText(
+        this.scene,
+        pad,
+        summaryY,
+        truncateText(this.buildShipSummary(), SHIP_ROW_LAYOUT.summaryChars),
+        { size: SQUAD_TYPE.caption, color: HOLO_PALETTE.textSecondary },
+      ),
+      ...createRemoveControl(this.scene, () => this.emit("remove")),
+    ]);
   }
 
   private buildShipSummary(): string {
@@ -187,149 +208,74 @@ export class SquadCard extends Phaser.Events.EventEmitter {
     return n > 2 ? `${names.join(", ")} +${n - 2} more` : names.join(", ");
   }
 
-  private drawTeamRow(): void {
-    const y = TEAM_ROW_Y;
-    TEAM_LABELS.forEach((label, i) => {
-      const teamId = i + 1;
-      const active = this.squad.teamId === teamId;
-      const col = TEAM_COLORS[i]!;
-      const chip = this.scene.add.container(6 + i * (CHIP_W + 5), y);
-      const bg = this.scene.add.graphics();
-      bg.fillStyle(active ? col : 0x111928, active ? 0.5 : 1);
-      bg.fillRoundedRect(0, 0, CHIP_W, CHIP_H, 3);
-      bg.lineStyle(1, col, active ? 0.9 : 0.3);
-      bg.strokeRoundedRect(0, 0, CHIP_W, CHIP_H, 3);
-      const hexCol = `#${col.toString(16).padStart(6, "0")}`;
-      const txt = this.scene.add
-        .text(CHIP_W / 2, CHIP_H / 2, label, {
-          font: `${active ? "bold " : ""}9px Arial`,
-          color: active ? "#ffffff" : hexCol,
-        })
-        .setOrigin(0.5);
-      chip.add([bg, txt]);
-      chip.setInteractive(
-        new Phaser.Geom.Rectangle(0, 0, CHIP_W, CHIP_H),
-        Phaser.Geom.Rectangle.Contains,
-      );
-      chip.on("pointerdown", () => this.emit("teamChanged", teamId));
-      this.container.add(chip);
-    });
-  }
-
   private drawActionRow(): void {
-    const ctrlLabel = this.squad.controller === "player" ? "Player" : "AI";
-    const ctrlColor =
-      this.squad.controller === "player" ? "#44ee88" : "#ee8844";
-    const fLabel = this.squad.factionId
+    const isPlayer = this.squad.controller === "player";
+    const factionLabel = this.squad.factionId
       ? FACTION_SHORT[this.squad.factionId]
       : "Faction";
-    this.container.add(
-      this.makeBtn(6, ACTION_Y, fLabel, "#99aacc", () => this.cycleFaction()),
-    );
-    this.container.add(
-      this.makeBtn(92, ACTION_Y, ctrlLabel, ctrlColor, () =>
-        this.toggleController(),
+    this.container.add([
+      createCardAction(this.scene, 0, factionLabel, "secondary", () =>
+        this.cycleFaction(),
       ),
-    );
-    this.container.add(
-      this.makeBtn(178, ACTION_Y, "Auto-Fill", "#8899aa", () =>
+      createCardAction(
+        this.scene,
+        1,
+        isPlayer ? "Player" : "AI",
+        isPlayer ? "primary" : "secondary",
+        () => this.toggleController(),
+      ),
+      createCardAction(this.scene, 2, "Auto-Fill", "secondary", () =>
         this.emit("autoFill"),
       ),
-    );
+    ]);
   }
 
   private drawShipList(): void {
+    const { pad, dividerY, listPad } = CARD_LAYOUT;
     const divider = this.scene.add.graphics();
-    divider.lineStyle(1, 0x1e2a38, 1);
-    divider.lineBetween(8, DIVIDER_Y, CARD_W - 8, DIVIDER_Y);
+    divider.lineStyle(HOLO_BORDER.hairline, HOLO_PALETTE.border, DIVIDER_ALPHA);
+    divider.lineBetween(pad, dividerY, CARD_W - pad, dividerY);
     this.container.add(divider);
+    const listTop = dividerY + listPad;
 
     if (this.squad.ships.length === 0) {
       this.container.add(
-        this.scene.add.text(
-          14,
-          DIVIDER_Y + 10,
+        this.mutedLine(
+          listTop + SHIP_ROW_H / 2,
           "No ships — tap card header or Auto-Fill",
-          { font: "9px Arial", color: "#445566" },
         ),
       );
       return;
     }
 
-    const shown = Math.min(this.squad.ships.length, MAX_SHOWN_SHIPS);
-    this.squad.ships
-      .slice(0, shown)
-      .forEach((shipId, i) => this.drawShipRow(shipId, i));
+    this.squad.ships.slice(0, MAX_SHOWN_SHIPS).forEach((shipId, index) => {
+      this.container.add(
+        createShipRow(this.scene, {
+          shipId,
+          top: listTop + index * SHIP_ROW_H,
+          factionId: this.squad.factionId,
+          loadoutId:
+            this.squad.loadoutChoices[String(index)] ??
+            this.squad.loadoutChoices[shipId],
+        }),
+      );
+    });
 
     if (this.squad.ships.length > MAX_SHOWN_SHIPS) {
       const extra = this.squad.ships.length - MAX_SHOWN_SHIPS;
-      const moreY = DIVIDER_Y + 8 + MAX_SHOWN_SHIPS * SHIP_ROW_H;
+      const moreY =
+        listTop + MAX_SHOWN_SHIPS * SHIP_ROW_H + CARD_LAYOUT.moreLineH / 2;
       this.container.add(
-        this.scene.add.text(14, moreY, `+${extra} more ships — tap to edit`, {
-          font: "9px Arial",
-          color: "#445566",
-        }),
+        this.mutedLine(moreY, `+${extra} more ships — tap to edit`),
       );
     }
   }
 
-  private drawShipRow(shipId: string, index: number): void {
-    const def = SHIP_DEFINITIONS[shipId];
-    if (!def) return;
-    const y = DIVIDER_Y + 8 + index * SHIP_ROW_H;
-    const loadoutId =
-      this.squad.loadoutChoices[String(index)] ??
-      this.squad.loadoutChoices[shipId];
-    const loadout = loadoutId
-      ? getShipLoadouts(shipId).find((l) => l.id === loadoutId)
-      : null;
-    const pts = loadout?.pointCost ?? def.baseStats.pointCost;
-    const desc = loadout ? loadout.description : def.description;
-    const statsLabel = `ATK ${def.baseStats.attack}  HUL ${def.baseStats.hull}  SHD ${def.baseStats.shields}`;
-    const spriteX = 6 + 12;
-    const spriteY = y + SHIP_ROW_H / 2 - 2;
-
-    // Dark bg circle makes sprites visible against the card background
-    const spriteBg = this.scene.add.graphics();
-    spriteBg.fillStyle(0x0d1620, 0.8);
-    spriteBg.fillCircle(spriteX, spriteY, 14);
-
-    this.container.add(
-      this.scene.add
-        .text(CARD_W - 6, y + 2, `${pts}pt`, {
-          font: "11px Arial",
-          color: "#88aa66",
-        })
-        .setOrigin(1, 0),
-    );
-    this.container.add(
-      this.scene.add.text(36, y + 2, def.name, {
-        font: "bold 11px Arial",
-        color: "#d8ecff",
-      }),
-    );
-    this.container.add(
-      this.scene.add.text(36, y + 15, statsLabel, {
-        font: "10px Arial",
-        color: "#6a8aaa",
-      }),
-    );
-    const truncDesc = desc.length > 36 ? `${desc.slice(0, 33)}…` : desc;
-    this.container.add(
-      this.scene.add.text(36, y + 26, truncDesc, {
-        font: "9px Arial",
-        color: "#5a6c7a",
-      }),
-    );
-    this.container.add(spriteBg);
-    // Use real sprite if loaded; fall back to faction+size placeholder
-    const spriteKey = this.scene.textures.exists(def.spriteKey)
-      ? def.spriteKey
-      : `ship_${this.squad.factionId ?? "terran_hegemony"}_${def.baseStats.size}`;
-    const sprite = this.scene.add
-      .image(spriteX, spriteY, spriteKey)
-      .setDisplaySize(22, 22);
-    this.container.add(sprite);
+  private mutedLine(centreY: number, text: string): Phaser.GameObjects.Text {
+    return addSquadText(this.scene, CARD_LAYOUT.pad, centreY, text, {
+      size: SQUAD_TYPE.small,
+      color: HOLO_PALETTE.textMuted,
+    }).setOrigin(0, 0.5);
   }
 
   private cycleFaction(): void {
@@ -346,38 +292,5 @@ export class SquadCard extends Phaser.Events.EventEmitter {
     this.squad.controller =
       this.squad.controller === "player" ? "ai" : "player";
     this.emit("changed");
-  }
-
-  private makeBtn(
-    x: number,
-    y: number,
-    label: string,
-    color: string,
-    onClick: () => void,
-  ): Phaser.GameObjects.Container {
-    const c = this.scene.add.container(x, y);
-    const bg = this.scene.add.graphics();
-    bg.fillStyle(0x243040, 1);
-    bg.fillRoundedRect(0, 0, BTN_W, BTN_H, 3);
-    const txt = this.scene.add
-      .text(BTN_W / 2, BTN_H / 2, label, { font: "10px Arial", color })
-      .setOrigin(0.5);
-    c.add([bg, txt]);
-    c.setInteractive(
-      new Phaser.Geom.Rectangle(0, 0, BTN_W, BTN_H),
-      Phaser.Geom.Rectangle.Contains,
-    );
-    c.on("pointerover", () => {
-      bg.clear();
-      bg.fillStyle(0x344454, 1);
-      bg.fillRoundedRect(0, 0, BTN_W, BTN_H, 3);
-    });
-    c.on("pointerout", () => {
-      bg.clear();
-      bg.fillStyle(0x243040, 1);
-      bg.fillRoundedRect(0, 0, BTN_W, BTN_H, 3);
-    });
-    c.on("pointerdown", onClick);
-    return c;
   }
 }

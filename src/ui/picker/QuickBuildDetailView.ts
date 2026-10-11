@@ -10,7 +10,6 @@
  */
 
 import Phaser from "phaser";
-import type { UpgradeSlotType } from "../../core/upgradeTypes";
 import {
   describeQuickBuild,
   fillSlotBar,
@@ -20,39 +19,25 @@ import {
 } from "../../data/quickBuildDetails";
 import { ROOKIE_INITIATIVE } from "../../data/pilotPricing";
 import type { ShipLoadout } from "../../data/ShipLoadouts";
-
-/** Short chip label and colour per slot category. */
-const SLOT_STYLE: Readonly<
-  Record<UpgradeSlotType, { readonly label: string; readonly color: number }>
-> = {
-  talent: { label: "TAL", color: 0xffcc66 },
-  missile: { label: "MSL", color: 0xff7755 },
-  torpedo: { label: "TRP", color: 0xff5566 },
-  cannon: { label: "CAN", color: 0xff9944 },
-  turret: { label: "TUR", color: 0xffaa77 },
-  bomb: { label: "BMB", color: 0xdd6644 },
-  crew: { label: "CRW", color: 0x66ccff },
-  gunner: { label: "GUN", color: 0xff8866 },
-  astromech: { label: "AST", color: 0x88ddff },
-  sensor: { label: "SEN", color: 0x55ddcc },
-  tech: { label: "TEC", color: 0x88aaff },
-  modification: { label: "MOD", color: 0x99cc66 },
-  illicit: { label: "ILL", color: 0xcc66cc },
-  title: { label: "TTL", color: 0xddddaa },
-  configuration: { label: "CFG", color: 0xaabbcc },
-  force_power: { label: "FRC", color: 0xbb88ff },
-};
+import { HOLO_PALETTE } from "../theme/HoloTheme";
+import { toCssColor } from "../theme/colorMath";
+import { holoFont } from "../theme/holoFont";
+import { PICKER_TYPE, pickerTextStyle } from "./pickerStyle";
+import { drawSlotChip, SLOT_CHIP } from "./SlotChip";
 
 const COLUMN_GAP = 16;
+type TextStyle = Phaser.Types.GameObjects.Text.TextStyle;
 /** Share of the block's width given to the pilot column (slots get the rest). */
 const PILOT_COLUMN_SHARE = 0.42;
-const CHIP_W = 44;
-const CHIP_H = 18;
-const CHIP_GAP = 4;
 const LINE_GAP = 3;
 const SECTION_GAP = 4;
-const PILOT_SLOT_EDGE = 0xffd76a;
-const HEADER_STYLE = { font: "bold 11px Arial", color: "#3a5a7a" } as const;
+/** Pilot name type step (between card name and panel heading). */
+const PILOT_NAME_FONT = { size: 15, weight: "600" } as const;
+const HEADER_STYLE = pickerTextStyle("caption", HOLO_PALETTE.textSecondary);
+const CAPTION_SPACING = PICKER_TYPE.caption.letterSpacing;
+const MUTED_ITALIC = pickerTextStyle("small", HOLO_PALETTE.textMuted, {
+  fontStyle: "italic",
+});
 
 /** Where to draw and what. */
 export interface QuickBuildDetailArgs {
@@ -100,15 +85,19 @@ export class QuickBuildDetailView {
    * @param y - Top edge.
    * @param text - Content.
    * @param style - Phaser text style.
+   * @param letterSpacing - Extra tracking (captions).
    * @returns y below the text plus a small gap.
    */
   private addText(
     x: number,
     y: number,
     text: string,
-    style: Phaser.Types.GameObjects.Text.TextStyle,
+    style: TextStyle,
+    letterSpacing = 0,
   ): number {
-    const t = this.scene.add.text(x, y, text, style);
+    const t = this.scene.add
+      .text(x, y, text, style)
+      .setLetterSpacing(letterSpacing);
     this.container.add(t);
     return y + t.height + LINE_GAP;
   }
@@ -127,22 +116,28 @@ export class QuickBuildDetailView {
     y: number,
     w: number,
   ): number {
-    let cy = this.addText(x, y, "PILOT", HEADER_STYLE);
+    let cy = this.addText(x, y, "PILOT", HEADER_STYLE, CAPTION_SPACING);
     const pilot = details?.pilot;
     const name = pilot
       ? `${pilot.isUnique ? "\u2605 " : ""}${pilot.name}`
       : "Rookie pilot";
     const initiative = pilot?.initiative ?? ROOKIE_INITIATIVE;
     cy = this.addText(x, cy, name, {
-      font: "bold 14px Arial",
-      color: pilot?.isUnique ? "#ffd76a" : "#eef6ff",
+      ...holoFont(PILOT_NAME_FONT.size, PILOT_NAME_FONT.weight),
+      color: toCssColor(
+        pilot?.isUnique ? HOLO_PALETTE.warning : HOLO_PALETTE.textPrimary,
+      ),
     });
     const tags = [`Initiative ${initiative}`];
     if (pilot?.isUnique) tags.push("Unique \u2014 one per squad");
-    cy = this.addText(x, cy, tags.join("  \u00b7  "), {
-      font: "11px Arial",
-      color: "#8ab0cc",
-    });
+    cy = this.addText(
+      x,
+      cy,
+      tags.join("  \u00b7  "),
+      pickerTextStyle("small", HOLO_PALETTE.textSecondary, {
+        wordWrap: { width: w },
+      }),
+    );
     return this.drawAbility(details, x, cy + LINE_GAP, w);
   }
 
@@ -162,31 +157,33 @@ export class QuickBuildDetailView {
   ): number {
     const ability = details?.ability;
     if (!ability) {
-      return this.addText(x, y, "No pilot ability", {
-        font: "italic 11px Arial",
-        color: "#5a7a8a",
-      });
+      return this.addText(x, y, "No pilot ability", MUTED_ITALIC);
     }
-    let cy = this.addText(x, y, `ABILITY \u2014 ${ability.name}`, {
-      font: "bold 12px Arial",
-      color: "#66bbee",
-    });
+    let cy = this.addText(
+      x,
+      y,
+      `ABILITY \u2014 ${ability.name}`,
+      pickerTextStyle("name", HOLO_PALETTE.accent),
+    );
     if (ability.cardText) {
-      cy = this.addText(x, cy, `\u201c${ability.cardText}\u201d`, {
-        font: "italic 11px Arial",
-        color: "#7090a8",
-        wordWrap: { width: w },
-      });
+      cy = this.addText(
+        x,
+        cy,
+        `\u201c${ability.cardText}\u201d`,
+        pickerTextStyle("small", HOLO_PALETTE.textSecondary, {
+          fontStyle: "italic",
+          wordWrap: { width: w },
+        }),
+      );
     }
     return this.addText(
       x,
       cy,
       `\u25b8 ${ability.summary || "No real-time effect"}`,
-      {
-        font: "bold 11px Arial",
-        color: "#88ffcc",
+      pickerTextStyle("small", HOLO_PALETTE.success, {
+        fontStyle: "600",
         wordWrap: { width: w },
-      },
+      }),
     );
   }
 
@@ -206,55 +203,32 @@ export class QuickBuildDetailView {
     w: number,
   ): number {
     const filled = slots.filter((slot) => slot.upgradeId !== null).length;
-    const legend = slots.some((slot) => slot.fromPilot)
-      ? "   (gold edge = added by the pilot)"
-      : "";
     const cy = this.addText(
       x,
       y,
-      `SLOTS  ${filled}/${slots.length} FILLED${legend}`,
+      `SLOTS  ${filled}/${slots.length} FILLED`,
       HEADER_STYLE,
+      CAPTION_SPACING,
     );
     const perRow = Math.max(
       1,
-      Math.floor((w + CHIP_GAP) / (CHIP_W + CHIP_GAP)),
+      Math.floor((w + SLOT_CHIP.gap) / (SLOT_CHIP.width + SLOT_CHIP.gap)),
     );
     slots.forEach((slot, i) => {
-      const chipX = x + (i % perRow) * (CHIP_W + CHIP_GAP);
-      const chipY = cy + Math.floor(i / perRow) * (CHIP_H + CHIP_GAP);
-      this.drawChip(slot, chipX, chipY);
+      const chipX = x + (i % perRow) * (SLOT_CHIP.width + SLOT_CHIP.gap);
+      const chipY =
+        cy + Math.floor(i / perRow) * (SLOT_CHIP.height + SLOT_CHIP.gap);
+      drawSlotChip(this.scene, this.container, slot, { x: chipX, y: chipY });
     });
-    return cy + Math.ceil(slots.length / perRow) * (CHIP_H + CHIP_GAP);
-  }
-
-  /**
-   * One slot chip.
-   * @param slot - The slot.
-   * @param x - Chip left.
-   * @param y - Chip top.
-   */
-  private drawChip(slot: FilledSlot, x: number, y: number): void {
-    const style = SLOT_STYLE[slot.type];
-    const isFilled = slot.upgradeId !== null;
-    const g = this.scene.add.graphics();
-    g.fillStyle(isFilled ? style.color : 0x131c28, isFilled ? 0.85 : 1);
-    g.fillRoundedRect(x, y, CHIP_W, CHIP_H, 3);
-    g.lineStyle(
-      slot.fromPilot ? 2 : 1,
-      slot.fromPilot ? PILOT_SLOT_EDGE : style.color,
-      isFilled || slot.fromPilot ? 1 : 0.5,
+    const rows = Math.ceil(slots.length / perRow);
+    const below = cy + rows * (SLOT_CHIP.height + SLOT_CHIP.gap);
+    if (!slots.some((slot) => slot.fromPilot)) return below;
+    return this.addText(
+      x,
+      below + LINE_GAP,
+      "Gold edge = added by the pilot",
+      pickerTextStyle("micro", HOLO_PALETTE.textMuted, { fontStyle: "400" }),
     );
-    g.strokeRoundedRect(x, y, CHIP_W, CHIP_H, 3);
-    const label = this.scene.add
-      .text(x + CHIP_W / 2, y + CHIP_H / 2, style.label, {
-        font: "bold 10px Arial",
-        color: isFilled
-          ? "#0d1525"
-          : `#${style.color.toString(16).padStart(6, "0")}`,
-      })
-      .setOrigin(0.5)
-      .setAlpha(isFilled ? 1 : 0.6);
-    this.container.add([g, label]);
   }
 
   /**
@@ -271,21 +245,21 @@ export class QuickBuildDetailView {
     y: number,
     w: number,
   ): number {
-    let cy = this.addText(x, y, "UPGRADES", HEADER_STYLE);
+    let cy = this.addText(x, y, "UPGRADES", HEADER_STYLE, CAPTION_SPACING);
     const upgrades = details?.upgrades ?? [];
     if (upgrades.length === 0) {
-      return this.addText(x, cy, "None equipped", {
-        font: "italic 11px Arial",
-        color: "#5a7a8a",
-      });
+      return this.addText(x, cy, "None equipped", MUTED_ITALIC);
     }
     for (const upgrade of upgrades) {
       const summary = upgrade.summary ? `: ${upgrade.summary}` : "";
-      cy = this.addText(x, cy, `\u25c6 ${upgrade.name}${summary}`, {
-        font: "11px Arial",
-        color: "#b0c8dc",
-        wordWrap: { width: w },
-      });
+      cy = this.addText(
+        x,
+        cy,
+        `\u25c6 ${upgrade.name}${summary}`,
+        pickerTextStyle("small", HOLO_PALETTE.textPrimary, {
+          wordWrap: { width: w },
+        }),
+      );
     }
     return cy;
   }

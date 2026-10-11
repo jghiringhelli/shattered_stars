@@ -1,0 +1,120 @@
+/**
+ * squadBuilderChrome — scene-level controls of SquadBuilderScene: the
+ * SIMPLE/ADVANCED mode toggle (small secondary button, top-right) and the
+ * bottom action bar (AUTO-FILL ALL · START BATTLE · RANDOMIZE).
+ */
+
+import type Phaser from "phaser";
+import { createHoverButton } from "../ButtonFactory";
+import type { HoloPressButton } from "../menu/HoloPressButton";
+import { MENU_LAYOUT } from "../menu/MenuScaffold";
+import { HOLO_PALETTE } from "../theme/HoloTheme";
+import { SQUAD_TYPE } from "./squadBuilderStyle";
+
+/** Geometry of the scene chrome. */
+const CHROME_LAYOUT = {
+  toggleW: 128,
+  toggleH: 30,
+  primaryW: 220,
+  secondaryW: 180,
+  barH: 40,
+  barGap: 20,
+  primaryFont: 15,
+} as const;
+
+/**
+ * Small secondary button switching between the simple flow and the
+ * advanced builder, aligned to the header row on the right margin.
+ *
+ * @param scene - Squad builder scene.
+ * @param simpleMode - Current mode (label offers the other one).
+ * @param onToggle - Fired on press.
+ * @returns The button.
+ */
+export function createModeToggle(
+  scene: Phaser.Scene,
+  simpleMode: boolean,
+  onToggle: () => void,
+): HoloPressButton {
+  const { toggleW, toggleH } = CHROME_LAYOUT;
+  return createHoverButton(
+    scene,
+    scene.scale.width - MENU_LAYOUT.margin - toggleW / 2,
+    MENU_LAYOUT.titleY,
+    {
+      width: toggleW,
+      height: toggleH,
+      color: HOLO_PALETTE.panelFill,
+      variant: "secondary",
+      label: simpleMode ? "ADVANCED" : "SIMPLE",
+      font: `600 ${SQUAD_TYPE.label}px`,
+      icon: simpleMode ? "gear" : "back",
+    },
+    onToggle,
+  );
+}
+
+/** Callbacks for the advanced builder's action bar. */
+export interface ActionBarHandlers {
+  readonly onAutoFill: () => void;
+  readonly onRandomize: () => void;
+  readonly onStart: () => void;
+}
+
+/**
+ * Bottom action bar: START BATTLE (primary) bottom-centre, flanked by
+ * AUTO-FILL ALL and RANDOMIZE (secondary).
+ *
+ * @param scene - Squad builder scene.
+ * @param handlers - Button callbacks.
+ * @returns Buttons in reading order (left → right).
+ */
+export function createActionBar(
+  scene: Phaser.Scene,
+  handlers: ActionBarHandlers,
+): HoloPressButton[] {
+  const { primaryW, secondaryW, barH, barGap, primaryFont } = CHROME_LAYOUT;
+  const cx = scene.scale.width / 2;
+  const y = scene.scale.height - MENU_LAYOUT.primaryInset;
+  const offset = primaryW / 2 + barGap + secondaryW / 2;
+  const secondary = (
+    x: number,
+    label: string,
+    icon: "fleet" | "refresh",
+    onClick: () => void,
+  ): HoloPressButton =>
+    createHoverButton(
+      scene,
+      x,
+      y,
+      {
+        width: secondaryW,
+        height: barH,
+        color: HOLO_PALETTE.panelFill,
+        variant: "secondary",
+        label,
+        font: `600 ${SQUAD_TYPE.body}px`,
+        icon,
+      },
+      onClick,
+    );
+  return [
+    secondary(cx - offset, "AUTO-FILL ALL", "fleet", handlers.onAutoFill),
+    createHoverButton(
+      scene,
+      cx,
+      y,
+      {
+        width: primaryW,
+        height: barH,
+        color: HOLO_PALETTE.accent,
+        variant: "primary",
+        label: "START BATTLE",
+        font: `600 ${primaryFont}px`,
+        icon: "next",
+      },
+      handlers.onStart,
+    ),
+    secondary(cx + offset, "RANDOMIZE", "refresh", handlers.onRandomize),
+  ];
+}

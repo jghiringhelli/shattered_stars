@@ -11,7 +11,26 @@ import type { ShipDefinition } from "../../core/types";
 import { getShipLoadouts } from "../../data/ShipLoadouts";
 import { CAT_X, CAT_W } from "./catalogHelpers";
 import type { StagingSelection } from "./ShipDetailPanel";
-import { punch } from "../UIJuice";
+import { createHoverButton } from "../ButtonFactory";
+import {
+  HOLO_ALPHA,
+  HOLO_BORDER,
+  HOLO_PALETTE,
+  HOLO_SPACING,
+} from "../theme/HoloTheme";
+import { addPickerText, fitOrEllipsize, fittedFontSize } from "./pickerStyle";
+
+/** Staging strip layout (inside the catalog panel). */
+const STAGE = {
+  pad: HOLO_SPACING.lg,
+  buttonH: 40,
+  /** Label font of the confirm button before fitting. */
+  buttonFont: { size: 14, weight: "600" },
+  /** Room the button's icon and padding take from the label width. */
+  buttonChrome: 56,
+  /** Lets the press punch play before the panel rebuilds. */
+  emitDelayMs: 90,
+} as const;
 
 export class CatalogStaging
   extends Phaser.Events.EventEmitter
@@ -47,94 +66,112 @@ export class CatalogStaging
     this.emit("requestRender");
   }
 
-  /** Render the staging area into the given container. */
+  /**
+   * Render the staging strip into the given container.
+   *
+   * @param container - Catalog panel container.
+   * @param stageTop - Strip top.
+   * @param stageH - Strip height.
+   * @param accent - Faction accent for the divider.
+   */
   render(
     container: Phaser.GameObjects.Container,
     stageTop: number,
     stageH: number,
+    accent: number = HOLO_PALETTE.border,
   ): void {
-    const bg = this.scene.add.graphics();
-    bg.fillStyle(0x090e18, 1);
-    bg.fillRoundedRect(CAT_X + 4, stageTop, CAT_W - 8, stageH, 6);
-    bg.lineStyle(1, 0x1e2d40, 1);
-    bg.strokeRoundedRect(CAT_X + 4, stageTop, CAT_W - 8, stageH, 6);
-    container.add(bg);
+    const divider = this.scene.add.graphics();
+    divider.lineStyle(HOLO_BORDER.hairline, accent, HOLO_ALPHA.structure);
+    divider.lineBetween(
+      CAT_X + STAGE.pad,
+      stageTop,
+      CAT_X + CAT_W - STAGE.pad,
+      stageTop,
+    );
+    container.add(divider);
 
-    if (!this.selectedShipId) {
+    const def = this.ships.find((s) => s.id === this.selectedShipId);
+    if (!def) {
       container.add(
-        this.scene.add
-          .text(
-            CAT_X + CAT_W / 2,
-            stageTop + stageH / 2,
-            "Click a ship above to select it",
-            { font: "13px Arial", color: "#3a5566" },
-          )
-          .setOrigin(0.5),
+        addPickerText(
+          this.scene,
+          { x: CAT_X + CAT_W / 2, y: stageTop + stageH / 2 },
+          "Click a ship above to select it",
+          "body",
+          HOLO_PALETTE.textMuted,
+        ).setOrigin(0.5),
       );
       return;
     }
+    this.drawSelectionLine(container, def, stageTop + STAGE.pad);
+    this.drawAddButton(
+      container,
+      def,
+      stageTop + stageH - STAGE.pad - STAGE.buttonH / 2,
+    );
+  }
 
-    const def = this.ships.find((s) => s.id === this.selectedShipId);
-    if (!def) return;
-    container.add(
-      this.scene.add.text(CAT_X + 10, stageTop + 10, def.name, {
-        font: "bold 14px Arial",
-        color: "#88ffcc",
-      }),
-    );
-    container.add(
-      this.scene.add
-        .text(
-          CAT_X + CAT_W - 10,
-          stageTop + 10,
-          def.baseStats.size.toUpperCase(),
-          { font: "11px Arial", color: "#5588aa" },
-        )
-        .setOrigin(1, 0),
-    );
-    this.drawAddButton(container, def, stageTop + stageH - 36);
+  private drawSelectionLine(
+    container: Phaser.GameObjects.Container,
+    def: ShipDefinition,
+    y: number,
+  ): void {
+    const size = addPickerText(
+      this.scene,
+      { x: CAT_X + CAT_W - STAGE.pad, y: y + 3 },
+      def.baseStats.size.toUpperCase(),
+      "caption",
+      HOLO_PALETTE.textSecondary,
+    ).setOrigin(1, 0);
+    const name = addPickerText(
+      this.scene,
+      { x: CAT_X + STAGE.pad, y },
+      def.name,
+      "heading",
+      HOLO_PALETTE.textPrimary,
+    ).setLetterSpacing(0);
+    fitOrEllipsize(name, size.x - size.width - STAGE.pad - name.x);
+    container.add([name, size]);
   }
 
   private drawAddButton(
     container: Phaser.GameObjects.Container,
     def: ShipDefinition,
-    y: number,
+    centreY: number,
   ): void {
-    const w = CAT_W - 16;
-    const h = 28;
-    const c = this.scene.add.container(CAT_X + 8, y);
-    const bg = this.scene.add.graphics();
-    bg.fillStyle(0x1a3322, 1);
-    bg.fillRoundedRect(0, 0, w, h, 5);
-    bg.lineStyle(2, 0x44ff88, 1);
-    bg.strokeRoundedRect(0, 0, w, h, 5);
+    const width = CAT_W - STAGE.pad * 2;
     const loadoutId = this.selectedLoadoutId;
     const ldLabel = loadoutId
       ? (getShipLoadouts(def.id).find((l) => l.id === loadoutId)?.name ??
         "Loadout")
       : "Base";
-    c.add([
-      bg,
-      this.scene.add
-        .text(
-          w / 2,
-          h / 2,
-          `→  ${this.confirmLabel}  ${def.name.toUpperCase()} — ${ldLabel.toUpperCase()}`,
-          { font: "bold 12px Arial", color: "#44ff88" },
-        )
-        .setOrigin(0.5),
-    ]);
-    c.setInteractive(
-      new Phaser.Geom.Rectangle(0, 0, w, h),
-      Phaser.Geom.Rectangle.Contains,
+    const label = `${this.confirmLabel}  ${def.name.toUpperCase()} \u2014 ${ldLabel.toUpperCase()}`;
+    const fontSize = fittedFontSize(
+      this.scene,
+      label,
+      width - STAGE.buttonChrome,
+      STAGE.buttonFont,
     );
-    c.on("pointerdown", () => {
-      punch(this.scene, c, { scale: 1.08, durationMs: 160 });
-      // Give the punch a beat to play before the panel rebuilds and destroys `c`.
-      this.scene.time.delayedCall(90, () =>
-        this.emit("addInstance", { shipId: def.id, loadoutId }),
-      );
-    });
-    container.add(c);
+    const button = createHoverButton(
+      this.scene,
+      CAT_X + CAT_W / 2,
+      centreY,
+      {
+        width,
+        height: STAGE.buttonH,
+        color: HOLO_PALETTE.accent,
+        variant: "primary",
+        label,
+        font: `${STAGE.buttonFont.weight} ${fontSize}px`,
+        icon: this.confirmLabel === "ADD" ? "plus" : "next",
+      },
+      () => {
+        // Give the punch a beat to play before the panel rebuilds and destroys the button.
+        this.scene.time.delayedCall(STAGE.emitDelayMs, () =>
+          this.emit("addInstance", { shipId: def.id, loadoutId }),
+        );
+      },
+    );
+    container.add(button);
   }
 }

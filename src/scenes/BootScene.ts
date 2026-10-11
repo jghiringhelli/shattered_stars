@@ -11,6 +11,7 @@ import {
   initTutorialOverlay,
   hideTutorialOverlay,
 } from "../ui/TutorialOverlay";
+import { createBootLoadingView } from "../ui/menu/BootLoadingView";
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -24,34 +25,13 @@ export class BootScene extends Phaser.Scene {
     initTutorialOverlay();
 
     // Show loading progress
-    const progressBar = this.add.graphics();
-    const progressBox = this.add.graphics();
-    progressBox.fillStyle(0x222222, 0.8);
-    progressBox.fillRect(440, 320, 400, 50);
-
-    const width = this.cameras.main.width;
-    const height = this.cameras.main.height;
-    const loadingText = this.make.text({
-      x: width / 2,
-      y: height / 2 - 50,
-      text: "Loading...",
-      style: {
-        font: "24px monospace",
-        color: "#ffffff",
-      },
-    });
-    loadingText.setOrigin(0.5, 0.5);
-
+    const loadingView = createBootLoadingView(this);
     this.load.on("progress", (value: number) => {
-      progressBar.clear();
-      progressBar.fillStyle(0x00bfff, 1);
-      progressBar.fillRect(450, 330, 380 * value, 30);
+      loadingView.setProgress(value);
     });
 
     this.load.on("complete", () => {
-      progressBar.destroy();
-      progressBox.destroy();
-      loadingText.destroy();
+      loadingView.destroy();
       hideTutorialOverlay();
     });
 

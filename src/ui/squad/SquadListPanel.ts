@@ -1,7 +1,7 @@
 /**
  * SquadListPanel — renders squad cards grouped by team.
  * The battle format (1v1, 2v2, FFA, etc.) is derived automatically
- * from squad–team assignments. Each team occupies its own row.
+ * from squad–team assignments. Each team occupies its own lane.
  *
  * Emits: 'squadChanged' | 'editShips' {squadIdx} | 'teamChanged' {squadIdx, teamId} |
  *        'addSquad' teamId | 'addTeam' | 'removeSquad' {squadIdx} | 'removeTeam' teamId
@@ -9,32 +9,29 @@
 
 import Phaser from "phaser";
 import type { SquadEntry, GameMode } from "../../core/squadTypes";
-import { autoFillSquad } from "../../core/squadTypes";
 import {
+  autoFillSquad,
   makeSquad,
   MULTI_TEAM_MODES,
-  TEAM_COLORS,
-  TEAM_LABELS,
   computeFormatLabel,
 } from "../../core/squadTypes";
+import { HOLO_PALETTE } from "../theme/HoloTheme";
+import { SquadCard } from "./SquadCard";
+import { CARD_W, squadCardHeight } from "./squadCardLayout";
 import {
-  SquadCard,
-  CARD_W,
-  CARD_H_COLLAPSED,
-  SHIP_ROW_H,
-  MAX_SHOWN_SHIPS,
-} from "./SquadCard";
+  LIST_LAYOUT,
+  createAddSquadTile,
+  createAddTeamButton,
+  createRemoveTeamLink,
+  createTeamLane,
+  drawListScrollbar,
+} from "./squadListParts";
+import { SQUAD_TYPE, addSquadText } from "./squadBuilderStyle";
 
-const PANEL_X = 320;
-const PANEL_Y = 68;
-const ROW_START_Y = PANEL_Y + 28;
-const TEAM_HEADER_H = 28;
-const TEAM_GAP = 14;
-const CARD_GAP = 10;
-const ADD_BTN_W = 80;
 const MAX_TEAMS = 4;
 export const MAX_SQUADS = 8;
 
+/** Configuration for {@link SquadListPanel}. */
 export interface SquadListPanelConfig {
   readonly squads: SquadEntry[];
   readonly gameMode: GameMode;
@@ -42,6 +39,7 @@ export interface SquadListPanelConfig {
   readonly sceneWidth: number;
 }
 
+/** Scrollable, team-grouped list of squad cards. */
 export class SquadListPanel extends Phaser.Events.EventEmitter {
   private readonly scene: Phaser.Scene;
   private config: SquadListPanelConfig;
@@ -54,15 +52,22 @@ export class SquadListPanel extends Phaser.Events.EventEmitter {
   private contentH = 0;
   /** Scrollbar track + thumb — lives outside the container so it stays fixed. */
   private scrollbarGraphics: Phaser.GameObjects.Graphics | null = null;
+  private readonly onWheel = (
+    _pointer: unknown,
+    _objects: unknown,
+    _dx: number,
+    dy: number,
+  ): void => this.scrollBy(dy * LIST_LAYOUT.wheelFactor);
 
-  private readonly CLIP_TOP = PANEL_Y;
-  private readonly CLIP_BOTTOM_MARGIN = 70; // above START BATTLE bar
-
+  /**
+   * @param scene - Owning scene.
+   * @param config - Squads (shared, mutated by cards), mode, limit and width.
+   */
   constructor(scene: Phaser.Scene, config: SquadListPanelConfig) {
     super();
     this.scene = scene;
     this.config = config;
-    this.setupScrollInput();
+    this.scene.input.on("wheel", this.onWheel);
   }
 
   /** Render or re-render the entire panel */
@@ -72,26 +77,36 @@ export class SquadListPanel extends Phaser.Events.EventEmitter {
     this.container?.destroy();
     this.container = this.scene.add.container(0, -this.scrollY);
     this.drawFormatLabel();
-    let y = ROW_START_Y;
+    let y: number = LIST_LAYOUT.rowStartY;
     for (const teamId of this.sortedTeamIds()) {
-      y = this.drawTeamSection(teamId, y) + TEAM_GAP;
+      y = this.drawTeamSection(teamId, y) + LIST_LAYOUT.laneGap;
     }
     if (this.isMultiMode() && this.sortedTeamIds().length < MAX_TEAMS) {
-      this.drawAddTeamButton(y);
-      y += 44;
+      this.container.add(
+        createAddTeamButton(this.scene, LIST_LAYOUT.x, y, () =>
+          this.emit("addTeam"),
+        ),
+      );
+      y += LIST_LAYOUT.addTeamRowH;
     }
-    this.contentH = y - ROW_START_Y;
+    this.contentH = y - LIST_LAYOUT.rowStartY;
     this.applyClipMask();
     this.drawScrollbar();
   }
 
-  /** Update config and re-render */
+  /**
+   * Update config and re-render.
+   *
+   * @param patch - Fields to replace.
+   */
   update(patch: Partial<SquadListPanelConfig>): void {
     this.config = { ...this.config, ...patch };
     this.render();
   }
 
+  /** Destroy display objects and the wheel listener. */
   destroy(): void {
+    this.scene.input?.off("wheel", this.onWheel);
     this.cards.forEach((c) => c.destroy());
     this.container?.destroy();
     this.clipMask?.destroy();
@@ -99,77 +114,73 @@ export class SquadListPanel extends Phaser.Events.EventEmitter {
     super.destroy();
   }
 
-  /** Draw a thin scrollbar track + thumb on the right edge. Lives outside the container. */
-  private drawScrollbar(): void {
-    this.scrollbarGraphics?.destroy();
-    const visibleH =
-      this.scene.scale.height - this.CLIP_TOP - this.CLIP_BOTTOM_MARGIN;
-    const maxScroll = Math.max(0, this.contentH - visibleH + ROW_START_Y);
-    if (maxScroll <= 0) return;
-    const trackX = this.config.sceneWidth - 7;
-    const thumbH = Math.max(
-      24,
-      visibleH * (visibleH / (this.contentH + ROW_START_Y)),
-    );
-    const thumbY =
-      this.CLIP_TOP + (this.scrollY / maxScroll) * (visibleH - thumbH);
-    this.scrollbarGraphics = this.scene.add.graphics();
-    this.scrollbarGraphics.fillStyle(0x0e1622, 1);
-    this.scrollbarGraphics.fillRoundedRect(
-      trackX,
-      this.CLIP_TOP,
-      4,
-      visibleH,
-      2,
-    );
-    this.scrollbarGraphics.fillStyle(0x334466, 1);
-    this.scrollbarGraphics.fillRoundedRect(trackX, thumbY, 4, thumbH, 2);
-  }
-
   /** Auto-fill ships for all squads up to the point limit */
   autoFillAll(): void {
     this.config.squads.forEach((s) => this.autoFill(s));
   }
 
-  /** Create and auto-fill a new squad for the given teamId */
+  /**
+   * Create and auto-fill a new squad for the given teamId.
+   *
+   * @param teamId - Team number 1–4.
+   * @param index - Squad index (drives the default faction).
+   * @returns The new squad (not yet added to the list).
+   */
   buildNewSquad(teamId: number, index: number): SquadEntry {
     const squad = makeSquad(teamId, index, "ai");
     this.autoFill(squad);
     return squad;
   }
 
-  /** Wire mouse-wheel on the scene to scroll this panel. */
-  private setupScrollInput(): void {
-    this.scene.input.on(
-      "wheel",
-      (_ptr: unknown, _gos: unknown, _dx: number, dy: number) => {
-        const visibleH =
-          this.scene.scale.height - this.CLIP_TOP - this.CLIP_BOTTOM_MARGIN;
-        const maxScroll = Math.max(0, this.contentH - visibleH + ROW_START_Y);
-        this.scrollY = Math.max(
-          0,
-          Math.min(maxScroll, this.scrollY + dy * 0.8),
-        );
-        if (this.container) this.container.setY(-this.scrollY);
-        this.drawScrollbar();
-      },
-    );
+  private get visibleH(): number {
+    const { clipTop, clipBottomMargin } = LIST_LAYOUT;
+    return this.scene.scale.height - clipTop - clipBottomMargin;
+  }
+
+  private get maxScroll(): number {
+    const { rowStartY, clipTop } = LIST_LAYOUT;
+    return Math.max(0, this.contentH - this.visibleH + rowStartY - clipTop);
+  }
+
+  private scrollBy(delta: number): void {
+    this.scrollY = Phaser.Math.Clamp(this.scrollY + delta, 0, this.maxScroll);
+    if (this.container) this.container.setY(-this.scrollY);
+    this.drawScrollbar();
+  }
+
+  /** Draw a thin scrollbar on the right edge. Lives outside the container. */
+  private drawScrollbar(): void {
+    this.scrollbarGraphics?.destroy();
+    this.scrollbarGraphics = null;
+    const maxScroll = this.maxScroll;
+    if (maxScroll <= 0) return;
+    this.scrollbarGraphics = this.scene.add.graphics();
+    drawListScrollbar(this.scrollbarGraphics, {
+      trackX:
+        this.config.sceneWidth -
+        LIST_LAYOUT.rightMargin +
+        LIST_LAYOUT.scrollbarInset,
+      top: LIST_LAYOUT.clipTop,
+      visibleH: this.visibleH,
+      contentH: this.visibleH + maxScroll,
+      scrollY: this.scrollY,
+      maxScroll,
+    });
   }
 
   /** Create or refresh the rectangular clip mask for the scroll area. */
   private applyClipMask(): void {
     this.clipMask?.destroy();
-    const h = this.scene.scale.height - this.CLIP_TOP - this.CLIP_BOTTOM_MARGIN;
     // make.graphics with add:false creates the shape without adding it to the display list
     this.clipMask = this.scene.make.graphics({
       add: false,
     } as Phaser.Types.GameObjects.Graphics.Options);
     this.clipMask.fillStyle(0xffffff);
     this.clipMask.fillRect(
-      PANEL_X,
-      this.CLIP_TOP,
-      this.config.sceneWidth - PANEL_X,
-      h,
+      LIST_LAYOUT.x,
+      LIST_LAYOUT.clipTop,
+      this.config.sceneWidth - LIST_LAYOUT.x,
+      this.visibleH,
     );
     this.container.setMask(
       new Phaser.Display.Masks.GeometryMask(this.scene, this.clipMask),
@@ -186,79 +197,67 @@ export class SquadListPanel extends Phaser.Events.EventEmitter {
     return MULTI_TEAM_MODES.includes(this.config.gameMode);
   }
 
+  private get laneRight(): number {
+    return this.config.sceneWidth - LIST_LAYOUT.rightMargin;
+  }
+
   private drawFormatLabel(): void {
     const label = computeFormatLabel(this.config.squads);
     this.container.add(
-      this.scene.add.text(PANEL_X + 10, PANEL_Y + 6, `Format: ${label}`, {
-        font: "bold 13px Arial",
-        color: "#5577aa",
-      }),
+      addSquadText(
+        this.scene,
+        LIST_LAYOUT.x,
+        LIST_LAYOUT.formatLabelY,
+        `Format: ${label}`,
+        {
+          size: SQUAD_TYPE.name,
+          weight: "600",
+          color: HOLO_PALETTE.textSecondary,
+          letterSpacing: 1,
+        },
+      ),
     );
   }
 
   private drawTeamSection(teamId: number, startY: number): number {
+    const { x, lanePad, laneHeaderH, cardGap } = LIST_LAYOUT;
     const teamSquads = this.config.squads
       .map((squad, idx) => ({ squad, idx }))
       .filter(({ squad }) => squad.teamId === teamId);
-    const maxCardH =
-      teamSquads.length > 0
-        ? Math.max(
-            ...teamSquads.map(({ squad }) => {
-              const shown = Math.min(
-                Math.max(squad.ships.length, 1),
-                MAX_SHOWN_SHIPS,
-              );
-              return CARD_H_COLLAPSED + 12 + shown * SHIP_ROW_H + 10;
-            }),
-          )
-        : CARD_H_COLLAPSED + 12 + SHIP_ROW_H + 10;
-    const rowH = TEAM_HEADER_H + maxCardH + 16;
-    this.drawTeamBg(startY, rowH, teamId);
-    this.drawTeamHeader(teamId, startY);
-    let cardX = PANEL_X + 10;
+    const maxCardH = Math.max(
+      ...teamSquads.map(({ squad }) => squadCardHeight(squad)),
+      squadCardHeight({ ships: [] }),
+    );
+    const rowH = laneHeaderH + maxCardH + lanePad;
+    const laneRect = { x, y: startY, width: this.laneRight - x, height: rowH };
+    this.container.add(createTeamLane(this.scene, laneRect, teamId));
+    this.drawRemoveTeam(teamId, startY);
+    const cardY = startY + laneHeaderH;
+    let cardX = x + lanePad;
     for (const { squad, idx } of teamSquads) {
-      this.renderCard(squad, idx, cardX, startY + TEAM_HEADER_H + 6);
-      cardX += CARD_W + CARD_GAP;
+      this.renderCard(squad, idx, cardX, cardY);
+      cardX += CARD_W + cardGap;
     }
     if (this.isMultiMode() && this.config.squads.length < MAX_SQUADS) {
-      this.drawAddSquadButton(cardX, startY + TEAM_HEADER_H + 6, teamId);
+      this.container.add(
+        createAddSquadTile(this.scene, cardX, cardY, () =>
+          this.emit("addSquad", teamId),
+        ),
+      );
     }
     return startY + rowH;
   }
 
-  private drawTeamBg(y: number, h: number, teamId: number): void {
-    const color = TEAM_COLORS[teamId - 1] ?? 0x446688;
-    const w = this.config.sceneWidth - PANEL_X - 12;
-    const g = this.scene.add.graphics();
-    g.fillStyle(color, 0.05);
-    g.fillRoundedRect(PANEL_X, y, w, h, 6);
-    g.lineStyle(1, color, 0.22);
-    g.strokeRoundedRect(PANEL_X, y, w, h, 6);
-    this.container.add(g);
-  }
-
-  private drawTeamHeader(teamId: number, y: number): void {
-    const color = TEAM_COLORS[teamId - 1] ?? 0x446688;
-    const hexCol = `#${color.toString(16).padStart(6, "0")}`;
-    const label = TEAM_LABELS[teamId - 1] ?? `T${teamId}`;
+  private drawRemoveTeam(teamId: number, laneTop: number): void {
+    if (this.sortedTeamIds().length <= 2 || !this.isMultiMode()) return;
     this.container.add(
-      this.scene.add.text(PANEL_X + 12, y + 6, `TEAM ${label}`, {
-        font: "bold 12px Arial",
-        color: hexCol,
-      }),
+      createRemoveTeamLink(
+        this.scene,
+        this.laneRight - LIST_LAYOUT.lanePad,
+        laneTop + LIST_LAYOUT.laneHeaderH / 2,
+        () => this.emit("removeTeam", teamId),
+      ),
     );
-    if (this.sortedTeamIds().length > 2 && this.isMultiMode()) {
-      const rm = this.scene.add
-        .text(this.config.sceneWidth - 28, y + 6, "✕ remove team", {
-          font: "11px Arial",
-          color: "#664444",
-        })
-        .setInteractive({ useHandCursor: true });
-      rm.on("pointerover", () => rm.setColor("#ff6666"));
-      rm.on("pointerout", () => rm.setColor("#664444"));
-      rm.on("pointerdown", () => this.emit("removeTeam", teamId));
-      this.container.add(rm);
-    }
   }
 
   private renderCard(
@@ -272,7 +271,7 @@ export class SquadListPanel extends Phaser.Events.EventEmitter {
       pointLimit: this.config.pointLimit,
     });
     card.render(x, y);
-    // Card must live inside the container so it scrolls with team backgrounds/headers.
+    // Card must live inside the container so it scrolls with team lanes.
     this.container.add(card.cardContainer);
     card.on("changed", () => this.emit("squadChanged"));
     card.on("factionChanged", () => {
@@ -289,71 +288,6 @@ export class SquadListPanel extends Phaser.Events.EventEmitter {
       this.emit("teamChanged", { squadIdx: idx, teamId }),
     );
     this.cards.push(card);
-  }
-
-  private drawAddSquadButton(x: number, y: number, teamId: number): void {
-    const h = CARD_H_COLLAPSED;
-    const btn = this.scene.add.container(x, y);
-    const bg = this.scene.add.graphics();
-    bg.fillStyle(0x141a25, 0.9);
-    bg.fillRoundedRect(0, 0, ADD_BTN_W, h, 6);
-    bg.lineStyle(1, 0x22334a, 0.9);
-    bg.strokeRoundedRect(0, 0, ADD_BTN_W, h, 6);
-    btn.add([
-      bg,
-      this.scene.add
-        .text(ADD_BTN_W / 2, h / 2, "+ Squad", {
-          font: "11px Arial",
-          color: "#334466",
-        })
-        .setOrigin(0.5),
-    ]);
-    btn.setInteractive(
-      new Phaser.Geom.Rectangle(0, 0, ADD_BTN_W, h),
-      Phaser.Geom.Rectangle.Contains,
-    );
-    btn.on("pointerover", () => {
-      bg.clear();
-      bg.fillStyle(0x1a2535, 0.9);
-      bg.fillRoundedRect(0, 0, ADD_BTN_W, h, 6);
-      bg.lineStyle(1, 0x3a5588, 1);
-      bg.strokeRoundedRect(0, 0, ADD_BTN_W, h, 6);
-    });
-    btn.on("pointerout", () => {
-      bg.clear();
-      bg.fillStyle(0x141a25, 0.9);
-      bg.fillRoundedRect(0, 0, ADD_BTN_W, h, 6);
-      bg.lineStyle(1, 0x22334a, 0.9);
-      bg.strokeRoundedRect(0, 0, ADD_BTN_W, h, 6);
-    });
-    btn.on("pointerdown", () => this.emit("addSquad", teamId));
-    this.container.add(btn);
-  }
-
-  private drawAddTeamButton(y: number): void {
-    const w = 130;
-    const h = 34;
-    const btn = this.scene.add.container(PANEL_X + 10, y);
-    const bg = this.scene.add.graphics();
-    bg.fillStyle(0x141a25, 0.9);
-    bg.fillRoundedRect(0, 0, w, h, 6);
-    bg.lineStyle(1, 0x22334a, 0.9);
-    bg.strokeRoundedRect(0, 0, w, h, 6);
-    btn.add([
-      bg,
-      this.scene.add
-        .text(w / 2, h / 2, "+ Add Team", {
-          font: "bold 12px Arial",
-          color: "#335577",
-        })
-        .setOrigin(0.5),
-    ]);
-    btn.setInteractive(
-      new Phaser.Geom.Rectangle(0, 0, w, h),
-      Phaser.Geom.Rectangle.Contains,
-    );
-    btn.on("pointerdown", () => this.emit("addTeam"));
-    this.container.add(btn);
   }
 
   private autoFill(squad: SquadEntry): void {

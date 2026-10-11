@@ -1,10 +1,9 @@
 /**
  * Settings Scene
  *
- * Game settings including:
- * - Audio volume
- * - Graphics quality
- * - Controls
+ * Audio levels and visual options, saved on every change. Holo layout: two
+ * side-by-side panels (AUDIO / VISUAL) of keyboard-focusable rows —
+ * ↑/↓ select, ←/→ adjust a slider, ENTER flips a switch, ESC goes back.
  */
 
 import Phaser from "phaser";
@@ -14,7 +13,21 @@ import {
   loadSettings as loadStoredSettings,
   saveSettings as saveToStorage,
 } from "../systems/SettingsStorage";
-import { addSceneBackground } from "../ui/TexturedPanel";
+import {
+  addBackButton,
+  addFooterHint,
+  addMenuBackdrop,
+  addMenuHeader,
+} from "../ui/menu/MenuScaffold";
+import { createHoloPanel } from "../ui/hud/HoloPanel";
+import { MenuFocus, type FocusTarget } from "../ui/menu/MenuFocus";
+import { drawMenuIcon, type MenuIconName } from "../ui/menu/MenuIcons";
+import {
+  SETTINGS_ROW,
+  SettingsSliderRow,
+  SettingsSwitchRow,
+} from "../ui/settings/settingsRows";
+import { HOLO_PALETTE, HOLO_SPACING } from "../ui/theme/HoloTheme";
 
 type MutableSettings = {
   masterVolume: number;
@@ -25,9 +38,32 @@ type MutableSettings = {
   showMinimap: boolean;
 };
 
+/** Panel grid. */
+const SETTINGS_LAYOUT = {
+  panelWidth: 400,
+  panelGap: 40,
+  panelTop: 200,
+  headerHeight: 28,
+  rowGap: HOLO_SPACING.xs,
+  inset: HOLO_SPACING.sm,
+  iconSize: 14,
+  /** Header icon centre, measured from the panel's right edge. */
+  iconInset: 20,
+  rowsPerPanel: 3,
+} as const;
+
+/** A panel's rows to build: label + kind. */
+interface PanelSpec {
+  readonly title: string;
+  readonly icon: MenuIconName;
+  readonly centerX: number;
+}
+
 export class SettingsScene extends Phaser.Scene {
   private settings: MutableSettings = { ...DEFAULT_SETTINGS };
   private returnScene: string | null = null;
+  private rows: FocusTarget[] = [];
+  private focus: MenuFocus | null = null;
 
   constructor() {
     super({ key: "SettingsScene" });
@@ -38,284 +74,159 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor(0x0a0a1a);
-    addSceneBackground(this);
+    addMenuBackdrop(this, { textureId: "nebula_blue" });
     this.loadSettings();
-    this.createHeader();
+    addMenuHeader(this, {
+      title: "Settings",
+      subtitle: "Audio and display preferences — saved automatically",
+    });
+    this.rows = [];
     this.createSettingsUI();
-    this.createBackButton();
+    const back = addBackButton(this, () => this.exitSettings());
+    this.focus = new MenuFocus(this, [...this.rows, back]);
+    addFooterHint(
+      this,
+      "↑ ↓  SELECT        ← →  ADJUST        ENTER  TOGGLE        ESC  BACK",
+    );
     this.setupInput();
   }
 
-  private createHeader(): void {
-    this.add
-      .text(this.scale.width / 2, 50, "SETTINGS", {
-        font: "bold 48px Arial",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5);
-  }
-
   private createSettingsUI(): void {
-    const audioEndY = this.createAudioSection(150, 60);
-    this.createVisualSection(audioEndY, 60);
-  }
-
-  /**
-   * Create the Audio settings section (three sliders: master, music, SFX).
-   *
-   * @param startY  - Top Y position of this section.
-   * @param spacing - Vertical gap between controls.
-   * @returns The Y coordinate after the last slider (ready for the next section).
-   */
-  private createAudioSection(startY: number, spacing: number): number {
     const cx = this.scale.width / 2;
-    let y = startY;
-    this.add
-      .text(cx, y, "--- AUDIO ---", {
-        font: "bold 24px Arial",
-        color: "#888888",
-      })
-      .setOrigin(0.5);
-    y += 50;
-    this.createSlider(
-      cx,
-      y,
-      "Master Volume",
-      this.settings.masterVolume,
-      (val) => {
-        this.settings.masterVolume = val;
-        audioManager.setMasterVolume(val);
-        this.saveSettings();
-      },
-    );
-    y += spacing;
-    this.createSlider(
-      cx,
-      y,
-      "Music Volume",
-      this.settings.musicVolume,
-      (val) => {
-        this.settings.musicVolume = val;
-        audioManager.setMusicVolume(val);
-        this.saveSettings();
-      },
-    );
-    y += spacing;
-    this.createSlider(cx, y, "SFX Volume", this.settings.sfxVolume, (val) => {
-      this.settings.sfxVolume = val;
-      audioManager.setSfxVolume(val);
-      this.saveSettings();
+    const offset = (SETTINGS_LAYOUT.panelWidth + SETTINGS_LAYOUT.panelGap) / 2;
+    this.createAudioSection({
+      title: "Audio",
+      icon: "speaker",
+      centerX: cx - offset,
     });
-    return y + spacing + 20;
-  }
-
-  /**
-   * Create the Visual settings section (three toggles: camera shake, damage numbers, minimap).
-   *
-   * @param startY  - Top Y position of this section.
-   * @param spacing - Vertical gap between controls.
-   */
-  private createVisualSection(startY: number, spacing: number): void {
-    const cx = this.scale.width / 2;
-    let y = startY;
-    this.add
-      .text(cx, y, "--- VISUAL ---", {
-        font: "bold 24px Arial",
-        color: "#888888",
-      })
-      .setOrigin(0.5);
-    y += 50;
-    this.createToggle(
-      cx,
-      y,
-      "Camera Shake",
-      this.settings.cameraShake,
-      (val) => {
-        this.settings.cameraShake = val;
-        this.saveSettings();
-      },
-    );
-    y += spacing;
-    this.createToggle(
-      cx,
-      y,
-      "Damage Numbers",
-      this.settings.showDamageNumbers,
-      (val) => {
-        this.settings.showDamageNumbers = val;
-        this.saveSettings();
-      },
-    );
-    y += spacing;
-    this.createToggle(cx, y, "Minimap", this.settings.showMinimap, (val) => {
-      this.settings.showMinimap = val;
-      this.saveSettings();
+    this.createVisualSection({
+      title: "Visual",
+      icon: "eye",
+      centerX: cx + offset,
     });
   }
 
   /**
-   * Build a shared pointer handler for slider pointerdown and pointermove events.
+   * Draw a section panel and return the row placement helper.
    *
-   * @param fill        - Graphics object rendering the filled portion of the slider track.
-   * @param sliderX     - Left-edge X of the slider track.
-   * @param sliderY     - Center Y of the slider track.
-   * @param sliderWidth - Pixel width of the slider track.
-   * @param valueText   - Text object showing the current percentage.
-   * @param onChange    - Callback invoked with the new 0–1 value.
-   * @returns A pointer event handler that computes and applies the new value.
+   * @param spec - Title, icon and horizontal centre.
+   * @returns Row (x, y, width) for each row index.
    */
-  private makeSliderHandler(
-    fill: Phaser.GameObjects.Graphics,
-    sliderX: number,
-    sliderY: number,
-    sliderWidth: number,
-    valueText: Phaser.GameObjects.Text,
-    onChange: (val: number) => void,
-  ): (pointer: Phaser.Input.Pointer) => void {
-    return (pointer) => {
-      const newValue = Phaser.Math.Clamp(
-        (pointer.x - sliderX) / sliderWidth,
-        0,
-        1,
+  private createPanel(spec: PanelSpec): (index: number) => {
+    x: number;
+    y: number;
+    width: number;
+  } {
+    const { panelWidth, panelTop, headerHeight, rowGap, inset } =
+      SETTINGS_LAYOUT;
+    const rowsHeight =
+      SETTINGS_LAYOUT.rowsPerPanel * (SETTINGS_ROW.height + rowGap) - rowGap;
+    const height = headerHeight + inset * 2 + rowsHeight;
+    createHoloPanel(this, spec.centerX, panelTop + height / 2, {
+      width: panelWidth,
+      height,
+      title: spec.title,
+    });
+    const icon = this.add.graphics();
+    drawMenuIcon(
+      icon,
+      spec.icon,
+      {
+        x: spec.centerX + panelWidth / 2 - SETTINGS_LAYOUT.iconInset,
+        y: panelTop + headerHeight / 2,
+      },
+      SETTINGS_LAYOUT.iconSize,
+      HOLO_PALETTE.accent,
+    );
+    const left = spec.centerX - panelWidth / 2 + inset;
+    return (index) => ({
+      x: left,
+      y:
+        panelTop +
+        headerHeight +
+        inset +
+        index * (SETTINGS_ROW.height + rowGap),
+      width: panelWidth - inset * 2,
+    });
+  }
+
+  /**
+   * Audio panel: master, music and SFX sliders.
+   *
+   * @param spec - Panel title/icon/centre.
+   */
+  private createAudioSection(spec: PanelSpec): void {
+    const at = this.createPanel(spec);
+    const slider = (
+      index: number,
+      label: string,
+      value: number,
+      apply: (v: number) => void,
+    ): void => {
+      this.rows.push(
+        new SettingsSliderRow(this, { ...at(index), label }, value, (v) => {
+          apply(v);
+          this.saveSettings();
+        }),
       );
-      this.updateSliderFill(fill, sliderX, sliderY, sliderWidth, newValue);
-      valueText.setText(`${Math.round(newValue * 100)}%`);
-      onChange(newValue);
     };
-  }
-
-  private createSlider(
-    x: number,
-    y: number,
-    label: string,
-    value: number,
-    onChange: (val: number) => void,
-  ): void {
-    const sliderWidth = 200;
-    this.add
-      .text(x - 150, y, label, { font: "18px Arial", color: "#ffffff" })
-      .setOrigin(1, 0.5);
-    const bg = this.add.graphics();
-    bg.fillStyle(0x333333, 1);
-    bg.fillRoundedRect(x - 100, y - 8, sliderWidth, 16, 8);
-    const fill = this.add.graphics();
-    this.updateSliderFill(fill, x - 100, y, sliderWidth, value);
-    const valueText = this.add
-      .text(x + 120, y, `${Math.round(value * 100)}%`, {
-        font: "18px Arial",
-        color: "#aaaaaa",
-      })
-      .setOrigin(0, 0.5);
-    const hitArea = this.add.rectangle(x, y, sliderWidth + 20, 30, 0x000000, 0);
-    hitArea.setInteractive();
-    const handler = this.makeSliderHandler(
-      fill,
-      x - 100,
-      y,
-      sliderWidth,
-      valueText,
-      onChange,
-    );
-    hitArea.on("pointerdown", handler);
-    hitArea.on("pointermove", (pointer: Phaser.Input.Pointer) => {
-      if (pointer.isDown) handler(pointer);
+    slider(0, "Master Volume", this.settings.masterVolume, (v) => {
+      this.settings.masterVolume = v;
+      audioManager.setMasterVolume(v);
+    });
+    slider(1, "Music Volume", this.settings.musicVolume, (v) => {
+      this.settings.musicVolume = v;
+      audioManager.setMusicVolume(v);
+    });
+    slider(2, "SFX Volume", this.settings.sfxVolume, (v) => {
+      this.settings.sfxVolume = v;
+      audioManager.setSfxVolume(v);
     });
   }
 
-  private updateSliderFill(
-    graphics: Phaser.GameObjects.Graphics,
-    x: number,
-    y: number,
-    width: number,
-    value: number,
-  ): void {
-    graphics.clear();
-    graphics.fillStyle(0x44aaff, 1);
-    graphics.fillRoundedRect(x, y - 8, width * value, 16, 8);
-  }
-
-  private createToggle(
-    x: number,
-    y: number,
-    label: string,
-    value: boolean,
-    onChange: (val: boolean) => void,
-  ): void {
-    this.add
-      .text(x - 150, y, label, { font: "18px Arial", color: "#ffffff" })
-      .setOrigin(1, 0.5);
-    const bg = this.add.graphics();
-    this.drawToggle(bg, x - 80, y, value);
-    const toggleText = this.add
-      .text(x - 80, y, value ? "ON" : "OFF", {
-        font: "bold 14px Arial",
-        color: value ? "#44ff44" : "#888888",
-      })
-      .setOrigin(0.5);
-    const hitArea = this.add.rectangle(x - 80, y, 60, 30, 0x000000, 0);
-    hitArea.setInteractive({ useHandCursor: true });
-    hitArea.on("pointerdown", () => {
-      const newValue = !value;
-      value = newValue;
-      this.drawToggle(bg, x - 80, y, newValue);
-      toggleText
-        .setText(newValue ? "ON" : "OFF")
-        .setColor(newValue ? "#44ff44" : "#888888");
-      onChange(newValue);
+  /**
+   * Visual panel: camera shake, damage numbers, minimap switches.
+   *
+   * @param spec - Panel title/icon/centre.
+   */
+  private createVisualSection(spec: PanelSpec): void {
+    const at = this.createPanel(spec);
+    const toggle = (
+      index: number,
+      label: string,
+      value: boolean,
+      apply: (v: boolean) => void,
+    ): void => {
+      this.rows.push(
+        new SettingsSwitchRow(this, { ...at(index), label }, value, (v) => {
+          apply(v);
+          this.saveSettings();
+        }),
+      );
+    };
+    toggle(0, "Camera Shake", this.settings.cameraShake, (v) => {
+      this.settings.cameraShake = v;
     });
-  }
-
-  private drawToggle(
-    graphics: Phaser.GameObjects.Graphics,
-    x: number,
-    y: number,
-    on: boolean,
-  ): void {
-    graphics.clear();
-    graphics.fillStyle(on ? 0x226622 : 0x333333, 1);
-    graphics.fillRoundedRect(x - 30, y - 15, 60, 30, 8);
-    graphics.lineStyle(2, on ? 0x44ff44 : 0x666666, 1);
-    graphics.strokeRoundedRect(x - 30, y - 15, 60, 30, 8);
-  }
-
-  private createBackButton(): void {
-    const btn = this.add.container(
-      this.scale.width / 2,
-      this.scale.height - 80,
-    );
-    const bg = this.add.graphics();
-    bg.fillStyle(0x333344, 1);
-    bg.fillRoundedRect(-80, -20, 160, 40, 8);
-    btn.add(bg);
-    btn.add(
-      this.add
-        .text(0, 0, "BACK", { font: "bold 24px Arial", color: "#ffffff" })
-        .setOrigin(0.5),
-    );
-    btn.setInteractive(
-      new Phaser.Geom.Rectangle(-80, -20, 160, 40),
-      Phaser.Geom.Rectangle.Contains,
-    );
-    btn.on("pointerover", () => {
-      bg.clear();
-      bg.fillStyle(0x444466, 1);
-      bg.fillRoundedRect(-80, -20, 160, 40, 8);
+    toggle(1, "Damage Numbers", this.settings.showDamageNumbers, (v) => {
+      this.settings.showDamageNumbers = v;
     });
-    btn.on("pointerout", () => {
-      bg.clear();
-      bg.fillStyle(0x333344, 1);
-      bg.fillRoundedRect(-80, -20, 160, 40, 8);
-    });
-    btn.on("pointerdown", () => {
-      this.exitSettings();
+    toggle(2, "Minimap", this.settings.showMinimap, (v) => {
+      this.settings.showMinimap = v;
     });
   }
 
   private setupInput(): void {
-    this.input.keyboard!.on("keydown-ESC", () => {
+    const keyboard = this.input.keyboard!;
+    keyboard.on("keydown-ESC", () => {
       this.exitSettings();
     });
+    keyboard.on("keydown-LEFT", () => this.adjustFocused(-1));
+    keyboard.on("keydown-RIGHT", () => this.adjustFocused(1));
+  }
+
+  private adjustFocused(steps: number): void {
+    const row = this.rows[this.focus?.focusedIndex ?? -1];
+    if (row instanceof SettingsSliderRow) row.adjust(steps);
   }
 
   private exitSettings(): void {

@@ -510,6 +510,16 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 - **ArcadeTurret.ts** - 360° auto-targeting turrets with ms-based cooldowns
 
 
+### Menu UI (src/ui/menu/, src/ui/theme/)
+- **HoloTheme.ts** tokens + **holoFont.ts** (`holoFont(size, weight)` — never use the `font: "bold 18px Arial"`
+  shorthand: Phaser splits it on spaces and drops multi-word families)
+- **MenuScaffold.ts** - every non-battle screen: `addMenuBackdrop` (dimmed painted bg), `addMenuHeader`,
+  `addBackButton` (top-left), `addFooterHint`; primary action bottom-centre
+- **ButtonFactory.ts** renders holo (`HoloPressButton`, fires on press; legacy `color` → variant);
+  **MenuFocus.ts** keyboard focus ring; **MenuIcons.ts** procedural glyphs; **holoChrome.ts** frames/gauges
+- Main-menu rows stay at x=640, y=220+40·i (`tests/e2e/helpers/game.ts` MENU_POSITIONS)
+
+
 ### Data (src/data/)
 - **ShipDefinitions.ts** - All ship stats and configurations
 - **ModeBalancing.ts** - Per-mode stat adjustments

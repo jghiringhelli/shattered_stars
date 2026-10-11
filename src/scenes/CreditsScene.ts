@@ -1,29 +1,159 @@
 /**
  * Credits Scene
  *
- * Shows game credits with scrolling text
+ * Scrolling credits over the dimmed galaxy painting. The roll is clipped to
+ * the area below the header so it never collides with the BACK button.
+ * ↑ speeds the roll up, ↓ reverses it; ESC / SPACE / BACK return.
  */
 
 import Phaser from "phaser";
-import { renderMenuStarfield } from "../rendering/Starfield";
-import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
+import {
+  addBackButton,
+  addFooterHint,
+  addMenuBackdrop,
+  MENU_LAYOUT,
+} from "../ui/menu/MenuScaffold";
+import { holoFont } from "../ui/theme/holoFont";
+import { HOLO_PALETTE } from "../ui/theme/HoloTheme";
+import { toCssColor } from "../ui/theme/colorMath";
+
+/** Line styles of the credit roll. */
+type CreditStyle =
+  "title" | "subtitle" | "section" | "role" | "name" | "small" | "spacer";
+
+/** Typography + advance per credit style. */
+const CREDIT_STYLES: Readonly<
+  Record<
+    Exclude<CreditStyle, "spacer">,
+    {
+      size: number;
+      weight: string;
+      color: number;
+      spacing: number;
+      advance: number;
+    }
+  >
+> = {
+  title: {
+    size: 44,
+    weight: "300",
+    color: HOLO_PALETTE.textPrimary,
+    spacing: 12,
+    advance: 60,
+  },
+  subtitle: {
+    size: 18,
+    weight: "400",
+    color: HOLO_PALETTE.textSecondary,
+    spacing: 1,
+    advance: 40,
+  },
+  section: {
+    size: 13,
+    weight: "600",
+    color: HOLO_PALETTE.accent,
+    spacing: 5,
+    advance: 44,
+  },
+  role: {
+    size: 11,
+    weight: "600",
+    color: HOLO_PALETTE.textSecondary,
+    spacing: 2,
+    advance: 24,
+  },
+  name: {
+    size: 20,
+    weight: "400",
+    color: HOLO_PALETTE.textPrimary,
+    spacing: 0.5,
+    advance: 34,
+  },
+  small: {
+    size: 13,
+    weight: "400",
+    color: HOLO_PALETTE.textMuted,
+    spacing: 0.5,
+    advance: 24,
+  },
+};
+const SPACER_ADVANCE = 20;
+/** Half-length of the accent rules flanking section headings. */
+const SECTION_RULE = 60;
+const SECTION_RULE_GAP = 16;
+/** Scroll speeds in px/frame. */
+const SCROLL = { normal: 0.5, fast: 2, reverse: -1 } as const;
+/** Bottom edge of the visible roll (above the footer hint). */
+const ROLL_BOTTOM_INSET = 36;
+
+const CREDITS: ReadonlyArray<{
+  readonly text: string;
+  readonly style: CreditStyle;
+}> = [
+  { text: "SHATTERED STARS", style: "title" },
+  { text: "", style: "spacer" },
+  { text: "A Tactical Starship Combat Game", style: "subtitle" },
+  { text: "", style: "spacer" },
+  { text: "", style: "spacer" },
+  { text: "DEVELOPMENT", style: "section" },
+  { text: "GAME DESIGN", style: "role" },
+  { text: "Shattered Stars Team", style: "name" },
+  { text: "", style: "spacer" },
+  { text: "PROGRAMMING", style: "role" },
+  { text: "Built with Claude AI", style: "name" },
+  { text: "", style: "spacer" },
+  { text: "ART DIRECTION", style: "role" },
+  { text: "Procedural Generation", style: "name" },
+  { text: "", style: "spacer" },
+  { text: "", style: "spacer" },
+  { text: "TECHNOLOGY", style: "section" },
+  { text: "GAME ENGINE", style: "role" },
+  { text: "Phaser 3", style: "name" },
+  { text: "", style: "spacer" },
+  { text: "LANGUAGE", style: "role" },
+  { text: "TypeScript", style: "name" },
+  { text: "", style: "spacer" },
+  { text: "BUILD TOOL", style: "role" },
+  { text: "Vite", style: "name" },
+  { text: "", style: "spacer" },
+  { text: "", style: "spacer" },
+  { text: "INSPIRATION", style: "section" },
+  { text: "X-Wing Miniatures Game", style: "name" },
+  { text: "Fantasy Flight Games", style: "small" },
+  { text: "", style: "spacer" },
+  { text: "Star Wars", style: "name" },
+  { text: "Lucasfilm", style: "small" },
+  { text: "", style: "spacer" },
+  { text: "Wing Commander", style: "name" },
+  { text: "Origin Systems", style: "small" },
+  { text: "", style: "spacer" },
+  { text: "", style: "spacer" },
+  { text: "SPECIAL THANKS", style: "section" },
+  { text: "PLAYTESTERS", style: "role" },
+  { text: "You!", style: "name" },
+  { text: "", style: "spacer" },
+  { text: "", style: "spacer" },
+  { text: "", style: "spacer" },
+  { text: "Thank you for playing!", style: "subtitle" },
+  { text: "", style: "spacer" },
+  { text: "", style: "spacer" },
+  { text: "", style: "spacer" },
+];
 
 export class CreditsScene extends Phaser.Scene {
   private creditsContainer!: Phaser.GameObjects.Container;
   private creditsTotalHeight = 0;
-  private scrollSpeed = 0.5;
+  private scrollSpeed: number = SCROLL.normal;
 
   constructor() {
     super({ key: "CreditsScene" });
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor(0x050510);
-
-    addPaintedSpaceBackground(this, "galaxy_spiral");
-    this.createStarfield();
+    addMenuBackdrop(this, { textureId: "galaxy_spiral", scrimAlpha: 0.45 });
     this.createCredits();
-    this.createBackButton();
+    addBackButton(this, () => this.scene.start("MainMenuScene"));
+    addFooterHint(this, "↑  FASTER        ↓  REWIND        ESC  BACK");
     this.setupInput();
   }
 
@@ -37,215 +167,64 @@ export class CreditsScene extends Phaser.Scene {
     }
   }
 
-  private createStarfield(): void {
-    renderMenuStarfield(this, {
-      starCount: 100,
-      starSizeRange: [0.5, 1.5],
-      alphaRange: [0.2, 0.6],
-    });
-  }
-
   private createCredits(): void {
     this.creditsContainer = this.add.container(
       this.scale.width / 2,
       this.scale.height,
     );
-
-    const credits = [
-      { text: "SHATTERED STARS", style: "title" },
-      { text: "", style: "spacer" },
-      { text: "A Tactical Starship Combat Game", style: "subtitle" },
-      { text: "", style: "spacer" },
-      { text: "", style: "spacer" },
-      { text: "--- DEVELOPMENT ---", style: "section" },
-      { text: "", style: "spacer" },
-      { text: "Game Design", style: "role" },
-      { text: "Shattered Stars Team", style: "name" },
-      { text: "", style: "spacer" },
-      { text: "Programming", style: "role" },
-      { text: "Built with Claude AI", style: "name" },
-      { text: "", style: "spacer" },
-      { text: "Art Direction", style: "role" },
-      { text: "Procedural Generation", style: "name" },
-      { text: "", style: "spacer" },
-      { text: "", style: "spacer" },
-      { text: "--- TECHNOLOGY ---", style: "section" },
-      { text: "", style: "spacer" },
-      { text: "Game Engine", style: "role" },
-      { text: "Phaser 3", style: "name" },
-      { text: "", style: "spacer" },
-      { text: "Language", style: "role" },
-      { text: "TypeScript", style: "name" },
-      { text: "", style: "spacer" },
-      { text: "Build Tool", style: "role" },
-      { text: "Vite", style: "name" },
-      { text: "", style: "spacer" },
-      { text: "", style: "spacer" },
-      { text: "--- INSPIRATION ---", style: "section" },
-      { text: "", style: "spacer" },
-      { text: "X-Wing Miniatures Game", style: "name" },
-      { text: "Fantasy Flight Games", style: "small" },
-      { text: "", style: "spacer" },
-      { text: "Star Wars", style: "name" },
-      { text: "Lucasfilm", style: "small" },
-      { text: "", style: "spacer" },
-      { text: "Wing Commander", style: "name" },
-      { text: "Origin Systems", style: "small" },
-      { text: "", style: "spacer" },
-      { text: "", style: "spacer" },
-      { text: "--- SPECIAL THANKS ---", style: "section" },
-      { text: "", style: "spacer" },
-      { text: "Playtesters", style: "role" },
-      { text: "You!", style: "name" },
-      { text: "", style: "spacer" },
-      { text: "", style: "spacer" },
-      { text: "", style: "spacer" },
-      { text: "Thank you for playing!", style: "subtitle" },
-      { text: "", style: "spacer" },
-      { text: "", style: "spacer" },
-      { text: "", style: "spacer" },
-    ];
-
     let y = 0;
-
-    credits.forEach((credit) => {
-      let text: Phaser.GameObjects.Text;
-
-      switch (credit.style) {
-        case "title":
-          text = this.add
-            .text(0, y, credit.text, {
-              font: "bold 48px Arial",
-              color: "#ffffff",
-            })
-            .setOrigin(0.5);
-          y += 60;
-          break;
-
-        case "subtitle":
-          text = this.add
-            .text(0, y, credit.text, {
-              font: "24px Arial",
-              color: "#88aacc",
-            })
-            .setOrigin(0.5);
-          y += 40;
-          break;
-
-        case "section":
-          text = this.add
-            .text(0, y, credit.text, {
-              font: "bold 28px Arial",
-              color: "#ffaa44",
-            })
-            .setOrigin(0.5);
-          y += 50;
-          break;
-
-        case "role":
-          text = this.add
-            .text(0, y, credit.text, {
-              font: "18px Arial",
-              color: "#888888",
-            })
-            .setOrigin(0.5);
-          y += 25;
-          break;
-
-        case "name":
-          text = this.add
-            .text(0, y, credit.text, {
-              font: "bold 22px Arial",
-              color: "#ffffff",
-            })
-            .setOrigin(0.5);
-          y += 35;
-          break;
-
-        case "small":
-          text = this.add
-            .text(0, y, credit.text, {
-              font: "14px Arial",
-              color: "#666666",
-            })
-            .setOrigin(0.5);
-          y += 25;
-          break;
-
-        case "spacer":
-        default:
-          y += 20;
-          return;
+    for (const credit of CREDITS) {
+      if (credit.style === "spacer") {
+        y += SPACER_ADVANCE;
+        continue;
       }
-
+      const style = CREDIT_STYLES[credit.style];
+      const text = this.add
+        .text(0, y, credit.text, {
+          ...holoFont(style.size, style.weight),
+          color: toCssColor(style.color),
+        })
+        .setLetterSpacing(style.spacing)
+        .setOrigin(0.5);
       this.creditsContainer.add(text);
-    });
-
+      if (credit.style === "section") this.addSectionRules(y, text.width);
+      y += style.advance;
+    }
     this.creditsTotalHeight = y;
+    this.clipRoll();
   }
 
-  private createBackButton(): void {
-    const btn = this.add.container(100, this.scale.height - 50);
+  private addSectionRules(y: number, textWidth: number): void {
+    const rules = this.add.graphics();
+    const inner = textWidth / 2 + SECTION_RULE_GAP;
+    rules.lineStyle(1, HOLO_PALETTE.accent, 0.6);
+    rules.lineBetween(-inner - SECTION_RULE, y, -inner, y);
+    rules.lineBetween(inner, y, inner + SECTION_RULE, y);
+    this.creditsContainer.add(rules);
+  }
 
-    const bg = this.add.graphics();
-    bg.fillStyle(0x333344, 0.8);
-    bg.fillRoundedRect(-60, -20, 120, 40, 8);
-    btn.add(bg);
-
-    const text = this.add
-      .text(0, 0, "BACK", {
-        font: "bold 20px Arial",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5);
-    btn.add(text);
-
-    btn.setInteractive(
-      new Phaser.Geom.Rectangle(-60, -20, 120, 40),
-      Phaser.Geom.Rectangle.Contains,
+  /** Clip the roll to the band between the header and the footer. */
+  private clipRoll(): void {
+    const top = MENU_LAYOUT.ruleY;
+    const shape = this.make.graphics({}, false);
+    shape.fillStyle(0xffffff, 1);
+    shape.fillRect(
+      0,
+      top,
+      this.scale.width,
+      this.scale.height - ROLL_BOTTOM_INSET - top,
     );
-
-    btn.on("pointerover", () => {
-      bg.clear();
-      bg.fillStyle(0x444466, 0.9);
-      bg.fillRoundedRect(-60, -20, 120, 40, 8);
-    });
-
-    btn.on("pointerout", () => {
-      bg.clear();
-      bg.fillStyle(0x333344, 0.8);
-      bg.fillRoundedRect(-60, -20, 120, 40, 8);
-    });
-
-    btn.on("pointerdown", () => {
-      this.scene.start("MainMenuScene");
-    });
+    this.creditsContainer.setMask(shape.createGeometryMask());
   }
 
   private setupInput(): void {
-    this.input.keyboard!.on("keydown-ESC", () => {
-      this.scene.start("MainMenuScene");
-    });
-
-    this.input.keyboard!.on("keydown-SPACE", () => {
-      this.scene.start("MainMenuScene");
-    });
-
-    // Speed up scroll with arrow keys
-    this.input.keyboard!.on("keydown-UP", () => {
-      this.scrollSpeed = 2;
-    });
-
-    this.input.keyboard!.on("keyup-UP", () => {
-      this.scrollSpeed = 0.5;
-    });
-
-    this.input.keyboard!.on("keydown-DOWN", () => {
-      this.scrollSpeed = -1;
-    });
-
-    this.input.keyboard!.on("keyup-DOWN", () => {
-      this.scrollSpeed = 0.5;
-    });
+    const keyboard = this.input.keyboard!;
+    keyboard.on("keydown-ESC", () => this.scene.start("MainMenuScene"));
+    keyboard.on("keydown-SPACE", () => this.scene.start("MainMenuScene"));
+    // Speed up / rewind the roll with arrow keys
+    keyboard.on("keydown-UP", () => (this.scrollSpeed = SCROLL.fast));
+    keyboard.on("keyup-UP", () => (this.scrollSpeed = SCROLL.normal));
+    keyboard.on("keydown-DOWN", () => (this.scrollSpeed = SCROLL.reverse));
+    keyboard.on("keyup-DOWN", () => (this.scrollSpeed = SCROLL.normal));
   }
 }

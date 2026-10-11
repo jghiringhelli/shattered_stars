@@ -3,24 +3,57 @@
  * keyboard, gamepad, and touch. Row data comes from ControlsReference.ts,
  * which derives the actual key/button/gesture labels live from
  * DefaultBindings.ts so this screen can't drift out of sync with real input.
+ *
+ * Holo layout: one full-width translucent table with icon column headers,
+ * accent group captions and zebra-striped rows.
  */
 
 import Phaser from "phaser";
-import { renderMenuStarfield } from "../rendering/Starfield";
-import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import {
   CONTROL_GROUPS,
   keyboardLabelFor,
   gamepadLabelFor,
   touchLabelFor,
 } from "../ui/ControlsReference";
+import {
+  addBackButton,
+  addMenuBackdrop,
+  addMenuHeader,
+  MENU_LAYOUT,
+} from "../ui/menu/MenuScaffold";
+import { createHoloPanel } from "../ui/hud/HoloPanel";
+import { drawMenuIcon, type MenuIconName } from "../ui/menu/MenuIcons";
+import { holoFont } from "../ui/theme/holoFont";
+import {
+  HOLO_PALETTE,
+  HOLO_SPACING,
+  HOLO_TYPE_SCALE,
+} from "../ui/theme/HoloTheme";
+import { toCssColor } from "../ui/theme/colorMath";
 
 const ROW_HEIGHT = 19;
-const GROUP_GAP = 10;
-const TABLE_TOP = 108;
+const GROUP_HEADING_HEIGHT = 24;
+const GROUP_GAP = 6;
+const TABLE_TOP = 100;
+const TABLE_BOTTOM = 708;
+const COLUMN_HEADER_HEIGHT = 26;
+const ICON_SIZE = 14;
+const ZEBRA_ALPHA = 0.05;
+const BODY_SIZE = 13;
 // Absolute x positions (not centered) — the widest row (camera pan, which
 // merges WASD+Arrows on keyboard and D-pad+stick on gamepad) needs real room.
-const COL_X = { label: 40, keyboard: 300, gamepad: 620, touch: 940 } as const;
+const COL_X = { label: 56, keyboard: 330, gamepad: 640, touch: 950 } as const;
+
+/** Device columns with their header glyphs. */
+const DEVICE_COLUMNS: ReadonlyArray<{
+  readonly x: number;
+  readonly title: string;
+  readonly icon: MenuIconName;
+}> = [
+  { x: COL_X.keyboard, title: "KEYBOARD", icon: "keyboard" },
+  { x: COL_X.gamepad, title: "GAMEPAD", icon: "gamepad" },
+  { x: COL_X.touch, title: "TOUCH", icon: "touch" },
+];
 
 export class ControlsScene extends Phaser.Scene {
   constructor() {
@@ -28,107 +61,105 @@ export class ControlsScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor(0x050510);
-    addPaintedSpaceBackground(this, "starfield_deep");
-    renderMenuStarfield(this, { starCount: 100, alphaRange: [0.2, 0.6] });
-
-    this.createHeader();
+    addMenuBackdrop(this, { textureId: "starfield_deep" });
+    addMenuHeader(this, {
+      title: "Controls",
+      subtitle: "Every action on keyboard, gamepad and touch",
+    });
+    addBackButton(this, () => this.scene.start("MainMenuScene"));
+    this.createTablePanel();
+    this.createColumnHeaders();
     this.createTable();
-    this.createBackButton();
     this.setupInput();
   }
 
-  private createHeader(): void {
-    const centerX = this.scale.width / 2;
-    this.add
-      .text(centerX, 30, "CONTROLS", {
-        font: "bold 32px Arial",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5);
-    this.add
-      .text(centerX, 58, "Keyboard / Gamepad / Touch — by action", {
-        font: "14px Arial",
-        color: "#88aacc",
-      })
-      .setOrigin(0.5);
-
-    const headerY = 82;
-    this.add.text(COL_X.keyboard, headerY, "Keyboard", {
-      font: "bold 12px Arial",
-      color: "#6688cc",
-    });
-    this.add.text(COL_X.gamepad, headerY, "Gamepad", {
-      font: "bold 12px Arial",
-      color: "#6688cc",
-    });
-    this.add.text(COL_X.touch, headerY, "Touch", {
-      font: "bold 12px Arial",
-      color: "#6688cc",
+  private createTablePanel(): void {
+    const { width } = this.scale;
+    const panelWidth = width - MENU_LAYOUT.margin * 2;
+    createHoloPanel(this, width / 2, (TABLE_TOP + TABLE_BOTTOM) / 2, {
+      width: panelWidth,
+      height: TABLE_BOTTOM - TABLE_TOP,
     });
   }
 
+  private createColumnHeaders(): void {
+    const y = TABLE_TOP + HOLO_SPACING.md + COLUMN_HEADER_HEIGHT / 2;
+    const icons = this.add.graphics();
+    for (const column of DEVICE_COLUMNS) {
+      drawMenuIcon(
+        icons,
+        column.icon,
+        { x: column.x + ICON_SIZE / 2, y },
+        ICON_SIZE,
+        HOLO_PALETTE.accent,
+      );
+      this.add
+        .text(column.x + ICON_SIZE + HOLO_SPACING.sm, y, column.title, {
+          ...holoFont(HOLO_TYPE_SCALE.caption.size, "600"),
+          color: toCssColor(HOLO_PALETTE.accent),
+        })
+        .setLetterSpacing(HOLO_TYPE_SCALE.caption.letterSpacing)
+        .setOrigin(0, 0.5);
+    }
+    const rule = this.add.graphics();
+    const ruleY = TABLE_TOP + HOLO_SPACING.md + COLUMN_HEADER_HEIGHT;
+    rule.lineStyle(1, HOLO_PALETTE.border, 1);
+    rule.lineBetween(
+      MENU_LAYOUT.margin + HOLO_SPACING.md,
+      ruleY,
+      this.scale.width - MENU_LAYOUT.margin - HOLO_SPACING.md,
+      ruleY,
+    );
+  }
+
   private createTable(): void {
-    let y = TABLE_TOP;
-
+    let y =
+      TABLE_TOP + HOLO_SPACING.md + COLUMN_HEADER_HEIGHT + HOLO_SPACING.xs;
+    const stripes = this.add.graphics();
     for (const group of CONTROL_GROUPS) {
-      this.add.text(COL_X.label, y, group.title, {
-        font: "bold 14px Arial",
-        color: "#ffcc66",
-      });
-      y += ROW_HEIGHT;
-
-      for (const row of group.rows) {
-        this.add.text(COL_X.label, y, row.label, {
-          font: "12px Arial",
-          color: "#ccddee",
-        });
-        this.add.text(COL_X.keyboard, y, keyboardLabelFor(row.intents), {
-          font: "12px monospace",
-          color: "#ffffff",
-        });
-        this.add.text(COL_X.gamepad, y, gamepadLabelFor(row.intents), {
-          font: "12px monospace",
-          color: "#ffffff",
-        });
-        this.add.text(COL_X.touch, y, touchLabelFor(row.intents), {
-          font: "12px monospace",
-          color: "#ffffff",
-        });
+      this.add
+        .text(
+          COL_X.label - HOLO_SPACING.sm,
+          y + GROUP_HEADING_HEIGHT / 2,
+          group.title.toUpperCase(),
+          {
+            ...holoFont(HOLO_TYPE_SCALE.caption.size + 1, "600"),
+            color: toCssColor(HOLO_PALETTE.warning),
+          },
+        )
+        .setLetterSpacing(HOLO_TYPE_SCALE.caption.letterSpacing)
+        .setOrigin(0, 0.5);
+      y += GROUP_HEADING_HEIGHT;
+      group.rows.forEach((row, index) => {
+        if (index % 2 === 0) this.drawStripe(stripes, y);
+        this.addCell(COL_X.label, y, row.label, HOLO_PALETTE.textSecondary);
+        this.addCell(COL_X.keyboard, y, keyboardLabelFor(row.intents));
+        this.addCell(COL_X.gamepad, y, gamepadLabelFor(row.intents));
+        this.addCell(COL_X.touch, y, touchLabelFor(row.intents));
         y += ROW_HEIGHT;
-      }
+      });
       y += GROUP_GAP;
     }
   }
 
-  private createBackButton(): void {
-    const btn = this.add.container(100, this.scale.height - 30);
+  private drawStripe(g: Phaser.GameObjects.Graphics, y: number): void {
+    const left = MENU_LAYOUT.margin + HOLO_SPACING.sm;
+    g.fillStyle(HOLO_PALETTE.track, ZEBRA_ALPHA);
+    g.fillRect(left, y, this.scale.width - left * 2, ROW_HEIGHT);
+  }
 
-    const bg = this.add.graphics();
-    bg.fillStyle(0x333344, 0.8);
-    bg.fillRoundedRect(-60, -18, 120, 36, 8);
-    btn.add(bg);
-
-    const text = this.add
-      .text(0, 0, "BACK", { font: "bold 18px Arial", color: "#ffffff" })
-      .setOrigin(0.5);
-    btn.add(text);
-
-    btn.setInteractive(
-      new Phaser.Geom.Rectangle(-60, -18, 120, 36),
-      Phaser.Geom.Rectangle.Contains,
-    );
-    btn.on("pointerover", () => {
-      bg.clear();
-      bg.fillStyle(0x444466, 0.9);
-      bg.fillRoundedRect(-60, -18, 120, 36, 8);
-    });
-    btn.on("pointerout", () => {
-      bg.clear();
-      bg.fillStyle(0x333344, 0.8);
-      bg.fillRoundedRect(-60, -18, 120, 36, 8);
-    });
-    btn.on("pointerdown", () => this.scene.start("MainMenuScene"));
+  private addCell(
+    x: number,
+    y: number,
+    text: string,
+    color: number = HOLO_PALETTE.textPrimary,
+  ): void {
+    this.add
+      .text(x, y + ROW_HEIGHT / 2, text, {
+        ...holoFont(BODY_SIZE, "400"),
+        color: toCssColor(color),
+      })
+      .setOrigin(0, 0.5);
   }
 
   private setupInput(): void {

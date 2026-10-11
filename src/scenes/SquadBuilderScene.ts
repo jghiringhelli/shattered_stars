@@ -7,7 +7,6 @@
  */
 
 import Phaser from "phaser";
-import { createHoverButton } from "../ui/ButtonFactory";
 import type { FactionId } from "../config";
 import { SHIP_DEFINITIONS } from "../data/ShipDefinitions";
 import {
@@ -26,7 +25,19 @@ import { SquadListPanel } from "../ui/squad/SquadListPanel";
 import { SimpleSquadFlow } from "../ui/squad/SimpleSquadFlow";
 import { flashText } from "../ui/textFlash";
 import { shake } from "../ui/UIJuice";
-import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
+import {
+  addBackButton,
+  addFooterHint,
+  addMenuBackdrop,
+  addMenuHeader,
+} from "../ui/menu/MenuScaffold";
+import { MenuFocus } from "../ui/menu/MenuFocus";
+import type { HoloPressButton } from "../ui/menu/HoloPressButton";
+import {
+  createActionBar,
+  createModeToggle,
+} from "../ui/squad/squadBuilderChrome";
+import { FLASH_COLORS } from "../ui/squad/squadBuilderStyle";
 
 type ShipsPickedEvent = {
   slotIndex: number;
@@ -54,8 +65,10 @@ export class SquadBuilderScene extends Phaser.Scene {
   /** Exposed for E2E tests — easy single-ship flow is the default for Skirmish. */
   public simpleMode = true;
   private simpleFlow: SimpleSquadFlow | null = null;
-  private bottomBarObjects: Phaser.GameObjects.GameObject[] = [];
-  private modeToggleText!: Phaser.GameObjects.Text;
+  private bottomBarObjects: HoloPressButton[] = [];
+  private backButton!: HoloPressButton;
+  private modeToggleButton: HoloPressButton | null = null;
+  private menuFocus: MenuFocus | null = null;
 
   constructor() {
     super({ key: "SquadBuilderScene" });
@@ -89,12 +102,16 @@ export class SquadBuilderScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor(0x080c14);
-    addPaintedSpaceBackground(this, "nebula_crimson", 1, 0.45);
+    addMenuBackdrop(this, { textureId: "nebula_crimson" });
+    // Controls from a previous visit were destroyed with the old display list.
+    this.menuFocus = null;
+    this.modeToggleButton = null;
+    this.bottomBarObjects = [];
     this.buildDefaultSquads();
     this.createTitle();
-    this.createBackButton();
-    this.createModeToggle();
+    this.backButton = addBackButton(this, () =>
+      this.scene.start("MainMenuScene"),
+    );
     this.renderBuilderMode();
     this.setupInput();
     this.listenForShipsPicked();
@@ -102,12 +119,17 @@ export class SquadBuilderScene extends Phaser.Scene {
 
   /** Shows the simple single-ship flow or the advanced multi-squad builder, per simpleMode. */
   private renderBuilderMode(): void {
+    // Drop the focus ring while the old controls still exist.
+    this.menuFocus?.clear();
+    this.menuFocus?.destroy();
+    this.menuFocus = null;
     this.simpleFlow?.destroy();
     this.simpleFlow = null;
     this.formatPanel?.destroy();
     this.squadListPanel?.destroy();
     this.bottomBarObjects.forEach((o) => o.destroy());
     this.bottomBarObjects = [];
+    this.createModeToggle();
 
     if (this.simpleMode) {
       this.instructionText.setText(
@@ -121,6 +143,20 @@ export class SquadBuilderScene extends Phaser.Scene {
       this.buildPanels();
       this.createBottomBar();
     }
+    this.wireMenuFocus();
+  }
+
+  /** Keyboard focus over BACK, the mode toggle and the action bar. */
+  private wireMenuFocus(): void {
+    const targets = [
+      this.backButton,
+      ...(this.modeToggleButton ? [this.modeToggleButton] : []),
+      ...this.bottomBarObjects,
+    ];
+    this.menuFocus = new MenuFocus(this, targets, {
+      columns: targets.length,
+      isActive: () => !this.scene.isActive("ShipPickerScene"),
+    });
   }
 
   /** Faction → ship → payload → launch, for players who just want to play. */
@@ -159,27 +195,13 @@ export class SquadBuilderScene extends Phaser.Scene {
     this.simpleFlow.render();
   }
 
-  /** Small always-visible link to switch between the simple flow and the full builder. */
+  /** Small always-visible button to switch between the simple flow and the full builder. */
   private createModeToggle(): void {
-    this.modeToggleText = this.add
-      .text(
-        this.scale.width - 18,
-        36,
-        this.simpleMode ? "ADVANCED ▸" : "◂ SIMPLE",
-        { font: "13px Arial", color: "#556677" },
-      )
-      .setOrigin(1, 0.5)
-      .setInteractive({ useHandCursor: true });
-    this.modeToggleText.on("pointerover", () =>
-      this.modeToggleText.setColor("#88aacc"),
-    );
-    this.modeToggleText.on("pointerout", () =>
-      this.modeToggleText.setColor("#556677"),
-    );
-    this.modeToggleText.on("pointerdown", () => {
+    this.modeToggleButton?.destroy();
+    this.modeToggleButton = createModeToggle(this, this.simpleMode, () => {
       this.simpleMode = !this.simpleMode;
-      this.modeToggleText.setText(this.simpleMode ? "ADVANCED ▸" : "◂ SIMPLE");
-      this.renderBuilderMode();
+      // Defer so the pressed button is not destroyed inside its own handler.
+      this.time.delayedCall(0, () => this.renderBuilderMode());
     });
   }
 
@@ -248,7 +270,7 @@ export class SquadBuilderScene extends Phaser.Scene {
       if (this.squads.length <= 2) {
         flashText(this, this.instructionText, {
           message: "Minimum 2 squads required",
-          color: "#ff8844",
+          color: FLASH_COLORS.warning,
         });
         shake(this, this.instructionText);
         return;
@@ -261,7 +283,7 @@ export class SquadBuilderScene extends Phaser.Scene {
       if (uniqueTeams.size <= 2) {
         flashText(this, this.instructionText, {
           message: "Minimum 2 teams required",
-          color: "#ff8844",
+          color: FLASH_COLORS.warning,
         });
         shake(this, this.instructionText);
         return;
@@ -286,7 +308,7 @@ export class SquadBuilderScene extends Phaser.Scene {
       if (hadCapitals) {
         flashText(this, this.instructionText, {
           message: "Capital ships removed — not allowed outside Epic mode",
-          color: "#cc8833",
+          color: FLASH_COLORS.warning,
           durationMs: 2500,
         });
       }
@@ -310,93 +332,22 @@ export class SquadBuilderScene extends Phaser.Scene {
   }
 
   private createTitle(): void {
-    this.add
-      .text(this.scale.width / 2, 36, "SQUAD BUILDER", {
-        font: "bold 28px Arial",
-        color: "#ffffff",
-      })
-      .setOrigin(0.5);
-    this.instructionText = this.add
-      .text(
-        this.scale.width / 2,
-        this.scale.height - 22,
-        "Use team chips (T1–T4) to set sides · Tap card header to edit ships · Auto-Fill to build squads automatically",
-        { font: "12px Arial", color: "#334455" },
-      )
-      .setOrigin(0.5);
-  }
-
-  private createBackButton(): void {
-    this.add
-      .text(18, 36, "< BACK", { font: "14px Arial", color: "#445566" })
-      .setOrigin(0, 0.5)
-      .setInteractive({ useHandCursor: true })
-      .on("pointerdown", () => this.scene.start("MainMenuScene"))
-      .on("pointerover", function (this: Phaser.GameObjects.Text) {
-        this.setColor("#6688aa");
-      })
-      .on("pointerout", function (this: Phaser.GameObjects.Text) {
-        this.setColor("#445566");
-      });
+    addMenuHeader(this, { title: "SQUAD BUILDER" });
+    this.instructionText = addFooterHint(
+      this,
+      "Use team chips (T1–T4) to set sides · Tap card header to edit ships · Auto-Fill to build squads automatically",
+    );
   }
 
   private createBottomBar(): void {
-    const cx = this.scale.width / 2;
-    const y = this.scale.height - 52;
-    this.bottomBarObjects.push(
-      createHoverButton(
-        this,
-        cx - 175,
-        y,
-        {
-          width: 150,
-          height: 38,
-          color: 0x1a3322,
-          hoverColor: 0x2a5533,
-          label: "AUTO-FILL ALL",
-          font: "13px Arial",
-          textColor: "#77cc88",
-        },
-        () => {
-          this.squadListPanel.autoFillAll();
-          this.squadListPanel.render();
-        },
-      ),
-    );
-    this.bottomBarObjects.push(
-      createHoverButton(
-        this,
-        cx,
-        y,
-        {
-          width: 130,
-          height: 38,
-          color: 0x2a1a33,
-          hoverColor: 0x4a2a55,
-          label: "RANDOMIZE",
-          font: "13px Arial",
-          textColor: "#aa77cc",
-        },
-        () => this.randomizeAll(),
-      ),
-    );
-    this.bottomBarObjects.push(
-      createHoverButton(
-        this,
-        cx + 165,
-        y,
-        {
-          width: 150,
-          height: 38,
-          color: 0x1a3311,
-          hoverColor: 0x2a5522,
-          label: "START BATTLE",
-          font: "bold 14px Arial",
-          textColor: "#88ee88",
-        },
-        () => this.startBattle(),
-      ),
-    );
+    this.bottomBarObjects = createActionBar(this, {
+      onAutoFill: () => {
+        this.squadListPanel.autoFillAll();
+        this.squadListPanel.render();
+      },
+      onRandomize: () => this.randomizeAll(),
+      onStart: () => this.startBattle(),
+    });
   }
 
   private setupInput(): void {
@@ -427,7 +378,7 @@ export class SquadBuilderScene extends Phaser.Scene {
     if (!squad?.factionId) {
       flashText(this, this.instructionText, {
         message: "Select a faction first (click the faction button)",
-        color: "#ffaa44",
+        color: FLASH_COLORS.warning,
       });
       shake(this, this.instructionText);
       return;
@@ -467,7 +418,7 @@ export class SquadBuilderScene extends Phaser.Scene {
     if (uniqueTeams.size < 2) {
       flashText(this, this.instructionText, {
         message: "Assign squads to at least 2 different teams before starting!",
-        color: "#ff5544",
+        color: FLASH_COLORS.danger,
         durationMs: 3000,
       });
       shake(this, this.instructionText);
@@ -476,7 +427,7 @@ export class SquadBuilderScene extends Phaser.Scene {
     if (this.squads.some((s) => !s.factionId || s.ships.length === 0)) {
       flashText(this, this.instructionText, {
         message: "All squads must have ships before starting!",
-        color: "#ff5544",
+        color: FLASH_COLORS.danger,
         durationMs: 3000,
       });
       shake(this, this.instructionText);

@@ -7,8 +7,11 @@ import Phaser from "phaser";
 import { UPGRADE_DEFINITIONS } from "../../systems/UpgradeSystem";
 import type { ShipDefinition } from "../../core/types";
 import type { LoadoutBonuses } from "./types";
+import { HOLO_SPACING } from "../theme/HoloTheme";
 
-export const CAT_X = 60;
+/** Catalog panel left edge — on the 32-px menu margin. */
+export const CAT_X = HOLO_SPACING.xxl;
+/** Catalog panel width (two card columns + scrollbar gutter). */
 export const CAT_W = 440;
 
 /**

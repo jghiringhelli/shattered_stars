@@ -6,47 +6,53 @@
  * really is — pilot (name, initiative, unique), pilot ability (card text +
  * real-time summary), the slot bar filled vs empty, and each upgrade's
  * real-time effect (see QuickBuildDetailView).
+ *
+ * Narrow or short panels use denser layouts: action chips instead of
+ * described actions, then no lore excerpt (the picker roster's hover detail
+ * shows it) and tighter section gaps.
  */
 
 import Phaser from "phaser";
 import type { ShipDefinition } from "../../core/types";
-import { FACTION_COLORS } from "../../config";
-import { getEncyclopediaEntry } from "../../data/ShipEncyclopedia";
-import {
-  getShipLoadouts,
-  getEquippableLoadouts,
-} from "../../data/ShipLoadouts";
+import type { FactionId } from "../../config";
+import { getShipLoadouts, type ShipLoadout } from "../../data/ShipLoadouts";
 import { getLoadoutPlaystyle } from "../../data/ShipRoleProfiles";
-import { ACTION_DEFINITIONS } from "../../systems/ActionsSystem";
-import { punch } from "../UIJuice";
-import {
-  addContainedImage,
-  computeLoadoutBonuses,
-  buildStatLine,
-} from "./catalogHelpers";
+import { drawHoloFrame } from "../menu/holoChrome";
+import { factionAccent, HOLO_PALETTE, HOLO_RADIUS } from "../theme/HoloTheme";
+import { computeLoadoutBonuses, buildStatLine } from "./catalogHelpers";
 import { QuickBuildDetailView } from "./QuickBuildDetailView";
+import {
+  drawActions,
+  drawLore,
+  drawStatGauges,
+  type SectionArea,
+} from "./detailSections";
+import {
+  artHeight,
+  DENSITIES,
+  DETAIL_PAD,
+  drawDetailEmptyState,
+  drawDetailHeader,
+  startDensity,
+  type Density,
+} from "./detailHeader";
+import { drawLoadoutRow } from "./LoadoutRow";
+import { addPickerText, pickerTextStyle } from "./pickerStyle";
 
-const STAT_DEFS = [
-  { key: "attack", label: "ATTACK", color: 0xff6655 },
-  { key: "agility", label: "AGILITY", color: 0x44ffaa },
-  { key: "hull", label: "HULL", color: 0x66ccff },
-  { key: "shields", label: "SHIELDS", color: 0x4488ff },
-] as const;
+/** Panel bounds (top-left origin). */
+interface PanelRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
 
-/** Art box height at the full panel height — compact so the quick-build block fits. */
-const ART_H = 88;
-/** Panel height the layout is designed for; shorter panels shrink the art. */
-const FULL_PANEL_H = 570;
-/** The art never shrinks below this. */
-const MIN_ART_H = 56;
-/** Longest lore excerpt shown (characters) before an ellipsis. */
-const LORE_MAX_CHARS = 120;
-/** Space between the build's stat line and its description. */
-const DESCRIPTION_GAP = 12;
-const LOADOUT_BTN_W = 150;
-const LOADOUT_BTN_H = 40;
-const LOADOUT_BTN_GAP = 8;
-const LOADOUTS_PER_PAGE = 3;
+/** Content column: left edge, top and width. */
+interface ContentBox {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+}
 
 /** Read-only view of the ship/loadout currently staged, owned by CatalogStaging. */
 export interface StagingSelection {
@@ -58,6 +64,7 @@ export interface StagingSelection {
 export class ShipDetailPanel {
   private container: Phaser.GameObjects.Container | null = null;
   private loadoutPage = 0;
+  private sectionGap: number = DENSITIES[0]!.gap;
   private lastArgs: {
     ships: readonly ShipDefinition[];
     staging: StagingSelection;
@@ -79,55 +86,39 @@ export class ShipDetailPanel {
     h: number,
   ): void {
     this.lastArgs = { ships, staging, x, y, w, h };
-    this.container?.destroy();
-    this.container = this.scene.add.container(0, 0);
-
-    const bg = this.scene.add.graphics();
-    bg.fillStyle(0x0d1525, 0.96);
-    bg.fillRoundedRect(x, y, w, h, 10);
-    this.container.add(bg);
-
-    const shipId = staging.getSelectedShipId();
-    const def = ships.find((s) => s.id === shipId);
+    const rect = { x, y, width: w, height: h };
+    const def = ships.find((s) => s.id === staging.getSelectedShipId());
     if (!def) {
-      bg.lineStyle(2, 0x223040, 0.8);
-      bg.strokeRoundedRect(x, y, w, h, 10);
-      this.container.add(
-        this.scene.add
-          .text(
-            x + w / 2,
-            y + h / 2,
-            "Select a ship to see its stats and payloads",
-            {
-              font: "15px Arial",
-              color: "#3a5566",
-              wordWrap: { width: w - 60 },
-              align: "center",
-            },
-          )
-          .setOrigin(0.5),
-      );
+      const bg = this.resetContainer();
+      drawHoloFrame(bg, rect, { radius: HOLO_RADIUS.lg });
+      drawDetailEmptyState(this.scene, this.container!, rect);
       return;
     }
-
-    const fCol =
-      FACTION_COLORS[def.faction as keyof typeof FACTION_COLORS] ?? 0x334455;
-    bg.lineStyle(2, fCol, 0.9);
-    bg.strokeRoundedRect(x, y, w, h, 10);
-
-    let cy = y + 12;
-    const artH = Math.max(MIN_ART_H, ART_H - Math.max(0, FULL_PANEL_H - h));
-    cy = this.drawArtAndHeader(def, x, cy, w, artH) + 8;
-    cy = this.drawStats(def, staging, x, cy, w) + 8;
-    cy = this.drawActions(def, x, cy, w) + 6;
-    cy = this.drawDescription(def, x, cy, w) + 8;
-    this.drawLoadoutSection(def, staging, x, cy, w);
+    // Start from the density the panel size calls for; fall back to denser
+    // layouts only when a long build would spill past the panel.
+    for (let level = startDensity(w, h); level < DENSITIES.length; level++) {
+      const bottom = this.build(def, staging, rect, DENSITIES[level]!);
+      if (bottom <= y + h - DETAIL_PAD) return;
+    }
   }
 
   destroy(): void {
     this.container?.destroy();
     this.container = null;
     this.lastArgs = null;
+  }
+
+  /**
+   * Replace the container with an empty one holding a background graphics.
+   *
+   * @returns The background graphics.
+   */
+  private resetContainer(): Phaser.GameObjects.Graphics {
+    this.container?.destroy();
+    this.container = this.scene.add.container(0, 0);
+    const bg = this.scene.add.graphics();
+    this.container.add(bg);
+    return bg;
   }
 
   /** Re-renders using the args from the last render() call — used after a loadout click. */
@@ -137,233 +128,88 @@ export class ShipDetailPanel {
     this.render(ships, staging, x, y, w, h);
   }
 
-  private drawArtAndHeader(
-    def: ShipDefinition,
-    x: number,
-    y: number,
-    w: number,
-    artH: number,
-  ): number {
-    const c = this.container!;
-    const artKey = `ship_art_${def.id}`;
-    const imgKey = this.scene.textures.exists(artKey) ? artKey : def.spriteKey;
-    c.add(
-      addContainedImage(
-        this.scene,
-        imgKey,
-        x + w / 2,
-        y + artH / 2,
-        w - 32,
-        artH,
-      ),
-    );
-
-    let cy = y + artH + 6;
-    c.add(
-      this.scene.add
-        .text(x + w / 2, cy, def.name, {
-          font: "bold 20px Arial",
-          color: "#eef6ff",
-        })
-        .setOrigin(0.5, 0),
-    );
-    cy += 24;
-    const fCol =
-      FACTION_COLORS[def.faction as keyof typeof FACTION_COLORS] ?? 0x334455;
-    const hexCol = `#${fCol.toString(16).padStart(6, "0")}`;
-    const badge = `${def.role.replace(/_/g, " ").toUpperCase()}  \u00b7  ${def.baseStats.size.toUpperCase()}  \u00b7  ${def.baseStats.pointCost}pt`;
-    c.add(
-      this.scene.add
-        .text(x + w / 2, cy, badge, { font: "13px Arial", color: hexCol })
-        .setOrigin(0.5, 0),
-    );
-    return cy + 14;
-  }
-
-  private drawStats(
+  /**
+   * Build the panel for a ship at one density.
+   *
+   * @param def - The selected ship.
+   * @param staging - Current selection.
+   * @param rect - Panel bounds.
+   * @param density - Layout density.
+   * @returns y just below the content.
+   */
+  private build(
     def: ShipDefinition,
     staging: StagingSelection,
-    x: number,
-    y: number,
-    w: number,
+    rect: PanelRect,
+    density: Density,
   ): number {
-    const c = this.container!;
-    const selLd = getShipLoadouts(def.id).find(
+    const accent = factionAccent(def.faction as FactionId);
+    drawHoloFrame(this.resetContainer(), rect, {
+      radius: HOLO_RADIUS.lg,
+      accent,
+    });
+    this.sectionGap = density.gap;
+    const box = { x: rect.x + DETAIL_PAD, w: rect.width - DETAIL_PAD * 2 };
+    const area = (top: number): SectionArea => ({
+      scene: this.scene,
+      container: this.container!,
+      x: box.x,
+      y: top,
+      width: box.w,
+    });
+    const artH = artHeight(rect.height, density);
+    const gap = density.gap;
+    let cy =
+      drawDetailHeader(this.scene, this.container!, {
+        def,
+        rect,
+        artH,
+        accent,
+      }) + gap;
+    const bonuses = computeLoadoutBonuses(
+      this.selectedLoadout(def, staging)?.upgrades ?? [],
+    );
+    cy = drawStatGauges(area(cy), def, bonuses) + gap;
+    cy = drawActions(area(cy), def, density.chipActions) + gap;
+    if (density.lore) cy = drawLore(area(cy), def) + gap;
+    const rowBottom = drawLoadoutRow(this.scene, this.container!, {
+      def,
+      selectedLoadoutId: staging.getSelectedLoadoutId(),
+      page: this.loadoutPage,
+      x: box.x,
+      y: cy,
+      width: box.w,
+      accent,
+      onSelect: (loadoutId) => {
+        staging.selectLoadout(loadoutId);
+        this.rerender();
+      },
+      onPage: (page) => {
+        this.loadoutPage = page;
+        this.rerender();
+      },
+    });
+    return this.drawLoadoutDetails(def, staging, {
+      ...box,
+      y: rowBottom + gap,
+    });
+  }
+
+  /**
+   * The staged build, resolved against the full catalogue: a squadron
+   * preset may have selected a loadout the button row does not offer.
+   *
+   * @param def - The selected ship.
+   * @param staging - Current selection.
+   * @returns The staged build, or undefined for the bare ship.
+   */
+  private selectedLoadout(
+    def: ShipDefinition,
+    staging: StagingSelection,
+  ): ShipLoadout | undefined {
+    return getShipLoadouts(def.id).find(
       (l) => l.id === staging.getSelectedLoadoutId(),
     );
-    const bonuses = computeLoadoutBonuses(selLd?.upgrades ?? []);
-    const bonusMap: Record<string, number> = {
-      attack: bonuses.atk,
-      agility: bonuses.agi,
-      hull: bonuses.hull,
-      shields: bonuses.shld,
-    };
-    const colW = (w - 32) / STAT_DEFS.length;
-    STAT_DEFS.forEach((s, i) => {
-      const sx = x + 16 + i * colW;
-      const base = def.baseStats[s.key as keyof typeof def.baseStats] as number;
-      const delta = bonusMap[s.key] ?? 0;
-      const total = base + delta;
-      const hexCol = `#${s.color.toString(16).padStart(6, "0")}`;
-      c.add(
-        this.scene.add
-          .text(sx + (colW - 8) / 2, y, s.label, {
-            font: "bold 11px Arial",
-            color: hexCol,
-          })
-          .setOrigin(0.5, 0),
-      );
-      const g = this.scene.add.graphics();
-      g.fillStyle(s.color, 0.15);
-      g.fillRect(sx, y + 16, colW - 8, 18);
-      g.fillStyle(s.color, 0.75);
-      g.fillRect(sx, y + 16, Math.max(6, (total / 8) * (colW - 8)), 18);
-      c.add(g);
-      const valLabel = delta !== 0 ? `${total} (+${delta})` : String(total);
-      c.add(
-        this.scene.add
-          .text(sx + (colW - 8) / 2, y + 18, valLabel, {
-            font: "bold 13px Arial",
-            color: delta > 0 ? "#88ffcc" : "#ffffff",
-          })
-          .setOrigin(0.5, 0),
-      );
-    });
-    return y + 40;
-  }
-
-  private drawActions(
-    def: ShipDefinition,
-    x: number,
-    y: number,
-    w: number,
-  ): number {
-    const actions = def.baseStats.actions ?? [];
-    if (actions.length === 0) return y;
-    const c = this.container!;
-    c.add(
-      this.scene.add.text(x + 16, y, "ACTIONS", {
-        font: "bold 11px Arial",
-        color: "#3a5a7a",
-      }),
-    );
-    const cy = y + 14;
-    const colW = (w - 32) / 2;
-    const rowH = 30;
-    actions.forEach((actionKey, i) => {
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const cx = x + 16 + col * colW;
-      const ry = cy + row * rowH;
-      const actionDef =
-        ACTION_DEFINITIONS[actionKey as keyof typeof ACTION_DEFINITIONS];
-      c.add(
-        this.scene.add.text(cx, ry, `\u25c6 ${actionKey.replace(/_/g, " ")}`, {
-          font: "bold 12px Arial",
-          color: "#66bbee",
-        }),
-      );
-      c.add(
-        this.scene.add.text(cx, ry + 14, actionDef?.description ?? "", {
-          font: "10px Arial",
-          color: "#5a7a8a",
-          wordWrap: { width: colW - 16 },
-        }),
-      );
-    });
-    const rows = Math.ceil(actions.length / 2);
-    return cy + rows * rowH;
-  }
-
-  private drawDescription(
-    def: ShipDefinition,
-    x: number,
-    y: number,
-    w: number,
-  ): number {
-    const entry = getEncyclopediaEntry(def.id);
-    const full = entry?.lore ?? def.description;
-    const desc =
-      full.length > LORE_MAX_CHARS
-        ? `${full.slice(0, LORE_MAX_CHARS - 3)}…`
-        : full;
-    const t = this.scene.add.text(x + 16, y, desc, {
-      font: "12px Arial",
-      color: "#8ab0cc",
-      wordWrap: { width: w - 32 },
-    });
-    this.container!.add(t);
-    return y + t.height;
-  }
-
-  private drawLoadoutSection(
-    def: ShipDefinition,
-    staging: StagingSelection,
-    x: number,
-    y: number,
-    w: number,
-  ): void {
-    const c = this.container!;
-    c.add(
-      this.scene.add.text(x + 16, y, "PAYLOAD", {
-        font: "bold 12px Arial",
-        color: "#3a5a7a",
-      }),
-    );
-    const btnY = y + 18;
-    const offered = getEquippableLoadouts(def.id);
-    const maxPage = Math.max(
-      0,
-      Math.ceil(offered.length / LOADOUTS_PER_PAGE) - 1,
-    );
-    const page = Math.min(this.loadoutPage, maxPage);
-    const visible = offered.slice(
-      page * LOADOUTS_PER_PAGE,
-      (page + 1) * LOADOUTS_PER_PAGE,
-    );
-
-    let bx = x + 16;
-    c.add(
-      this.makeLoadoutBtn(
-        bx,
-        btnY,
-        "BASE",
-        def.baseStats.pointCost,
-        staging.getSelectedLoadoutId() === null,
-        () => {
-          staging.selectLoadout(null);
-          this.rerender();
-        },
-      ),
-    );
-    bx += LOADOUT_BTN_W + LOADOUT_BTN_GAP;
-    for (const ld of visible) {
-      const active = staging.getSelectedLoadoutId() === ld.id;
-      c.add(
-        this.makeLoadoutBtn(
-          bx,
-          btnY,
-          ld.name.toUpperCase(),
-          ld.pointCost,
-          active,
-          () => {
-            staging.selectLoadout(ld.id);
-            this.rerender();
-          },
-        ),
-      );
-      bx += LOADOUT_BTN_W + LOADOUT_BTN_GAP;
-    }
-    if (maxPage > 0) {
-      c.add(
-        this.makePageArrow(bx, btnY, "\u25b6", page < maxPage, () => {
-          this.loadoutPage = Math.min(maxPage, this.loadoutPage + 1);
-          this.rerender();
-        }),
-      );
-    }
-
-    this.drawLoadoutDetails(def, staging, x, btnY + LOADOUT_BTN_H + 8, w);
   }
 
   /**
@@ -372,117 +218,43 @@ export class ShipDetailPanel {
    *
    * @param def - The selected ship.
    * @param staging - Current ship/loadout selection.
-   * @param x - Panel left.
-   * @param y - Top of the block.
-   * @param w - Panel width.
+   * @param box - Content left, top and width.
+   * @returns y just below the block.
    */
   private drawLoadoutDetails(
     def: ShipDefinition,
     staging: StagingSelection,
-    x: number,
-    y: number,
-    w: number,
-  ): void {
+    box: ContentBox,
+  ): number {
     const c = this.container!;
-    // Resolve against the full catalogue: a squadron preset may have selected a
-    // loadout the button row above does not offer.
-    const selLd = getShipLoadouts(def.id).find(
-      (l) => l.id === staging.getSelectedLoadoutId(),
-    );
+    const selLd = this.selectedLoadout(def, staging);
     const bonuses = computeLoadoutBonuses(selLd?.upgrades ?? []);
-    const statT = this.scene.add.text(
-      x + 16,
-      y,
+    const statT = addPickerText(
+      this.scene,
+      { x: box.x, y: box.y },
       buildStatLine(bonuses, selLd?.pointCost ?? def.baseStats.pointCost),
-      { font: "bold 12px Arial", color: selLd ? "#88cc55" : "#6688aa" },
+      "name",
+      selLd ? HOLO_PALETTE.success : HOLO_PALETTE.textSecondary,
     );
     const description = selLd
       ? `${selLd.description} \u2014 ${getLoadoutPlaystyle(selLd.role)}`
       : "Stock ship flown by a rookie \u2014 no pilot ability, no upgrades.";
-    const descX = statT.x + statT.width + DESCRIPTION_GAP;
-    const descT = this.scene.add.text(descX, y, description, {
-      font: "12px Arial",
-      color: "#7090a8",
-      wordWrap: { width: x + w - 16 - descX },
-    });
+    const descX = statT.x + statT.width + this.sectionGap;
+    const descT = this.scene.add.text(
+      descX,
+      box.y,
+      description,
+      pickerTextStyle("small", HOLO_PALETTE.textSecondary, {
+        wordWrap: { width: box.x + box.w - descX },
+      }),
+    );
     c.add([statT, descT]);
-    new QuickBuildDetailView(this.scene, c).render({
+    return new QuickBuildDetailView(this.scene, c).render({
       shipId: def.id,
       loadout: selLd,
-      x: x + 16,
-      y: y + Math.max(statT.height, descT.height) + 6,
-      width: w - 32,
+      x: box.x,
+      y: box.y + Math.max(statT.height, descT.height) + this.sectionGap,
+      width: box.w,
     });
-  }
-
-  private makeLoadoutBtn(
-    x: number,
-    y: number,
-    label: string,
-    pointCost: number,
-    active: boolean,
-    onClick: () => void,
-  ): Phaser.GameObjects.Container {
-    const c = this.scene.add.container(x, y);
-    const bg = this.scene.add.graphics();
-    bg.fillStyle(active ? 0x1a3322 : 0x131c28, 1);
-    bg.fillRoundedRect(0, 0, LOADOUT_BTN_W, LOADOUT_BTN_H, 5);
-    bg.lineStyle(2, active ? 0x44ff88 : 0x253545, 1);
-    bg.strokeRoundedRect(0, 0, LOADOUT_BTN_W, LOADOUT_BTN_H, 5);
-    c.add([
-      bg,
-      this.scene.add
-        .text(LOADOUT_BTN_W / 2, 12, label, {
-          font: `${active ? "bold " : ""}12px Arial`,
-          color: active ? "#88ffcc" : "#5577aa",
-        })
-        .setOrigin(0.5),
-      this.scene.add
-        .text(LOADOUT_BTN_W / 2, 27, `${pointCost}pt`, {
-          font: "10px Arial",
-          color: active ? "#aaddaa" : "#446688",
-        })
-        .setOrigin(0.5),
-    ]);
-    c.setInteractive(
-      new Phaser.Geom.Rectangle(0, 0, LOADOUT_BTN_W, LOADOUT_BTN_H),
-      Phaser.Geom.Rectangle.Contains,
-    );
-    c.on("pointerdown", onClick);
-    // Punch feedback on the button that just became active (including right
-    // after a fresh render caused by clicking it) — a destroyed-and-rebuilt
-    // container can't tween itself mid-click, so this fires on (re)creation.
-    if (active) punch(this.scene, c, { scale: 1.08, durationMs: 160 });
-    return c;
-  }
-
-  private makePageArrow(
-    x: number,
-    y: number,
-    label: string,
-    enabled: boolean,
-    onClick: () => void,
-  ): Phaser.GameObjects.Container {
-    const c = this.scene.add.container(x, y);
-    const bg = this.scene.add.graphics();
-    bg.fillStyle(enabled ? 0x1a2838 : 0x0e1420, 1);
-    bg.fillRoundedRect(0, 0, 20, LOADOUT_BTN_H, 4);
-    c.add([
-      bg,
-      this.scene.add
-        .text(10, LOADOUT_BTN_H / 2, label, {
-          font: "bold 13px Arial",
-          color: enabled ? "#5588cc" : "#223344",
-        })
-        .setOrigin(0.5),
-    ]);
-    if (enabled) {
-      c.setInteractive(
-        new Phaser.Geom.Rectangle(0, 0, 20, LOADOUT_BTN_H),
-        Phaser.Geom.Rectangle.Contains,
-      );
-      c.on("pointerdown", onClick);
-    }
-    return c;
   }
 }

@@ -8,6 +8,25 @@
 
 import Phaser from "phaser";
 import { createHoverButton } from "./ButtonFactory";
+import { HoloPanel } from "./hud/HoloPanel";
+import { MENU_CLEAR_COLOR } from "./menu/MenuScaffold";
+import { holoFont } from "./theme/holoFont";
+import { HOLO_DEPTH, HOLO_PALETTE } from "./theme/HoloTheme";
+import { toCssColor } from "./theme/colorMath";
+
+/** Dialog geometry (relative to the dialog centre). */
+const DIALOG = {
+  width: 440,
+  height: 184,
+  messageY: -30,
+  messageWrap: 380,
+  messageSize: 17,
+  buttonY: 48,
+  buttonOffsetX: 104,
+  buttonWidth: 184,
+  buttonHeight: 42,
+  dimAlpha: 0.6,
+} as const;
 
 export interface ConfirmDialogConfig {
   readonly scene: Phaser.Scene;
@@ -26,30 +45,32 @@ export function showConfirmDialog(
   const width = scene.scale.width;
   const height = scene.scale.height;
 
-  const root = scene.add.container(0, 0).setScrollFactor(0).setDepth(3000);
+  const root = scene.add
+    .container(0, 0)
+    .setScrollFactor(0)
+    .setDepth(HOLO_DEPTH.modal);
 
   const dim = scene.add.graphics();
-  dim.fillStyle(0x000000, 0.6);
+  dim.fillStyle(MENU_CLEAR_COLOR, DIALOG.dimAlpha);
   dim.fillRect(0, 0, width, height);
   dim.setScrollFactor(0);
   root.add(dim);
 
-  const panel = scene.add.container(width / 2, height / 2).setScrollFactor(0);
+  const panel = new HoloPanel(scene, width / 2, height / 2, {
+    width: DIALOG.width,
+    height: DIALOG.height,
+    accentColor: HOLO_PALETTE.danger,
+    title: "Confirm",
+    fillAlpha: 0.94,
+  }).setScrollFactor(0);
   root.add(panel);
 
-  const panelBg = scene.add.graphics();
-  panelBg.fillStyle(0x1a1a2a, 0.98);
-  panelBg.fillRoundedRect(-220, -90, 440, 180, 14);
-  panelBg.lineStyle(2, 0xff6644, 1);
-  panelBg.strokeRoundedRect(-220, -90, 440, 180, 14);
-  panel.add(panelBg);
-
   const messageText = scene.add
-    .text(0, -35, config.message, {
-      font: "20px Arial",
-      color: "#ffffff",
+    .text(0, DIALOG.messageY, config.message, {
+      ...holoFont(DIALOG.messageSize, "400"),
+      color: toCssColor(HOLO_PALETTE.textPrimary),
       align: "center",
-      wordWrap: { width: 380 },
+      wordWrap: { width: DIALOG.messageWrap },
     })
     .setOrigin(0.5);
   panel.add(messageText);
@@ -58,14 +79,15 @@ export function showConfirmDialog(
 
   const confirmBtn = createHoverButton(
     scene,
-    -110,
-    45,
+    -DIALOG.buttonOffsetX,
+    DIALOG.buttonY,
     {
-      width: 180,
-      height: 46,
-      color: 0x662222,
+      width: DIALOG.buttonWidth,
+      height: DIALOG.buttonHeight,
+      color: HOLO_PALETTE.danger,
+      variant: "danger",
       label: config.confirmLabel ?? "YES, QUIT",
-      font: "bold 18px Arial",
+      font: "600 16px",
     },
     () => {
       close();
@@ -76,14 +98,15 @@ export function showConfirmDialog(
 
   const cancelBtn = createHoverButton(
     scene,
-    110,
-    45,
+    DIALOG.buttonOffsetX,
+    DIALOG.buttonY,
     {
-      width: 180,
-      height: 46,
-      color: 0x2a3a4a,
+      width: DIALOG.buttonWidth,
+      height: DIALOG.buttonHeight,
+      color: HOLO_PALETTE.panelFill,
+      variant: "secondary",
       label: config.cancelLabel ?? "CANCEL",
-      font: "bold 18px Arial",
+      font: "600 16px",
     },
     () => {
       close();

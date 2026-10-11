@@ -19,6 +19,10 @@ import {
 } from "../data/quickBuildDetails";
 import { getLoadoutById } from "../data/ShipLoadouts";
 import { createHoverButton } from "./ButtonFactory";
+import { drawHoloFrame } from "./menu/holoChrome";
+import { holoFont } from "./theme/holoFont";
+import { HOLO_PALETTE, HOLO_TYPE_SCALE } from "./theme/HoloTheme";
+import { toCssColor } from "./theme/colorMath";
 
 /** What to show and where. */
 export interface QuickBuildChooserOptions {
@@ -45,13 +49,20 @@ export interface RenderedQuickBuildChooser {
   readonly height: number;
 }
 
-const PADDING = 10;
+const PADDING = 12;
 const ARROW_SIZE = 28;
-const ROW_GAP = 4;
-const DEFAULT_ACCENT = 0x446688;
-const ARROW_COLOR = 0x223344;
-const ARROW_HOVER_COLOR = 0x335577;
-const UNIQUE_COLOR = "#ffd76a";
+const ROW_GAP = 6;
+const DETAIL_LINE_GAP = 3;
+const DEFAULT_ACCENT = HOLO_PALETTE.border;
+const BUILD_NAME_SIZE = 15;
+const DETAIL_SIZE = 12;
+const CAPTION_LETTER_SPACING = HOLO_TYPE_SCALE.caption.letterSpacing;
+const UNIQUE_COLOR = toCssColor(HOLO_PALETTE.warning);
+const PRIMARY_TEXT = toCssColor(HOLO_PALETTE.textPrimary);
+const SECONDARY_TEXT = toCssColor(HOLO_PALETTE.textSecondary);
+const MUTED_TEXT = toCssColor(HOLO_PALETTE.textMuted);
+const BUILD_COLOR = toCssColor(HOLO_PALETTE.success);
+const ABILITY_COLOR = toCssColor(HOLO_PALETTE.accent);
 
 /**
  * Renders the chooser card.
@@ -71,15 +82,17 @@ export function renderQuickBuildChooser(
   const loadout = options.loadoutId ? getLoadoutById(options.loadoutId) : null;
   const details = loadout ? describeQuickBuild(loadout) : null;
 
-  const heading = scene.add.text(x + PADDING, y + PADDING, options.heading, {
-    font: "bold 12px Arial",
-    color: "#aaccee",
-  });
+  const heading = scene.add
+    .text(x + PADDING, y + PADDING, options.heading, {
+      ...holoFont(HOLO_TYPE_SCALE.caption.size, "600"),
+      color: SECONDARY_TEXT,
+    })
+    .setLetterSpacing(CAPTION_LETTER_SPACING);
   const position = choices.indexOf(options.loadoutId ?? "") + 1;
   const counter = scene.add
     .text(x + width - PADDING, y + PADDING, counterLabel(position, choices), {
-      font: "11px Arial",
-      color: "#6688aa",
+      ...holoFont(HOLO_TYPE_SCALE.caption.size, "600"),
+      color: MUTED_TEXT,
     })
     .setOrigin(1, 0);
   objects.push(heading, counter);
@@ -89,19 +102,20 @@ export function renderQuickBuildChooser(
   let cy = rowY + ARROW_SIZE + ROW_GAP;
   for (const line of detailLines(details, choices.length > 0)) {
     const text = scene.add.text(x + PADDING, cy, line.text, {
-      font: line.font,
+      ...holoFont(DETAIL_SIZE, line.weight),
       color: line.color,
       wordWrap: { width: width - PADDING * 2 },
     });
     objects.push(text);
-    cy += text.height + 2;
+    cy += text.height + DETAIL_LINE_GAP;
   }
 
-  const height = cy - y + PADDING - 2;
-  bg.fillStyle(0x0d1525, 0.92);
-  bg.fillRoundedRect(x, y, width, height, 8);
-  bg.lineStyle(2, options.accentColor ?? DEFAULT_ACCENT, 0.8);
-  bg.strokeRoundedRect(x, y, width, height, 8);
+  const height = cy - y + PADDING - DETAIL_LINE_GAP;
+  drawHoloFrame(
+    bg,
+    { x, y, width, height },
+    { accent: options.accentColor ?? DEFAULT_ACCENT },
+  );
   return { objects, height };
 }
 
@@ -140,14 +154,15 @@ function renderBuildRow(
     : "BARE HULL";
   const title = scene.add
     .text(x + width / 2, midY, label, {
-      font: "bold 14px Arial",
-      color: details ? "#44ffaa" : "#888888",
+      ...holoFont(BUILD_NAME_SIZE, "600"),
+      color: details ? BUILD_COLOR : MUTED_TEXT,
     })
+    .setLetterSpacing(1)
     .setOrigin(0.5);
   const maxTitleW = width - 2 * (PADDING + ARROW_SIZE + ROW_GAP);
   if (title.width > maxTitleW) title.setScale(maxTitleW / title.width);
   if (choices.length <= 1) return [title];
-  const arrow = (dx: number, glyph: string, step: CycleStep) =>
+  const arrow = (dx: number, step: CycleStep) =>
     createHoverButton(
       scene,
       dx,
@@ -155,27 +170,23 @@ function renderBuildRow(
       {
         width: ARROW_SIZE,
         height: ARROW_SIZE,
-        radius: 6,
-        color: ARROW_COLOR,
-        hoverColor: ARROW_HOVER_COLOR,
-        label: glyph,
-        font: "bold 14px Arial",
-        textColor: "#88ccff",
+        color: HOLO_PALETTE.panelFill,
+        variant: "secondary",
+        label: "",
+        icon: step > 0 ? "next" : "back",
+        font: "600 13px",
       },
       () => options.onCycle(step),
     ).setName(`${options.name}:${step > 0 ? "next" : "prev"}`);
   const half = PADDING + ARROW_SIZE / 2;
-  return [
-    title,
-    arrow(x + half, "\u25c0", -1),
-    arrow(x + width - half, "\u25b6", 1),
-  ];
+  return [title, arrow(x + half, -1), arrow(x + width - half, 1)];
 }
 
 /** One line of the card's detail text. */
 interface DetailLine {
   readonly text: string;
-  readonly font: string;
+  /** Holo font weight / style keywords. */
+  readonly weight: string;
   readonly color: string;
 }
 
@@ -193,15 +204,15 @@ function detailLines(
     const text = hasChoices
       ? "No quick build selected \u2014 rookie pilot, no upgrades"
       : "No quick builds for this ship \u2014 flies the bare hull";
-    return [{ text, font: "italic 11px Arial", color: "#6a7a8a" }];
+    return [{ text, weight: "italic", color: MUTED_TEXT }];
   }
   const pilot = details.pilot;
   const lines: DetailLine[] = [];
   if (pilot) {
     lines.push({
       text: `${pilot.isUnique ? "\u2605 " : ""}${pilot.name}  \u00b7  Initiative ${pilot.initiative}`,
-      font: "bold 12px Arial",
-      color: pilot.isUnique ? UNIQUE_COLOR : "#eef6ff",
+      weight: "600",
+      color: pilot.isUnique ? UNIQUE_COLOR : PRIMARY_TEXT,
     });
   }
   const ability = details.ability;
@@ -209,20 +220,20 @@ function detailLines(
     ability
       ? {
           text: `${ability.name}: ${ability.summary || "no real-time effect"}`,
-          font: "11px Arial",
-          color: "#88ffcc",
+          weight: "400",
+          color: ABILITY_COLOR,
         }
       : {
           text: "No pilot ability",
-          font: "italic 11px Arial",
-          color: "#6a7a8a",
+          weight: "italic",
+          color: MUTED_TEXT,
         },
   );
   if (details.upgrades.length > 0) {
     lines.push({
       text: `Upgrades: ${details.upgrades.map((u) => u.name).join(", ")}`,
-      font: "11px Arial",
-      color: "#8ab0cc",
+      weight: "400",
+      color: SECONDARY_TEXT,
     });
   }
   return lines;

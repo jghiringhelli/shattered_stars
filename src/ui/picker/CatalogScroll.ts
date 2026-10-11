@@ -5,6 +5,17 @@
  */
 
 import Phaser from "phaser";
+import { HOLO_PALETTE, HOLO_RADIUS } from "../theme/HoloTheme";
+
+/** Scrollbar geometry and wheel tuning. */
+const SCROLLBAR = {
+  /** Distance of the track's left edge from the clip's right edge. */
+  inset: 6,
+  width: 4,
+  minThumb: 20,
+  /** Pixels scrolled per wheel delta unit. */
+  wheelFactor: 0.8,
+} as const;
 
 /**
  * Configuration for the scrollable clip area.
@@ -29,10 +40,17 @@ export class CatalogScroll {
 
   constructor(private readonly cfg: CatalogScrollConfig) {}
 
-  /** Wire mousewheel on the scene to scroll the grid container. */
+  /**
+   * Wire mousewheel on the scene to scroll the grid container.
+   *
+   * @param scene - Owning scene.
+   * @param getContainer - Returns the grid container currently on screen.
+   * @param onScroll - Called after every scroll step.
+   */
   setupWheel(
     scene: Phaser.Scene,
-    container: Phaser.GameObjects.Container,
+    getContainer: () => Phaser.GameObjects.Container,
+    onScroll: () => void = () => undefined,
   ): void {
     scene.input.on(
       "wheel",
@@ -40,12 +58,30 @@ export class CatalogScroll {
         const maxScroll = Math.max(0, this.contentH - this.cfg.clipH);
         this.scrollY = Math.max(
           0,
-          Math.min(maxScroll, this.scrollY + dy * 0.8),
+          Math.min(maxScroll, this.scrollY + dy * SCROLLBAR.wheelFactor),
         );
-        container.setY(this.cfg.clipY - this.scrollY);
+        getContainer().setY(this.cfg.clipY - this.scrollY);
         this.drawScrollbar(scene);
+        onScroll();
       },
     );
+  }
+
+  /** Current scroll offset in pixels (0 = top). */
+  get offset(): number {
+    return this.scrollY;
+  }
+
+  /**
+   * True when a content-space vertical span is at least partly visible.
+   *
+   * @param top - Span top in content coordinates.
+   * @param height - Span height.
+   * @returns Whether any of it lies inside the clip.
+   */
+  isSpanVisible(top: number, height: number): boolean {
+    const viewTop = this.scrollY;
+    return top + height > viewTop && top < viewTop + this.cfg.clipH;
   }
 
   /** Apply a geometry mask that clips the grid to the visible region. */
@@ -74,29 +110,37 @@ export class CatalogScroll {
     this.scrollbarGfx?.destroy();
     const maxScroll = Math.max(0, this.contentH - this.cfg.clipH);
     if (maxScroll <= 0) return;
-    const trackX = this.cfg.clipX + this.cfg.clipW - 6;
+    const trackX = this.cfg.clipX + this.cfg.clipW - SCROLLBAR.inset;
     const thumbH = Math.max(
-      20,
+      SCROLLBAR.minThumb,
       this.cfg.clipH * (this.cfg.clipH / this.contentH),
     );
     const thumbY =
       this.cfg.clipY + (this.scrollY / maxScroll) * (this.cfg.clipH - thumbH);
     this.scrollbarGfx = scene.add.graphics();
-    this.scrollbarGfx.fillStyle(0x0e1622, 1);
+    this.scrollbarGfx.fillStyle(HOLO_PALETTE.track, HOLO_PALETTE.trackAlpha);
     this.scrollbarGfx.fillRoundedRect(
       trackX,
       this.cfg.clipY,
-      4,
+      SCROLLBAR.width,
       this.cfg.clipH,
-      2,
+      HOLO_RADIUS.sm / 2,
     );
-    this.scrollbarGfx.fillStyle(0x445577, 1);
-    this.scrollbarGfx.fillRoundedRect(trackX, thumbY, 4, thumbH, 2);
+    this.scrollbarGfx.fillStyle(HOLO_PALETTE.border, 1);
+    this.scrollbarGfx.fillRoundedRect(
+      trackX,
+      thumbY,
+      SCROLLBAR.width,
+      thumbH,
+      HOLO_RADIUS.sm / 2,
+    );
   }
 
   /** Update the total content height (drives scroll bounds). */
   setContentHeight(h: number): void {
     this.contentH = h;
+    const maxScroll = Math.max(0, this.contentH - this.cfg.clipH);
+    this.scrollY = Math.min(this.scrollY, maxScroll);
   }
 
   /** Reset scroll position to the top. */

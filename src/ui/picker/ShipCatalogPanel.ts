@@ -1,20 +1,22 @@
 /**
  * ShipCatalogPanel — left panel of ShipPickerScene.
- * Shows faction ship catalog; user clicks a ship to stage it, picks a loadout,
- * then clicks [→ ADD TO SQUAD] to add the config to the roster.
+ * Shows faction ship catalog as holo cards; user clicks a ship to stage it,
+ * picks a loadout in the detail panel, then clicks ADD to add the config to
+ * the roster.
  *
  * Emits: 'addInstance' { shipId: string, loadoutId: string | null }
  */
 
 import Phaser from "phaser";
 import type { ShipDefinition } from "../../core/types";
-import { FACTION_COLORS } from "../../config";
 import type { FactionId } from "../../config";
-import { isStarterPick } from "../../data/ProgressionData";
+import { drawHoloFrame } from "../menu/holoChrome";
+import { factionAccent, HOLO_RADIUS, HOLO_SPACING } from "../theme/HoloTheme";
 import { ShipDetailPanel } from "./ShipDetailPanel";
 import { CatalogScroll } from "./CatalogScroll";
 import { CatalogStaging } from "./CatalogStaging";
-import { secondaryTags, CAT_X, CAT_W } from "./catalogHelpers";
+import { buildCatalogCard } from "./CatalogCard";
+import { CAT_X, CAT_W } from "./catalogHelpers";
 import type { LoadoutBonuses } from "./types";
 
 export type { LoadoutBonuses };
@@ -41,12 +43,37 @@ const ROLE_SORT: Record<string, number> = {
   capital: 6,
 };
 
-const DEFAULT_TOP_Y = 98;
-const DEFAULT_PANEL_H = 570;
-const COL_W = CAT_W / 2;
-const ROW_H = 50;
-const ROW_GAP = 4;
-const GRID_ROWS = 7;
+/** Default panel top — the menu grid's first content row. */
+const DEFAULT_TOP_Y = 104;
+/** Default panel height — content band down to the primary-action row. */
+const DEFAULT_PANEL_H = 528;
+
+/** Card grid layout inside the catalog panel. */
+const GRID = {
+  /** Inner padding of the panel. */
+  pad: HOLO_SPACING.sm,
+  /** Space reserved on the right for the scrollbar. */
+  gutter: HOLO_SPACING.sm,
+  /** Horizontal gap between the two card columns. */
+  columnGap: HOLO_SPACING.sm,
+  rowH: 48,
+  rowGap: HOLO_SPACING.sm,
+  /** Rows visible before scrolling. */
+  rows: 7,
+  columns: 2,
+} as const;
+const CARD_W =
+  (CAT_W - GRID.pad * 2 - GRID.gutter - GRID.columnGap) / GRID.columns;
+const ROW_PITCH = GRID.rowH + GRID.rowGap;
+/** Gap between the catalog and the detail panel / screen edge. */
+const DETAIL_GAP = HOLO_SPACING.lg;
+const SCREEN_MARGIN = HOLO_SPACING.xxl;
+
+/** Horizontal extent of the detail panel. */
+interface DetailArea {
+  readonly x: number;
+  readonly width: number;
+}
 
 export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
   private container!: Phaser.GameObjects.Container;
@@ -54,6 +81,10 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
   private readonly detailPanel: ShipDetailPanel;
   private readonly scroll: CatalogScroll;
   private readonly staging: CatalogStaging;
+  private readonly accent: number;
+  private rowHits: Array<{ hit: Phaser.GameObjects.Rectangle; top: number }> =
+    [];
+  private detailArea: DetailArea | null = null;
   private scrollWired = false;
   private showOnlyUnlocked = false;
 
@@ -67,46 +98,44 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
     private readonly panelH = DEFAULT_PANEL_H,
   ) {
     super();
+    this.accent = factionAccent(this.factionId);
     this.detailPanel = new ShipDetailPanel(scene);
-    const gridClipH = GRID_ROWS * (ROW_H + ROW_GAP);
     this.scroll = new CatalogScroll({
       clipX: CAT_X,
-      clipY: this.topY + 10,
+      clipY: this.topY + GRID.pad,
       clipW: CAT_W,
-      clipH: gridClipH,
+      clipH: GRID.rows * ROW_PITCH,
     });
     this.staging = new CatalogStaging(scene, ships, confirmLabel);
     this.staging.on("addInstance", (e: unknown) => this.emit("addInstance", e));
     this.staging.on("requestRender", () => this.render());
   }
 
+  /** Rebuilds the grid, the staging strip and the detail panel. */
   render(): void {
     this.container?.destroy();
     this.gridContainer?.destroy();
     this.container = this.scene.add.container(0, 0);
-    this.gridContainer = this.scene.add.container(0, this.topY + 10);
+    const gridTop = this.topY + GRID.pad;
+    this.gridContainer = this.scene.add.container(0, gridTop);
     this.drawBackground();
     this.drawGrid();
+    this.gridContainer.setY(gridTop - this.scroll.offset);
     this.scroll.applyMask(this.scene, this.gridContainer);
     this.scroll.drawScrollbar(this.scene);
     if (!this.scrollWired) {
-      this.scroll.setupWheel(this.scene, this.gridContainer);
+      this.scroll.setupWheel(
+        this.scene,
+        () => this.gridContainer,
+        () => this.syncRowHits(),
+      );
       this.scrollWired = true;
     }
-    const stageTop = this.topY + 10 + GRID_ROWS * (ROW_H + ROW_GAP);
-    const stageH = this.panelH - (stageTop - this.topY) - 8;
-    this.staging.render(this.container, stageTop, stageH);
-
-    const detailX = CAT_X + CAT_W + 24;
-    const detailW = this.scene.scale.width - detailX - 40;
-    this.detailPanel.render(
-      this.ships,
-      this.staging,
-      detailX,
-      this.topY,
-      Math.max(320, detailW),
-      this.panelH,
-    );
+    this.syncRowHits();
+    const stageTop = gridTop + GRID.rows * ROW_PITCH;
+    const stageH = this.panelH - (stageTop - this.topY) - GRID.pad;
+    this.staging.render(this.container, stageTop, stageH, this.accent);
+    this.renderDetail();
   }
 
   destroy(): void {
@@ -124,13 +153,38 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
     this.render();
   }
 
+  /**
+   * Place the detail panel explicitly (default: from the catalog's right
+   * edge to the screen margin). Takes effect on the next render().
+   *
+   * @param x - Left edge of the detail panel.
+   * @param width - Detail panel width.
+   */
+  setDetailArea(x: number, width: number): void {
+    this.detailArea = { x, width };
+  }
+
+  private renderDetail(): void {
+    const x = this.detailArea?.x ?? CAT_X + CAT_W + DETAIL_GAP;
+    const width =
+      this.detailArea?.width ?? this.scene.scale.width - x - SCREEN_MARGIN;
+    this.detailPanel.render(
+      this.ships,
+      this.staging,
+      x,
+      this.topY,
+      width,
+      this.panelH,
+    );
+  }
+
   private drawBackground(): void {
-    const fCol = FACTION_COLORS[this.factionId];
     const g = this.scene.add.graphics();
-    g.fillStyle(0x0d1525, 1);
-    g.fillRoundedRect(CAT_X, this.topY, CAT_W, this.panelH, 10);
-    g.lineStyle(2, fCol, 0.7);
-    g.strokeRoundedRect(CAT_X, this.topY, CAT_W, this.panelH, 10);
+    drawHoloFrame(
+      g,
+      { x: CAT_X, y: this.topY, width: CAT_W, height: this.panelH },
+      { accent: this.accent, radius: HOLO_RADIUS.lg },
+    );
     this.container.add(g);
   }
 
@@ -141,128 +195,47 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
     const sorted = [...visible].sort(
       (a, b) => (ROLE_SORT[a.role] ?? 9) - (ROLE_SORT[b.role] ?? 9),
     );
+    this.rowHits = [];
     sorted.forEach((def, i) => {
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const x = CAT_X + 4 + col * COL_W;
-      const y = row * (ROW_H + ROW_GAP);
-      this.drawShipRow(def, x, y);
+      const col = i % GRID.columns;
+      const row = Math.floor(i / GRID.columns);
+      const x = CAT_X + GRID.pad + col * (CARD_W + GRID.columnGap);
+      this.drawShipRow(def, x, row * ROW_PITCH);
     });
-    const totalRows = Math.ceil(sorted.length / 2);
-    this.scroll.setContentHeight(totalRows * (ROW_H + ROW_GAP));
+    const totalRows = Math.ceil(sorted.length / GRID.columns);
+    this.scroll.setContentHeight(totalRows * ROW_PITCH);
   }
 
   private drawShipRow(def: ShipDefinition, x: number, y: number): void {
     const locked = this.gating.lockedShipIds.has(def.id);
-    const isSel = !locked && this.staging.getSelectedShipId() === def.id;
-    const base = this.buildRowBase(def, x, y, isSel, locked);
-    const tags = locked ? [] : this.buildTags(def, x, y);
-    const hit = this.buildRowHit(def, x, y, locked);
-    const lock = locked ? this.buildLockBadge(def, x, y) : [];
-    this.gridContainer.add([...base, ...tags, hit, ...lock]);
-  }
-
-  private buildRowBase(
-    def: ShipDefinition,
-    x: number,
-    y: number,
-    isSel: boolean,
-    locked: boolean,
-  ): Phaser.GameObjects.GameObject[] {
-    const starter = !locked && isStarterPick(def.id);
-    const bg = this.scene.add.graphics();
-    bg.fillStyle(locked ? 0x0b0f16 : isSel ? 0x0e2618 : 0x111a28, 1);
-    bg.fillRoundedRect(x, y, COL_W - 8, ROW_H, 5);
-    bg.lineStyle(
-      1,
-      locked ? 0x2a2f38 : isSel ? 0x44ff88 : starter ? 0xd7a83a : 0x223040,
-      1,
-    );
-    bg.strokeRoundedRect(x, y, COL_W - 8, ROW_H, 5);
-    const spriteKey = this.scene.textures.exists(def.spriteKey)
-      ? def.spriteKey
-      : `ship_${def.faction}_${def.baseStats.size}`;
-    const sprite = this.scene.add
-      .image(x + 18, y + ROW_H / 2, spriteKey)
-      .setDisplaySize(32, 32)
-      .setAlpha(locked ? 0.35 : 1);
-    if (starter) sprite.setTint(0xffe6a3);
-    const nameT = this.scene.add.text(x + 38, y + 6, def.name, {
-      font: `bold 12px Arial`,
-      color: locked ? "#5a6472" : isSel ? "#88ffcc" : "#d8ecff",
-    });
-    const ptsT = this.scene.add
-      .text(x + COL_W - 12, y + 6, `${def.baseStats.pointCost}pt`, {
-        font: "11px Arial",
-        color: locked ? "#556" : isSel ? "#aaddaa" : "#88aa66",
-      })
-      .setOrigin(1, 0);
-    const roleT = this.scene.add.text(
-      x + 38,
-      y + 24,
-      def.role.replace(/_/g, " "),
+    const card = buildCatalogCard(
+      this.scene,
       {
-        font: "10px Arial",
-        color: locked ? "#48505c" : isSel ? "#55cc88" : "#5a8060",
+        def,
+        x,
+        y,
+        width: CARD_W,
+        height: GRID.rowH,
+        locked,
+        selected: !locked && this.staging.getSelectedShipId() === def.id,
+        lockReason: locked ? this.gating.reasonFor(def.id) : "",
+        accent: this.accent,
+      },
+      () => {
+        this.staging.selectShip(def.id);
+        this.render();
       },
     );
-    return [bg, sprite, nameT, ptsT, roleT];
+    this.rowHits.push({ hit: card.hit, top: y });
+    this.gridContainer.add(card.objects);
   }
 
-  private buildTags(
-    def: ShipDefinition,
-    x: number,
-    y: number,
-  ): Phaser.GameObjects.Text[] {
-    const tagObjs: Phaser.GameObjects.Text[] = [];
-    let tagX = x + 38 + 72;
-    const starter = isStarterPick(def.id);
-    const tags = starter
-      ? ["\u2605 STARTER", ...secondaryTags(def)]
-      : secondaryTags(def);
-    tags.forEach((tag, i) => {
-      const isStarterTag = starter && i === 0;
-      const tObj = this.scene.add.text(tagX, y + 24, tag, {
-        font: "8px Arial",
-        color: isStarterTag ? "#ffd76a" : "#446688",
-        backgroundColor: isStarterTag ? "#3a2c0a" : "#0a1520",
-        padding: { x: 3, y: 1 },
-      });
-      tagObjs.push(tObj);
-      tagX += (tObj.width ?? 40) + 4;
-    });
-    return tagObjs;
-  }
-
-  private buildLockBadge(
-    def: ShipDefinition,
-    x: number,
-    y: number,
-  ): Phaser.GameObjects.GameObject[] {
-    const reason = this.gating.reasonFor(def.id);
-    const badge = this.scene.add
-      .text(x + COL_W - 14, y + 26, `\uD83D\uDD12 ${reason}`, {
-        font: "8px Arial",
-        color: "#c8a24a",
-      })
-      .setOrigin(1, 0);
-    return [badge];
-  }
-
-  private buildRowHit(
-    def: ShipDefinition,
-    x: number,
-    y: number,
-    locked: boolean,
-  ): Phaser.GameObjects.Rectangle {
-    const hit = this.scene.add
-      .rectangle(x + (COL_W - 8) / 2, y + ROW_H / 2, COL_W - 8, ROW_H, 0, 0)
-      .setInteractive({ useHandCursor: !locked });
-    hit.on("pointerdown", () => {
-      if (locked) return;
-      this.staging.selectShip(def.id);
-      this.render();
-    });
-    return hit;
+  /** Rows scrolled out of the clip must not swallow clicks meant for the staging strip. */
+  private syncRowHits(): void {
+    for (const { hit, top } of this.rowHits) {
+      if (hit.input) {
+        hit.input.enabled = this.scroll.isSpanVisible(top, GRID.rowH);
+      }
+    }
   }
 }
