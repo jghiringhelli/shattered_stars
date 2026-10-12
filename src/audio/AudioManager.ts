@@ -9,68 +9,36 @@
  */
 
 import type { FactionId } from "../config";
+import { browserStore } from "../systems/keyValueStore";
 import { VOICE_DESIGNS, type SoundEffectType } from "./SoundDesign";
 import { playVoice } from "./SfxVoice";
 import { attenuationAt, panAt } from "./spatial";
+import {
+  MENU_MUSIC_TRACK,
+  MUSIC_CROSSFADE_SECONDS,
+  SUBMENU_MUSIC_TRACK,
+  factionMusicTrack,
+  isOneShotTrack,
+  isRecordedTrack,
+  musicFileUrl,
+  pickMusicFormat,
+  resolveMusicTrack,
+  type BattleMusicMode,
+  type BattleMusicPhase,
+  type MusicFormat,
+  type MusicTrack,
+} from "./musicTracks";
+import { MusicDirector } from "./MusicDirector";
+
+/** Browser codec probe; Node/test environments without a DOM get mp3. */
+function probeAudioSupport(mime: string): string {
+  if (typeof document === "undefined") return "";
+  return document.createElement("audio").canPlayType(mime);
+}
 
 export type { SoundEffectType };
-
-// Music tracks — generic legacy names + Harmonia faction IDs.
-// Any string listed here can be passed to playMusic(). If a matching mp3
-// exists under public/assets/audio/music/<id>.mp3 it will be loaded and
-// looped; otherwise falls back to the procedural synth (legacy names only).
-export type MusicTrack =
-  | "menu_theme"
-  | "combat_low"
-  | "combat_medium"
-  | "combat_high"
-  | "victory_sting"
-  | "defeat_sting"
-  // Harmonia faction tracks — see docs/SUNO_PROMPTS.md
-  | "menu_main"
-  | "heg_tactical"
-  | "heg_combat"
-  | "heg_boss"
-  | "heg_victory"
-  | "heg_defeat"
-  | "conf_tactical"
-  | "conf_combat"
-  | "conf_boss"
-  | "conf_victory"
-  | "conf_defeat"
-  | "syn_tactical"
-  | "syn_combat"
-  | "syn_boss"
-  | "syn_awakening"
-  | "cors_tactical"
-  | "cors_combat"
-  | "cors_boss"
-  | "cors_heist"
-  | "asc_tactical"
-  | "asc_combat"
-  | "asc_boss"
-  | "asc_prophecy"
-  | "void_encounter"
-  | "void_nexus_discovery"
-  | "void_campaign_credits"
-  | "victory_common"
-  | "defeat_common"
-  | "arcade_action"
-  | "tactical_planning"
-  | "survival_ramp"
-  | "campaign_briefing";
-
-/** Battle music phase — maps to Harmonia's per-faction track naming (`<prefix>_<phase>`). */
-export type BattleMusicPhase = "tactical" | "combat" | "boss";
-
-/** Harmonia track-id prefix per faction — factions without one fall back to the generic combat_* tracks. */
-const FACTION_MUSIC_PREFIX: Partial<Record<FactionId, string>> = {
-  terran_hegemony: "heg",
-  free_confederation: "conf",
-  synthetic_collective: "syn",
-  void_corsairs: "cors",
-  ascendant_empire: "asc",
-};
+// Track ids + catalog live in musicTracks.ts; re-exported for existing importers.
+export type { MusicTrack, BattleMusicPhase, BattleMusicMode };
 
 interface AudioSettings {
   masterVolume: number;
@@ -131,6 +99,8 @@ export class AudioManager {
 
   // Current music state
   private currentMusicSource: AudioBufferSourceNode | null = null;
+  /** Per-track fader under the music bus, ramped for crossfades. */
+  private currentMusicFader: GainNode | null = null;
   private currentMusicTrack: MusicTrack | null = null;
   /** Pending next bar of the procedural loop, so stopMusic can cancel it. */
   private musicLoopTimer: ReturnType<typeof setTimeout> | null = null;
@@ -139,13 +109,17 @@ export class AudioManager {
   // Sound effect cache
   // File-based music buffers cached after first fetch/decode
   private musicBuffers: Map<string, AudioBuffer> = new Map();
-  // Tracks known to have no mp3 file (avoid retrying failed fetches)
+  // Recorded tracks whose fetch/decode failed (avoid retrying)
   private missingMusicFiles: Set<string> = new Set();
   // Last time each effect was triggered, for the retrigger guard
   private lastPlayedAtMs: Map<SoundEffectType, number> = new Map();
   private listener: ListenerPose = { ...DEFAULT_LISTENER };
-  // Fires on real-file playback so the caller can toggle procedural fallbacks
-  private static readonly MUSIC_URL_PREFIX = "assets/audio/music/";
+  /** Encoded format this browser decodes, chosen on initialize(). */
+  private musicFormat: MusicFormat = "mp3";
+  /** Battle track, skirmish rotation and the tension layer. */
+  private readonly musicDirector = new MusicDirector((track) =>
+    this.startTrack(track),
+  );
 
   private constructor() {
     this.loadSettings();
@@ -190,6 +164,7 @@ export class AudioManager {
       this.uiGain.connect(this.masterGain);
       this.uiGain.gain.value = this.settings.uiVolume;
 
+      this.musicFormat = pickMusicFormat(probeAudioSupport);
       console.log("[AudioManager] Initialized");
     } catch (e) {
       console.warn("[AudioManager] Failed to initialize:", e);
@@ -319,17 +294,30 @@ export class AudioManager {
   // ==========================================
 
   /**
-   * Play background music. Attempts to load an mp3 from
-   * public/assets/audio/music/<track>.mp3 first; on 404 or decode failure,
-   * falls back to the procedural synth (only for legacy generic names).
+   * Play background music, crossfading from whatever is playing.
+   *
+   * Recorded tracks (musicTracks.ts catalog) load public/assets/audio/music/
+   * <track>.ogg|.mp3; everything else — and any recorded track whose load
+   * fails — uses the procedural synth without a network request. Requesting
+   * the track that is already playing is a no-op, so menus that re-enter
+   * keep their music running.
+   *
+   * @param requested - Track id (aliases such as menu_theme resolve).
    */
-  playMusic(track: MusicTrack): void {
+  playMusic(requested: MusicTrack): void {
+    this.musicDirector.context(requested);
+  }
+
+  /** Crossfade to a track (the director's player). */
+  private startTrack(requested: MusicTrack): void {
     if (!this.context || !this.musicGain) return;
+    const track = resolveMusicTrack(requested);
+    if (track === this.currentMusicTrack) return;
 
     this.stopMusic();
     this.currentMusicTrack = track;
 
-    if (this.missingMusicFiles.has(track)) {
+    if (!isRecordedTrack(track) || this.missingMusicFiles.has(track)) {
       this.startProceduralMusic(track);
       return;
     }
@@ -344,46 +332,77 @@ export class AudioManager {
   }
 
   /**
-   * Play the faction-flavored battle track for the given phase (tactical/
-   * combat/boss), falling back to the generic combat_* tracks for factions
-   * without their own Harmonia catalogue entry.
+   * Legacy phase API: tactical → the faction's theme (campaign hub, faction
+   * screens), combat → skirmish battle music, boss → boss battle music.
+   *
+   * @param factionId - Faction whose identity the music carries.
+   * @param phase - Game context.
    */
   playFactionMusic(
     factionId: FactionId,
     phase: BattleMusicPhase = "combat",
   ): void {
-    const prefix = FACTION_MUSIC_PREFIX[factionId];
-    if (!prefix) {
-      const fallback: MusicTrack =
-        phase === "boss"
-          ? "combat_high"
-          : phase === "tactical"
-            ? "combat_low"
-            : "combat_medium";
-      this.playMusic(fallback);
+    if (phase === "tactical") {
+      this.playMusic(factionMusicTrack(factionId, phase));
       return;
     }
-    this.playMusic(`${prefix}_${phase}` as MusicTrack);
+    this.playBattleMusic(phase === "boss" ? "boss" : "skirmish", factionId);
   }
 
   /**
-   * Play the faction-flavored victory/defeat stinger, falling back to the
-   * shared common sting for factions without their own.
+   * Start a battle's music: Dogfight Vector (dogfight), Dreadnought (boss),
+   * Threading the Belt (hazard) or skirmish (faction combat / rotating
+   * Combat Skirmish takes). Resets the tension layer.
+   *
+   * @param mode - Kind of fight.
+   * @param factionId - The player's faction.
+   */
+  playBattleMusic(mode: BattleMusicMode, factionId: FactionId): void {
+    this.musicDirector.battle(mode, factionId);
+  }
+
+  /**
+   * Feed the flagship's hull fraction (each frame is fine); low hull raises
+   * the Shields Low layer, recovery returns to the battle track.
+   *
+   * @param hullFraction - Flagship hull / max hull.
+   */
+  reportPlayerHull(hullFraction: number): void {
+    this.musicDirector.reportPlayerHull(hullFraction);
+  }
+
+  /**
+   * @param active - Whether a boss is in its final phase (raises Shields Low).
+   */
+  setBossFinalPhase(active: boolean): void {
+    this.musicDirector.setBossFinalPhase(active);
+  }
+
+  /** Play the main theme used by the main menu. */
+  playMenuMusic(): void {
+    this.playMusic(MENU_MUSIC_TRACK);
+  }
+
+  /** Play the ambience used by setup screens and submenus. */
+  playSubmenuMusic(): void {
+    this.playMusic(SUBMENU_MUSIC_TRACK);
+  }
+
+  /**
+   * Play the victory / defeat stinger (once, not looped).
+   *
+   * @param _factionId - Kept for call-site compatibility; stingers are shared.
+   * @param outcome - Battle result.
    */
   playFactionStinger(
-    factionId: FactionId,
+    _factionId: FactionId,
     outcome: "victory" | "defeat",
   ): void {
-    const prefix = FACTION_MUSIC_PREFIX[factionId];
-    if (prefix === "heg" || prefix === "conf") {
-      this.playMusic(`${prefix}_${outcome}` as MusicTrack);
-      return;
-    }
     this.playMusic(outcome === "victory" ? "victory_common" : "defeat_common");
   }
 
   private loadAndPlayMusicFile(track: MusicTrack): void {
-    const url = `${AudioManager.MUSIC_URL_PREFIX}${track}.mp3`;
+    const url = musicFileUrl(track, this.musicFormat);
     fetch(url)
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -393,7 +412,8 @@ export class AudioManager {
       .then((audioBuf) => {
         this.musicBuffers.set(track, audioBuf);
         // Only play if this is still the current track (user may have switched)
-        if (this.currentMusicTrack === track) {
+        // and an earlier in-flight load for it has not already started it.
+        if (this.currentMusicTrack === track && !this.currentMusicSource) {
           this.playBufferLooped(audioBuf, track);
         }
       })
@@ -407,17 +427,42 @@ export class AudioManager {
 
   private playBufferLooped(buffer: AudioBuffer, track: MusicTrack): void {
     if (!this.context || !this.musicGain) return;
+    const now = this.context.currentTime;
+    const fader = this.context.createGain();
+    fader.gain.setValueAtTime(0, now);
+    fader.gain.linearRampToValueAtTime(1, now + MUSIC_CROSSFADE_SECONDS);
+    fader.connect(this.musicGain);
     const source = this.context.createBufferSource();
     source.buffer = buffer;
-    source.loop = true;
-    source.connect(this.musicGain);
+    source.loop = !isOneShotTrack(track);
+    source.connect(fader);
     source.start(0);
     this.currentMusicSource = source;
+    this.currentMusicFader = fader;
     this.currentMusicTrack = track;
   }
 
+  /** Ramp the playing recorded track to silence, then stop it. */
+  private fadeOutCurrentSource(): void {
+    const source = this.currentMusicSource;
+    const fader = this.currentMusicFader;
+    this.currentMusicSource = null;
+    this.currentMusicFader = null;
+    if (!source) return;
+    const now = this.context?.currentTime ?? 0;
+    try {
+      if (fader) {
+        fader.gain.setValueAtTime(fader.gain.value, now);
+        fader.gain.linearRampToValueAtTime(0, now + MUSIC_CROSSFADE_SECONDS);
+      }
+      source.stop(fader ? now + MUSIC_CROSSFADE_SECONDS : now);
+    } catch (e) {
+      // Ignore if already stopped
+    }
+  }
+
   /**
-   * Stop current music
+   * Stop current music (recorded tracks fade out over the crossfade time).
    */
   stopMusic(): void {
     // Cancel the pending bar before anything else. Without this the callback
@@ -427,14 +472,7 @@ export class AudioManager {
       clearTimeout(this.musicLoopTimer);
       this.musicLoopTimer = null;
     }
-    if (this.currentMusicSource) {
-      try {
-        this.currentMusicSource.stop();
-      } catch (e) {
-        // Ignore if already stopped
-      }
-      this.currentMusicSource = null;
-    }
+    this.fadeOutCurrentSource();
     this.currentMusicTrack = null;
   }
 
@@ -462,6 +500,16 @@ export class AudioManager {
       Record<MusicTrack, { baseFreq: number; tempo: number; intensity: number }>
     > = {
       menu_theme: { baseFreq: 110, tempo: 0.5, intensity: 0.3 },
+      menu_main: { baseFreq: 110, tempo: 0.5, intensity: 0.3 },
+      // Fallback voices for recorded tracks whose file fails to load.
+      menu_ambient: { baseFreq: 98, tempo: 0.4, intensity: 0.25 },
+      long_haul: { baseFreq: 110, tempo: 0.6, intensity: 0.3 },
+      skirmish_combat_a: { baseFreq: 110, tempo: 1.0, intensity: 0.6 },
+      skirmish_combat_b: { baseFreq: 116.54, tempo: 1.05, intensity: 0.6 },
+      dogfight_combat: { baseFreq: 123.47, tempo: 1.2, intensity: 0.7 },
+      boss_dreadnought: { baseFreq: 146.83, tempo: 1.2, intensity: 0.8 },
+      asteroid_belt: { baseFreq: 92.5, tempo: 0.9, intensity: 0.45 },
+      tension_alert: { baseFreq: 103.83, tempo: 1.3, intensity: 0.7 },
       combat_low: { baseFreq: 82.41, tempo: 0.8, intensity: 0.4 },
       combat_medium: { baseFreq: 110, tempo: 1.0, intensity: 0.6 },
       combat_high: { baseFreq: 146.83, tempo: 1.2, intensity: 0.8 },
@@ -617,7 +665,7 @@ export class AudioManager {
 
   private loadSettings(): void {
     try {
-      const saved = localStorage.getItem("audio_settings");
+      const saved = browserStore().getItem("audio_settings");
       if (saved) {
         this.settings = { ...this.settings, ...JSON.parse(saved) };
       }
@@ -628,7 +676,7 @@ export class AudioManager {
 
   private saveSettings(): void {
     try {
-      localStorage.setItem("audio_settings", JSON.stringify(this.settings));
+      browserStore().setItem("audio_settings", JSON.stringify(this.settings));
     } catch (e) {
       console.warn("[AudioManager] Failed to save settings");
     }

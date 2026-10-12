@@ -1,0 +1,48 @@
+{
+  "description": "ACE-Step gap tracks (factions with no Suno take): Synthetic Collective and Ascendant Empire. Everything else ships from the author's Suno library (scripts/music/suno_tracks.json). Prompts are ACE-Step tag strings derived from Harmonia's POST /projects/shattered_stars/prompts/composition output (faction mode, key, tempo, instrumentation). Negations are omitted on purpose: ACE-Step's tag encoder reads 'no synthesizers' as 'synthesizers'.",
+  "defaults": {
+    "loop_crossfade_seconds": 3.0,
+    "loop_start_search_seconds": 8.0,
+    "generation_margin_seconds": 10,
+    "infer_step": 60,
+    "guidance_scale": 7.0
+  },
+  "tracks": [
+    {
+      "id": "syn_tactical",
+      "harmonia_era": "synthetic",
+      "harmonia_mood": "tactical",
+      "seed": 23875,
+      "duration_seconds": 100,
+      "tuning_hz": 440,
+      "prompt": "dark ambient electronic, instrumental, granular synthesizer textures, pure sine wave tones, algorithmic arpeggios, glitch, metallic digital clicks, modular synth, cold, alien machine intelligence, atonal, polyrhythmic, IDM, 100 bpm, sci-fi video game soundtrack"
+    },
+    {
+      "id": "syn_combat",
+      "harmonia_era": "synthetic",
+      "harmonia_mood": "combat",
+      "seed": 23876,
+      "duration_seconds": 85,
+      "tuning_hz": 440,
+      "prompt": "aggressive electronic, instrumental, distorted synthesizer bass, glitch percussion, drum machine, metallic transient hits, fast algorithmic arpeggios, modular synth, polyrhythm, industrial IDM, cold machine, atonal, 150 bpm, sci-fi battle video game soundtrack"
+    },
+    {
+      "id": "asc_tactical",
+      "harmonia_era": "ascendant",
+      "harmonia_mood": "tactical",
+      "seed": 23879,
+      "duration_seconds": 100,
+      "tuning_hz": 432,
+      "prompt": "ancient meditative ambient, instrumental, duduk, erhu, oud, overtone throat singing drone, struck stone lithophone, sparse frame drum, vast reverb, minimal notes, long silences, F lydian, 50 bpm, mystical, timeless, world music"
+    },
+    {
+      "id": "asc_combat",
+      "harmonia_era": "ascendant",
+      "harmonia_mood": "combat",
+      "seed": 23880,
+      "duration_seconds": 85,
+      "tuning_hz": 432,
+      "prompt": "ancient ritual battle music, instrumental, deep frame drums, overtone throat singing, duduk, erhu, oud, struck stone lithophone, vast reverb, solemn power, F lydian, 96 bpm, world music, mystical"
+    }
+  ]
+}

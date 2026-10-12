@@ -1,0 +1,20 @@
+{
+  "description": "Game music sourced from the author's Suno library (read-only, D:\\radar\\media_music\\games). Take choice: ear-confirmed / pick_anthem.py top pick in D:\\radar\\media_music\\SELECTION.md first, else the QC-OK take with the best loop score in D:\\radar\\results\\game_quality_full.log (WAV preferred as source). Loops are cut near loop_seconds at the point whose spectrum best matches the loop head, then crossfaded; one_shot entries are faded stingers.",
+  "source_root": "D:\\radar\\media_music\\games",
+  "defaults": { "loop_crossfade_seconds": 4.0, "loop_start_search_seconds": 20.0, "one_shot_fade_seconds": 4.0 },
+  "tracks": [
+    { "id": "menu_main", "title": "Shattered Stars - Main Theme", "source": "shattered_stars\\ss_main_theme_take1_cced853f.wav", "loop_seconds": 110, "why": "QC OK, loop 0.721 vs take2 0.497" },
+    { "id": "menu_ambient", "title": "Deep Space Standby", "source": "arcade_space\\menu_deep_space_take1_d5bdadcc.wav", "loop_seconds": 85, "why": "QC OK, best loop 0.953" },
+    { "id": "skirmish_combat_a", "title": "Shattered Stars - Combat Skirmish", "source": "shattered_stars\\ss_combat_skirmish_take1_735825a8.wav", "loop_seconds": 95, "why": "QC OK, best loop 0.943" },
+    { "id": "skirmish_combat_b", "title": "Shattered Stars - Combat Skirmish", "source": "shattered_stars\\ss_combat_skirmish_take2_5517a9f6.wav", "loop_seconds": 85, "why": "QC OK, loop 0.921 (take3 0.924 has no WAV)" },
+    { "id": "dogfight_combat", "title": "Dogfight Vector", "source": "arcade_space\\combat_dogfight_take1_917cec2e.wav", "loop_seconds": 95, "why": "only QC-OK take (take2 DEAD-AIR)" },
+    { "id": "boss_dreadnought", "title": "Dreadnought", "source": "arcade_space\\capital_ship_boss_take1_02137006.mp3", "loop_seconds": 95, "why": "pick_anthem top pick, QC OK, loop 0.984" },
+    { "id": "heg_tactical", "title": "Frontier Steel", "source": "arcade_space\\terran_frontier_theme_take1_e0b54b67.wav", "loop_seconds": 95, "why": "ear-confirmed final (SELECTION.md 2026-07-28)" },
+    { "id": "cors_tactical", "title": "Starport Cantina", "source": "arcade_space\\outlaw_starport_take2_fabbb0ca.wav", "loop_seconds": 85, "why": "ear-confirmed sci-fi rework (SELECTION.md); western Cantina Orbit takes marked discard" },
+    { "id": "long_haul", "title": "Long Haul", "source": "arcade_space\\long_haul_hyperspace_take2_3304e950.mp3", "loop_seconds": 90, "why": "pick_anthem top pick (2026-07-28 pool), QC OK" },
+    { "id": "asteroid_belt", "title": "Threading the Belt", "source": "arcade_space\\asteroid_field_take2_28455c45.mp3", "loop_seconds": 75, "why": "pick_anthem top pick; QC 'SHORT' only (88 s source)" },
+    { "id": "tension_alert", "title": "Shields Low", "source": "arcade_space\\tension_alert_take1_b611fbc3.mp3", "loop_seconds": 40, "segment": [46, 190], "why": "both takes QC DEAD-AIR; take1 (loop 0.873) used after its 43-44 s dropout" },
+    { "id": "victory_common", "title": "Mission Accomplished", "source": "arcade_space\\victory_briefing_take2_9cc98679.wav", "one_shot_seconds": 30, "why": "QC OK (take1 REVIEW tail-silence)" },
+    { "id": "defeat_common", "title": "Fall Back", "source": "arcade_space\\retreat_signal_take2_a856201c.mp3", "one_shot_seconds": 25, "why": "pick_anthem top pick, QC OK" }
+  ]
+}
