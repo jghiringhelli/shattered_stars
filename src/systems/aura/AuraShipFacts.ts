@@ -22,6 +22,7 @@ export type AuraSheetFacts = Required<
     | "auraMagnitudeBonus"
     | "auraStressReliefTiers"
     | "auraHitChanceBonus"
+    | "auraShieldRegenPerSecond"
   >
 >;
 
@@ -39,6 +40,7 @@ export function auraFactsOf(modifiers: CombatModifiers): AuraSheetFacts {
     auraMagnitudeBonus: modifiers.auraMagnitudeBonus,
     auraStressReliefTiers: modifiers.auraStressReliefTiers,
     auraHitChanceBonus: modifiers.auraHitChanceBonus,
+    auraShieldRegenPerSecond: modifiers.auraShieldRegenPerSecond,
   };
 }
 

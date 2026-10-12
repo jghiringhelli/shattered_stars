@@ -397,12 +397,15 @@ export const SHIP_SLOTS: Readonly<Record<string, ShipSlotConfig>> = {
     charges: 4,
   },
 
-  // Void Corsairs
-  corsair_venom: { slots: ["talent", "modification"] },
+  // Void Corsairs — raiders and smugglers carry an illicit slot (black-market
+  // gear: a strong effect paid for with a drawback).
+  corsair_venom: { slots: ["talent", "modification", "illicit"] },
   corsair_blade: {
-    slots: ["talent", "missile", "modification", "configuration"],
+    slots: ["talent", "missile", "modification", "configuration", "illicit"],
   },
-  corsair_fang: { slots: ["talent", "modification", "configuration"] },
+  corsair_fang: {
+    slots: ["talent", "modification", "configuration", "illicit"],
+  },
   corsair_phantom: {
     slots: ["talent", "tech", "modification", "configuration"],
   },
@@ -413,9 +416,11 @@ export const SHIP_SLOTS: Readonly<Record<string, ShipSlotConfig>> = {
     slots: ["talent", "tech", "crew", "modification", "configuration"],
   },
   corsair_talon: { slots: ["talent", "missile", "modification"] },
-  corsair_cutlass: { slots: ["talent", "cannon", "missile", "modification"] },
+  corsair_cutlass: {
+    slots: ["talent", "cannon", "missile", "modification", "illicit"],
+  },
   corsair_marauder: {
-    slots: ["talent", "cannon", "missile", "gunner", "modification"],
+    slots: ["talent", "cannon", "missile", "gunner", "modification", "illicit"],
     charges: 2,
   },
   corsair_saber: {
@@ -423,7 +428,7 @@ export const SHIP_SLOTS: Readonly<Record<string, ShipSlotConfig>> = {
   },
   corsair_scimitar: { slots: ["talent", "cannon", "torpedo", "modification"] },
   corsair_bomber: {
-    slots: ["torpedo", "bomb", "gunner", "modification"],
+    slots: ["torpedo", "bomb", "gunner", "modification", "illicit"],
     charges: 3,
   },
   corsair_torpedo_boat: {
@@ -469,7 +474,15 @@ export const SHIP_SLOTS: Readonly<Record<string, ShipSlotConfig>> = {
     charges: 3,
   },
   corsair_tender: {
-    slots: ["crew", "crew", "sensor", "tech", "modification", "modification"],
+    slots: [
+      "crew",
+      "crew",
+      "sensor",
+      "tech",
+      "modification",
+      "modification",
+      "illicit",
+    ],
   },
   corsair_dreadnought: {
     slots: [

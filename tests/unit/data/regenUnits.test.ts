@@ -30,15 +30,13 @@ import {
   repairStep,
 } from "../../../src/arcade/systems/repair/HullRepair";
 
-/** Miniature rates the converted pilot abilities used to carry. */
-const OLD_MINIATURE_ABILITY_REGEN: Readonly<Record<string, number>> = {
-  regenerative_matrix: 0.15,
-  healing_aura: 0.1,
-  shield_transfer: 0.05,
-  force_heal: 0.2,
-  shield_upgrade: 0.1,
-  regenerative_shields: 0.2,
-};
+/**
+ * Measured ceiling for a pilot ability's shield regen (own or granted to
+ * allies), in real-time HP/s: regen never pauses, and the skill arena shows
+ * 0.24 HP/s already worth ~7 points; at 1+ HP/s a ship out-heals a
+ * duelist's fire and cannot be killed (abilityPricing).
+ */
+const MAX_ABILITY_REGEN_HP_PER_S = 0.24;
 
 /** One second of real time. */
 const ONE_SECOND_MS = 1000;
@@ -89,20 +87,17 @@ describe("regen units — catalog cards and pilot abilities (converted)", () => 
     expect(drifted).toEqual([]);
   });
 
-  it("keeps each converted pilot ability at its old real-time strength", () => {
-    for (const [id, miniature] of Object.entries(OLD_MINIATURE_ABILITY_REGEN)) {
-      expect(PILOT_ABILITY_REALTIME[id]?.shieldRegenPerSecond, id).toBeCloseTo(
-        miniature * DURABILITY_SCALE,
-        10,
-      );
-    }
+  it("keeps every pilot ability's regen (own or allies') below the measured ceiling", () => {
+    const tooStrong = Object.entries(PILOT_ABILITY_REALTIME).filter(
+      ([, effect]) =>
+        (effect.shieldRegenPerSecond ?? 0) > MAX_ABILITY_REGEN_HP_PER_S ||
+        (effect.auraShieldRegenPerSecond ?? 0) > MAX_ABILITY_REGEN_HP_PER_S,
+    );
+    expect(tooStrong).toEqual([]);
   });
 
-  it("states the Aegis Field shield regen in HP/s (0.2 tokens/s = 2.4 HP/s)", () => {
-    expect(FACTION_AURAS.ascendant_empire.magnitude).toBeCloseTo(
-      0.2 * DURABILITY_SCALE,
-      10,
-    );
+  it("states the Aegis Field shield regen in HP/s (0.4 HP/s, balance report)", () => {
+    expect(FACTION_AURAS.ascendant_empire.magnitude).toBeCloseTo(0.4, 10);
     expect(FACTION_AURAS.ascendant_empire.description).toMatch(/HP\/s/);
   });
 });

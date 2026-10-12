@@ -26,6 +26,9 @@ import { incomingDamageMultiplier } from "../ShotConditions";
 /** Armor never reduces a landed hit below this much damage. */
 export const MIN_ARMORED_HIT_DAMAGE = 1;
 
+/** Absorbs float noise (7 × 0.1 × 10 = 6.9999…) before flooring a hit. */
+const FLOAT_NOISE_EPSILON = 1e-9;
+
 /** Armor of a ship without the stat (every fighter). */
 const NO_ARMOR = 0;
 
@@ -51,6 +54,24 @@ export function armorReductionOf(definitionId: string): number {
 export function applyArmor(damage: number, armor: number): number {
   if (damage <= 0 || armor <= 0) return damage;
   return Math.max(Math.min(damage, MIN_ARMORED_HIT_DAMAGE), damage - armor);
+}
+
+/**
+ * A mitigated hit as whole hit points, rounded with a dither so the average
+ * equals the exact product: a 3-damage hit taking 15% less deals 3 or 2,
+ * averaging 2.55 (nearest-rounding would always give 3 and swallow every
+ * reduction under ~17%).
+ *
+ * @param damage - Damage after armor and mitigation (may be fractional).
+ * @param dither - Uniform value in [0, 1) (resolveDiceAttack reuses its
+ *   hit roll, so no extra random number is drawn).
+ * @returns Whole damage, never below {@link MIN_ARMORED_HIT_DAMAGE}.
+ */
+export function ditheredHitDamage(damage: number, dither: number): number {
+  return Math.max(
+    MIN_ARMORED_HIT_DAMAGE,
+    Math.floor(damage + dither + FLOAT_NOISE_EPSILON),
+  );
 }
 
 /** Aura inputs of one shot (omitted fields = no aura). */

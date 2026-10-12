@@ -540,10 +540,10 @@ describe("PilotAbilities", () => {
       it(`should define ability "${id}"`, () => {
         const ability = PILOT_ABILITIES[id];
         expect(ability).toBeDefined();
-        expect(ability.id).toBe(id);
-        expect(ability.name.length).toBeGreaterThan(0);
-        expect(ability.pointCost).toBeGreaterThan(0);
-        expect(ability.xpCost).toBeGreaterThan(0);
+        expect(ability!.id).toBe(id);
+        expect(ability!.name.length).toBeGreaterThan(0);
+        expect(ability!.pointCost).toBeGreaterThan(0);
+        expect(ability!.xpCost).toBeGreaterThan(0);
       });
     }
 

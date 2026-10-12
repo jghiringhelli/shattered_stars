@@ -73,7 +73,11 @@ export function snakeToLabel(id: string): string {
 
 /** Screen regions of the encyclopedia. */
 export interface EncyclopediaRegions {
+  /** Section tabs (ships / pilots / upgrades / factions). */
+  readonly tabs: HoloRect;
   readonly chips: HoloRect;
+  /** Type-to-search field. */
+  readonly search: HoloRect;
   readonly list: HoloRect;
   readonly detail: HoloRect;
 }
@@ -83,7 +87,7 @@ export interface EncyclopediaRegions {
  *
  * @param width - Screen width.
  * @param height - Screen height.
- * @returns Chip row, ship list panel and detail panel rectangles.
+ * @returns Tab row, chip row, search field, list panel and detail panel.
  */
 export function encyclopediaRegions(
   width: number,
@@ -93,11 +97,21 @@ export function encyclopediaRegions(
   const left = MENU_LAYOUT.margin;
   const top = MENU_LAYOUT.contentTop;
   const bottom = height - MENU_LAYOUT.margin;
-  const listTop = top + L.chipHeight + L.chipToListGap;
+  const row = (y: number, h: number): HoloRect => ({
+    x: left,
+    y,
+    width: L.listWidth,
+    height: h,
+  });
+  const chipsTop = top + L.chipHeight + L.chipGap;
+  const searchTop = chipsTop + L.chipHeight + L.chipGap;
+  const listTop = searchTop + L.chipHeight + L.chipToListGap;
   const detailX = left + L.listWidth + L.columnGap;
   return {
-    chips: { x: left, y: top, width: L.listWidth, height: L.chipHeight },
-    list: { x: left, y: listTop, width: L.listWidth, height: bottom - listTop },
+    tabs: row(top, L.chipHeight),
+    chips: row(chipsTop, L.chipHeight),
+    search: row(searchTop, L.chipHeight),
+    list: row(listTop, bottom - listTop),
     detail: {
       x: detailX,
       y: top,

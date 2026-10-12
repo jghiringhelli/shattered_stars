@@ -71,8 +71,8 @@ describe("abilityPointValue", () => {
     );
   });
 
-  it("40% faster recharge on one action is worth 3", () => {
-    expect(abilityPointValue({ boostCooldownMultiplier: 0.6 })).toBe(3);
+  it("40% faster recharge on one action is worth 2 (bots barely use it)", () => {
+    expect(abilityPointValue({ boostCooldownMultiplier: 0.6 })).toBe(2);
   });
 
   it("a drawback lowers the value", () => {

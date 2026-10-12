@@ -44,6 +44,22 @@ export interface RepairCandidate {
   readonly effect: AuraEffectType;
   readonly magnitude: number;
   readonly hullRepair: number;
+  /** Shield HP/s the projector's pilot / cards restore to allies (any faction). */
+  readonly allyShieldRegen?: number;
+}
+
+/**
+ * Total repair a candidate contributes: its faction repair field (shield
+ * regen + hull repair) plus any ally shield regen its pilot or cards grant.
+ * @param candidate - A covering projector.
+ * @returns Repair HP/s, 0 when it repairs nothing.
+ */
+function repairPowerOf(candidate: RepairCandidate): number {
+  const field =
+    candidate.effect === "shield_regen"
+      ? candidate.magnitude + candidate.hullRepair
+      : 0;
+  return field + (candidate.allyShieldRegen ?? 0);
 }
 
 /**
@@ -51,15 +67,14 @@ export interface RepairCandidate {
  *
  * @param current - The best candidate so far, or null.
  * @param candidate - Another covering projector.
- * @returns Whichever repairs more (only shield-regen fields repair).
+ * @returns Whichever repairs more (shield-regen fields and ally healers).
  */
 export function strongerRepairSource<T extends RepairCandidate>(
   current: T | null,
   candidate: T,
 ): T | null {
-  if (candidate.effect !== "shield_regen") return current;
+  const candidatePower = repairPowerOf(candidate);
+  if (candidatePower <= 0) return current;
   if (current === null) return candidate;
-  const currentPower = current.magnitude + current.hullRepair;
-  const candidatePower = candidate.magnitude + candidate.hullRepair;
-  return candidatePower > currentPower ? candidate : current;
+  return candidatePower > repairPowerOf(current) ? candidate : current;
 }

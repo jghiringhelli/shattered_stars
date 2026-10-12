@@ -3,6 +3,7 @@
  */
 
 import type { UpgradeDefinition } from "../../core/upgradeTypes";
+import { FORCE_POWER_UPGRADES } from "./forcePowers";
 import { MODIFICATION_UPGRADES } from "./modifications";
 import {
   ASTROMECH_UPGRADES,
@@ -23,4 +24,5 @@ export const UPGRADE_CATALOG: Readonly<Record<string, UpgradeDefinition>> = {
   ...ORDNANCE_UPGRADES,
   ...TURRET_UPGRADES,
   ...ILLICIT_UPGRADES,
+  ...FORCE_POWER_UPGRADES,
 };

@@ -9,9 +9,15 @@ price is derived from its contents — never authored.
 
 Categories (`UpgradeSlotType`): modification, configuration, title, sensor,
 tech, cannon, turret, missile, torpedo, bomb, crew, gunner, astromech,
-talent, illicit. `force_power` is reserved for Ascendant pilot cards.
+talent, illicit, force_power. Illicit slots sit on seven Void Corsair raider
+and smuggler hulls (Venom, Blade, Fang, Cutlass, Marauder, Bomber, Tender).
+The `force_power` slot comes from Ascendant pilot cards and takes the four
+Force powers (`forcePowers.ts`): Battle Meditation, Mending Light, Foresight,
+Righteous Wrath.
 
-Every card MUST change real-time combat (tested in `UpgradeCatalog.test.ts`):
+Every card MUST change real-time combat in every mode — tested in
+`UpgradeCatalog.test.ts` and, knob by knob through the shared consumers and
+mode by mode, in `tests/unit/arcade/CardEffectsEveryMode.test.ts`:
 
 | Card kind | Where its effect lives | Read by |
 |---|---|---|
@@ -23,11 +29,18 @@ Every card MUST change real-time combat (tested in `UpgradeCatalog.test.ts`):
 `CombatModifiers` knobs: laser damage (flat, calm-only, vs unshielded), damage
 taken, shield regen, hull repair, maneuver stress rate and relief tiers, boost / barrel
 roll / K-turn recharge, ordnance reload / charges / homing, turret rate of
-fire, stress inflicted per laser hit, cloak duration, aura projection and aura
-radius (command cards widen the aura on ships that already project one).
+fire, stress inflicted per laser hit, cloak duration, aura projection, aura
+radius (command cards widen the aura on ships that already project one) and
+what the aura gives allies inside it (strength, stress relief, hit chance,
+shield regen — `auraShieldRegenPerSecond` heals allies, never the projector).
 Stacking: additive bonuses sum, multipliers multiply, then clamp
 (damage taken ≥ 0.5×, recharge ≥ 0.4×, stress rate ≥ 0.5×, relief ≤ 2 tiers,
 aura radius ≤ +50%).
+
+Damage reduction on small hits: a dice-mode hit deals a few points, so
+`damage × mitigation` is rounded with a dither drawn from the hit roll
+(`DamageRules.ditheredHitDamage`) — the average is exact (a 15% reduction
+makes 3-damage hits average 2.55) and no extra random number is drawn.
 
 ### Secondary weapons — one model in every mode (`src/arcade/weapons/`)
 
@@ -43,12 +56,12 @@ runs the weapons step **before** primary fire each frame.
 
 | Weapon | Rule (from the card's `WeaponProfile`) |
 |---|---|
-| Missile / torpedo | Needs a **lock** on the pilot's target (target within range 3 for one 500 ms cycle; the launch spends it), the target inside the front arc (80°) and the card's range band (default 2–3; config `RANGE_1..3`). Leaves the nose on the ship's heading (the pilot aims the launcher) and steers for its target's intercept point (lead guidance) at the card's turn rate — torpedoes track slowly, a hard break still shakes a missile. On impact the warhead rolls its attack (card damage as dice) against the target's agility with the same odds as turrets and primaries (`calculateHitChance`) — agile interceptors shrug off missiles, as in X-Wing. A hit deals card damage × `ORDNANCE_DAMAGE_SCALE` (10: a decisive strike, proton torpedo 50). The launch, and the warhead while it flies, is this attacker's attack on the target (`HitImmunityLedger`): no launch at a target it already hit this cycle — a human's press is held for up to one cycle ("LAUNCH QUEUED") and fires as soon as the cycle clears. |
+| Missile / torpedo | Needs a **lock** on the pilot's target (target within range 3 for one 500 ms cycle; the launch spends it), the target inside the front arc (80°) and the card's range band (default 2–3; config `RANGE_1..3`). Leaves the nose on the ship's heading (the pilot aims the launcher) and steers for its target's intercept point (lead guidance) at the card's turn rate (torpedoes 240°/s, Concussion 270°/s, Seeker 330°/s; turn budget ≈ 1.5 s of turning, so Targeting Computer / Astromech add a second chance) — a top-speed head-on pass still shakes a torpedo; at the old 50–140°/s bots landed 5–15% of warheads and ordnance measured as a net loss. On impact the warhead rolls its attack (card damage as dice) against the target's agility with the same odds as turrets and primaries (`calculateHitChance`) — agile interceptors shrug off missiles, as in X-Wing. A hit deals card damage × `ORDNANCE_DAMAGE_SCALE` (2: strong but never a one-shot, proton torpedo 10; card texts derive the number from the constant). The launch, and the warhead while it flies, is this attacker's attack on the target (`HitImmunityLedger`): no launch at a target it already hit this cycle — a human's press is held for up to one cycle ("LAUNCH QUEUED") and fires as soon as the cycle clears. |
 | Bomb | Dropped astern (one speed-1 template); blasts 2 cycles later, every ship within range 1 (friendly fire). |
 | Mine | Dropped astern; arms after a cycle; the first **enemy** touching it sets it off (IFF); the blast hits every ship in reach; fizzles after 45 s. |
 | Turret | 360° within its band (default 1–2), the pilot's target first, finite traverse (240°/s), primary-laser dice for its card damage, at most one attack per cycle. Skirmish gunner crew aims it by hand. |
 | Cannon | A `realtime` modifier of the primary laser (no separate weapon). |
-| Cloak | Only ships whose action bar has `cloak` (Raven, Owl, Specter, Phantom, Shadow); 8 s (+ Phantom Strike), 15 s recharge, attacking breaks it, half damage taken while cloaked, cannot be locked. |
+| Cloak | Only ships whose action bar has `cloak` (Raven, Owl, Specter, Phantom, Shadow); 8 s (+ Phantom Strike), 15 s recharge, attacking breaks it, half damage taken while cloaked, cannot be locked. A bot fires as soon as it can, so cloak duration alone measures ~0 — Phantom Strike also gives +1 laser damage from behind the target. |
 
 Controls: FIRE_SECONDARY (Shift+Space / tap / pad X) fires the selected slot,
 WEAPON_CYCLE (Tab / RB) selects the next, CLOAK (C). The HUD weapon bar shows
@@ -65,12 +78,18 @@ aura regen and hull repair, Survival relics/affixes, Campaign armory and
 research, `shieldsPerKill`) is authored in **real-time hit points** (HP/s, HP
 per kill) and applied as is — nothing in the repair pipeline multiplies by
 `DURABILITY_SCALE`. One shield/hull token is `DURABILITY_SCALE` (12) HP, so a
-card that "restores 1 shield every ~8 s" carries 12 / 8 ≈ 1.44 HP/s. Repairs
+card that "restores 1 shield every ~100 s" carries 12 / 100 = 0.12 HP/s. Repairs
 never exceed max values and never revive a destroyed ship.
+
+Shield regen never pauses: shields refill fully between passes, so against
+the game's AI it is worth ~34 points per HP/s (0.06 HP/s ≈ 2.5 pts, 0.24 ≈
+7.4, ≥ 0.72 HP/s wins ~100% of mirror duels — unkillable). Card and pilot
+regen therefore stays at 0.06–0.24 HP/s (tested).
 
 | Source | Knob / rule | Cards |
 |---|---|---|
-| Own shield regen | `shieldRegenPerSecond` (no pause) | Repair Astromech (R2-style, 1.44 HP/s), Jury-Rigged Deflectors, Regenerative Shields, ability regen |
+| Own shield regen | `shieldRegenPerSecond` (no pause) | Repair Astromech (R2-style, 0.12 HP/s), Jury-Rigged Deflectors (0.18), Regenerative Matrix (0.18), campaign Shield Upgrade / Regenerative Shields (0.12 / 0.24) |
+| Allies' shield regen | `auraShieldRegenPerSecond`: allies inside the pilot's aura, never the pilot | Mending Light (0.06), Healing Aura (0.12), Force Heal (0.12), Shield Transfer (0.06) |
 | Own hull repair | `hullRepairPerSecond`, paused `HULL_REPAIR_DAMAGE_PAUSE_MS` (3 s) after any hit | Mechanic crew (0.96 HP/s), Patch Astromech (R5-style, 0.6 HP/s) |
 | Repair field | Ascendant Aegis Field: shield regen; projected by a support or capital ship it also repairs allied hull at `AURA_HULL_REPAIR_RATIO` (¼) of its rate, same 3 s pause (`src/systems/aura/AuraRepair.ts`) | — |
 | Damage control | A capital's emergency repair / power-to-engines order (Skirmish) | — |
@@ -94,11 +113,52 @@ damage control (3); plain shield regen only shimmers.
   taken above 1×, or a negative stat) and is priced below its clean equivalent.
 - Aura-granting cards are exactly those with `realtime.projectsAura`.
 
-### Price rule (fixed point values)
-+1 hull = 3 · +1 shield = 4 · +1 laser damage = 5 (cannon) or 3 with a drawback ·
-40% faster recharge on one maneuver = 3 · 15% less damage taken ≈ 5–6 ·
-aura projection = 4 · trade-off configuration = 2 · illicit = clean equivalent − 1 ·
-shield regen ≈ 1.44 HP/s = 4 · hull repair (out of fire) 0.6 HP/s = 3, 0.96 HP/s = 4.
+### Price rule — one scale for cards and pilot abilities (`src/data/abilityPricing.ts`)
+
+A non-weapon card costs `cardPointValue` = its hull/shield tokens × 4 plus the
+value of its real-time effect, one point off for illicit gear, at least 1; a
+pilot ability costs `abilityPointValue` of the same effect, so a card and an
+ability that do the same thing cost the same (tested in `cardPricing.test.ts`:
+every non-weapon card's price equals the rule). Weapon cards carry their
+measured price.
+
+Calibration (2026-10-12): the skill arena flies two identical hulls (Gladius,
+Viper, Falcon) at the Normal tier, one with the effect and one without, 600
+battles per effect on fixed seeds, both seatings; win odds convert at 0.285
+logit per point, the slope both anchors share (+1 shield token = 4, +1 laser
+damage = 5). Ally effects were measured in 3v3. Per unit:
+
+| Knob | Points | Measured |
+|---|---|---|
+| +1 hull / +1 shield token | 4 | identical (shields spill into hull) |
+| +1 laser damage / while unstressed / vs unshielded | 5 / 4 / 3 | HLC 5.0, Marksman 3.6, Predator 2.7 |
+| +1 laser dmg at range 1 / behind / bullseye / stressed / damaged | 1.2 / 1.3 / 0.8 / 1.6 / 2.7 | as listed |
+| +1 laser dmg with a wingman / in a kill frenzy | 2 / 2 | squad-only (1v1 reads 0) |
+| damage taken (per 1.0 of reduction) / with a wingman | 16 / 10 | Stealth Device 15% = 2.4 |
+| shield regen / allies' shield regen (per HP/s) | 34 / 34 | 0.12 HP/s = 4.1 |
+| hull repair (per HP/s, paused after hits) | 5.5 | Mechanic 0.96 = 5.1 |
+| stress on hit (per 1.0) / stress relief tier / stress rate | 13 / 1.5 / 2 | Ion Cannon 0.12 = 1.5 |
+| boost / barrel roll / K-turn recharge (per 1.0) | 5 | bots barely use them (~0) |
+| ordnance charges / reload / homing° | 2 / 3 / 0.005 | Weapons Engineer 1.8 |
+| turret rate of fire (per 1.0) | 5 | Veteran Gunner 1.6 |
+| aura projection / radius / strength / ally hit chance / ally relief | 1.5 / 2 / 2 / 10 / 1.5 | Tactical Officer (3v3) ≈ 2 |
+
+Weapon prices (measured on the same mirror): Light / Twin / Ion / Quad turret
+4 / 7 / 6 / 9 (Twin and Quad reload in 3 s), Proton / Ion torpedo 4 / 2,
+Concussion / Seeker missile 2 / 1, Proton bomb 1, Seismic charge 1, Cluster /
+Proximity mine 5 / 3.
+
+### Reach (tested in `QuickBuildReach.test.ts`)
+
+Battles fly quick builds only, so every pilot card and every upgrade card
+appears in at least one offered quick build (one with at least one card)
+that is legal, live and affordable where its ship flies (a standard 200-point
+squad, or Epic for huge hulls). The original catalogue lives in
+`src/data/ShipLoadouts.ts`; the builds that fly every remaining pilot and
+card, plus the cheap Synthetic swarm builds (initiative 1–2 drones with the
+1-point Swarm Uplink), live per faction in `src/data/loadouts/` and are
+merged after it (so each ship's default build is unchanged).
+`src/data/quickBuildIndex.ts` answers "which builds fly this pilot / card".
 
 ## 2. Slots (`SHIP_SLOTS` in `src/data/ShipSlots.ts`)
 
@@ -156,7 +216,7 @@ loadout's modifier sheet is its upgrades plus its pilot's ability
 | "After you destroy a ship" | shields per kill, or a 4 s laser frenzy |
 | "When destroyed" | death blast on enemies at range 1 |
 | "Free boost / barrel roll" | faster recharge of that action |
-| Acts on friendlies | projects the faction aura |
+| Acts on friendlies | projects the faction aura; heals / calms friendlies → allies inside the aura regenerate shields / fly a stress tier easier (never the pilot) |
 | Force "Action:" | automatic on a recharge (shield regen, stress per hit) |
 
 Conditional knobs: range 1 (`RANGE_1`), rear arc (±45° behind the
@@ -183,3 +243,11 @@ target), bullseye (±10° off the nose), wingman (a friendly within
   what `assignQuickBuilds` would hand out, so an untouched chooser changes
   nothing; cycling skips builds whose unique pilot already flies elsewhere
   in the squad. Online Dogfight skips the setup screen and flies defaults.
+- The Encyclopedia (`EncyclopediaScene`, data in `src/data/encyclopedia/`)
+  browses ships, pilots (ability text + real-time reading + the builds that
+  fly them), upgrade cards (grouped by slot, with role / best-with hints and
+  requirements) and the five factions (identity, aura, fleet, cheapest
+  builds). Sections switch with the tabs or LEFT / RIGHT; the faction chips
+  filter (keeping cards every faction may use); typing searches every word
+  of an entry (BACKSPACE / DELETE edit the query). Tested in
+  `encyclopediaCodex.test.ts` and `tests/e2e/encyclopedia.spec.ts`.

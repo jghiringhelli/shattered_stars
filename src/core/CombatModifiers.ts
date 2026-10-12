@@ -66,6 +66,11 @@ export interface CombatModifiers {
   readonly auraStressReliefTiers: number;
   /** Hit-chance bonus this ship's aura grants allies inside it (0–1). */
   readonly auraHitChanceBonus: number;
+  /**
+   * Real-time shield HP per second this ship's aura restores to every ally
+   * inside it (never to the projector itself).
+   */
+  readonly auraShieldRegenPerSecond: number;
 
   // --- Conditional knobs (pilot abilities), read per hit -------------------
   /** Laser damage added when the target is at range 1. */
@@ -119,6 +124,7 @@ export const NEUTRAL_MODIFIERS: CombatModifiers = {
   auraMagnitudeBonus: 0,
   auraStressReliefTiers: 0,
   auraHitChanceBonus: 0,
+  auraShieldRegenPerSecond: 0,
   closeRangeLaserBonus: 0,
   rearArcLaserBonus: 0,
   bullseyeLaserBonus: 0,
@@ -175,6 +181,7 @@ const ADDITIVE_KEYS = [
   "auraMagnitudeBonus",
   "auraStressReliefTiers",
   "auraHitChanceBonus",
+  "auraShieldRegenPerSecond",
   "closeRangeLaserBonus",
   "rearArcLaserBonus",
   "bullseyeLaserBonus",

@@ -21,6 +21,7 @@ import {
   type CombatModifiers,
 } from "../../../../src/core/CombatModifiers";
 import { ATTACK_INTERVAL_MS } from "../../../../src/arcade/systems/CombatTempo";
+import { UPGRADE_DEFINITIONS } from "../../../../src/systems/UpgradeSystem";
 
 const MS_PER_S = 1000;
 
@@ -55,7 +56,8 @@ describe("createArsenal", () => {
     expect(slot.maxCharges).toBe(4);
     expect(slot.spec.cooldownMs).toBe(2000);
     expect(slot.spec.kind === "missile" && slot.spec.homingTurnBudget).toBe(
-      450,
+      (UPGRADE_DEFINITIONS.concussion_missile?.weapon?.homingTurnBudget ?? 0) +
+        90,
     );
   });
 

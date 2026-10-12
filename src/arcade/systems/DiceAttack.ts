@@ -25,7 +25,11 @@ import {
   shotPosition,
   type ShotLevers,
 } from "../ShotLevers";
-import { applyArmor, damageMitigationOf } from "./DamageRules";
+import {
+  applyArmor,
+  damageMitigationOf,
+  ditheredHitDamage,
+} from "./DamageRules";
 
 /** One shot. */
 export interface DiceAttackInput {
@@ -169,7 +173,11 @@ export function resolveDiceAttack(input: DiceAttackInput): DiceAttackResult {
   );
   return {
     hit: true,
-    damage: Math.max(1, Math.round(armored * mitigation)),
+    // A hit roll is uniform on [0, hitChance): reuse it as the rounding dither.
+    damage: ditheredHitDamage(
+      armored * mitigation,
+      input.roll / levered.hitChance,
+    ),
     stressOnTarget: attacker.modifiers.stressOnHit,
   };
 }

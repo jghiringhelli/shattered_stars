@@ -73,6 +73,7 @@ const KNOB_VOTES: Readonly<Record<keyof CombatModifiers, KnobVote>> = {
   auraMagnitudeBonus: up("support"),
   auraStressReliefTiers: up("support"),
   auraHitChanceBonus: up("support"),
+  auraShieldRegenPerSecond: up("support"),
   deathBlastDamage: up("brawler"),
 };
 

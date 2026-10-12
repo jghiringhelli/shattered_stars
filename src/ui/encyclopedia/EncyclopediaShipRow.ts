@@ -1,6 +1,7 @@
 /**
- * EncyclopediaShipRow — one selectable row of the encyclopedia ship list:
- * a faction-accent bar, the ship name and a right-aligned role caption.
+ * EncyclopediaShipRow — one selectable row of the encyclopedia list (a ship,
+ * pilot, upgrade card or faction): a faction-accent bar, the name and a
+ * right-aligned caption (role, initiative, slot).
  * Idle rows are bare text on the list panel; hover raises the row with a
  * faint accent border and the selected row gets a tinted accent frame.
  */
@@ -19,17 +20,19 @@ import {
 
 /** Data shown by a row. */
 export interface ShipRowModel {
-  readonly shipId: string;
+  /** Id of the codex entry the row selects. */
+  readonly id: string;
   readonly name: string;
-  readonly roleLabel: string;
-  /** Faction accent of the ship. */
+  /** Right-aligned caption (role, initiative, slot). */
+  readonly caption: string;
+  /** Faction accent of the entry. */
   readonly accent: number;
 }
 
 /** Row interaction callbacks. */
 export interface ShipRowHandlers {
   /** Invoked when the row is pressed. */
-  readonly onSelect: (shipId: string) => void;
+  readonly onSelect: (id: string) => void;
   /** Whether the pointer is inside the visible list viewport. */
   readonly isInViewport: (pointer: Phaser.Input.Pointer) => boolean;
 }
@@ -57,7 +60,7 @@ export class EncyclopediaShipRow {
 
   /**
    * @param scene - Owning scene.
-   * @param model - Ship data to show.
+   * @param model - Entry data to show.
    * @param size - Row width and height.
    * @param handlers - Selection and viewport callbacks.
    */
@@ -95,9 +98,9 @@ export class EncyclopediaShipRow {
     this.redraw();
   }
 
-  /** Ship id shown by this row. */
-  get shipId(): string {
-    return this.model.shipId;
+  /** Codex entry id shown by this row. */
+  get id(): string {
+    return this.model.id;
   }
 
   /**
@@ -115,7 +118,7 @@ export class EncyclopediaShipRow {
       .text(
         this.size.width - HOLO_SPACING.md,
         this.size.height / 2,
-        this.model.roleLabel,
+        this.model.caption,
         {
           ...holoFont(ROW_STYLE.roleSize, HOLO_TYPE_SCALE.caption.weight),
           color: toCssColor(HOLO_PALETTE.textMuted),
@@ -143,8 +146,7 @@ export class EncyclopediaShipRow {
     hit.on(
       Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN,
       (pointer: Phaser.Input.Pointer) => {
-        if (handlers.isInViewport(pointer))
-          handlers.onSelect(this.model.shipId);
+        if (handlers.isInViewport(pointer)) handlers.onSelect(this.model.id);
       },
     );
   }

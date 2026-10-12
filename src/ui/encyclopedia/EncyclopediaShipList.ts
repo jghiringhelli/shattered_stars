@@ -1,20 +1,16 @@
 /**
- * EncyclopediaShipList — the scrollable ship list of the encyclopedia: a
- * HoloPanel ("SHIPS · N" header, filter accent border), masked rows, a thin
- * scroll indicator and the selected-row state.
+ * EncyclopediaShipList — the scrollable list of the encyclopedia (ships,
+ * pilots, upgrade cards or factions): a HoloPanel ("SHIPS · N" header,
+ * filter accent border), masked rows, a thin scroll indicator and the
+ * selected-row state.
  */
 
 import Phaser from "phaser";
-import type { EncyclopediaEntry } from "../../data/ShipEncyclopedia";
-import { getShipDefinition } from "../../data/ShipDefinitions";
+import type { CodexEntry } from "../../data/encyclopedia/codex";
 import { createHoloPanel, type HoloPanel } from "../hud/HoloPanel";
 import type { HoloRect } from "../menu/holoChrome";
 import { HOLO_PALETTE, HOLO_SPACING, factionAccent } from "../theme/HoloTheme";
-import {
-  ENCYCLOPEDIA_LAYOUT,
-  PANEL_HEADER_HEIGHT,
-  snakeToLabel,
-} from "./encyclopediaLayout";
+import { ENCYCLOPEDIA_LAYOUT, PANEL_HEADER_HEIGHT } from "./encyclopediaLayout";
 import { EncyclopediaShipRow } from "./EncyclopediaShipRow";
 
 /** Scroll indicator geometry. */
@@ -34,12 +30,12 @@ export class EncyclopediaShipList {
   /**
    * @param scene - Owning scene.
    * @param area - Panel bounds.
-   * @param onSelect - Invoked with a ship id when a row is pressed.
+   * @param onSelect - Invoked with an entry id when a row is pressed.
    */
   constructor(
     private readonly scene: Phaser.Scene,
     area: HoloRect,
-    private readonly onSelect: (shipId: string) => void,
+    private readonly onSelect: (id: string) => void,
   ) {
     this.panel = createHoloPanel(
       scene,
@@ -69,26 +65,31 @@ export class EncyclopediaShipList {
   }
 
   /**
-   * Replace the listed ships.
+   * Replace the listed entries.
    *
-   * @param entries - Ships to list, in order.
+   * @param entries - Entries to list, in order.
    * @param accent - Panel accent (active faction or neutral).
+   * @param title - Panel title before the count (e.g. "SHIPS").
    */
-  setEntries(entries: ReadonlyArray<EncyclopediaEntry>, accent: number): void {
+  setEntries(
+    entries: ReadonlyArray<CodexEntry>,
+    accent: number,
+    title: string,
+  ): void {
     this.rowsContainer.removeAll(true);
     this.rows = entries.map((entry, i) => this.createRow(entry, i));
-    this.panel.setAccent(accent).setTitle(`SHIPS · ${entries.length}`);
+    this.panel.setAccent(accent).setTitle(`${title} · ${entries.length}`);
     this.scrollTo(0);
   }
 
   /**
-   * Highlight the row of a ship and scroll it into view.
+   * Highlight the row of an entry and scroll it into view.
    *
-   * @param shipId - Selected ship id.
+   * @param id - Selected entry id.
    */
-  setSelected(shipId: string): void {
+  setSelected(id: string): void {
     this.rows.forEach((row, i) => {
-      const selected = row.shipId === shipId;
+      const selected = row.id === id;
       row.setSelected(selected);
       if (selected) this.ensureVisible(i);
     });
@@ -111,18 +112,14 @@ export class EncyclopediaShipList {
     return ENCYCLOPEDIA_LAYOUT.rowHeight + ENCYCLOPEDIA_LAYOUT.rowGap;
   }
 
-  private createRow(
-    entry: EncyclopediaEntry,
-    index: number,
-  ): EncyclopediaShipRow {
-    const def = getShipDefinition(entry.shipId);
+  private createRow(entry: CodexEntry, index: number): EncyclopediaShipRow {
     const row = new EncyclopediaShipRow(
       this.scene,
       {
-        shipId: entry.shipId,
-        name: def?.name ?? entry.shipId,
-        roleLabel: snakeToLabel(def?.role ?? ""),
-        accent: factionAccent(def?.faction),
+        id: entry.id,
+        name: entry.name,
+        caption: entry.tag,
+        accent: factionAccent(entry.faction ?? undefined),
       },
       { width: this.viewport.width, height: ENCYCLOPEDIA_LAYOUT.rowHeight },
       {

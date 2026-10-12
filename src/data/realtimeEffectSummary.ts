@@ -144,6 +144,9 @@ const KNOB_PHRASES: Readonly<Record<keyof CombatModifiers, KnobPhrase>> = {
   auraHitChanceBonus: additive(
     (v) => `allies in the aura +${percent(v)}% hit chance`,
   ),
+  auraShieldRegenPerSecond: additive(
+    (v) => `allies in the aura regenerate ${formatNumber(v)} shield HP/s`,
+  ),
   deathBlastDamage: additive(
     (v) => `explodes for ${formatNumber(v)} dmg when destroyed`,
   ),

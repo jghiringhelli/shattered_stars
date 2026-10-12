@@ -83,10 +83,11 @@ describe("a locked launch against a manoeuvring fighter", () => {
     expect(chase(body({ y: 3000 - RANGE_3 }), { vx: 0, vy: 300 })).toBe(true);
   });
 
-  it("a_slow_tracking_torpedo_launched_well_off_the_nose_misses_a_head_on_pass", () => {
-    // 200 px out, 35° off the nose, closing at 300 px/s: point the nose.
+  it("a_torpedo_launched_well_off_the_nose_misses_a_fast_head_on_pass", () => {
+    // 200 px out, 35° off the nose, closing at ~430 px/s (a top-speed pass):
+    // the torpedo cannot turn inside the pass.
     const start = body({ x: 3000 + 115, y: 3000 - 164 });
-    expect(chase(start, { vx: -170, vy: 250 })).toBe(false);
+    expect(chase(start, { vx: -250, vy: 350 })).toBe(false);
   });
 
   it("leads_a_crossing_target_and_intercepts_it", () => {

@@ -7,37 +7,20 @@
  * picker all use these loadouts.
  */
 
-import type { ShipRole } from "../core/types";
 import { deriveLoadoutCost } from "./loadoutPricing";
+import type {
+  BlueprintsByShip,
+  LoadoutBlueprint,
+  ShipLoadout,
+} from "./loadouts/loadoutTypes";
+import { ROSTER_BLUEPRINTS } from "./loadouts";
 
 export { SHIP_SLOTS, getShipSlots, type ShipSlotConfig } from "./ShipSlots";
+export type { LoadoutBlueprint, ShipLoadout } from "./loadouts/loadoutTypes";
 
 // ============================================
 // Pre-Built Loadouts
 // ============================================
-
-export interface ShipLoadout {
-  readonly id: string;
-  readonly name: string;
-  readonly shipId: string;
-  /** The pilot flying this build (a PILOT_CARDS key for the same ship). */
-  readonly pilotId: string;
-  readonly upgrades: readonly string[]; // Upgrade IDs
-  /** Bare ship + pilot surcharge + every equipped upgrade. Derived, never authored. */
-  readonly pointCost: number;
-  readonly description: string;
-  readonly role: "offense" | "defense" | "support" | "balanced" | "swarm";
-}
-
-/**
- * A loadout as authored: what the build IS, with no price attached.
- *
- * Prices used to be written by hand next to each build and drifted badly —
- * 196 of 215 disagreed with their own upgrade list and 20 undercut the bare
- * ship. Authoring only the contents and deriving the price keeps the
- * catalogue consistent and incremental by construction.
- */
-export type LoadoutBlueprint = Omit<ShipLoadout, "pointCost">;
 
 /**
  * Pre-configured loadouts for AI and campaign use
@@ -2406,23 +2389,45 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
 };
 
 /**
+ * The authored builds of every source, per ship: the catalogue above first
+ * (so each ship's default quick build is unchanged), then the roster builds
+ * that fly every remaining pilot and card (src/data/loadouts/).
+ *
+ * @param sources - Build sets keyed by ship id, in priority order.
+ * @returns One blueprint list per ship.
+ */
+function mergeBlueprints(
+  ...sources: ReadonlyArray<BlueprintsByShip>
+): Record<string, LoadoutBlueprint[]> {
+  const merged: Record<string, LoadoutBlueprint[]> = {};
+  for (const source of sources) {
+    for (const [shipId, blueprints] of Object.entries(source)) {
+      merged[shipId] = [...(merged[shipId] ?? []), ...blueprints];
+    }
+  }
+  return merged;
+}
+
+/**
  * Every pre-built loadout, priced from its contents.
  *
  * Built once at module load by running each blueprint through
  * `deriveLoadoutCost`, so `pointCost` can never disagree with `upgrades`.
  */
 export const SHIP_LOADOUTS: Record<string, ShipLoadout[]> = Object.fromEntries(
-  Object.entries(LOADOUT_BLUEPRINTS).map(([shipId, blueprints]) => [
-    shipId,
-    blueprints.map((blueprint) => ({
-      ...blueprint,
-      pointCost: deriveLoadoutCost(
-        blueprint.shipId,
-        blueprint.upgrades,
-        blueprint.pilotId,
-      ),
-    })),
-  ]),
+  Object.entries(mergeBlueprints(LOADOUT_BLUEPRINTS, ROSTER_BLUEPRINTS)).map(
+    ([shipId, blueprints]) => [
+      shipId,
+      blueprints.map((blueprint) => ({
+        ...blueprint,
+        pointCost: deriveLoadoutCost(
+          blueprint.shipId,
+          blueprint.upgrades,
+          blueprint.pilotId,
+        ),
+      })),
+    ],
+  ),
 );
 
 // ============================================
@@ -2527,7 +2532,7 @@ export function buildRandomSquad(
 
   // Get all loadouts for this faction (by ship faction)
   const factionLoadouts: ShipLoadout[] = [];
-  for (const [shipId, loadouts] of Object.entries(SHIP_LOADOUTS)) {
+  for (const loadouts of Object.values(SHIP_LOADOUTS)) {
     // We'd need to check ship faction here - simplified for now
     factionLoadouts.push(...loadouts);
   }

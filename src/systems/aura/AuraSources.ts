@@ -46,6 +46,8 @@ export interface SourceInfo {
   readonly stressRelief: number;
   /** Hit-chance bonus the projector's pilot grants allies (any faction). */
   readonly hitChance: number;
+  /** Shield HP/s the projector's pilot / cards restore to allies (any faction). */
+  readonly allyShieldRegen: number;
 }
 
 /**
@@ -142,6 +144,7 @@ export function buildSources(ships: ReadonlyArray<AuraShip>): SourceInfo[] {
       hullRepair: auraHullRepairRate(aura.effect, projection.kind, magnitude),
       stressRelief: ship.auraStressReliefTiers ?? 0,
       hitChance: ship.auraHitChanceBonus ?? 0,
+      allyShieldRegen: ship.auraShieldRegenPerSecond ?? 0,
     });
   }
   return sources;
@@ -206,5 +209,6 @@ export function accumulate(acc: ActiveAura, source: SourceInfo): ActiveAura {
       MAX_AURA_HIT_CHANCE_BONUS,
       next.hitChanceBonus + source.hitChance,
     ),
+    shieldRegenPerSecond: next.shieldRegenPerSecond + source.allyShieldRegen,
   };
 }

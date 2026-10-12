@@ -52,6 +52,8 @@ export interface AuraShip {
   readonly auraStressReliefTiers?: number;
   /** Hit-chance bonus this ship's aura grants allies inside it. */
   readonly auraHitChanceBonus?: number;
+  /** Shield HP/s this ship's aura restores to allies inside it. */
+  readonly auraShieldRegenPerSecond?: number;
 }
 
 /** The distinct effect a faction aura applies to covered allies. */
@@ -191,9 +193,11 @@ export const FACTION_AURAS: Record<FactionId, FactionAura> = {
     faction: "ascendant_empire",
     effect: "shield_regen",
     radius: 220,
-    // Real-time shield HP per second (0.2 shield tokens/s x DURABILITY_SCALE).
-    magnitude: 2.4,
-    description: "Allied ships slowly regenerate shields (2.4 HP/s).",
+    // Real-time shield HP per second. Regen accumulates over a whole battle
+    // (a 3-minute reinforced match), so it is kept small: 2.4 HP/s made AE
+    // lists win 80 % of reinforced battles, 0.3–0.4 HP/s ~50 % (balance report).
+    magnitude: 0.4,
+    description: "Allied ships slowly regenerate shields (0.4 HP/s).",
   },
 };
 

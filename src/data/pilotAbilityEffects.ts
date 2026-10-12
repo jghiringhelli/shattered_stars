@@ -15,7 +15,13 @@
  *   steady rate (shield regeneration, stress inflicted per hit).
  * - Regen / repair rates and shields-per-kill are REAL-TIME hit points
  *   (HP/s, HP per kill), never rescaled: one shield token is
- *   DURABILITY_SCALE (12) HP, so 1.2 HP/s restores a token every 10 s.
+ *   DURABILITY_SCALE (12) HP. Shield regen never pauses, so it is worth
+ *   ~34 points per HP/s against the game's AI (abilityPricing): pilot
+ *   regen stays at 0.06-0.24 HP/s (a token every 50-200 s) — at 1+ HP/s a
+ *   ship out-heals a duelist's fire and cannot be killed.
+ * - Abilities whose card text heals or calms FRIENDLY ships act on the
+ *   allies inside the pilot's aura (auraShieldRegenPerSecond,
+ *   auraStressReliefTiers), never on the pilot itself.
  * - "While no friendly is near" reads as protection that a nearby wingman
  *   cancels (a wingman damage-taken drawback).
  *
@@ -54,7 +60,7 @@ export const PILOT_ABILITY_REALTIME: Readonly<Record<string, RealtimeEffect>> =
     elusive: { damageTakenMultiplier: 0.9 },
     hold_the_line: { wingmanDamageTakenMultiplier: 0.8 },
     radiant_judgment: { closeRangeLaserBonus: 1, damageTakenMultiplier: 0.95 },
-    regenerative_matrix: { shieldRegenPerSecond: 1.8 },
+    regenerative_matrix: { shieldRegenPerSecond: 0.18 },
     smugglers_luck: { damageTakenMultiplier: 0.92, cloakDurationBonus: 0.5 },
     stalwart: { damageTakenMultiplier: 0.85 },
 
@@ -105,12 +111,16 @@ export const PILOT_ABILITY_REALTIME: Readonly<Record<string, RealtimeEffect>> =
       auraRadiusBonus: 0.25,
       auraMagnitudeBonus: 0.15,
     },
-    healing_aura: { projectsAura: true, shieldRegenPerSecond: 1.2 },
+    // Card: each friendly at range 0-2 recovers 1 shield -> allies inside the
+    // pilot's aura regenerate a shield token every ~100 s (not the pilot).
+    healing_aura: { projectsAura: true, auraShieldRegenPerSecond: 0.12 },
     hive_mind: { wingmanLaserBonus: 1, wingmanDamageTakenMultiplier: 0.9 },
     // Card: reveal an enemy's planned maneuver -> allies dodge better: the
     // aura is 30% stronger.
     informant: { projectsAura: true, auraMagnitudeBonus: 0.3 },
-    inspiring_presence: { projectsAura: true, stressReliefTiers: 1 },
+    // Card: up to 3 friendlies remove 1 stress -> allies inside the aura fly
+    // one stress tier easier (the pilot does not).
+    inspiring_presence: { projectsAura: true, auraStressReliefTiers: 1 },
     networked_aim: { projectsAura: true, wingmanLaserBonus: 1 },
     // Card: remove 1 stress from a friendly -> allies in a 10% wider aura
     // fly one stress tier easier.
@@ -119,7 +129,9 @@ export const PILOT_ABILITY_REALTIME: Readonly<Record<string, RealtimeEffect>> =
       auraRadiusBonus: 0.1,
       auraStressReliefTiers: 1,
     },
-    shield_transfer: { projectsAura: true, shieldRegenPerSecond: 0.6 },
+    // Card: transfer 1 shield to a friendly at range 0-1 -> allies inside the
+    // aura regenerate a shield token every ~200 s.
+    shield_transfer: { projectsAura: true, auraShieldRegenPerSecond: 0.06 },
     swarm_tactics: { wingmanLaserBonus: 1, auraRadiusBonus: 0.05 },
 
     // --- Force (automatic on a recharge) -------------------------------------
@@ -131,7 +143,14 @@ export const PILOT_ABILITY_REALTIME: Readonly<Record<string, RealtimeEffect>> =
       auraRadiusBonus: 0.15,
       auraMagnitudeBonus: 0.2,
     },
-    force_heal: { projectsAura: true, shieldRegenPerSecond: 2.4 },
+    // Card: friendlies at range 0-2/0-3 recover a shield or remove a red
+    // token -> allies inside the aura regenerate 0.12 shield HP/s more and
+    // fly one stress tier easier.
+    force_heal: {
+      projectsAura: true,
+      auraShieldRegenPerSecond: 0.12,
+      auraStressReliefTiers: 1,
+    },
     force_push: { stressOnHit: 0.1 },
     // Card: "When a friendly ship at range 0-1 defends, spend 1 Force: the
     // defender adds 1 evade" — protection for ships flying together, not
@@ -158,8 +177,8 @@ export const PILOT_ABILITY_REALTIME: Readonly<Record<string, RealtimeEffect>> =
       damageTakenMultiplier: 0.92,
       barrelRollCooldownMultiplier: 0.9,
     },
-    shield_upgrade: { shieldRegenPerSecond: 1.2 },
-    regenerative_shields: { shieldRegenPerSecond: 2.4 },
+    shield_upgrade: { shieldRegenPerSecond: 0.12 },
+    regenerative_shields: { shieldRegenPerSecond: 0.24 },
     barrel_roll_efficiency: { barrelRollCooldownMultiplier: 0.75 },
     boost_expertise: {
       boostCooldownMultiplier: 0.85,
