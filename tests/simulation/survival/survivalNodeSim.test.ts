@@ -6,7 +6,10 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { createRun } from "../../../src/systems/survival/RunState";
+import {
+  createRun,
+  FREE_STARTING_ESCORTS,
+} from "../../../src/systems/survival/RunState";
 import { enterNode } from "../../../src/systems/survival/RunNavigation";
 import { nextOptions } from "../../../src/systems/survival/SectorMapGenerator";
 import { flagshipLoadout } from "../../../src/arcade/systems/SurvivalLoadouts";
@@ -42,8 +45,8 @@ describe("simulateNodeBattle", () => {
     expect(again.won).toBe(battle.won);
   });
 
-  it("fights the run's fleet against the node's wave and reports a decision", () => {
-    expect(battle.playerShips).toBe(1);
+  it("fights the run's fleet (flagship + free wingman) against the node's wave and reports a decision", () => {
+    expect(battle.playerShips).toBe(1 + FREE_STARTING_ESCORTS);
     expect(battle.enemyShips).toBeGreaterThanOrEqual(1);
     expect(battle.timedOut).toBe(false);
     expect(battle.durationMs).toBeGreaterThan(0);

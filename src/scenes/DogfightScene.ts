@@ -66,6 +66,7 @@ import { defaultDifficulty } from "../systems/SettingsStorage";
 import { dogfightBriefing, showSortieBriefing } from "../ui/briefing";
 import { bindMenuBack } from "../ui/menu/menuTransitions";
 import { FACTION_NAMES_SHORT } from "../data/survival/factionNames";
+import { DOGFIGHT_DEFAULT_PAIRING } from "../data/DogfightDefaults";
 import {
   absorbDamage,
   combatantOf,
@@ -219,10 +220,10 @@ export class DogfightScene extends Phaser.Scene {
   private enemySideScore: SideScore = createSideScore();
 
   // Settings
-  private playerFaction: FactionId = "free_confederation";
-  private enemyFaction: FactionId = "terran_hegemony";
-  private playerShipId = "confed_falcon";
-  private enemyShipId = "terran_raptor";
+  private playerFaction: FactionId = DOGFIGHT_DEFAULT_PAIRING.player.faction;
+  private enemyFaction: FactionId = DOGFIGHT_DEFAULT_PAIRING.enemy.faction;
+  private playerShipId = DOGFIGHT_DEFAULT_PAIRING.player.shipId;
+  private enemyShipId = DOGFIGHT_DEFAULT_PAIRING.enemy.shipId;
   private difficulty: "easy" | "normal" | "hard" | "brutal" = "normal";
   /** Preselects Settings › Default Difficulty (kept across rematches). */
   private readonly difficultyDefault = new SettingsDefaultPick(

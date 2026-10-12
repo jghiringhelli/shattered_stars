@@ -10,11 +10,14 @@ import {
   adjustFleetHull,
   EVENT_HULL_FLOOR,
   enterSector,
+  FREE_STARTING_ESCORTS,
   removeEscort,
   upgradeShip,
   withLog,
 } from "../../../../src/systems/survival/RunState";
 import { MAX_ESCORTS } from "../../../../src/data/survival/escorts";
+import { FACTION_STARTER_SHIPS } from "../../../../src/data/survival/starters";
+import type { FactionId } from "../../../../src/config";
 import {
   MAX_SHIP_UPGRADES,
   STARTING_SALVAGE,
@@ -51,7 +54,7 @@ describe("RunRng", () => {
 });
 
 describe("createRun", () => {
-  it("starts in sector 1 at no node with starting salvage and an intact flagship", () => {
+  it("starts in sector 1 at no node with starting salvage, an intact flagship and its free wingman", () => {
     const run = RunBuilder.aRun().build();
     expect(run.sector).toBe(1);
     expect(run.currentNodeId).toBeNull();
@@ -62,11 +65,26 @@ describe("createRun", () => {
       shields: 1,
       upgrades: 0,
     });
-    expect(run.escorts).toEqual([]);
+    expect(run.escorts).toHaveLength(FREE_STARTING_ESCORTS);
     expect(run.pools).toEqual(["base"]);
   });
 
-  it("applies meta unlocks: escort packages, war chest, relic pools", () => {
+  it("gives every run one escort wingman: a fresh faction starter fighter", () => {
+    expect(FREE_STARTING_ESCORTS).toBe(1);
+    for (const faction of Object.keys(FACTION_STARTER_SHIPS) as FactionId[]) {
+      const run = RunBuilder.aRun().withFaction(faction).build();
+      expect(run.escorts).toHaveLength(1);
+      expect(run.escorts[0]).toMatchObject({
+        definitionId: FACTION_STARTER_SHIPS[faction],
+        hull: 1,
+        shields: 1,
+        upgrades: 0,
+      });
+      expect(run.progression.escorts).toBe(1);
+    }
+  });
+
+  it("applies meta unlocks: escort packages on top of the free wingman, war chest, relic pools", () => {
     const run = RunBuilder.aRun()
       .withUnlocks(
         "wingmate_package",
@@ -75,10 +93,16 @@ describe("createRun", () => {
         "ace_pack",
       )
       .build();
-    expect(run.escorts).toHaveLength(2);
-    expect(run.progression.escorts).toBe(2);
+    expect(run.escorts).toHaveLength(FREE_STARTING_ESCORTS + 2);
+    expect(run.progression.escorts).toBe(FREE_STARTING_ESCORTS + 2);
     expect(run.salvage).toBe(STARTING_SALVAGE + 30);
     expect(run.pools).toEqual(["base", "ace_pack"]);
+  });
+
+  it("counts the free wingman toward the escort cap", () => {
+    let run = RunBuilder.aRun().withUnlocks("twin_wing_package").build();
+    for (let i = 0; i < MAX_ESCORTS; i++) run = addEscort(run);
+    expect(run.escorts).toHaveLength(MAX_ESCORTS);
   });
 
   it("clamps ascension to 0..10", () => {

@@ -17,14 +17,17 @@ import type { RunState } from "./RunTypes";
 export type CombatKind = "combat" | "elite" | "boss";
 
 /**
- * Waves fought per battle node, by kind (the boss arrives on the last
- * wave). One wave for combat / elite nodes: at the game's combat tempo a
- * 1–3 ship wave already takes a couple of minutes (see ADR-0004).
+ * Waves fought per battle node, by kind. One wave for every kind: at the
+ * game's combat tempo a 1–3 ship wave already takes about a minute, and a
+ * boss node's separate escort wave before the boss wave cost the fleet so
+ * much persisted hull that a 2-ship wing cleared ~13 % of bosses (ADR-0004
+ * sweep). The boss arrives alone (NodeWaveRoster); its phases call in
+ * reinforcements.
  */
 export const WAVES_PER_NODE: Readonly<Record<CombatKind, number>> = {
   combat: 1,
   elite: 1,
-  boss: 2,
+  boss: 1,
 };
 
 /**
@@ -38,15 +41,20 @@ export const ROGUELITE_THREAT_SCALE = 0.45;
 export const SECTOR_THREAT_STEP = 0.25;
 /** Threat added per map row (+4% each). */
 export const ROW_THREAT_STEP = 0.04;
-/** Regular ships per wave are capped at BASE + PER_SECTOR × sector. */
-export const MAX_REGULARS_BASE = 1;
-export const MAX_REGULARS_PER_SECTOR = 1;
+/**
+ * Most regular ships one wave fields, in every sector. It used to grow
+ * with the sector (1 + sector: up to four expert regulars in sector 3,
+ * where an average wing cleared ~30 % of combat nodes); sectors now get
+ * harder through pilot tiers, threat and the belt instead.
+ */
+export const MAX_REGULARS_PER_WAVE = 2;
 /** Regulars a node's extra elite replaces (an elite ≈ 2–3 regulars of power). */
 export const REGULARS_PER_EXTRA_ELITE = 2;
 /**
  * Effective waves (AI tier) a sector spans: with two map rows per step,
- * sector 1 flies novices (elites average), sector 2 average pilots and
- * sector 3 experts (see SurvivalSteering's wave bands 1–3 / 4–8 / 9+).
+ * sector 1 flies novices (its last rows average), sector 2 average pilots
+ * and sector 3 average pilots turning expert from its fifth row (see
+ * SurvivalSteering's wave bands 1–3 / 4–10 / 11+).
  */
 export const EFFECTIVE_WAVES_PER_SECTOR = 4;
 /** Map rows per effective-wave step within a sector. */
@@ -60,7 +68,7 @@ export const ROWS_PER_BELT_STEP = 2;
  * 1160 px, wall 1800 px) — the arena never collapses onto the fleet.
  */
 export const MAX_BELT_STEPS = 12;
-/** Elites an elite node adds to every wave. */
+/** Elites an elite node fields (Elite Contracts, ascension 1, adds one more). */
 export const ELITE_NODE_EXTRA_ELITES = 1;
 /** Phases of a regular sector boss; the final boss has one more. */
 export const BASE_BOSS_PHASES = 1;
@@ -124,10 +132,9 @@ export function planCombat(run: RunState): CombatPlan | null {
       ROGUELITE_THREAT_SCALE *
       (1 + (run.sector - 1) * SECTOR_THREAT_STEP + row * ROW_THREAT_STEP) *
       rules.threatMultiplier,
-    maxRegulars: MAX_REGULARS_BASE + MAX_REGULARS_PER_SECTOR * run.sector,
+    maxRegulars: MAX_REGULARS_PER_WAVE,
     extraElites:
-      (kind === "elite" ? ELITE_NODE_EXTRA_ELITES : 0) +
-      (kind !== "combat" ? rules.extraElites : 0),
+      kind === "elite" ? ELITE_NODE_EXTRA_ELITES + rules.extraElites : 0,
     eliteAffixCount: rules.eliteAffixCount,
     effectiveWave,
     enemyHullMultiplier: rules.enemyHullMultiplier,

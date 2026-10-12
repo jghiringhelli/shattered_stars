@@ -175,7 +175,14 @@ test.describe("SurvivalScene — waves", () => {
   test("clearing a wave that is not the last sends the next one", async ({
     page,
   }) => {
-    await launchNode(page, "boss");
+    // Every node kind is one wave today (ADR-0004); the scene still flies
+    // multi-wave nodes, so give this combat node's plan a second wave
+    // before its first wave arrives (2 s after the scene starts).
+    await launchNode(page, "combat");
+    await page.evaluate(() => {
+      const s = (window as any).game.scene.getScene("SurvivalScene") as any;
+      s.rules.plan.waves = 2;
+    });
     await clearWave(page);
     await page.waitForFunction(
       () => {

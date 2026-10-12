@@ -7,6 +7,8 @@ import { describe, it, expect } from "vitest";
 import { RoguelikeRunService } from "../../../../src/systems/survival/RoguelikeRunService";
 import { MemoryStore } from "../../../../src/systems/survival/KeyValueStore";
 import { dailyChallengeFor } from "../../../../src/systems/survival/DailyChallenge";
+import { FREE_STARTING_ESCORTS } from "../../../../src/systems/survival/RunState";
+import { FACTION_STARTER_SHIPS } from "../../../../src/data/survival/starters";
 
 const daily = dailyChallengeFor(new Date(2026, 9, 11));
 
@@ -32,5 +34,14 @@ describe("daily run start", () => {
     const run = service.startRun(request(true));
     expect(run.ascension).toBe(3);
     expect(run.seed).toBe(daily.seed);
+  });
+
+  it("a daily run starts with the free wingman, the same for everyone", () => {
+    const veteran = new RoguelikeRunService(new MemoryStore(), () => 0);
+    const run = veteran.startRun(request(true));
+    expect(run.escorts).toHaveLength(FREE_STARTING_ESCORTS);
+    expect(run.escorts[0]!.definitionId).toBe(
+      FACTION_STARTER_SHIPS[daily.faction],
+    );
   });
 });

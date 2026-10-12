@@ -102,4 +102,15 @@ export interface BattleHudSnapshot {
   readonly contacts: ReadonlyArray<ContactHudState>;
   readonly weapons: ReadonlyArray<WeaponSlotDescriptor>;
   readonly camera: CameraViewSnapshot;
+  /**
+   * Arena boundary ring traced on the radar (Survival: the asteroid belt's
+   * safe radius); omit when the arena has none.
+   */
+  readonly boundary?: HudBoundaryRing | undefined;
+}
+
+/** A circular arena boundary in world space (radar ring). */
+export interface HudBoundaryRing {
+  readonly center: HudPoint;
+  readonly radius: number;
 }

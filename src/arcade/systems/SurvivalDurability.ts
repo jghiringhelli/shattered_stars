@@ -14,13 +14,16 @@ import { DURABILITY_SCALE } from "../../config";
 export const ELITE_HULL_MULTIPLIER = 1.5;
 
 /** Boss stat multiplier before its per-boss-wave growth. */
-export const BOSS_BASE_MULTIPLIER = 2;
+export const BOSS_BASE_MULTIPLIER = 1;
 
 /**
  * Waves per extra boss multiplier step. Roguelite bosses use a boss wave of
- * sector × 5 (CombatNodePlan.bossWave), so each sector's boss is one step up.
+ * sector × 5 (CombatNodePlan.bossWave), so all three sector bosses fly their
+ * equipped hull (×1): ×3/×4/×5 bosses (and even ×2/×3 ones) were walls for
+ * an average-tier 2-ship wing (ADR-0004 sweep). Bosses stand out through
+ * their gunship hull, pilot tier, capital systems and phases instead.
  */
-export const WAVES_PER_BOSS_STEP = 5;
+export const WAVES_PER_BOSS_STEP = 20;
 
 /** A ship's durability caps. */
 export interface DurabilityCaps {

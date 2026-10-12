@@ -5,7 +5,9 @@
 import { describe, it, expect } from "vitest";
 import {
   BELT_AVOID_MARGIN_PX,
+  beltAvoidMargin,
   beltRetreatPoint,
+  beltWarningLevel,
   beltIntensity,
   beltDamagePerSecond,
   beltDamageForFrame,
@@ -97,6 +99,52 @@ describe("tightenBelt", () => {
 
   it("treats negative steps as no tightening", () => {
     expect(tightenBelt(BASE, -5)).toEqual(BASE);
+  });
+});
+
+describe("tightenBelt with a damage ramp", () => {
+  const RAMP = { perStep: 0.5, maxPerSecond: 5 };
+
+  it("raises damage by the ramp's step per squeeze", () => {
+    expect(tightenBelt(BASE, 1, RAMP).maxDamagePerSecond).toBe(4.5);
+  });
+
+  it("never raises damage beyond the ramp's cap however tight the belt", () => {
+    expect(tightenBelt(BASE, 100, RAMP).maxDamagePerSecond).toBe(5);
+  });
+
+  it("still squeezes the radii like the default ramp", () => {
+    const ramped = tightenBelt(BASE, 3, RAMP);
+    const plain = tightenBelt(BASE, 3);
+    expect(ramped.safeRadius).toBe(plain.safeRadius);
+    expect(ramped.wallRadius).toBe(plain.wallRadius);
+  });
+});
+
+describe("beltWarningLevel", () => {
+  const BELT = { safeRadius: 2000, wallRadius: 2400, maxDamagePerSecond: 3 };
+  const CENTER = { x: 3000, y: 3000 };
+  const at = (dist: number) => ({ x: CENTER.x, y: CENTER.y - dist });
+
+  it("is clear well inside the safe zone", () => {
+    expect(beltWarningLevel(at(1000), CENTER, BELT)).toBe("clear");
+  });
+
+  it("is near within the avoid margin of the belt", () => {
+    expect(
+      beltWarningLevel(at(2000 - BELT_AVOID_MARGIN_PX / 2), CENTER, BELT),
+    ).toBe("near");
+  });
+
+  it("is inside once past the safe radius", () => {
+    expect(beltWarningLevel(at(2100), CENTER, BELT)).toBe("inside");
+  });
+
+  it("warns exactly where an AI pilot starts its retreat", () => {
+    const tight = { safeRadius: 300, wallRadius: 500, maxDamagePerSecond: 9 };
+    expect(beltAvoidMargin(tight)).toBe(150);
+    expect(beltWarningLevel(at(140), CENTER, tight)).toBe("clear");
+    expect(beltWarningLevel(at(160), CENTER, tight)).toBe("near");
   });
 });
 

@@ -12,6 +12,7 @@
 
 import type { BotTier } from "../src/arcade/ai";
 import { ACE_MATCHUPS } from "../src/data/AceMatchups";
+import { DOGFIGHT_DEFAULT_PAIRING } from "../src/data/DogfightDefaults";
 import {
   medianDurationMs,
   simulateDuelRound,
@@ -34,7 +35,11 @@ const MIRRORS: ReadonlyArray<
   ["mirror sparrow", ["confed_sparrow"], ["confed_sparrow"]],
   ["mirror viper", ["terran_viper"], ["terran_viper"]],
   ["mirror fang", ["corsair_fang"], ["corsair_fang"]],
-  ["dogfight default", ["confed_falcon"], ["terran_raptor"]],
+  [
+    "dogfight default",
+    [DOGFIGHT_DEFAULT_PAIRING.player.shipId],
+    [DOGFIGHT_DEFAULT_PAIRING.enemy.shipId],
+  ],
 ];
 
 function argValue(name: string): string | undefined {

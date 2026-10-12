@@ -20,6 +20,7 @@ import type {
 } from "../../arcade/systems/SurvivalLoadouts";
 import {
   tierAbove,
+  survivalBossTier,
   survivalEnemyTier,
 } from "../../arcade/systems/SurvivalSteering";
 import type { BotTier } from "../../arcade/ai/BotTypes";
@@ -179,7 +180,10 @@ export class SurvivalBattleRules {
     rank: WaveTier,
     affixes: readonly EliteAffix[],
   ): BotTier {
-    const tier = survivalEnemyTier(spec.tierWave, rank);
+    const tier =
+      rank === "boss"
+        ? survivalBossTier(this.plan.sector)
+        : survivalEnemyTier(spec.tierWave, rank);
     return affixes.some((a) => a.tierBoost) ? tierAbove(tier) : tier;
   }
 

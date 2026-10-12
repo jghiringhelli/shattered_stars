@@ -15,6 +15,7 @@ import {
   eliteMaxHull,
   realTimeBeltDamage,
   realTimeRunBonuses,
+  WAVES_PER_BOSS_STEP,
 } from "../../../../src/arcade/systems/SurvivalDurability";
 import {
   ACE_HULL_MULTIPLIER,
@@ -80,17 +81,20 @@ describe("Survival elites and bosses", () => {
     );
   });
 
-  it("the wave-5 boss multiplier grows by one per milestone", () => {
-    expect(bossMultiplier(5)).toBe(BOSS_BASE_MULTIPLIER + 1);
-    expect(bossMultiplier(10)).toBe(BOSS_BASE_MULTIPLIER + 2);
+  it("the roguelite's three sector bosses (waves 5/10/15) fly their equipped hull; a step every 20 waves", () => {
+    expect(bossMultiplier(5)).toBe(1);
+    expect(bossMultiplier(10)).toBe(1);
+    expect(bossMultiplier(15)).toBe(1);
+    expect(bossMultiplier(WAVES_PER_BOSS_STEP)).toBe(BOSS_BASE_MULTIPLIER + 1);
   });
 
   it("a boss multiplies already-scaled hull and shields (no double scaling)", () => {
-    const caps = survivalBoss({ maxHull: 16, maxShields: 8 }, 5);
+    const caps = survivalBoss({ maxHull: 16, maxShields: 8 }, 20);
     expect(caps).toEqual({
-      maxHull: 16 * bossMultiplier(5),
-      maxShields: 8 * bossMultiplier(5),
+      maxHull: 16 * bossMultiplier(20),
+      maxShields: 8 * bossMultiplier(20),
     });
+    expect(bossMultiplier(20)).toBe(2);
   });
 });
 

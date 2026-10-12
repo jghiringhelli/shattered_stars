@@ -39,6 +39,8 @@ export interface RunSummary {
   readonly durationMs: number;
   readonly endedAt: number;
   readonly chartsEarned: number;
+  /** Escorts lost over the run (absent in history saved before it was tracked). */
+  readonly escortsLost?: number;
 }
 
 /**
@@ -100,6 +102,7 @@ export function summarizeRun(run: RunState, endedAt: number): RunSummary {
     durationMs: run.stats.elapsedMs,
     endedAt,
     chartsEarned: chartsEarned(run),
+    escortsLost: run.stats.escortsLost,
   };
 }
 

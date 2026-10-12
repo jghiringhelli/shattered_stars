@@ -71,9 +71,11 @@ describe("power draft and rerolls", () => {
         branch: { ...base.progression.branch, fleet: 3, gunnery: 3 },
       },
     };
-    expect(choosePower(ready, "x_wingcmd").escorts).toHaveLength(1);
+    expect(choosePower(ready, "x_wingcmd").escorts).toHaveLength(
+      ready.escorts.length + 1,
+    );
     let full = ready;
-    for (let i = 0; i < MAX_ESCORTS; i++)
+    while (full.escorts.length < MAX_ESCORTS)
       full = { ...full, escorts: [...full.escorts, full.flagship] };
     full = {
       ...full,

@@ -13,8 +13,8 @@ import { selectionFor } from "./QuickBuildChoice";
 /** How hard a wave ship hits: plain, elite (+hull, +attack) or boss. */
 export type WaveTier = "regular" | "elite" | "boss";
 
-/** Roles an elite is drawn from, in preference order of the roster. */
-const ELITE_ROLES: ReadonlySet<string> = new Set(["gunship", "bomber"]);
+/** Roles an elite is drawn from by default, in preference order. */
+const DEFAULT_ELITE_ROLES: readonly string[] = ["gunship", "bomber"];
 
 /** Role a boss is drawn from. */
 const BOSS_ROLE = "gunship";
@@ -30,6 +30,11 @@ export interface WaveComposition {
   readonly enemyCount: number;
   readonly eliteCount: number;
   readonly isMilestone: boolean;
+  /**
+   * Roles elites are drawn from, most preferred first (default: the
+   * roster's first gunship or bomber, whichever it lists first).
+   */
+  readonly eliteRoles?: readonly string[];
 }
 
 /** One ship of a wave, with its quick build. */
@@ -47,11 +52,12 @@ export interface SquadMember {
 
 /**
  * A wave's ships, in spawn order (regulars, elites, boss), each with its
- * quick build. Regulars cycle through the roster; elites are its first
- * gunship/bomber; a boss wave's boss is its first gunship (else its last ship).
+ * quick build. Regulars cycle through the roster; elites are its first ship
+ * of the preferred elite roles (else its first ship); a boss wave's boss is
+ * its first gunship (else its last ship).
  *
  * @param roster - The enemy faction's ships.
- * @param composition - Ship counts and whether a boss joins.
+ * @param composition - Ship counts, elite roles and whether a boss joins.
  * @returns The wave's ships (empty for an empty roster).
  */
 export function planWaveRoster(
@@ -59,7 +65,7 @@ export function planWaveRoster(
   composition: WaveComposition,
 ): WaveSlot[] {
   if (roster.length === 0) return [];
-  const elite = roster.find((ship) => ELITE_ROLES.has(ship.role)) ?? roster[0]!;
+  const elite = eliteShip(roster, composition.eliteRoles);
   const boss =
     roster.find((ship) => ship.role === BOSS_ROLE) ??
     roster[roster.length - 1]!;
@@ -81,6 +87,24 @@ export function planWaveRoster(
     ...ship,
     loadoutId: loadouts[index] ?? null,
   }));
+}
+
+/**
+ * @param roster - The enemy faction's ships (not empty).
+ * @param roles - Preferred elite roles, most preferred first; omitted = the
+ *   roster's first gunship or bomber.
+ * @returns The ship its elites fly.
+ */
+function eliteShip(
+  roster: readonly RosterShip[],
+  roles: readonly string[] | undefined,
+): RosterShip {
+  const byRole = roles
+    ? roles
+        .map((role) => roster.find((ship) => ship.role === role))
+        .find((ship) => ship !== undefined)
+    : roster.find((ship) => DEFAULT_ELITE_ROLES.includes(ship.role));
+  return byRole ?? roster[0]!;
 }
 
 /**

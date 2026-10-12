@@ -122,14 +122,17 @@ export class SurvivalRunController {
   }
 
   /**
-   * Enemy composition for a roguelite battle wave: the run's threat scaled
-   * by the node's multiplier; the node's extra elites replace regulars
-   * (never below one regular), and regulars are capped per node.
+   * Enemy composition for a roguelite battle wave: regulars from the run's
+   * threat scaled by the node's multiplier (capped per node); elites only
+   * from the node itself (elite nodes, ascension). The node's elites replace
+   * regulars and may fly alone; a wave without elites keeps one regular.
+   * Unlike the endless {@link waveSize} there are no threat elites and no
+   * boss-wave bonus elite — elites on regular nodes and an elite beside
+   * every boss made combat nodes in sectors 2–3 and bosses walls (ADR-0004).
    *
    * @param playerShipCount - Living player ships.
    * @param threatMultiplier - Sector / row / ascension threat scale.
    * @param extraElites - Elites the node adds.
-   * @param isBossWave - True when the boss joins this wave.
    * @param maxEnemies - Cap on regular ships (defaults to the threat cap).
    * @param regularsPerElite - Regulars each extra elite replaces.
    * @returns The wave's size.
@@ -138,19 +141,18 @@ export class SurvivalRunController {
     playerShipCount: number,
     threatMultiplier: number,
     extraElites: number,
-    isBossWave: boolean,
     maxEnemies: number = MAX_ENEMIES,
     regularsPerElite = 0,
   ): WaveSize {
     const threat = computeThreat(this.run, playerShipCount) * threatMultiplier;
-    const size = sizeWave(threat, isBossWave);
+    const size = sizeWave(threat);
     const regulars = Math.max(
-      1,
+      extraElites > 0 ? 0 : 1,
       size.enemyCount - extraElites * regularsPerElite,
     );
     return {
       enemyCount: Math.min(maxEnemies, regulars),
-      eliteCount: size.eliteCount + extraElites,
+      eliteCount: extraElites,
     };
   }
 

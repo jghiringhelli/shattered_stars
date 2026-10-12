@@ -49,7 +49,7 @@ export const META_UNLOCKS: readonly MetaUnlock[] = [
     icon: "👥",
     cost: 25,
     startingEscorts: 1,
-    description: "Start every run with 1 escort",
+    description: "Start every run with 1 extra escort",
   },
   {
     id: "twin_wing_package",
@@ -58,7 +58,7 @@ export const META_UNLOCKS: readonly MetaUnlock[] = [
     cost: 60,
     requires: "wingmate_package",
     startingEscorts: 2,
-    description: "Start every run with 2 escorts",
+    description: "Start every run with 2 extra escorts",
   },
   {
     id: "ace_pack",
@@ -117,7 +117,8 @@ export function unlockedRelicPools(unlocked: readonly string[]): RelicPool[] {
 
 /**
  * @param unlocked - Owned unlock ids.
- * @returns Escorts a new run starts with (the best package owned).
+ * @returns Escorts a meta package adds to a new run (the best package
+ *   owned), on top of the free wingman every run starts with.
  */
 export function startingEscorts(unlocked: readonly string[]): number {
   return Math.max(

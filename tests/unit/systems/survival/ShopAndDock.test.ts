@@ -124,8 +124,8 @@ describe("prices and salvage", () => {
 });
 
 describe("repair dock", () => {
-  it("offers a repair or one upgrade per ship", () => {
-    const run = addEscort(RunBuilder.aRun().build());
+  it("offers a repair or one upgrade per ship (the free wingman included)", () => {
+    const run = RunBuilder.aRun().build();
     expect(dockOptions(run).map((o) => o.id)).toEqual([
       "repair",
       "upgrade-0",

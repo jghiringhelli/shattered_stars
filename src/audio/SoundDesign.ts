@@ -25,6 +25,7 @@ export type SoundEffectType =
   | "ui_back"
   | "powerup"
   | "alert"
+  | "belt_warning"
   | "victory"
   | "defeat";
 
@@ -277,6 +278,21 @@ export const VOICE_DESIGNS: Readonly<Record<SoundEffectType, VoiceSpec>> = {
     attackSeconds: 0.008,
     holdSeconds: 0.05,
     releaseSeconds: 0.15,
+  },
+  // Survival's asteroid belt: a low, falling klaxon, distinct from the UI alert.
+  belt_warning: {
+    startFrequency: 440,
+    endFrequency: 260,
+    oscillator: "sawtooth",
+    detuneCents: 9,
+    noiseMix: 0.15,
+    filterType: "bandpass",
+    filterStartHz: 900,
+    filterEndHz: 500,
+    resonance: 3,
+    attackSeconds: 0.01,
+    holdSeconds: 0.18,
+    releaseSeconds: 0.2,
   },
   victory: {
     startFrequency: 523.25,

@@ -94,7 +94,7 @@ describe("resolveEventChoice", () => {
     const run = { ...eventRun(), salvage: 100 };
     const result = resolveEventChoice(run, getEvent("mercenary_wing")!, 0);
     expect(result.run.salvage).toBe(45);
-    expect(result.run.escorts).toHaveLength(1);
+    expect(result.run.escorts).toHaveLength(run.escorts.length + 1);
     expect(result.startsCombat).toBe(false);
   });
 

@@ -32,6 +32,17 @@ describe("run save / resume", () => {
     expect(loadRun(store)).toEqual(run);
   });
 
+  it("resumes the free wingman with its persisted damage", () => {
+    const store = new MemoryStore();
+    const run = RunBuilder.aRun().build();
+    const hurt = {
+      ...run,
+      escorts: [{ ...run.escorts[0]!, hull: 0.4, shields: 0.25 }],
+    };
+    saveRun(store, hurt);
+    expect(loadRun(store)!.escorts).toEqual(hurt.escorts);
+  });
+
   it("returns null for no save, corrupt JSON, a newer schema or a broken shape", () => {
     const store = new MemoryStore();
     expect(loadRun(store)).toBeNull();

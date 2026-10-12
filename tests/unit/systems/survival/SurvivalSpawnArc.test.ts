@@ -110,7 +110,6 @@ describe("every wave of every node, sector and ascension spawns inside the safe 
                   ships,
                   plan.threatMultiplier,
                   plan.extraElites,
-                  spec.isBossWave,
                   plan.maxRegulars,
                   2,
                 );

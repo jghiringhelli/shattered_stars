@@ -23,14 +23,13 @@ import { realTimeBeltDamage } from "../../arcade/systems/SurvivalDurability";
 import {
   beltDamageForFrame,
   beltRetreatPoint,
-  tightenBelt,
   type BeltConfig,
 } from "../../systems/arena/ArenaBoundary";
 import { planCombat } from "../../systems/survival/CombatNodePlan";
 import type { CombatOutcome } from "../../systems/survival/CombatResolution";
 import type { RunState } from "../../systems/survival/RunTypes";
 import { SurvivalBattleRules } from "../../systems/survival/SurvivalBattleRules";
-import { SURVIVAL_BASE_BELT } from "../../systems/survival/SurvivalSpawnArc";
+import { survivalBelt } from "../../systems/survival/SurvivalBelt";
 import { SurvivalRunController } from "../../systems/survival/SurvivalRunController";
 import { countSpecialActions } from "../../telemetry/matchStatTypes";
 import { createSeededRng } from "../../utils/random";
@@ -126,7 +125,7 @@ function openBattle(run: RunState, playerBeltDamage: boolean): NodeBattle {
   const rules = new SurvivalBattleRules(run, plan);
   const controller = SurvivalRunController.fromState(run.seed, run.progression);
   const rng = createSeededRng(plan.combatSeed ^ 0x5bd1e995);
-  let belt = tightenBelt(SURVIVAL_BASE_BELT, plan.beltSteps);
+  let belt = survivalBelt(plan.beltSteps);
   const squadAi = new SquadBattleAi({
     worldSize: BATTLEFIELD_SIZE,
     random: () => rng.next(),

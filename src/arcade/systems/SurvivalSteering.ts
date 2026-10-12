@@ -7,17 +7,19 @@
  * roguelite run the "wave" fed here is the battle node's *effective wave*
  * (CombatNodePlan: sector 1 → 1–4, sector 2 → 5–8, sector 3 → 9–12, +3 at
  * ascension 3), so sector 1 flies novices, sector 2 average pilots and
- * sector 3 experts:
+ * sector 3 average pilots turning expert from its fifth row:
  *
- * | ship            | waves 1–3 | waves 4–8 | wave 9+ |
- * |-----------------|-----------|-----------|---------|
- * | regular         | novice    | average   | expert  |
- * | elite           | average   | expert    | expert  |
- * | sector boss     | expert    | expert    | expert  |
- * | escort (player) | average   | average   | average |
+ * | ship            | waves 1–3 | waves 4–10 | wave 11+ |
+ * |-----------------|-----------|------------|----------|
+ * | regular / elite | novice    | average    | expert   |
+ * | sector boss     | average in sector 1, expert after      |
+ * | escort (player) | average   | average    | average  |
  *
- * Elites fly one tier above the wave's regulars (capped at expert; an Ace
- * affix adds one more); every sector boss is an expert.
+ * Elites fly the wave's tier (their edge is +50 % hull, +1 die and an
+ * affix; an Ace affix adds one tier); a roguelite sector boss flies its
+ * sector's boss tier (survivalBossTier); endless milestone bosses are
+ * experts. Elites one tier up and experts from wave 9 made sector-2/3
+ * elites and sector-3 combat nodes walls for an average pilot (ADR-0004).
  *
  * Pure: no Phaser.
  */
@@ -29,10 +31,21 @@ import type { WaveTier } from "./SurvivalLoadouts";
 export const NOVICE_LAST_WAVE = 3;
 
 /** Last wave whose regulars fly as average pilots (experts after it). */
-export const AVERAGE_LAST_WAVE = 8;
+export const AVERAGE_LAST_WAVE = 10;
 
-/** Tier of every milestone boss. */
+/** Tier of every milestone boss of the endless waves. */
 export const SURVIVAL_BOSS_TIER: BotTier = "expert";
+
+/**
+ * Tier of each roguelite sector boss (sector 1 average, experts after).
+ * An expert sector-1 boss beat an average-tier 2-ship wing ~75 % of the
+ * time (ADR-0004 sweep).
+ */
+export const SURVIVAL_SECTOR_BOSS_TIERS: readonly BotTier[] = [
+  "average",
+  "expert",
+  "expert",
+];
 
 /** Tier of the player's escorts (weak basic bodies, competent wingmen). */
 export const SURVIVAL_ESCORT_TIER: BotTier = "average";
@@ -62,10 +75,18 @@ export function tierAbove(tier: BotTier): BotTier {
 /**
  * @param wave - Wave number (1-based).
  * @param rank - The wave ship's rank (regular, elite, boss).
- * @returns The tier its BotPilot flies at.
+ * @returns The tier its BotPilot flies at (elites fly the wave's tier).
  */
 export function survivalEnemyTier(wave: number, rank: WaveTier): BotTier {
   if (rank === "boss") return SURVIVAL_BOSS_TIER;
-  const regular = survivalWaveTier(wave);
-  return rank === "elite" ? tierAbove(regular) : regular;
+  return survivalWaveTier(wave);
+}
+
+/**
+ * @param sector - The roguelite sector (1-based).
+ * @returns The tier its boss flies at (later sectors keep the last tier).
+ */
+export function survivalBossTier(sector: number): BotTier {
+  const tiers = SURVIVAL_SECTOR_BOSS_TIERS;
+  return tiers[Math.min(Math.max(1, sector), tiers.length) - 1]!;
 }

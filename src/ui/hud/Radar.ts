@@ -20,11 +20,17 @@ import {
 } from "../theme/HoloTheme";
 import { addPinned, createScreenContainer } from "./holoPrimitives";
 import { drawDiamond, fillBlip } from "./HudIcons";
-import { projectToRadar } from "./hudMath";
+import { projectToRadar, type RadarProjectionOptions } from "./hudMath";
 import { drawMarkReticle } from "./markGlyphs";
+import { radarBoundaryPaths } from "./radarBoundary";
 import { drawSideFrame } from "./sideGlyphs";
 import type { ScreenRect } from "./screenRect";
-import type { ContactHudState, HudPose, HudSizeClass } from "./types";
+import type {
+  ContactHudState,
+  HudBoundaryRing,
+  HudPose,
+  HudSizeClass,
+} from "./types";
 
 const DEG_TO_RAD = Math.PI / 180;
 const DEFAULT_RADIUS = 78;
@@ -49,6 +55,8 @@ const MARK_PAD = 6;
 const MARK_LINE_WIDTH = 1.5;
 /** Rim tick angles (Phaser degrees): fore, starboard, aft, port. */
 const RIM_TICKS_DEG = [270, 0, 90, 180] as const;
+/** Stroke of the arena-boundary ring (px). */
+const BOUNDARY_LINE_WIDTH = 2;
 
 /** Radar options. */
 export interface RadarConfig {
@@ -143,10 +151,12 @@ export class Radar {
    *
    * @param player - Player pose; null clears the blips.
    * @param contacts - Contacts to plot (dead ones are skipped).
+   * @param boundary - Arena boundary ring to trace (e.g. the belt's safe radius).
    */
   update(
     player: HudPose | null,
     contacts: ReadonlyArray<ContactHudState>,
+    boundary: HudBoundaryRing | null = null,
   ): void {
     this.blips.clear();
     if (player === null) return;
@@ -155,6 +165,7 @@ export class Radar {
       radiusPx: this.radius,
       worldSize: this.worldSize,
     };
+    if (boundary) this.drawBoundary(player, boundary, options);
     for (const contact of contacts) {
       if (!contact.alive) continue;
       const p = projectToRadar(player, contact.pose, options);
@@ -201,6 +212,21 @@ export class Radar {
   /** Destroy all game objects. */
   destroy(): void {
     this.container.destroy();
+  }
+
+  /** Trace the stretches of the boundary ring within range. */
+  private drawBoundary(
+    player: HudPose,
+    boundary: HudBoundaryRing,
+    options: RadarProjectionOptions,
+  ): void {
+    this.blips.lineStyle(BOUNDARY_LINE_WIDTH, HOLO_PALETTE.warning, 1);
+    for (const path of radarBoundaryPaths(player, boundary, options)) {
+      this.blips.beginPath();
+      this.blips.moveTo(path[0]!.x, path[0]!.y);
+      for (const p of path.slice(1)) this.blips.lineTo(p.x, p.y);
+      this.blips.strokePath();
+    }
   }
 
   private drawFace(): void {

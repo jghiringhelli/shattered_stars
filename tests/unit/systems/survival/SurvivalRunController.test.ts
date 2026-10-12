@@ -134,13 +134,22 @@ describe("SurvivalRunController roguelite battles", () => {
     expect(saved.level).toBe(1);
   });
 
-  it("scales a wave by the node's threat multiplier and extra elites", () => {
+  it("scales a wave's regulars by the node's threat multiplier and fields the node's extra elites", () => {
     const c = new SurvivalRunController(1);
     c.beginWave();
-    const base = c.scaledWaveSize(1, 1, 0, false);
-    const hard = c.scaledWaveSize(1, 3, 2, true);
+    const base = c.scaledWaveSize(1, 1, 0);
+    const hard = c.scaledWaveSize(1, 3, 2);
     expect(hard.enemyCount).toBeGreaterThan(base.enemyCount);
-    expect(hard.eliteCount).toBeGreaterThanOrEqual(base.eliteCount + 3);
+    expect(hard.eliteCount).toBe(2);
+  });
+
+  it("fields only the node's elites: no threat elites, no boss-wave bonus elite", () => {
+    const c = new SurvivalRunController(1);
+    for (let i = 0; i < 40; i++) c.beginWave();
+    while (!c.isMilestone) c.beginWave();
+    expect(c.waveSize(6).eliteCount).toBeGreaterThan(1);
+    expect(c.scaledWaveSize(6, 3, 0).eliteCount).toBe(0);
+    expect(c.scaledWaveSize(6, 3, 1).eliteCount).toBe(1);
   });
 });
 
@@ -148,21 +157,26 @@ describe("SurvivalRunController regular-ship cap", () => {
   it("never fields more regulars than the node allows", () => {
     const c = new SurvivalRunController(1);
     for (let i = 0; i < 20; i++) c.beginWave();
-    expect(c.scaledWaveSize(6, 2, 0, false, 4).enemyCount).toBe(4);
+    expect(c.scaledWaveSize(6, 2, 0, 4).enemyCount).toBe(4);
   });
 });
 
 describe("SurvivalRunController elite nodes", () => {
-  it("trades regulars for the node's extra elites, keeping at least one regular", () => {
+  it("trades regulars for the node's extra elites, down to the elites alone", () => {
     const c = new SurvivalRunController(1);
     for (let i = 0; i < 20; i++) c.beginWave();
-    const plain = c.scaledWaveSize(2, 1, 0, false);
-    const elite = c.scaledWaveSize(2, 1, 1, false, 40, 2);
-    expect(elite.enemyCount).toBe(Math.max(1, plain.enemyCount - 2));
-    expect(elite.eliteCount).toBe(plain.eliteCount + 1);
+    const plain = c.scaledWaveSize(2, 1, 0);
+    const elite = c.scaledWaveSize(2, 1, 1, 40, 2);
+    expect(elite.enemyCount).toBe(Math.max(0, plain.enemyCount - 2));
+    expect(elite.eliteCount).toBe(1);
     expect(
-      new SurvivalRunController(1).scaledWaveSize(1, 1, 3, false, 40, 2)
-        .enemyCount,
+      new SurvivalRunController(1).scaledWaveSize(1, 1, 3, 40, 2).enemyCount,
+    ).toBe(0);
+  });
+
+  it("keeps at least one regular in a wave without elites", () => {
+    expect(
+      new SurvivalRunController(1).scaledWaveSize(1, 0.01, 0).enemyCount,
     ).toBe(1);
   });
 });

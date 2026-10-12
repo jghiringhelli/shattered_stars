@@ -120,7 +120,11 @@ export class BattleHud {
     const { player } = snapshot;
     this.ring.setVisible(player !== null);
     if (player !== null) this.ring.update(player, snapshot.camera.zoom);
-    this.radar.update(player?.pose ?? null, snapshot.contacts);
+    this.radar.update(
+      player?.pose ?? null,
+      snapshot.contacts,
+      snapshot.boundary ?? null,
+    );
     this.weapons.update(snapshot.weapons);
     if (this.weapons.width !== this.lastWeaponWidth) this.refreshObstacles();
     this.readout.update(player);

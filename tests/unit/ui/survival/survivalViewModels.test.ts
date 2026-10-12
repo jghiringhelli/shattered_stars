@@ -110,4 +110,23 @@ describe("map side panel and summary text", () => {
     expect(summaryLines(summary).join("\n")).toContain("Squadron ×1");
     expect(historyRow(summary, 0)).toContain("2026-10-11");
   });
+
+  it("reports the wing: escorts lost over the run (free wingman included)", () => {
+    const run = RunBuilder.aRun()
+      .with({
+        status: "defeat",
+        cause: "Shot down",
+        stats: { ...RunBuilder.aRun().build().stats, escortsLost: 2 },
+      })
+      .build();
+    const summary = summarizeRun(run, Date.UTC(2026, 9, 11));
+    expect(summary.escortsLost).toBe(2);
+    expect(summaryLines(summary).join("\n")).toContain("Escorts lost 2");
+  });
+
+  it("reads older history entries without an escort count as none lost", () => {
+    const run = RunBuilder.aRun().with({ status: "defeat" }).build();
+    const { escortsLost: _dropped, ...old } = summarizeRun(run, 0);
+    expect(summaryLines(old).join("\n")).toContain("Escorts lost 0");
+  });
 });

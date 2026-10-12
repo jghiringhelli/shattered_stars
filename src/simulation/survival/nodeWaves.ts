@@ -11,15 +11,12 @@
  */
 
 import { planWaveRoster } from "../../arcade/systems/SurvivalLoadouts";
-import { tightenBelt } from "../../systems/arena/ArenaBoundary";
-import {
-  REGULARS_PER_EXTRA_ELITE,
-  shouldStartNextBossPhase,
-} from "../../systems/survival/CombatNodePlan";
+import { shouldStartNextBossPhase } from "../../systems/survival/CombatNodePlan";
+import { nodeWaveRoster } from "../../systems/survival/NodeWaveRoster";
+import { survivalBelt } from "../../systems/survival/SurvivalBelt";
 import {
   layoutWave,
   reinforcementPoints,
-  SURVIVAL_BASE_BELT,
 } from "../../systems/survival/SurvivalSpawnArc";
 import { livingPlayers } from "./nodeCombat";
 import { ARENA_CENTER, createEnemy, type NodeShip } from "./nodeShips";
@@ -38,21 +35,13 @@ export function spawnWave(battle: NodeBattle): void {
   const { rules, controller, combat } = battle;
   const spec = rules.nextWave();
   controller.beginWave();
-  battle.belt = tightenBelt(SURVIVAL_BASE_BELT, spec.beltSteps);
+  battle.belt = survivalBelt(spec.beltSteps);
   combat.squadAi.resetEnemySquad();
-  const plan = rules.plan;
-  const size = controller.scaledWaveSize(
-    livingPlayers(combat).length,
-    plan.threatMultiplier,
-    plan.extraElites,
-    spec.isBossWave,
-    plan.maxRegulars,
-    REGULARS_PER_EXTRA_ELITE,
-  );
-  const slots = planWaveRoster(rules.roster(spec.faction), {
-    enemyCount: size.enemyCount,
-    eliteCount: size.eliteCount,
-    isMilestone: spec.isBossWave,
+  const slots = nodeWaveRoster({
+    rules,
+    controller,
+    spec,
+    playerShips: livingPlayers(combat).length,
   });
   const layout = layoutWave({
     center: ARENA_CENTER,

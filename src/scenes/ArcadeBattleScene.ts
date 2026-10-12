@@ -43,6 +43,11 @@ import { InputManager } from "../input/InputManager";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import { trackModeEnd, trackModeStart } from "../telemetry/telemetry";
 import { matchStats } from "../telemetry/matchTelemetry";
+import {
+  cycleEvent,
+  projectileShot,
+  stressEvent,
+} from "../telemetry/matchEvents";
 import type { ActionIntent } from "../input/InputTypes";
 import {
   tickOrdnanceCooldowns,
@@ -933,6 +938,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
     );
     this.pilotControl = result.pilot;
     this.applyFlightResult(ship, result);
+    matchStats.record({ kind: "flight", events: result.events });
+    matchStats.record(stressEvent(result.stress, deltaMs));
   }
 
   /**
@@ -996,6 +1003,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     );
     if (!targetId || !this.botFleet) return;
     this.botFleet.markTarget(this.playerFaction, targetId, this.battleClockMs);
+    matchStats.record({ kind: "mark" });
     this.scenario?.onPlayerMark(targetId);
     const target = this.ships.get(targetId);
     if (target) {
@@ -1080,6 +1088,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
         ship.control = state.control;
 
         if (completed && ship.id === this.playerShipId) {
+          matchStats.record(cycleEvent(ship.shipDial, completed));
           this.pilotControl = onPilotCycleCommitted(
             this.pilotControl,
             state.control.currentManeuver ?? "straight",
@@ -2325,6 +2334,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       { stressOnHit: ship.turretSlot.stressOnHit, bonusDamageVsUnshielded: 0 },
     );
     this.projectiles.push(proj);
+    matchStats.record(projectileShot(proj, this.playerFaction));
 
     const sprite = this.add.graphics();
     drawEnergyOrb(sprite, {
@@ -2497,6 +2507,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       MAIN_BEAM_HIT_DAMAGE,
     );
     this.projectiles.push(proj);
+    matchStats.record(projectileShot(proj, this.playerFaction));
 
     const sprite = this.add.graphics();
     drawEnergyOrb(sprite, { color: 0x99ddff, radius: 7 });

@@ -25,6 +25,20 @@ export const WALL_SHRINK_PER_STEP = 100;
 /** Per-step growth of the belt's max damage-per-second when it tightens. */
 export const DAMAGE_GROWTH_PER_STEP = 1;
 
+/** How a belt's damage grows as it tightens. */
+export interface BeltDamageRamp {
+  /** Max damage-per-second added per squeeze. */
+  readonly perStep: number;
+  /** Max damage-per-second the belt never exceeds, however tight. */
+  readonly maxPerSecond: number;
+}
+
+/** The default ramp: +DAMAGE_GROWTH_PER_STEP per squeeze, uncapped. */
+export const DEFAULT_DAMAGE_RAMP: BeltDamageRamp = {
+  perStep: DAMAGE_GROWTH_PER_STEP,
+  maxPerSecond: Number.POSITIVE_INFINITY,
+};
+
 export interface BeltConfig {
   /** No belt damage within this radius from the arena center. */
   readonly safeRadius: number;
@@ -81,10 +95,20 @@ export function beltDamagePerTurn(
 
 /**
  * Tighten the belt by `steps` (e.g. the Survival wave index): shrink both radii
- * and raise damage. The safe radius floors at MIN_SAFE_RADIUS and the wall stays
- * a fixed margin outside it, so the arena squeezes inward without collapsing.
+ * and raise damage along `ramp` (capped at its max). The safe radius floors at
+ * MIN_SAFE_RADIUS and the wall stays a fixed margin outside it, so the arena
+ * squeezes inward without collapsing.
+ *
+ * @param base - The belt before any squeeze.
+ * @param steps - Squeezes to apply (negative = none).
+ * @param ramp - How damage grows per squeeze (default: +1/s, uncapped).
+ * @returns The tightened belt.
  */
-export function tightenBelt(base: BeltConfig, steps: number): BeltConfig {
+export function tightenBelt(
+  base: BeltConfig,
+  steps: number,
+  ramp: BeltDamageRamp = DEFAULT_DAMAGE_RAMP,
+): BeltConfig {
   const clampedSteps = Math.max(0, steps);
   const safeRadius = Math.max(
     MIN_SAFE_RADIUS,
@@ -98,8 +122,10 @@ export function tightenBelt(base: BeltConfig, steps: number): BeltConfig {
     safeRadius + margin,
     base.wallRadius - WALL_SHRINK_PER_STEP * clampedSteps,
   );
-  const maxDamagePerSecond =
-    base.maxDamagePerSecond + DAMAGE_GROWTH_PER_STEP * clampedSteps;
+  const maxDamagePerSecond = Math.min(
+    ramp.maxPerSecond,
+    base.maxDamagePerSecond + ramp.perStep * clampedSteps,
+  );
   return { safeRadius, wallRadius, maxDamagePerSecond };
 }
 
@@ -112,6 +138,35 @@ export const BELT_AVOID_MARGIN_PX = 300;
 
 /** Fraction of the safe radius that always stays free to fight in. */
 const MIN_OPEN_FRACTION = 0.5;
+
+/**
+ * @param config - The current belt.
+ * @returns How far inside the safe radius pilots should turn back (px): the
+ *   avoid margin, shrunk on a tight belt so half the safe zone stays open.
+ */
+export function beltAvoidMargin(config: BeltConfig): number {
+  return Math.min(BELT_AVOID_MARGIN_PX, config.safeRadius * MIN_OPEN_FRACTION);
+}
+
+/** How close a ship is to the belt: safe, within the avoid margin, or in it. */
+export type BeltWarningLevel = "clear" | "near" | "inside";
+
+/**
+ * @param position - The ship's position.
+ * @param center - The arena centre.
+ * @param config - The current belt.
+ * @returns "inside" past the safe radius (taking damage), "near" within the
+ *   avoid margin (where AI pilots turn back), else "clear".
+ */
+export function beltWarningLevel(
+  position: { readonly x: number; readonly y: number },
+  center: { readonly x: number; readonly y: number },
+  config: BeltConfig,
+): BeltWarningLevel {
+  const dist = Math.hypot(position.x - center.x, position.y - center.y);
+  if (dist > config.safeRadius) return "inside";
+  return dist > config.safeRadius - beltAvoidMargin(config) ? "near" : "clear";
+}
 
 /**
  * Where an AI pilot should fly to stay out of the belt.
@@ -128,12 +183,7 @@ export function beltRetreatPoint(
   center: { readonly x: number; readonly y: number },
   config: BeltConfig,
 ): { x: number; y: number } | null {
-  const margin = Math.min(
-    BELT_AVOID_MARGIN_PX,
-    config.safeRadius * MIN_OPEN_FRACTION,
-  );
-  const dist = Math.hypot(position.x - center.x, position.y - center.y);
-  return dist > config.safeRadius - margin
-    ? { x: center.x, y: center.y }
-    : null;
+  return beltWarningLevel(position, center, config) === "clear"
+    ? null
+    : { x: center.x, y: center.y };
 }

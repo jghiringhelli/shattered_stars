@@ -41,6 +41,7 @@ export type {
   BattleHudSnapshot,
   CameraViewSnapshot,
   ContactHudState,
+  HudBoundaryRing,
   HudPose,
   HudSizeClass,
   PlayerHudState,

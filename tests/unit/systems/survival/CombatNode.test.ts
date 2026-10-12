@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   combatKindOf,
   MAX_BELT_STEPS,
+  MAX_REGULARS_PER_WAVE,
   planCombat,
   shouldStartNextBossPhase,
   WAVES_PER_NODE,
@@ -46,12 +47,20 @@ describe("planCombat", () => {
     expect(plan.kind).toBe("combat");
     expect(plan.waves).toBe(WAVES_PER_NODE.combat);
     expect(plan.threatMultiplier).toBeCloseTo(ROGUELITE_THREAT_SCALE);
-    expect(plan.maxRegulars).toBe(2);
+    expect(plan.maxRegulars).toBe(MAX_REGULARS_PER_WAVE);
     expect(survivalEnemyTier(plan.effectiveWave, "regular")).toBe("novice");
     const later = planCombat({ ...run, sector: 3 })!;
     expect(later.threatMultiplier).toBeCloseTo(ROGUELITE_THREAT_SCALE * 1.5);
-    expect(later.maxRegulars).toBe(4);
-    expect(survivalEnemyTier(later.effectiveWave, "regular")).toBe("expert");
+    expect(later.maxRegulars).toBe(MAX_REGULARS_PER_WAVE);
+    expect(survivalEnemyTier(later.effectiveWave, "regular")).toBe("average");
+    const deep = { ...run, sector: 3, activeNodeId: run.map.rows[4]![0]!.id };
+    expect(survivalEnemyTier(planCombat(deep)!.effectiveWave, "regular")).toBe(
+      "expert",
+    );
+  });
+
+  it("fields at most two regulars per wave in every sector (sector 3 flew four experts)", () => {
+    expect(MAX_REGULARS_PER_WAVE).toBe(2);
   });
 
   it("adds elites and affixes on elite nodes and more under ascension", () => {
@@ -67,6 +76,16 @@ describe("planCombat", () => {
     );
     expect(ascended.beltSteps).toBeGreaterThan(elite.beltSteps);
     expect(ascended.effectiveWave).toBeGreaterThan(elite.effectiveWave);
+  });
+
+  it("applies Elite Contracts to elite nodes only, as described — never to a boss", () => {
+    for (const ascension of [0, 1, 10]) {
+      const boss = atActiveNode(
+        RunBuilder.aRun().withAscension(ascension).build(),
+        "boss",
+      );
+      expect(planCombat(boss)!.extraElites).toBe(0);
+    }
   });
 
   it("gives the final boss an extra phase and ascension 8 one more", () => {
@@ -158,7 +177,7 @@ describe("completeCombat", () => {
     );
     expect(next.escorts).toHaveLength(1);
     expect(next.progression.escorts).toBe(1);
-    expect(next.stats.escortsLost).toBe(1);
+    expect(next.stats.escortsLost).toBe(run.escorts.length - 1);
   });
 
   it("pays an event battle's bonus after victory", () => {
@@ -216,7 +235,7 @@ describe("completeCombat", () => {
 });
 
 describe("AI tier curve", () => {
-  it("flies novices through sector 1, average pilots in sector 2 and experts in sector 3", () => {
+  it("flies novices through sector 1, average pilots in sector 2 and early sector 3, experts from sector 3's fifth row", () => {
     const base = atActiveNode(RunBuilder.aRun().build(), "combat");
     const tierAt = (sector: number, row: number) => {
       const plan = planCombat({
@@ -230,6 +249,8 @@ describe("AI tier curve", () => {
     expect(tierAt(1, 5)).toBe("novice");
     expect(tierAt(2, 0)).toBe("average");
     expect(tierAt(2, 6)).toBe("average");
-    expect(tierAt(3, 0)).toBe("expert");
+    expect(tierAt(3, 0)).toBe("average");
+    expect(tierAt(3, 3)).toBe("average");
+    expect(tierAt(3, 4)).toBe("expert");
   });
 });

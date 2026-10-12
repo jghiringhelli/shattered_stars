@@ -94,6 +94,15 @@ describe("voice designs", () => {
       expect(spec.endFrequency, name).toBeLessThan(spec.startFrequency);
     }
   });
+
+  it("gives the asteroid-belt warning its own low, falling klaxon", () => {
+    const belt = VOICE_DESIGNS.belt_warning;
+    expect(belt.endFrequency).toBeLessThan(belt.startFrequency);
+    expect(belt.startFrequency).toBeLessThan(
+      VOICE_DESIGNS.alert.startFrequency,
+    );
+    expect(belt.noiseMix).toBeLessThan(NOISE_DOMINANT_MIX);
+  });
 });
 
 describe("voiceDuration", () => {

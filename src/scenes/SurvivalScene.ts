@@ -26,9 +26,10 @@ import {
 import {
   beltDamageForFrame,
   beltRetreatPoint,
-  tightenBelt,
   type BeltConfig,
 } from "../systems/arena/ArenaBoundary";
+import { survivalBelt } from "../systems/survival/SurvivalBelt";
+import { BeltWarningHud } from "../ui/survival/BeltWarningHud";
 import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
 import { applyAllyAuraRepairs } from "../systems/aura/AllyAuraRepair";
@@ -116,9 +117,9 @@ import {
 } from "../systems/survival/RoguelikeRunService";
 import {
   planCombat,
-  REGULARS_PER_EXTRA_ELITE,
   shouldStartNextBossPhase,
 } from "../systems/survival/CombatNodePlan";
+import { nodeWaveRoster } from "../systems/survival/NodeWaveRoster";
 import {
   trackDeath,
   trackModeEnd,
@@ -330,6 +331,8 @@ export class SurvivalScene extends Phaser.Scene {
   // UI — holographic battle HUD (flight, radar, weapons) + Survival readouts
   private battleHud: BattleHud | null = null;
   private modeHud!: SurvivalModeHud;
+  /** Pulsing edge/text/icon warning + audio cue near the asteroid belt. */
+  private beltWarning: BeltWarningHud | null = null;
 
   /** X-Wing round tempo: a struck target ignores its attacker for a cycle. */
   private readonly hitLedger = new HitImmunityLedger();
@@ -456,6 +459,8 @@ export class SurvivalScene extends Phaser.Scene {
     this.pilot.detach();
     this.battleHud?.destroy();
     this.battleHud = null;
+    this.beltWarning?.destroy();
+    this.beltWarning = null;
   }
 
   private resetState(): void {
@@ -464,7 +469,7 @@ export class SurvivalScene extends Phaser.Scene {
     this.enemySerial = 0;
     this.battleEnded = false;
     this.openRunBattle();
-    this.beltConfig = tightenBelt(BASE_BELT, this.rules.plan.beltSteps);
+    this.beltConfig = survivalBelt(this.rules.plan.beltSteps);
     this.drawBelt();
     this.isWaveActive = false;
     this.isPaused = false;
@@ -581,6 +586,7 @@ export class SurvivalScene extends Phaser.Scene {
     // looking at, so a distant firefight sounds distant.
     syncListenerToCamera(this.cameras.main);
     this.modeHud.sync(this.cameras.main);
+    this.beltWarning?.sync(this.cameras.main);
     if (this.isPaused) return;
     this.performanceState = updateFPS(this.performanceState, delta);
     this.performanceState = evaluateQuality(this.performanceState, time);
@@ -637,6 +643,9 @@ export class SurvivalScene extends Phaser.Scene {
   private createHUD(): void {
     this.modeHud = new SurvivalModeHud(this, this.playerFaction);
     this.battleHud = new BattleHud(this, { worldSize: BATTLEFIELD_SIZE });
+    this.beltWarning = new BeltWarningHud(this, (volume) =>
+      audioManager.playSound("belt_warning", volume),
+    );
   }
 
   /**
@@ -651,8 +660,14 @@ export class SurvivalScene extends Phaser.Scene {
     );
     const flagship = this.ships.get(this.playerShipIds[0] ?? "") ?? null;
     if (flagship) this.retireHealthBar(flagship.id);
-    this.battleHud?.update(
-      squadHudSnapshot({
+    this.beltWarning?.update(
+      flagship,
+      ARENA_CENTER,
+      this.beltConfig,
+      this.time.now,
+    );
+    this.battleHud?.update({
+      ...squadHudSnapshot({
         flagship,
         ships: this.ships.values(),
         targetId: flagship ? this.hudTargetOf(flagship) : null,
@@ -661,7 +676,8 @@ export class SurvivalScene extends Phaser.Scene {
         attackIntervalMs: flagship ? this.attackIntervalOf(flagship) : 0,
         camera: cameraViewFrom(this.cameras.main),
       }),
-    );
+      boundary: { center: ARENA_CENTER, radius: this.beltConfig.safeRadius },
+    });
   }
 
   /**
@@ -758,7 +774,7 @@ export class SurvivalScene extends Phaser.Scene {
     if (this.battleEnded) return;
     const spec = this.rules.nextWave();
     this.wave = this.run.beginWave();
-    this.beltConfig = tightenBelt(BASE_BELT, spec.beltSteps);
+    this.beltConfig = survivalBelt(spec.beltSteps);
     this.drawBelt();
     const label = `Wave ${spec.index}/${spec.total}`;
     this.modeHud.setWave(this.wave, label);
@@ -962,20 +978,12 @@ export class SurvivalScene extends Phaser.Scene {
    * @param spec - The wave (faction, boss wave, tiers).
    */
   private spawnWaveEnemies(spec: WaveSpec): void {
-    const plan = this.rules.plan;
-    const { enemyCount, eliteCount } = this.run.scaledWaveSize(
-      this.playerShipIds.length,
-      plan.threatMultiplier,
-      plan.extraElites,
-      spec.isBossWave,
-      plan.maxRegulars,
-      REGULARS_PER_EXTRA_ELITE,
-    );
     const faction = spec.faction;
-    const slots = planWaveRoster(this.rules.roster(faction), {
-      enemyCount,
-      eliteCount,
-      isMilestone: spec.isBossWave,
+    const slots = nodeWaveRoster({
+      rules: this.rules,
+      controller: this.run,
+      spec,
+      playerShips: this.playerShipIds.length,
     });
     const layout = layoutWave({
       center: ARENA_CENTER,

@@ -10,6 +10,7 @@
 
 import type { BotTier } from "../arcade/ai/BotTypes";
 import { ACE_MATCHUPS } from "../data/AceMatchups";
+import { DOGFIGHT_DEFAULT_PAIRING } from "../data/DogfightDefaults";
 import { SCENARIO_IDS } from "../arcade/scenarios";
 import { simulateDuelRound } from "./DuelTempoSim";
 import { runBattle } from "./skill/SkillArena";
@@ -73,8 +74,8 @@ function dogfightCell(label: string, [t1, t2]: Pair): BatteryCell {
       seedsOf(n).map((seed) =>
         duelSample(
           simulateDuelRound({
-            side1: ["confed_falcon"],
-            side2: ["terran_raptor"],
+            side1: [DOGFIGHT_DEFAULT_PAIRING.player.shipId],
+            side2: [DOGFIGHT_DEFAULT_PAIRING.enemy.shipId],
             seed,
             tier: t1,
             side2Tier: t2,
@@ -191,7 +192,7 @@ export const BATTERY_CELLS: readonly BatteryCell[] = [
   ...["average v average", "expert v novice"].map((l) =>
     scenarioCell(l, PAIRS[l]!),
   ),
-  ...[1, 2].map(survivalCell),
+  ...[1, 2, 3].map(survivalCell),
 ];
 
 /** Gate-1 pairs sampled by the tempo experiment (hardest + spread, per expert ship). */

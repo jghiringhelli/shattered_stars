@@ -57,6 +57,18 @@ describe("planWaveRoster", () => {
     expect(slots).toMatchObject([{ definitionId: FANG, tier: "elite" }]);
   });
 
+  it("elites follow a given role preference, first role first", () => {
+    const HEAVY: RosterShip = { id: "heavy_ship", role: "heavy_fighter" };
+    const roster = [FIGHTER, GUNSHIP, BOMBER, HEAVY];
+    const pick = (eliteRoles: readonly string[]) =>
+      planWaveRoster(roster, { ...PLAIN_WAVE, eliteCount: 1, eliteRoles })[0]!
+        .definitionId;
+    expect(pick(["heavy_fighter", "bomber"])).toBe(HEAVY.id);
+    expect(pick(["bomber", "gunship"])).toBe(BOMBER.id);
+    expect(pick(["gunship", "bomber"])).toBe(GUNSHIP.id);
+    expect(pick(["support"])).toBe(FANG);
+  });
+
   it("a milestone adds one boss, the roster's first gunship, last", () => {
     const slots = planWaveRoster([GUNSHIP, FIGHTER], {
       enemyCount: 1,

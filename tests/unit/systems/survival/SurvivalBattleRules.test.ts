@@ -76,8 +76,21 @@ describe("SurvivalBattleRules — the player's fleet", () => {
 });
 
 describe("SurvivalBattleRules — waves and enemies", () => {
-  it("steps tiers and the belt each wave and sends the boss on a boss node's last wave", () => {
+  it("sends the boss with a boss node's single wave (its phases bring the reinforcements)", () => {
     const rules = rulesFor(atActiveNode(RunBuilder.aRun().build(), "boss"));
+    expect(rules.plan.waves).toBe(1);
+    const only = rules.nextWave();
+    expect(only).toMatchObject({ index: 1, total: 1, isBossWave: true });
+    expect(rules.onLastWave).toBe(true);
+    expect(rules.currentWave()).toBe(only);
+  });
+
+  it("steps tiers and the belt each wave of a multi-wave node, the boss arriving last", () => {
+    const run = atActiveNode(RunBuilder.aRun().build(), "boss");
+    const rules = new SurvivalBattleRules(run, {
+      ...planCombat(run)!,
+      waves: 2,
+    });
     const first = rules.nextWave();
     expect(first).toMatchObject({ index: 1, total: 2, isBossWave: false });
     expect(rules.onLastWave).toBe(false);
@@ -87,6 +100,17 @@ describe("SurvivalBattleRules — waves and enemies", () => {
     expect(second.beltSteps).toBe(first.beltSteps + 1);
     expect(rules.onLastWave).toBe(true);
     expect(rules.currentWave()).toBe(second);
+  });
+
+  it("flies the sector boss at its sector's boss tier: average in sector 1, expert after", () => {
+    const base = atActiveNode(RunBuilder.aRun().build(), "boss");
+    const tierIn = (sector: number) => {
+      const rules = rulesFor({ ...base, sector });
+      return rules.tierFor(rules.nextWave(), "boss", []);
+    };
+    expect(tierIn(1)).toBe("average");
+    expect(tierIn(2)).toBe("expert");
+    expect(tierIn(3)).toBe("expert");
   });
 
   it("never fields capital ships as wave ships", () => {
@@ -119,8 +143,8 @@ describe("SurvivalBattleRules — waves and enemies", () => {
     const rules = rulesFor(atActiveNode(RunBuilder.aRun().build(), "elite"));
     const spec = rules.nextWave();
     expect(rules.tierFor(spec, "regular", [])).toBe("novice");
-    expect(rules.tierFor(spec, "elite", [])).toBe("average");
-    expect(rules.tierFor(spec, "elite", [getAffix("ace")!])).toBe("expert");
+    expect(rules.tierFor(spec, "elite", [])).toBe("novice");
+    expect(rules.tierFor(spec, "elite", [getAffix("ace")!])).toBe("average");
   });
 });
 

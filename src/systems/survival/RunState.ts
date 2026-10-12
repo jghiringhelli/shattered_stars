@@ -58,9 +58,13 @@ export function freshShip(
   return { definitionId, loadoutId, hull: 1, shields: 1, upgrades: 0 };
 }
 
+/** Every run starts with this many escort wingmen (ADR-0004: a squad, and its mark, from node 1). */
+export const FREE_STARTING_ESCORTS = 1;
+
 /**
  * @param options - Seed, faction, flagship, ascension, meta unlocks, clock.
- * @returns A new run positioned at the start of sector 1.
+ * @returns A new run positioned at the start of sector 1, with the free
+ *   wingman plus any meta escort package (capped at MAX_ESCORTS).
  */
 export function createRun(options: NewRunOptions): RunState {
   const ascension = clampAscension(options.ascension);
@@ -100,7 +104,8 @@ export function createRun(options: NewRunOptions): RunState {
     log: [],
   };
   let run = base;
-  for (let i = 0; i < startingEscorts(options.unlocked); i++) {
+  const escorts = FREE_STARTING_ESCORTS + startingEscorts(options.unlocked);
+  for (let i = 0; i < escorts; i++) {
     run = addEscort(run);
   }
   return run;

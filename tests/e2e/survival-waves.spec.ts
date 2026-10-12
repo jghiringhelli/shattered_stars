@@ -99,7 +99,7 @@ test.describe("SurvivalScene — wave escalation", () => {
 // ─── Sector boss ──────────────────────────────────────────────────────────────
 
 test.describe("SurvivalScene — sector boss", () => {
-  test("a boss node sends a high-hull boss with phases on its last wave", async ({
+  test("a boss node sends the boss alone, with its phases, on its only wave", async ({
     page,
   }) => {
     await page.goto("/");
@@ -142,30 +142,38 @@ test.describe("SurvivalScene — sector boss", () => {
       undefined,
       { timeout: 10_000 },
     );
-    await page.evaluate(() => {
-      const s = (window as any).game.scene.getScene("SurvivalScene") as any;
-      for (const id of [...s.enemyShipIds]) s.ships.delete(id);
-      s.enemyShipIds = [];
-      s.startNextWave();
-    });
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const { bossMultiplier } =
+        await import("/src/arcade/systems/SurvivalDurability.ts");
       const s = (window as any).game.scene.getScene("SurvivalScene") as any;
       const boss = [...s.ships.values()].find((sh: any) =>
         String(sh.id).startsWith("boss_"),
       );
+      const plan = s.rules.plan;
       return {
-        kind: s.rules.plan.kind,
-        phases: s.rules.plan.bossPhases,
+        kind: plan.kind,
+        waves: plan.waves,
+        phases: plan.bossPhases,
+        enemies: s.enemyShipIds.length,
         bossHull: boss?.maxHull ?? 0,
-        equippedHull: boss?.combatStats.maxHull ?? Infinity,
+        expectedHull: Math.round(
+          (boss?.combatStats.maxHull ?? 0) *
+            bossMultiplier(plan.bossWave) *
+            plan.enemyHullMultiplier,
+        ),
         tracked: boss ? s.bossPhases.get(boss.id) : undefined,
       };
     });
     expect(result.kind).toBe("boss");
+    expect(result.waves).toBe(1);
     expect(result.phases).toBeGreaterThanOrEqual(1);
     expect(result.tracked).toBe(1);
-    // Boss hull is its equipped (already scaled) hull multiplied 2+ times.
-    expect(result.bossHull).toBeGreaterThanOrEqual(2 * result.equippedHull);
+    // The boss flies alone (no bonus elite, no regulars to squad-mark with).
+    expect(result.enemies).toBe(1);
+    // Its equipped (already scaled) hull × the sector's boss multiplier × the
+    // run's enemy hull scale — scaled once, never twice.
+    expect(result.bossHull).toBeGreaterThan(0);
+    expect(result.bossHull).toBe(result.expectedHull);
   });
 });
 

@@ -11,11 +11,15 @@
 
 import type { BeltConfig } from "../arena/ArenaBoundary";
 
-/** Survival's asteroid belt before any squeeze (tightenBelt shrinks it). */
+/**
+ * Survival's asteroid belt before any squeeze (survivalBelt shrinks it and
+ * ramps its damage, capped — see SurvivalBelt). 0.5 miniature points/s at
+ * the wall = 6 HP/s in real time.
+ */
 export const SURVIVAL_BASE_BELT: BeltConfig = {
   safeRadius: 2600,
   wallRadius: 3000,
-  maxDamagePerSecond: 3,
+  maxDamagePerSecond: 0.5,
 };
 
 /** Wave ships enter this far inside the safe radius (px). */

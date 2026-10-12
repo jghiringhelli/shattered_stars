@@ -44,7 +44,7 @@ export function summaryLines(summary: RunSummary): string[] {
     .map((a) => `${ARCHETYPE_SETS[a].name} ×${counts[a]}`);
   return [
     `${FACTION_NAMES_SHORT[summary.faction]} — ${ship}`,
-    `Sectors cleared ${summary.sectorsCleared}/3 (reached ${summary.sectorReached})   Nodes ${summary.nodesCleared}   Kills ${summary.kills}`,
+    `Sectors cleared ${summary.sectorsCleared}/3 (reached ${summary.sectorReached})   Nodes ${summary.nodesCleared}   Kills ${summary.kills}   Escorts lost ${summary.escortsLost ?? 0}`,
     `Salvage earned ${summary.salvageEarned}   Ascension ${summary.ascension}   Time ${formatDuration(summary.durationMs)}   Seed ${summary.seedCode}`,
     `Relics (${relics.length}): ${relics.length > 0 ? relics.join(", ") : "none"}`,
     `Build archetypes: ${archetypes.length > 0 ? archetypes.join(", ") : "none"}${mutations.length > 0 ? `   Mutations: ${mutations.join(", ")}` : ""}`,
