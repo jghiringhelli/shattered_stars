@@ -17,6 +17,12 @@ import {
   type SquadEntry,
 } from "../../../src/core/squadTypes";
 import { SHIP_DEFINITIONS } from "../../../src/data/ShipDefinitions";
+import {
+  getLoadoutById,
+  getEquippableLoadouts,
+} from "../../../src/data/ShipLoadouts";
+import { assignQuickBuilds } from "../../../src/arcade/systems/QuickBuildEquip";
+import { getQuickBuild, toSimSpecs } from "../../../src/data/SquadronPresets";
 import type { FactionId } from "../../../src/config";
 
 const ALL_FACTIONS: readonly FactionId[] = [
@@ -29,12 +35,22 @@ const ALL_FACTIONS: readonly FactionId[] = [
 
 const POINT_LIMIT = 200;
 
-/** Total point cost of a squad's ships, read back from the definitions. */
+/**
+ * Total point cost of a squad as it flies: every ship on its chosen quick
+ * build, else the default one the battle scene equips (assignQuickBuilds),
+ * priced at that build's cost.
+ */
 function costOf(squad: SquadEntry): number {
-  return squad.ships.reduce(
-    (sum, id) => sum + (SHIP_DEFINITIONS[id]?.baseStats.pointCost ?? 0),
-    0,
+  const builds = assignQuickBuilds(
+    squad.ships,
+    squad.ships.map((_, i) => squad.loadoutChoices[String(i)]),
   );
+  return squad.ships.reduce((sum, id, i) => {
+    const build = builds[i] ? getLoadoutById(builds[i]!) : undefined;
+    return (
+      sum + (build?.pointCost ?? SHIP_DEFINITIONS[id]!.baseStats.pointCost)
+    );
+  }, 0);
 }
 
 /** The cheapest non-capital ship in a faction — what a new player picks. */
@@ -85,6 +101,20 @@ describe("fillSquadWingmen", () => {
       const squad = playerSquadWithFlagship(faction, cheapestShip(faction));
       expect(squad.pointsUsed).toBe(costOf(squad));
     }
+  });
+
+  it("charges the player's chosen quick build, not the bare hull", () => {
+    const flagship = "terran_viper";
+    const priciest = [...getEquippableLoadouts(flagship)].sort(
+      (a, b) => b.pointCost - a.pointCost,
+    )[0]!;
+    const squad = makeSquad(1, 0, "player");
+    squad.factionId = "terran_hegemony";
+    squad.ships = [flagship];
+    squad.loadoutChoices = { "0": priciest.id };
+    fillSquadWingmen(squad, "arcade", POINT_LIMIT);
+    expect(squad.pointsUsed).toBe(costOf(squad));
+    expect(squad.pointsUsed).toBeLessThanOrEqual(POINT_LIMIT);
   });
 
   it("never exceeds the squad size cap", () => {
@@ -156,6 +186,39 @@ describe("Skirmish launch is a fair fight", () => {
 });
 
 describe("autoFillSquad", () => {
+  it("fields the faction's curated quick-build squad when one matches the budget", () => {
+    for (const faction of ALL_FACTIONS) {
+      const preset = getQuickBuild(faction, POINT_LIMIT)!;
+      const squad = makeSquad(2, 0, "ai");
+      squad.factionId = faction;
+      autoFillSquad(squad, "arcade", POINT_LIMIT);
+      expect(squad.ships).toEqual(toSimSpecs(preset).map((s) => s.shipId));
+      expect(
+        squad.ships.map((_, i) => squad.loadoutChoices[String(i)]),
+      ).toEqual(preset.ships.map((s) => s.loadoutId));
+      expect(squad.pointsUsed).toBe(preset.totalCost);
+    }
+  });
+
+  it("falls back to the greedy fill when no preset matches the budget", () => {
+    const squad = makeSquad(2, 0, "ai");
+    squad.factionId = "terran_hegemony";
+    autoFillSquad(squad, "arcade", 250);
+    expect(squad.ships.length).toBeGreaterThan(0);
+    expect(squad.loadoutChoices).toEqual({});
+    expect(costOf(squad)).toBeLessThanOrEqual(250);
+  });
+
+  it("prices the AI squad at the quick builds it flies, within the limit", () => {
+    for (const faction of ALL_FACTIONS) {
+      const squad = makeSquad(2, 0, "ai");
+      squad.factionId = faction;
+      autoFillSquad(squad, "arcade", POINT_LIMIT);
+      expect(squad.pointsUsed).toBe(costOf(squad));
+      expect(costOf(squad)).toBeLessThanOrEqual(POINT_LIMIT);
+    }
+  });
+
   it("rebuilds from scratch instead of accumulating onto existing ships", () => {
     const fresh = makeSquad(1, 0, "ai");
     fresh.factionId = "terran_hegemony";

@@ -29,7 +29,11 @@ export function armRound(state: RoundState): WeaponsDriver {
           weaponBodyOf(
             ship,
             `side${ship.side}`,
-            damageMitigationOf(ship.modifiers, false),
+            damageMitigationOf(
+              ship.modifiers,
+              false,
+              state.auras?.get(ship.id),
+            ),
           ),
         ),
       wantedTargetOf: (id) => state.crew.targetOf(id),

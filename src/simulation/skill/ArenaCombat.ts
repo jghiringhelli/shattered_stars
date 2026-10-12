@@ -21,7 +21,11 @@ import {
   combatantOf,
   resolveDiceAttack,
 } from "../../arcade/systems/DiceAttack";
-import { armorReductionOf } from "../../arcade/systems/DamageRules";
+import {
+  armorReductionOf,
+  shotAurasOf,
+} from "../../arcade/systems/DamageRules";
+import { NO_AURAS } from "./ArenaAuras";
 import { forgetMarkedTarget } from "../../arcade/systems/SquadMark";
 import { creditKill } from "../../systems/arena/BattleScore";
 import type { CombatState, SideTally } from "./ArenaCombatState";
@@ -146,6 +150,7 @@ function fireAt(
     roll: state.random(),
     targetMarked: shot.marked,
     levers: state.rules.shotLevers,
+    ...shotAurasOf(state.auras ?? NO_AURAS, attacker.id, target.id),
     targetArmor: armorReductionOf(target.definitionId),
   });
   state.weapons?.onAttack(attacker.id);

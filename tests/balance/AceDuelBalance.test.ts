@@ -1,30 +1,34 @@
 /**
- * Ace Duel Balance — regression guardrail for the preset iconic matchups.
+ * Ace Duel balance — guardrail on the real duel engine (DuelTempoSim: the
+ * scenes' BotPilots, default quick builds with their secondaries, the aces'
+ * sheet and ad-hoc abilities). Every preset is played from both seats at
+ * the average tier (Normal) with fixed seeds, so the result is
+ * deterministic: a drop here is a regression in ships, builds, abilities or
+ * combat, not noise.
  *
- * Ace Duel ships have no unit/sim coverage: the scene picks a canned matchup and
- * fights it best-of-3. This suite is the safety net for the *data + combat* of
- * those presets. With a FIXED seed it asserts:
- *  - structural integrity of every preset (real ships, real abilities, both sides),
- *  - determinism (same seed → identical outcome),
- *  - competitiveness (no preset is a hopeless stomp; matchups resolve decisively).
- *
- * It models ship-vs-ship combat only (pilot abilities / difficulty are layered by
- * the live scene, not the sim), so it is a coarse "is this matchup playable?" lens
- * rather than a claim of exact in-scene outcomes.
+ * The CI band (30–70 % at 24 rounds) is the 40–60 % target widened by the
+ * sample's interval; `npm run balance:report` measures every preset at
+ * average and expert with 120 rounds (docs/balance/latest.md).
  */
 
 import { describe, it, expect } from "vitest";
 import { ACE_MATCHUPS } from "../../src/data/AceMatchups";
+import { findAceMatchupIssues } from "../../src/simulation/DuelBalance";
 import {
-  runAceMatchup,
-  findAceMatchupIssues,
-  STOMP_FLOOR,
-  MAX_DRAW_RATE,
-  type DuelOutcome,
-} from "../../src/simulation/DuelBalance";
+  aceSides,
+  runDuelSeries,
+} from "../../src/simulation/balance/duelBalance";
+import { shareInterval } from "../../src/simulation/balance/balanceStats";
+import { seedRange } from "../../src/simulation/skill";
 
-const BATTLES = 120;
-const SEED = 20260316;
+/** Seeds per preset (each flown from both seats). */
+const SEEDS = seedRange(12, 4000);
+/** CI band around the 40–60 % target. */
+const CI_LOW = 0.3;
+const CI_HIGH = 0.7;
+/** A preset's median round must stay a duel, not a stalemate (ms). */
+const MAX_MEDIAN_ROUND_MS = 90_000;
+const AVERAGE = { tier: "average", reactionScale: 1 } as const;
 
 describe("Ace Duel preset structure", () => {
   it("has at least the shipped roster of matchups", () => {
@@ -32,61 +36,37 @@ describe("Ace Duel preset structure", () => {
   });
 
   it("references only real ships and abilities, with unique ids and non-empty sides", () => {
-    const issues = findAceMatchupIssues();
-    expect(issues).toEqual([]);
+    expect(findAceMatchupIssues()).toEqual([]);
+  });
+
+  it("pits no capital ship (they stalemate a duel)", () => {
+    const capitals = ACE_MATCHUPS.flatMap((m) => [
+      ...m.side1.ships,
+      ...m.side2.ships,
+    ]).filter((id) => /conduit|bastion$|imperator|dreadnought/.test(id));
+    expect(capitals).toEqual([]);
   });
 });
 
-describe("Ace Duel matchup balance (headless, seeded)", () => {
-  const outcomes = new Map<string, DuelOutcome>();
-  /**
-   * Capital ships are intentionally boss-tier (tripled hull/shields + flat
-   * armor damage reduction), so a duel between two capitals legitimately
-   * needs far more turns to resolve than a fighter duel.
-   */
-  const MAX_TURNS_OVERRIDE: Readonly<Record<string, number>> = {
-    gunship_duel: 300,
-  };
-  for (const matchup of ACE_MATCHUPS) {
-    outcomes.set(
-      matchup.id,
-      runAceMatchup(matchup, {
-        mode: "continuous",
-        battles: BATTLES,
-        seed: SEED,
-        maxTurns: MAX_TURNS_OVERRIDE[matchup.id],
-      }),
-    );
-  }
-
+describe("Ace Duel presets on the real engine (average pilots, both seats)", () => {
   it.each(ACE_MATCHUPS.map((m) => m.id))(
-    "matchup '%s' is not a hopeless stomp",
+    "preset '%s' is a fair fight",
     (id) => {
-      const outcome = outcomes.get(id)!;
-      // Among decisive battles, the losing side must still win a real share.
-      expect(outcome.weakerSideShare).toBeGreaterThanOrEqual(STOMP_FLOOR);
+      const matchup = ACE_MATCHUPS.find((m) => m.id === id)!;
+      const series = runDuelSeries({
+        ...aceSides(matchup),
+        seeds: SEEDS,
+        skill1: AVERAGE,
+        skill2: AVERAGE,
+      });
+      const { share } = shareInterval(series.tally);
+      expect(share).toBeGreaterThanOrEqual(CI_LOW);
+      expect(share).toBeLessThanOrEqual(CI_HIGH);
+      const sorted = [...series.durationsMs].sort((a, b) => a - b);
+      expect(sorted[Math.floor(sorted.length / 2)] ?? Infinity).toBeLessThan(
+        MAX_MEDIAN_ROUND_MS,
+      );
     },
+    60_000,
   );
-
-  it.each(ACE_MATCHUPS.map((m) => m.id))(
-    "matchup '%s' resolves decisively most of the time",
-    (id) => {
-      const outcome = outcomes.get(id)!;
-      expect(outcome.drawRate).toBeLessThanOrEqual(MAX_DRAW_RATE);
-    },
-  );
-
-  it("is deterministic for a fixed seed", () => {
-    const first = runAceMatchup(ACE_MATCHUPS[0]!, {
-      mode: "continuous",
-      battles: BATTLES,
-      seed: SEED,
-    });
-    const second = runAceMatchup(ACE_MATCHUPS[0]!, {
-      mode: "continuous",
-      battles: BATTLES,
-      seed: SEED,
-    });
-    expect(second).toEqual(first);
-  });
 });

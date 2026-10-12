@@ -120,6 +120,7 @@ export function flyScript(options: ScriptOptions): FlightTrace {
     },
   };
   let cycleStart: Pose = options.start;
+  let peakStress = 0;
   const pending = [...options.events].sort((a, b) => a.atMs - b.atMs);
   const trace: FlightTrace = {
     cycles: [],
@@ -148,14 +149,14 @@ export function flyScript(options: ScriptOptions): FlightTrace {
       cycleMs: CYCLE_DURATION_MS,
     });
     flight = tick.state;
-    trace.peakStress = Math.max(trace.peakStress, flight.stress.level);
+    peakStress = Math.max(peakStress, flight.stress.level);
     if (!tick.completed) continue;
     const { direction, speed, endPose } = tick.completed;
     trace.cycles.push({ direction, speed, start: cycleStart, end: endPose });
     cycleStart = endPose;
     pilot.onCycleCommitted(flight.motion.control.currentManeuver ?? "straight");
   }
-  return { ...trace, final: flight };
+  return { ...trace, final: flight, peakStress };
 }
 
 function applyEvent(intents: ScriptedIntents, event: ScriptEvent): void {

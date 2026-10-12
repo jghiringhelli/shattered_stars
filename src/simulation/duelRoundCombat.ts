@@ -12,7 +12,13 @@
 import { BATTLEFIELD_SIZE, LOGIC_DELTA } from "../config";
 import { applyInstantStress } from "../arcade/ArcadeStress";
 import type { HitImmunityLedger } from "../arcade/systems/CombatTempo";
-import { armorReductionOf } from "../arcade/systems/DamageRules";
+import { armorReductionOf, shotAurasOf } from "../arcade/systems/DamageRules";
+import {
+  duelShotOdds,
+  marksmanshipDamage,
+} from "../arcade/systems/AceDuelAbilities";
+import type { ActiveAura } from "../systems/SupportAura";
+import type { DamagePauseTracker } from "../arcade/systems/repair/HullRepair";
 import type { WeaponsDriver } from "../arcade/weapons/WeaponsDriver";
 import {
   absorbDamage,
@@ -21,7 +27,6 @@ import {
 } from "../arcade/systems/DiceAttack";
 import type { DuelBotCrew } from "../arcade/systems/DuelBotCrew";
 import { primaryShotTarget } from "../arcade/systems/DuelPrimaryFire";
-import { calculateHitChance } from "../data/ModeBalancing";
 import type { RandomGenerator } from "../utils/random";
 import type { DuelSimShip } from "./duelSimShips";
 import type { ResolvedTempo } from "./TempoVariant";
@@ -47,6 +52,10 @@ export interface RoundState {
   specialsUsed: number;
   /** The ships' secondaries (duelRoundWeapons.armRound). */
   weapons?: WeaponsDriver;
+  /** Faction auras covering each ship this frame (hero pilots in 2v2). */
+  auras?: ReadonlyMap<string, ActiveAura>;
+  /** Time since each ship last took damage (hull repair pause). */
+  repairs?: DamagePauseTracker;
 }
 
 /**
@@ -89,23 +98,25 @@ function attack(
   target: DuelSimShip,
 ): void {
   state.attacks[attacker.side] += 1;
+  const { hitChance, extraDamageChance } = duelShotOdds(attacker, target);
+  const roll = state.rng.next();
   const result = resolveDiceAttack({
     attacker: combatantOf(attacker),
     target: combatantOf(target),
-    hitChance: calculateHitChance(
-      attacker.combatStats.attackDice,
-      target.combatStats.agilityDice,
-    ),
-    baseDamage: attacker.combatStats.attackDice,
+    hitChance,
+    baseDamage:
+      attacker.combatStats.attackDice +
+      marksmanshipDamage(roll, hitChance, extraDamageChance),
     attackerHasWingman: false,
     targetHasWingman: false,
     nowMs: flightNow(state),
-    roll: state.rng.next(),
+    roll,
     targetMarked: state.crew.isMarkedShot(
       attacker.id,
       target.id,
       flightNow(state),
     ),
+    ...shotAurasOf(state.auras ?? new Map(), attacker.id, target.id),
     targetArmor: armorReductionOf(target.definitionId),
   });
   state.weapons?.onAttack(attacker.id);

@@ -7,6 +7,8 @@
  */
 
 import type { HitImmunityLedger } from "../../arcade/systems/CombatTempo";
+import type { DamagePauseTracker } from "../../arcade/systems/repair/HullRepair";
+import type { ActiveAura } from "../../systems/SupportAura";
 import type { WeaponsDriver } from "../../arcade/weapons/WeaponsDriver";
 import type { SquadMarks } from "../../arcade/systems/SquadMark";
 import type { SideScore } from "../../systems/arena/BattleScore";
@@ -84,4 +86,8 @@ export interface CombatState {
   firstKillAtMs?: number;
   /** The ships' secondaries (ArenaWeapons.armArena); omitted = primaries only. */
   weapons?: WeaponsDriver;
+  /** Faction auras covering each ship this frame (ArenaAuras); omitted = none. */
+  auras?: ReadonlyMap<string, ActiveAura>;
+  /** Time since each ship last took damage (hull repair pause, ArenaAuras). */
+  repairs?: DamagePauseTracker;
 }

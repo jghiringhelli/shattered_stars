@@ -82,7 +82,11 @@ describe("ship variants", () => {
       .filter(([role, anchor]) => {
         const ship = SHIP_DEFINITIONS[anchor.referenceShipId];
         if (!ship || ship.role !== role) return true;
-        const live = pricingProfile(ship.baseStats, SHIP_DIALS[ship.id]!);
+        const live = pricingProfile(
+          ship.role,
+          ship.baseStats,
+          SHIP_DIALS[ship.id]!,
+        );
         const levers = Object.keys(anchor.profile) as (keyof PricingProfile)[];
         return (
           levers.some((lever) => live[lever] !== anchor.profile[lever]) ||

@@ -9,13 +9,17 @@ import {
   WINGMAN_SKILL,
   type EpicDifficulty,
 } from "../../../../src/arcade/systems/EpicAiFlight";
-import { BRUTAL_REACTION_SCALE } from "../../../../src/arcade/ai";
+import {
+  BRUTAL_REACTION_SCALE,
+  EASY_REACTION_SCALE,
+  HARD_REACTION_SCALE,
+} from "../../../../src/arcade/ai";
 
 describe("raidBotSkill — escorts", () => {
   it.each([
-    ["easy", "novice", 1],
+    ["easy", "novice", EASY_REACTION_SCALE],
     ["medium", "average", 1],
-    ["hard", "expert", 1],
+    ["hard", "expert", HARD_REACTION_SCALE],
     ["mythic", "expert", BRUTAL_REACTION_SCALE],
   ] as const)(
     "flies %s escorts as %s pilots (reaction x%s)",

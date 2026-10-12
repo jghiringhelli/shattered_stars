@@ -93,7 +93,9 @@ describe("ArcadeBotFleet tiers", () => {
     expect(fleetAt("brutal").skillFor(ENEMY).reactionScale).toBe(
       BRUTAL_REACTION_SCALE,
     );
-    expect(fleetAt("hard").skillFor(ENEMY).reactionScale).toBe(1);
+    expect(fleetAt("hard").skillFor(ENEMY).reactionScale).toBeGreaterThan(
+      BRUTAL_REACTION_SCALE,
+    );
   });
 
   it("flies an unknown difficulty as the average pilot", () => {

@@ -17,7 +17,6 @@ import {
   cloneSquad,
   exportSquad,
   importSquad,
-  getPresetSquads,
   getSquadForScene,
   getPilotSceneConfig,
 } from "../../../src/systems/SquadBuilder";
@@ -301,28 +300,6 @@ describe("SquadBuilder", () => {
     });
   });
 
-  describe("getPresetSquads", () => {
-    it("should return preset squads for each faction", () => {
-      const factions = [
-        "terran_hegemony",
-        "free_confederation",
-        "synthetic_collective",
-        "void_corsairs",
-        "ascendant_empire",
-      ] as const;
-
-      for (const faction of factions) {
-        const presets = getPresetSquads(faction);
-        expect(presets.length).toBeGreaterThan(0);
-
-        for (const preset of presets) {
-          expect(preset.faction).toBe(faction);
-          expect(preset.units.length).toBeGreaterThan(0);
-        }
-      }
-    });
-  });
-
   describe("epic format validation", () => {
     it("should reject capital ship in standard squad", () => {
       const squad = createSquad("Test", "terran_hegemony", "standard");
@@ -462,17 +439,6 @@ describe("SquadBuilder", () => {
 
       const [config] = getSquadForScene(r);
       expect(config!.faction).toBe("terran_hegemony");
-    });
-
-    it("should work with preset squads", () => {
-      const [preset] = getPresetSquads("free_confederation");
-      expect(preset).toBeDefined();
-      const configs = getSquadForScene(preset!);
-      expect(configs.length).toBeGreaterThan(0);
-      for (const c of configs) {
-        expect(c.pilotSkill).toBeGreaterThanOrEqual(1);
-        expect(c.pilotSkill).toBeLessThanOrEqual(6);
-      }
     });
   });
 

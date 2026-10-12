@@ -13,10 +13,8 @@ import { BotPilot } from "../../arcade/ai/BotPilot";
 import type { BotContact } from "../../arcade/ai/BotView";
 import { SquadCommand } from "../../arcade/ai/SquadCommand";
 import { tickCycleFlight } from "../../arcade/systems/CycleFlight";
-import {
-  regenerateShields,
-  stressModifiersOf,
-} from "../../arcade/systems/QuickBuildEquip";
+import { stressModifiersOf } from "../../arcade/systems/QuickBuildEquip";
+import type { ActiveAura } from "../../systems/SupportAura";
 import { resolveByPoints } from "../../systems/arena/BattleScore";
 import type { CombatState, SideId } from "./ArenaCombatState";
 import { spawnLayout } from "./ArenaLayout";
@@ -157,24 +155,24 @@ export function pilotShip(
 
 /**
  * Fly one tick on the cycle engine; tell the pilot when a cycle commits.
+ * (Shield regen and hull repair run in ArenaAuras.updateArenaAuras.)
  * @param ship - The ship.
  * @param tempo - What-if tempo (flight clock); omitted = the engine's.
+ * @param aura - The faction aura covering the ship (stress relief), if any.
  */
-export function flyShip(ship: ArenaShip, tempo?: ResolvedTempo): void {
+export function flyShip(
+  ship: ArenaShip,
+  tempo?: ResolvedTempo,
+  aura?: ActiveAura,
+): void {
   const tick = tickCycleFlight(ship.flight, {
     deltaMs: tempo ? TICK_MS * tempo.flightScale : TICK_MS,
     worldSize: BATTLEFIELD_SIZE,
     dial: ship.dial,
     cycleMs: tempo ? tempo.cycleMs : CYCLE_DURATION_MS,
-    modifiers: stressModifiersOf(ship.modifiers),
+    modifiers: stressModifiersOf(ship.modifiers, aura),
   });
   setArenaFlight(ship, tick.state);
-  ship.shields = regenerateShields(
-    ship.shields,
-    ship.maxShields,
-    ship.modifiers,
-    TICK_MS,
-  );
   if (tick.completed) {
     ship.pilot.onCycleCommitted(
       tick.state.motion.control.currentManeuver ?? "straight",

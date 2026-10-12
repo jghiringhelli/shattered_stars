@@ -731,7 +731,7 @@ export class BattleSimulator {
     let team1Destroyed = 0;
     let team2Destroyed = 0;
 
-    for (const [shipId, stats] of this.shipStats) {
+    for (const stats of this.shipStats.values()) {
       if (stats.team === "team1") {
         if (stats.survived) team1Alive++;
         else team2Destroyed++;
@@ -812,7 +812,7 @@ export class BattleSimulator {
       totalTurns += result.turnsElapsed;
 
       // Aggregate ship stats
-      for (const [shipId, shipStats] of result.shipStats) {
+      for (const shipStats of result.shipStats.values()) {
         const defId = shipStats.definitionId;
         let agg = shipAggregates.get(defId);
         if (!agg) {

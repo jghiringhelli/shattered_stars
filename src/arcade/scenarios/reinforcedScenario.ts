@@ -11,11 +11,12 @@
  *   50-point ship is worth 2 and a full pool 40;
  * - keeps the objective scoring (1 per objective per 6 s round);
  * - plays to a per-scenario threshold within the 3-minute reinforced limit,
- *   tuned from bot-vs-bot reinforced matches (average bots, 1000 / 250):
- *   with a flat 40 the winners got there at ~131 s (Satellite Array),
- *   ~133 s (Chance Engagement), but ~85 s in Salvage Mission and Scramble
- *   the Transmissions, whose carried crates / scrambled nodes keep scoring
- *   every round. The thresholds below put every scenario at ~2:30–3:00.
+ *   tuned on the real engine (ReinforcedBattleSim, average bots, 1000 / 250,
+ *   160 matches per scenario — npm run balance:report): at 50 / 50 / 75 / 75
+ *   the medians were 108 s (Satellite Array), 95 s (Chance Engagement),
+ *   150 s (Salvage Mission) and 132 s (Scramble the Transmissions); score
+ *   accrues about linearly, so the thresholds below put every scenario's
+ *   median at ~2:30 within the 3:00 clock.
  *
  * Pure.
  */
@@ -38,10 +39,10 @@ export const REINFORCED_SCENARIO_POINTS_PER_SQUAD_POINT =
 export const REINFORCED_SCENARIO_THRESHOLDS: Readonly<
   Record<ScenarioId, number>
 > = {
-  satellite_array: 50,
-  chance_engagement: 50,
+  satellite_array: 70,
+  chance_engagement: 75,
   salvage_mission: 75,
-  scramble_transmissions: 75,
+  scramble_transmissions: 85,
 };
 
 /**

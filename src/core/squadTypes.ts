@@ -6,6 +6,9 @@
 import type { FactionId } from "../config";
 import type { AIDifficultyLevel } from "../ai/AIDifficulty";
 import { getShipsByFaction, SHIP_DEFINITIONS } from "../data/ShipDefinitions";
+import { getLoadoutById } from "../data/ShipLoadouts";
+import { getQuickBuild, toSimSpecs } from "../data/SquadronPresets";
+import { assignQuickBuilds } from "../arcade/systems/QuickBuildEquip";
 
 export type GameMode = "arcade" | "continuous" | "survival" | "online" | "epic";
 
@@ -138,8 +141,36 @@ function recruitableShips(
 }
 
 /**
+ * What a squad costs as it flies: every ship on its chosen quick build,
+ * else the default one the battle scenes equip (assignQuickBuilds — unique
+ * pilots never twice), priced at that build's cost (bare hull when the
+ * ship has no build).
+ *
+ * @param ships - Ship ids in squad order.
+ * @param loadoutChoices - Chosen builds keyed by squad index ("0", "1", …).
+ * @returns Total points.
+ */
+export function flownSquadCost(
+  ships: readonly string[],
+  loadoutChoices: Readonly<Record<string, string>> = {},
+): number {
+  const builds = assignQuickBuilds(
+    ships,
+    ships.map((_, index) => loadoutChoices[String(index)]),
+  );
+  return ships.reduce((sum, id, index) => {
+    const build = builds[index] ? getLoadoutById(builds[index]!) : undefined;
+    return (
+      sum + (build?.pointCost ?? SHIP_DEFINITIONS[id]?.baseStats.pointCost ?? 0)
+    );
+  }, 0);
+}
+
+/**
  * Adds wingmen to a squad up to the point limit, keeping the ships already in
- * it and recomputing pointsUsed from the final roster.
+ * it and recomputing pointsUsed from the final roster — priced as it flies
+ * ({@link flownSquadCost}: the player's chosen build, every other ship's
+ * default build), so a squad never fields more points than the limit.
  *
  * The simple Skirmish flow lets the player pick a single flagship. Without
  * this, that ship launched alone: a 28pt Stiletto against the 198pt three-ship
@@ -155,25 +186,27 @@ export function fillSquadWingmen(
   pointLimit: number,
 ): void {
   if (!squad.factionId) return;
-  squad.pointsUsed = squad.ships.reduce(
-    (sum, id) => sum + (SHIP_DEFINITIONS[id]?.baseStats.pointCost ?? 0),
-    0,
-  );
+  squad.pointsUsed = flownSquadCost(squad.ships, squad.loadoutChoices);
   for (const ship of recruitableShips(squad.factionId, gameMode, squad.ships)) {
     if (squad.ships.length >= MAX_SQUAD_SHIPS) break;
-    if (squad.pointsUsed + ship.baseStats.pointCost > pointLimit) continue;
+    const withShip = flownSquadCost(
+      [...squad.ships, ship.id],
+      squad.loadoutChoices,
+    );
+    if (withShip > pointLimit) continue;
     squad.ships.push(ship.id);
-    squad.pointsUsed += ship.baseStats.pointCost;
+    squad.pointsUsed = withShip;
   }
 }
 
 /**
- * Greedily fills a squad's ships (by point cost, highest first) up to the
- * point limit for its faction, discarding whatever was there before. Shared by
- * SquadListPanel (advanced builder) and the simple flow's AI-opponent
- * auto-fill so both use identical logic.
+ * Fills a squad for its faction from scratch, discarding whatever was there
+ * before: the faction's curated quick-build squad for exactly this budget
+ * (SquadronPresets — balanced lists with an aura projector), else greedily
+ * by point cost, highest first. Shared by SquadListPanel (advanced builder)
+ * and the simple flow's AI-opponent auto-fill so both use identical logic.
  *
- * @param squad - Squad to fill in place (mutates .ships and .pointsUsed).
+ * @param squad - Squad to fill in place (mutates .ships, .loadoutChoices and .pointsUsed).
  * @param gameMode - Capital ships are only allowed in "epic" mode.
  * @param pointLimit - Maximum total point cost for the squad.
  */
@@ -183,6 +216,19 @@ export function autoFillSquad(
   pointLimit: number,
 ): void {
   squad.ships = [];
+  squad.loadoutChoices = {};
   squad.pointsUsed = 0;
+  const preset = squad.factionId
+    ? getQuickBuild(squad.factionId, pointLimit)
+    : undefined;
+  if (preset && preset.pointLimit === pointLimit) {
+    const specs = toSimSpecs(preset);
+    squad.ships = specs.map((spec) => spec.shipId);
+    specs.forEach((spec, index) => {
+      if (spec.loadoutId) squad.loadoutChoices[String(index)] = spec.loadoutId;
+    });
+    squad.pointsUsed = flownSquadCost(squad.ships, squad.loadoutChoices);
+    return;
+  }
   fillSquadWingmen(squad, gameMode, pointLimit);
 }

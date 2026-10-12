@@ -13,8 +13,7 @@
  * - Star Wars Squadrons: Fast, action-oriented (TTK 5-15s)
  */
 
-import type { FactionId } from "../config";
-import { SHIP_DEFINITIONS, getShipDefinition } from "../data/ShipDefinitions";
+import { SHIP_DEFINITIONS } from "../data/ShipDefinitions";
 import { getModeCombatStats, calculateHitChance } from "../data/ModeBalancing";
 
 /** Abstract simulators stay on miniature hull/shield points. */
@@ -354,22 +353,6 @@ export class GameplayMetricsAnalyzer {
     // Maneuver impact: How much does movement selection matter?
     // Determines positioning AND stress management
     const maneuverImpact = 0.2;
-
-    // Stat dominance: How much do raw ship stats determine outcome?
-    // Calculate correlation between point cost and effectiveness
-    const ships = Object.values(SHIP_DEFINITIONS);
-    const avgPointCost =
-      ships.reduce((sum, s) => sum + s.baseStats.pointCost, 0) / ships.length;
-    const avgPower =
-      ships.reduce((sum, s) => {
-        return (
-          sum +
-          s.baseStats.attack +
-          s.baseStats.agility +
-          s.baseStats.hull +
-          s.baseStats.shields
-        );
-      }, 0) / ships.length;
 
     // Lower stat dominance is better for skill expression
     const statDominance = 0.15;

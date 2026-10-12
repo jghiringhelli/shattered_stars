@@ -21,6 +21,8 @@ export {
   difficultyToTier,
   botProfile,
   BRUTAL_REACTION_SCALE,
+  EASY_REACTION_SCALE,
+  HARD_REACTION_SCALE,
   DEFAULT_BOT_SKILL,
   type BotSkill,
 } from "./BotDifficulty";

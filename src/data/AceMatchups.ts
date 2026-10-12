@@ -40,14 +40,14 @@ export const ACE_MATCHUPS: readonly AceMatchup[] = [
     side1: {
       name: "Admiral Kronos",
       faction: "terran_hegemony",
-      ships: ["terran_raptor"],
+      ships: ["terran_legionnaire"],
       abilities: ["marksmanship", "lone_wolf"],
     },
     side2: {
       name: "Phoenix Commander",
       faction: "free_confederation",
       ships: ["confed_falcon"],
-      abilities: ["predator", "outmaneuver"],
+      abilities: ["predator", "fearless"],
     },
   },
   {
@@ -65,8 +65,8 @@ export const ACE_MATCHUPS: readonly AceMatchup[] = [
     side2: {
       name: "Vortex Ace",
       faction: "void_corsairs",
-      ships: ["corsair_fang"],
-      abilities: ["fearless", "lone_wolf"],
+      ships: ["corsair_phantom"],
+      abilities: ["fearless", "outmaneuver"],
     },
   },
   {
@@ -85,7 +85,7 @@ export const ACE_MATCHUPS: readonly AceMatchup[] = [
       name: "Confederation Freighter Captain",
       faction: "free_confederation",
       ships: ["confed_hawk"],
-      abilities: ["regenerative_shields", "stealth_device"],
+      abilities: ["stealth_device", "fearless"],
     },
   },
   {
@@ -93,18 +93,18 @@ export const ACE_MATCHUPS: readonly AceMatchup[] = [
     name: "Gunship Showdown",
     description: "Collective Prime Node vs Empire Archon",
     flavorText:
-      "Two capital-class vessels, each capable of leveling cities, face off in the void.",
+      "Two siege gunships trade broadsides at point-blank range. The heavier guns win.",
     side1: {
       name: "Collective Prime Node",
       faction: "synthetic_collective",
-      ships: ["synth_conduit"],
-      abilities: ["networked_aim", "predatory_instinct"],
+      ships: ["synth_eradicator"],
+      abilities: ["networked_aim"],
     },
     side2: {
       name: "Empire Archon",
       faction: "ascendant_empire",
-      ships: ["ascendant_bastion"],
-      abilities: ["regenerative_shields", "tenacity"],
+      ships: ["ascendant_judgment"],
+      abilities: ["tenacity", "fearless"],
     },
   },
   {
@@ -116,13 +116,13 @@ export const ACE_MATCHUPS: readonly AceMatchup[] = [
     side1: {
       name: "Hegemony Bomber Wing",
       faction: "terran_hegemony",
-      ships: ["terran_thunderbolt", "terran_thunderbolt"],
+      ships: ["terran_hammer", "terran_hammer"],
       abilities: ["marksmanship"],
     },
     side2: {
       name: "Confederation Strike Team",
       faction: "free_confederation",
-      ships: ["confed_condor", "confed_condor"],
+      ships: ["confed_pelican", "confed_pelican"],
       abilities: ["predator"],
     },
   },

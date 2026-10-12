@@ -18,6 +18,7 @@ import { createSideScore } from "../../systems/arena/BattleScore";
 import { emptyTally, resolveCombatTick, type CombatState } from "./ArenaCombat";
 import { ENGINE_RULES } from "./ArenaRules";
 import { armArena, resolveWeaponsTick } from "./ArenaWeapons";
+import { auraOf, updateArenaAuras } from "./ArenaAuras";
 import {
   commandSquads,
   createSquads,
@@ -79,8 +80,10 @@ export function runBattle(spec: BattleSpec): BattleResult {
     commandSquads(squads, contacts, state, nowMs * k);
     for (const ship of ships)
       if (ship.alive) pilotShip(ship, contacts, squads, nowMs * k, TICK_MS * k);
-    for (const ship of ships) if (ship.alive) flyShip(ship, tempo);
+    for (const ship of ships)
+      if (ship.alive) flyShip(ship, tempo, auraOf(state, ship.id));
     nowMs += TICK_MS;
+    updateArenaAuras(state, TICK_MS);
     // Secondaries first, as in the scenes (a launch is the cycle's attack).
     resolveWeaponsTick(state, nowMs * k, TICK_MS * k);
     resolveCombatTick(state, nowMs * k, TICK_MS * k);

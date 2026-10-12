@@ -59,24 +59,24 @@ describe("priceBreakdown", () => {
     },
   );
 
-  it("charges 3 points per extra hull", () => {
-    expect(deltaFor("interceptor", { hull: 4 })).toBe(3);
+  it("charges 5 points per extra real-time hull point", () => {
+    expect(deltaFor("interceptor", { hull: 3 })).toBe(5);
   });
 
-  it("charges 4 points per extra shield", () => {
-    expect(deltaFor("interceptor", { shields: 3 })).toBe(4);
+  it("charges 8 points per extra real-time shield point", () => {
+    expect(deltaFor("interceptor", { shields: 2 })).toBe(8);
   });
 
-  it("charges 5 points per extra attack die", () => {
-    expect(deltaFor("heavy_fighter", { attack: 4 })).toBe(5);
+  it("charges 10 points per extra point of damage per hit", () => {
+    expect(deltaFor("heavy_fighter", { attack: 3 })).toBe(10);
   });
 
-  it("charges 4 points per extra agility die", () => {
-    expect(deltaFor("light_fighter", { agility: 4 })).toBe(4);
+  it("charges 2 points per extra real-time agility die", () => {
+    expect(deltaFor("light_fighter", { agility: 4 })).toBe(2);
   });
 
   it("refunds removed stats at the same rate", () => {
-    expect(deltaFor("interceptor", { shields: 1, hull: 2 })).toBe(-7);
+    expect(deltaFor("interceptor", { shields: 0, hull: 1 })).toBe(-13);
   });
 
   it("charges 4 points per extra top speed", () => {
@@ -92,16 +92,16 @@ describe("priceBreakdown", () => {
   });
 
   it("values eleven dial steps like one 4-point stress-relief tier", () => {
-    expect(deltaFor("interceptor", { dialSteps: 13 + 11 })).toBeCloseTo(4);
+    expect(deltaFor("interceptor", { dialSteps: 14 + 11 })).toBeCloseTo(4);
   });
 
   it("values capital hull and shields at a third of a fighter's", () => {
-    expect(deltaFor("capital", { hull: 39 })).toBeCloseTo(3);
-    expect(deltaFor("capital", { shields: 27 })).toBeCloseTo(4);
+    expect(deltaFor("capital", { hull: 25 })).toBeCloseTo(5);
+    expect(deltaFor("capital", { shields: 15 })).toBeCloseTo(8);
   });
 
   it("does not scale capital attack", () => {
-    expect(deltaFor("capital", { attack: 6 })).toBe(5);
+    expect(deltaFor("capital", { attack: 4 })).toBe(10);
   });
 
   it("prices each role against its own anchor", () => {
@@ -114,6 +114,22 @@ describe("priceBreakdown", () => {
 
 describe("expectedPointCost", () => {
   const dial: ManeuverDefinition[] = [STRAIGHT_1_GREEN];
+
+  it("charges nothing for a card point that rounds away in real time", () => {
+    // Interceptor hull 3 and 4 both fly as 2 real-time hull points (24 HP).
+    expect(expectedPointCost("interceptor", stats({ hull: 4 }), dial)).toBe(
+      expectedPointCost("interceptor", stats({ hull: 3 }), dial),
+    );
+  });
+
+  it("charges a card point that adds a real-time point", () => {
+    // Interceptor hull 5 flies as 3 real-time hull points (36 HP).
+    expect(
+      expectedPointCost("interceptor", stats({ hull: 5 }), dial),
+    ).toBeGreaterThan(
+      expectedPointCost("interceptor", stats({ hull: 4 }), dial),
+    );
+  });
 
   it("rounds the breakdown to whole points", () => {
     const value = expectedPointCost("interceptor", stats(), dial);

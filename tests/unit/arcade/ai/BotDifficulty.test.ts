@@ -1,12 +1,15 @@
 /**
  * BotDifficulty — specification tests: difficulty labels map onto the tiers
- * the skill gates measure, Brutal is a faster expert, unknown labels fly the
- * average pilot.
+ * the skill gates measure, tuned on the real engine (docs/balance/): Easy is
+ * a quicker novice, Hard a slower-reacting expert, Brutal the expert as the
+ * gates measure it; unknown labels fly the average pilot.
  */
 
 import { describe, expect, it } from "vitest";
 import {
   BRUTAL_REACTION_SCALE,
+  EASY_REACTION_SCALE,
+  HARD_REACTION_SCALE,
   botProfile,
   difficultyToTier,
 } from "../../../../src/arcade/ai/BotDifficulty";
@@ -16,7 +19,7 @@ describe("difficultyToTier", () => {
   it("maps the duel difficulties onto the gate tiers", () => {
     expect(difficultyToTier("easy")).toEqual({
       tier: "novice",
-      reactionScale: 1,
+      reactionScale: EASY_REACTION_SCALE,
     });
     expect(difficultyToTier("normal")).toEqual({
       tier: "average",
@@ -24,12 +27,17 @@ describe("difficultyToTier", () => {
     });
     expect(difficultyToTier("hard")).toEqual({
       tier: "expert",
-      reactionScale: 1,
+      reactionScale: HARD_REACTION_SCALE,
     });
     expect(difficultyToTier("brutal")).toEqual({
       tier: "expert",
       reactionScale: BRUTAL_REACTION_SCALE,
     });
+  });
+
+  it("makes every step up react at least as fast within a tier", () => {
+    expect(EASY_REACTION_SCALE).toBeLessThan(1);
+    expect(HARD_REACTION_SCALE).toBeGreaterThan(BRUTAL_REACTION_SCALE);
   });
 
   it("maps the epic raid's labels too", () => {
@@ -55,13 +63,13 @@ describe("botProfile", () => {
   });
 
   it("scales reaction and decision cadence, not the noise", () => {
-    const brutal = botProfile("expert", BRUTAL_REACTION_SCALE);
-    expect(brutal.reactionMs).toBeCloseTo(
-      TIER_PROFILES.expert.reactionMs * BRUTAL_REACTION_SCALE,
+    const hard = botProfile("expert", HARD_REACTION_SCALE);
+    expect(hard.reactionMs).toBeCloseTo(
+      TIER_PROFILES.expert.reactionMs * HARD_REACTION_SCALE,
     );
-    expect(brutal.decisionIntervalMs).toBeCloseTo(
-      TIER_PROFILES.expert.decisionIntervalMs * BRUTAL_REACTION_SCALE,
+    expect(hard.decisionIntervalMs).toBeCloseTo(
+      TIER_PROFILES.expert.decisionIntervalMs * HARD_REACTION_SCALE,
     );
-    expect(brutal.headingNoiseDeg).toBe(TIER_PROFILES.expert.headingNoiseDeg);
+    expect(hard.headingNoiseDeg).toBe(TIER_PROFILES.expert.headingNoiseDeg);
   });
 });

@@ -19,13 +19,13 @@ const SMOKE_SEEDS = 20;
 
 /** The thinnest margins of the full gate-1 matrix, plus a mirror. */
 const HARDEST_PAIRS: readonly string[] = [
-  "confed_owl>ascendant_crusader",
-  "confed_raven>ascendant_crusader",
-  "corsair_blade>corsair_marauder",
-  "corsair_specter>synth_predator",
-  "corsair_talon>synth_hunter",
-  "synth_interceptor_drone>synth_stalker",
-  "synth_stalker>synth_ravager",
+  "terran_stiletto>terran_gladius",
+  "confed_wasp>corsair_fang",
+  "confed_sparrow>corsair_saber",
+  "terran_stiletto>corsair_shadow",
+  "terran_gladius>ascendant_inquisitor",
+  "terran_gladius>ascendant_crusader",
+  "confed_sparrow>synth_stalker",
   "terran_viper>terran_viper",
 ];
 

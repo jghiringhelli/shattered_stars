@@ -100,8 +100,15 @@ export function applyLoadoutEffects(
     } = upg.effects;
 
     if (hullBonus) {
-      ship.hull += hullBonus * DURABILITY_SCALE;
-      ship.maxHull += hullBonus * DURABILITY_SCALE;
+      // A hull-removing card never leaves less than one hull point.
+      ship.maxHull = Math.max(
+        DURABILITY_SCALE,
+        ship.maxHull + hullBonus * DURABILITY_SCALE,
+      );
+      ship.hull = Math.min(
+        ship.maxHull,
+        Math.max(DURABILITY_SCALE, ship.hull + hullBonus * DURABILITY_SCALE),
+      );
     }
     if (shieldBonus) {
       ship.shields += shieldBonus * DURABILITY_SCALE;

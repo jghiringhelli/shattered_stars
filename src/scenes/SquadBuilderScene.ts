@@ -16,8 +16,8 @@ import {
   makeSquad,
   autoFillSquad,
   fillSquadWingmen,
+  flownSquadCost,
   pickOpponentFaction,
-  MULTI_TEAM_MODES,
 } from "../core/squadTypes";
 import type { AIDifficultyLevel } from "../ai/AIDifficulty";
 import { defaultDifficulty } from "../systems/SettingsStorage";
@@ -354,10 +354,7 @@ export class SquadBuilderScene extends Phaser.Scene {
           SHIP_DEFINITIONS[id]?.baseStats.size !== "huge" &&
           SHIP_DEFINITIONS[id]?.role !== "capital",
       );
-      squad.pointsUsed = squad.ships.reduce(
-        (sum, id) => sum + (SHIP_DEFINITIONS[id]?.baseStats.pointCost ?? 0),
-        0,
-      );
+      squad.pointsUsed = flownSquadCost(squad.ships, squad.loadoutChoices);
     }
   }
 
@@ -439,11 +436,7 @@ export class SquadBuilderScene extends Phaser.Scene {
       squad.ships = data.ships;
       squad.loadoutChoices = data.loadoutChoices ?? {};
       squad.pointsUsed =
-        data.pointsUsed ??
-        data.ships.reduce(
-          (sum, id) => sum + (SHIP_DEFINITIONS[id]?.baseStats.pointCost ?? 0),
-          0,
-        );
+        data.pointsUsed ?? flownSquadCost(data.ships, squad.loadoutChoices);
       this.editTarget = null;
       this.squadListPanel.render();
     });

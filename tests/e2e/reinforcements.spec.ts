@@ -355,7 +355,7 @@ test.describe("Reinforcement battle", () => {
       { key: SCENE, known: enemies, E },
       { timeout: 5_000 },
     );
-    const fresh = await arrival.jsonValue();
+    const fresh = (await arrival.jsonValue())!;
     expect(fresh.shielded).toBe(true);
     expect(fresh.tier).toBe("novice");
     const after = sideOf(await readout(page), E);
@@ -530,7 +530,7 @@ test.describe("Reinforcement battle", () => {
       (key) => (window as any).game.scene.getScene(key).scenarioReadout.board,
       SCENE,
     );
-    expect(board.goal).toBe("FIRST TO 50");
+    expect(board.goal).toBe("FIRST TO 70");
     const r = await readout(page);
     expect(r.format).toBe("scenario");
     expect(r.choice).toBe("planned");

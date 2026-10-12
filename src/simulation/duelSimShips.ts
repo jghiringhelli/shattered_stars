@@ -14,6 +14,7 @@ import {
   equipFlight,
   equipQuickBuild,
 } from "../arcade/systems/QuickBuildEquip";
+import { duelModifiers } from "../arcade/systems/AceDuelAbilities";
 import type { CombatModifiers } from "../core/CombatModifiers";
 import { NEUTRAL_MODIFIERS } from "../core/CombatModifiers";
 import type { ManeuverDefinition } from "../core/types";
@@ -37,6 +38,8 @@ export interface DuelSimShip {
   readonly side: 1 | 2;
   /** Its quick build (secondaries are armed from it). */
   readonly loadoutId: string | null;
+  /** Ace Duel sheet abilities of its ace (empty in Dogfight). */
+  readonly abilities: readonly string[];
   x: number;
   y: number;
   angle: number;
@@ -52,21 +55,32 @@ export interface DuelSimShip {
   frenzyUntilMs: number;
 }
 
+/** How a side is equipped (Ace Duel presets; Dogfight leaves both empty). */
+export interface DuelSideKit {
+  /** Quick build per ship (index-aligned); missing = the default build. */
+  readonly loadouts?: readonly (string | null | undefined)[];
+  /** The side's ace abilities (AceDuelAbilities: sheet + ad hoc). */
+  readonly abilities?: readonly string[];
+}
+
 /**
- * Spawn one side in a line facing the other, each ship on its default
- * quick build (no unique pilot repeated within the side).
+ * Spawn one side in a line facing the other, each ship on its chosen or
+ * default quick build (no unique pilot repeated within the side) with the
+ * side's ace abilities folded into its sheet, as AceDuelScene does.
  *
  * @param side - Which side.
  * @param shipIds - Ship definition ids.
+ * @param kit - Builds and ace abilities (default: default builds, none).
  * @returns The side's ships.
  */
 export function spawnDuelSide(
   side: 1 | 2,
   shipIds: readonly string[],
+  kit: DuelSideKit = {},
 ): DuelSimShip[] {
   const center = BATTLEFIELD_SIZE / 2;
   const y = center + (side === 1 ? SPAWN_DISTANCE : -SPAWN_DISTANCE);
-  const loadouts = assignQuickBuilds(shipIds);
+  const loadouts = assignQuickBuilds(shipIds, kit.loadouts ?? []);
   const lastIndex = shipIds.length - 1;
   return shipIds.map((definitionId, index) =>
     buildShip({
@@ -76,6 +90,7 @@ export function spawnDuelSide(
       x: center + (index - lastIndex / 2) * SPAWN_SPACING,
       y,
       loadoutId: loadouts[index] ?? null,
+      abilities: kit.abilities ?? [],
     }),
   );
 }
@@ -87,6 +102,7 @@ interface ShipSpec {
   readonly x: number;
   readonly y: number;
   readonly loadoutId: string | null;
+  readonly abilities: readonly string[];
 }
 
 function buildShip(spec: ShipSpec): DuelSimShip {
@@ -98,6 +114,7 @@ function buildShip(spec: ShipSpec): DuelSimShip {
     definitionId: spec.definitionId,
     side: spec.side,
     loadoutId: spec.loadoutId,
+    abilities: spec.abilities,
     ...pose,
     hull: combatStats.hull,
     maxHull: combatStats.maxHull,
@@ -110,7 +127,11 @@ function buildShip(spec: ShipSpec): DuelSimShip {
     modifiers: NEUTRAL_MODIFIERS,
     frenzyUntilMs: 0,
   };
-  ship.modifiers = equipQuickBuild(ship, spec.loadoutId);
+  const sheet = equipQuickBuild(ship, spec.loadoutId);
+  ship.modifiers =
+    spec.abilities.length > 0
+      ? duelModifiers(sheet, spec.abilities, spec.loadoutId)
+      : sheet;
   ship.flight = equipFlight(ship.flight, ship.modifiers);
   return ship;
 }

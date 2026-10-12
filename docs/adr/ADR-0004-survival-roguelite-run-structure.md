@@ -274,3 +274,22 @@ wave (threat ×1.0–2.0) → 19–27 s, run win 1–8 %. Owner decision: accept
 human flies slower than the bot and the map, events and shops pad the run) or trade win rate
 for length. The belt still matters: about half of the lost battles include a ship lost in the
 belt (the autopilot chases into it), which is the 27.5 % → 60.5 % gap to a belt-aware pilot.
+
+## Re-measure after the combat unification (2026-10-12)
+
+Enemies now fly their quick builds' secondaries (missiles, torpedoes, turrets, bombs) at
+ORDNANCE_DAMAGE_SCALE 2, faction auras and pilot abilities act in Survival, and hull prices follow
+real-time stats. `npm run telemetry:survival`, 200 runs, average autopilot, ascension 0:
+
+| Config | S1 clear | S2 clear | S3 clear | combat | elite | boss | run win | node length p10/med/p90 |
+|---|---|---|---|---|---|---|---|---|
+| unified, enemy hull ×0.7 (seeds 1–200) | 93 % | 88 % | 87 % | 95 % | 70 % | 81 % | **16 %** ✘ | 10 / 19 / 48 s |
+| shield recovery between nodes 0.5 → 0.8 | 92 % | 88 % | 87 % | 95 % | 68 % | 79 % | 15 % | 10 / 19 / 49 s |
+| enemy hull ×0.6 | 94 % | 90 % | 90 % | 95 % | 74 % | 86 % | 24 % | 9 / 17 / 40 s |
+| **enemy hull ×0.55** (seeds 1–200) | **95 %** | **91 %** | **90 %** | 96 % | 74 % | 85 % | **25 %** | 9 / 17 / 41 s |
+| **enemy hull ×0.55** (seeds 201–400) | 96 % | 90 % | 93 % | 96 % | 75 % | 89 % | **31.5 %** | 9 / 16 / 37 s |
+
+Adopted `BASE_ENEMY_HULL_MULTIPLIER` 0.55 (src/data/survival/ascension.ts): S1 ≥ 80 % ✔, S2 ≥ 65 % ✔,
+S3 ≥ 50 % ✔, run win 25–31.5 % ✔ (bottom half of the band, as before). **Node length** re-measured as the
+owner asked: median 16–19 s (p90 37–48 s), still below the 45–90 s target — the fairness-pass finding
+stands (every lengthening lever measured so far costs the run win); owner decision pending.

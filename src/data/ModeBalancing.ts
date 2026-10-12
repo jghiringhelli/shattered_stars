@@ -8,6 +8,7 @@
 
 import { getShipDefinition } from "./ShipDefinitions";
 import { DURABILITY_SCALE } from "../config";
+import type { ShipStats } from "../core/types";
 
 /** The fewest miniature hull points any ship has in a real-time mode. */
 const MIN_MINIATURE_HULL = 1;
@@ -192,10 +193,28 @@ export function getModeCombatStats(
     // Return default stats if ship not found
     return getDefaultStats(mode, durabilityScale);
   }
+  return combatStatsFor(shipDef.role, shipDef.baseStats, mode, durabilityScale);
+}
 
-  const baseStats = shipDef.baseStats;
-  const roleModifiers =
-    ROLE_MODIFIERS[shipDef.role] ?? ROLE_MODIFIERS["heavy_fighter"];
+/**
+ * Combat stats of a hull's card stats in a mode: the mode's base scaling
+ * and the role's modifiers, rounded to whole hull / shield points, damage
+ * per hit and agility dice (what real-time combat actually reads).
+ *
+ * @param role - The ship's role (picks its modifiers).
+ * @param baseStats - The ship's card stats.
+ * @param mode - Game mode.
+ * @param durabilityScale - Real-time HP per miniature hull/shield point
+ *   (pass 1 to stay on miniature numbers, e.g. for pricing).
+ * @returns The combat stats.
+ */
+export function combatStatsFor(
+  role: string,
+  baseStats: Pick<ShipStats, "hull" | "shields" | "attack" | "agility">,
+  mode: GameMode,
+  durabilityScale: number = DURABILITY_SCALE,
+): ModeCombatStats {
+  const roleModifiers = ROLE_MODIFIERS[role] ?? ROLE_MODIFIERS["heavy_fighter"];
   const modeStats = MODE_BASE_STATS[mode];
 
   // Calculate hull and shields

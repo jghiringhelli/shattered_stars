@@ -4,9 +4,13 @@
  *
  * A hull is priced against its role's anchor: the anchor's price plus the
  * value of every difference in hull, shields, attack, agility, speed bounds,
- * dial permissiveness and size. Unit values come from the upgrade catalogue
- * (the game's own "market price" for each lever) and were checked against
- * the shipped roster.
+ * dial permissiveness and size. Hull, shields, attack and agility are read
+ * as real-time combat reads them (ModeBalancing.combatStatsFor: the role's
+ * modifiers, rounded to whole points / dice), not as printed on the card —
+ * a card point that rounds away buys nothing in play, and two hulls that
+ * fly and fight identically cost the same. Unit values and role anchors
+ * were calibrated on the real engine (npm run balance:report, value per
+ * point of every hull in squads; docs/balance/).
  *
  * Not priced, on purpose:
  * - Action lists — no real-time system reads them (boost, barrel roll,
@@ -15,28 +19,30 @@
  *   loadout (src/data/loadoutPricing.ts). Variants trade slots, they do not
  *   buy them.
  * - Role-intrinsic behaviour (support and capital hulls project their
- *   faction aura by role; ModeBalancing scales dice-mode stats by role) —
- *   it is the same for every ship of a role, so it lives in the anchor price.
+ *   faction aura by role; ModeBalancing gives each role its firing arc,
+ *   range and cadence) — the same for every ship of a role, so it lives in
+ *   the anchor price.
  *
- * Pure: no state, no catalogue imports — callers pass the stats and dial.
+ * Pure: no state — callers pass the stats and dial.
  */
 
 import type { ShipSize } from "../config";
 import type { ManeuverDefinition, ShipRole, ShipStats } from "../core/types";
 import { dialSteps } from "./dialPermissiveness";
+import { combatStatsFor } from "./ModeBalancing";
 
 // ============================================
-// Unit values (points per lever step)
+// Unit values (points per real-time lever step)
 // ============================================
 
-/** +1 hull — the catalogue's Hull Upgrade. */
-export const HULL_POINTS = 3;
-/** +1 shield — the catalogue's Shield Upgrade. */
-export const SHIELD_POINTS = 4;
-/** +1 attack die (dice modes; skirmish clamps lasers) — Heavy Laser Cannon floor. */
-export const ATTACK_POINTS = 5;
-/** +1 agility die (dice modes) — between Evasion Configuration and Stealth Device. */
-export const AGILITY_POINTS = 4;
+/** +1 real-time hull point (12 HP): squad value per point, measured. */
+export const HULL_POINTS = 5;
+/** +1 real-time shield point (12 HP, regenerates): measured. */
+export const SHIELD_POINTS = 8;
+/** +1 damage per hit (real-time attack): +50 % output on a 2-damage fighter. */
+export const ATTACK_POINTS = 10;
+/** +1 real-time agility die (−8 % hit chance against the ship): measured weak. */
+export const AGILITY_POINTS = 2;
 /** +1 top speed — the catalogue's `maxSpeedBonus` knob (abilityPricing). */
 export const TOP_SPEED_POINTS = 4;
 /** −1 minimum speed (slower turning circle, speed-0 hover) — half a top-speed step. */
@@ -115,19 +121,19 @@ export interface RoleAnchor {
  * reference profile (median residual of the role, rounded).
  */
 export const ROLE_ANCHORS: Readonly<Record<ShipRole, RoleAnchor>> = {
-  light_fighter: anchor("terran_stiletto", [2, 2, 2, 3, 1, 5, "tiny", 11], 25),
-  interceptor: anchor("terran_viper", [3, 2, 3, 3, 1, 5, "small", 13], 46),
+  light_fighter: anchor("terran_stiletto", [1, 1, 1, 3, 1, 5, "tiny", 12], 37),
+  interceptor: anchor("terran_viper", [2, 1, 2, 2, 1, 5, "small", 14], 43),
   heavy_fighter: anchor(
     "terran_centurion",
-    [5, 3, 3, 2, 1, 4, "small", 10],
-    56,
+    [3, 2, 2, 1, 1, 4, "small", 11],
+    58,
   ),
-  bomber: anchor("terran_hammer", [5, 3, 3, 1, 1, 3, "medium", 9], 58),
-  support: anchor("confed_crane", [4, 4, 1, 1, 1, 3, "medium", 7], 49),
-  gunship: anchor("terran_vindicator", [6, 4, 4, 1, 1, 3, "medium", 6], 70),
+  bomber: anchor("terran_hammer", [4, 2, 1, 0, 1, 3, "medium", 9], 53),
+  support: anchor("confed_crane", [3, 3, 0, 0, 1, 3, "medium", 7], 53),
+  gunship: anchor("terran_vindicator", [5, 2, 3, 0, 1, 3, "medium", 7], 90),
   capital: anchor(
     "terran_imperator",
-    [36, 24, 5, 0, 0, 2, "huge", 4],
+    [22, 12, 3, 0, 0, 2, "huge", 4],
     118,
     CAPITAL_DURABILITY_SCALE,
   ),
@@ -183,21 +189,26 @@ function anchor(
 // ============================================
 
 /**
- * Extract the priced levers of a hull.
+ * Extract the priced levers of a hull: hull, shields, attack and agility
+ * as real-time combat reads them (miniature points, role modifiers and
+ * rounding applied), speed bounds, size and dial.
  *
+ * @param role - The ship's role (its real-time modifiers).
  * @param stats - The ship's base stats.
  * @param dial - The ship's maneuver dial.
  * @returns The ship's pricing profile.
  */
 export function pricingProfile(
+  role: ShipRole,
   stats: ShipStats,
   dial: readonly ManeuverDefinition[],
 ): PricingProfile {
+  const live = combatStatsFor(role, stats, "continuous", 1);
   return {
-    hull: stats.hull,
-    shields: stats.shields,
-    attack: stats.attack,
-    agility: stats.agility,
+    hull: live.hull,
+    shields: live.shields,
+    attack: live.attackDice,
+    agility: live.agilityDice,
     minSpeed: stats.speed.min,
     maxSpeed: stats.speed.max,
     size: stats.size,
@@ -259,7 +270,9 @@ export function expectedPointCost(
   stats: ShipStats,
   dial: readonly ManeuverDefinition[],
 ): number {
-  return Math.round(priceBreakdown(role, pricingProfile(stats, dial)).total);
+  return Math.round(
+    priceBreakdown(role, pricingProfile(role, stats, dial)).total,
+  );
 }
 
 /**

@@ -1,13 +1,16 @@
 /**
  * Real-time levers of a ship variant, for the ShipVariants invariants.
  *
- * A variant is what a player feels in a match: hull, shields, attack,
- * agility, armour, speed bounds, the stress-relevant cells of its dial,
- * its size and its slot bar (with ordnance charges). Action lists are
- * flavour and deliberately absent (docs/specs/ship-variants.md).
+ * A variant is what a player feels in a match: hull, shields, attack and
+ * agility as real-time combat reads them (ModeBalancing.combatStatsFor —
+ * a card point that rounds away is not felt), armour, speed bounds, the
+ * stress-relevant cells of its dial, its size and its slot bar (with
+ * ordnance charges). Action lists are flavour and deliberately absent
+ * (docs/specs/ship-variants.md).
  */
 
 import type { ShipDefinition } from "../../../src/core/types";
+import { combatStatsFor } from "../../../src/data/ModeBalancing";
 import { SHIP_DIALS } from "../../../src/data/ShipDefinitions";
 import { SHIP_SLOTS } from "../../../src/data/ShipSlots";
 import {
@@ -55,13 +58,14 @@ export function leversOf(ship: ShipDefinition): VariantLevers {
     }
   }
   const slotConfig = SHIP_SLOTS[ship.id];
+  const live = combatStatsFor(ship.role, s, "continuous", 1);
   return {
     id: ship.id,
     scalars: [
-      s.hull,
-      s.shields,
-      s.attack,
-      s.agility,
+      live.hull,
+      live.shields,
+      live.attackDice,
+      live.agilityDice,
       s.armor ?? 0,
       s.speed.max,
       -s.speed.min,

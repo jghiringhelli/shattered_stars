@@ -60,6 +60,9 @@ function makeShip(id: string, x = 3000, y = 3000, angle = 0): ShipState {
     isCloaked: false,
     currentManeuver: null,
     maneuverProgress: 0,
+    mobileArcDirection: "front",
+    charges: 0,
+    maxCharges: 0,
   };
 }
 

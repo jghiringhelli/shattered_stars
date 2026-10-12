@@ -46,7 +46,7 @@ describe("ShipDefinitions", () => {
       expect(def!.baseStats.armor).toBe(1);
       expect(def!.baseStats.attack).toBe(6);
       expect(def!.baseStats.agility).toBe(0);
-      expect(def!.baseStats.pointCost).toBe(145);
+      expect(def!.baseStats.pointCost).toBe(141);
     });
 
     it('all huge ships have role "capital"', () => {
@@ -84,6 +84,27 @@ describe("ShipDefinitions", () => {
       for (const maneuver of dial) {
         expect(maneuver.speed).toBeLessThanOrEqual(2);
       }
+    });
+
+    it("never prints a maneuver faster than the ship's top speed", () => {
+      const unreachable = Object.values(SHIP_DEFINITIONS)
+        .filter((def) =>
+          SHIP_DIALS[def.id]!.some((m) => m.speed > def.baseStats.speed.max),
+        )
+        .map((def) => def.id);
+      expect(unreachable).toEqual([]);
+    });
+
+    it("prints a maneuver at every ship's top speed", () => {
+      const missingTop = Object.values(SHIP_DEFINITIONS)
+        .filter(
+          (def) =>
+            !SHIP_DIALS[def.id]!.some(
+              (m) => m.speed === def.baseStats.speed.max,
+            ),
+        )
+        .map((def) => def.id);
+      expect(missingTop).toEqual([]);
     });
   });
 

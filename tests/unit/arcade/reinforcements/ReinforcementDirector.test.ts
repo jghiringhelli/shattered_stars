@@ -1,19 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { toDeployOption } from "../../../../src/arcade/reinforcements/shipOptions";
 import { rulesFor } from "../../../../src/arcade/reinforcements/reinforcementRules";
-import {
-  ReinforcementDirector,
-  type DirectorSetup,
-} from "../../../../src/arcade/reinforcements/ReinforcementDirector";
+import { ReinforcementDirector } from "../../../../src/arcade/reinforcements/ReinforcementDirector";
+import type { DirectorSetup } from "../../../../src/arcade/reinforcements/directorTypes";
 import type { DeployOption } from "../../../../src/arcade/reinforcements/reinforcementTypes";
 
 const opt = (definitionId: string, loadoutId: string | null = null) =>
   toDeployOption({ definitionId, loadoutId })!;
 
-const kestrel = opt("confed_kestrel"); // 42
-const wasp = opt("confed_wasp"); // 25
-const venom = opt("corsair_venom"); // 24
-const talon = opt("corsair_talon"); // 45
+const kestrel = opt("confed_kestrel");
+const wasp = opt("confed_wasp");
+const venom = opt("corsair_venom");
+const talon = opt("corsair_talon");
+
+/** Field cap of the test battles: the two opening Venoms plus room for one more. */
+const FIELD_CAP = 3 * venom.cost;
 
 const P = "free_confederation";
 const E = "void_corsairs";
@@ -24,7 +25,7 @@ function director(
 ): ReinforcementDirector {
   let n = 0;
   const setup: DirectorSetup = {
-    rules: rulesFor("skirmish", { poolPoints: 300, fieldCapPoints: 100 }),
+    rules: rulesFor("skirmish", { poolPoints: 300, fieldCapPoints: FIELD_CAP }),
     playerFaction: P,
     sides: [
       { faction: P, strategy: "balanced", plan: [wasp, kestrel] },
@@ -64,7 +65,7 @@ describe("ReinforcementDirector", () => {
     const enemy = deployed.filter((x) => x.faction === E);
     expect(enemy.length).toBeGreaterThan(0);
     expect(enemy[0]?.option).toBe(venom);
-    expect(d.summary(E).fieldPoints).toBeLessThanOrEqual(100);
+    expect(d.summary(E).fieldPoints).toBeLessThanOrEqual(FIELD_CAP);
     expect(enemy.every((x) => x.pilot === "ai")).toBe(true);
   });
 
@@ -78,7 +79,7 @@ describe("ReinforcementDirector", () => {
     expect(d.summary(E).remainingPoints).toBe(
       before - cost(deployed.map((x) => x.option)),
     );
-    expect(d.summary(E).fieldPoints).toBeLessThanOrEqual(100);
+    expect(d.summary(E).fieldPoints).toBeLessThanOrEqual(FIELD_CAP);
   });
 
   it("numbers arrivals per side so they fan out", () => {
@@ -143,7 +144,10 @@ describe("ReinforcementDirector", () => {
   it("refuses a disabled option and keeps the picker open", () => {
     const d = opened(
       director({
-        rules: rulesFor("skirmish", { poolPoints: 120, fieldCapPoints: 100 }),
+        rules: rulesFor("skirmish", {
+          poolPoints: 120,
+          fieldCapPoints: FIELD_CAP,
+        }),
       }),
     );
     d.tick(TICK);
@@ -157,7 +161,10 @@ describe("ReinforcementDirector", () => {
   it("a side whose pool is exhausted with nothing alive loses", () => {
     const d = opened(
       director({
-        rules: rulesFor("skirmish", { poolPoints: 70, fieldCapPoints: 100 }),
+        rules: rulesFor("skirmish", {
+          poolPoints: 70,
+          fieldCapPoints: FIELD_CAP,
+        }),
       }),
     );
     d.tick(TICK);
@@ -188,7 +195,7 @@ describe("ReinforcementDirector", () => {
 
   it("waits the AI deploy delay after a loss", () => {
     const rules = {
-      ...rulesFor("skirmish", { poolPoints: 300, fieldCapPoints: 100 }),
+      ...rulesFor("skirmish", { poolPoints: 300, fieldCapPoints: FIELD_CAP }),
       aiDeployDelayMs: 1000,
     };
     const d = opened(director({ rules }));

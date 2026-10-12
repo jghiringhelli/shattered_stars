@@ -7,7 +7,8 @@
 
 import { describe, expect, it } from "vitest";
 import { BotPilot } from "../../../../src/arcade/ai/BotPilot";
-import { BRUTAL_REACTION_SCALE } from "../../../../src/arcade/ai/BotDifficulty";
+/** A reaction scale twice as fast as the tier's. */
+const FAST_REACTION_SCALE = 0.5;
 import type { BotContact } from "../../../../src/arcade/ai/BotView";
 import {
   tickCycleFlight,
@@ -123,10 +124,10 @@ describe("BotPilot", () => {
     expect(pilot.targetId).toBe("player");
   });
 
-  it("takes the tier's reaction, scaled for brutal", () => {
+  it("takes the tier's reaction, scaled by the reaction scale", () => {
     expect(new BotPilot("expert").profile.reactionMs).toBe(120);
     expect(
-      new BotPilot("expert", { reactionScale: BRUTAL_REACTION_SCALE }).profile
+      new BotPilot("expert", { reactionScale: FAST_REACTION_SCALE }).profile
         .reactionMs,
     ).toBe(60);
   });

@@ -83,12 +83,8 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     factionId: "terran_hegemony",
     pointLimit: 100,
     name: "Iron Cadets",
-    style: "swarm",
-    ships: [
-      { loadoutId: "stiletto_basic" },
-      { loadoutId: "stiletto_basic" },
-      { loadoutId: "stiletto_basic" },
-    ],
+    style: "aggressive",
+    ships: [{ loadoutId: "viper_basic" }, { loadoutId: "raptor_pursuit" }],
   },
   {
     id: "th_150_patrol_alpha",
@@ -97,9 +93,9 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Patrol Alpha",
     style: "balanced",
     ships: [
-      { loadoutId: "stiletto_basic" },
       { loadoutId: "viper_pursuit" },
-      { loadoutId: "viper_pursuit" },
+      { loadoutId: "raptor_pursuit" },
+      { loadoutId: "javelin_hunter" },
     ],
   },
   {
@@ -109,10 +105,9 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Iron Fist",
     style: "balanced",
     ships: [
-      { loadoutId: "vindicator_strike" },
-      { loadoutId: "stiletto_basic" },
-      { loadoutId: "stiletto_basic" },
-      { loadoutId: "stiletto_basic" },
+      { loadoutId: "centurion_assault" },
+      { loadoutId: "centurion_defender" },
+      { loadoutId: "gladius_basic" },
     ],
   },
   {
@@ -122,11 +117,11 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Battle Squadron",
     style: "balanced",
     ships: [
+      { loadoutId: "bastion_defender" },
       { loadoutId: "viper_ace" },
-      { loadoutId: "harbinger_coordinator" },
       { loadoutId: "viper_pursuit" },
-      { loadoutId: "harbinger_coordinator" },
-      { loadoutId: "viper_basic" },
+      { loadoutId: "raptor_basic" },
+      { loadoutId: "stiletto_picket" },
     ],
   },
 
@@ -138,9 +133,9 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Scout Squadron",
     style: "swarm",
     ships: [
-      { loadoutId: "wasp_swarm" },
-      { loadoutId: "wasp_swarm" },
-      { loadoutId: "wasp_swarm" },
+      { loadoutId: "wasp_ace" },
+      { loadoutId: "wasp_picket" },
+      { loadoutId: "finch_patrol" },
     ],
   },
   {
@@ -150,11 +145,11 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Freedom Wing",
     style: "swarm",
     ships: [
-      { loadoutId: "wasp_swarm" },
-      { loadoutId: "wasp_swarm" },
+      { loadoutId: "wasp_ace" },
+      { loadoutId: "wasp_picket" },
+      { loadoutId: "wasp_picket" },
       { loadoutId: "finch_patrol" },
-      { loadoutId: "finch_patrol" },
-      { loadoutId: "finch_patrol" },
+      { loadoutId: "finch_scout" },
     ],
   },
   {
@@ -164,9 +159,9 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Confederacy Strike",
     style: "balanced",
     ships: [
-      { loadoutId: "albatross_assault" },
-      { loadoutId: "finch_scout" },
-      { loadoutId: "albatross_assault" },
+      { loadoutId: "falcon_defender" },
+      { loadoutId: "eagle_defender" },
+      { loadoutId: "crane_coordinator" },
     ],
   },
   {
@@ -194,7 +189,7 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     style: "swarm",
     ships: [
       { loadoutId: "drone_standard" },
-      { loadoutId: "scout_basic" },
+      { loadoutId: "scout_recon" },
       { loadoutId: "drone_standard" },
     ],
   },
@@ -205,11 +200,10 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Hunter Pack",
     style: "aggressive",
     ships: [
-      { loadoutId: "interceptor_swarm" },
-      { loadoutId: "scout_basic" },
-      { loadoutId: "interceptor_swarm" },
-      { loadoutId: "scout_basic" },
-      { loadoutId: "scout_basic" },
+      { loadoutId: "interceptor_overdrive" },
+      { loadoutId: "interceptor_swarm_uplink" },
+      { loadoutId: "drone_standard" },
+      { loadoutId: "scout_swarm_picket" },
     ],
   },
   {
@@ -219,11 +213,10 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Precision Strike",
     style: "balanced",
     ships: [
-      { loadoutId: "eradicator_defender" },
-      { loadoutId: "scout_basic" },
-      { loadoutId: "scout_basic" },
-      { loadoutId: "scout_basic" },
-      { loadoutId: "scout_basic" },
+      { loadoutId: "ravager_ion" },
+      { loadoutId: "heavy_patrol" },
+      { loadoutId: "scout_recon" },
+      { loadoutId: "relay_coordinator" },
     ],
   },
   {
@@ -249,7 +242,11 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     pointLimit: 100,
     name: "Fang Blade",
     style: "aggressive",
-    ships: [{ loadoutId: "fang_raider" }, { loadoutId: "fang_predator" }],
+    ships: [
+      { loadoutId: "fang_raider" },
+      { loadoutId: "fang_hot_wired" },
+      { loadoutId: "fang_hot_wired" },
+    ],
   },
   {
     id: "vc_150_corsair_raider",
@@ -282,11 +279,11 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Corsair Fleet",
     style: "balanced",
     ships: [
-      { loadoutId: "tender_support" },
+      { loadoutId: "reaver_boarding" },
+      { loadoutId: "marauder_brawler" },
+      { loadoutId: "scimitar_assault" },
       { loadoutId: "blade_ace" },
-      { loadoutId: "venom_swarm" },
-      { loadoutId: "tender_support" },
-      { loadoutId: "blade_ace" },
+      { loadoutId: "fang_hot_wired" },
     ],
   },
 
@@ -306,22 +303,21 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Sacred Guard",
     style: "balanced",
     ships: [
+      { loadoutId: "seraph_champion" },
       { loadoutId: "virtue_pursuit" },
-      { loadoutId: "cherub_swarm" },
-      { loadoutId: "virtue_pursuit" },
+      { loadoutId: "herald_scout" },
     ],
   },
   {
     id: "ae_200_crusader_host",
     factionId: "ascendant_empire",
     pointLimit: 200,
-    name: "Crusader Host",
+    name: "Temple Inquisition",
     style: "balanced",
     ships: [
-      { loadoutId: "crusader_assault" },
-      { loadoutId: "cherub_swarm" },
-      { loadoutId: "cherub_swarm" },
-      { loadoutId: "cherub_swarm" },
+      { loadoutId: "inquisitor_hunter" },
+      { loadoutId: "acolyte_relay" },
+      { loadoutId: "templar_guardian" },
     ],
   },
   {

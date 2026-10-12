@@ -8,7 +8,8 @@
 
 import { describe, it, expect } from "vitest";
 import { BATTLEFIELD_SIZE, LOGIC_DELTA } from "../../../../src/config";
-import { BRUTAL_REACTION_SCALE } from "../../../../src/arcade/ai";
+/** A reaction scale twice as fast as the tier's. */
+const FAST_REACTION_SCALE = 0.5;
 import {
   DuelBotCrew,
   contactOf,
@@ -23,7 +24,7 @@ import {
 const AVERAGE = { tier: "average", reactionScale: 1 } as const;
 const EXPERT_FAST = {
   tier: "expert",
-  reactionScale: BRUTAL_REACTION_SCALE,
+  reactionScale: FAST_REACTION_SCALE,
 } as const;
 /** Long enough for perception, a squad plan and a few bot decisions. */
 const SETTLE_MS = 2000;

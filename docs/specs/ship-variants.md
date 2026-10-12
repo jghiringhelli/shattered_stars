@@ -34,49 +34,60 @@ turn at each speed inside the ship's speed band; a missing cell is red.
 expected = anchor(role).pointCost
          + Σ (lever − anchor lever) × unit value
 ```
-rounded to whole points. Each role has one anchor (`ROLE_ANCHORS`), a reference
-profile taken from a shipped ship and priced at the role's roster-calibrated
-median. Role-intrinsic behaviour (support/capital aura, ModeBalancing role
-modifiers) is identical across a role, so it lives in the anchor price.
+rounded to whole points. **Hull, shields, attack and agility are read as
+real-time combat reads them** — `ModeBalancing.combatStatsFor(role, stats,
+"continuous", 1)`: the role's modifiers, rounded to whole hull / shield
+points, damage per hit and agility dice. A card point that rounds away is
+not felt in play and costs nothing; hulls that fly and fight identically
+cost the same (one price per real-time stat group). Each role has one anchor
+(`ROLE_ANCHORS`), a reference profile taken from a shipped ship.
 
-| Lever | Points | Source |
+Unit values and anchors were calibrated on the real engine (balance pass
+2026-10-12, `npm run balance:report`, docs/balance/): every Skirmish hull's
+mono squad on its default quick builds against the five AI lists, its win
+share interpolated to 200 points. Before the switch gunships played +30 %
+above their price and interceptors −29 %; after it every role sits within
+±3 % and 5 of 82 hulls lie outside ±15 %.
+
+| Lever (real time) | Points | Source |
 |---|---|---|
-| +1 hull | 3 | Hull Upgrade |
-| +1 shield | 4 | Shield Upgrade |
-| +1 attack | 5 | Heavy Laser Cannon floor |
-| +1 agility | 4 | between Evasion Configuration and Stealth Device |
+| +1 hull point (12 HP) | 5 | measured (squad value per point) |
+| +1 shield point (12 HP, regenerates) | 8 | measured |
+| +1 damage per hit | 10 | +50 % output on a 2-damage fighter |
+| +1 agility die | 2 | measured weak in squads (−8 % hit chance) |
 | +1 top speed | 4 | `maxSpeedBonus` (abilityPricing) |
 | −1 minimum speed | 2 | half a top-speed step |
 | +1 dial step | 4 / 11 ≈ 0.36 | a stress-relief tier (4 pts) eases ≈ 11 cells |
 | +1 size class | 4 | roster fit (best fit 4–5) |
-| Capital hull / shield | × 1/3 | capital pools are ~6× a fighter's; roster fit |
+| Capital hull / shield | × 1/3 | capital pools are ~6× a fighter's |
 
 A **dial step** is one stress cell one difficulty greener: each cell scores
 green 2, white 1, red/missing 0 (`dialSteps`, `src/data/dialPermissiveness.ts`).
+Dials never print rows above a ship's top speed (`SHIP_DIALS` cuts them).
 
 **Not priced:** action lists (flavour) and the slot bar (every card is paid
 for by the loadout — variants trade slots, they do not buy them).
 
-| Role | Anchor ship | Profile (h/s/a/ag, speed, size, dial steps) | Price |
+| Role | Anchor ship | Real-time profile (h/s/a/ag, speed, size, dial steps) | Price |
 |---|---|---|---|
-| light_fighter | terran_stiletto | 2/2/2/3, 1–5, tiny, 11 | 25 |
-| interceptor | terran_viper | 3/2/3/3, 1–5, small, 13 | 46 |
-| heavy_fighter | terran_centurion | 5/3/3/2, 1–4, small, 10 | 56 |
-| bomber | terran_hammer | 5/3/3/1, 1–3, medium, 9 | 58 |
-| support | confed_crane | 4/4/1/1, 1–3, medium, 7 | 49 |
-| gunship | terran_vindicator | 6/4/4/1, 1–3, medium, 6 | 70 |
-| capital | terran_imperator | 36/24/5/0, 0–2, huge, 4 | 118 |
+| light_fighter | terran_stiletto | 1/1/1/3, 1–5, tiny, 12 | 37 |
+| interceptor | terran_viper | 2/1/2/2, 1–5, small, 14 | 43 |
+| heavy_fighter | terran_centurion | 3/2/2/1, 1–4, small, 11 | 58 |
+| bomber | terran_hammer | 4/2/1/0, 1–3, medium, 9 | 53 |
+| support | confed_crane | 3/3/0/0, 1–3, medium, 7 | 53 |
+| gunship | terran_vindicator | 5/2/3/0, 1–3, medium, 7 | 90 |
+| capital | terran_imperator | 22/12/3/0, 0–2, huge, 4 | 118 |
 
 **Tolerance:** an authored `pointCost` may sit at most
 `max(3, round(5% × expected))` points from the heuristic — room for a hand
-nudge of one stat step on a fighter, proportionally more on a capital.
-Loadout prices are derived from `pointCost` (`loadoutPricing.ts`), so a hull
-price change flows into every build and preset automatically.
+nudge measured on the engine. Loadout prices are derived from `pointCost`
+(`loadoutPricing.ts`), so a hull price change flows into every build and
+preset automatically.
 
 ## 3. Invariants (tested in `tests/unit/data/ShipVariants.test.ts`)
 
 - No two ships of the same role are identical in hull, shields, attack,
-  agility, armour, speed bounds, dial cells, size and slot bar (with charges).
+  agility (real time), armour, speed bounds, dial cells, size and slot bar (with charges).
 - No ship matches or beats another of its role on every lever (dial cell by
   cell, slot bar as a multiset) at the same or a lower price.
 - Every ship's `pointCost` is within tolerance of the heuristic.
@@ -90,4 +101,4 @@ price change flows into every build and preset automatically.
 3. If its slot bar changed, repair its loadouts (`ShipLoadouts.test.ts`), and
    re-check quick-build presets against their point limits.
 4. Run `tests/unit/data`, `tests/balance` and
-   `npx tsx scripts/headless_sim.ts --matrix --battles 500`.
+   `npm run balance:report` (real engine).

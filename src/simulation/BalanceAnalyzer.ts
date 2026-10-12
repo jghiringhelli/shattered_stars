@@ -10,21 +10,13 @@
  * This is the main entry point for understanding game health.
  */
 
-import {
-  BattleSimulator,
-  type AggregatedStats,
-  type ShipPerformanceStats,
-} from "./BattleSimulator";
+import { BattleSimulator } from "./BattleSimulator";
 import {
   GameplayMetricsAnalyzer,
   type GameplayFeelReport,
 } from "./GameplayMetrics";
 import { SHIP_DEFINITIONS } from "../data/ShipDefinitions";
-import {
-  MONSTER_DEFINITIONS,
-  getBossMonsters,
-  getMonstersByCategory,
-} from "../data/SpaceMonsters";
+import { MONSTER_DEFINITIONS, getBossMonsters } from "../data/SpaceMonsters";
 import type { FactionId } from "../config";
 
 // ============================================
@@ -79,10 +71,7 @@ export interface MatchupStats {
   drawRate: number;
   averageTurns: number;
   balance:
-    | "balanced"
-    | "slightly_favored"
-    | "imbalanced"
-    | "severely_imbalanced";
+    "balanced" | "slightly_favored" | "imbalanced" | "severely_imbalanced";
 }
 
 export interface ShipBalanceData {
@@ -304,7 +293,7 @@ export class BalanceAnalyzer {
       let strongestMatchup = { opponent: factions[0]!, winRate: 0 };
       let weakestMatchup = { opponent: factions[0]!, winRate: 1 };
 
-      for (const [key, ms] of matchups) {
+      for (const ms of matchups.values()) {
         if (ms.faction1 === faction) {
           wins += ms.faction1WinRate;
           games++;
@@ -355,16 +344,15 @@ export class BalanceAnalyzer {
   /**
    * Analyze individual ship balance
    */
-  private analyzeShipBalance(factionData: FactionBalanceData): ShipBalanceData {
+  private analyzeShipBalance(
+    _factionData: FactionBalanceData,
+  ): ShipBalanceData {
     const ships = new Map<string, ShipStats>();
     const overperformers: string[] = [];
     const underperformers: string[] = [];
     const outliers: string[] = [];
 
     const allShips = Object.values(SHIP_DEFINITIONS);
-    const avgCost =
-      allShips.reduce((sum, s) => sum + s.baseStats.pointCost, 0) /
-      allShips.length;
 
     for (const ship of allShips) {
       const stats = ship.baseStats;

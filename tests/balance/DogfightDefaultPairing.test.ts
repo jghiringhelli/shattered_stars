@@ -9,8 +9,9 @@ import { describe, it, expect } from "vitest";
 import { DOGFIGHT_DEFAULT_PAIRING } from "../../src/data/DogfightDefaults";
 import { simulateDuelRound } from "../../src/simulation/DuelTempoSim";
 
-/** Seeds per seating (fixed: the result is deterministic). */
-const ROUNDS = 40;
+/** Seeds per seating (fixed: the result is deterministic; 120 rounds keep the
+ * sample's interval inside the ±10 % band). */
+const ROUNDS = 60;
 const SEED_BASE = 1000;
 /** Fair = the default player's share of decided rounds within 50 ± 10 %. */
 const FAIRNESS_MARGIN = 0.1;

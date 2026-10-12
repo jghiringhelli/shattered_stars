@@ -33,12 +33,7 @@ import { survivalBelt } from "../../systems/survival/SurvivalBelt";
 import { SurvivalRunController } from "../../systems/survival/SurvivalRunController";
 import { countSpecialActions } from "../../telemetry/matchStatTypes";
 import { createSeededRng } from "../../utils/random";
-import {
-  livingPlayers,
-  resolveNodeCombat,
-  findTarget,
-  type NodeCombat,
-} from "./nodeCombat";
+import { livingPlayers, resolveNodeCombat, findTarget } from "./nodeCombat";
 import { ARENA_CENTER, spawnFleet, type NodeShip } from "./nodeShips";
 import { armNode, fireNodeSecondaries } from "./nodeWeapons";
 import { spawnBossReinforcements, spawnWave } from "./nodeWaves";

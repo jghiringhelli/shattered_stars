@@ -105,6 +105,7 @@ import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
+import { hullFractionOf } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
 import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import {
@@ -698,6 +699,9 @@ export class AceDuelScene extends Phaser.Scene {
 
   /** Feeds the holographic HUD this frame's ships, camera and the player's mark. */
   private updateHud(): void {
+    audioManager.reportPlayerHull(
+      hullFractionOf(this.ships.get(this.flagshipId)),
+    );
     this.hud?.update(
       buildDuelHudSnapshot({
         ships: this.ships.values(),

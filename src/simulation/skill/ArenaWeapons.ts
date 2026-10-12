@@ -109,6 +109,10 @@ function bodyOf(ship: ArenaShip, state: CombatState): WeaponBody {
   return weaponBodyOf(
     ship,
     ship.side,
-    damageMitigationOf(ship.modifiers, fliesWithWingman(ship, state)),
+    damageMitigationOf(
+      ship.modifiers,
+      fliesWithWingman(ship, state),
+      state.auras?.get(ship.id),
+    ),
   );
 }

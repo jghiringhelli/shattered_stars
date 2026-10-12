@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { ShipRole } from "../../../src/core/types";
+import { SHIP_DEFINITIONS } from "../../../src/data/ShipDefinitions";
 import type { DuelOutcome } from "../../../src/simulation/DuelBalance";
 import {
   ROLE_REPRESENTATIVES,
@@ -64,7 +65,11 @@ describe("RoleMatchup", () => {
   });
 
   it("buildEqualPointSquad fills the budget with as many identical ships as fit", () => {
-    expect(buildEqualPointSquad("terran_stiletto", 200)).toHaveLength(8); // cost 25
+    expect(buildEqualPointSquad("terran_stiletto", 200)).toHaveLength(
+      Math.floor(
+        200 / SHIP_DEFINITIONS["terran_stiletto"]!.baseStats.pointCost,
+      ),
+    );
     expect(buildEqualPointSquad("terran_imperator", 200)).toHaveLength(1); // cost 118
   });
 

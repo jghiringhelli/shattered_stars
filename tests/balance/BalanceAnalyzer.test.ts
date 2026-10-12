@@ -4,77 +4,80 @@
  * Tests for the comprehensive balance analysis system.
  */
 
-import { describe, it, expect } from 'vitest';
-import { BalanceAnalyzer, type BalanceReport } from '../../src/simulation/BalanceAnalyzer';
+import { describe, it, expect } from "vitest";
+import {
+  BalanceAnalyzer,
+  type BalanceReport,
+} from "../../src/simulation/BalanceAnalyzer";
 
-describe('BalanceAnalyzer', () => {
+describe("BalanceAnalyzer", () => {
   // Use smaller sample sizes for faster tests
-  const analyzer = new BalanceAnalyzer('continuous', 10);
+  const analyzer = new BalanceAnalyzer("continuous", 10);
 
-  describe('Faction Balance Analysis', () => {
-    it('should analyze all factions', async () => {
+  describe("Faction Balance Analysis", () => {
+    it("should analyze all factions", async () => {
       const report = await analyzer.analyze();
 
       expect(report.factionBalance).toBeDefined();
       expect(report.factionBalance.factions.size).toBe(5);
     });
 
-    it('should track matchup data', async () => {
+    it("should track matchup data", async () => {
       const report = await analyzer.analyze();
 
       // 5 factions = 10 unique matchups
       expect(report.factionBalance.matchups.size).toBe(10);
     });
 
-    it('should identify imbalance warnings', async () => {
+    it("should identify imbalance warnings", async () => {
       const report = await analyzer.analyze();
 
       expect(Array.isArray(report.factionBalance.imbalanceWarnings)).toBe(true);
     });
   });
 
-  describe('Ship Balance Analysis', () => {
-    it('should analyze all ships', async () => {
+  describe("Ship Balance Analysis", () => {
+    it("should analyze all ships", async () => {
       const report = await analyzer.analyze();
 
       expect(report.shipBalance).toBeDefined();
       expect(report.shipBalance.ships.size).toBeGreaterThan(0);
     });
 
-    it('should identify overperformers and underperformers', async () => {
+    it("should identify overperformers and underperformers", async () => {
       const report = await analyzer.analyze();
 
       expect(Array.isArray(report.shipBalance.overperformers)).toBe(true);
       expect(Array.isArray(report.shipBalance.underperformers)).toBe(true);
     });
 
-    it('should rate ships A-F', async () => {
+    it("should rate ships A-F", async () => {
       const report = await analyzer.analyze();
 
-      const validRatings = ['S', 'A', 'B', 'C', 'D', 'F'];
+      const validRatings = ["S", "A", "B", "C", "D", "F"];
       for (const [, stats] of report.shipBalance.ships) {
         expect(validRatings).toContain(stats.rating);
       }
     });
   });
 
-  describe('Role Balance Analysis', () => {
-    it('should analyze all roles', async () => {
+  describe("Role Balance Analysis", () => {
+    it("should analyze all roles", async () => {
       const report = await analyzer.analyze();
 
       expect(report.roleBalance).toBeDefined();
       expect(report.roleBalance.roles.size).toBeGreaterThan(0);
     });
 
-    it('should check for rock-paper-scissors balance', async () => {
+    it("should check for rock-paper-scissors balance", async () => {
       const report = await analyzer.analyze();
 
-      expect(typeof report.roleBalance.rockPaperScissors).toBe('boolean');
+      expect(typeof report.roleBalance.rockPaperScissors).toBe("boolean");
     });
   });
 
-  describe('Gameplay Feel Integration', () => {
-    it('should include gameplay feel analysis', async () => {
+  describe("Gameplay Feel Integration", () => {
+    it("should include gameplay feel analysis", async () => {
       const report = await analyzer.analyze();
 
       expect(report.gameplayFeel).toBeDefined();
@@ -85,8 +88,8 @@ describe('BalanceAnalyzer', () => {
     });
   });
 
-  describe('Monster Analysis', () => {
-    it('should analyze monster content', async () => {
+  describe("Monster Analysis", () => {
+    it("should analyze monster content", async () => {
       const report = await analyzer.analyze();
 
       expect(report.monsterAnalysis).toBeDefined();
@@ -94,19 +97,27 @@ describe('BalanceAnalyzer', () => {
       expect(report.monsterAnalysis.bossCount).toBeGreaterThan(0);
     });
 
-    it('should provide difficulty spread', async () => {
+    it("should provide difficulty spread", async () => {
       const report = await analyzer.analyze();
 
       expect(report.monsterAnalysis.difficultySpread).toBeDefined();
-      expect(typeof report.monsterAnalysis.difficultySpread.easy).toBe('number');
-      expect(typeof report.monsterAnalysis.difficultySpread.medium).toBe('number');
-      expect(typeof report.monsterAnalysis.difficultySpread.hard).toBe('number');
-      expect(typeof report.monsterAnalysis.difficultySpread.extreme).toBe('number');
+      expect(typeof report.monsterAnalysis.difficultySpread.easy).toBe(
+        "number",
+      );
+      expect(typeof report.monsterAnalysis.difficultySpread.medium).toBe(
+        "number",
+      );
+      expect(typeof report.monsterAnalysis.difficultySpread.hard).toBe(
+        "number",
+      );
+      expect(typeof report.monsterAnalysis.difficultySpread.extreme).toBe(
+        "number",
+      );
     });
   });
 
-  describe('Overall Health Score', () => {
-    it('should calculate overall health', async () => {
+  describe("Overall Health Score", () => {
+    it("should calculate overall health", async () => {
       const report = await analyzer.analyze();
 
       expect(report.overallHealth).toBeDefined();
@@ -114,49 +125,57 @@ describe('BalanceAnalyzer', () => {
       expect(report.overallHealth.score).toBeLessThanOrEqual(100);
     });
 
-    it('should assign a grade', async () => {
+    it("should assign a grade", async () => {
       const report = await analyzer.analyze();
 
-      const validGrades = ['A', 'B', 'C', 'D', 'F'];
+      const validGrades = ["A", "B", "C", "D", "F"];
       expect(validGrades).toContain(report.overallHealth.grade);
     });
 
-    it('should provide breakdown scores', async () => {
+    it("should provide breakdown scores", async () => {
       const report = await analyzer.analyze();
 
-      expect(report.overallHealth.breakdown.factionBalance).toBeGreaterThanOrEqual(0);
-      expect(report.overallHealth.breakdown.shipBalance).toBeGreaterThanOrEqual(0);
-      expect(report.overallHealth.breakdown.gameplayFeel).toBeGreaterThanOrEqual(0);
-      expect(report.overallHealth.breakdown.pveContent).toBeGreaterThanOrEqual(0);
+      expect(
+        report.overallHealth.breakdown.factionBalance,
+      ).toBeGreaterThanOrEqual(0);
+      expect(report.overallHealth.breakdown.shipBalance).toBeGreaterThanOrEqual(
+        0,
+      );
+      expect(
+        report.overallHealth.breakdown.gameplayFeel,
+      ).toBeGreaterThanOrEqual(0);
+      expect(report.overallHealth.breakdown.pveContent).toBeGreaterThanOrEqual(
+        0,
+      );
     });
   });
 
-  describe('Recommendations', () => {
-    it('should generate recommendations', async () => {
+  describe("Recommendations", () => {
+    it("should generate recommendations", async () => {
       const report = await analyzer.analyze();
 
       expect(Array.isArray(report.recommendations)).toBe(true);
     });
 
-    it('should have valid priority levels', async () => {
+    it("should have valid priority levels", async () => {
       const report = await analyzer.analyze();
 
-      const validPriorities = ['critical', 'high', 'medium', 'low'];
+      const validPriorities = ["critical", "high", "medium", "low"];
       for (const rec of report.recommendations) {
         expect(validPriorities).toContain(rec.priority);
       }
     });
 
-    it('should have valid categories', async () => {
+    it("should have valid categories", async () => {
       const report = await analyzer.analyze();
 
-      const validCategories = ['balance', 'gameplay', 'content', 'polish'];
+      const validCategories = ["balance", "gameplay", "content", "polish"];
       for (const rec of report.recommendations) {
         expect(validCategories).toContain(rec.category);
       }
     });
 
-    it('should sort recommendations by priority', async () => {
+    it("should sort recommendations by priority", async () => {
       const report = await analyzer.analyze();
 
       const priorityOrder: Record<string, number> = {
@@ -169,35 +188,37 @@ describe('BalanceAnalyzer', () => {
       for (let i = 1; i < report.recommendations.length; i++) {
         const prev = report.recommendations[i - 1]!;
         const curr = report.recommendations[i]!;
-        expect(priorityOrder[prev.priority]).toBeLessThanOrEqual(priorityOrder[curr.priority]);
+        expect(priorityOrder[prev.priority]).toBeLessThanOrEqual(
+          priorityOrder[curr.priority]!,
+        );
       }
     });
   });
 
-  describe('Report Generation', () => {
-    it('should generate text report', async () => {
+  describe("Report Generation", () => {
+    it("should generate text report", async () => {
       const report = await analyzer.analyze();
       const textReport = analyzer.generateReport(report);
 
-      expect(textReport).toContain('BALANCE ANALYSIS REPORT');
-      expect(textReport).toContain('OVERALL HEALTH');
-      expect(textReport).toContain('FACTION BALANCE');
-      expect(textReport).toContain('SHIP BALANCE');
-      expect(textReport).toContain('PVE CONTENT');
-      expect(textReport).toContain('RECOMMENDATIONS');
+      expect(textReport).toContain("BALANCE ANALYSIS REPORT");
+      expect(textReport).toContain("OVERALL HEALTH");
+      expect(textReport).toContain("FACTION BALANCE");
+      expect(textReport).toContain("SHIP BALANCE");
+      expect(textReport).toContain("PVE CONTENT");
+      expect(textReport).toContain("RECOMMENDATIONS");
     });
 
-    it('should include metadata', async () => {
+    it("should include metadata", async () => {
       const report = await analyzer.analyze();
 
       expect(report.generatedAt).toBeTruthy();
       expect(report.simulationRuns).toBeGreaterThan(0);
-      expect(report.mode).toBe('continuous');
+      expect(report.mode).toBe("continuous");
     });
   });
 
-  describe('Performance', () => {
-    it('should complete analysis in reasonable time', async () => {
+  describe("Performance", () => {
+    it("should complete analysis in reasonable time", async () => {
       const start = Date.now();
       await analyzer.analyze();
       const elapsed = Date.now() - start;
