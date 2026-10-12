@@ -21,6 +21,7 @@ import {
   buildOnlineDogfightInit,
   localSeatOf,
 } from "../../../src/net/lobby/matchSetup";
+import { pendingLoadout } from "../../../src/net/lobby/lobbyEdits";
 import { OnlineSession } from "../../../src/net/lobby/OnlineSession";
 import type { MatchStart, RoomView } from "../../../src/net/protocol";
 import { getShipDefinition } from "../../../src/data/ShipDefinitions";
@@ -204,6 +205,68 @@ describe("LobbyModel", () => {
       },
     });
     expect(roomCountdowns(state, 1_100)).toEqual({ start: 2, ready: 19 });
+  });
+});
+
+describe("team factions", () => {
+  const withPlayers = (
+    mode: RoomView["mode"],
+    factions: readonly (string | null)[],
+    teams: readonly (0 | 1)[] = [0, 1],
+  ): LobbyState =>
+    reduceLobby(online(), {
+      kind: "server",
+      message: {
+        t: "room",
+        room: room({
+          mode,
+          maxPlayers: factions.length,
+          players: factions.map((faction, i) => ({
+            ...room().players[i % 2]!,
+            id: i === 0 ? "me" : `p${i}`,
+            seat: i,
+            team: teams[i] ?? 0,
+            loadout: faction ? { faction, ships: ["corsair_raider"] } : null,
+          })),
+        }),
+      },
+    });
+
+  it("blocks ready while both teams of a squad battle fly one faction", () => {
+    for (const mode of ["skirmish", "scenario", "reinforcements"] as const)
+      expect(
+        readyBlocker(withPlayers(mode, ["void_corsairs", "void_corsairs"])),
+      ).toMatch(/different faction/i);
+    expect(
+      readyBlocker(withPlayers("dogfight", ["void_corsairs", "void_corsairs"])),
+    ).toBeNull();
+  });
+
+  it("asks teammates of a squad battle to fly one faction", () => {
+    const mixed = withPlayers(
+      "skirmish",
+      ["void_corsairs", "terran_hegemony", "free_confederation"],
+      [0, 1, 0],
+    );
+    expect(readyBlocker(mixed)).toMatch(/same faction/i);
+  });
+
+  it("seats a newcomer on a faction the other team does not fly", () => {
+    const state = withPlayers("reinforcements", ["free_confederation", null]);
+    const asGuest: LobbyState = { ...state, localId: "p1" };
+    expect(pendingLoadout(asGuest, null)?.faction).not.toBe(
+      "free_confederation",
+    );
+  });
+
+  it("seats a newcomer on the faction their teammate flies", () => {
+    const state = withPlayers(
+      "skirmish",
+      ["terran_hegemony", "void_corsairs", null],
+      [0, 1, 0],
+    );
+    const asTeammate: LobbyState = { ...state, localId: "p2" };
+    expect(pendingLoadout(asTeammate, null)?.faction).toBe("terran_hegemony");
   });
 });
 

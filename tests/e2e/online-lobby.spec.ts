@@ -1,8 +1,8 @@
 /**
  * Online lobby, end to end: two browser contexts reach the lobby from the
- * main menu, find each other (room code / quick match), ready up and receive
- * the same match from a real relay started in-process; a dropped connection
- * shows as reconnecting and resumes the same seat.
+ * main menu, find each other (room code / quick match), ready up and land
+ * in the same battle from a real relay started in-process; a dropped
+ * connection shows as reconnecting and resumes the same seat.
  */
 
 import { test, expect, type Browser, type Page } from "@playwright/test";
@@ -109,7 +109,7 @@ async function hasNamed(page: Page, name: string): Promise<boolean> {
 test.describe("online lobby", () => {
   test.describe.configure({ mode: "serial" });
 
-  test("two players meet by room code, ready up and receive the same match", async ({
+  test("two players meet by room code, ready up and fly the same duel", async ({
     browser,
   }) => {
     const host = await openLobby(browser);
@@ -144,12 +144,8 @@ test.describe("online lobby", () => {
     const hostMatch = await lobbyState<unknown>(host, "s.match");
     const guestMatch = await lobbyState<unknown>(guest, "s.match");
     expect(hostMatch).toEqual(guestMatch);
-    expect(await hasNamed(host, "online_match_card")).toBe(true);
-
-    await clickNamed(host, "online_match_back");
-    await clickNamed(guest, "online_match_back");
-    await waitForLobby(host, "s.match === null && s.room.phase === 'lobby'");
-    await waitForLobby(guest, "s.match === null && s.room.phase === 'lobby'");
+    await waitForScene(host, "DogfightScene");
+    await waitForScene(guest, "DogfightScene");
     await host.context().close();
     await guest.context().close();
   });

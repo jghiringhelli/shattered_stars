@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CLOSE_CODES } from "../../../src/net/protocol";
+import { CLOSE_CODES, PROTOCOL_VERSION } from "../../../src/net/protocol";
 import {
   createCoreHarness,
   DOGFIGHT_LOADOUT,
@@ -35,7 +35,7 @@ describe("RelayCore handshake", () => {
     const again = new RecordingConnection();
     const resumed = h.core.hello(again, {
       t: "hello",
-      protocol: 1,
+      protocol: PROTOCOL_VERSION,
       build: "test-build",
       name: "Ace",
       token: session.token,
@@ -53,7 +53,7 @@ describe("RelayCore handshake", () => {
     expect(
       h.core.hello(again, {
         t: "hello",
-        protocol: 1,
+        protocol: PROTOCOL_VERSION,
         build: "test-build",
         name: "Ace",
         token: session.token,
@@ -67,7 +67,7 @@ describe("RelayCore handshake", () => {
     const { session, conn } = h.connect();
     h.core.hello(new RecordingConnection(), {
       t: "hello",
-      protocol: 1,
+      protocol: PROTOCOL_VERSION,
       build: "test-build",
       name: "Ace",
       token: session.token,
@@ -154,6 +154,31 @@ describe("RelayCore rooms", () => {
     expect(host.conn.last("room")!.room.phase).toBe("lobby");
   });
 
+  it("starts a squad battle only when each team flies its own faction", () => {
+    const h = createCoreHarness();
+    const host = h.connect("Host");
+    const guest = h.connect("Guest");
+    h.send(host.session, { t: "create_room", mode: "reinforcements" });
+    h.send(guest.session, {
+      t: "join_room",
+      code: host.conn.last("room")!.room.code,
+    });
+    const squad = (faction: string) => ({
+      t: "set_loadout" as const,
+      loadout: { faction, ships: ["corsair_raider"] },
+    });
+    for (const p of [host, guest]) {
+      h.send(p.session, squad("void_corsairs"));
+      h.send(p.session, { t: "set_ready", ready: true });
+    }
+    h.clock.advance(h.config.startCountdownMs * 2);
+    expect(host.conn.last("match_start")).toBeUndefined();
+    h.send(guest.session, squad("terran_hegemony"));
+    h.send(guest.session, { t: "set_ready", ready: true });
+    h.clock.advance(h.config.startCountdownMs);
+    expect(host.conn.last("match_start")).toBeDefined();
+  });
+
   it("passes host to the next seat when the host leaves", () => {
     const h = createCoreHarness();
     const { host, guest } = readyPair(h);
@@ -228,5 +253,3 @@ function readyPair(h: ReturnType<typeof createCoreHarness>) {
   }
   return { host, guest };
 }
-
-export type { ServerMessage };

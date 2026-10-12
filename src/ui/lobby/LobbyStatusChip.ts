@@ -56,6 +56,11 @@ export class LobbyStatusChip {
     return this.label.text;
   }
 
+  /** The pill's objects (to pin them into a screen-space layer). */
+  get gameObjects(): Phaser.GameObjects.GameObject[] {
+    return [this.frame, this.label];
+  }
+
   /**
    * Show a message; the tone is kept when omitted.
    *

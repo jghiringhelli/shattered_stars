@@ -70,6 +70,14 @@ export class ShipRepairFeedback {
   }
 
   /**
+   * The repair mechanic's own state (hull-repair pause after hits) — the
+   * part of this hub that is simulation, snapshotted by online battles.
+   */
+  get mechanic(): DamagePauseTracker {
+    return this.tracker;
+  }
+
+  /**
    * Apply a ship's own shield regen and hull repair for one frame (replaces
    * the scene's regenerateShields call) and refresh its overlay.
    * @param ship - A ship (mutated: hull, shields).

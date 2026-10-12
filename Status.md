@@ -95,8 +95,9 @@ src/
   data/           ShipDefinitions (101 ships), ShipLoadouts, ModeBalancing, CampaignData
   core/           types.ts, ArcadeControls (cycle system), errors.ts
   ai/             AIBrain, AIShipFactory, AIDifficulty, ArcadeAI
-  multiplayer/    OnlineTurnManager, BattleStateSerializer
-  services/       NetworkService (P2P WebSocket)
+  multiplayer/    BattleStateSerializer (legacy)
+  net/            Online play: protocol, NetClient, LockstepSession, lobby, battle link
+  services/       ImageGenerator
   simulation/     BattleSimulator, BalanceAnalyzer
   ui/             HealthBar, Minimap, SquadCard, ShipPickerScene components
 public/

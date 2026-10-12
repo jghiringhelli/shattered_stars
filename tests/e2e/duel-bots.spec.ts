@@ -146,27 +146,6 @@ test.describe("Dogfight — the AI opponent is a bot", () => {
     );
     expect(Math.hypot(end.x - start.x, end.y - start.y)).toBeGreaterThan(20);
   });
-
-  test("online the opponent is a remote human — no bot", async ({ page }) => {
-    suppressWebGLNoise(page);
-    await page.goto("/?debug=1");
-    await waitForMenuReady(page);
-    await page.evaluate((key) => {
-      const game = (window as any).game;
-      game.scene.stop("MainMenuScene");
-      game.scene.start(key, { isOnlineMode: true, seed: 7 });
-    }, DOGFIGHT_KEY);
-    await page.waitForFunction(
-      (key) => (window as any).game.scene.getScene(key)?.crew != null,
-      DOGFIGHT_KEY,
-      { timeout: 15_000 },
-    );
-    const bots = await page.evaluate(
-      (key) => (window as any).game.scene.getScene(key).crew.pilots.size,
-      DOGFIGHT_KEY,
-    );
-    expect(bots).toBe(0);
-  });
 });
 
 test.describe("Dogfight — R marks the HUD target", () => {

@@ -54,6 +54,28 @@ describe("PilotInputCodec", () => {
     expect(EDGE_MASK & INPUT_AI_CONTROL).toBe(0);
   });
 
+  it("carries the gamepad roll buttons and the commander orders", () => {
+    const presses = [
+      "BARREL_ROLL_LEFT",
+      "BARREL_ROLL_RIGHT",
+      "COMMANDER_ORDER_1",
+      "COMMANDER_ORDER_4",
+    ] as const;
+    const decoded = decodePilotInput(
+      encodePilotInput({ held: new Set(), edges: new Set(presses) }),
+    );
+    expect([...decoded.edges]).toEqual([...presses]);
+  });
+
+  it("keeps every button below the relay's AI-control bit", () => {
+    const all = encodePilotInput({
+      held: new Set(HELD_ACTIONS),
+      edges: new Set(EDGE_ACTIONS),
+    }) as number;
+    expect(all).toBeGreaterThan(0);
+    expect(all).toBeLessThan(INPUT_AI_CONTROL);
+  });
+
   it("carries turret aim to 1/65536 of a turn", () => {
     const decoded = decodePilotInput(
       encodePilotInput({ held: new Set(), edges: new Set(), aimRad: 1.234 }),

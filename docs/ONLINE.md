@@ -19,6 +19,9 @@ type an address: the relay URL is baked into the build. Design and measurements:
 - **Rooms by code** (5 characters, no look-alikes, e.g. `K7Q2X`) and **quick match**
   (pairs the two oldest players waiting on the same mode and build; 20 s ready check).
 - **Modes:** Dogfight 1v1 · Skirmish up to 2v2 · Scenario 1v1 · Reinforcements 1v1.
+  In the squad battles (every mode but Dogfight) a side is one faction: teammates fly the
+  same faction and the two teams different ones — the relay will not start a room that
+  breaks this and the lobby says why (READY stays disabled).
 - **Ready check + countdown** (3 s) → `match_start` with one seed, canonical seats and the
   input delay sized from everyone's ping.
 - **Heartbeat** (WebSocket ping every 5 s, drop after 15 s silence; clients ping every 2 s
@@ -30,6 +33,27 @@ type an address: the relay URL is baked into the build. Design and measurements:
   frames, strict schema validation of every message, token-bucket rate limits per message
   type (inputs 160/s, chat 1/s, …), repeat offenders closed (4008).
 - **Health:** `GET /healthz` → `{"status":"ok","protocol":1,"rooms":…,"matches":…,"desyncs":…}`.
+
+## Online battles (how a match plays)
+
+- The lobby starts the battle scene with the relay's match (canonical seats, seed, input
+  delay): DogfightScene for duels, ArcadeBattleScene for Skirmish / Scenario /
+  Reinforcements. Seat 0's side is the simulation's "player" side on every client; the
+  camera, HUD, colours and end screen show each client its own seat.
+- Every client simulates every seat at 60 Hz from the same inputs (`OnlineBattleLink` →
+  `LockstepSession`). Each seat's pilot (flight, weapon keys, squad mark, crew stations)
+  flies from its input stream; a reinforcement pick travels as an input command, and the
+  picker's 5 s auto-accept runs on the simulation clock. A seat whose ship is lost takes
+  the next ship its faction deploys.
+- A player who drops or leaves is flown by the same bot on every client (the relay's
+  AI-control fill); a notice says so, and they rejoin through a snapshot (ONLINE again
+  after a reload, within the 30 s window). Nobody can pause a shared battle: PAUSE offers
+  to leave the match.
+- Every tick each client hashes its state; every 30 ticks the hashes go to the relay. A
+  mismatch triggers a resync: the authority's snapshot (StateGraph of the simulation
+  objects, LZ77-packed) replaces the diverged client's state.
+- Results are reported by team; the relay ends the match and the room returns to the lobby
+  (REMATCH = back to the room).
 
 ## Configuration
 
@@ -100,6 +124,9 @@ npm run dev                 # game; dev builds connect to localhost:8080 by defa
 Open two browser windows (or one normal + one private, so they get separate sessions),
 choose ONLINE, then QUICK MATCH in both, or CREATE ROOM + JOIN BY CODE.
 
+Simulate a real network between two local windows with `?netsim=latency,jitter,loss`
+(one-way client↔relay, ms / ms / 0–1), e.g. `/?netsim=40,15` or `/?netsim=60,25,0.01`.
+
 Container check (needs Docker running):
 ```sh
 docker build -f server/Dockerfile -t ss-relay .
@@ -116,6 +143,10 @@ docker run --rm -p 8080:8080 -e ALLOWED_ORIGINS=http://localhost:3000 ss-relay
   page reload).
 - Integration (real sockets): `npx vitest run tests/integration/relay_server.test.ts`.
 - E2E (two browser contexts against an in-process relay): `npx playwright test tests/e2e/online-lobby.spec.ts`.
+- Battles, e2e: `npx playwright test tests/e2e/online-battle.spec.ts` — two browsers behind
+  `?netsim=40,15` play a minute of Dogfight, Skirmish and Reinforcements and must hash
+  identically on every common tick; a deliberately corrupted client must be caught by the
+  hashes and healed by the authority's snapshot.
 - Netcode measurements behind ADR-0005: `npm run measure:net`.
 
 ## Operations

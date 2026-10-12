@@ -4,7 +4,7 @@
  * Tests for the seeded and non-seeded random number generators.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   createSeededRng,
   createRng,
@@ -12,16 +12,16 @@ import {
   getDefaultRng,
   random,
   type RandomGenerator,
-} from '../../../src/utils/random';
+} from "../../../src/utils/random";
 
-describe('Random', () => {
-  describe('createSeededRng', () => {
-    it('should create a random generator with given seed', () => {
+describe("Random", () => {
+  describe("createSeededRng", () => {
+    it("should create a random generator with given seed", () => {
       const rng = createSeededRng(12345);
       expect(rng.getSeed()).toBe(12345);
     });
 
-    it('should produce deterministic results with same seed', () => {
+    it("should produce deterministic results with same seed", () => {
       const rng1 = createSeededRng(42);
       const rng2 = createSeededRng(42);
 
@@ -31,7 +31,7 @@ describe('Random', () => {
       expect(values1).toEqual(values2);
     });
 
-    it('should produce different results with different seeds', () => {
+    it("should produce different results with different seeds", () => {
       const rng1 = createSeededRng(1);
       const rng2 = createSeededRng(2);
 
@@ -41,8 +41,8 @@ describe('Random', () => {
       expect(value1).not.toBe(value2);
     });
 
-    describe('next()', () => {
-      it('should return values between 0 and 1', () => {
+    describe("next()", () => {
+      it("should return values between 0 and 1", () => {
         const rng = createSeededRng(999);
 
         for (let i = 0; i < 100; i++) {
@@ -52,7 +52,7 @@ describe('Random', () => {
         }
       });
 
-      it('should produce varied distribution', () => {
+      it("should produce varied distribution", () => {
         const rng = createSeededRng(123);
         const values = new Set<number>();
 
@@ -65,8 +65,8 @@ describe('Random', () => {
       });
     });
 
-    describe('nextInt()', () => {
-      it('should return integers in range', () => {
+    describe("nextInt()", () => {
+      it("should return integers in range", () => {
         const rng = createSeededRng(456);
 
         for (let i = 0; i < 100; i++) {
@@ -77,13 +77,13 @@ describe('Random', () => {
         }
       });
 
-      it('should return min when min equals max', () => {
+      it("should return min when min equals max", () => {
         const rng = createSeededRng(789);
         const value = rng.nextInt(7, 7);
         expect(value).toBe(7);
       });
 
-      it('should cover entire range', () => {
+      it("should cover entire range", () => {
         const rng = createSeededRng(111);
         const values = new Set<number>();
 
@@ -97,10 +97,10 @@ describe('Random', () => {
       });
     });
 
-    describe('pick()', () => {
-      it('should return element from array', () => {
+    describe("pick()", () => {
+      it("should return element from array", () => {
         const rng = createSeededRng(222);
-        const array = ['a', 'b', 'c', 'd', 'e'];
+        const array = ["a", "b", "c", "d", "e"];
 
         for (let i = 0; i < 50; i++) {
           const picked = rng.pick(array);
@@ -108,13 +108,13 @@ describe('Random', () => {
         }
       });
 
-      it('should return undefined for empty array', () => {
+      it("should return undefined for empty array", () => {
         const rng = createSeededRng(333);
         const picked = rng.pick([]);
         expect(picked).toBeUndefined();
       });
 
-      it('should pick different elements over time', () => {
+      it("should pick different elements over time", () => {
         const rng = createSeededRng(444);
         const array = [1, 2, 3, 4, 5];
         const picks = new Set<number>();
@@ -129,8 +129,8 @@ describe('Random', () => {
       });
     });
 
-    describe('shuffle()', () => {
-      it('should return array with same elements', () => {
+    describe("shuffle()", () => {
+      it("should return array with same elements", () => {
         const rng = createSeededRng(555);
         const original = [1, 2, 3, 4, 5];
         const array = [...original];
@@ -140,7 +140,7 @@ describe('Random', () => {
         expect(array.sort()).toEqual(original.sort());
       });
 
-      it('should shuffle in place', () => {
+      it("should shuffle in place", () => {
         const rng = createSeededRng(666);
         const array = [1, 2, 3, 4, 5];
         const result = rng.shuffle(array);
@@ -148,7 +148,7 @@ describe('Random', () => {
         expect(result).toBe(array);
       });
 
-      it('should produce deterministic shuffle with same seed', () => {
+      it("should produce deterministic shuffle with same seed", () => {
         const rng1 = createSeededRng(777);
         const rng2 = createSeededRng(777);
 
@@ -161,14 +161,14 @@ describe('Random', () => {
         expect(array1).toEqual(array2);
       });
 
-      it('should handle single element array', () => {
+      it("should handle single element array", () => {
         const rng = createSeededRng(888);
         const array = [42];
         rng.shuffle(array);
         expect(array).toEqual([42]);
       });
 
-      it('should handle empty array', () => {
+      it("should handle empty array", () => {
         const rng = createSeededRng(999);
         const array: number[] = [];
         rng.shuffle(array);
@@ -176,18 +176,18 @@ describe('Random', () => {
       });
     });
 
-    describe('chance()', () => {
-      it('should return true for probability 1', () => {
+    describe("chance()", () => {
+      it("should return true for probability 1", () => {
         const rng = createSeededRng(1010);
         expect(rng.chance(1)).toBe(true);
       });
 
-      it('should return false for probability 0', () => {
+      it("should return false for probability 0", () => {
         const rng = createSeededRng(1111);
         expect(rng.chance(0)).toBe(false);
       });
 
-      it('should respect probability distribution', () => {
+      it("should respect probability distribution", () => {
         const rng = createSeededRng(1212);
         let trueCount = 0;
         const trials = 1000;
@@ -203,18 +203,18 @@ describe('Random', () => {
     });
   });
 
-  describe('createRng', () => {
-    it('should create a random generator', () => {
+  describe("createRng", () => {
+    it("should create a random generator", () => {
       const rng = createRng();
-      expect(typeof rng.next()).toBe('number');
+      expect(typeof rng.next()).toBe("number");
     });
 
-    it('should have a seed', () => {
+    it("should have a seed", () => {
       const rng = createRng();
-      expect(typeof rng.getSeed()).toBe('number');
+      expect(typeof rng.getSeed()).toBe("number");
     });
 
-    it('should produce values between 0 and 1', () => {
+    it("should produce values between 0 and 1", () => {
       const rng = createRng();
 
       for (let i = 0; i < 10; i++) {
@@ -224,7 +224,7 @@ describe('Random', () => {
       }
     });
 
-    it('should have working nextInt', () => {
+    it("should have working nextInt", () => {
       const rng = createRng();
 
       for (let i = 0; i < 10; i++) {
@@ -234,9 +234,9 @@ describe('Random', () => {
       }
     });
 
-    it('should have working pick', () => {
+    it("should have working pick", () => {
       const rng = createRng();
-      const array = ['x', 'y', 'z'];
+      const array = ["x", "y", "z"];
 
       for (let i = 0; i < 10; i++) {
         const picked = rng.pick(array);
@@ -244,7 +244,7 @@ describe('Random', () => {
       }
     });
 
-    it('should have working shuffle', () => {
+    it("should have working shuffle", () => {
       const rng = createRng();
       const array = [1, 2, 3];
       const original = [...array];
@@ -254,14 +254,14 @@ describe('Random', () => {
       expect(array.sort()).toEqual(original);
     });
 
-    it('should have working chance', () => {
+    it("should have working chance", () => {
       const rng = createRng();
       expect(rng.chance(1)).toBe(true);
       expect(rng.chance(0)).toBe(false);
     });
   });
 
-  describe('Default RNG', () => {
+  describe("Default RNG", () => {
     let originalRng: RandomGenerator;
 
     beforeEach(() => {
@@ -272,13 +272,13 @@ describe('Random', () => {
       setDefaultRng(originalRng);
     });
 
-    it('should get default RNG', () => {
+    it("should get default RNG", () => {
       const rng = getDefaultRng();
       expect(rng).toBeDefined();
-      expect(typeof rng.next).toBe('function');
+      expect(typeof rng.next).toBe("function");
     });
 
-    it('should set default RNG', () => {
+    it("should set default RNG", () => {
       const customRng = createSeededRng(99999);
       setDefaultRng(customRng);
 
@@ -286,7 +286,7 @@ describe('Random', () => {
     });
   });
 
-  describe('random convenience object', () => {
+  describe("random convenience object", () => {
     let originalRng: RandomGenerator;
 
     beforeEach(() => {
@@ -299,31 +299,31 @@ describe('Random', () => {
       setDefaultRng(originalRng);
     });
 
-    it('should have next()', () => {
+    it("should have next()", () => {
       const value = random.next();
       expect(value).toBeGreaterThanOrEqual(0);
       expect(value).toBeLessThan(1);
     });
 
-    it('should have nextInt()', () => {
+    it("should have nextInt()", () => {
       const value = random.nextInt(1, 6);
       expect(value).toBeGreaterThanOrEqual(1);
       expect(value).toBeLessThanOrEqual(6);
     });
 
-    it('should have pick()', () => {
-      const array = ['a', 'b', 'c'];
+    it("should have pick()", () => {
+      const array = ["a", "b", "c"];
       const picked = random.pick(array);
       expect(array).toContain(picked);
     });
 
-    it('should have shuffle()', () => {
+    it("should have shuffle()", () => {
       const array = [1, 2, 3];
       random.shuffle(array);
       expect(array.sort()).toEqual([1, 2, 3]);
     });
 
-    it('should have chance()', () => {
+    it("should have chance()", () => {
       expect(random.chance(1)).toBe(true);
       expect(random.chance(0)).toBe(false);
     });

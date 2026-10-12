@@ -29,6 +29,7 @@ import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
+import { hullFractionOf } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
 import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import {
@@ -37,7 +38,7 @@ import {
   evaluateQuality,
   type PerformanceState,
 } from "../systems/PerformanceSystem";
-import type { ManeuverDefinition, ManeuverDirection } from "../core/types";
+import type { ManeuverDefinition } from "../core/types";
 import {
   createCycleFlight,
   tickCycleFlight,
@@ -46,7 +47,6 @@ import {
 import { PlayerFlightPilot } from "../arcade/systems/PlayerFlightPilot";
 import { difficultyToTier, type BotContact } from "../arcade/ai";
 import { DuelBotCrew } from "../arcade/systems/DuelBotCrew";
-import { shiftMotion } from "../arcade/systems/ShipMotion";
 import type { FlightEvent } from "../arcade/systems/PilotFlightTypes";
 import { playFlightEventFx } from "../arcade/ArcadeFX";
 import {
@@ -117,7 +117,6 @@ import {
 } from "../core/CombatModifiers";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { PauseMenu } from "../ui/PauseMenu";
-import { networkService } from "../services/NetworkService";
 import { InputManager } from "../input/InputManager";
 import { openSettingsOverBattle } from "./battleUi/openSettingsOverBattle";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
@@ -127,18 +126,37 @@ import {
   trackModeStart,
 } from "../telemetry/telemetry";
 import { matchStats } from "../telemetry/matchTelemetry";
-import {
-  random,
-  setDefaultRng,
-  createSeededRng,
-  createRng,
-} from "../utils/random";
+import { random, setDefaultRng, createRng } from "../utils/random";
 import {
   createSideScore,
   creditKill,
   resolveByPoints,
   type SideScore,
 } from "../systems/arena/BattleScore";
+import type { OnlineDogfightInit } from "../net/lobby/matchSetup";
+import { getOnlineSession } from "../net/lobby/createOnlineSession";
+import {
+  startOnlineBattle,
+  type OnlineBattleDebug,
+  type OnlineBattleLink,
+} from "../net/battle/OnlineBattleLink";
+import type { LockstepSimulation } from "../net/lockstep/types";
+import { captureGraph, restoreGraph } from "../net/lockstep/StateGraph";
+import { StateHasher } from "../net/lockstep/StateHasher";
+import { TICK_MS, type TickInput } from "../net/protocol";
+import {
+  DogfightOnline,
+  type DuelRoundResult,
+  type DuelTimerKind,
+} from "./duel/online/DogfightOnline";
+import { ROUND_BANNER_MS } from "./duel/DuelBanner";
+import { ONLINE_GRAPH_OPTIONS } from "./online/onlineGraph";
+import { OnlineNoticeView } from "./online/OnlineNoticeView";
+import {
+  confirmLeaveOnlineBattle,
+  ONLINE_LOBBY_SCENE,
+} from "./online/onlineExit";
+import { addOrdnance, addShip } from "./online/battleHash";
 
 interface DogfightShip {
   id: string;
@@ -172,20 +190,6 @@ interface Pose {
   readonly angle: number;
 }
 
-/**
- * Shortest signed displacement between two coordinates on the torus.
- * @param delta - Raw difference (px).
- * @returns The equivalent difference in [-size/2, size/2).
- */
-function torusDelta(delta: number): number {
-  const half = BATTLEFIELD_SIZE / 2;
-  return (
-    ((((delta + half) % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
-      BATTLEFIELD_SIZE) -
-    half
-  );
-}
-
 interface ShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
 }
@@ -202,6 +206,8 @@ const QUICK_BUILD_CHOOSER_W = 290;
 /** Round time limit (s). */
 const ROUND_TIME_S = 180;
 const MS_PER_S = 1000;
+/** Pause between a round's result banner and the next round / match end (ms). */
+const ROUND_RESULT_PAUSE_MS = 2000;
 /** Round result banners. */
 const RESULT_BANNERS = {
   player_win: { text: "VICTORY!", color: HOLO_PALETTE.success },
@@ -291,41 +297,46 @@ export class DogfightScene extends Phaser.Scene {
   /** InputManager.on() subscription ids, unsubscribed in shutdown() to avoid duplicate callbacks after scene.restart(). */
   private inputSubscriptionIds: number[] = [];
 
-  // Online multiplayer (networked 1v1 — see setupNetworking()/onRemoteAction()).
-  // Each client is authoritative for its own ship's input and for combat
-  // rolls it initiates as attacker; the opponent's ship is driven entirely
-  // by network messages instead of local AI/RNG.
-  private isOnlineMode = false;
-  private onlineSeed = 0;
-  private lastSentManeuver: { dir: ManeuverDirection; speed: number } | null =
-    null;
+  // Online duel (input lockstep through the relay): every client simulates
+  // both seats from the same seed and inputs; only presentation reads the
+  // local seat. Null offline.
+  private online: DogfightOnline | null = null;
+  private net: OnlineBattleLink | null = null;
+  private notices: OnlineNoticeView | null = null;
+  private leaveDialogOpen = false;
+  /** Simulation time (ms): scene time offline, tick × TICK_MS online. */
+  private simNowMs = 0;
+  /** This scene as the lockstep session's simulation. */
+  private readonly lockstep: LockstepSimulation = {
+    step: (tick, inputs) => this.stepOnline(tick, inputs),
+    hash: (tick) => this.hashOnline(tick),
+    snapshot: () => captureGraph(this.simGraph(), ONLINE_GRAPH_OPTIONS),
+    restore: (_tick, data) => this.restoreOnline(data),
+  };
 
   constructor() {
     super({ key: "DogfightScene" });
   }
 
   /**
-   * Receives online-match config from LobbyScene's `scene.start("DogfightScene", data)`.
-   * Absent/undefined `isOnlineMode` means a normal local match — every field
-   * keeps its class-level default in that case.
+   * LobbyScene starts an online duel with an OnlineDogfightInit (canonical
+   * seats, local seat, seed); any other start is a local match.
+   *
+   * @param data - Scene data.
    */
-  init(
-    data: {
-      isOnlineMode?: boolean;
-      seed?: number;
-      localFactionId?: FactionId;
-      localShipId?: string;
-      opponentFactionId?: FactionId;
-      opponentShipId?: string;
-    } = {},
-  ): void {
-    if (!data.isOnlineMode) return;
-    this.isOnlineMode = true;
-    this.onlineSeed = data.seed ?? 0;
-    this.playerFaction = data.localFactionId ?? this.playerFaction;
-    this.playerShipId = data.localShipId ?? this.playerShipId;
-    this.enemyFaction = data.opponentFactionId ?? this.enemyFaction;
-    this.enemyShipId = data.opponentShipId ?? this.enemyShipId;
+  init(data: Partial<OnlineDogfightInit> = {}): void {
+    this.online = null;
+    if (!data.online || !data.seats || data.seed === undefined) return;
+    this.online = new DogfightOnline(data as OnlineDogfightInit);
+    const [first, second] = data.seats;
+    if (!first || !second) return;
+    this.playerFaction = first.faction;
+    this.playerShipId = first.shipId;
+    this.enemyFaction = second.faction;
+    this.enemyShipId = second.shipId;
+    this.playerBuilds = null;
+    this.difficulty = "normal";
+    this.matchFormat = "best_of_3";
   }
 
   create(): void {
@@ -362,14 +373,16 @@ export class DogfightScene extends Phaser.Scene {
     this.background.startShootingStars();
 
     this.resetMatchState();
-    this.weapons = createSceneWeapons(this, this.weaponsLink(), this.hitLedger);
+    this.weapons = createSceneWeapons(
+      this,
+      this.weaponsLink(),
+      this.hitLedger,
+      this.online === null,
+    );
 
-    if (this.isOnlineMode) {
-      // Both players already picked faction/ship in the lobby — skip the
-      // local setup screen and seed the shared RNG for deterministic rolls.
-      setDefaultRng(createSeededRng(this.onlineSeed));
-      this.setupNetworking();
-      this.startMatch();
+    if (this.online) {
+      // Both players picked their ships in the lobby: no setup screen.
+      this.startOnline(this.online);
     } else {
       this.difficulty =
         this.difficultyDefault.next(defaultDifficulty()) ?? this.difficulty;
@@ -396,7 +409,7 @@ export class DogfightScene extends Phaser.Scene {
     this.cameras.main.centerOn(BATTLEFIELD_SIZE / 2, BATTLEFIELD_SIZE / 2);
   }
 
-  /** Unregisters network listeners and resets the shared RNG so a fixed battle seed never leaks into whatever plays next. */
+  /** Unregisters input and the online link, and resets the shared RNG so a fixed battle seed never leaks into whatever plays next. */
   shutdown(): void {
     this.inputSubscriptionIds.forEach((id) => InputManager.off(id));
     this.inputSubscriptionIds = [];
@@ -407,61 +420,231 @@ export class DogfightScene extends Phaser.Scene {
     this.weapons?.destroy();
     this.weapons = null;
     this.hitLedger.clear();
-    if (this.isOnlineMode) {
-      networkService.off("game_action", this.onRemoteAction, this);
-      networkService.off(
-        "player_disconnected",
-        this.onOpponentDisconnected,
-        this,
-      );
-      setDefaultRng(createRng());
-    }
+    if (!this.online) return;
+    this.net?.dispose();
+    this.net = null;
+    this.notices?.destroy();
+    this.notices = null;
+    this.online.dispose();
+    setDefaultRng(createRng());
+    // Phaser keeps the last start data: a later local duel must not replay this match.
+    this.sys.settings.data = {};
   }
 
-  private setupNetworking(): void {
-    networkService.on("game_action", this.onRemoteAction, this);
-    networkService.on("player_disconnected", this.onOpponentDisconnected, this);
-  }
-
-  private onOpponentDisconnected(): void {
-    if (this.matchComplete) return;
-    this.matchComplete = true;
-    this.showRoundResult("OPPONENT DISCONNECTED", HOLO_PALETTE.warning);
+  /** @returns The online link's diagnostics (e2e), or null offline. */
+  get onlineDebug(): OnlineBattleDebug | null {
+    return this.net?.debug ?? null;
   }
 
   /**
-   * Applies state received from the opponent's client. Maneuver messages
-   * describe the SENDER's own ship and are always applied to the local
-   * `enemyShipIds[0]` slot (which represents the opponent regardless of
-   * which faction/ship they picked). `combat_result` carries the outcome
-   * of a roll the opponent already computed as attacker — applied directly
-   * instead of re-rolling locally, since two clients rolling independent
-   * dice for the same shot could disagree and desync hull/shield state.
+   * Builds the online duel and joins the relay's lockstep session: the
+   * match RNG, the link, round 1; the relay starts the clock once both
+   * clients report loaded.
+   *
+   * @param online - The online seats.
    */
-  private onRemoteAction(payload: unknown): void {
-    if (!this.isOnlineMode) return;
-    const msg = payload as { type: string; data?: Record<string, unknown> };
-
-    switch (msg.type) {
-      case "maneuver": {
-        const opponent = this.ships.get(this.enemyShipIds[0] ?? "");
-        if (!opponent) return;
-        this.applyRemoteManeuver(opponent, msg.data ?? {});
-        break;
-      }
-      case "combat_result": {
-        const localShip = this.ships.get(this.playerShipIds[0] ?? "");
-        const hullAfter = msg.data?.hullAfter as number | undefined;
-        const shieldsAfter = msg.data?.shieldsAfter as number | undefined;
-        if (localShip && typeof hullAfter === "number") {
-          localShip.hull = hullAfter;
-          localShip.shields = shieldsAfter ?? localShip.shields;
-          const healthBar = this.healthBars.get(localShip.id);
-          healthBar?.update(localShip.hull, localShip.shields);
-        }
-        break;
-      }
+  private startOnline(online: DogfightOnline): void {
+    setDefaultRng(online.rng);
+    this.notices = new OnlineNoticeView(this);
+    this.net = startOnlineBattle(getOnlineSession(this.registry), {
+      intents: InputManager,
+      onNotice: (notice) => this.notices?.show(notice),
+      onMatchEnd: () => {
+        if (!this.matchComplete) this.endMatch();
+      },
+    });
+    if (!this.net) {
+      this.scene.start(ONLINE_LOBBY_SCENE);
+      return;
     }
+    this.startMatch();
+    this.net.markLoaded();
+  }
+
+  /**
+   * One lockstep tick: every seat's input, the round flow on the sim clock,
+   * then the same simulation the local duel runs per frame.
+   *
+   * @param tick - The tick.
+   * @param inputs - Every seat's input.
+   */
+  private stepOnline(tick: number, inputs: readonly TickInput[]): void {
+    const online = this.online;
+    if (!online) return;
+    online.nowMs = tick * TICK_MS;
+    this.simNowMs = online.nowMs;
+    online.feed(inputs);
+    for (const kind of online.takeDue()) this.runRoundEvent(kind);
+    if (this.matchComplete) return;
+    this.simulate(TICK_MS, online.nowMs);
+  }
+
+  /** @param kind - A round-flow event that fell due. */
+  private runRoundEvent(kind: DuelTimerKind): void {
+    if (kind === "round_live") this.isRoundActive = true;
+    else if (kind === "next_round") this.startNextRound();
+    else this.endMatch();
+  }
+
+  /**
+   * After a round-flow delay: on the sim clock online, scene time offline.
+   *
+   * @param delayMs - Delay (ms).
+   * @param kind - What happens then.
+   */
+  private after(delayMs: number, kind: DuelTimerKind): void {
+    if (this.online) this.online.schedule(delayMs, kind);
+    else this.time.delayedCall(delayMs, () => this.runRoundEvent(kind));
+  }
+
+  /** @returns Fingerprint of the duel (ships, ordnance, round, RNG). */
+  private hashOnline(tick: number): number {
+    const h = new StateHasher()
+      .addInt(tick)
+      .addInt(this.currentRound)
+      .addInt(this.playerWins)
+      .addInt(this.enemyWins)
+      .addInt(this.roundTimeRemaining)
+      .addBool(this.isRoundActive)
+      .addString(this.roundResult)
+      .addInt(this.online?.rng.getState() ?? 0);
+    for (const ship of this.ships.values()) {
+      addShip(h, ship, [
+        ship.flight.motion.control,
+        ship.flight.stress,
+        { cooldown: ship.weaponCooldown, frenzy: ship.frenzyUntilMs },
+      ]);
+    }
+    const runtime = this.weapons?.runtime;
+    if (runtime) addOrdnance(h, runtime.shotsInFlight, runtime.devicesOnField);
+    return h.digest();
+  }
+
+  /** @returns Every simulation object of the duel (snapshot root). */
+  private simGraph() {
+    const online = this.online;
+    return {
+      ships: this.ships,
+      crew: this.crew,
+      weapons: this.weapons?.simulation ?? null,
+      ledger: this.hitLedger,
+      repair: this.repairFeedback?.mechanic ?? null,
+      auras: this.auras,
+      seats: online?.seats ?? [],
+      pilots: online?.pilots ?? [],
+      rng: online?.rng ?? null,
+      clock: { nowMs: online?.nowMs ?? 0, timers: online?.timers ?? [] },
+      duel: {
+        playerWins: this.playerWins,
+        enemyWins: this.enemyWins,
+        currentRound: this.currentRound,
+        roundTimeRemaining: this.roundTimeRemaining,
+        isRoundActive: this.isRoundActive,
+        roundResult: this.roundResult,
+        playerSideScore: this.playerSideScore,
+        enemySideScore: this.enemySideScore,
+        lastSecondTime: this.lastSecondTime,
+        matchComplete: this.matchComplete,
+        playerShipIds: this.playerShipIds,
+        enemyShipIds: this.enemyShipIds,
+      },
+    };
+  }
+
+  /** @param data - The authority's snapshot: jump to it and redraw. */
+  private restoreOnline(data: string): void {
+    const live = this.simGraph();
+    const r = restoreGraph(live, data, ONLINE_GRAPH_OPTIONS)
+      .root as typeof live;
+    this.crew = r.crew;
+    this.auras = r.auras;
+    if (this.online) {
+      this.online.nowMs = r.clock.nowMs;
+      this.online.timers = r.clock.timers;
+    }
+    Object.assign(this, r.duel);
+    this.syncPresentation();
+  }
+
+  /** Sprites, overlays and the scoreboard for the ships a snapshot left. */
+  private syncPresentation(): void {
+    for (const [id, sprite] of this.shipSprites) {
+      if (this.ships.has(id)) continue;
+      sprite.destroy();
+      this.shipSprites.delete(id);
+      this.healthBars.get(id)?.destroy();
+      this.healthBars.delete(id);
+    }
+    for (const ship of this.ships.values()) {
+      if (!this.shipSprites.has(ship.id)) this.createShipSprite(ship);
+      if (!this.isLocalShip(ship) && !this.healthBars.has(ship.id))
+        this.createHealthBar(ship);
+      this.shipSprites.get(ship.id)?.setPosition(ship.x, ship.y);
+      this.healthBars.get(ship.id)?.update(ship.hull, ship.shields);
+    }
+    this.hud?.setRound(this.currentRound);
+    this.updateTimerDisplay();
+    this.updateScoreDisplay();
+  }
+
+  /** PAUSE online: the shared battle never pauses — offer to leave instead. */
+  private askLeaveOnline(): void {
+    if (!this.net || this.leaveDialogOpen || this.matchComplete) return;
+    const zoom = this.cameras.main.zoom;
+    confirmLeaveOnlineBattle(this, this.net, {
+      onOpen: () => {
+        this.leaveDialogOpen = true;
+        this.cameras.main.setZoom(1);
+      },
+      onClose: () => {
+        this.leaveDialogOpen = false;
+        this.cameras.main.setZoom(zoom);
+      },
+    });
+  }
+
+  /** @param ship - A ship. @returns Whether this client flies it (camera, HUD, own colours). */
+  private isLocalShip(ship: DogfightShip): boolean {
+    return this.online
+      ? ship.id === this.online.localShipId
+      : ship.owner === PLAYER_SIDE;
+  }
+
+  /** @returns The ship this client flies. */
+  private localShipId(): string {
+    return this.online?.localShipId ?? this.playerShipIds[0] ?? "";
+  }
+
+  /** @returns The side this client flies (HUD allies, marks). */
+  private localSide(): string {
+    return this.online?.localSide ?? PLAYER_SIDE;
+  }
+
+  /** @returns The faction this client flies (accent, music). */
+  private localFaction(): FactionId {
+    const seat = this.online?.seat(this.online.localSeat);
+    return seat?.faction ?? this.playerFaction;
+  }
+
+  /** @param ship - A ship. @returns Whether it flies on this client's side (telemetry). */
+  private isFriendly(ship: DogfightShip): boolean {
+    return ship.owner === this.localSide();
+  }
+
+  /**
+   * @param shipId - A ship.
+   * @returns Whether a human flies it now (online: its seat, unless the
+   *   relay handed the seat to the AI; offline: the player's ship).
+   */
+  private isHumanFlown(shipId: string): boolean {
+    if (this.online) return this.online.isHumanFlown(shipId);
+    return shipId === this.playerShipIds[0];
+  }
+
+  /** @param shipId - A ship. @returns The human pilot controls flying it, or null. */
+  private humanPilotOf(shipId: string): PlayerFlightPilot | null {
+    if (this.online) return this.online.pilotFor(shipId);
+    return shipId === this.playerShipIds[0] ? this.pilot : null;
   }
 
   /**
@@ -483,7 +666,6 @@ export class DogfightScene extends Phaser.Scene {
     this.playerShipIds = [];
     this.enemyShipIds = [];
     this.setupObjects = [];
-    this.lastSentManeuver = null;
     this.hud = null;
     this.hitLedger.clear();
   }
@@ -502,6 +684,7 @@ export class DogfightScene extends Phaser.Scene {
     this.enemySideScore = createSideScore();
     this.isPaused = false;
     this.pilot.reset();
+    this.online?.resetPilots();
     this.hitLedger.clear();
     this.weapons?.runtime.clear();
     this.crew = null;
@@ -510,19 +693,18 @@ export class DogfightScene extends Phaser.Scene {
   /**
    * The round's crew: a bot for the AI opponent at the difficulty's tier
    * (easy = novice, normal = average, hard = expert, brutal = expert with
-   * faster reactions). Online the opponent is a remote human — no bot.
+   * faster reactions). Online both ships get a bot that flies only while
+   * the relay hands that seat to the AI (its player dropped or left).
    *
    * @returns The crew for the ships just spawned.
    */
   private createCrew(): DuelBotCrew {
-    const aiSkill = this.isOnlineMode
-      ? null
-      : difficultyToTier(this.difficulty);
+    const aiSkill = difficultyToTier(this.difficulty);
     return new DuelBotCrew({
       roster: [...this.ships.values()].map((ship) => ({
         shipId: ship.id,
         side: ship.owner,
-        skill: ship.owner === "ai" ? aiSkill : null,
+        skill: this.online || ship.owner === "ai" ? aiSkill : null,
       })),
       playerSide: PLAYER_SIDE,
       random: () => random.next(),
@@ -683,20 +865,18 @@ export class DogfightScene extends Phaser.Scene {
     this.setupObjects.forEach((o) => o.destroy());
     this.setupObjects = [];
     this.isSetupPhase = false;
-    trackModeStart("dogfight", {
-      difficulty: this.difficulty,
-      online: this.isOnlineMode,
-    });
+    const online = this.online !== null;
+    trackModeStart("dogfight", { difficulty: this.difficulty, online });
     matchStats.start(
       "dogfight",
-      { difficulty: this.difficulty, online: this.isOnlineMode },
+      { difficulty: this.difficulty, online },
       this.events,
     );
 
-    audioManager.playBattleMusic("dogfight", this.playerFaction);
+    audioManager.playBattleMusic("dogfight", this.localFaction());
 
     this.hud = new DuelHud(this, {
-      accent: factionAccent(this.playerFaction),
+      accent: factionAccent(this.localFaction()),
       scoreColors: [SIDE_COLORS.player, SIDE_COLORS.enemy],
     });
     this.setupInput();
@@ -738,7 +918,7 @@ export class DogfightScene extends Phaser.Scene {
 
     // Tighter zoom for dogfight — applied here, not at setup-screen time (see create()).
     this.cameras.main.setZoom(1.1);
-    const playerSprite = this.shipSprites.get(this.playerShipIds[0] ?? "");
+    const playerSprite = this.shipSprites.get(this.localShipId());
     if (playerSprite) {
       this.cameraVirtualX = playerSprite.x;
       this.cameraVirtualY = playerSprite.y;
@@ -750,8 +930,13 @@ export class DogfightScene extends Phaser.Scene {
     }
   }
 
-  /** The ROUND N banner; weapons go live once it has faded. */
+  /** The ROUND N banner; weapons go live once it has faded (online: on the sim clock). */
   private showRoundStart(): void {
+    if (this.online) {
+      this.hud?.showRoundBanner(this.currentRound, () => undefined);
+      this.after(ROUND_BANNER_MS, "round_live");
+      return;
+    }
     this.hud?.showRoundBanner(this.currentRound, () => {
       this.isRoundActive = true;
     });
@@ -762,79 +947,160 @@ export class DogfightScene extends Phaser.Scene {
     // Mix every positional sound relative to what the player is
     // looking at, so a distant firefight sounds distant.
     syncListenerToCamera(this.cameras.main);
+    if (this.online) {
+      this.updateOnline(delta, time);
+      return;
+    }
     if (this.isSetupPhase || this.isPaused || this.matchComplete) return;
+    this.updatePresentationQuality(time, delta);
+    this.simulate(delta, time);
+    this.updateSprites();
+    this.updateCameraFollow();
+    this.updateHud();
+  }
+
+  /**
+   * Online frame: the lockstep session runs every due tick (stepOnline),
+   * then the frame draws the result from the local seat's point of view.
+   *
+   * @param delta - Frame length (ms).
+   * @param time - Scene time (ms).
+   */
+  private updateOnline(delta: number, time: number): void {
+    this.notices?.update();
+    if (this.isSetupPhase || this.matchComplete || !this.net) return;
+    this.net.frame(delta, this.lockstep);
+    if (this.matchComplete) return;
+    this.updatePresentationQuality(time, delta);
+    this.updateSprites();
+    this.updateCameraFollow();
+    this.updateHud();
+  }
+
+  /** Adaptive effect quality and the parallax background (presentation). */
+  private updatePresentationQuality(time: number, delta: number): void {
     this.performanceState = updateFPS(this.performanceState, delta);
     this.performanceState = evaluateQuality(this.performanceState, time);
     this.effectsManager.setQualitySettings(
       this.performanceState.effectSettings,
     );
-
     this.background.update();
+  }
 
-    // Update timer
-    if (this.isRoundActive) {
-      if (time - this.lastSecondTime >= 1000) {
-        this.roundTimeRemaining--;
-        this.updateTimerDisplay();
-        this.lastSecondTime = time;
-
-        if (this.roundTimeRemaining <= 0) {
-          const outcome = resolveByPoints(
-            this.playerSideScore,
-            this.enemySideScore,
-          );
-          this.endRound(
-            outcome === "side1"
-              ? "player_win"
-              : outcome === "side2"
-                ? "enemy_win"
-                : "draw",
-          );
-          return;
-        }
-      }
-    }
-
-    this.updateAI(time, delta);
-    this.flyShips(delta);
+  /**
+   * The duel's simulation for one step: round clock, every pilot (human
+   * and bot), flight, weapons once the round is live, round end. Offline it
+   * runs per frame on scene time; online per lockstep tick on the sim clock.
+   *
+   * @param deltaMs - Step length (ms).
+   * @param nowMs - Simulation time (ms).
+   */
+  private simulate(deltaMs: number, nowMs: number): void {
+    this.simNowMs = nowMs;
+    if (this.isRoundActive && this.tickRoundClock(nowMs)) return;
+    this.updateAI(deltaMs);
+    this.flyShips(deltaMs);
     // Ships close in during the ROUND banner; weapons go live with the round.
     if (this.isRoundActive) {
+      this.applySeatWeaponKeys(nowMs);
       // Secondaries first: a held or chosen launch is this cycle's attack.
-      this.weapons?.update(delta, this.time.now);
-      this.processCombat(delta);
+      this.weapons?.update(deltaMs, nowMs);
+      this.processCombat(deltaMs);
     }
-    this.updateSprites();
-    this.updateCameraFollow();
-    this.updateHud();
     this.checkRoundEnd();
+  }
+
+  /**
+   * The round clock, one second at a time; a timed-out round goes to the
+   * side that destroyed more squad points.
+   *
+   * @param nowMs - Simulation time (ms).
+   * @returns True when the round just ended on time.
+   */
+  private tickRoundClock(nowMs: number): boolean {
+    if (nowMs - this.lastSecondTime < MS_PER_S) return false;
+    this.roundTimeRemaining--;
+    this.updateTimerDisplay();
+    this.lastSecondTime = nowMs;
+    if (this.roundTimeRemaining > 0) return false;
+    const outcome = resolveByPoints(this.playerSideScore, this.enemySideScore);
+    this.endRound(
+      outcome === "side1"
+        ? "player_win"
+        : outcome === "side2"
+          ? "enemy_win"
+          : "draw",
+    );
+    return true;
+  }
+
+  /** Online: every human seat's weapon keys this tick (offline BattleWeapons reads InputManager). */
+  private applySeatWeaponKeys(nowMs: number): void {
+    const online = this.online;
+    if (!online) return;
+    online.seats.forEach((seat, index) => {
+      const shipId = online.shipIdOf(index);
+      const ship = this.ships.get(shipId);
+      if (!ship || ship.hull <= 0 || seat.aiControl) return;
+      this.weapons?.pilotKeys(
+        shipId,
+        (intent) => seat.pressed(intent),
+        nowMs,
+        index === online.localSeat,
+      );
+    });
   }
 
   /** Feeds the holographic HUD this frame's ships, camera and the player's mark. */
   private updateHud(): void {
-    const playerId = this.playerShipIds[0] ?? "";
+    const playerId = this.localShipId();
+    const side = this.localSide();
+    audioManager.reportPlayerHull(hullFractionOf(this.ships.get(playerId)));
     this.hud?.update(
       buildDuelHudSnapshot({
         ships: this.ships.values(),
         playerId,
-        isAlly: (ship) => ship.owner === PLAYER_SIDE,
+        isAlly: (ship) => ship.owner === side,
         camera: cameraViewFrom(this.cameras.main),
         worldSize: BATTLEFIELD_SIZE,
-        markedId: this.crew?.markedTargetOf(PLAYER_SIDE, this.time.now) ?? null,
+        markedId: this.crew?.markedTargetOf(side, this.simNowMs) ?? null,
         secondaryWeapons: this.weapons?.hudSlots() ?? [],
       }),
     );
   }
 
-  /** R / gamepad R3: the player marks the HUD's current target for their side. */
-  private markHudTarget(): void {
+  /**
+   * R / gamepad R3: a pilot marks their HUD's current target for their side.
+   *
+   * @param shipId - The marking pilot's ship.
+   * @param side - Its side.
+   */
+  private markHudTarget(shipId: string, side: string): void {
     const targetId = playerTargetId({
       ships: this.ships.values(),
-      playerId: this.playerShipIds[0] ?? "",
-      isAlly: (ship) => ship.owner === PLAYER_SIDE,
+      playerId: shipId,
+      isAlly: (ship) => ship.owner === side,
       worldSize: BATTLEFIELD_SIZE,
     });
-    if (targetId) this.crew?.markTarget(PLAYER_SIDE, targetId, this.time.now);
-    if (targetId) matchStats.record({ kind: "mark" });
+    if (targetId) this.crew?.markTarget(side, targetId, this.simNowMs);
+    if (targetId && side === this.localSide())
+      matchStats.record({ kind: "mark" });
+  }
+
+  /** Every human pilot's MARK_TARGET since the last step. */
+  private takeMarkRequests(): void {
+    const online = this.online;
+    if (!online) {
+      if (this.pilot.takeMarkRequest())
+        this.markHudTarget(this.playerShipIds[0] ?? "", PLAYER_SIDE);
+      return;
+    }
+    online.pilots.forEach((pilot, seat) => {
+      const shipId = online.shipIdOf(seat);
+      const ship = this.ships.get(shipId);
+      if (pilot.takeMarkRequest() && ship && this.isHumanFlown(shipId))
+        this.markHudTarget(shipId, ship.owner);
+    });
   }
 
   /**
@@ -843,7 +1109,7 @@ export class DogfightScene extends Phaser.Scene {
    * pinned to the battlefield center while the ship flies away.
    */
   private updateCameraFollow(): void {
-    const ship = this.ships.get(this.playerShipIds[0] ?? "");
+    const ship = this.ships.get(this.localShipId());
     if (!ship) return;
 
     let dx = ship.x - this.cameraVirtualX;
@@ -874,11 +1140,16 @@ export class DogfightScene extends Phaser.Scene {
     this.hud?.setClock(this.roundTimeRemaining * MS_PER_S);
   }
 
-  /** Best-of score; highlighted once either side is one round from the match. */
+  /** Best-of score (this client's side first); highlighted once either side is one round from the match. */
   private updateScoreDisplay(): void {
     const remaining =
       this.winsNeeded() - Math.max(this.playerWins, this.enemyWins);
-    this.hud?.setScore(this.playerWins, this.enemyWins, remaining === 1);
+    const flipped = (this.online?.localSeat ?? 0) !== 0;
+    this.hud?.setScore(
+      flipped ? this.enemyWins : this.playerWins,
+      flipped ? this.playerWins : this.enemyWins,
+      remaining === 1,
+    );
   }
 
   /** @returns Round wins that take the match. */
@@ -888,10 +1159,12 @@ export class DogfightScene extends Phaser.Scene {
 
   private setupInput(): void {
     setupSceneInput(this);
-    this.pilot.attach();
+    if (!this.online) this.pilot.attach();
     this.createPauseMenu();
     this.inputSubscriptionIds.push(
-      InputManager.on("PAUSE", () => this.togglePause()),
+      InputManager.on("PAUSE", () =>
+        this.online ? this.askLeaveOnline() : this.togglePause(),
+      ),
     );
 
     this.input.on(
@@ -977,19 +1250,16 @@ export class DogfightScene extends Phaser.Scene {
     };
     ship.modifiers = equipQuickBuild(ship, loadoutId);
     ship.flight = equipFlight(ship.flight, ship.modifiers);
-    // Online, each client arms (and fires the turret of) its own ship only.
-    if (!this.isOnlineMode || owner === "player") {
-      this.weapons?.equip(id, {
-        definitionId: defId,
-        loadoutId,
-        modifiers: ship.modifiers,
-      });
-    }
+    this.weapons?.equip(id, {
+      definitionId: defId,
+      loadoutId,
+      modifiers: ship.modifiers,
+    });
 
     this.ships.set(id, ship);
     matchStats.record({
       kind: "deploy",
-      friendly: owner === "player",
+      friendly: this.isFriendly(ship),
       shipId: id,
     });
 
@@ -1001,7 +1271,7 @@ export class DogfightScene extends Phaser.Scene {
 
     this.createShipSprite(ship);
     // The player's durability lives on the HUD status ring.
-    if (owner !== "player") this.createHealthBar(ship);
+    if (!this.isLocalShip(ship)) this.createHealthBar(ship);
   }
 
   private createShipSprite(ship: DogfightShip): void {
@@ -1020,7 +1290,7 @@ export class DogfightScene extends Phaser.Scene {
       faction: ship.faction,
       fallbackSizeName: sizeName,
       size,
-      isPlayer: ship.owner === "player",
+      isPlayer: this.isLocalShip(ship),
     });
 
     container.setAngle(ship.angle);
@@ -1033,7 +1303,7 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   private createHealthBar(ship: DogfightShip): void {
-    const isPlayers = ship.owner === "player";
+    const isPlayers = this.isFriendly(ship);
     const healthBar = new HealthBar({
       scene: this,
       x: ship.x,
@@ -1068,7 +1338,7 @@ export class DogfightScene extends Phaser.Scene {
       this.setFlight(ship, tick.state);
       this.repairFeedback?.selfRepair(ship, deltaMs);
       if (tick.completed) this.onCycleCommitted(ship, tick.state);
-      if (tick.completed && ship.owner === "player")
+      if (tick.completed && this.isLocalShip(ship))
         matchStats.record({
           kind: "cycle",
           dial: ship.dial,
@@ -1092,21 +1362,16 @@ export class DogfightScene extends Phaser.Scene {
 
   /**
    * A ship's maneuver cycle committed: its pilot (human or bot) learns which
-   * maneuver the new cycle started; the player's is relayed online.
+   * maneuver the new cycle started.
    *
    * @param ship - The ship.
    * @param flight - Its flight state after the commit.
    */
   private onCycleCommitted(ship: DogfightShip, flight: CycleFlightState): void {
     this.crew?.onCycleCommitted(ship);
-    if (ship.id !== this.playerShipIds[0]) return;
     const { control } = flight.motion;
-    this.pilot.onCycleCommitted(control.currentManeuver ?? "straight");
-    this.sendManeuver(
-      control.nextManeuver ?? "straight",
-      control.speed,
-      ship,
-      true,
+    this.humanPilotOf(ship.id)?.onCycleCommitted(
+      control.currentManeuver ?? "straight",
     );
   }
 
@@ -1136,7 +1401,7 @@ export class DogfightScene extends Phaser.Scene {
     events: readonly FlightEvent[],
     origin: Pose,
   ): void {
-    const isPlayer = ship.owner === "player";
+    const isPlayer = this.isLocalShip(ship);
     for (const event of events) {
       playFlightEventFx(this, {
         event,
@@ -1158,15 +1423,8 @@ export class DogfightScene extends Phaser.Scene {
    * @param delta - Frame length (ms).
    */
   private processCombat(delta: number): void {
-    // Online, only the local ship fires here — the opponent's ship is
-    // authoritative on their own client, and its attack outcomes arrive via
-    // the `combat_result` network message instead of being independently
-    // re-rolled (see onRemoteAction()).
-    const gunners = this.isOnlineMode
-      ? [this.ships.get(this.playerShipIds[0] ?? "")]
-      : [...this.ships.values()];
-    for (const ship of gunners) {
-      if (!ship || ship.hull <= 0) continue;
+    for (const ship of this.ships.values()) {
+      if (ship.hull <= 0) continue;
       ship.weaponCooldown = Math.max(0, ship.weaponCooldown - delta);
       if (ship.weaponCooldown > 0) continue;
       const target = primaryShotTarget({
@@ -1174,8 +1432,10 @@ export class DogfightScene extends Phaser.Scene {
         candidates: this.ships.values(),
         isEnemy: (other) => other.owner !== ship.owner,
         ledger: this.hitLedger,
-        nowMs: this.time.now,
-        preferredId: this.crew?.targetOf(ship.id) ?? null,
+        nowMs: this.simNowMs,
+        preferredId: this.isHumanFlown(ship.id)
+          ? null
+          : (this.crew?.targetOf(ship.id) ?? null),
         worldSize: BATTLEFIELD_SIZE,
       });
       if (!target) continue;
@@ -1204,10 +1464,10 @@ export class DogfightScene extends Phaser.Scene {
       baseDamage: attacker.combatStats.attackDice,
       attackerHasWingman: this.fliesWithWingman(attacker),
       targetHasWingman: this.fliesWithWingman(target),
-      nowMs: this.time.now,
+      nowMs: this.simNowMs,
       roll: random.next(),
       targetMarked:
-        this.crew?.isMarkedShot(attacker.id, target.id, this.time.now) ?? false,
+        this.crew?.isMarkedShot(attacker.id, target.id, this.simNowMs) ?? false,
       ...shotAurasOf(this.auras, attacker.id, target.id),
       targetArmor: armorReductionOf(target.definitionId),
     });
@@ -1220,7 +1480,7 @@ export class DogfightScene extends Phaser.Scene {
       });
     matchStats.record({
       kind: "shot",
-      friendly: attacker.owner === "player",
+      friendly: this.isFriendly(attacker),
       weapon: "primary",
       hit: result.hit,
     });
@@ -1232,20 +1492,6 @@ export class DogfightScene extends Phaser.Scene {
       attacker.faction,
       result.hit,
     );
-    // In online mode only the local ship ever reaches fireAt() as attacker
-    // (see processCombat()) — relay the authoritative result so the
-    // opponent's client updates its own copy of this ship instead of
-    // independently rolling dice for the same shot.
-    if (this.isOnlineMode && attacker.id === (this.playerShipIds[0] ?? "")) {
-      networkService.sendGameAction({
-        type: "combat_result",
-        data: {
-          hit: result.hit,
-          hullAfter: target.hull,
-          shieldsAfter: target.shields,
-        },
-      });
-    }
   }
 
   /**
@@ -1268,7 +1514,7 @@ export class DogfightScene extends Phaser.Scene {
     const after = absorbDamage(target, result.damage);
     matchStats.record({
       kind: "damage",
-      toFriendly: target.owner === "player",
+      toFriendly: this.isFriendly(target),
       hull: target.hull - after.hull,
       shield: target.shields - after.shields,
     });
@@ -1280,7 +1526,7 @@ export class DogfightScene extends Phaser.Scene {
     }
     const wasAlive = target.hull > 0;
     Object.assign(target, after);
-    this.hitLedger.recordHit(attacker.id, target.id, this.time.now);
+    this.hitLedger.recordHit(attacker.id, target.id, this.simNowMs);
     this.healthBars.get(target.id)?.update(target.hull, target.shields);
     if (wasAlive && target.hull <= 0) this.onShipDestroyed(attacker, target);
   }
@@ -1301,19 +1547,18 @@ export class DogfightScene extends Phaser.Scene {
           ),
         ),
       wantedTargetOf: (shipId: string) =>
-        shipId === this.playerShipIds[0]
+        this.isHumanFlown(shipId)
           ? playerTargetId({
               ships: this.ships.values(),
               playerId: shipId,
-              isAlly: (ship) => ship.owner === PLAYER_SIDE,
+              isAlly: (ship) => ship.owner === this.ships.get(shipId)?.owner,
               worldSize: BATTLEFIELD_SIZE,
             })
           : (this.crew?.targetOf(shipId) ?? null),
-      playerShipId: () => this.playerShipIds[0] ?? null,
-      playerSide: () => PLAYER_SIDE,
+      playerShipId: () => this.localShipId() || null,
+      playerSide: () => this.localSide(),
       sideOf: (shipId: string) => this.ships.get(shipId)?.owner ?? null,
-      isBotControlled: (shipId: string) =>
-        !this.isOnlineMode && shipId !== this.playerShipIds[0],
+      isBotControlled: (shipId: string) => !this.isHumanFlown(shipId),
       applyHit: (hit: WeaponHit) => this.applyWeaponHit(hit),
       spriteOf: (shipId: string) => this.shipSprites.get(shipId),
     };
@@ -1359,11 +1604,12 @@ export class DogfightScene extends Phaser.Scene {
     this.crew?.forget(victim.id);
     matchStats.record({
       kind: "kill",
-      victimFriendly: victim.owner === "player",
-      victimIsPlayer: victim.owner === "player",
+      victimFriendly: this.isFriendly(victim),
+      victimIsPlayer: this.isLocalShip(victim),
     });
-    if (victim.owner === "player") {
+    if (this.isLocalShip(victim))
       trackDeath("dogfight", killer.definitionId, { round: this.currentRound });
+    if (victim.owner === "player") {
       this.enemySideScore = creditKill(
         this.enemySideScore,
         victim.definitionId,
@@ -1397,7 +1643,7 @@ export class DogfightScene extends Phaser.Scene {
    */
   private resolveAbilityKill(killer: DogfightShip, victim: DogfightShip): void {
     if (killer.hull > 0) {
-      Object.assign(killer, rewardKill(combatantOf(killer), this.time.now));
+      Object.assign(killer, rewardKill(combatantOf(killer), this.simNowMs));
     }
     const enemies = [...this.ships.values()].filter(
       (other) => other.faction !== victim.faction && other.hull > 0,
@@ -1415,24 +1661,25 @@ export class DogfightScene extends Phaser.Scene {
   /**
    * Queues every ship's next maneuver: the player's from input (and their
    * R mark), every AI ship's from its BotPilot — the same controls, through
-   * the same pilot hands. Online the opponent is a remote human driven by
-   * onRemoteAction() (the crew has no bot for it).
+   * the same pilot hands. Online every seat's human flies from its lockstep
+   * input; a seat the relay hands to the AI is flown by its bot.
    *
-   * @param time - Scene time (ms).
-   * @param delta - Frame length (ms).
+   * @param delta - Step length (ms).
    */
-  private updateAI(time: number, delta: number): void {
-    for (const shipId of this.playerShipIds) {
-      const ship = this.ships.get(shipId);
-      if (ship && ship.hull > 0) this.flyPlayer(ship, time, delta);
+  private updateAI(delta: number): void {
+    for (const ship of this.ships.values()) {
+      if (ship.hull <= 0 || !this.isHumanFlown(ship.id)) continue;
+      const pilot = this.humanPilotOf(ship.id);
+      if (pilot) this.flyPlayer(ship, pilot, delta);
     }
-    if (this.pilot.takeMarkRequest()) this.markHudTarget();
+    this.takeMarkRequests();
     const crew = this.crew;
     if (!crew) return;
     const contacts = crew.contactsOf(this.ships.values());
-    crew.command(contacts, this.time.now);
+    crew.command(contacts, this.simNowMs);
     for (const ship of this.ships.values()) {
-      if (ship.hull > 0) this.flyBot(ship, contacts, delta);
+      if (ship.hull > 0 && !this.isHumanFlown(ship.id))
+        this.flyBot(ship, contacts, delta);
     }
   }
 
@@ -1449,33 +1696,38 @@ export class DogfightScene extends Phaser.Scene {
     delta: number,
   ): void {
     const origin = { x: ship.x, y: ship.y, angle: ship.angle };
-    const result = this.crew?.fly(ship, contacts, this.time.now, delta);
+    const result = this.crew?.fly(ship, contacts, this.simNowMs, delta);
     if (!result) return;
     this.setFlight(ship, { motion: result.motion, stress: result.stress });
     this.playFlightEvents(ship, result.events, origin);
   }
 
   /**
-   * Runs one frame of the player's flight input through the shared pilot
+   * Runs one step of a human pilot's flight input through the shared pilot
    * controls (tap = drift, hold = bank, Q/E = hard turn, K-turn, Segnor,
-   * Tallon, boost, barrel roll) and relays the queued maneuver online.
+   * Tallon, boost, barrel roll).
    *
-   * @param ship - The player ship.
-   * @param time - Scene time (ms).
-   * @param delta - Frame length (ms).
+   * @param ship - The human's ship.
+   * @param pilot - Its pilot controls (InputManager offline, a seat online).
+   * @param delta - Step length (ms).
    */
-  private flyPlayer(ship: DogfightShip, time: number, delta: number): void {
+  private flyPlayer(
+    ship: DogfightShip,
+    pilot: PlayerFlightPilot,
+    delta: number,
+  ): void {
     const origin = { x: ship.x, y: ship.y, angle: ship.angle };
-    const result = this.pilot.fly({
+    const result = pilot.fly({
       flight: ship.flight,
       ship: ship.flight.motion,
       dial: ship.dial,
-      nowMs: time,
+      nowMs: this.simNowMs,
       deltaMs: delta,
       worldSize: BATTLEFIELD_SIZE,
     });
     this.setFlight(ship, { motion: result.motion, stress: result.stress });
     this.playFlightEvents(ship, result.events, origin);
+    if (!this.isLocalShip(ship)) return;
     this.weapons?.showRefusals(result.refusals, ship);
     matchStats.record({ kind: "flight", events: result.events });
     matchStats.record({
@@ -1483,85 +1735,11 @@ export class DogfightScene extends Phaser.Scene {
       ms: delta,
       stressed: result.stress.isStressed,
     });
-    const { control } = result.motion;
-    this.sendManeuver(
-      control.nextManeuver ?? "straight",
-      control.speed,
-      ship,
-      result.events.length > 0,
-    );
-  }
-
-  /**
-   * Mirrors the opponent's queued maneuver and speed and moves their ship to
-   * the pose their client reports (each client is authoritative for its own
-   * ship; the maneuver in progress is carried along, not restarted).
-   *
-   * @param opponent - The local copy of the opponent's ship.
-   * @param data - The maneuver message payload.
-   */
-  private applyRemoteManeuver(
-    opponent: DogfightShip,
-    data: Record<string, unknown>,
-  ): void {
-    let motion = opponent.flight.motion;
-    if (typeof data.x === "number" && typeof data.y === "number") {
-      motion = shiftMotion(
-        motion,
-        torusDelta(data.x - motion.x),
-        torusDelta(data.y - motion.y),
-        BATTLEFIELD_SIZE,
-      );
-    }
-    const dir = data.dir as ManeuverDirection | undefined;
-    const speed = data.speed;
-    const control = {
-      ...motion.control,
-      nextManeuver:
-        dir === undefined
-          ? motion.control.nextManeuver
-          : dir === "straight"
-            ? null
-            : dir,
-      speed: typeof speed === "number" ? speed : motion.control.speed,
-    };
-    this.setFlight(opponent, {
-      ...opponent.flight,
-      motion: { ...motion, control },
-    });
-  }
-
-  /**
-   * Relays the local ship's queued maneuver, speed and pose to the opponent
-   * — only when the maneuver changed, an action moved the ship, or a cycle
-   * committed (periodic pose sync), to avoid flooding the socket.
-   *
-   * @param dir - Queued maneuver.
-   * @param speed - Queued speed.
-   * @param ship - The local ship (its pose is sent).
-   * @param force - Send even when the maneuver did not change.
-   */
-  private sendManeuver(
-    dir: ManeuverDirection,
-    speed: number,
-    ship: Pose,
-    force: boolean,
-  ): void {
-    if (!this.isOnlineMode) return;
-    const unchanged =
-      this.lastSentManeuver?.dir === dir &&
-      this.lastSentManeuver.speed === speed;
-    if (unchanged && !force) return;
-    this.lastSentManeuver = { dir, speed };
-    networkService.sendGameAction({
-      type: "maneuver",
-      data: { dir, speed, x: ship.x, y: ship.y },
-    });
   }
 
   private updateSprites(): void {
     const markedId =
-      this.crew?.markedTargetOf(PLAYER_SIDE, this.time.now) ?? null;
+      this.crew?.markedTargetOf(this.localSide(), this.simNowMs) ?? null;
     for (const [id, ship] of this.ships) {
       const healthBar = this.healthBars.get(id);
       if (healthBar) {
@@ -1591,21 +1769,20 @@ export class DogfightScene extends Phaser.Scene {
     }
   }
 
-  private endRound(result: "player_win" | "enemy_win" | "draw"): void {
+  /** @param result - The round's result from the "player" side (seat 0 online). */
+  private endRound(result: DuelRoundResult): void {
     this.isRoundActive = false;
     this.roundResult = result;
     if (result === "player_win") this.playerWins++;
     else if (result === "enemy_win") this.enemyWins++;
-    const banner = RESULT_BANNERS[result];
+    const banner = RESULT_BANNERS[this.online?.localResult(result) ?? result];
     this.showRoundResult(banner.text, banner.color);
     this.updateScoreDisplay();
 
     const winsNeeded = this.winsNeeded();
-    if (this.playerWins >= winsNeeded || this.enemyWins >= winsNeeded) {
-      this.time.delayedCall(2000, () => this.endMatch());
-    } else {
-      this.time.delayedCall(2000, () => this.startNextRound());
-    }
+    const decided =
+      this.playerWins >= winsNeeded || this.enemyWins >= winsNeeded;
+    this.after(ROUND_RESULT_PAUSE_MS, decided ? "end_match" : "next_round");
   }
 
   /**
@@ -1625,7 +1802,15 @@ export class DogfightScene extends Phaser.Scene {
     // Hide the in-battle HUD under the end screen.
     this.hud?.setVisible(false);
 
-    const playerWon = this.playerWins > this.enemyWins;
+    const seat0Result: DuelRoundResult =
+      this.playerWins > this.enemyWins ? "player_win" : "enemy_win";
+    this.net?.reportMatchOver(this.online?.winnerTeam(seat0Result) ?? null);
+    const playerWon =
+      (this.online?.localResult(seat0Result) ?? seat0Result) === "player_win";
+    const flipped = (this.online?.localSeat ?? 0) !== 0;
+    const [mine, theirs] = flipped
+      ? [this.enemyWins, this.playerWins]
+      : [this.playerWins, this.enemyWins];
     trackModeEnd("dogfight", playerWon ? "victory" : "defeat", {
       rounds: this.currentRound,
     });
@@ -1633,21 +1818,34 @@ export class DogfightScene extends Phaser.Scene {
       rounds: this.currentRound,
     });
     audioManager.playFactionStinger(
-      this.playerFaction,
+      this.localFaction(),
       playerWon ? "victory" : "defeat",
     );
-    const sweep =
-      (playerWon && this.enemyWins === 0) ||
-      (!playerWon && this.playerWins === 0);
+    const sweep = (playerWon ? theirs : mine) === 0;
     showDuelEndScreen(this, {
       header: "Dogfight \u2014 match result",
       title: playerWon ? "MATCH WON" : "MATCH LOST",
       won: playerWon,
-      scoreLine: `Final score  ${this.playerWins}  \u2013  ${this.enemyWins}`,
+      scoreLine: `Final score  ${mine}  \u2013  ${theirs}`,
       notes: sweep ? ["Sweep!"] : [],
-      accent: factionAccent(this.playerFaction),
-      onRematch: () => this.scene.restart(),
-      onMenu: () => this.scene.start("MainMenuScene"),
+      accent: factionAccent(this.localFaction()),
+      ...this.endScreenActions(),
     });
+  }
+
+  /** @returns REMATCH / MENU: a local duel restarts; an online one returns to the room. */
+  private endScreenActions(): { onRematch: () => void; onMenu: () => void } {
+    if (!this.online)
+      return {
+        onRematch: () => this.scene.restart(),
+        onMenu: () => this.scene.start("MainMenuScene"),
+      };
+    return {
+      onRematch: () => this.scene.start(ONLINE_LOBBY_SCENE),
+      onMenu: () => {
+        getOnlineSession(this.registry).leaveRoom();
+        this.scene.start("MainMenuScene");
+      },
+    };
   }
 }

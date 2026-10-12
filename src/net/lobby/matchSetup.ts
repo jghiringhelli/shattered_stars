@@ -11,18 +11,17 @@
 
 import type { FactionId } from "../../config";
 import { SCENARIO_IDS } from "../../arcade/scenarios";
-import type { MatchStart, SeatView } from "../protocol";
+import type { MatchStart, SeatView, TeamId } from "../protocol";
 
 /** Squad point limit of online team battles (the Skirmish standard). */
 export const ONLINE_POINT_LIMIT = 200;
 
 /**
- * Whether the lobby launches the battle scenes on match start. Off until the
- * battle scenes run on the lockstep session (Phase 2 of the online work:
- * DogfightScene / ArcadeBattleScene integration); until then a started
- * match shows a "battle link pending" card and returns to the room.
+ * Whether the lobby launches the battle scenes on match start (both battle
+ * scenes run on the lockstep session). Off, a started match shows the
+ * "match ready" card and returns to the room.
  */
-export const ONLINE_BATTLES_ENABLED = false;
+export const ONLINE_BATTLES_ENABLED = true;
 
 /** Online context every online battle carries (registry `battleConfig.online` / Dogfight init). */
 export interface OnlineBattleContext {
@@ -37,6 +36,7 @@ export interface OnlineBattleContext {
 export interface OnlineDogfightSeat {
   readonly seat: number;
   readonly name: string;
+  readonly team: TeamId;
   readonly faction: FactionId;
   readonly shipId: string;
 }
@@ -122,6 +122,7 @@ export function buildOnlineDogfightInit(
     seats: match.seats.map((s: SeatView) => ({
       seat: s.seat,
       name: s.name,
+      team: s.team,
       faction: s.loadout.faction as FactionId,
       shipId: s.loadout.ships[0] ?? "",
     })),

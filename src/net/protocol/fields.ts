@@ -100,8 +100,8 @@ export function readDisplayText(
   maxLength: number,
 ): string | undefined {
   if (typeof value !== "string") return undefined;
-  // eslint-disable-next-line no-control-regex
   const cleaned = value
+    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001f\u007f]/g, "")
     .trim()
     .slice(0, maxLength);

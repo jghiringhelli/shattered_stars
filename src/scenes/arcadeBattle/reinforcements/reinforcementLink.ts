@@ -18,6 +18,13 @@ export interface ReinforcementSceneLink {
   readonly adopt: (ship: ArcadeShip) => void;
   /** Called once when the reinforcement rules end the match. */
   readonly onEnd: (victory: boolean) => void;
+  /**
+   * Online: a pick on the picker becomes a lockstep command (applied on every
+   * client in the same tick through `choose`) instead of deploying at once.
+   */
+  readonly requestPick?: (index: number) => void;
+  /** Whether this client shows the player's picker (online: seat 0 only). Default true. */
+  readonly showPicker?: boolean;
 }
 
 /** Camera target while the player's ship is down. */

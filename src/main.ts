@@ -1,5 +1,4 @@
 import Phaser from "phaser";
-import { NetworkService } from "./services/NetworkService";
 import { BootScene } from "./scenes/BootScene";
 import { MainMenuScene } from "./scenes/MainMenuScene";
 import { SquadBuilderScene } from "./scenes/SquadBuilderScene";
@@ -96,12 +95,10 @@ bootstrapPlayerPreferences(game);
 declare global {
   interface Window {
     game: Phaser.Game;
-    networkService: NetworkService;
   }
 }
 if (import.meta.env.DEV) {
   window.game = game;
-  window.networkService = NetworkService.getInstance();
   void import("./debug/verifyHooks").then((m) => m.installVerifyHooks(game));
   void import("./debug/SessionLogger").then(({ SessionLogger }) => {
     if (!SessionLogger.isEnabled()) return;

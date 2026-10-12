@@ -17,7 +17,8 @@ const TITLE_SIZE_PX = 46;
 const TITLE_LETTER_SPACING = 10;
 /** ROUND banner: grow to this scale while fading out over this long (ms). */
 const ROUND_END_SCALE = 1.5;
-const ROUND_BANNER_MS = 1500;
+/** The ROUND banner's fade; weapons go live when it ends (online: on the sim clock). */
+export const ROUND_BANNER_MS = 1500;
 /** Result banner: hold, then drift up while fading (ms / px). */
 const RESULT_HOLD_MS = 1500;
 const RESULT_FADE_MS = 500;

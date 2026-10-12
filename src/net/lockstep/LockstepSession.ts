@@ -25,6 +25,7 @@ import type { Clock } from "../time";
 import { InputBuffer } from "./InputBuffer";
 import { AdaptiveDelay } from "./AdaptiveDelay";
 import { LocalInputSampler } from "./LocalInputSampler";
+import { packSnapshot, unpackSnapshot } from "./snapshotPacking";
 import { MAX_TICKS_PER_FRAME, TickPacer } from "./TickPacer";
 import type {
   FrameResult,
@@ -287,7 +288,11 @@ export class LockstepSession {
     this.stats.ticksRun++;
     if (this.captureAt === tick) {
       this.captureAt = null;
-      this.send({ t: "snapshot", tick, data: sim.snapshot(tick) });
+      this.send({
+        t: "snapshot",
+        tick,
+        data: packSnapshot(sim.snapshot(tick)),
+      });
       this.stats.snapshotsSent++;
     }
     const interval = this.options.hashIntervalTicks ?? HASH_INTERVAL_TICKS;
@@ -302,7 +307,7 @@ export class LockstepSession {
     if (!snapshot) return;
     this.pendingSnapshot = null;
     if (snapshot.tick < this.tick) return;
-    sim.restore(snapshot.tick, snapshot.data);
+    sim.restore(snapshot.tick, unpackSnapshot(snapshot.data));
     this.tick = snapshot.tick;
     this.buffer.discardThrough(snapshot.tick);
     if (this.barrier !== null && this.barrier <= snapshot.tick)

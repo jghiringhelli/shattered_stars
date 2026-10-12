@@ -31,7 +31,6 @@ import { trackModeEnd, trackModeStart } from "../telemetry/telemetry";
 import { matchStats } from "../telemetry/matchTelemetry";
 import { cycleEvent, stressEvent } from "../telemetry/matchEvents";
 import type { ActionIntent } from "../input/InputTypes";
-import type { CombatModifiers } from "../core/CombatModifiers";
 import { getShipDefinition } from "../data/ShipDefinitions";
 import { calculateHitChance } from "../data/ModeBalancing";
 import { applyInstantStress, accrueCycleStress } from "../arcade/ArcadeStress";
@@ -154,6 +153,7 @@ const FLIGHT_EDGES: readonly FlightEdge[] = [
   "BOOST",
 ];
 import { audioManager } from "../audio/AudioManager";
+import { hullFractionOf } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
 import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
@@ -162,9 +162,9 @@ import {
   type AuraShip,
   type ActiveAura,
 } from "../systems/SupportAura";
+import { auraFactsOf } from "../systems/aura/AuraShipFacts";
 import { HitImmunityLedger } from "../arcade/systems/CombatTempo";
 import {
-  DEFAULT_SQUAD_DURABILITY,
   EMERGENCY_HULL_REPAIR,
   EMERGENCY_SHIELD_REPAIR,
   ENGINE_REPAIR_PER_SECOND,
@@ -187,7 +187,12 @@ import {
 } from "./arcadeBattle/ArcadeBotFleet";
 import { toBotContact } from "./arcadeBattle/arcadeBotContact";
 import { selectHudTargetId } from "./arcadeBattle/arcadeHudModel";
-import { createSeededRng, random } from "../utils/random";
+import {
+  createRng,
+  createSeededRng,
+  random,
+  setDefaultRng,
+} from "../utils/random";
 import type { WeaponSlotDescriptor } from "../ui/hud/types";
 import {
   createScenarioController,
@@ -209,6 +214,35 @@ import {
 import type { ReinforcementSceneLink } from "./arcadeBattle/reinforcements/reinforcementLink";
 import type { ReinforcementReadout } from "./arcadeBattle/reinforcements/reinforcementReadout";
 import { reinforcementShipIds } from "./arcadeBattle/reinforcements/reinforcementSetup";
+import {
+  ArcadeOnline,
+  readOnlineBattle,
+  type PilotKeys,
+} from "./arcadeBattle/online/ArcadeOnline";
+import { planOnlineDeployment } from "./arcadeBattle/online/onlineDeployment";
+import {
+  hashArcade,
+  readSimFields,
+  REINFORCEMENT_SIM_FIELDS,
+  SCENARIO_SIM_FIELDS,
+  writeSimFields,
+} from "./arcadeBattle/online/arcadeLockstep";
+import { getOnlineSession } from "../net/lobby/createOnlineSession";
+import {
+  startOnlineBattle,
+  type OnlineBattleDebug,
+  type OnlineBattleLink,
+} from "../net/battle/OnlineBattleLink";
+import { PILOT_COMMANDS } from "../net/input/PilotInputCodec";
+import type { LockstepSimulation } from "../net/lockstep/types";
+import { captureGraph, restoreGraph } from "../net/lockstep/StateGraph";
+import type { TickInput } from "../net/protocol";
+import { ONLINE_GRAPH_OPTIONS } from "./online/onlineGraph";
+import { OnlineNoticeView } from "./online/OnlineNoticeView";
+import {
+  confirmLeaveOnlineBattle,
+  ONLINE_LOBBY_SCENE,
+} from "./online/onlineExit";
 
 interface ShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
@@ -364,8 +398,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   /** Gesture state machine — tracks tap timing, hold duration, chord detection. */
   private gestureState: GestureState = INITIAL_GESTURE_STATE;
-  /** Player flight-input memory (gestures, tap vs hold steering). */
-  private pilotControl: PilotControlState = INITIAL_PILOT_CONTROL;
+  /** Flight-input memory (gestures, tap vs hold steering) of each human-flown ship. */
+  private pilotControls = new Map<string, PilotControlState>();
   /**
    * When true, pressing left+right simultaneously triggers a barrel roll.
    * Read from settings on create(); exposed as a toggle for accessibility / mobile.
@@ -392,6 +426,22 @@ export class ArcadeBattleScene extends Phaser.Scene {
   /** Debug / measurement hooks: AI flies the player's ship; battle-time speed-up. */
   debugAutopilot = false;
   debugTimeScale = 1;
+
+  // Online battle (input lockstep through the relay): every client simulates
+  // every seat from the same seed and inputs in canonical seat order — seat
+  // 0's squad is the simulation's "player" side; only presentation (camera,
+  // HUD, own colours) reads the local seat. Null offline.
+  private online: ArcadeOnline | null = null;
+  private net: OnlineBattleLink | null = null;
+  private notices: OnlineNoticeView | null = null;
+  private leaveDialogOpen = false;
+  /** This scene as the lockstep session's simulation. */
+  private readonly lockstep: LockstepSimulation = {
+    step: (tick, inputs) => this.stepOnline(tick, inputs),
+    hash: (tick) => this.hashOnline(tick),
+    snapshot: () => captureGraph(this.simGraph(), ONLINE_GRAPH_OPTIONS),
+    restore: (_tick, data) => this.restoreOnline(data),
+  };
 
   constructor() {
     super({ key: "ArcadeBattleScene" });
@@ -455,19 +505,24 @@ export class ArcadeBattleScene extends Phaser.Scene {
     return {
       worldSize: BATTLEFIELD_SIZE,
       ships: () => this.ships.values(),
-      playerShipId: () => this.playerShipId,
+      playerShipId: () => this.viewShipId(),
       playerMarkedTargetId: () => this.playerMarkedTargetId,
       radarRect: () => this.hud?.layoutRects()["radar"],
       reserves: () => this.reinforcements?.reserves() ?? null,
-      onEnd: () => {
+      viewSide: () =>
+        this.viewFaction() === this.playerFaction ? "player" : "enemy",
+      onEnd: (result) => {
         this.gameEnded = true;
-        this.showEndScreen(this.scenario?.playerWon ?? false);
+        this.finishBattle(
+          result.winner === "draw" ? null : result.winner === "player",
+        );
       },
     };
   }
 
   /** @returns What the reinforcement controller reads from (and asks of) this scene. */
   private reinforcementLink(): ReinforcementSceneLink {
+    const online = this.online;
     return {
       worldSize: BATTLEFIELD_SIZE,
       playerFaction: this.playerFaction,
@@ -476,14 +531,26 @@ export class ArcadeBattleScene extends Phaser.Scene {
       adopt: (ship) => this.adoptShip(ship),
       onEnd: (victory) => {
         this.gameEnded = true;
-        this.showEndScreen(victory);
+        const winner = this.reinforcements?.result?.winner;
+        this.finishBattle(winner === "draw" ? null : victory);
       },
+      ...(online
+        ? {
+            requestPick: (index: number) =>
+              this.net?.queueCommand({
+                op: PILOT_COMMANDS.deployReserve,
+                arg: index,
+              }),
+            showPicker: online.localSeat === 0,
+          }
+        : {}),
     };
   }
 
   /**
    * A reinforcement warped in: its record, sprite and overlay, an AI pilot
-   * (squad membership comes with its faction), or the player's view.
+   * (squad membership comes with its faction), or the player's view. Online
+   * a seat that lost its ship takes the next one its faction deploys.
    *
    * @param ship - The new ship.
    */
@@ -492,8 +559,16 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.armShip(ship);
     if (ship.owner === "player") {
       this.playerShipId = ship.id;
-      this.pilotControl = INITIAL_PILOT_CONTROL;
-    } else this.botFleet?.enlist(ship.id, ship.faction);
+      this.online?.assignShip(0, ship.id);
+      this.pilotControls.delete(ship.id);
+    } else {
+      this.botFleet?.enlist(ship.id, ship.faction);
+      this.online?.claimReinforcement(
+        ship.id,
+        ship.faction,
+        (id) => (this.ships.get(id)?.hull ?? 0) > 0,
+      );
+    }
     this.createShipSprite(ship);
     this.createHealthBar(ship);
   }
@@ -510,6 +585,20 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.reinforcements?.destroy();
     this.reinforcements = null;
     teardownSceneInput();
+    if (!this.online) return;
+    this.net?.dispose();
+    this.net = null;
+    this.notices?.destroy();
+    this.notices = null;
+    this.online = null;
+    setDefaultRng(createRng());
+    // A later local battle must never replay this online match's config.
+    this.registry.remove("battleConfig");
+  }
+
+  /** @returns The online link's diagnostics (e2e), or null offline. */
+  get onlineDebug(): OnlineBattleDebug | null {
+    return this.net?.debug ?? null;
   }
 
   preload(): void {
@@ -563,8 +652,15 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.cameraShakeEnabled = this.userWantsCameraShake;
     this.damageNumbersEnabled = this.userWantsDamageNumbers;
     this.resetBattleState();
-    trackModeStart("skirmish");
-    matchStats.start("skirmish", {}, this.events);
+    const onlineBattle = readOnlineBattle(this.registry.get("battleConfig"));
+    this.online = onlineBattle ? new ArcadeOnline(onlineBattle) : null;
+    if (this.online) setDefaultRng(this.online.combatRng);
+    trackModeStart("skirmish", this.online ? { online: true } : undefined);
+    matchStats.start(
+      "skirmish",
+      this.online ? { online: true } : {},
+      this.events,
+    );
 
     // No setBounds — we manage the camera manually for seamless toroid wrapping.
     this.cameras.main.setBackgroundColor(0x050510);
@@ -578,7 +674,12 @@ export class ArcadeBattleScene extends Phaser.Scene {
       this.registry.get("battleConfig"),
       this.scenarioLink(),
     );
-    this.weapons = createSceneWeapons(this, this.weaponsLink(), this.hitLedger);
+    this.weapons = createSceneWeapons(
+      this,
+      this.weaponsLink(),
+      this.hitLedger,
+      this.online === null,
+    );
     this.spawnShips();
     this.createHealthBars();
     this.repairFeedback = new ShipRepairFeedback({
@@ -591,7 +692,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       worldSize: BATTLEFIELD_SIZE,
       sizeOf: (definitionId) => shipSizeOf(definitionId),
     });
-    audioManager.playFactionMusic(this.playerFaction, "combat");
+    audioManager.playFactionMusic(this.viewFaction(), "combat");
     this.reinforcements = createReinforcementController(
       this,
       this.registry.get("battleConfig"),
@@ -615,12 +716,35 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.enemySideScore = createSideScore();
 
     // Initialise virtual camera to player spawn position (no startFollow — we drive it manually).
-    const playerSprite = this.shipSprites.get(this.playerShipId!);
+    const playerSprite = this.shipSprites.get(this.viewShipId() ?? "");
     if (playerSprite) {
       this.cameraVirtualX = playerSprite.x;
       this.cameraVirtualY = playerSprite.y;
       this.cameras.main.centerOn(this.cameraVirtualX, this.cameraVirtualY);
     }
+    if (this.online) this.joinOnlineBattle();
+  }
+
+  /**
+   * The battle is built: join the relay's lockstep session (the match
+   * starts once every seat has loaded).
+   */
+  private joinOnlineBattle(): void {
+    this.notices = new OnlineNoticeView(this);
+    this.net = startOnlineBattle(getOnlineSession(this.registry), {
+      intents: InputManager,
+      onNotice: (notice) => this.notices?.show(notice),
+      onMatchEnd: () => {
+        if (this.gameEnded) return;
+        this.gameEnded = true;
+        this.finishBattle(null);
+      },
+    });
+    if (!this.net) {
+      this.scene.start(ONLINE_LOBBY_SCENE);
+      return;
+    }
+    this.net.markLoaded();
   }
 
   /**
@@ -641,7 +765,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.pauseOverlay = null;
     this.activeAuras = new Map();
     this.playerWasAuraCovered = false;
-    this.pilotControl = INITIAL_PILOT_CONTROL;
+    this.pilotControls = new Map();
     this.prevThrustUpHeld = false;
     this.prevThrustDownHeld = false;
     this.botFleet = null;
@@ -664,8 +788,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
       currentHull: ship.hull,
       currentShields: ship.shields,
       side: overlaySide(
-        id === this.playerShipId,
-        ship.faction === this.playerFaction,
+        id === this.viewShipId(),
+        ship.faction === this.viewFaction(),
       ),
       definitionId: ship.definitionId,
     });
@@ -685,6 +809,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.lastTime = time;
 
     if (deltaMs <= 0) return;
+    if (this.online) {
+      this.updateOnline(deltaMs);
+      return;
+    }
     if (this.isPaused || this.gameEnded) return;
 
     // THRUST_UP/DOWN are HELD intents (continuous, for other scenes'
@@ -710,10 +838,43 @@ export class ArcadeBattleScene extends Phaser.Scene {
     }
 
     // Render-only updates: every real frame (not fixed-step)
+    this.renderFrame(deltaMs);
+  }
+
+  /** Render-only work of a frame: sprites, HUD, scenario glyphs, camera. */
+  private renderFrame(deltaMs: number): void {
     this.updateSprites(deltaMs);
     this.updateHUD();
     this.scenario?.render(this.cameras.main, this.time.now);
     this.updateCameraFollow();
+  }
+
+  /**
+   * Online frame: the lockstep session runs every due tick (stepOnline →
+   * tickLogic at the fixed step), then the frame draws the battle from the
+   * local seat's point of view. Nobody can pause a shared battle.
+   *
+   * @param deltaMs - Real time since the last frame (ms).
+   */
+  private updateOnline(deltaMs: number): void {
+    this.notices?.update();
+    if (this.gameEnded || !this.net) return;
+    this.net.frame(deltaMs, this.lockstep);
+    if (this.gameEnded) return;
+    this.renderFrame(deltaMs);
+  }
+
+  /**
+   * One lockstep tick: every seat's input, then the same fixed-step logic
+   * a local battle runs.
+   *
+   * @param _tick - The tick (the battle clock advances with tickLogic).
+   * @param inputs - Every seat's input.
+   */
+  private stepOnline(_tick: number, inputs: readonly TickInput[]): void {
+    if (this.gameEnded || !this.online) return;
+    this.online.feed(inputs);
+    this.tickLogic(ArcadeBattleScene.FIXED_DT);
   }
 
   private tickLogic(dt: number): void {
@@ -739,7 +900,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.firePrimaries(dt);
     const reinforced = this.reinforcements?.tick(dt, this.battleClockMs);
     if (this.scenario?.tick(dt, this.battleClockMs) || reinforced) return;
-    this.updateFleeDetector(dt);
+    // Fleeing is a single-player rule (only the player's ship can flee).
+    if (!this.online) this.updateFleeDetector(dt);
     this.checkVictory();
     this.updateMatchTimer(dt);
   }
@@ -752,9 +914,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
    * @remarks Called every frame; replaces Phaser's built-in startFollow.
    */
   private updateCameraFollow(): void {
-    // While the player's ship is down, the reinforcement picker points the camera at a wingman.
-    const ship =
-      this.reinforcements?.cameraFocus() ?? this.ships.get(this.playerShipId!);
+    const ship = this.cameraFocusShip();
     if (!ship) return;
 
     // Shortest-path delta — pick the direction that doesn't cross the whole map.
@@ -778,10 +938,74 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
     // Speed-based zoom: zoom out slightly at high speed for spatial awareness.
     const speedRatio = (ship.control.speed - 1) / 4;
-    const targetZoom = Phaser.Math.Linear(1.0, 0.75, speedRatio);
+    const targetZoom = this.leaveDialogOpen
+      ? 1
+      : Phaser.Math.Linear(1.0, 0.75, speedRatio);
     const zoom = this.cameras.main.zoom;
-    this.cameras.main.setZoom(zoom + (targetZoom - zoom) * 0.03);
+    this.cameras.main.setZoom(
+      this.leaveDialogOpen ? 1 : zoom + (targetZoom - zoom) * 0.03,
+    );
     this.cameras.main.centerOn(this.cameraVirtualX, this.cameraVirtualY);
+  }
+
+  /**
+   * What the camera follows: the local pilot's ship; while it is down, the
+   * reinforcement picker's wingman (offline) or any living ship of the local
+   * side (online).
+   *
+   * @returns The focus, or null to hold the camera.
+   */
+  private cameraFocusShip(): {
+    readonly x: number;
+    readonly y: number;
+    readonly control: { readonly speed: number };
+  } | null {
+    if (!this.online)
+      return (
+        this.reinforcements?.cameraFocus() ??
+        this.ships.get(this.playerShipId!) ??
+        null
+      );
+    const own = this.ships.get(this.viewShipId() ?? "");
+    if (own && own.hull > 0) return own;
+    const faction = this.viewFaction();
+    return (
+      [...this.ships.values()].find(
+        (s) => s.hull > 0 && s.faction === faction,
+      ) ?? null
+    );
+  }
+
+  /** @returns The ship this client's pilot flies (presentation), or null. */
+  private viewShipId(): string | null {
+    if (!this.online) return this.playerShipId;
+    return this.online.shipOf(this.online.localSeat);
+  }
+
+  /** @returns The faction this client flies (presentation: allies, HUD, music). */
+  private viewFaction(): FactionId {
+    return (
+      (this.online?.localFaction as FactionId | undefined) ?? this.playerFaction
+    );
+  }
+
+  /** @returns The mark of this client's side (HUD, overlays). */
+  private viewMarkedTargetId(): string | null {
+    return (
+      this.botFleet?.markedTargetOf(this.viewFaction(), this.battleClockMs) ??
+      null
+    );
+  }
+
+  /**
+   * @param shipId - A ship.
+   * @returns Whether a human flies it now (online: its seat, unless the
+   *   relay handed the seat to the AI; offline: the player's ship unless
+   *   the autopilot flies it).
+   */
+  private isHumanFlown(shipId: string): boolean {
+    if (this.online) return this.online.isHumanFlown(shipId);
+    return shipId === this.playerShipId && !this.debugAutopilot;
   }
 
   private createStarfield(): void {
@@ -799,7 +1023,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
     );
     this.inputSubscriptionIds.push(
       InputManager.on("PAUSE", () => {
-        if (this.isPaused) this.resumeBattle();
+        if (this.online) this.askLeaveOnline();
+        else if (this.isPaused) this.resumeBattle();
         else this.pauseBattle();
       }),
     );
@@ -810,12 +1035,33 @@ export class ArcadeBattleScene extends Phaser.Scene {
     );
   }
 
+  /** PAUSE online: the shared battle never pauses — offer to leave instead. */
+  private askLeaveOnline(): void {
+    if (!this.net || this.leaveDialogOpen || this.gameEnded) return;
+    confirmLeaveOnlineBattle(this, this.net, {
+      onOpen: () => {
+        this.leaveDialogOpen = true;
+        this.cameras.main.setZoom(1);
+      },
+      onClose: () => {
+        this.leaveDialogOpen = false;
+      },
+    });
+  }
+
   /** Drains a queued edge-triggered intent, returning whether it fired since the last check. */
   private consumeEdge(intent: ActionIntent): boolean {
     const had = this.pendingEdgeIntents.has(intent);
     this.pendingEdgeIntents.delete(intent);
     return had;
   }
+
+  /** The local pilot's keys offline: InputManager's held state and the queued presses. */
+  private readonly localKeys: PilotKeys = {
+    held: (intent) => InputManager.isHeld(intent),
+    consume: (intent) => this.consumeEdge(intent),
+    pressed: (intent) => this.pendingEdgeIntents.has(intent),
+  };
 
   /**
    * Pause the battle and show the pause menu. The camera goes to zoom 1:
@@ -850,14 +1096,54 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.reinforcements?.setHudVisible(true);
   }
 
+  /**
+   * Every human pilot's input this tick: offline the player's keys; online
+   * each seat's lockstep input (and seat 0's reinforcement pick).
+   *
+   * @param deltaMs - Tick length (ms).
+   */
   private handleInput(deltaMs: number): void {
-    const ship = this.ships.get(this.playerShipId!);
-    if (!ship || ship.hull <= 0) return;
+    const online = this.online;
+    if (!online) {
+      const ship = this.ships.get(this.playerShipId!);
+      if (ship && ship.hull > 0)
+        this.handlePilotInput(ship, this.localKeys, deltaMs);
+      return;
+    }
+    const pick = online.seats[0]?.takeCommand();
+    if (pick?.op === PILOT_COMMANDS.deployReserve)
+      this.reinforcements?.choose(pick.arg);
+    online.seats.forEach((seat, index) => {
+      const ship = this.ships.get(online.shipOf(index) ?? "");
+      const keys = online.keysOf(index);
+      if (!ship || ship.hull <= 0 || !keys || seat.aiControl) return;
+      this.weapons?.pilotKeys(
+        ship.id,
+        keys.pressed,
+        this.battleClockMs,
+        index === online.localSeat,
+      );
+      this.handlePilotInput(ship, keys, deltaMs);
+    });
+  }
 
-    this.applyFlightInput(ship, deltaMs);
+  /**
+   * One pilot's controls for a tick: flight, crew role, squad mark, then
+   * the crew station's own keys (gunner turret, commander orders).
+   *
+   * @param ship - The human's ship.
+   * @param keys - Their keys this tick.
+   * @param deltaMs - Tick length (ms).
+   */
+  private handlePilotInput(
+    ship: ArcadeShip,
+    keys: PilotKeys,
+    deltaMs: number,
+  ): void {
+    this.applyFlightInput(ship, keys, deltaMs);
 
     // Crew role cycle: pilot -> gunner (large/huge with a turret) -> commander (capital only)
-    if (this.consumeEdge("CREW_CYCLE")) {
+    if (keys.consume("CREW_CYCLE")) {
       const def = getShipDefinition(ship.definitionId);
       const sz = def?.baseStats.size;
       const hasTurret =
@@ -868,47 +1154,54 @@ export class ArcadeBattleScene extends Phaser.Scene {
       ship.crewMode = nextCrewRole(ship.crewMode, roles);
     }
 
-    if (this.consumeEdge("MARK_TARGET")) this.markHudTarget(ship);
+    if (keys.consume("MARK_TARGET")) this.markHudTarget(ship);
 
     // Weapons autofire; FIRE_SECONDARY / WEAPON_CYCLE / CLOAK are read by
     // the shared BattleWeapons. Crew modes only change what the player steers.
     if (ship.crewMode === "gunner") {
-      this.handleGunnerInput(ship, deltaMs / 1000);
+      this.handleGunnerInput(ship, keys, deltaMs / 1000);
       return;
     }
     this.weapons?.runtime.releaseTurret(ship.id);
-    if (ship.crewMode === "commander") this.handleCommanderInput(ship, deltaMs);
+    if (ship.crewMode === "commander")
+      this.handleCommanderInput(ship, keys, deltaMs);
   }
 
   /**
-   * Runs one frame of the player's flight controls through the shared
+   * Runs one frame of a pilot's flight controls through the shared
    * PilotFlightControls (the same code every cycle-engine scene uses) and
    * plays the effects for whatever happened.
    *
-   * @param ship - The player ship.
+   * @param ship - The pilot's ship.
+   * @param keys - Their keys this tick.
    * @param deltaMs - Frame length (ms).
    */
-  private applyFlightInput(ship: ArcadeShip, deltaMs: number): void {
+  private applyFlightInput(
+    ship: ArcadeShip,
+    keys: PilotKeys,
+    deltaMs: number,
+  ): void {
     const edges = new Set<FlightEdge>(
-      FLIGHT_EDGES.filter((edge) => this.consumeEdge(edge)),
+      FLIGHT_EDGES.filter((edge) => keys.consume(edge)),
     );
     const result = applyPilotFlightInput(
-      this.pilotControl,
+      this.pilotControls.get(ship.id) ?? INITIAL_PILOT_CONTROL,
       { ship, motion: ship, stress: ship.stress, dial: ship.shipDial },
       {
-        left: InputManager.isHeld("STEER_LEFT"),
-        right: InputManager.isHeld("STEER_RIGHT"),
-        up: InputManager.isHeld("THRUST_UP"),
-        down: InputManager.isHeld("THRUST_DOWN"),
+        left: keys.held("STEER_LEFT"),
+        right: keys.held("STEER_RIGHT"),
+        up: keys.held("THRUST_UP"),
+        down: keys.held("THRUST_DOWN"),
         edges,
-        nowMs: this.time.now,
+        nowMs: this.battleClockMs,
         deltaMs,
         allowChordBarrelRoll: this.allowChordBarrelRoll,
       },
       BATTLEFIELD_SIZE,
     );
-    this.pilotControl = result.pilot;
+    this.pilotControls.set(ship.id, result.pilot);
     this.applyFlightResult(ship, result);
+    if (ship.id !== this.viewShipId()) return;
     this.weapons?.showRefusals(result.refusals, ship);
     matchStats.record({ kind: "flight", events: result.events });
     matchStats.record(stressEvent(result.stress, deltaMs));
@@ -949,7 +1242,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     event: FlightEvent,
     origin: { x: number; y: number; angle: number },
   ): void {
-    const isPlayer = ship.id === this.playerShipId;
+    const isPlayer = ship.id === this.viewShipId();
     playFlightEventFx(this, {
       event,
       origin,
@@ -962,10 +1255,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   /**
-   * MARK_TARGET (R): the player's side marks the player's HUD target — the
-   * wingmen focus it and every hit on it by the side gets the mark bonus.
+   * MARK_TARGET (R): a pilot's side marks their HUD target — the wingmen
+   * focus it and every hit on it by the side gets the mark bonus.
    *
-   * @param player - The player's ship.
+   * @param player - The marking pilot's ship.
    */
   private markHudTarget(player: ArcadeShip): void {
     const targetId = selectHudTargetId(
@@ -974,13 +1267,25 @@ export class ArcadeBattleScene extends Phaser.Scene {
       BATTLEFIELD_SIZE,
     );
     if (!targetId || !this.botFleet) return;
-    this.botFleet.markTarget(this.playerFaction, targetId, this.battleClockMs);
+    this.botFleet.markTarget(player.faction, targetId, this.battleClockMs);
+    if (player.faction === this.playerFaction)
+      this.scenario?.onPlayerMark(targetId);
+    if (player.id !== this.viewShipId()) return;
     matchStats.record({ kind: "mark" });
-    this.scenario?.onPlayerMark(targetId);
     const target = this.ships.get(targetId);
     if (target) {
       this.showFloatingText(target.x, target.y - 45, "MARKED", "#ff3344");
     }
+  }
+
+  /**
+   * @param shipId - A ship.
+   * @returns Whether a human seat's pilot controls belong to it (offline:
+   *   the player's ship).
+   */
+  private isPilotShip(shipId: string): boolean {
+    if (this.online) return this.online.seatOfShip(shipId) >= 0;
+    return shipId === this.playerShipId;
   }
 
   private updateShips(deltaMs: number): void {
@@ -1007,11 +1312,15 @@ export class ArcadeBattleScene extends Phaser.Scene {
         ship.angle = state.angle;
         ship.control = state.control;
 
-        if (completed && ship.id === this.playerShipId) {
-          matchStats.record(cycleEvent(ship.shipDial, completed));
-          this.pilotControl = onPilotCycleCommitted(
-            this.pilotControl,
-            state.control.currentManeuver ?? "straight",
+        if (completed && this.isPilotShip(ship.id)) {
+          if (ship.id === this.viewShipId())
+            matchStats.record(cycleEvent(ship.shipDial, completed));
+          this.pilotControls.set(
+            ship.id,
+            onPilotCycleCommitted(
+              this.pilotControls.get(ship.id) ?? INITIAL_PILOT_CONTROL,
+              state.control.currentManeuver ?? "straight",
+            ),
           );
         } else if (completed) {
           this.botFleet?.onCycleCommitted(
@@ -1076,15 +1385,15 @@ export class ArcadeBattleScene extends Phaser.Scene {
         systemsOnline: ship.capitalSystems
           ? !isBridgeOffline(ship.capitalSystems)
           : true,
+        ...auraFactsOf(ship.modifiers),
       });
     }
 
     const { buffs, coveredShipIds } = resolveSupportAuras(snapshot);
     this.activeAuras = buffs;
 
-    const playerCovered = this.playerShipId
-      ? coveredShipIds.has(this.playerShipId)
-      : false;
+    const viewId = this.viewShipId();
+    const playerCovered = viewId ? coveredShipIds.has(viewId) : false;
     if (playerCovered && !this.playerWasAuraCovered) {
       audioManager.playSound("powerup", 0.35);
     }
@@ -1124,7 +1433,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     victim: ArcadeShip,
   ): void {
     if (attacker && attacker.hull > 0) {
-      Object.assign(attacker, rewardKill(attacker, this.time.now));
+      Object.assign(attacker, rewardKill(attacker, this.battleClockMs));
     }
     const enemies = this.frameCache?.aliveEnemiesOf(victim.faction) ?? [];
     const blast = deathBlastDamage(victim);
@@ -1172,8 +1481,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private recordDestruction(target: ArcadeShip): void {
     matchStats.record({
       kind: "kill",
-      victimFriendly: target.faction === this.playerFaction,
-      victimIsPlayer: target.id === this.playerShipId,
+      victimFriendly: target.faction === this.viewFaction(),
+      victimIsPlayer: target.id === this.viewShipId(),
     });
     if (target.faction === this.playerFaction) {
       this.enemySideScore = creditKill(
@@ -1207,7 +1516,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     );
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
-      if (ship.owner === "player" && !this.debugAutopilot) continue;
+      if (this.isHumanFlown(ship.id)) continue;
       this.flyAiShip(fleet, ship, deltaMs);
     }
   }
@@ -1321,11 +1630,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
           ),
         ),
       wantedTargetOf: (shipId: string) => this.preferredTargetOf(shipId),
-      playerShipId: () => this.playerShipId,
-      playerSide: () => this.playerFaction,
+      playerShipId: () => this.viewShipId(),
+      playerSide: () => this.viewFaction(),
       sideOf: (shipId: string) => this.ships.get(shipId)?.faction ?? null,
-      isBotControlled: (shipId: string) =>
-        shipId !== this.playerShipId || this.debugAutopilot,
+      isBotControlled: (shipId: string) => !this.isHumanFlown(shipId),
       applyHit: (hit: WeaponHit) => this.applyWeaponHit(hit),
     };
   }
@@ -1338,7 +1646,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private preferredTargetOf(shipId: string): string | null {
     const ship = this.ships.get(shipId);
     if (!ship) return null;
-    if (ship.id === this.playerShipId && !this.debugAutopilot) {
+    if (this.isHumanFlown(ship.id)) {
       return selectHudTargetId(ship, this.ships.values(), BATTLEFIELD_SIZE);
     }
     return this.botFleet?.targetIdFor(ship.id, ship.faction) ?? null;
@@ -1412,7 +1720,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       targetArmor: armorReductionOf(target.definitionId),
     });
     this.weapons?.onAttack(attacker.id);
-    const friendly = attacker.faction === this.playerFaction;
+    const friendly = attacker.faction === this.viewFaction();
     matchStats.record({
       kind: "shot",
       friendly,
@@ -1466,7 +1774,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       ? concentrateFireMultiplier(
           orders.concentrateFire,
           target.id,
-          this.time.now,
+          this.battleClockMs,
         )
       : 1;
   }
@@ -1487,7 +1795,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       damage *= this.turretFactor(attacker);
     matchStats.record({
       kind: "hit",
-      friendly: attacker?.faction === this.playerFaction,
+      friendly: attacker?.faction === this.viewFaction(),
       weapon: "ordnance",
     });
     this.landHit(attacker, target, {
@@ -1509,7 +1817,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       isPowerFocused(
         ship.commanderOrders.powerRedirect,
         "turrets",
-        this.time.now,
+        this.battleClockMs,
       )
         ? POWER_REDIRECT_TURRET_MULTIPLIER
         : 1;
@@ -1542,7 +1850,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.applyHitDamage(target, hit.damage);
     matchStats.record({
       kind: "damage",
-      toFriendly: target.faction === this.playerFaction,
+      toFriendly: target.faction === this.viewFaction(),
       shield: before.shields - target.shields,
       hull: before.hull - target.hull,
     });
@@ -1554,15 +1862,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
         "#ff4444",
       );
     }
-    const involvesPlayer =
-      target.id === this.playerShipId || attacker?.id === this.playerShipId;
+    const viewId = this.viewShipId();
+    const involvesPlayer = target.id === viewId || attacker?.id === viewId;
     if (this.cameraShakeEnabled && involvesPlayer)
       this.cameras.main.shake(50, 0.005);
     if (target.hull > 0) return;
-    if (
-      attacker?.faction === this.playerFaction &&
-      target.faction !== this.playerFaction
-    ) {
+    const viewFaction = this.viewFaction();
+    if (attacker?.faction === viewFaction && target.faction !== viewFaction) {
       this.score += KILL_SCORE;
       this.showFloatingText(target.x, target.y - 40, "KILL!", "#ffff00");
     }
@@ -1613,7 +1919,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
         }
       | undefined;
 
-    if (battleConfig?.factions?.length) {
+    if (this.online && battleConfig?.factions?.length) {
+      this.spawnOnline(battleConfig.factions);
+    } else if (battleConfig?.factions?.length) {
       this.spawnFromConfig(battleConfig.factions);
     } else {
       this.spawnDefaultShips();
@@ -1629,9 +1937,39 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   /**
+   * An online battle's opening squads, in canonical seat order: seat 0's
+   * squad is the "player" side, every seat flies its squad's first ship.
+   *
+   * @param factions - The battle config's squads (each with its seat).
+   */
+  private spawnOnline(
+    factions: Array<{
+      factionId: FactionId;
+      ships: string[];
+      loadoutChoices?: Record<string, string>;
+      teamId?: string;
+      seat?: number;
+    }>,
+  ): void {
+    const plan = planOnlineDeployment(factions, BATTLEFIELD_SIZE, (slot) =>
+      quickBuildsOf(slot as (typeof factions)[number]),
+    );
+    this.playerFaction = plan.playerFaction;
+    for (const spec of plan.specs) {
+      const ship = spawnArcadeShip(spec);
+      this.ships.set(ship.id, ship);
+    }
+    this.playerShipId = "player_0";
+    for (const [seat, shipId] of plan.seatShips)
+      this.online?.assignShip(seat, shipId);
+  }
+
+  /**
    * The battle's AI: difficulty and seed from the battle config (Squad
    * Builder sets `aiDifficulty`; online rooms set `seed`), and a bot pilot
-   * for every AI-flown ship.
+   * for every AI-flown ship. Online every human seat's ship has a bot too
+   * (it flies only while the relay hands that seat to the AI), and every
+   * human-led squad follows the player's squad rules.
    *
    * @returns The fleet, every AI ship enlisted.
    */
@@ -1640,14 +1978,20 @@ export class ArcadeBattleScene extends Phaser.Scene {
       { aiDifficulty?: string; seed?: number } | undefined;
     const seed =
       config?.seed ?? Math.floor(Math.random() * RANDOM_BATTLE_SEED_RANGE);
+    const online = this.online;
     const fleet = new ArcadeBotFleet({
       difficulty: config?.aiDifficulty ?? DEFAULT_SKIRMISH_DIFFICULTY,
       playerFaction: this.playerFaction,
-      random: createSeededRng(seed).next,
+      random: online
+        ? () => online.fleetRng.next()
+        : createSeededRng(seed).next,
       worldSize: BATTLEFIELD_SIZE,
+      ...(online
+        ? { humanFactions: online.humanFactions, markAssist: true }
+        : {}),
     });
     for (const ship of this.ships.values()) {
-      if (ship.owner === "ai") fleet.enlist(ship.id, ship.faction);
+      if (ship.owner === "ai" || online) fleet.enlist(ship.id, ship.faction);
     }
     return fleet;
   }
@@ -1738,9 +2082,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
       y: BATTLEFIELD_SIZE / 2 + 50,
       angle: 0,
     });
-    playerShip.hull = playerShip.maxHull = DEFAULT_SQUAD_DURABILITY.player.hull;
-    playerShip.shields = playerShip.maxShields =
-      DEFAULT_SQUAD_DURABILITY.player.shields;
     this.ships.set(playerShip.id, playerShip);
     this.playerShipId = playerShip.id;
 
@@ -1759,8 +2100,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
         y: BATTLEFIELD_SIZE / 2 + offset.y,
         angle: 0,
       });
-      ally.hull = ally.maxHull = DEFAULT_SQUAD_DURABILITY.wingman.hull;
-      ally.shields = ally.maxShields = DEFAULT_SQUAD_DURABILITY.wingman.shields;
       this.ships.set(ally.id, ally);
     }
 
@@ -1837,7 +2176,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   private updateSprites(deltaMs: number): void {
-    const markedId = this.playerMarkedTargetId;
+    const markedId = this.viewMarkedTargetId();
     for (const [id, sprite] of this.shipSprites) {
       const ship = this.ships.get(id);
 
@@ -1887,7 +2226,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       }
 
       // Cloaked ships: nearly invisible to enemies, dimmed for the owning player
-      const isPlayer = ship.id === this.playerShipId;
+      const isPlayer = ship.id === this.viewShipId();
       sprite.setAlpha(ship.isCloaked ? (isPlayer ? 0.45 : 0.12) : 1.0);
 
       // Update health bar position and values
@@ -1926,15 +2265,15 @@ export class ArcadeBattleScene extends Phaser.Scene {
   /** Feed this frame's battle state to the holographic HUD. */
   private updateHUD(): void {
     if (!this.hud) return;
-    const player = this.playerShipId
-      ? (this.ships.get(this.playerShipId) ?? null)
-      : null;
+    const viewId = this.viewShipId();
+    const player = viewId ? (this.ships.get(viewId) ?? null) : null;
+    audioManager.reportPlayerHull(hullFractionOf(player));
     this.hud.update({
       player,
       crewMode: player?.crewMode ?? "pilot",
       commanderOrders: player?.commanderOrders ?? null,
       ships: [...this.ships.values()],
-      playerFaction: this.playerFaction,
+      playerFaction: this.viewFaction(),
       weapons: player ? this.weaponBar(player) : [],
       camera: this.cameras.main,
       score: this.score,
@@ -1943,7 +2282,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
         this.reinforcements?.remainingMs ??
         this.matchTimer.remainingMs,
       nowMs: this.time.now,
-      markedId: this.playerMarkedTargetId,
+      markedId: this.viewMarkedTargetId(),
     });
   }
 
@@ -2023,15 +2362,20 @@ export class ArcadeBattleScene extends Phaser.Scene {
    * Left/right rotate the turret aim; it autofires like every other
    * weapon in this game once a target is in arc/range.
    *
-   * @param ship - The player ship.
+   * @param ship - The pilot's ship.
+   * @param keys - Their keys this tick.
    * @param dt - Frame time in seconds.
    */
-  private handleGunnerInput(ship: ArcadeShip, dt: number): void {
+  private handleGunnerInput(
+    ship: ArcadeShip,
+    keys: PilotKeys,
+    dt: number,
+  ): void {
     const turret = this.weapons?.runtime.arsenalOf(ship.id)?.turret;
     if (!turret) return;
-    const turn = InputManager.isHeld("STEER_LEFT")
+    const turn = keys.held("STEER_LEFT")
       ? -GUNNER_TURN_DEG_PER_S * dt
-      : InputManager.isHeld("STEER_RIGHT")
+      : keys.held("STEER_RIGHT")
         ? GUNNER_TURN_DEG_PER_S * dt
         : 0;
     this.weapons?.runtime.aimTurret(ship.id, turret.facingDeg + turn);
@@ -2043,15 +2387,20 @@ export class ArcadeBattleScene extends Phaser.Scene {
    * The commander doesn't fly or gun — the ship's turret keeps auto-firing
    * and its last-set maneuver keeps running while orders are issued.
    *
-   * @param ship - The player ship.
+   * @param ship - The pilot's ship.
+   * @param keys - Their keys this tick.
    * @param deltaMs - Frame time in milliseconds.
    */
-  private handleCommanderInput(ship: ArcadeShip, deltaMs: number): void {
+  private handleCommanderInput(
+    ship: ArcadeShip,
+    keys: PilotKeys,
+    deltaMs: number,
+  ): void {
     const orders = ship.commanderOrders;
     if (!orders || !this.frameCache) return;
-    const now = this.time.now;
+    const now = this.battleClockMs;
 
-    if (this.consumeEdge("COMMANDER_ORDER_1")) {
+    if (keys.consume("COMMANDER_ORDER_1")) {
       const target = this.findNearestEnemy(ship);
       if (target) {
         orders.concentrateFire = issueConcentrateFire(target.id, now);
@@ -2065,7 +2414,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     }
 
     if (
-      this.consumeEdge("COMMANDER_ORDER_2") &&
+      keys.consume("COMMANDER_ORDER_2") &&
       canRedirectPower(orders.lastPowerRedirectAt, now)
     ) {
       const focus = nextPowerFocus(orders.powerRedirect?.focus ?? null);
@@ -2079,7 +2428,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       );
     }
 
-    if (this.consumeEdge("COMMANDER_ORDER_3")) {
+    if (keys.consume("COMMANDER_ORDER_3")) {
       orders.mainBeam = startCharging(orders.mainBeam);
     }
     if (orders.mainBeam.charging) {
@@ -2093,7 +2442,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
     const beforeRepair = { hull: ship.hull, shields: ship.shields };
     if (
-      this.consumeEdge("COMMANDER_ORDER_4") &&
+      keys.consume("COMMANDER_ORDER_4") &&
       canEmergencyRepair(orders.lastEmergencyRepairAt, now) &&
       ship.capitalSystems
     ) {
@@ -2238,10 +2587,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const result = checkVictoryCondition(this.frameCache, this.playerFaction);
     if (result.outcome === "victory") {
       this.gameEnded = true;
-      this.showEndScreen(true);
+      this.finishBattle(true);
     } else if (result.outcome === "defeat") {
       this.gameEnded = true;
-      this.showEndScreen(false);
+      this.finishBattle(false);
     }
   }
 
@@ -2259,8 +2608,27 @@ export class ArcadeBattleScene extends Phaser.Scene {
         this.playerSideScore,
         this.enemySideScore,
       );
-      this.showEndScreen(outcome === "side1");
+      this.finishBattle(outcome === "draw" ? null : outcome === "side1");
     }
+  }
+
+  /**
+   * The battle is decided (from the "player" side — seat 0's online).
+   * Online the result goes to the relay and the end screen shows it from
+   * the local seat's side; a local battle shows it as is (a draw is no win).
+   *
+   * @param playerSideWon - Whether the "player" side won (null = draw).
+   */
+  private finishBattle(playerSideWon: boolean | null): void {
+    const online = this.online;
+    if (!online) {
+      this.showEndScreen(playerSideWon ?? false);
+      return;
+    }
+    this.net?.reportMatchOver(online.winnerTeam(playerSideWon));
+    this.showEndScreen(
+      playerSideWon !== null && online.localVictory(playerSideWon),
+    );
   }
 
   /** Award global progression XP for this battle (score is exactly KILL_SCORE per kill). */
@@ -2296,18 +2664,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.reinforcements?.finish();
     this.cameras.main.setZoom(1.0);
     audioManager.playFactionStinger(
-      this.playerFaction,
+      this.viewFaction(),
       victory ? "victory" : "defeat",
     );
     this.awardProgressionXp(victory);
     this.hud?.hideFleeWarning();
     this.hud?.setVisible(false);
-    const onRetry = (): void => {
-      this.scene.start("ArcadeBattleScene");
-    };
-    const onMenu = (): void => {
-      this.scene.start("MainMenuScene");
-    };
+    const { onRetry, onMenu } = this.endScreenActions();
     if (this.scenario?.showResult({ onRetry, onMenu })) return;
     createEndOverlay(this, {
       victory,
@@ -2318,5 +2681,93 @@ export class ArcadeBattleScene extends Phaser.Scene {
       onRetry,
       onMenu,
     });
+  }
+
+  /** @returns RETRY / MENU: a local battle restarts; an online one returns to the room. */
+  private endScreenActions(): { onRetry: () => void; onMenu: () => void } {
+    if (!this.online)
+      return {
+        onRetry: () => this.scene.start("ArcadeBattleScene"),
+        onMenu: () => this.scene.start("MainMenuScene"),
+      };
+    return {
+      onRetry: () => this.scene.start(ONLINE_LOBBY_SCENE),
+      onMenu: () => {
+        getOnlineSession(this.registry).leaveRoom();
+        this.scene.start("MainMenuScene");
+      },
+    };
+  }
+
+  /** @returns Fingerprint of the battle (ships, ordnance, clocks, RNGs, scores). */
+  private hashOnline(tick: number): number {
+    const runtime = this.weapons?.runtime;
+    return hashArcade({
+      tick,
+      battleClockMs: this.battleClockMs,
+      rngStates: [
+        this.online?.combatRng.getState() ?? 0,
+        this.online?.fleetRng.getState() ?? 0,
+      ],
+      ships: this.ships.values(),
+      shots: runtime?.shotsInFlight ?? [],
+      devices: runtime?.devicesOnField ?? [],
+      scalars: [
+        this.matchTimer,
+        this.playerSideScore,
+        this.enemySideScore,
+        {
+          ended: this.gameEnded,
+          remaining: this.reinforcements?.remainingMs ?? 0,
+        },
+      ],
+    });
+  }
+
+  /** @returns Every simulation object of the battle (snapshot root). */
+  private simGraph() {
+    return {
+      ships: this.ships,
+      fleet: this.botFleet,
+      weapons: this.weapons?.simulation ?? null,
+      ledger: this.hitLedger,
+      repair: this.repairFeedback?.mechanic ?? null,
+      seats: this.online?.seats ?? [],
+      rngs: [this.online?.combatRng ?? null, this.online?.fleetRng ?? null],
+      online: this.online,
+      pilotControls: this.pilotControls,
+      reinforcements: readSimFields(
+        this.reinforcements,
+        REINFORCEMENT_SIM_FIELDS,
+      ),
+      scenario: readSimFields(this.scenario, SCENARIO_SIM_FIELDS),
+      battle: {
+        battleClockMs: this.battleClockMs,
+        framesAlive: this.framesAlive,
+        matchTimer: this.matchTimer,
+        playerSideScore: this.playerSideScore,
+        enemySideScore: this.enemySideScore,
+        activeAuras: this.activeAuras,
+        playerShipId: this.playerShipId,
+        gameEnded: this.gameEnded,
+      },
+    };
+  }
+
+  /** @param data - The authority's snapshot: jump to it and redraw. */
+  private restoreOnline(data: string): void {
+    const live = this.simGraph();
+    const r = restoreGraph(live, data, ONLINE_GRAPH_OPTIONS)
+      .root as typeof live;
+    this.botFleet = r.fleet;
+    writeSimFields(this.reinforcements, r.reinforcements);
+    writeSimFields(this.scenario, r.scenario);
+    Object.assign(this, r.battle);
+    this.frameCache = buildFrameCache(this.ships.values());
+    for (const ship of this.ships.values()) {
+      if (ship.hull <= 0 || this.shipSprites.has(ship.id)) continue;
+      this.createShipSprite(ship);
+      this.createHealthBar(ship);
+    }
   }
 }

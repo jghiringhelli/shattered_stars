@@ -1,6 +1,7 @@
 # ADR-0005 — Online play: deterministic input lockstep through an authoritative relay
 
-- **Status:** Accepted (Phase 1 built: relay, net layer, lobby; Phase 2: battle-scene integration)
+- **Status:** Accepted (Phase 1: relay, net layer, lobby; Phase 2 built: DogfightScene and
+  ArcadeBattleScene run on the lockstep session)
 - **Date:** 2026-10-11
 - **Deciders:** Project owner (jghiringhelli)
 - **Related:** [docs/ONLINE.md](../ONLINE.md) (deploy + operations), `src/net/`, `server/src/`,
@@ -129,3 +130,46 @@ and arbitrated by the server, with hash-based desync detection and snapshot resy
   rather than desync. Mitigations later: a relay region per continent, DataChannel transport.
 - One relay instance holds all rooms in memory: deploys drop running matches (clients are
   told to reconnect; the reconnection window covers a quick restart but not lost room state).
+
+## Phase 2 — battle scenes on the session (built)
+
+- **Scenes.** DogfightScene and ArcadeBattleScene implement `LockstepSimulation`: the
+  frame loop calls `OnlineBattleLink.frame(delta, sim)`; `step(tick, inputs)` runs the same
+  simulation a local battle runs per frame (Dogfight) or per fixed step (Skirmish) on the
+  sim clock (`tick × TICK_MS` / `battleClockMs`), never `scene.time.now` or frame delta.
+  Round flow (Dogfight's banner → weapons live, round end → next round) is data timers on
+  the sim clock. Combat dice and bots draw from `DeterministicRng`s seeded by the match.
+- **Seats.** Seat 0's side is the simulation's "player" side on every client. Each human
+  seat has a `SeatInput` (decoded tick input as held/press/onAny, plus its command); the
+  Dogfight flies every seat through its own `PlayerFlightPilot`, the Skirmish scene through
+  per-ship `PilotControlState`s. Every seat ship also has a bot, which flies it only while the
+  relay's AI-control flag is set. Reinforcement picks are input commands; a seat whose ship
+  is lost takes the next ship its faction deploys. Settings that steer the simulation (mark
+  assist, difficulty) are fixed online.
+- **Squad battles: a side is one faction** (the Skirmish scene's sides are factions):
+  `teamFactionConflict` — teammates share a faction, the teams differ — is enforced by the
+  relay's start check and shown by the lobby.
+- **Hash** (every tick traced, every 30 sent): ship poses, durability, speed, stress and
+  cooldowns, ordnance on the field, clocks, scores and RNG states (floats at 1/1024).
+- **Snapshot / restore.** `StateGraph` serializes the simulation objects reachable from a
+  per-scene root (ships, bot fleet / crew, weapons driver, tempo ledger, repair tracker,
+  seat pilots, RNGs, controllers' simulation fields): class instances, Maps and Sets are
+  restored in place (shared references stay valid), plain records rebuilt fresh (shared
+  frozen defaults are never written into), functions and Phaser objects kept live. Snapshots
+  travel LZ77-packed (`snapshotPacking`): Dogfight 17 KB → 7 KB, a 3v3 Skirmish ~385 KB raw.
+
+### Measurements (browser e2e, `tests/e2e/online-battle.spec.ts`)
+
+Two Chromium contexts on one machine, each behind `?netsim=40,15` (40 ± 15 ms one-way to
+an in-process relay), both pilots steering, boosting, K-turning and marking throughout:
+
+| Scenario | Identical ticks | Input delay (t) | Stall per client | Up per client |
+|---|---|---|---|---|
+| Dogfight, 60 s | 100 % (≥ 3,000 compared) | 10 / 10 | 0 ms / 133 ms (longest 33 ms) | ~4 KB/s |
+| Reinforcements 3v3 + pools, 60 s | 100 % | 9–11 / 13–18 | 0.05–0.3 s / 4–18 s (longest 117 ms) | ~3.5 KB/s |
+| Corrupted client (hull −1) | healed by one snapshot, then 100 % | — | — | — |
+| Page reload mid-Skirmish | rejoined via snapshot, then 100 % | 9 / 11 | 0.25 s / 0.43 s | — |
+
+The stall column is dominated by CPU contention (two game instances in one headless
+browser alongside other test runs): the stalling client is the one waiting for the slower
+one. The virtual-network measurements above remain the reference for network effects.

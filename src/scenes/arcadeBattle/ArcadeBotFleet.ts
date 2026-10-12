@@ -65,6 +65,13 @@ export interface ArcadeBotFleetOptions {
   readonly random: () => number;
   /** Torus side length (px). */
   readonly worldSize: number;
+  /**
+   * Every faction a human leads (online: one per seat's squad); default:
+   * the player's faction only. Their squads take the player's rules.
+   */
+  readonly humanFactions?: ReadonlySet<string>;
+  /** Mark assist for the human squads; default: the local setting (online fixes it). */
+  readonly markAssist?: boolean;
 }
 
 /** One frame of one AI ship. */
@@ -99,9 +106,15 @@ export class ArcadeBotFleet {
    * @returns The tier and reaction scale its AI ships fly with.
    */
   skillFor(side: string): BotSkill {
-    return side === this.options.playerFaction
-      ? WINGMAN_SKILL
-      : this.enemySkill;
+    return this.isHumanSide(side) ? WINGMAN_SKILL : this.enemySkill;
+  }
+
+  /** @param side - A faction. @returns Whether a human leads it. */
+  private isHumanSide(side: string): boolean {
+    return (
+      this.options.humanFactions?.has(side) ??
+      side === this.options.playerFaction
+    );
   }
 
   /**
@@ -277,11 +290,12 @@ export class ArcadeBotFleet {
     let squad = this.squadCommands.get(side);
     if (squad) return squad;
     const skill = this.skillFor(side);
-    const isPlayerSide = side === this.options.playerFaction;
+    const isPlayerSide = this.isHumanSide(side);
     squad = new SquadCommand({
       side,
       aiLeader: !isPlayerSide && skill.tier !== "novice",
-      assistMark: isPlayerSide && isMarkAssistEnabled(),
+      assistMark:
+        isPlayerSide && (this.options.markAssist ?? isMarkAssistEnabled()),
       reactionMs: botProfile(skill.tier, skill.reactionScale).reactionMs,
       worldSize: this.options.worldSize,
     });

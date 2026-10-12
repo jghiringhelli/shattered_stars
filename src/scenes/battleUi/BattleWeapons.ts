@@ -236,18 +236,43 @@ export class BattleWeapons {
     this.pressed = new Set();
     const playerId = this.link.playerShipId();
     if (!playerId) return;
-    if (pressed.has("WEAPON_CYCLE")) this.runtime.cycleWeapon(playerId);
-    if (pressed.has("CLOAK")) this.toggleCloak(playerId);
-    if (!pressed.has("FIRE_SECONDARY")) return;
-    this.flash(playerId, fireOutcomeLabel(this.driver.fire(playerId, nowMs)));
+    this.pilotKeys(playerId, (intent) => pressed.has(intent), nowMs, true);
   }
 
-  /** CLOAK for the player's ship, saying why when it cannot. */
-  private toggleCloak(playerId: string): void {
-    const cloak = this.runtime.arsenalOf(playerId)?.cloak ?? null;
-    const wasCloaked = this.runtime.isCloaked(playerId);
-    if (this.runtime.toggleCloak(playerId) || wasCloaked) return;
-    this.flash(playerId, cloakRefusalLabel(cloak));
+  /**
+   * One pilot's weapon keys (WEAPON_CYCLE, CLOAK, FIRE_SECONDARY) for any
+   * ship a human flies — online every seat's keys arrive this way, from the
+   * lockstep input; offline the attached input source feeds the player's.
+   *
+   * @param shipId - The human's ship.
+   * @param pressed - Whether a weapon key was pressed this tick.
+   * @param nowMs - Battle time (ms).
+   * @param showFeedback - Flash refusals (the local pilot only).
+   */
+  pilotKeys(
+    shipId: string,
+    pressed: (intent: ActionIntent) => boolean,
+    nowMs: number,
+    showFeedback: boolean,
+  ): void {
+    if (pressed("WEAPON_CYCLE")) this.runtime.cycleWeapon(shipId);
+    if (pressed("CLOAK")) this.toggleCloak(shipId, showFeedback);
+    if (!pressed("FIRE_SECONDARY")) return;
+    const outcome = this.driver.fire(shipId, nowMs);
+    if (showFeedback) this.flash(shipId, fireOutcomeLabel(outcome));
+  }
+
+  /** The Phaser-free driver (runtime, held launches) — snapshotted online. */
+  get simulation(): WeaponsDriver {
+    return this.driver;
+  }
+
+  /** CLOAK for a ship, saying why when it cannot. */
+  private toggleCloak(shipId: string, showFeedback: boolean): void {
+    const cloak = this.runtime.arsenalOf(shipId)?.cloak ?? null;
+    const wasCloaked = this.runtime.isCloaked(shipId);
+    if (this.runtime.toggleCloak(shipId) || wasCloaked) return;
+    if (showFeedback) this.flash(shipId, cloakRefusalLabel(cloak));
   }
 
   private flash(shipId: string, label: string | null): void {

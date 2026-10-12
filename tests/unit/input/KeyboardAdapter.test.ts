@@ -7,11 +7,11 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { KeyboardBinding } from "../../../src/input/InputTypes";
 
 // KeyboardAdapter only needs Phaser.Input.Keyboard.KeyCodes (a plain numeric
 // enum) — mock it directly instead of importing real Phaser, which requires
-// a browser `window` (this test file runs under vitest's node environment,
-// same constraint NetworkService.test.ts works around the same way).
+// a browser `window` (this test file runs under vitest's node environment).
 vi.mock("phaser", () => ({
   default: {
     Input: {
@@ -47,11 +47,6 @@ const KeyCodes = {
   CTRL: 17,
   ALT: 18,
 } as const;
-interface KeyboardBinding {
-  key: string;
-  intent: string;
-  modifiers?: { shift?: boolean; ctrl?: boolean; alt?: boolean };
-}
 
 interface FakeKey {
   isDown: boolean;
@@ -107,12 +102,14 @@ function makeFakeScene(): {
 }
 
 describe("KeyboardAdapter", () => {
-  let scene: unknown;
+  let scene: ConstructorParameters<typeof KeyboardAdapter>[0];
   let setKeyDown: (name: keyof typeof KeyCodes, down: boolean) => void;
 
   beforeEach(() => {
     const fake = makeFakeScene();
-    scene = fake.scene;
+    scene = fake.scene as unknown as ConstructorParameters<
+      typeof KeyboardAdapter
+    >[0];
     setKeyDown = fake.setKeyDown;
   });
 

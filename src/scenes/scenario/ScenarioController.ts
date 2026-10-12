@@ -42,6 +42,7 @@ import {
 import { ScenarioHudView } from "./ScenarioHudView";
 import { objectiveGlyphs, scoreboardView } from "./scenarioHudModel";
 import { buildReadout, type ScenarioReadout } from "./scenarioReadout";
+import { scenarioFromSide } from "./scenarioPerspective";
 import { ScenarioWorldView } from "./ScenarioWorldView";
 
 /** A Skirmish ship record, as the scenario reads (and deploys) it. */
@@ -67,6 +68,8 @@ export interface ScenarioSceneLink {
   readonly reserves?: () => Readonly<Record<ScenarioSide, boolean>> | null;
   /** Called once when the match ends. */
   readonly onEnd: (result: ScenarioResult) => void;
+  /** The side the local pilot flies (online seats); default "player". */
+  readonly viewSide?: () => ScenarioSide;
 }
 
 /**
@@ -225,9 +228,10 @@ export class ScenarioController {
    * @param nowMs - Scene time (pulses).
    */
   render(camera: CameraLike, nowMs: number): void {
-    const glyphs = objectiveGlyphs(this.state);
+    const view = this.viewState();
+    const glyphs = objectiveGlyphs(view);
     const ships = [...this.link.ships()];
-    const carriers = this.state.crates.flatMap((crate) => {
+    const carriers = view.crates.flatMap((crate) => {
       const ship = ships.find((s) => s.id === crate.carrierId && s.hull > 0);
       return ship ? [{ crateId: crate.id, x: ship.x, y: ship.y }] : [];
     });
@@ -235,13 +239,18 @@ export class ScenarioController {
     const playerId = this.link.playerShipId();
     const player = ships.find((s) => s.id === playerId && s.hull > 0) ?? null;
     this.hud.update({
-      board: scoreboardView(this.state, playerId),
+      board: scoreboardView(view, playerId),
       glyphs,
       player,
       camera,
       radar: this.link.radarRect(),
       worldSize: this.link.worldSize,
     });
+  }
+
+  /** @returns The match as the local pilot's side sees it. */
+  private viewState(): ScenarioState {
+    return scenarioFromSide(this.state, this.link.viewSide?.() ?? "player");
   }
 
   /** @param visible - Show or hide the scenario HUD (pause / end screens). */
@@ -255,7 +264,7 @@ export class ScenarioController {
    * @returns Whether it was shown (false until the match has a result).
    */
   showResult(actions: ScenarioEndActions): boolean {
-    const result = this.state.result;
+    const result = this.viewState().result;
     if (!result) return false;
     this.hud.setVisible(false);
     createScenarioEndOverlay(
@@ -264,11 +273,6 @@ export class ScenarioController {
       actions,
     );
     return true;
-  }
-
-  /** @returns Whether the player's side won (draws are not wins). */
-  get playerWon(): boolean {
-    return this.state.result?.winner === "player";
   }
 
   /**

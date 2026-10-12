@@ -23,6 +23,7 @@ import {
 import { NET_LIMITS } from "../protocol";
 import { createSystemScheduler } from "../time";
 import { createWebSocketTransport } from "../transport/Transport";
+import { netsimTransport, parseNetsim } from "../transport/NetsimTransport";
 import { OnlineSession } from "./OnlineSession";
 
 /** Game-registry key of the OnlineSession. */
@@ -101,18 +102,26 @@ function rebuild(
 }
 
 function buildSession(store: KeyValueStore): OnlineSession {
+  const query = new URLSearchParams(window.location.search);
   const server = resolveServerUrl({
-    query: new URLSearchParams(window.location.search).get("server"),
+    query: query.get("server"),
     override: store.getItem(SERVER_OVERRIDE_KEY),
     buildDefault: buildServerUrl(),
     isDev: import.meta.env.DEV,
   });
   const scheduler = createSystemScheduler();
+  const netsim = parseNetsim(query.get("netsim"));
   const client = new NetClient({
     url: server.url ?? "",
     build: gameBuildId(),
     name: pilotName(store),
-    transport: createWebSocketTransport,
+    transport: netsim
+      ? netsimTransport(createWebSocketTransport, {
+          scheduler,
+          conditions: netsim,
+          random: Math.random,
+        })
+      : createWebSocketTransport,
     scheduler,
     tokenStore: sessionTokenStore(),
   });

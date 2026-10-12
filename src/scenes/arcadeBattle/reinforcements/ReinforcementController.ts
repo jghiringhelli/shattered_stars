@@ -112,7 +112,10 @@ export class ReinforcementController {
       this.alive.add(reg.shipId);
     }
     this.hud = new ReinforcementHud(scene, this.sides.length);
-    this.picker = new ReinforcementPicker(scene, (index) => this.choose(index));
+    this.picker = new ReinforcementPicker(scene, (index) => {
+      if (this.link.requestPick) this.link.requestPick(index);
+      else this.choose(index);
+    });
   }
 
   /** The match rules. */
@@ -252,7 +255,8 @@ export class ReinforcementController {
       const ship = this.link.ships.get(id);
       if (ship && ship.hull > 0) continue;
       // The picker's buttons hit-test correctly only at zoom 1.
-      if (id === this.director.playerShipId) this.scene.cameras.main.setZoom(1);
+      if (id === this.director.playerShipId && this.link.showPicker !== false)
+        this.scene.cameras.main.setZoom(1);
       this.alive.delete(id);
       this.shield.forget(id);
       this.director.shipDestroyed(id);
@@ -307,7 +311,9 @@ export class ReinforcementController {
       camera: this.scene.cameras.main,
       nowMs: this.scene.time.now,
     });
-    this.picker.update(this.director.picker);
+    this.picker.update(
+      this.link.showPicker === false ? null : this.director.picker,
+    );
   }
 
   private issueId(pilot: Parameters<typeof freshShipId>[0]): string {

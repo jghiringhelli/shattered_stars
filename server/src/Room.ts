@@ -7,6 +7,7 @@
 
 import {
   MODE_RULES,
+  teamFactionConflict,
   type ErrorCode,
   type Loadout,
   type MatchMode,
@@ -267,6 +268,7 @@ export class Room {
       return false;
     if (!members.every((m) => m.ready && m.connected && m.loadout))
       return false;
+    if (teamFactionConflict(this.setup.mode, members) !== null) return false;
     return new Set(members.map((m) => m.team)).size === 2;
   }
 

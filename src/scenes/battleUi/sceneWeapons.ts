@@ -27,18 +27,21 @@ export {
  * @param scene - The battle scene.
  * @param link - What the glue reads from the scene.
  * @param ledger - The scene's round-tempo ledger.
- * @returns The attached BattleWeapons (destroy it on shutdown).
+ * @param listen - Attach InputManager (offline); online battles feed every
+ *   seat's keys through BattleWeapons.pilotKeys instead.
+ * @returns The BattleWeapons (destroy it on shutdown).
  */
 export function createSceneWeapons(
   scene: Phaser.Scene,
   link: BattleWeaponsLink,
   ledger: HitImmunityLedger,
+  listen = true,
 ): BattleWeapons {
   const weapons = new BattleWeapons(scene, link, {
     worldSize: BATTLEFIELD_SIZE,
     ledger,
     random: () => random.next(),
-    input: InputManager,
+    ...(listen ? { input: InputManager } : {}),
   });
   weapons.attach();
   return weapons;

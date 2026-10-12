@@ -9,6 +9,7 @@ import { AdaptiveDelay } from "../../../src/net/lockstep/AdaptiveDelay";
 import { InputBuffer } from "../../../src/net/lockstep/InputBuffer";
 import { LocalInputSampler } from "../../../src/net/lockstep/LocalInputSampler";
 import { LockstepSession } from "../../../src/net/lockstep/LockstepSession";
+import { packSnapshot } from "../../../src/net/lockstep/snapshotPacking";
 import { StateHasher } from "../../../src/net/lockstep/StateHasher";
 import {
   ADVANTAGE_DEADBAND_TICKS,
@@ -329,7 +330,11 @@ describe("LockstepSession", () => {
     s.update(TICK_MS * 5, sim);
     expect(s.tick).toBe(1);
     expect(s.status).toBe("resyncing");
-    s.receive({ t: "snapshot", tick: 1, data: JSON.stringify({ total: 42 }) });
+    s.receive({
+      t: "snapshot",
+      tick: 1,
+      data: packSnapshot(JSON.stringify({ total: 42 })),
+    });
     s.update(0, sim);
     expect(sim.total).toBe(42);
     expect(s.stats.snapshotsApplied).toBe(1);

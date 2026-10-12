@@ -23,7 +23,7 @@ export interface SerializableShip {
   readonly id: string;
   readonly definitionId: string;
   readonly faction: string;
-  readonly owner: 'player' | 'ai';
+  readonly owner: "player" | "ai";
   readonly x: number;
   readonly y: number;
   readonly angle: number;
@@ -45,7 +45,7 @@ export interface ShipSnapshot {
   readonly id: string;
   readonly definitionId: string;
   readonly faction: string;
-  readonly owner: 'player' | 'ai';
+  readonly owner: "player" | "ai";
   readonly x: number;
   readonly y: number;
   readonly angle: number;
@@ -91,7 +91,7 @@ export interface BattleSnapshot {
  * const serializer = new BattleStateSerializer();
  * // end of turn:
  * const snap = serializer.serialize(this.ships, this.turnState.turnNumber, this.baseSeed);
- * networkService.sendSnapshot(snap);
+ * sendToPeers(snap);
  * // late joiner:
  * const shipMap = serializer.deserialize(snap);
  * const nextSeed = serializer.computeRngSeed(snap.baseSeed, snap.turnNumber + 1);
@@ -173,6 +173,6 @@ export class BattleStateSerializer {
    */
   computeRngSeed(baseSeed: number, turnNumber: number): number {
     // Knuth multiplicative hash — bijective, fast, well-distributed
-    return ((baseSeed ^ (turnNumber * 0x9e3779b9)) >>> 0);
+    return (baseSeed ^ (turnNumber * 0x9e3779b9)) >>> 0;
   }
 }
