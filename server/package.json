@@ -1,0 +1,20 @@
+{
+  "name": "shattered-stars-relay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Shattered Stars online relay: rooms, matchmaking and deterministic-lockstep input relay (container build only; local dev runs it from the repo root with `npm run start:server`).",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/server.cjs --external:bufferutil --external:utf-8-validate",
+    "start": "node dist/server.cjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

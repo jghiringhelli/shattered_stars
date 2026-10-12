@@ -56,6 +56,11 @@ export class HoloTextPrompt {
    * runs several scene steps before clearing its key queue.
    */
   private lastEvent: KeyboardEvent | null = null;
+  /**
+   * Every handled event: Phaser can replay a short queue of native events
+   * (e.g. [6, 4, 6, 4…]) over several steps, which a last-event check misses.
+   */
+  private readonly seenEvents = new WeakSet<KeyboardEvent>();
   private onDone: ((value: string | null) => void) | null = null;
   private readonly keyHandler = (event: KeyboardEvent): void =>
     this.onKey(event);
@@ -204,7 +209,8 @@ export class HoloTextPrompt {
   }
 
   private onKey(event: KeyboardEvent): void {
-    if (event.timeStamp < this.openedAt || event === this.lastEvent) return;
+    if (event.timeStamp < this.openedAt || this.seenEvents.has(event)) return;
+    this.seenEvents.add(event);
     this.lastEvent = event;
     if (event.key === "Enter") return this.finish(this.buffer);
     if (event.key === "Escape") return this.finish(null);

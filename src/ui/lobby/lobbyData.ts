@@ -1,7 +1,6 @@
 /**
- * lobbyData — static lobby data and pure helpers: faction display names,
- * the faction cycle order and the default ships spawned for a faction when
- * the server supplies none.
+ * lobbyData — static lobby data: faction display names, the faction cycle
+ * order and each faction's default online squad.
  */
 
 import type { FactionId } from "../../config";
@@ -49,41 +48,4 @@ const DEFAULT_FACTION_SHIPS: Readonly<
 export function defaultShipsForFaction(factionId: FactionId | null): string[] {
   if (!factionId) return [];
   return [...(DEFAULT_FACTION_SHIPS[factionId] ?? [])];
-}
-
-/**
- * Resolve ship IDs for a player slot, preferring server-provided data over defaults.
- *
- * @param factionId - The player's chosen faction.
- * @param remoteShips - Ships supplied by the server (empty or absent for local sim).
- * @returns Array of ship definition IDs to spawn.
- */
-export function resolveShips(
-  factionId: string | null,
-  remoteShips?: string[],
-): string[] {
-  if (remoteShips && remoteShips.length > 0) return remoteShips;
-  return defaultShipsForFaction(factionId as FactionId | null);
-}
-
-/**
- * Next faction in the "Change Faction" cycle.
- *
- * @param current - Current faction id, or null.
- * @returns The following faction (wraps around).
- */
-export function nextFaction(current: string | null): FactionId {
-  const index = current ? ALL_FACTIONS.indexOf(current as FactionId) : -1;
-  return ALL_FACTIONS[(index + 1) % ALL_FACTIONS.length] as FactionId;
-}
-
-/**
- * Display label for a room's game mode.
- *
- * @param gameMode - Room mode id ("arcade", "dogfight", …).
- * @returns Title-case label, e.g. "Arcade".
- */
-export function gameModeLabel(gameMode: string | undefined): string {
-  const mode = gameMode && gameMode.length > 0 ? gameMode : "arcade";
-  return mode.charAt(0).toUpperCase() + mode.slice(1);
 }

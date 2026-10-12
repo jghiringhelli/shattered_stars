@@ -1,0 +1,26 @@
+# Render Blueprint for the Shattered Stars relay (New → Blueprint → this repo).
+# See docs/ONLINE.md for the full walkthrough.
+services:
+  - type: web
+    name: shattered-stars-relay
+    runtime: docker
+    dockerfilePath: ./server/Dockerfile
+    dockerContext: .
+    plan: starter            # the free plan sleeps after 15 min idle, dropping rooms; fine for a playtest
+    region: oregon
+    healthCheckPath: /healthz
+    autoDeploy: false        # deploy on demand, like the GitHub Pages workflow
+    numInstances: 1          # rooms live in memory: one instance only
+    buildFilter:
+      paths:
+        - server/**
+        - src/net/**
+    envVars:
+      - key: LOG_LEVEL
+        value: info
+      - key: ALLOWED_ORIGINS
+        value: https://jghiringhelli.github.io
+      - key: RECONNECT_WINDOW_MS
+        value: "30000"
+      - key: TRUST_PROXY
+        value: "true"
