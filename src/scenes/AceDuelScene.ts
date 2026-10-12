@@ -66,6 +66,19 @@ import {
   primaryShotTarget,
 } from "../arcade/systems/DuelPrimaryFire";
 import { DuelHud } from "./duel/DuelHud";
+import type {
+  BattleWeapons,
+  BattleWeaponsLink,
+  WeaponHit,
+} from "./battleUi/BattleWeapons";
+import { createSceneWeapons, weaponBodyOf } from "./battleUi/sceneWeapons";
+import {
+  armorReductionOf,
+  damageMitigationOf,
+  shotAurasOf,
+} from "../arcade/systems/DamageRules";
+import type { ActiveAura } from "../systems/SupportAura";
+import { applyAllyAuraRepairs } from "../systems/aura/AllyAuraRepair";
 import { buildDuelHudSnapshot, playerTargetId } from "./duel/duelHudSnapshot";
 import { showDuelEndScreen } from "./duel/DuelEndScreen";
 import {
@@ -104,6 +117,7 @@ import type { ManeuverDefinition } from "../core/types";
 import { ACE_MATCHUPS, type AceMatchup } from "../data/AceMatchups";
 import { PauseMenu } from "../ui/PauseMenu";
 import { InputManager } from "../input/InputManager";
+import { openSettingsOverBattle } from "./battleUi/openSettingsOverBattle";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import {
   trackDeath,
@@ -111,6 +125,7 @@ import {
   trackModeStart,
 } from "../telemetry/telemetry";
 import { matchStats } from "../telemetry/matchTelemetry";
+import { browserStore } from "../systems/keyValueStore";
 import {
   createSideScore,
   creditKill,
@@ -200,6 +215,10 @@ export class AceDuelScene extends Phaser.Scene {
   private side2ShipIds: string[] = [];
   /** Round tempo: a struck ship ignores the same attacker until the next cycle. */
   private readonly hitLedger = new HitImmunityLedger();
+  /** Secondary weapons (missiles, torpedoes, turrets, bombs, mines, cloak). */
+  private weapons: BattleWeapons | null = null;
+  /** Faction auras resolved this frame (buffs every shot and stress tick). */
+  private auras: ReadonlyMap<string, ActiveAura> = new Map();
 
   // Match state
   private selectedMatchup: AceMatchup = ACE_MATCHUPS[0]!;
@@ -308,6 +327,7 @@ export class AceDuelScene extends Phaser.Scene {
 
     this.loadCompletedMatchups();
     this.resetMatchState();
+    this.weapons = createSceneWeapons(this, this.weaponsLink(), this.hitLedger);
     this.difficulty =
       this.difficultyDefault.next(defaultDifficulty()) ?? this.difficulty;
     this.showSetupScreen();
@@ -330,7 +350,7 @@ export class AceDuelScene extends Phaser.Scene {
 
   private loadCompletedMatchups(): void {
     try {
-      const saved = localStorage.getItem("shattered_stars_ace_duel");
+      const saved = browserStore().getItem("shattered_stars_ace_duel");
       if (saved) {
         const ids: string[] = JSON.parse(saved);
         this.completedMatchups = new Set(ids);
@@ -341,7 +361,7 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   private saveCompletedMatchups(): void {
-    localStorage.setItem(
+    browserStore().setItem(
       "shattered_stars_ace_duel",
       JSON.stringify(Array.from(this.completedMatchups)),
     );
@@ -354,6 +374,8 @@ export class AceDuelScene extends Phaser.Scene {
     this.pilot.detach();
     this.hud?.destroy();
     this.hud = null;
+    this.weapons?.destroy();
+    this.weapons = null;
     this.hitLedger.clear();
   }
 
@@ -389,6 +411,7 @@ export class AceDuelScene extends Phaser.Scene {
     this.isPaused = false;
     this.pilot.reset();
     this.hitLedger.clear();
+    this.weapons?.runtime.clear();
     this.crew = null;
   }
 
@@ -577,11 +600,11 @@ export class AceDuelScene extends Phaser.Scene {
       this.events,
     );
 
-    audioManager.playFactionMusic(
+    audioManager.playBattleMusic(
+      "dogfight",
       this.playerSide === 1
         ? this.selectedMatchup.side1.faction
         : this.selectedMatchup.side2.faction,
-      "combat",
     );
 
     const { side1, side2 } = this.selectedMatchup;
@@ -662,7 +685,11 @@ export class AceDuelScene extends Phaser.Scene {
     this.updateAI(time, delta);
     this.flyShips(delta);
     // Ships close in during the ROUND banner; weapons go live with the round.
-    if (this.isRoundActive) this.processCombat(delta);
+    if (this.isRoundActive) {
+      // Secondaries first: a held or chosen launch is this cycle's attack.
+      this.weapons?.update(delta, this.time.now);
+      this.processCombat(delta);
+    }
     this.updateSprites();
     this.updateCameraFollow();
     this.updateHud();
@@ -680,6 +707,7 @@ export class AceDuelScene extends Phaser.Scene {
         worldSize: BATTLEFIELD_SIZE,
         markedId:
           this.crew?.markedTargetOf(this.playerSideKey, this.time.now) ?? null,
+        secondaryWeapons: this.weapons?.hudSlots() ?? [],
       }),
     );
   }
@@ -782,7 +810,7 @@ export class AceDuelScene extends Phaser.Scene {
         this.scene.restart();
       },
       onSettings: () => {
-        this.scene.launch("SettingsScene", { returnScene: "AceDuelScene" });
+        openSettingsOverBattle(this);
       },
       onQuit: () => {
         this.scene.start("MainMenuScene");
@@ -803,6 +831,8 @@ export class AceDuelScene extends Phaser.Scene {
     if (this.isPaused) {
       this.cameras.main.setZoom(1.0);
       this.pauseMenu.show();
+    } else {
+      this.pauseMenu.hide();
     }
   }
 
@@ -877,6 +907,11 @@ export class AceDuelScene extends Phaser.Scene {
       spawn.loadoutId,
     );
     ship.flight = equipFlight(ship.flight, ship.modifiers);
+    this.weapons?.equip(id, {
+      definitionId: defId,
+      loadoutId: spawn.loadoutId,
+      modifiers: ship.modifiers,
+    });
 
     this.ships.set(id, ship);
     matchStats.record({
@@ -953,7 +988,7 @@ export class AceDuelScene extends Phaser.Scene {
         worldSize: BATTLEFIELD_SIZE,
         dial: ship.dial,
         cycleMs: CYCLE_DURATION_MS,
-        modifiers: stressModifiersOf(ship.modifiers),
+        modifiers: stressModifiersOf(ship.modifiers, this.auras.get(ship.id)),
       });
       this.setFlight(ship, tick.state);
       this.regenerateShieldsOf(ship, deltaMs);
@@ -971,6 +1006,13 @@ export class AceDuelScene extends Phaser.Scene {
         .setAngle(ship.angle);
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
+    // Faction auras (support ships, hero pilots): repairs now, buffs at
+    // every shot and stress tick — the same in every battle mode.
+    this.auras = applyAllyAuraRepairs(
+      [...this.ships.values()].filter((ship) => ship.hull > 0),
+      this.repairFeedback,
+      deltaMs,
+    );
   }
 
   /**
@@ -1069,6 +1111,7 @@ export class AceDuelScene extends Phaser.Scene {
         ledger: this.hitLedger,
         nowMs: this.time.now,
         preferredId: this.crew?.targetOf(ship.id) ?? null,
+        worldSize: BATTLEFIELD_SIZE,
       });
       if (!target) continue;
       this.fireAt(ship, target);
@@ -1102,8 +1145,16 @@ export class AceDuelScene extends Phaser.Scene {
       roll,
       targetMarked:
         this.crew?.isMarkedShot(attacker.id, target.id, this.time.now) ?? false,
+      ...shotAurasOf(this.auras, attacker.id, target.id),
+      targetArmor: armorReductionOf(target.definitionId),
     });
-    if (result.hit) this.applyHit(attacker, target, result);
+    this.weapons?.onAttack(attacker.id);
+    const cloak = this.weapons?.incomingDamageFactor(target.id) ?? 1;
+    if (result.hit)
+      this.applyHit(attacker, target, {
+        ...result,
+        damage: Math.max(1, Math.round(result.damage * cloak)),
+      });
     matchStats.record({
       kind: "shot",
       friendly: this.isPlayerSide(attacker.id),
@@ -1156,6 +1207,65 @@ export class AceDuelScene extends Phaser.Scene {
     this.hitLedger.recordHit(attacker.id, target.id, this.time.now);
     this.healthBars.get(target.id)?.update(target.hull, target.shields);
     if (wasAlive && target.hull <= 0) this.onShipDestroyed(attacker, target);
+  }
+
+  /** @returns What the secondary weapons read from (and ask of) this scene. */
+  private weaponsLink(): BattleWeaponsLink {
+    const sideOf = (shipId: string): string | null =>
+      this.side1ShipIds.includes(shipId)
+        ? "side1"
+        : this.side2ShipIds.includes(shipId)
+          ? "side2"
+          : null;
+    return {
+      bodies: () =>
+        [...this.ships.values()].map((ship) =>
+          weaponBodyOf(
+            ship,
+            sideOf(ship.id) ?? ship.owner,
+            damageMitigationOf(
+              ship.modifiers,
+              this.fliesWithWingman(ship),
+              this.auras.get(ship.id),
+            ),
+          ),
+        ),
+      wantedTargetOf: (shipId: string) =>
+        shipId === this.flagshipId
+          ? playerTargetId({
+              ships: this.ships.values(),
+              playerId: shipId,
+              isAlly: (ship) => this.isPlayerSide(ship.id),
+              worldSize: BATTLEFIELD_SIZE,
+            })
+          : (this.crew?.targetOf(shipId) ?? null),
+      playerShipId: () => this.flagshipId,
+      playerSide: () => this.playerSideKey,
+      sideOf,
+      applyHit: (hit: WeaponHit) => this.applyWeaponHit(hit),
+      spriteOf: (shipId: string) => this.shipSprites.get(shipId),
+    };
+  }
+
+  /**
+   * A secondary weapon's hit: the same shields-then-hull path as a laser.
+   *
+   * @param hit - The hit from the weapons runtime.
+   */
+  private applyWeaponHit(hit: WeaponHit): void {
+    const target = this.ships.get(hit.targetId);
+    if (!target || target.hull <= 0) return;
+    const attacker = this.ships.get(hit.attackerId) ?? target;
+    this.applyHit(attacker, target, {
+      hit: true,
+      damage: hit.damage,
+      stressOnTarget: hit.stress,
+    });
+  }
+
+  /** The secondary-weapons glue (e2e). */
+  get secondaryWeapons(): BattleWeapons | null {
+    return this.weapons;
   }
 
   /**
@@ -1287,6 +1397,7 @@ export class AceDuelScene extends Phaser.Scene {
     });
     this.setFlight(ship, { motion: result.motion, stress: result.stress });
     this.playFlightEvents(ship, result.events, origin);
+    this.weapons?.showRefusals(result.refusals, ship);
     matchStats.record({ kind: "flight", events: result.events });
     matchStats.record({
       kind: "stress",

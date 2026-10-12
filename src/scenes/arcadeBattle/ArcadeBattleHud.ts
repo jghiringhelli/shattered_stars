@@ -22,6 +22,7 @@ import {
 import { createScreenContainer } from "../../ui/hud/holoPrimitives";
 import { hudRootTransform } from "../../ui/hud/hudMath";
 import type { ScreenRect } from "../../ui/hud/screenRect";
+import type { WeaponSlotDescriptor } from "../../ui/hud/types";
 import { HOLO_DEPTH } from "../../ui/theme/HoloTheme";
 import {
   createControlsHint,
@@ -64,7 +65,8 @@ export interface ArcadeHudFrame {
   readonly commanderOrders: CommanderOrders | null;
   readonly ships: ReadonlyArray<HudShipView>;
   readonly playerFaction: string;
-  readonly selectedWeaponSlot: number;
+  /** The player's weapon bar (primary + secondaries), left to right. */
+  readonly weapons: ReadonlyArray<WeaponSlotDescriptor>;
   readonly camera: CameraLike;
   readonly score: number;
   readonly remainingMs: number;
@@ -190,7 +192,7 @@ export class ArcadeBattleHud {
       player: frame.player,
       ships: frame.ships,
       playerFaction: frame.playerFaction,
-      selectedWeaponSlot: frame.selectedWeaponSlot,
+      weapons: frame.weapons,
       camera,
       worldSize: this.config.worldSize,
       sizeOf: this.config.sizeOf,

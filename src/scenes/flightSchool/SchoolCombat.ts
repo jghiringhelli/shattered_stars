@@ -7,6 +7,7 @@
  * takes real damage.
  */
 
+import { BATTLEFIELD_SIZE } from "../../config";
 import { HitImmunityLedger } from "../../arcade/systems/CombatTempo";
 import {
   absorbDamage,
@@ -40,6 +41,11 @@ function isTargetable(ship: SchoolShip): boolean {
 export class SchoolCombat {
   private readonly ledger = new HitImmunityLedger();
 
+  /** The course's round-tempo ledger (shared with the secondary weapons). */
+  get tempoLedger(): HitImmunityLedger {
+    return this.ledger;
+  }
+
   /**
    * Fire every ready primary once (at most one attack per cycle each).
    *
@@ -69,6 +75,7 @@ export class SchoolCombat {
         ledger: this.ledger,
         nowMs: frame.nowMs,
         preferredId: crew?.targetOf(gunner.id) ?? null,
+        worldSize: BATTLEFIELD_SIZE,
       });
       if (!target) continue;
       shots.push(this.shoot(gunner, target, crew, frame.nowMs));
@@ -107,15 +114,40 @@ export class SchoolCombat {
       targetMarked: crew?.isMarkedShot(attacker.id, target.id, nowMs) ?? false,
     });
     if (!result.hit) return { attacker, target, hit: false, killed: false };
-    this.ledger.recordHit(attacker.id, target.id, nowMs);
+    return this.land(attacker, target, {
+      damage: result.damage,
+      stress: result.stressOnTarget,
+      nowMs,
+    });
+  }
+
+  /**
+   * A hit lands (laser or secondary weapon): tempo, stress, then damage —
+   * training drones shrug every hit off.
+   *
+   * @param attacker - The ship credited with the hit.
+   * @param target - The ship hit.
+   * @param hit - Damage, stress and scene time.
+   * @returns The resolved shot.
+   */
+  land(
+    attacker: SchoolShip,
+    target: SchoolShip,
+    hit: {
+      readonly damage: number;
+      readonly stress: number;
+      readonly nowMs: number;
+    },
+  ): SchoolShot {
+    this.ledger.recordHit(attacker.id, target.id, hit.nowMs);
     target.flight = {
       ...target.flight,
-      stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
+      stress: applyInstantStress(target.flight.stress, hit.stress),
     };
     if (target.role === "drone")
       return { attacker, target, hit: true, killed: false };
     const wasAlive = target.hull > 0;
-    Object.assign(target, absorbDamage(target, result.damage));
+    Object.assign(target, absorbDamage(target, hit.damage));
     return {
       attacker,
       target,

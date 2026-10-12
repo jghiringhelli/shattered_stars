@@ -523,8 +523,17 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
   sabotage, salvage, survive, stealth) shared by Campaign and Scenarios
 - **ArcadeStress.ts** - Pilot stress driven by ship dial difficulty (green/white/red rates,
   K-turn + boost instant spikes, hysteresis thresholds, HUD color helpers)
-- **ArcadeOrdnance.ts** - Arcade ordnance slots, cooldowns, homing
-- **ArcadeTurret.ts** - 360° auto-targeting turrets with ms-based cooldowns
+- **weapons/** - THE secondary-weapons model of every battle mode: `weaponSpecs` (cards → rules:
+  lock, front arc, X-Wing range bands, ×10 ordnance), `Arsenal` (slots, turret, cloak), `TargetLock`,
+  `OrdnanceFlight` (homing, torus), `Devices` (bombs/mines: drop astern, fuse/arm/trigger, friendly
+  fire), `TurretGunnery`, `FiringGeometry` (torus-aware arcs/ranges), `SecondaryWeapons` (runtime).
+  `WeaponsDriver` (Phaser-free driver: arming from quick builds, hit routing, cloak factor, held
+  launches) is shared by the scenes — wired via `src/scenes/battleUi/BattleWeapons.ts` (input,
+  view, HUD slots, feedback) — and the headless sims (skill arena, scenario, duel, Survival node).
+  Weapons step runs before primary fire everywhere.
+- **systems/FlightCapabilities.ts** - specials only if on the dial, dashes only if on the action bar,
+  stressed pilots refused red specials and every action, huge ships none (player and bots alike)
+- **systems/ArcTargeting.ts** - THE primary target picker (torus-aware range + arc) of every mode
 - **reinforcements/** - Reinforcement-pool battles (default for Skirmish, Epic, Scenario;
   Classic stays a Squad Builder toggle): per-side pool (1000; Epic 1200) spent on every
   deploy, on-field cap (250; Epic 500), category quotas (bombers / aces / capitals), strategy
@@ -568,12 +577,32 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 - **shipPricing.ts** - Bare-hull price heuristic (role anchor + lever deltas); variants must differ on real-time levers (spec: docs/specs/ship-variants.md, gate: ShipVariants.test.ts)
 
 
+### Asset Loading (src/assets/)
+- **assetManifest.ts** - Every runtime image (key + URL); BOOT_ASSETS = only what the main menu draws
+- **sceneAssetPlan.ts** - Per-scene preload plan (backdrops, campaign portraits, ship ids scanned from start data)
+- **scenePreloadGate.ts** - Wraps planned scenes' preload (installed by BootScene) with a progress bar
+- **textureLoading.ts** - On-demand loads + placeholder→art swap (ShipVisual, cards, encyclopedia)
+- Unreferenced art lives in `art-archive/` (not shipped); audit with `npx tsx scripts/audit_assets.ts`;
+  measure the menu's download size with `npx tsx scripts/measure_first_load.ts`
+
+
 ### Core Types (src/core/)
 - **types.ts** - ShipState, ManeuverDefinition, etc.
 - **errors.ts** - Typed error handling
 - **ArcadeControls.ts** - Discrete 500ms cycle system: createControlState, processCommand,
   updateManeuver, advanceCycle, startManeuver. Ships always execute a maneuver (default straight);
   nextManeuver queues the next cycle. SPEED_SCALE_FACTOR + baseSize drives per-cycle displacement.
+
+
+### Online (src/net/, server/) — see docs/ONLINE.md, ADR-0005
+- **server/src/** - Relay (Fly.io / Render): handshake + version check, sessions with a 30 s
+  reconnection window, rooms by code, quick match, ready check, rate limits, lockstep input
+  relay with AI fill for absent seats, hash desync detection + snapshot resync (`npm run start:server`)
+- **src/net/protocol/** - Shared wire protocol, limits, validation, timing (bump PROTOCOL_VERSION on change)
+- **src/net/lockstep/** - LockstepSession (60 Hz input lockstep, adaptive delay, pacing, hashes, resync)
+- **src/net/client/NetClient.ts** - WebSocket client (heartbeat, RTT, reconnect); **src/net/lobby/** - OnlineSession + LobbyModel + canonical match setup
+- **src/net/sim/** - Latency simulator + ReferenceDuelSim (tests, `npm run measure:net`)
+- Rule: online battles are built in canonical seat order; only presentation may read `localSeat`.
 
 
 ## Factions
@@ -720,6 +749,18 @@ GET  http://localhost:8002/projects/shattered_stars/assets/file/{id}     # fetch
 
 **Full manual:** `C:/Users/eu01244715/workspace/harmonia/docs/specs/Harmonia_-_Music_Generation_Manual.md`
 
+**In-game music:** 17 tracks ship as `public/assets/audio/music/<id>.ogg|.mp3` (-16 LUFS, seamless
+loops, ~28 MB), fetched lazily per context. Primary source is the author's **Suno** library
+(`D:\radar\media_music\games`, read-only) — spec + take choices: `scripts/music/suno_tracks.json`,
+rebuild: `python -B scripts/music/import_suno_music.py [--only <id>]`. Gaps (Synthetic, Ascendant)
+are ACE-Step renders — spec: `scripts/music/alpha_tracks.json`; regenerate with both services up:
+`python -B scripts/music/generate_alpha_music.py --only <id> [--seed <n>]`, re-cut from saved renders:
+`--reencode` (masters: `harmonia/output/shattered_stars/alpha/`; the pipeline calls the ACE-Step adapter
+directly because Harmonia's `/generate/ace-step` condenses prompts to "…dark fantasy, no <x>…" and
+ACE-Step reads negations as positive tags). Catalog: `src/audio/musicTracks.ts`; context rules:
+`src/audio/musicContexts.ts`; battle/tension state: `src/audio/MusicDirector.ts`. Unlisted ids play
+the procedural fallback with no fetch.
+
 ---
 
 ## Known Issues
@@ -777,3 +818,10 @@ Technology traps in this repo — what goes wrong, the wrong pattern, the right 
   bypass with `--no-verify`.
 - **Git identity is not set globally.** Commits succeed with a fallback author; set
   `git config user.email/name` if authorship matters.
+- **Never touch `localStorage` directly.** Access throws when storage is blocked or full
+  (Safari, privacy modes), and an uncaught throw at boot used to leave a black screen.
+  → Use `browserStore()` (src/systems/keyValueStore.ts) or inject a `KeyValueStore`; it never
+  throws and falls back to a session-only memory overlay. Tests: `resetBrowserStore()`.
+- **Don't load art in BootScene.** The first menu must stay small (< 10 MB). → Add new
+  images to `src/assets/assetManifest.ts` and the scene's plan in `sceneAssetPlan.ts`, or
+  use `requestTexture` / `swapWhenLoaded` for images shown later.

@@ -119,13 +119,18 @@ export class TelemetryLog {
     this.options.store.removeItem(TELEMETRY_STORAGE_KEY);
   }
 
-  /** @returns The buffer as a self-describing JSON document. */
-  exportJson(): string {
+  /**
+   * @param extra - Extra top-level fields (build, settings) placed before
+   *   the events.
+   * @returns The buffer as a self-describing JSON document.
+   */
+  exportJson(extra: Readonly<Record<string, unknown>> = {}): string {
     return JSON.stringify(
       {
         format: EXPORT_FORMAT,
         version: EXPORT_VERSION,
         exportedAt: new Date(this.now()).toISOString(),
+        ...extra,
         events: this.events(),
       },
       null,

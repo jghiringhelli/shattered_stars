@@ -105,7 +105,7 @@ describe("summarizeRealtimeEffect — flags and composition", () => {
 
   it("formats fractional rates without float noise", () => {
     expect(summarizeRealtimeEffect({ shieldRegenPerSecond: 0.15 })).toBe(
-      "regenerates 0.15 shields/s",
+      "regenerates 0.15 shield HP/s",
     );
   });
 

@@ -17,6 +17,14 @@ import {
 import { steeringQueue, type HeldSteering } from "../SteeringIntent";
 import { performAction, type MotionState } from "./ShipMotion";
 import type { FlightEvent, FlownShip } from "./PilotFlightTypes";
+import {
+  UNRESTRICTED_CAPABILITIES,
+  dashRefusal,
+  specialRefusal,
+  type FlightDash,
+  type FlightRefusal,
+  type SpecialManeuver,
+} from "./FlightCapabilities";
 
 /**
  * Queue a command on the motion state's control.
@@ -70,6 +78,24 @@ export interface Flight {
   motion: MotionState;
   stress: StressState;
   readonly events: FlightEvent[];
+  /** Specials and dashes the card or stress rules refused this frame. */
+  readonly refusals: FlightRefusal[];
+}
+
+/**
+ * @param flight - The flight being built.
+ * @param action - What was requested.
+ * @param reason - Why it was refused, or null when allowed.
+ * @returns True when refused (and recorded on the flight).
+ */
+function refused(
+  flight: Flight,
+  action: FlightRefusal["action"],
+  reason: FlightRefusal["reason"] | null,
+): boolean {
+  if (reason === null) return false;
+  flight.refusals.push({ action, reason });
+  return true;
 }
 
 /**
@@ -112,7 +138,8 @@ export function applySteering(
 }
 
 /**
- * K-turn (refused while stressed), Segnor and Tallon: queued red specials.
+ * K-turn, Segnor and Tallon: queued specials. Refused when not on the
+ * ship's dial, or when red and the pilot is stressed (X-Wing).
  * @param flown - Ship being flown.
  * @param flight - Motion/stress being built this frame (mutated).
  * @param wants - Which specials were requested this frame.
@@ -120,11 +147,14 @@ export function applySteering(
 export function applySpecials(
   flown: FlownShip,
   flight: Flight,
-  wants: ReadonlyArray<[boolean, FlightCommand, FlightEvent]>,
+  wants: ReadonlyArray<[boolean, SpecialManeuver, FlightEvent]>,
 ): void {
+  const capabilities =
+    flight.motion.control.capabilities ?? UNRESTRICTED_CAPABILITIES;
   for (const [requested, cmd, event] of wants) {
     if (!requested) continue;
-    if (cmd === "kturn" && flight.stress.isStressed) continue;
+    const reason = specialRefusal(capabilities, cmd, flight.stress.isStressed);
+    if (refused(flight, specialAction(event), reason)) continue;
     const before = flight.motion.control;
     flight.motion = command(flown, flight.motion, cmd);
     if (
@@ -138,7 +168,32 @@ export function applySpecials(
 }
 
 /**
+ * @param event - The effect event of a special.
+ * @returns The refusal label of that special.
+ */
+function specialAction(event: FlightEvent): FlightRefusal["action"] {
+  if (event === "segnor" || event === "tallon") return event;
+  return "kturn";
+}
+
+/**
+ * @param flight - The flight being built.
+ * @param dash - The dash requested.
+ * @returns True when the card or stress refuses it (recorded).
+ */
+function dashRefused(flight: Flight, dash: FlightDash): boolean {
+  const capabilities =
+    flight.motion.control.capabilities ?? UNRESTRICTED_CAPABILITIES;
+  return refused(
+    flight,
+    dash,
+    dashRefusal(capabilities, dash, flight.stress.isStressed),
+  );
+}
+
+/**
  * Boost and barrel roll: instant dashes that carry the cycle along.
+ * Refused when not on the ship's action bar or while stressed (X-Wing).
  * @param flown - Ship being flown.
  * @param flight - Motion/stress being built this frame (mutated).
  * @param boost - Whether a boost was requested.
@@ -152,7 +207,7 @@ export function applyDashes(
   actions: readonly GestureAction[],
   worldSize: number,
 ): void {
-  if (boost) {
+  if (boost && !dashRefused(flight, "boost")) {
     const boosted = performAction(
       flight.motion,
       flown.ship,
@@ -167,6 +222,7 @@ export function applyDashes(
   }
   for (const roll of ["barrel_roll_left", "barrel_roll_right"] as const) {
     if (!actions.includes(roll)) continue;
+    if (dashRefused(flight, "barrel_roll")) break;
     const rolled = performAction(flight.motion, flown.ship, roll, worldSize);
     if (rolled.performed) {
       flight.motion = rolled.state;

@@ -77,6 +77,19 @@ import {
 import { BattleBots } from "./battleUi/BattleBots";
 import { botContactOf } from "../arcade/ai/SceneContact";
 import { pickShotTarget } from "./battleUi/shotPreference";
+import { inArcEnvelope, torusRangePx } from "../arcade/weapons/FiringGeometry";
+import type {
+  BattleWeapons,
+  BattleWeaponsLink,
+  WeaponHit,
+} from "./battleUi/BattleWeapons";
+import { createSceneWeapons, weaponBodyOf } from "./battleUi/sceneWeapons";
+import {
+  armorReductionOf,
+  damageMitigationOf,
+  shotAurasOf,
+} from "../arcade/systems/DamageRules";
+import type { ActiveAura } from "../systems/SupportAura";
 
 /** Minimum ship data required by the shared combat loop. */
 export interface ContinuousShip {
@@ -151,6 +164,10 @@ export abstract class ContinuousBaseScene<
   protected telemetry: ShipTelemetry | null = null;
   /** X-Wing round tempo: who struck whom this maneuver cycle (clear on restart). */
   protected readonly hitLedger = new HitImmunityLedger();
+  /** Secondary weapons (missiles, torpedoes, turrets, bombs, mines, cloak). */
+  protected weapons: BattleWeapons | null = null;
+  /** Faction auras resolved this frame (buffs every shot and stress tick). */
+  protected auras: ReadonlyMap<string, ActiveAura> = new Map();
   /** AI ships' bot pilots, their squads and every side's mark (reset on restart). */
   protected readonly bots = new BattleBots({
     worldSize: BATTLEFIELD_SIZE,
@@ -191,7 +208,12 @@ export abstract class ContinuousBaseScene<
    * @param target - The ship fired at.
    */
   protected performAttack(attacker: T, target: T): void {
-    const result = this.rollShot(attacker, target);
+    const rolled = this.rollShot(attacker, target);
+    this.weapons?.onAttack(attacker.id);
+    const cloak = this.weapons?.incomingDamageFactor(target.id) ?? 1;
+    const result = rolled.hit
+      ? { ...rolled, damage: Math.max(1, Math.round(rolled.damage * cloak)) }
+      : rolled;
     this.effectsManager.fireLaser(
       attacker.x,
       attacker.y,
@@ -260,6 +282,11 @@ export abstract class ContinuousBaseScene<
     ship.loadoutId = loadoutId;
     ship.modifiers = equipQuickBuild(ship, loadoutId);
     this.setFlight(ship, equipFlight(ship.flight, ship.modifiers));
+    this.weapons?.equip(ship.id, {
+      definitionId: ship.definitionId,
+      loadoutId,
+      modifiers: ship.modifiers,
+    });
     if (ship.capitalSystems) {
       ship.capitalSystems = createCapitalSystems(ship.hull);
     }
@@ -283,6 +310,8 @@ export abstract class ContinuousBaseScene<
       nowMs: this.time.now,
       roll: random.next(),
       targetMarked: this.markedTargetOf(attacker) === target.id,
+      ...shotAurasOf(this.auras, attacker.id, target.id),
+      targetArmor: armorReductionOf(target.definitionId),
     });
   }
 
@@ -365,6 +394,7 @@ export abstract class ContinuousBaseScene<
       });
       this.hitLedger.forget(target.id);
       this.bots.remove(target.id);
+      this.weapons?.forget(target.id);
       this.resolveAbilityKill(attacker, target);
       this.onShipDestroyed(target.id, attacker.id);
     }
@@ -414,34 +444,23 @@ export abstract class ContinuousBaseScene<
    * @returns Living enemies within its weapon range and firing arc, nearest first.
    */
   private enemiesInArc(ship: T): T[] {
-    const maxRange = ship.combatStats.weaponRange;
-    const maxArcRad = (ship.combatStats.firingArc / 2) * Phaser.Math.DEG_TO_RAD;
-    const shipFacing = (ship.angle - 90) * Phaser.Math.DEG_TO_RAD;
+    const envelope = {
+      maxRangePx: ship.combatStats.weaponRange,
+      arcDeg: ship.combatStats.firingArc,
+    };
     const inReach: { ship: T; distance: number }[] = [];
     for (const other of this.ships.values()) {
       if (other.faction === ship.faction || other.hull <= 0) continue;
-      const distance = Phaser.Math.Distance.Between(
-        ship.x,
-        ship.y,
-        other.x,
-        other.y,
-      );
-      if (distance >= maxRange) continue;
-      const angleToTarget = Phaser.Math.Angle.Between(
-        ship.x,
-        ship.y,
-        other.x,
-        other.y,
-      );
-      let arcDiff = Math.abs(angleToTarget - shipFacing);
-      if (arcDiff > Math.PI) arcDiff = Math.PI * 2 - arcDiff;
-      if (arcDiff < maxArcRad) inReach.push({ ship: other, distance });
+      if (!inArcEnvelope(ship, other, envelope, BATTLEFIELD_SIZE)) continue;
+      inReach.push({
+        ship: other,
+        distance: torusRangePx(ship, other, BATTLEFIELD_SIZE),
+      });
     }
     return inReach
       .sort((a, b) => a.distance - b.distance)
       .map((entry) => entry.ship);
   }
-
   /**
    * Whether a ship can fly this frame: alive with its engines online
    * (a capital ship with its engines shot out drifts dead in space).
@@ -470,7 +489,7 @@ export abstract class ContinuousBaseScene<
         worldSize: BATTLEFIELD_SIZE,
         dial: ship.dial,
         cycleMs: CYCLE_DURATION_MS,
-        modifiers: stressModifiersOf(ship.modifiers),
+        modifiers: stressModifiersOf(ship.modifiers, this.auras.get(ship.id)),
       });
       this.setFlight(ship, tick.state);
       if (tick.completed && ship.owner === "player")
@@ -492,7 +511,11 @@ export abstract class ContinuousBaseScene<
         .setAngle(ship.angle);
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
-    applyAllyAuraRepairs(this.ships.values(), this.repairFeedback, deltaMs);
+    this.auras = applyAllyAuraRepairs(
+      this.ships.values(),
+      this.repairFeedback,
+      deltaMs,
+    );
   }
 
   /**
@@ -666,8 +689,91 @@ export abstract class ContinuousBaseScene<
 
     this.updateAI(time, delta);
     this.flyShips(delta);
+    // Secondaries first: a held or chosen launch is this cycle's attack.
+    this.weapons?.update(delta, this.time.now);
     this.processCombat(delta);
     this.updateSpritePositions();
     this.checkRoundEnd();
+  }
+
+  // ──────────────────────────────────────────────
+  // Secondary weapons
+  // ──────────────────────────────────────────────
+
+  /**
+   * Arm the battle's secondary weapons; call in create() before spawning
+   * (ships are armed as they are equipped).
+   */
+  protected createWeapons(): void {
+    this.weapons?.destroy();
+    this.weapons = createSceneWeapons(this, this.weaponsLink(), this.hitLedger);
+  }
+
+  /**
+   * @returns The ship whose secondaries the human fires (FIRE_SECONDARY,
+   *   WEAPON_CYCLE, CLOAK), or null. Default: none.
+   */
+  protected weaponsPlayerShipId(): string | null {
+    return null;
+  }
+
+  /** The secondary-weapons glue (e2e). */
+  get secondaryWeapons(): BattleWeapons | null {
+    return this.weapons;
+  }
+
+  private weaponsLink(): BattleWeaponsLink {
+    return {
+      bodies: () =>
+        [...this.ships.values()].map((ship) =>
+          weaponBodyOf(
+            ship,
+            ship.faction,
+            damageMitigationOf(
+              ship.modifiers,
+              this.fliesWithWingman(ship),
+              this.auras.get(ship.id),
+            ),
+          ),
+        ),
+      wantedTargetOf: (shipId: string) => {
+        const ship = this.ships.get(shipId);
+        if (!ship) return null;
+        return (
+          this.findWeaponTarget(ship)?.id ??
+          this.markedTargetOf(ship) ??
+          this.bots.pilotTargetOf(shipId)
+        );
+      },
+      playerShipId: () => this.weaponsPlayerShipId(),
+      playerSide: () => {
+        const id = this.weaponsPlayerShipId();
+        return (id ? this.ships.get(id)?.faction : null) ?? "";
+      },
+      sideOf: (shipId: string) => this.ships.get(shipId)?.faction ?? null,
+      // Ships fly standing orders and use their ordnance on their own; the
+      // ship the human has selected fires its secondaries by hand.
+      isBotControlled: (shipId: string) =>
+        shipId !== this.weaponsPlayerShipId(),
+      applyHit: (hit: WeaponHit) => this.applyWeaponHit(hit),
+      spriteOf: (shipId: string) => this.shipSprites.get(shipId),
+    };
+  }
+
+  /**
+   * A secondary weapon's hit, through the laser's path (stress, tempo,
+   * shields then hull or capital systems, kills).
+   *
+   * @param hit - The hit from the weapons runtime.
+   */
+  private applyWeaponHit(hit: WeaponHit): void {
+    const target = this.ships.get(hit.targetId);
+    if (!target || target.hull <= 0) return;
+    const attacker = this.ships.get(hit.attackerId) ?? target;
+    this.landShot(attacker, target, {
+      hit: true,
+      damage: hit.damage,
+      stressOnTarget: hit.stress,
+    });
   }
 }

@@ -17,6 +17,7 @@ import { NO_SQUAD_MARKS } from "../../arcade/systems/SquadMark";
 import { createSideScore } from "../../systems/arena/BattleScore";
 import { emptyTally, resolveCombatTick, type CombatState } from "./ArenaCombat";
 import { ENGINE_RULES } from "./ArenaRules";
+import { armArena, resolveWeaponsTick } from "./ArenaWeapons";
 import {
   commandSquads,
   createSquads,
@@ -68,6 +69,7 @@ export function runBattle(spec: BattleSpec): BattleResult {
     marks: NO_SQUAD_MARKS,
     ...(tempo ? { tempo } : {}),
   };
+  armArena(state);
   const limit = spec.timeLimitMs ?? DEFAULT_TIME_LIMIT_MS;
   // Flight, AI and combat run on the flight clock (k = 1 for the engine tempo).
   const k = tempo?.flightScale ?? 1;
@@ -79,6 +81,8 @@ export function runBattle(spec: BattleSpec): BattleResult {
       if (ship.alive) pilotShip(ship, contacts, squads, nowMs * k, TICK_MS * k);
     for (const ship of ships) if (ship.alive) flyShip(ship, tempo);
     nowMs += TICK_MS;
+    // Secondaries first, as in the scenes (a launch is the cycle's attack).
+    resolveWeaponsTick(state, nowMs * k, TICK_MS * k);
     resolveCombatTick(state, nowMs * k, TICK_MS * k);
     const winner = eliminationWinner(ships, state);
     if (winner) return resultOf(spec.seed, winner, "elimination", nowMs, state);

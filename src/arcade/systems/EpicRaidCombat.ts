@@ -15,6 +15,7 @@ import {
 import { laserHitBonus, type AbilityCombatant } from "../PilotAbilityCombat";
 import { incomingDamageMultiplier } from "../ShotConditions";
 import { leverShot } from "../ShotLevers";
+import type { ActiveAura } from "../../systems/SupportAura";
 
 /** The boss as a laser target: its pose and what blunts a bolt. */
 export interface BossTarget extends ShipPose {
@@ -42,6 +43,8 @@ export interface BossShotInput {
    * Omitted = not marked.
    */
   readonly targetMarked?: boolean;
+  /** The faction aura covering the attacker (adds its damage and hit bonus). */
+  readonly attackerAura?: ActiveAura;
 }
 
 /** Every bolt that hits the boss deals at least this much. */
@@ -59,7 +62,7 @@ export const MIN_BOSS_HIT_DAMAGE = 1;
  */
 export function resolveBossShot(input: BossShotInput): number {
   const levered = leverShot({
-    hitChance: input.hitChance,
+    hitChance: input.hitChance + (input.attackerAura?.hitChanceBonus ?? 0),
     position: "neutral",
     marked: input.targetMarked === true,
   });
@@ -80,7 +83,8 @@ export function resolveBossShot(input: BossShotInput): number {
       target: boss,
       attackerHasWingman: input.attackerHasWingman,
       nowMs: input.nowMs,
-    });
+    }) +
+    (input.attackerAura?.damageBonus ?? 0);
   return Math.max(MIN_BOSS_HIT_DAMAGE, raw - boss.armor);
 }
 

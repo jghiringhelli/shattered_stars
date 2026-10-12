@@ -58,7 +58,8 @@ async function getProjectileCount(page: Page): Promise<number> {
     const scene = (window as any).game?.scene.getScene(
       "ArcadeBattleScene",
     ) as any;
-    return scene?.projectiles?.length ?? 0;
+    // Primaries resolve instantly; only ordnance flies as projectiles.
+    return scene?.secondaryWeapons?.runtime?.shotsInFlight?.length ?? 0;
   });
 }
 

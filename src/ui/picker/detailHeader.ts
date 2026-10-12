@@ -9,6 +9,8 @@ import type { ShipDefinition } from "../../core/types";
 import { createMenuIcon } from "../menu/MenuIcons";
 import { HOLO_PALETTE, HOLO_SPACING } from "../theme/HoloTheme";
 import { addContainedImage } from "./catalogHelpers";
+import { shipArtAsset } from "../../assets/assetManifest";
+import { swapWhenLoaded } from "../../assets/textureLoading";
 import { addPickerText, pickerTextStyle } from "./pickerStyle";
 
 /** Art box height at the full panel height — compact so the quick-build block fits. */
@@ -111,18 +113,23 @@ export function drawDetailHeader(
   const centreX = rect.x + rect.width / 2;
   const top = rect.y + DETAIL_PAD;
   const artKey = `ship_art_${def.id}`;
-  const imgKey = scene.textures.exists(artKey) ? artKey : def.spriteKey;
+  const imgKey =
+    [artKey, def.spriteKey].find((key) => scene.textures.exists(key)) ??
+    `ship_${def.faction}_${def.baseStats.size}`;
   const nameY = top + artH + HEADER.nameGap;
   const badge = `${def.role.replace(/_/g, " ").toUpperCase()}  \u00b7  ${def.baseStats.size.toUpperCase()}  \u00b7  ${def.baseStats.pointCost} PT`;
+  const artBox = { maxWidth: rect.width - DETAIL_PAD * 2, maxHeight: artH };
+  const art = addContainedImage(
+    scene,
+    imgKey,
+    centreX,
+    top + artH / 2,
+    artBox.maxWidth,
+    artBox.maxHeight,
+  );
+  swapWhenLoaded(scene, art, shipArtAsset(def), artBox);
   container.add([
-    addContainedImage(
-      scene,
-      imgKey,
-      centreX,
-      top + artH / 2,
-      rect.width - DETAIL_PAD * 2,
-      artH,
-    ),
+    art,
     addPickerText(
       scene,
       { x: centreX, y: nameY },

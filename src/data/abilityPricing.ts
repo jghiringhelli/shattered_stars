@@ -8,6 +8,7 @@
  * Pure: no state.
  */
 
+import { DURABILITY_SCALE } from "../config";
 import {
   NEUTRAL_MODIFIERS,
   type CombatModifiers,
@@ -26,14 +27,21 @@ const ADDITIVE_POINTS: Partial<Record<keyof CombatModifiers, number>> = {
   stressedLaserBonus: 2,
   damagedLaserBonus: 2,
   killFrenzyLaserBonus: 3,
-  shieldsPerKill: 3,
-  shieldRegenPerSecond: 20,
-  hullRepairPerSecond: 30,
+  // Repair knobs are real-time HP (HP per kill, HP/s): the old per-token
+  // prices (3, 20, 30) divided by DURABILITY_SCALE.
+  shieldsPerKill: 3 / DURABILITY_SCALE,
+  shieldRegenPerSecond: 20 / DURABILITY_SCALE,
+  hullRepairPerSecond: 30 / DURABILITY_SCALE,
   stressReliefTiers: 3,
   ordnanceBonusCharges: 3,
   stressOnHit: 30,
   cloakDurationBonus: 1.5,
   auraRadiusBonus: 8,
+  auraMagnitudeBonus: 8,
+  // An extra stress tier for every ally in the aura = a self tier (3).
+  auraStressReliefTiers: 3,
+  // +5% hit chance shared with allies (a coordinator's Focus) = 2 points.
+  auraHitChanceBonus: 40,
   maxSpeedBonus: 4,
   deathBlastDamage: 1.5,
 };

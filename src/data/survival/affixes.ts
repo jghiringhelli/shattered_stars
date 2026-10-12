@@ -49,7 +49,7 @@ export const ELITE_AFFIXES: readonly EliteAffix[] = [
     id: "regenerating",
     name: "Regenerating",
     icon: "♻",
-    description: "Regenerates 2 shields per second",
+    description: "Regenerates 2 shield HP/s",
     effect: { shieldRegenPerSecond: 2 },
   },
   {
@@ -57,7 +57,11 @@ export const ELITE_AFFIXES: readonly EliteAffix[] = [
     name: "Volatile",
     icon: "💥",
     description: "Explodes on death, damaging nearby ships",
-    effect: { deathBlastDamage: 10 },
+    // Miniature 2.2 = 22 HP (x ORDNANCE_DAMAGE_SCALE): a real threat (more
+    // than a pilot's Self-Destruct, 20 HP) that never one-shots a full-health
+    // light fighter — the frailest, synth_scout_drone, has 24 HP in Survival
+    // (the ~30 HP first aimed for would). 10 (100 HP) erased any fighter.
+    effect: { deathBlastDamage: 2.2 },
   },
   {
     id: "marksman",

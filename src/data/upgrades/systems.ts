@@ -99,7 +99,7 @@ export const CREW_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
       "Patches 1 hull every ~12 seconds once the ship is out of fire.",
     pointCost: 4,
     creditCost: 200,
-    realtime: { hullRepairPerSecond: 0.08 },
+    realtime: { hullRepairPerSecond: 0.96 },
   },
   skilled_gunner: {
     id: "skilled_gunner",
@@ -121,7 +121,7 @@ export const ASTROMECH_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
     description: "Regenerates 1 shield every ~8 seconds.",
     pointCost: 4,
     creditCost: 200,
-    realtime: { shieldRegenPerSecond: 0.12 },
+    realtime: { shieldRegenPerSecond: 1.44 },
   },
   patch_astromech: {
     id: "patch_astromech",
@@ -131,7 +131,7 @@ export const ASTROMECH_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
       "Welds 1 hull back every ~20 seconds once the ship is out of fire.",
     pointCost: 3,
     creditCost: 150,
-    realtime: { hullRepairPerSecond: 0.05 },
+    realtime: { hullRepairPerSecond: 0.6 },
   },
   targeting_astromech: {
     id: "targeting_astromech",

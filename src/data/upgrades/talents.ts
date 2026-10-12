@@ -157,6 +157,6 @@ export const ILLICIT_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
     pointCost: 1,
     creditCost: 50,
     effects: { hullBonus: -1 },
-    realtime: { shieldRegenPerSecond: 0.08 },
+    realtime: { shieldRegenPerSecond: 0.96 },
   },
 };

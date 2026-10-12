@@ -9,6 +9,7 @@
  */
 
 import type { FactionId } from "../config";
+import { browserStore } from "./keyValueStore";
 import {
   CAMPAIGN_SAVE_VERSION,
   type CampaignPilotState,
@@ -77,7 +78,7 @@ export const CampaignSaveManager = {
   save(data: CampaignSaveData): void {
     try {
       const toSave = { ...data, lastPlayed: Date.now() };
-      localStorage.setItem(keyOf(toSave.factionId), JSON.stringify(toSave));
+      browserStore().setItem(keyOf(toSave.factionId), JSON.stringify(toSave));
     } catch (e) {
       console.error("Failed to save campaign:", e);
     }
@@ -90,7 +91,7 @@ export const CampaignSaveManager = {
   load(factionId: FactionId): CampaignSaveData | null {
     let saved: string | null;
     try {
-      saved = localStorage.getItem(keyOf(factionId));
+      saved = browserStore().getItem(keyOf(factionId));
     } catch (e) {
       console.error("Failed to read campaign:", e);
       return null;
@@ -101,7 +102,7 @@ export const CampaignSaveManager = {
     } catch (e) {
       console.error("Campaign save unreadable; backed up:", e);
       try {
-        localStorage.setItem(keyOf(factionId) + CORRUPT_BACKUP_SUFFIX, saved);
+        browserStore().setItem(keyOf(factionId) + CORRUPT_BACKUP_SUFFIX, saved);
       } catch {
         // Storage full: the original stays in place, nothing else to do.
       }
@@ -112,7 +113,7 @@ export const CampaignSaveManager = {
   /** @param factionId - Faction whose playthrough to delete. */
   delete(factionId: FactionId): void {
     try {
-      localStorage.removeItem(keyOf(factionId));
+      browserStore().removeItem(keyOf(factionId));
     } catch (e) {
       console.error("Failed to delete campaign:", e);
     }
@@ -123,7 +124,7 @@ export const CampaignSaveManager = {
    * @returns Whether a playthrough is stored.
    */
   exists(factionId: FactionId): boolean {
-    return localStorage.getItem(keyOf(factionId)) !== null;
+    return browserStore().getItem(keyOf(factionId)) !== null;
   },
 
   /** @returns Every stored playthrough, most recently played first. */

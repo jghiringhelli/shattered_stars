@@ -1,3 +1,4 @@
+import { DURABILITY_SCALE } from "../../../src/config";
 import { describe, it, expect } from "vitest";
 import {
   NEUTRAL_MODIFIERS,
@@ -22,12 +23,12 @@ describe("hullRepairPerSecond modifier knob", () => {
 
   it("reads as a hull repair phrase", () => {
     expect(summarizeRealtimeEffect({ hullRepairPerSecond: 0.05 })).toBe(
-      "repairs 0.05 hull/s out of fire",
+      "repairs 0.05 hull HP/s out of fire",
     );
   });
 
   it("is worth points in the ability price rule", () => {
-    expect(abilityPointValue({ hullRepairPerSecond: 0.1 })).toBeGreaterThan(1);
+    expect(abilityPointValue({ hullRepairPerSecond: 1.2 })).toBeGreaterThan(1);
   });
 });
 
@@ -44,11 +45,11 @@ describe("hull repair cards", () => {
     expect(patch?.realtime?.hullRepairPerSecond ?? 0).toBeGreaterThan(0);
   });
 
-  it("keeps every hull repair card slower than one miniature hull per 10 s", () => {
+  it("keeps every hull repair card slower than one hull token (DURABILITY_SCALE HP) per 10 s", () => {
     const rates = Object.values(UPGRADE_CATALOG)
       .map((card) => card.realtime?.hullRepairPerSecond ?? 0)
       .filter((rate) => rate > 0);
     expect(rates.length).toBeGreaterThanOrEqual(2);
-    expect(rates.every((rate) => rate <= 0.1)).toBe(true);
+    expect(rates.every((rate) => rate <= DURABILITY_SCALE / 10)).toBe(true);
   });
 });

@@ -27,7 +27,7 @@ const IDLE: FlightSchoolObservation = {
   barrelRollCooldownMs: 0,
   pressed: new Set(),
   primaryHits: 0,
-  secondaryShots: 0,
+  secondaryHits: 0,
   markedTargetId: null,
   beaconOnScreen: false,
   enemiesAlive: 0,
@@ -126,7 +126,7 @@ describe("Flight School step machine", () => {
   });
 
   it("secondary, mark and radar complete on their real effects", () => {
-    let state = feed(reach("secondary"), { secondaryShots: 1 });
+    let state = feed(reach("secondary"), { secondaryHits: 1 });
     expect(currentStep(state)?.id).toBe("mark");
     state = feed(state, { markedTargetId: "drone" });
     expect(currentStep(state)?.id).toBe("radar");

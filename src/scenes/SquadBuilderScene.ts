@@ -7,6 +7,7 @@
  */
 
 import Phaser from "phaser";
+import { audioManager } from "../audio/AudioManager";
 import type { FactionId } from "../config";
 import { SHIP_DEFINITIONS } from "../data/ShipDefinitions";
 import {
@@ -117,6 +118,7 @@ export class SquadBuilderScene extends Phaser.Scene {
 
   create(): void {
     addMenuBackdrop(this, { textureId: "nebula_crimson" });
+    audioManager.playSubmenuMusic();
     // Controls from a previous visit were destroyed with the old display list.
     this.menuFocus = null;
     this.modeToggleButton = null;

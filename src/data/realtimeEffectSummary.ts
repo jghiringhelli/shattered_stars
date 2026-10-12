@@ -13,7 +13,7 @@ import type { CombatModifiers, RealtimeEffect } from "../core/CombatModifiers";
 /** Phrases one knob's value, or null when the value is neutral. */
 type KnobPhrase = (value: number) => string | null;
 
-/** Decimal places kept when printing fractional rates (0.15 shields/s). */
+/** Decimal places kept when printing fractional rates (1.44 shield HP/s). */
 const RATE_DECIMALS = 2;
 
 /** Separator between phrases in a one-line summary. */
@@ -112,12 +112,12 @@ const KNOB_PHRASES: Readonly<Record<keyof CombatModifiers, KnobPhrase>> = {
     (n, dir) => `takes ${n}% ${dir} damage with a wingman near`,
   ),
   shieldRegenPerSecond: additive(
-    (v) => `regenerates ${formatNumber(v)} shields/s`,
+    (v) => `regenerates ${formatNumber(v)} shield HP/s`,
   ),
   hullRepairPerSecond: additive(
-    (v) => `repairs ${formatNumber(v)} hull/s out of fire`,
+    (v) => `repairs ${formatNumber(v)} hull HP/s out of fire`,
   ),
-  shieldsPerKill: additive((v) => `${signed(v)} shields per kill`),
+  shieldsPerKill: additive((v) => `${signed(v)} shield HP per kill`),
   stressRateMultiplier: scaled((n, dir) => `${n}% ${dir} maneuver stress`),
   stressReliefTiers: additive(
     (v) => `maneuvers ${formatNumber(v)} tier easier on stress`,
@@ -136,6 +136,14 @@ const KNOB_PHRASES: Readonly<Record<keyof CombatModifiers, KnobPhrase>> = {
   ),
   projectsAura: additive(() => "projects faction aura"),
   auraRadiusBonus: additive((v) => `aura radius +${percent(v)}%`),
+  auraMagnitudeBonus: additive((v) => `aura strength +${percent(v)}%`),
+  auraStressReliefTiers: additive(
+    (v) =>
+      `allies in the aura: maneuvers ${formatNumber(v)} tier easier on stress`,
+  ),
+  auraHitChanceBonus: additive(
+    (v) => `allies in the aura +${percent(v)}% hit chance`,
+  ),
   deathBlastDamage: additive(
     (v) => `explodes for ${formatNumber(v)} dmg when destroyed`,
   ),

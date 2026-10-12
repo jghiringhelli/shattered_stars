@@ -15,6 +15,7 @@ import {
   type CombatModifiers,
 } from "../../core/CombatModifiers";
 import type { ManeuverDefinition } from "../../core/types";
+import { UNRESTRICTED_CAPABILITIES } from "../../core/flightCapabilityTypes";
 import {
   getModeCombatStats,
   type ModeCombatStats,
@@ -59,6 +60,27 @@ export const SCHOOL_SHIPS = {
   { definitionId: string; faction: FactionId }
 >;
 
+/**
+ * The trainee flies a simulator configuration with every special and dash
+ * unlocked, so each lesson can be practised in one ship; every real ship
+ * flies only what its dial and action bar list (FlightCapabilities).
+ *
+ * @param role - The ship's role in the course.
+ * @param flight - Its flight state as built from its card.
+ * @returns The flight state (unrestricted for the trainee).
+ */
+function trainerFlight(
+  role: SchoolRole,
+  flight: CycleFlightState,
+): CycleFlightState {
+  if (role !== "player") return flight;
+  const control = {
+    ...flight.motion.control,
+    capabilities: UNRESTRICTED_CAPABILITIES,
+  };
+  return { ...flight, motion: { ...flight.motion, control } };
+}
+
 /** Sprite depth (above the background, below the HUD). */
 const SHIP_DEPTH = 10;
 
@@ -91,7 +113,7 @@ export function spawnSchoolShip(
     shields: stats.shields,
     maxShields: stats.maxShields,
     combatStats: stats,
-    flight: createCycleFlight(definitionId, pose),
+    flight: trainerFlight(role, createCycleFlight(definitionId, pose)),
     dial: getShipDial(definitionId),
     weaponCooldown: 0,
     modifiers: NEUTRAL_MODIFIERS,

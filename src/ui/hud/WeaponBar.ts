@@ -45,6 +45,10 @@ const SWEEP_SHADE_ALPHA = 0.6;
 const SWEEP_EDGE_WIDTH = 2;
 const SELECT_MARKER = { halfWidth: 5, height: 5, gap: 4 } as const;
 const HINT_INSET = 7;
+/** Lock ring radius as a fraction of the slot, its width and start (top). */
+const LOCK_RING_RADIUS = 0.47;
+const LOCK_RING_WIDTH = 2;
+const LOCK_RING_START_RAD = -Math.PI / 2;
 const BAR_ALPHA_SCALE = 0.6;
 
 /** WeaponBar options. */
@@ -187,6 +191,7 @@ export class WeaponBar {
       alpha,
     );
     this.drawCooldown(slot.cooldown, cx);
+    this.drawLock(slot.lock, cx);
     this.drawCharges(slot, cx);
     if (slot.selected) this.drawSelectMarker(cx);
     this.showHint(index, slot.keyHint, cx);
@@ -203,6 +208,32 @@ export class WeaponBar {
     g.lineStyle(SWEEP_EDGE_WIDTH, HOLO_PALETTE.warning, 1);
     g.beginPath();
     g.arc(cx, 0, r, span.start, span.end, false);
+    g.strokePath();
+  }
+
+  /**
+   * Lock ring around a launcher slot: a growing amber arc while the lock is
+   * acquired, a full green ring once locked.
+   */
+  private drawLock(lock: number | undefined, cx: number): void {
+    if (lock === undefined || lock <= 0) return;
+    const g = this.graphics;
+    const r = this.slotSize * LOCK_RING_RADIUS;
+    const locked = lock >= 1;
+    g.lineStyle(
+      LOCK_RING_WIDTH,
+      locked ? HOLO_PALETTE.success : HOLO_PALETTE.warning,
+      1,
+    );
+    g.beginPath();
+    g.arc(
+      cx,
+      0,
+      r,
+      LOCK_RING_START_RAD,
+      LOCK_RING_START_RAD + Math.min(1, lock) * Math.PI * 2,
+      false,
+    );
     g.strokePath();
   }
 

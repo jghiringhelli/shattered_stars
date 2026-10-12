@@ -1,23 +1,31 @@
 /**
  * Skirmish HUD model — specification tests: the player readout, radar
- * contacts, the marked target and the weapon bar built from scene state.
+ * contacts, the marked target, and the weapon bar the scene hands in.
  */
 
 import { describe, it, expect } from "vitest";
 import {
-  BOMB_HINT,
   buildBattleHudSnapshot,
-  cooldownFraction,
   maneuverHudLabel,
-  NEXT_WEAPON_HINT,
-  nextWeaponSlot,
   selectHudTargetId,
   toContacts,
   toPlayerHudState,
-  toWeaponSlots,
-  TURRET_HINT,
 } from "../../../../src/scenes/arcadeBattle/arcadeHudModel";
-import { HudShipBuilder, ordnanceSlot, turretSlot } from "./hudShipBuilder";
+import { HudShipBuilder } from "./hudShipBuilder";
+import type { WeaponSlotDescriptor } from "../../../../src/ui/hud/types";
+
+/** The weapon bar the scene hands in (built by the shared weapon HUD model). */
+const WEAPON_BAR: WeaponSlotDescriptor[] = [
+  { id: "primary", kind: "primary", cooldown: 0, selected: false },
+  {
+    id: "secondary-0",
+    kind: "torpedo",
+    cooldown: 0,
+    selected: true,
+    charges: 2,
+    maxCharges: 2,
+  },
+];
 
 const WORLD = 6000;
 const CAMERA = {
@@ -168,99 +176,6 @@ describe("selectHudTargetId", () => {
   });
 });
 
-describe("toWeaponSlots", () => {
-  it("lists the primary laser alone for a bare ship", () => {
-    const slots = toWeaponSlots(HudShipBuilder.aPlayer().build(), -1);
-    expect(slots.map((s) => [s.id, s.kind, s.selected])).toEqual([
-      ["primary", "primary", true],
-    ]);
-  });
-
-  it("shows the laser as cooling for the rest of the cycle once fired", () => {
-    const ship = HudShipBuilder.aPlayer()
-      .withControl({ firedLaserThisCycle: true, maneuverProgress: 0.25 })
-      .build();
-    expect(toWeaponSlots(ship, -1)[0]!.cooldown).toBeCloseTo(0.75);
-  });
-
-  it("lists ordnance with charges, cooldown and selection, then the turret", () => {
-    const ship = HudShipBuilder.aPlayer()
-      .withOrdnance(
-        ordnanceSlot({
-          charges: 1,
-          maxCharges: 2,
-          cooldownRemaining: 1000,
-          cooldownMax: 4000,
-        }),
-        ordnanceSlot({ slotIndex: 1, ordnanceClass: "bomb", isHoming: false }),
-      )
-      .withTurret(turretSlot())
-      .build();
-    const slots = toWeaponSlots(ship, 0);
-    expect(slots.map((s) => s.kind)).toEqual([
-      "primary",
-      "missile",
-      "bomb",
-      "turret",
-    ]);
-    expect(slots[1]).toMatchObject({
-      charges: 1,
-      maxCharges: 2,
-      cooldown: 0.25,
-      selected: true,
-    });
-    expect(slots[0]!.selected).toBe(false);
-  });
-
-  it("hints Tab on the slot that weapon cycling selects next", () => {
-    const ship = HudShipBuilder.aPlayer()
-      .withOrdnance(
-        ordnanceSlot(),
-        ordnanceSlot({ slotIndex: 1, ordnanceClass: "torpedo" }),
-      )
-      .build();
-    expect(toWeaponSlots(ship, -1).map((s) => s.keyHint)).toEqual([
-      undefined,
-      NEXT_WEAPON_HINT,
-      undefined,
-    ]);
-    expect(toWeaponSlots(ship, 1)[0]!.keyHint).toBe(NEXT_WEAPON_HINT);
-  });
-
-  it("hints Shift+Space on bombs and G on the turret", () => {
-    const ship = HudShipBuilder.aPlayer()
-      .withOrdnance(ordnanceSlot({ ordnanceClass: "bomb", isHoming: false }))
-      .withTurret(turretSlot())
-      .build();
-    const hints = toWeaponSlots(ship, -1).map((s) => s.keyHint);
-    expect(hints).toEqual([undefined, BOMB_HINT, TURRET_HINT]);
-  });
-});
-
-describe("nextWeaponSlot", () => {
-  it("cycles laser → each ordnance slot → laser", () => {
-    expect(nextWeaponSlot(-1, 2)).toBe(0);
-    expect(nextWeaponSlot(0, 2)).toBe(1);
-    expect(nextWeaponSlot(1, 2)).toBe(-1);
-  });
-
-  it("has nowhere to go without ordnance", () => {
-    expect(nextWeaponSlot(-1, 0)).toBeNull();
-  });
-});
-
-describe("cooldownFraction", () => {
-  it("is the remaining share, clamped to [0, 1]", () => {
-    expect(cooldownFraction(500, 2000)).toBe(0.25);
-    expect(cooldownFraction(-5, 2000)).toBe(0);
-    expect(cooldownFraction(5000, 2000)).toBe(1);
-  });
-
-  it("is 0 for an instant weapon", () => {
-    expect(cooldownFraction(100, 0)).toBe(0);
-  });
-});
-
 describe("buildBattleHudSnapshot", () => {
   const input = (player: ReturnType<HudShipBuilder["build"]> | null) => ({
     player,
@@ -268,7 +183,7 @@ describe("buildBattleHudSnapshot", () => {
       ? [player, HudShipBuilder.anEnemy().at(1000, 700).build()]
       : [],
     playerFaction: "free_confederation",
-    selectedWeaponSlot: -1,
+    weapons: WEAPON_BAR,
     camera: CAMERA,
     worldSize: WORLD,
     sizeOf,
@@ -279,7 +194,7 @@ describe("buildBattleHudSnapshot", () => {
     const { snapshot, targetId } = buildBattleHudSnapshot(input(player));
     expect(targetId).toBe("enemy_0");
     expect(snapshot.contacts[0]!.isTarget).toBe(true);
-    expect(snapshot.weapons).toHaveLength(1);
+    expect(snapshot.weapons).toEqual(WEAPON_BAR);
   });
 
   it("hides player-centric widgets once the player is destroyed", () => {

@@ -200,7 +200,8 @@ async function recover(
   }, s.sceneKey)) as Ship[];
   const projectiles = (await page.evaluate((key: string) => {
     const scene = (window as any).game?.scene.getScene(key) as any;
-    return scene?.projectiles?.length ?? 0;
+    // Primaries resolve instantly; only ordnance flies as projectiles.
+    return scene?.secondaryWeapons?.runtime?.shotsInFlight?.length ?? 0;
   }, s.sceneKey)) as number;
   const samples = (await page.evaluate(() => {
     const t = (window as any).__shipTelemetry;

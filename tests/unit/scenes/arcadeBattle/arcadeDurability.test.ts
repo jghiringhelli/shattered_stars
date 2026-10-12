@@ -14,6 +14,7 @@ import {
   EMERGENCY_REPAIR_SHIELD_AMOUNT,
   MAIN_BEAM_DAMAGE,
   POWER_REDIRECT_ENGINE_REPAIR_PER_SEC,
+  POWER_REDIRECT_SHIELD_REGEN_PER_SEC,
 } from "../../../../src/systems/ShipCrew";
 import {
   DEFAULT_SQUAD_DURABILITY,
@@ -23,6 +24,7 @@ import {
   MAIN_BEAM_HIT_DAMAGE,
   PLAYER_HULL_FLOOR,
   PLAYER_SHIELD_FLOOR,
+  POWER_SHIELD_REGEN_PER_SECOND,
   WINGMAN_HULL_FLOOR,
   realTimeDurability,
   regenerateScaledShields,
@@ -86,8 +88,14 @@ describe("scene-local HP sources", () => {
 });
 
 describe("regenerateScaledShields", () => {
-  it("regenerates miniature points per second at DURABILITY_SCALE", () => {
-    expect(regenerateScaledShields(0, 100, 1, 1000)).toBe(DURABILITY_SCALE);
+  it("regenerates real-time HP per second (rates are HP/s, never rescaled)", () => {
+    expect(regenerateScaledShields(0, 100, 1, 1000)).toBe(1);
+  });
+
+  it("keeps the power-redirect shield regen at its old real-time strength", () => {
+    expect(POWER_SHIELD_REGEN_PER_SECOND).toBe(
+      POWER_REDIRECT_SHIELD_REGEN_PER_SEC * DURABILITY_SCALE,
+    );
   });
 
   it("never exceeds the cap", () => {

@@ -13,21 +13,7 @@ import {
   type BankState,
 } from "../rendering/ShipBanking";
 import { showConfirmDialog } from "../ui/ConfirmDialog";
-import {
-  updateCooldowns,
-  processCommand,
-  canFire,
-} from "../core/ArcadeControls";
-import {
-  createProjectile,
-  updateProjectile,
-  isProjectileAlive,
-  checkProjectileHit,
-  withOnHit,
-  projectileRawDamage,
-  type Projectile,
-} from "../core/Projectile";
-import { consumeOrdnanceCharge } from "../arcade/ArcadeOrdnance";
+import { updateCooldowns } from "../core/ArcadeControls";
 import {
   type GestureState,
   INITIAL_GESTURE_STATE,
@@ -35,48 +21,50 @@ import {
 import { playFlightEventFx } from "../arcade/ArcadeFX";
 import {
   drawEnergyBolt,
-  drawEnergyOrb,
   CANNON_BOLT_LENGTH_PX,
   CANNON_BOLT_WIDTH_PX,
 } from "../rendering/BoltRenderer";
 import { InputManager } from "../input/InputManager";
+import { openSettingsOverBattle } from "./battleUi/openSettingsOverBattle";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import { trackModeEnd, trackModeStart } from "../telemetry/telemetry";
 import { matchStats } from "../telemetry/matchTelemetry";
-import {
-  cycleEvent,
-  projectileShot,
-  stressEvent,
-} from "../telemetry/matchEvents";
+import { cycleEvent, stressEvent } from "../telemetry/matchEvents";
 import type { ActionIntent } from "../input/InputTypes";
-import {
-  tickOrdnanceCooldowns,
-  canFireOrdnance,
-} from "../arcade/ArcadeOrdnance";
-import {
-  tickTurretCooldown,
-  canFireTurret,
-  consumeTurretShot,
-} from "../arcade/ArcadeTurret";
-import {
-  MIN_DAMAGE_TAKEN_MULTIPLIER,
-  laserDamageWithModifiers,
-  type CombatModifiers,
-} from "../core/CombatModifiers";
+import type { CombatModifiers } from "../core/CombatModifiers";
 import { getShipDefinition } from "../data/ShipDefinitions";
-import { distance } from "../systems/MovementSystem";
+import { calculateHitChance } from "../data/ModeBalancing";
 import { applyInstantStress, accrueCycleStress } from "../arcade/ArcadeStress";
 import {
   deathBlastDamage,
   deathBlastTargets,
   hasWingman,
-  laserHitBonus,
   rewardKill,
 } from "../arcade/PilotAbilityCombat";
-import { incomingDamageMultiplier } from "../arcade/ShotConditions";
+import { absorbDamage, resolveDiceAttack } from "../arcade/systems/DiceAttack";
+import {
+  armorReductionOf,
+  damageMitigationOf,
+} from "../arcade/systems/DamageRules";
+import { attackIntervalMs } from "../arcade/systems/CombatTempo";
+import { nearestTargetInArc } from "../arcade/systems/ArcTargeting";
+import { torusRangePx } from "../arcade/weapons/FiringGeometry";
+import type {
+  BattleWeapons,
+  BattleWeaponsLink,
+  WeaponHit,
+} from "./battleUi/BattleWeapons";
+import {
+  createSceneWeapons,
+  weaponBarSlots,
+  weaponBodyOf,
+} from "./battleUi/sceneWeapons";
+import { primaryWeaponSlot } from "./battleUi/hudSnapshot";
+import { assignQuickBuilds } from "../arcade/systems/QuickBuildEquip";
 import {
   BATTLEFIELD_SIZE,
   CYCLE_DURATION_MS,
+  RANGE_3,
   SHIP_SIZES,
   type FactionId,
   type ShipSize,
@@ -188,26 +176,19 @@ import {
   ArcadeBattleHud,
   type ArcadeHudReadout,
 } from "./arcadeBattle/ArcadeBattleHud";
-import { TARGET_ARC_HALF_DEG } from "./arcadeBattle/arcadeHudModel";
-import { nearestInArc } from "./arcadeBattle/arcTargeting";
 import {
   createEndOverlay,
   createPauseOverlay,
 } from "./arcadeBattle/ArcadeOverlays";
 import { spawnDeflectFlash } from "./arcadeBattle/hitFx";
 import {
-  LASER_BOLT_SPEED_PX_PER_S,
-  type FiringBody,
-} from "./arcadeBattle/aiFiringSolution";
-import { ordnanceInReach, pickAiShot } from "./arcadeBattle/aiShotSelection";
-import {
   ArcadeBotFleet,
   DEFAULT_SKIRMISH_DIFFICULTY,
 } from "./arcadeBattle/ArcadeBotFleet";
 import { toBotContact } from "./arcadeBattle/arcadeBotContact";
-import { projectileLeverBonus } from "./arcadeBattle/projectileLevers";
 import { selectHudTargetId } from "./arcadeBattle/arcadeHudModel";
-import { createSeededRng } from "../utils/random";
+import { createSeededRng, random } from "../utils/random";
+import type { WeaponSlotDescriptor } from "../ui/hud/types";
 import {
   createScenarioController,
   type ScenarioController,
@@ -217,6 +198,7 @@ import type { ScenarioReadout } from "./scenario/scenarioReadout";
 import type { ScreenRect } from "../ui/hud/screenRect";
 import {
   createArcadeShip,
+  equipLoadout,
   spawnArcadeShip,
   type ArcadeShip,
 } from "./arcadeBattle/arcadeShipFactory";
@@ -243,11 +225,18 @@ interface ShipSprite extends Phaser.GameObjects.Container {
   bankState: BankState;
 }
 
-/** Seconds a cloak lasts before upgrades (Phantom Strike extends it). */
-const BASE_CLOAK_SECONDS = 8;
-/** Hit-test radius of a ship for projectiles (px, before the bolt radius). */
-const SHIP_HIT_RADIUS_PX = 15;
 /** Score for each enemy the player's side destroys. */
+/** Gunner crew turret traverse (degrees per second). */
+const GUNNER_TURN_DEG_PER_S = 180;
+/** The capital main beam reaches twice X-Wing range 3. */
+const MAIN_BEAM_RANGE_PX = 2 * RANGE_3;
+const MAIN_BEAM_COLOR = 0x99ddff;
+const PLAYER_LASER_COLOR = 0xff8800;
+const ENEMY_LASER_COLOR = 0x00ff88;
+/** Time a primary bolt takes to reach its target (ms, visual only). */
+const LASER_BOLT_FLIGHT_MS = 110;
+/** Bolt graphics point "up"; screen atan2 0 points right. */
+const NORTH_UP_OFFSET_DEG = 90;
 const KILL_SCORE = 100;
 /** Seeds drawn for a battle whose config names none: [0, 2^31). */
 const RANDOM_BATTLE_SEED_RANGE = 2 ** 31;
@@ -261,20 +250,26 @@ function shipSizeOf(definitionId: string): ShipSize {
 }
 
 /**
- * @param ship - A ship record.
- * @returns Its position, heading and dial speed (for firing solutions).
+ * @param slot - A side of the battle config.
+ * @returns One quick build per ship: the Squad Builder's pick, else the
+ *   ship's default build (unique pilots never fly twice).
  */
-function firingBodyOf(ship: ArcadeShip): FiringBody {
-  return { x: ship.x, y: ship.y, angle: ship.angle, speed: ship.control.speed };
+function quickBuildsOf(slot: {
+  readonly ships: readonly string[];
+  readonly loadoutChoices?: Record<string, string>;
+}): (string | null)[] {
+  return assignQuickBuilds(
+    slot.ships,
+    slot.ships.map((_, index) => slot.loadoutChoices?.[String(index)]),
+  );
 }
 
 export class ArcadeBattleScene extends Phaser.Scene {
   private ships: Map<string, ArcadeShip> = new Map();
   private shipSprites: Map<string, ShipSprite> = new Map();
   private telemetry: ShipTelemetry | null = null;
-  private projectiles: Projectile[] = [];
-  private projectileSprites: Map<string, Phaser.GameObjects.Graphics> =
-    new Map();
+  /** Secondary weapons (missiles, torpedoes, turrets, bombs, mines, cloak). */
+  private weapons: BattleWeapons | null = null;
   private healthBars: Map<string, HealthBar> = new Map();
   /** Repair mechanic + overlay shimmer + repair drones (built in create). */
   private repairFeedback: ShipRepairFeedback | null = null;
@@ -313,7 +308,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
   /**
    * Edge-triggered intents (KTURN, SHARP_TURN_*, SEGNOR_*, TALLON_*,
-   * CREW_CYCLE, CLOAK, WEAPON_CYCLE, FIRE_SECONDARY, COMMANDER_ORDER_*, plus
+   * CREW_CYCLE, COMMANDER_ORDER_*, MARK_TARGET (weapon keys go to the
+   * shared BattleWeapons), plus
    * a manual rising-edge for THRUST_UP/DOWN) queued here by an onAny()
    * subscriber and drained via consumeEdge() — mirrors the old
    * Phaser.Input.Keyboard.JustDown() checks without depending on Phaser's
@@ -330,9 +326,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
     "TALLON_LEFT",
     "TALLON_RIGHT",
     "CREW_CYCLE",
-    "CLOAK",
-    "WEAPON_CYCLE",
-    "FIRE_SECONDARY",
     "COMMANDER_ORDER_1",
     "COMMANDER_ORDER_2",
     "COMMANDER_ORDER_3",
@@ -386,9 +379,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
    */
   private cameraVirtualX = BATTLEFIELD_SIZE / 2;
   private cameraVirtualY = BATTLEFIELD_SIZE / 2;
-
-  /** -1 = primary laser; 0/1/2 = ordnance slot index */
-  private selectedWeaponSlot = -1;
 
   /** The AI: a bot pilot per AI ship, a squad command per faction, the marks. */
   private botFleet: ArcadeBotFleet | null = null;
@@ -499,9 +489,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
    */
   private adoptShip(ship: ArcadeShip): void {
     this.ships.set(ship.id, ship);
+    this.armShip(ship);
     if (ship.owner === "player") {
       this.playerShipId = ship.id;
-      this.selectedWeaponSlot = -1;
       this.pilotControl = INITIAL_PILOT_CONTROL;
     } else this.botFleet?.enlist(ship.id, ship.faction);
     this.createShipSprite(ship);
@@ -513,6 +503,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.inputSubscriptionIds = [];
     this.pendingEdgeIntents.clear();
     this.hitLedger.clear();
+    this.weapons?.destroy();
+    this.weapons = null;
     this.hud?.destroy();
     this.hud = null;
     this.reinforcements?.destroy();
@@ -586,6 +578,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       this.registry.get("battleConfig"),
       this.scenarioLink(),
     );
+    this.weapons = createSceneWeapons(this, this.weaponsLink(), this.hitLedger);
     this.spawnShips();
     this.createHealthBars();
     this.repairFeedback = new ShipRepairFeedback({
@@ -637,8 +630,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private resetBattleState(): void {
     this.ships.clear();
     this.shipSprites.clear();
-    this.projectiles = [];
-    this.projectileSprites.clear();
     this.healthBars.clear();
     this.capitalIndicators.clear();
     this.hitLedger.clear();
@@ -648,7 +639,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.score = 0;
     this.isPaused = false;
     this.pauseOverlay = null;
-    this.selectedWeaponSlot = -1;
     this.activeAuras = new Map();
     this.playerWasAuraCovered = false;
     this.pilotControl = INITIAL_PILOT_CONTROL;
@@ -744,9 +734,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.updateAI(dt);
     this.updateShips(dt);
     this.updateAuras(dt);
-    this.updateProjectiles(dt);
-    this.updateTurrets();
-    this.checkCollisions();
+    // Secondaries first: a held or chosen launch is this cycle's attack.
+    this.weapons?.update(dt, this.battleClockMs);
+    this.firePrimaries(dt);
     const reinforced = this.reinforcements?.tick(dt, this.battleClockMs);
     if (this.scenario?.tick(dt, this.battleClockMs) || reinforced) return;
     this.updateFleeDetector(dt);
@@ -840,10 +830,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.reinforcements?.setHudVisible(false);
     this.pauseOverlay = createPauseOverlay(this, {
       onResume: () => this.resumeBattle(),
-      onSettings: () =>
-        this.scene.launch("SettingsScene", {
-          returnScene: "ArcadeBattleScene",
-        }),
+      onSettings: () => openSettingsOverBattle(this),
       onQuit: () =>
         showConfirmDialog({
           scene: this,
@@ -873,40 +860,24 @@ export class ArcadeBattleScene extends Phaser.Scene {
     if (this.consumeEdge("CREW_CYCLE")) {
       const def = getShipDefinition(ship.definitionId);
       const sz = def?.baseStats.size;
-      const hasTurret = !!ship.turretSlot && (sz === "large" || sz === "huge");
+      const hasTurret =
+        !!this.weapons?.runtime.arsenalOf(ship.id)?.turret &&
+        (sz === "large" || sz === "huge");
       const isCapital = def?.role === "capital";
       const roles = getAvailableCrewRoles(hasTurret, isCapital);
       ship.crewMode = nextCrewRole(ship.crewMode, roles);
     }
 
-    // Cloak toggle (C key) — 8-second invisibility; breaks on firing
-    if (this.consumeEdge("CLOAK") && !ship.isCloaked) {
-      ship.isCloaked = true;
-      ship.cloakTimer = BASE_CLOAK_SECONDS + ship.modifiers.cloakDurationBonus;
-    }
-
     if (this.consumeEdge("MARK_TARGET")) this.markHudTarget(ship);
 
+    // Weapons autofire; FIRE_SECONDARY / WEAPON_CYCLE / CLOAK are read by
+    // the shared BattleWeapons. Crew modes only change what the player steers.
     if (ship.crewMode === "gunner") {
       this.handleGunnerInput(ship, deltaMs / 1000);
       return;
     }
-
-    if (ship.crewMode === "commander") {
-      this.handleCommanderInput(ship, deltaMs);
-      return;
-    }
-
-    if (this.consumeEdge("WEAPON_CYCLE")) this.selectNextWeapon(ship);
-
-    // SHIFT+SPACE deploys a bomb; the selected weapon (laser or ordnance)
-    // always autofires on its own cooldown/charges — no button needed.
-    if (this.framesAlive > 5) {
-      if (this.consumeEdge("FIRE_SECONDARY")) {
-        this.deployBomb(ship);
-      }
-      this.fireSelectedWeapon(ship);
-    }
+    this.weapons?.runtime.releaseTurret(ship.id);
+    if (ship.crewMode === "commander") this.handleCommanderInput(ship, deltaMs);
   }
 
   /**
@@ -938,6 +909,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     );
     this.pilotControl = result.pilot;
     this.applyFlightResult(ship, result);
+    this.weapons?.showRefusals(result.refusals, ship);
     matchStats.record({ kind: "flight", events: result.events });
     matchStats.record(stressEvent(result.stress, deltaMs));
   }
@@ -1011,63 +983,11 @@ export class ArcadeBattleScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * Deploys the first ready bomb-class ordnance slot backward from the ship.
-   * Maps to SHIFT+SPACE — drop a bomb behind you as you fly over an enemy.
-   *
-   * @param ship - The deploying ship.
-   */
-  private deployBomb(ship: ArcadeShip): void {
-    const slotIdx = ship.ordnanceSlots.findIndex(
-      (s) =>
-        s.ordnanceClass === "bomb" && s.charges > 0 && s.cooldownRemaining <= 0,
-    );
-    if (slotIdx === -1) return;
-    const slot = ship.ordnanceSlots[slotIdx]!;
-    const deployAngle = (ship.angle + 180) % 360;
-    const rad = (deployAngle - 90) * (Math.PI / 180);
-    const proj = withOnHit(
-      createProjectile(
-        ship.x + Math.cos(rad) * 20,
-        ship.y + Math.sin(rad) * 20,
-        deployAngle,
-        ship.id,
-        ship.faction,
-        slot.damage,
-        false,
-        null,
-        0,
-        0,
-      ),
-      { stressOnHit: slot.stressOnHit, bonusDamageVsUnshielded: 0 },
-    );
-    this.projectiles.push(proj);
-    consumeOrdnanceCharge(slot);
-    const sprite = this.add.graphics();
-    drawEnergyOrb(sprite, {
-      color: ship.faction === this.playerFaction ? 0xffcc00 : 0xaaff00,
-      radius: 4,
-    });
-    sprite.setPosition(proj.x, proj.y);
-    sprite.setDepth(5);
-    this.projectileSprites.set(proj.id, sprite);
-  }
-
   private updateShips(deltaMs: number): void {
     for (const ship of this.ships.values()) {
       if (ship.hull <= 0) continue;
 
-      // Update cooldowns
       ship.control = updateCooldowns(ship.control, deltaMs);
-      const wasReady = ship.ordnanceSlots.map(canFireOrdnance);
-      tickOrdnanceCooldowns(ship.ordnanceSlots, deltaMs);
-      if (ship.id === this.playerShipId) {
-        const becameReady = ship.ordnanceSlots.some(
-          (slot, i) => !wasReady[i] && canFireOrdnance(slot),
-        );
-        if (becameReady) audioManager.playSound("powerup", 0.3);
-      }
-      if (ship.turretSlot) tickTurretCooldown(ship.turretSlot, deltaMs);
 
       // Dead in the water: a disabled engines system halts all movement.
       const enginesOffline =
@@ -1123,7 +1043,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       ship.y =
         ((ship.y % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) % BATTLEFIELD_SIZE;
 
-      this.tickCloak(ship, deltaMs);
+      ship.isCloaked = this.weapons?.runtime.isCloaked(ship.id) ?? false;
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
   }
@@ -1179,28 +1099,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
         : aura;
       this.repairFeedback?.auraRepair(ship, rates, deltaMs);
     }
-  }
-
-  /**
-   * Extra laser damage the attacker's pilot ability earns on this hit.
-   *
-   * @param proj - The bolt that hit.
-   * @param attacker - Who fired it (undefined once destroyed).
-   * @param target - The ship hit.
-   * @returns Extra damage (0 for ordnance, or when no condition holds).
-   */
-  private abilityHitBonus(
-    proj: Projectile,
-    attacker: ArcadeShip | undefined,
-    target: ArcadeShip,
-  ): number {
-    if (!proj.isLaser || !attacker || attacker.hull <= 0) return 0;
-    return laserHitBonus({
-      attacker,
-      target,
-      attackerHasWingman: this.fliesWithWingman(attacker),
-      nowMs: this.time.now,
-    });
   }
 
   /**
@@ -1290,75 +1188,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     }
     this.hitLedger.forget(target.id);
     this.botFleet?.forget(target.id);
-  }
-
-  /**
-   * The damage levers on a projectile hit (ShotLevers): the mark bonus when
-   * the attacker's side marked the target, the rear-arc bonus when it came
-   * from the target's tail. The hit-chance levers do not apply to real
-   * projectiles — whether a shot lands is the pilot's aim.
-   *
-   * @param proj - The projectile that struck.
-   * @param ship - The ship struck.
-   * @returns Extra damage (0 when neither lever holds).
-   */
-  private leverHitBonus(proj: Projectile, ship: ArcadeShip): number {
-    const marked =
-      this.botFleet?.isMarkedBy(
-        proj.ownerFaction,
-        ship.id,
-        this.battleClockMs,
-      ) ?? false;
-    return projectileLeverBonus({
-      projectile: proj,
-      target: ship,
-      marked,
-      worldSize: BATTLEFIELD_SIZE,
-      baseDamage: proj.damage,
-    });
-  }
-
-  private tickCloak(ship: ArcadeShip, deltaMs: number): void {
-    if (!ship.isCloaked) return;
-    ship.cloakTimer -= deltaMs / 1000;
-    if (ship.cloakTimer <= 0) {
-      ship.isCloaked = false;
-      ship.cloakTimer = 0;
-    }
-  }
-
-  private updateProjectiles(deltaMs: number): void {
-    const alive: Projectile[] = [];
-
-    for (const proj of this.projectiles) {
-      let targetX: number | undefined;
-      let targetY: number | undefined;
-      if (proj.isHoming && proj.homingTargetId) {
-        const homingTarget = this.ships.get(proj.homingTargetId);
-        if (homingTarget && homingTarget.hull > 0) {
-          targetX = homingTarget.x;
-          targetY = homingTarget.y;
-        }
-      }
-      const updated = updateProjectile(proj, deltaMs, targetX, targetY);
-
-      if (
-        isProjectileAlive(updated) &&
-        updated.x >= 0 &&
-        updated.x <= BATTLEFIELD_SIZE &&
-        updated.y >= 0 &&
-        updated.y <= BATTLEFIELD_SIZE
-      ) {
-        alive.push(updated);
-      } else {
-        // Remove sprite
-        const sprite = this.projectileSprites.get(proj.id);
-        sprite?.destroy();
-        this.projectileSprites.delete(proj.id);
-      }
-    }
-
-    this.projectiles = alive;
+    this.weapons?.forget(target.id);
   }
 
   /**
@@ -1379,7 +1209,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
       if (ship.hull <= 0) continue;
       if (ship.owner === "player" && !this.debugAutopilot) continue;
       this.flyAiShip(fleet, ship, deltaMs);
-      this.fireAiWeapons(fleet, ship);
     }
   }
 
@@ -1407,255 +1236,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   /**
-   * An AI ship's weapons: one laser attack per cycle, spent on a firing
-   * solution — its pilot's target first, else the nearest other enemy it
-   * has a solution on — and ordnance at its pilot's target when it is
-   * inside the launch cone and reach (homing ordnance locks that target).
-   *
-   * @param fleet - The battle's AI.
-   * @param ship - The AI ship.
-   */
-  private fireAiWeapons(fleet: ArcadeBotFleet, ship: ArcadeShip): void {
-    const targetId = fleet.targetIdFor(ship.id, ship.faction);
-    const enemies = this.attackableEnemiesOf(ship);
-    if (canFire(ship.control)) {
-      const shot = pickAiShot(
-        firingBodyOf(ship),
-        enemies.map((enemy) => ({ ...firingBodyOf(enemy), id: enemy.id })),
-        targetId,
-        { boltSpeed: LASER_BOLT_SPEED_PX_PER_S, worldSize: BATTLEFIELD_SIZE },
-      );
-      if (shot) {
-        ship.control = processCommand(ship, ship.control, "fire");
-        this.fireWeapon(ship, shot.aim);
-      }
-    }
-    const target = enemies.find((enemy) => enemy.id === targetId);
-    if (!target || !ordnanceInReach(ship, target, BATTLEFIELD_SIZE)) return;
-    const slotIndex = ship.ordnanceSlots.findIndex(canFireOrdnance);
-    if (slotIndex >= 0) this.fireOrdnance(ship, slotIndex, target);
-  }
-
-  /**
-   * @param ship - The attacking ship.
-   * @returns Living enemies of the ship that are not immune to it this cycle.
-   */
-  private attackableEnemiesOf(ship: ArcadeShip): ArcadeShip[] {
-    const enemies: ArcadeShip[] = [];
-    for (const view of this.frameCache?.aliveEnemiesOf(ship.faction) ?? []) {
-      const enemy = this.ships.get(view.id);
-      if (enemy && enemy.hull > 0 && !this.isImmuneTo(ship, enemy))
-        enemies.push(enemy);
-    }
-    return enemies;
-  }
-
-  /**
-   * Advances weapon selection: laser → slot 0 → slot 1 → … → laser.
-   * No-op when the ship has no ordnance.
-   *
-   * @param ship - The player ship.
-   */
-  private selectNextWeapon(ship: ArcadeShip): void {
-    if (ship.ordnanceSlots.length === 0) return;
-    this.selectedWeaponSlot =
-      this.selectedWeaponSlot >= ship.ordnanceSlots.length - 1
-        ? -1
-        : this.selectedWeaponSlot + 1;
-  }
-
-  /**
-   * Fires the currently selected weapon.
-   * If the selected ordnance cannot fire (cooldown / no charges), cycles
-   * forward through remaining slots; falls back to the primary laser if
-   * nothing is ready.
-   *
-   * @param ship - The player ship.
-   */
-  private fireSelectedWeapon(ship: ArcadeShip): void {
-    if (this.selectedWeaponSlot < 0) {
-      // Cloaked ships hold laser fire — autofiring the laser would decloak
-      // them the instant cloak activates, since firing always breaks cloak.
-      if (canFire(ship.control) && !ship.isCloaked) {
-        ship.control = processCommand(ship, ship.control, "fire");
-        this.fireWeapon(ship);
-      }
-      return;
-    }
-
-    const slot = ship.ordnanceSlots[this.selectedWeaponSlot];
-    if (slot && canFireOrdnance(slot)) {
-      this.fireOrdnance(ship, this.selectedWeaponSlot);
-      return;
-    }
-
-    // Selected ordnance can't fire — check remaining slots in forward order
-    const count = ship.ordnanceSlots.length;
-    for (let offset = 1; offset <= count; offset++) {
-      const idx = (this.selectedWeaponSlot + offset) % count;
-      if (canFireOrdnance(ship.ordnanceSlots[idx]!)) {
-        this.selectedWeaponSlot = idx;
-        this.fireOrdnance(ship, idx);
-        return;
-      }
-    }
-
-    // Nothing ready — fall back to laser (still holds fire while cloaked)
-    this.selectedWeaponSlot = -1;
-    if (canFire(ship.control) && !ship.isCloaked) {
-      ship.control = processCommand(ship, ship.control, "fire");
-      this.fireWeapon(ship);
-    }
-  }
-
-  /**
-   * Fires the primary laser from the ship's nose.
-   *
-   * @param ship - The firing ship.
-   * @param aimAngle - Bolt heading (°); the nose by default, an AI's
-   *   lead-intercept bearing when it has a firing solution.
-   */
-  private fireWeapon(ship: ArcadeShip, aimAngle: number = ship.angle): void {
-    // Firing breaks cloak
-    ship.isCloaked = false;
-    ship.cloakTimer = 0;
-    // Forward laser damage capped at 2 — secondary weapons handle higher burst.
-    // Stressed pilots shoot less accurately: 25% damage penalty.
-    const baseAttack =
-      getShipDefinition(ship.definitionId)?.baseStats.attack ?? 2;
-    const stressMult = ship.stress.isStressed ? 0.75 : 1;
-    const auraBonus = this.activeAuras.get(ship.id)?.damageBonus ?? 0;
-    const baseDamage =
-      Math.max(1, Math.round(Math.min(baseAttack, 2) * stressMult)) + auraBonus;
-    const damage = laserDamageWithModifiers(
-      baseDamage,
-      ship.modifiers,
-      ship.stress.isStressed,
-    );
-    // Spawn projectile from ship nose
-    const rad = (ship.angle - 90) * (Math.PI / 180);
-    const spawnDist = 20;
-    const proj = {
-      ...withOnHit(
-        createProjectile(
-          ship.x + Math.cos(rad) * spawnDist,
-          ship.y + Math.sin(rad) * spawnDist,
-          aimAngle,
-          ship.id,
-          ship.faction,
-          damage,
-        ),
-        {
-          stressOnHit: ship.modifiers.stressOnHit,
-          bonusDamageVsUnshielded: ship.modifiers.bonusDamageVsUnshielded,
-        },
-      ),
-      isLaser: true,
-    };
-
-    this.projectiles.push(proj);
-    matchStats.record({
-      kind: "shot",
-      friendly: ship.faction === this.playerFaction,
-      weapon: "primary",
-      hit: false,
-    });
-
-    // Create sprite — a rounded, rimmed bolt aligned with travel direction
-    const sprite = this.add.graphics();
-    drawEnergyBolt(sprite, {
-      color: ship.faction === this.playerFaction ? 0xff8800 : 0x00ff88,
-      length: CANNON_BOLT_LENGTH_PX,
-      width: CANNON_BOLT_WIDTH_PX,
-    });
-    sprite.setPosition(proj.x, proj.y);
-    sprite.setAngle(proj.angle);
-    sprite.setDepth(5);
-    this.projectileSprites.set(proj.id, sprite);
-  }
-
-  /**
-   * Fires an ordnance slot for the given ship. Homing ordnance locks the
-   * given target, else the nearest enemy in the forward arc; bombs fly
-   * straight (no target).
-   *
-   * @param ship - The firing ship.
-   * @param slotIndex - Index into ship.ordnanceSlots (0/1/2).
-   * @param lockTarget - The ship a homing weapon locks (AI: its pilot's target).
-   */
-  private fireOrdnance(
-    ship: ArcadeShip,
-    slotIndex: number,
-    lockTarget?: ArcadeShip,
-  ): void {
-    const slot = ship.ordnanceSlots[slotIndex];
-    if (!slot || !canFireOrdnance(slot)) return;
-
-    const bestTarget = slot.isHoming
-      ? (lockTarget ?? this.lockTargetFor(ship))
-      : null;
-
-    consumeOrdnanceCharge(slot);
-
-    const rad = (ship.angle - 90) * (Math.PI / 180);
-    const proj = withOnHit(
-      createProjectile(
-        ship.x + Math.cos(rad) * 20,
-        ship.y + Math.sin(rad) * 20,
-        ship.angle,
-        ship.id,
-        ship.faction,
-        slot.damage,
-        slot.isHoming,
-        bestTarget?.id ?? null,
-        slot.homingTurnRate,
-        slot.homingTurnBudget,
-      ),
-      { stressOnHit: slot.stressOnHit, bonusDamageVsUnshielded: 0 },
-    );
-    this.projectiles.push(proj);
-    matchStats.record({
-      kind: "shot",
-      friendly: ship.faction === this.playerFaction,
-      weapon: "ordnance",
-      hit: false,
-    });
-
-    const sprite = this.add.graphics();
-    const isPlayerFaction = ship.faction === this.playerFaction;
-    const missileColor = isPlayerFaction ? 0xff6600 : 0xff2200;
-    const bombColor = isPlayerFaction ? 0xffcc00 : 0xaaff00;
-    drawEnergyOrb(sprite, {
-      color: slot.isHoming ? missileColor : bombColor,
-      radius: slot.ordnanceClass === "torpedo" ? 5 : 4,
-    });
-    sprite.setPosition(proj.x, proj.y);
-    sprite.setDepth(5);
-    this.projectileSprites.set(proj.id, sprite);
-  }
-
-  /**
-   * The nearest visible enemy in this ship's forward arc — what a homing
-   * missile fired now locks, and what the HUD marks as the player's target.
-   *
-   * @param ship - The firing ship.
-   * @returns The target, or null when no enemy is in the arc.
-   */
-  private lockTargetFor(ship: ArcadeShip): ArcadeShip | null {
-    const enemies = [...this.ships.values()].filter(
-      (other) =>
-        other.faction !== ship.faction && other.hull > 0 && !other.isCloaked,
-    );
-    return nearestInArc(
-      ship,
-      ship.angle,
-      enemies,
-      TARGET_ARC_HALF_DEG,
-      BATTLEFIELD_SIZE,
-    );
-  }
-
-  /**
    * @param attacker - The ship about to attack.
    * @param target - Its target.
    * @returns True while the target ignores this attacker (struck this cycle).
@@ -1677,147 +1257,28 @@ export class ArcadeBattleScene extends Phaser.Scene {
     );
   }
 
-  private checkCollisions(): void {
-    if (!this.frameCache) return;
-    const spent = new Set<string>();
-    for (const proj of this.projectiles) {
-      const struck = this.frameCache.aliveShips.find(
-        (view) =>
-          view.id !== proj.ownerId &&
-          (this.ships.get(view.id)?.hull ?? 0) > 0 &&
-          checkProjectileHit(
-            proj,
-            view.x,
-            view.y,
-            SHIP_HIT_RADIUS_PX,
-            view.faction,
-            BATTLEFIELD_SIZE,
-          ),
-      );
-      if (!struck) continue;
-      spent.add(proj.id);
-      this.resolveProjectileHit(proj, this.ships.get(struck.id)!);
-    }
-    this.projectiles = this.projectiles.filter((p) => !spent.has(p.id));
-    for (const id of spent) {
-      this.projectileSprites.get(id)?.destroy();
-      this.projectileSprites.delete(id);
-    }
-  }
-
   /**
-   * One bolt / shot / ordnance striking a ship, under the X-Wing round
-   * tempo: while the target is immune to this attacker (struck by it earlier
-   * this cycle) the bolt is spent harmlessly with a deflect flash; otherwise
-   * it deals damage and starts the target's immunity to that attacker.
-   *
-   * @param proj - The projectile that struck.
-   * @param ship - The living ship it struck.
-   */
-  private resolveProjectileHit(proj: Projectile, ship: ArcadeShip): void {
-    const now = this.battleClockMs;
-    if (
-      this.hitLedger.isImmune(proj.ownerId, ship.id, now) ||
-      this.isArrivalShielded(ship)
-    ) {
-      spawnDeflectFlash(this, proj.x, proj.y);
-      return;
-    }
-    this.hitLedger.recordHit(proj.ownerId, ship.id, now);
-    const attacker = this.ships.get(proj.ownerId);
-    const damage = this.projectileHitDamage(proj, attacker, ship);
-    matchStats.record({
-      kind: "hit",
-      friendly: proj.ownerFaction === this.playerFaction,
-      weapon: proj.isLaser ? "primary" : "ordnance",
-    });
-    matchStats.record({
-      kind: "damage",
-      toFriendly: ship.faction === this.playerFaction,
-      shield: ship.shields > 0 ? Math.min(ship.shields, damage) : 0,
-      hull: ship.shields > 0 ? 0 : Math.min(ship.hull, damage),
-    });
-    ship.stress = applyInstantStress(ship.stress, proj.stressOnHit ?? 0);
-    ship.isCloaked = false;
-    ship.cloakTimer = 0;
-    this.applyHitDamage(ship, damage);
-    if (this.damageNumbersEnabled) {
-      this.showFloatingText(ship.x, ship.y - 20, `-${damage}`, "#ff4444");
-    }
-    if (ship.hull <= 0) {
-      if (proj.ownerFaction === this.playerFaction) {
-        this.score += KILL_SCORE;
-        this.showFloatingText(ship.x, ship.y - 40, "KILL!", "#ffff00");
-      }
-      this.resolveAbilityKill(attacker, ship);
-      this.recordDestruction(ship);
-    }
-    if (this.cameraShakeEnabled) this.cameras.main.shake(50, 0.005);
-  }
-
-  /**
-   * Damage a projectile deals: raw damage + pilot bonus + lever bonus (mark,
-   * rear arc), halved against a cloaked ship, minus armour, scaled by
-   * mitigation and concentrate fire.
-   *
-   * @param proj - The projectile.
-   * @param attacker - Who fired it (undefined once destroyed).
-   * @param ship - The ship struck.
-   * @returns Damage, at least 1.
-   */
-  private projectileHitDamage(
-    proj: Projectile,
-    attacker: ArcadeShip | undefined,
-    ship: ArcadeShip,
-  ): number {
-    const hitDamage =
-      projectileRawDamage(proj, ship.shields) +
-      this.abilityHitBonus(proj, attacker, ship) +
-      this.leverHitBonus(proj, ship);
-    const rawDamage = ship.isCloaked
-      ? Math.max(1, Math.floor(hitDamage / 2))
-      : hitDamage;
-    const armor = getShipDefinition(ship.definitionId)?.baseStats.armor ?? 0;
-    const armoredDamage = Math.max(1, rawDamage - armor);
-    const mitigation = Math.max(
-      MIN_DAMAGE_TAKEN_MULTIPLIER,
-      (this.activeAuras.get(ship.id)?.damageTakenMultiplier ?? 1) *
-        incomingDamageMultiplier(ship.modifiers, this.fliesWithWingman(ship)),
-    );
-    const attackerOrders = attacker?.commanderOrders;
-    const concentrateMultiplier = attackerOrders
-      ? concentrateFireMultiplier(
-          attackerOrders.concentrateFire,
-          ship.id,
-          this.time.now,
-        )
-      : 1;
-    return Math.max(
-      1,
-      Math.round(armoredDamage * mitigation * concentrateMultiplier),
-    );
-  }
-
-  /**
-   * Apply hit damage: shields absorb the whole hit while up, then hull
-   * (capital hulls through their subsystems).
+   * Apply hit damage: shields first, the rest spills onto the hull (capital
+   * hulls through their subsystems) — the rule every battle mode shares.
    *
    * @param ship - The ship struck.
    * @param damage - Damage to apply.
    */
   private applyHitDamage(ship: ArcadeShip, damage: number): void {
-    if (ship.shields > 0) {
-      ship.shields = Math.max(0, ship.shields - damage);
+    const after = absorbDamage(ship, damage);
+    const toHull = damage - (ship.shields - after.shields);
+    if (after.shields < ship.shields) {
       audioManager.playSoundAt("shield_hit", ship.x, ship.y, 0.4);
-      return;
     }
+    ship.shields = after.shields;
+    if (toHull <= 0) return;
     this.damageThisFrame = true;
     audioManager.playSoundAt("hull_hit", ship.x, ship.y, 0.4);
     if (!ship.capitalSystems) {
-      ship.hull = Math.max(0, ship.hull - damage);
+      ship.hull = after.hull;
       return;
     }
-    const result = applyCapitalSystemDamage(ship.capitalSystems, damage);
+    const result = applyCapitalSystemDamage(ship.capitalSystems, toHull);
     ship.capitalSystems = result.systems;
     ship.hull = sumSystemsHull(result.systems);
     if (result.justDisabled && result.hitSystemId) {
@@ -1828,6 +1289,316 @@ export class ArcadeBattleScene extends Phaser.Scene {
         "#ff8800",
       );
     }
+  }
+
+  /** The secondary-weapons glue (e2e). */
+  get secondaryWeapons(): BattleWeapons | null {
+    return this.weapons;
+  }
+
+  /** @param ship - A ship whose secondaries the shared runtime arms. */
+  private armShip(ship: ArcadeShip): void {
+    this.weapons?.equip(ship.id, {
+      definitionId: ship.definitionId,
+      loadoutId: ship.loadoutId,
+      modifiers: ship.modifiers,
+    });
+  }
+
+  /** @returns What the secondary weapons read from (and ask of) this scene. */
+  private weaponsLink(): BattleWeaponsLink {
+    return {
+      bodies: () =>
+        [...this.ships.values()].map((ship) =>
+          weaponBodyOf(
+            ship,
+            ship.faction,
+            damageMitigationOf(
+              ship.modifiers,
+              this.fliesWithWingman(ship),
+              this.activeAuras.get(ship.id),
+            ),
+          ),
+        ),
+      wantedTargetOf: (shipId: string) => this.preferredTargetOf(shipId),
+      playerShipId: () => this.playerShipId,
+      playerSide: () => this.playerFaction,
+      sideOf: (shipId: string) => this.ships.get(shipId)?.faction ?? null,
+      isBotControlled: (shipId: string) =>
+        shipId !== this.playerShipId || this.debugAutopilot,
+      applyHit: (hit: WeaponHit) => this.applyWeaponHit(hit),
+    };
+  }
+
+  /**
+   * @param shipId - A ship.
+   * @returns The enemy its pilot is after: the HUD target for the player,
+   *   the bot's target (else its squad focus) for an AI ship.
+   */
+  private preferredTargetOf(shipId: string): string | null {
+    const ship = this.ships.get(shipId);
+    if (!ship) return null;
+    if (ship.id === this.playerShipId && !this.debugAutopilot) {
+      return selectHudTargetId(ship, this.ships.values(), BATTLEFIELD_SIZE);
+    }
+    return this.botFleet?.targetIdFor(ship.id, ship.faction) ?? null;
+  }
+
+  /**
+   * @param player - The player's ship.
+   * @returns The weapon bar: primary laser, then the shared secondaries.
+   */
+  private weaponBar(player: ArcadeShip): WeaponSlotDescriptor[] {
+    return weaponBarSlots(
+      primaryWeaponSlot(
+        player.weaponCooldown,
+        attackIntervalMs(player.combatStats.weaponCooldown),
+      ),
+      this.weapons?.hudSlots() ?? [],
+    );
+  }
+
+  /**
+   * Every ship's primary weapon on the X-Wing round tempo, by the rule all
+   * modes share: its pilot's target (else the nearest enemy) inside its
+   * range and firing arc the short way across the map seam, at most one
+   * attack per cycle, never at a target still immune to it. A cloaked ship
+   * holds fire (firing would drop the cloak).
+   *
+   * @param deltaMs - Tick length (ms).
+   */
+  private firePrimaries(deltaMs: number): void {
+    for (const ship of this.ships.values()) {
+      if (ship.hull <= 0) continue;
+      ship.weaponCooldown = Math.max(0, ship.weaponCooldown - deltaMs);
+      if (ship.weaponCooldown > 0 || ship.isCloaked) continue;
+      const target = nearestTargetInArc(ship, this.ships.values(), {
+        rangePx: ship.combatStats.weaponRange,
+        arcDeg: ship.combatStats.firingArc,
+        worldSize: BATTLEFIELD_SIZE,
+        isEligible: (other) => !this.isImmuneTo(ship, other),
+        preferredId: this.preferredTargetOf(ship.id),
+      });
+      if (!target) continue;
+      this.fireAt(ship, target);
+      ship.weaponCooldown = attackIntervalMs(ship.combatStats.weaponCooldown);
+    }
+  }
+
+  /**
+   * One primary attack, resolved by the shared dice (DiceAttack): mode
+   * odds, pilot abilities, squad mark, auras and armour.
+   *
+   * @param attacker - The firing ship.
+   * @param target - The ship fired at.
+   */
+  private fireAt(attacker: ArcadeShip, target: ArcadeShip): void {
+    const now = this.battleClockMs;
+    const result = resolveDiceAttack({
+      attacker,
+      target,
+      hitChance: calculateHitChance(
+        attacker.combatStats.attackDice,
+        target.combatStats.agilityDice,
+      ),
+      baseDamage: attacker.combatStats.attackDice,
+      attackerHasWingman: this.fliesWithWingman(attacker),
+      targetHasWingman: this.fliesWithWingman(target),
+      nowMs: now,
+      roll: random.next(),
+      targetMarked:
+        this.botFleet?.isMarkedBy(attacker.faction, target.id, now) ?? false,
+      ...this.aurasOf(attacker, target),
+      targetArmor: armorReductionOf(target.definitionId),
+    });
+    this.weapons?.onAttack(attacker.id);
+    const friendly = attacker.faction === this.playerFaction;
+    matchStats.record({
+      kind: "shot",
+      friendly,
+      weapon: "primary",
+      hit: result.hit,
+    });
+    this.drawBolt(
+      attacker,
+      target,
+      friendly ? PLAYER_LASER_COLOR : ENEMY_LASER_COLOR,
+    );
+    if (!result.hit) return;
+    matchStats.record({ kind: "hit", friendly, weapon: "primary" });
+    const factor =
+      (this.weapons?.incomingDamageFactor(target.id) ?? 1) *
+      this.concentrateFactor(attacker, target);
+    this.landHit(attacker, target, {
+      damage: Math.max(1, Math.round(result.damage * factor)),
+      stress: result.stressOnTarget,
+    });
+  }
+
+  /**
+   * @param attacker - The firing ship.
+   * @param target - The ship fired at.
+   * @returns The support auras covering each (omitted when none).
+   */
+  private aurasOf(
+    attacker: ArcadeShip,
+    target: ArcadeShip,
+  ): { attackerAura?: ActiveAura; targetAura?: ActiveAura } {
+    const attackerAura = this.activeAuras.get(attacker.id);
+    const targetAura = this.activeAuras.get(target.id);
+    return {
+      ...(attackerAura ? { attackerAura } : {}),
+      ...(targetAura ? { targetAura } : {}),
+    };
+  }
+
+  /**
+   * @param attacker - The firing ship (undefined once destroyed).
+   * @param target - The ship hit.
+   * @returns The capital commander's concentrate-fire multiplier.
+   */
+  private concentrateFactor(
+    attacker: ArcadeShip | undefined,
+    target: ArcadeShip,
+  ): number {
+    const orders = attacker?.commanderOrders;
+    return orders
+      ? concentrateFireMultiplier(
+          orders.concentrateFire,
+          target.id,
+          this.time.now,
+        )
+      : 1;
+  }
+
+  /**
+   * A secondary weapon's hit (missile, torpedo, turret, bomb, mine) through
+   * the same path as a laser; a capital's turrets hit harder with power
+   * redirected to them and softer with their system damaged.
+   *
+   * @param hit - The hit from the weapons runtime.
+   */
+  private applyWeaponHit(hit: WeaponHit): void {
+    const target = this.ships.get(hit.targetId);
+    if (!target || target.hull <= 0) return;
+    const attacker = this.ships.get(hit.attackerId);
+    let damage = hit.damage * this.concentrateFactor(attacker, target);
+    if (hit.weapon === "turret" && attacker)
+      damage *= this.turretFactor(attacker);
+    matchStats.record({
+      kind: "hit",
+      friendly: attacker?.faction === this.playerFaction,
+      weapon: "ordnance",
+    });
+    this.landHit(attacker, target, {
+      damage: Math.max(1, Math.round(damage)),
+      stress: hit.stress,
+    });
+  }
+
+  /**
+   * @param ship - A ship firing its turret.
+   * @returns Damage factor from its capital systems and power redirect.
+   */
+  private turretFactor(ship: ArcadeShip): number {
+    const systems = ship.capitalSystems
+      ? turretDamageMultiplier(ship.capitalSystems)
+      : 1;
+    const power =
+      ship.commanderOrders &&
+      isPowerFocused(
+        ship.commanderOrders.powerRedirect,
+        "turrets",
+        this.time.now,
+      )
+        ? POWER_REDIRECT_TURRET_MULTIPLIER
+        : 1;
+    return systems * power;
+  }
+
+  /**
+   * A hit lands: the attacker's immunity tick, stress, damage (shields
+   * first, the rest onto the hull), feedback, and the kill. A reinforcement
+   * still under its arrival shield shrugs it off.
+   *
+   * @param attacker - The ship credited (undefined once destroyed).
+   * @param target - The ship hit.
+   * @param hit - Final damage and stress.
+   */
+  private landHit(
+    attacker: ArcadeShip | undefined,
+    target: ArcadeShip,
+    hit: { readonly damage: number; readonly stress: number },
+  ): void {
+    if (target.hull <= 0) return;
+    if (this.isArrivalShielded(target)) {
+      spawnDeflectFlash(this, target.x, target.y);
+      return;
+    }
+    if (attacker)
+      this.hitLedger.recordHit(attacker.id, target.id, this.battleClockMs);
+    target.stress = applyInstantStress(target.stress, hit.stress);
+    const before = { hull: target.hull, shields: target.shields };
+    this.applyHitDamage(target, hit.damage);
+    matchStats.record({
+      kind: "damage",
+      toFriendly: target.faction === this.playerFaction,
+      shield: before.shields - target.shields,
+      hull: before.hull - target.hull,
+    });
+    if (this.damageNumbersEnabled) {
+      this.showFloatingText(
+        target.x,
+        target.y - 20,
+        `-${hit.damage}`,
+        "#ff4444",
+      );
+    }
+    const involvesPlayer =
+      target.id === this.playerShipId || attacker?.id === this.playerShipId;
+    if (this.cameraShakeEnabled && involvesPlayer)
+      this.cameras.main.shake(50, 0.005);
+    if (target.hull > 0) return;
+    if (
+      attacker?.faction === this.playerFaction &&
+      target.faction !== this.playerFaction
+    ) {
+      this.score += KILL_SCORE;
+      this.showFloatingText(target.x, target.y - 40, "KILL!", "#ffff00");
+    }
+    this.resolveAbilityKill(attacker, target);
+    this.recordDestruction(target);
+  }
+
+  /**
+   * A primary bolt streaking from the attacker to the target (the short
+   * way across the map seam).
+   *
+   * @param from - The firing ship.
+   * @param to - The ship fired at.
+   * @param color - Bolt colour.
+   */
+  private drawBolt(
+    from: { readonly x: number; readonly y: number },
+    to: { readonly x: number; readonly y: number },
+    color: number,
+  ): void {
+    const { dx, dy } = torusDelta(from.x, from.y, to.x, to.y, BATTLEFIELD_SIZE);
+    const bolt = this.add.graphics().setDepth(5);
+    drawEnergyBolt(bolt, {
+      color,
+      length: CANNON_BOLT_LENGTH_PX,
+      width: CANNON_BOLT_WIDTH_PX,
+    });
+    bolt.setPosition(from.x, from.y);
+    bolt.setAngle((Math.atan2(dy, dx) * 180) / Math.PI + NORTH_UP_OFFSET_DEG);
+    this.tweens.add({
+      targets: bolt,
+      x: from.x + dx,
+      y: from.y + dy,
+      duration: LASER_BOLT_FLIGHT_MS,
+      onComplete: () => bolt.destroy(),
+    });
   }
 
   private spawnShips(): void {
@@ -1850,6 +1621,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.scenario?.deploy([...this.ships.values()], this.playerFaction);
 
     for (const ship of this.ships.values()) {
+      this.armShip(ship);
       this.createShipSprite(ship);
     }
     this.botFleet = this.createBotFleet();
@@ -1892,13 +1664,16 @@ export class ArcadeBattleScene extends Phaser.Scene {
       factions.find((f) => f.controller === "player") ?? factions[0]!;
     const enemySlots = factions.filter((f) => f !== playerSlot);
     this.playerFaction = playerSlot.factionId;
+    // Ships the Squad Builder left without a pick fly their default quick
+    // build (as reinforcements and every other mode do), never bare hulls.
+    const playerBuilds = quickBuildsOf(playerSlot);
 
     // Spawn player-controlled ship (first in player slot)
     const playerShipId = playerSlot.ships[0] ?? "confed_sparrow";
     const playerShip = spawnArcadeShip({
       id: "player_0",
       definitionId: playerShipId,
-      loadoutId: playerSlot.loadoutChoices?.["0"] ?? null,
+      loadoutId: playerBuilds[0] ?? null,
       faction: playerSlot.factionId,
       pilot: "player",
       x: BATTLEFIELD_SIZE / 2,
@@ -1919,7 +1694,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       const ally = spawnArcadeShip({
         id: `ally_${i}`,
         definitionId: shipId,
-        loadoutId: playerSlot.loadoutChoices?.[String(i + 1)] ?? null,
+        loadoutId: playerBuilds[i + 1] ?? null,
         faction: playerSlot.factionId,
         pilot: "wingman",
         x: BATTLEFIELD_SIZE / 2 + offset.x,
@@ -1933,13 +1708,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const totalEnemies = enemySlots.reduce((sum, s) => sum + s.ships.length, 0);
     let enemyIndex = 0;
     for (const slot of enemySlots) {
+      const builds = quickBuildsOf(slot);
       slot.ships.forEach((shipId, shipIdx) => {
         const angle = (enemyIndex / Math.max(totalEnemies, 1)) * Math.PI * 2;
         const radius = 1200;
         const enemy = spawnArcadeShip({
           id: `enemy_${enemyIndex}`,
           definitionId: shipId,
-          loadoutId: slot.loadoutChoices?.[String(shipIdx)] ?? null,
+          loadoutId: builds[shipIdx] ?? null,
           faction: slot.factionId,
           pilot: "ai",
           x: BATTLEFIELD_SIZE / 2 + Math.cos(angle) * radius,
@@ -2001,6 +1777,21 @@ export class ArcadeBattleScene extends Phaser.Scene {
         angle: 180,
       });
       this.ships.set(enemy.id, enemy);
+    }
+    this.equipDefaultBuilds();
+  }
+
+  /** Every ship of the default battle flies its side's default quick builds. */
+  private equipDefaultBuilds(): void {
+    const squads = new Map<string, ArcadeShip[]>();
+    for (const ship of this.ships.values()) {
+      squads.set(ship.faction, [...(squads.get(ship.faction) ?? []), ship]);
+    }
+    for (const squad of squads.values()) {
+      const builds = assignQuickBuilds(squad.map((ship) => ship.definitionId));
+      squad.forEach((ship, index) =>
+        equipLoadout(ship, builds[index] ?? undefined),
+      );
     }
   }
 
@@ -2130,15 +1921,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
         );
       }
     }
-
-    // Update projectile positions and orientations
-    for (const proj of this.projectiles) {
-      const sprite = this.projectileSprites.get(proj.id);
-      if (sprite) {
-        sprite.setPosition(proj.x, proj.y);
-        sprite.setAngle(proj.angle);
-      }
-    }
   }
 
   /** Feed this frame's battle state to the holographic HUD. */
@@ -2153,7 +1935,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       commanderOrders: player?.commanderOrders ?? null,
       ships: [...this.ships.values()],
       playerFaction: this.playerFaction,
-      selectedWeaponSlot: this.selectedWeaponSlot,
+      weapons: player ? this.weaponBar(player) : [],
       camera: this.cameras.main,
       score: this.score,
       remainingMs:
@@ -2237,116 +2019,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   /**
-   * Auto-rotates and fires turrets for all ships equipped with one: an AI
-   * ship's turret takes its pilot's target when in range, else (and on the
-   * player's ship) the nearest enemy in range. Ships where the player is in
-   * gunner mode are skipped — controlled via handleGunnerInput instead.
-   */
-  private updateTurrets(): void {
-    if (!this.frameCache) return;
-    for (const ship of this.ships.values()) {
-      if (ship.hull <= 0 || !ship.turretSlot) continue;
-      if (ship.id === this.playerShipId && ship.crewMode === "gunner") continue;
-
-      const target = this.turretTargetOf(ship, ship.turretSlot.range);
-      if (!target) continue;
-
-      const dx = target.x - ship.x;
-      const dy = target.y - ship.y;
-      ship.turretSlot.turretFacing =
-        ((Math.atan2(dy, dx) * 180) / Math.PI + 90 + 360) % 360;
-
-      if (canFireTurret(ship.turretSlot)) this.fireTurretShot(ship);
-    }
-  }
-
-  /**
-   * @param ship - A ship with a turret.
-   * @param range - The turret's range (px).
-   * @returns Its AI pilot's target when alive and in range, else the
-   *   nearest living enemy in range, else null.
-   */
-  private turretTargetOf(ship: ArcadeShip, range: number): ArcadeShip | null {
-    const inRange = (other: ArcadeShip | undefined): other is ArcadeShip =>
-      !!other &&
-      other.hull > 0 &&
-      distance(ship.x, ship.y, other.x, other.y) < range;
-    const pilotTargetId =
-      ship.owner === "ai"
-        ? this.botFleet?.targetIdFor(ship.id, ship.faction)
-        : null;
-    const pilotTarget = pilotTargetId
-      ? this.ships.get(pilotTargetId)
-      : undefined;
-    if (inRange(pilotTarget)) return pilotTarget;
-    let nearest: ArcadeShip | null = null;
-    let nearestDist = range;
-    for (const view of this.frameCache?.aliveEnemiesOf(ship.faction) ?? []) {
-      const dist = distance(ship.x, ship.y, view.x, view.y);
-      if (dist < nearestDist) {
-        nearestDist = dist;
-        nearest = this.ships.get(view.id) ?? null;
-      }
-    }
-    return nearest;
-  }
-
-  /**
-   * Spawns a turret projectile in the direction of the ship's turretFacing.
-   *
-   * @param ship - Ship firing its turret.
-   */
-  private fireTurretShot(ship: ArcadeShip): void {
-    if (!ship.turretSlot || !canFireTurret(ship.turretSlot)) return;
-    consumeTurretShot(ship.turretSlot);
-
-    const rad = (ship.turretSlot.turretFacing - 90) * (Math.PI / 180);
-    const auraBonus = this.activeAuras.get(ship.id)?.damageBonus ?? 0;
-    const systemsMultiplier = ship.capitalSystems
-      ? turretDamageMultiplier(ship.capitalSystems)
-      : 1;
-    const powerMultiplier =
-      ship.commanderOrders &&
-      isPowerFocused(
-        ship.commanderOrders.powerRedirect,
-        "turrets",
-        this.time.now,
-      )
-        ? POWER_REDIRECT_TURRET_MULTIPLIER
-        : 1;
-    const damage = Math.max(
-      1,
-      Math.round(
-        (ship.turretSlot.damage + auraBonus) *
-          systemsMultiplier *
-          powerMultiplier,
-      ),
-    );
-    const proj = withOnHit(
-      createProjectile(
-        ship.x + Math.cos(rad) * 20,
-        ship.y + Math.sin(rad) * 20,
-        ship.turretSlot.turretFacing,
-        ship.id,
-        ship.faction,
-        damage,
-      ),
-      { stressOnHit: ship.turretSlot.stressOnHit, bonusDamageVsUnshielded: 0 },
-    );
-    this.projectiles.push(proj);
-    matchStats.record(projectileShot(proj, this.playerFaction));
-
-    const sprite = this.add.graphics();
-    drawEnergyOrb(sprite, {
-      color: ship.faction === this.playerFaction ? 0x00ffff : 0xff00ff,
-      radius: 3,
-    });
-    sprite.setPosition(proj.x, proj.y);
-    sprite.setDepth(5);
-    this.projectileSprites.set(proj.id, sprite);
-  }
-
-  /**
    * Handles turret controls when the player is in gunner mode.
    * Left/right rotate the turret aim; it autofires like every other
    * weapon in this game once a target is in arc/range.
@@ -2355,18 +2027,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
    * @param dt - Frame time in seconds.
    */
   private handleGunnerInput(ship: ArcadeShip, dt: number): void {
-    if (!ship.turretSlot) return;
-    const TURN_RATE = 180; // degrees per second
-    if (InputManager.isHeld("STEER_LEFT")) {
-      ship.turretSlot.turretFacing =
-        (ship.turretSlot.turretFacing - TURN_RATE * dt + 360) % 360;
-    } else if (InputManager.isHeld("STEER_RIGHT")) {
-      ship.turretSlot.turretFacing =
-        (ship.turretSlot.turretFacing + TURN_RATE * dt + 360) % 360;
-    }
-    if (this.framesAlive > 5) {
-      this.fireTurretShot(ship);
-    }
+    const turret = this.weapons?.runtime.arsenalOf(ship.id)?.turret;
+    if (!turret) return;
+    const turn = InputManager.isHeld("STEER_LEFT")
+      ? -GUNNER_TURN_DEG_PER_S * dt
+      : InputManager.isHeld("STEER_RIGHT")
+        ? GUNNER_TURN_DEG_PER_S * dt
+        : 0;
+    this.weapons?.runtime.aimTurret(ship.id, turret.facingDeg + turn);
   }
 
   /**
@@ -2474,14 +2142,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
     });
   }
 
-  /** Nearest living enemy within this ship's turret range (falls back to any range if unarmed). */
+  /** Nearest living enemy, the short way across the map seam. */
   private findNearestEnemy(ship: ArcadeShip): ArcadeShip | null {
     if (!this.frameCache) return null;
-    const maxRange = ship.turretSlot?.range ?? Infinity;
     let nearest: ArcadeShip | null = null;
-    let nearestDist = maxRange;
+    let nearestDist = Infinity;
     for (const view of this.frameCache.aliveEnemiesOf(ship.faction)) {
-      const dist = distance(ship.x, ship.y, view.x, view.y);
+      const dist = torusRangePx(ship, view, BATTLEFIELD_SIZE);
       if (dist < nearestDist) {
         nearestDist = dist;
         nearest = this.ships.get(view.id) ?? null;
@@ -2491,31 +2158,23 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   /**
-   * Fires the commander's charged main beam: one heavy hit along the ship's
-   * forward facing.
+   * Fires the commander's charged main beam: one heavy hit on the nearest
+   * enemy in its forward arc within twice range 3 (a miss when none is).
    *
    * @param ship - The commanding player's ship.
    */
   private fireMainBeam(ship: ArcadeShip): void {
-    const rad = (ship.angle - 90) * (Math.PI / 180);
-    const proj = createProjectile(
-      ship.x + Math.cos(rad) * 20,
-      ship.y + Math.sin(rad) * 20,
-      ship.angle,
-      ship.id,
-      ship.faction,
-      MAIN_BEAM_HIT_DAMAGE,
-    );
-    this.projectiles.push(proj);
-    matchStats.record(projectileShot(proj, this.playerFaction));
-
-    const sprite = this.add.graphics();
-    drawEnergyOrb(sprite, { color: 0x99ddff, radius: 7 });
-    sprite.setPosition(proj.x, proj.y);
-    sprite.setDepth(5);
-    this.projectileSprites.set(proj.id, sprite);
-
     this.showFloatingText(ship.x, ship.y - 45, "MAIN BEAM FIRED!", "#ffffff");
+    this.weapons?.onAttack(ship.id);
+    const target = nearestTargetInArc(ship, this.ships.values(), {
+      rangePx: MAIN_BEAM_RANGE_PX,
+      arcDeg: ship.combatStats.firingArc,
+      worldSize: BATTLEFIELD_SIZE,
+      isEligible: (other) => !this.isArrivalShielded(other),
+    });
+    if (!target) return;
+    this.drawBolt(ship, target, MAIN_BEAM_COLOR);
+    this.landHit(ship, target, { damage: MAIN_BEAM_HIT_DAMAGE, stress: 0 });
   }
 
   private updateFleeDetector(deltaMs: number): void {

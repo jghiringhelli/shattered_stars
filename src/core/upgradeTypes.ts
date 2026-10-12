@@ -54,8 +54,14 @@ export interface WeaponProfile {
   readonly damage: number;
   /** Time between shots, in milliseconds. */
   readonly cooldownMs: number;
-  /** Turret engagement range, in pixels. */
-  readonly rangePx?: number;
+  /**
+   * X-Wing range band [min, max] (1–3; config RANGE_1..RANGE_3 px) the
+   * weapon engages at. Omitted = the class default (missiles/torpedoes
+   * 2–3, turrets 1–2).
+   */
+  readonly rangeBand?: readonly [number, number];
+  /** Bomb-slot cards: a timed "bomb" or a proximity "mine". */
+  readonly device?: "bomb" | "mine";
   /** Homing steering speed, in degrees per second. */
   readonly homingTurnRate?: number;
   /** Total degrees of steering before a homing shot flies straight. */

@@ -1,46 +1,34 @@
 /**
  * arcadeShipFactory — the Skirmish scene's ship record and how one is made:
- * real-time durability, the cycle-engine control state, crew/capital
- * state, the equipped loadout (stats, modifier sheet, ordnance and turret
- * with one-attack-per-cycle reloads) and the arcade durability floors of
- * the player's ship and its wingmen. Shared by the opening deployment and
+ * real-time durability, the mode's combat stats (dice, range, arc — the
+ * same ModeBalancing every battle mode fires by), the cycle-engine control
+ * state, crew/capital state, the equipped loadout (stats, modifier sheet;
+ * its secondary weapons are armed by the shared runtime, BattleWeapons)
+ * and the arcade durability floors of the player's ship and its wingmen. Shared by the opening deployment and
  * reinforcements so both make identical ships.
  *
  * Pure: no Phaser.
  */
 
-import {
-  createControlState,
-  type ShipControlState,
-} from "../../core/ArcadeControls";
+import type { ShipControlState } from "../../core/ArcadeControls";
+import { createShipControl } from "../../arcade/systems/CycleFlight";
 import {
   NEUTRAL_MODIFIERS,
   type CombatModifiers,
 } from "../../core/CombatModifiers";
 import type { ManeuverDefinition, ShipRole, ShipState } from "../../core/types";
-import {
-  buildOrdnanceSlots,
-  type ArcadeOrdnanceSlot,
-} from "../../arcade/ArcadeOrdnance";
 import { INITIAL_STRESS, type StressState } from "../../arcade/ArcadeStress";
 import {
-  buildTurretSlot,
-  type ArcadeTurretSlot,
-} from "../../arcade/ArcadeTurret";
-import {
   applyControlModifiers,
-  applyOrdnanceModifiers,
-  applyTurretModifiers,
   loadoutUpgradeIds,
   resolveLoadoutModifiers,
 } from "../../arcade/ArcadeUpgradeEffects";
-import { attackIntervalMs } from "../../arcade/systems/CombatTempo";
-import { SHIP_SIZES, type FactionId } from "../../config";
 import {
-  getMovementProfile,
-  getShipDefinition,
-  getShipDial,
-} from "../../data/ShipDefinitions";
+  getModeCombatStats,
+  type ModeCombatStats,
+} from "../../data/ModeBalancing";
+import type { FactionId } from "../../config";
+import { getShipDefinition, getShipDial } from "../../data/ShipDefinitions";
 import { uniquePilotOf } from "../../data/squadRules";
 import { applyLoadoutEffects } from "../../systems/BattleHelpers";
 import {
@@ -59,16 +47,13 @@ import {
   realTimeDurability,
 } from "./arcadeDurability";
 
-/** Base size of a ship whose size class is unknown (px). */
-const FALLBACK_BASE_SIZE = 32;
-
 /** A Skirmish ship record. */
 export interface ArcadeShip extends ShipState {
   control: ShipControlState;
-  /** Secondary weapon slots (1/2/3 keys). */
-  ordnanceSlots: ArcadeOrdnanceSlot[];
-  /** Turret slot if the ship has a turret upgrade equipped. */
-  turretSlot: ArcadeTurretSlot | null;
+  /** The mode's dice, primary range/arc and weapon cooldown. */
+  combatStats: ModeCombatStats;
+  /** Time left before the primary weapon may attack again (ms). */
+  weaponCooldown: number;
   /** 'pilot' flies the ship; 'gunner' controls the turret; 'commander' issues ship orders (capital only). */
   crewMode: CrewRole;
   /** Ship role cached from ShipDefinition — drives support auras. */
@@ -77,8 +62,6 @@ export interface ArcadeShip extends ShipState {
   stress: StressState;
   /** Maneuver dial for this ship; drives stress classification each frame. */
   shipDial: readonly ManeuverDefinition[];
-  /** Seconds remaining while cloak is active (0 = not cloaked). */
-  cloakTimer: number;
   /** Subsystem damage state (engines/turrets/bridge) — only set for capital-role ships. */
   capitalSystems: CapitalSystemsState | null;
   /** Commander order state (concentrate fire/power redirect/main beam/repair) — only set for capital-role ships. */
@@ -149,19 +132,13 @@ export function createArcadeShip(spec: ArcadeShipSpec): ArcadeShip {
   const isCapital = def?.role === "capital";
   return {
     ...baseShip,
-    control: createControlState(
-      baseShip,
-      SHIP_SIZES[def?.baseStats.size ?? "small"] ?? FALLBACK_BASE_SIZE,
-      getMovementProfile(spec.definitionId),
-      def?.baseStats.speed ?? { min: 1, max: 5 },
-    ),
-    ordnanceSlots: [],
-    turretSlot: null,
+    control: createShipControl(spec.definitionId, baseShip),
+    combatStats: getModeCombatStats(spec.definitionId, "continuous"),
+    weaponCooldown: 0,
     crewMode: "pilot",
     role: def?.role ?? "heavy_fighter",
     stress: INITIAL_STRESS,
     shipDial: getShipDial(spec.definitionId),
-    cloakTimer: 0,
     capitalSystems: isCapital ? createCapitalSystems(baseShip.hull) : null,
     commanderOrders: isCapital ? createCommanderOrders() : null,
     loadoutId: null,
@@ -173,10 +150,10 @@ export function createArcadeShip(spec: ArcadeShipSpec): ArcadeShip {
 }
 
 /**
- * Equip a loadout on a freshly created ship: stat bonuses, the real-time
- * modifier sheet (upgrades + the pilot's ability), upgraded maneuver
- * recharge times, and the ordnance/turret weapons with their reload
- * modifiers baked in — no weapon reloads faster than once per cycle.
+ * Equip a loadout on a freshly created ship: stat bonuses (hull, shields,
+ * dice), the real-time modifier sheet (upgrades + the pilot's ability) and
+ * upgraded maneuver recharge times. Its secondary weapons are armed by the
+ * scene's shared runtime from the same loadout.
  *
  * @param ship - The ship to equip (mutated in place, before first update).
  * @param loadoutId - Chosen loadout id, or undefined for the bare ship.
@@ -193,18 +170,6 @@ export function equipLoadout(
   ship.modifiers = modifiers;
   ship.isUniquePilot = uniquePilotOf(loadoutId ?? null) !== null;
   ship.control = applyControlModifiers(ship.control, modifiers);
-  ship.ordnanceSlots = applyOrdnanceModifiers(
-    buildOrdnanceSlots(upgradeIds),
-    modifiers,
-  ).map((slot) => ({
-    ...slot,
-    cooldownMax: attackIntervalMs(slot.cooldownMax),
-  }));
-  const turret = applyTurretModifiers(buildTurretSlot(upgradeIds), modifiers);
-  ship.turretSlot = turret && {
-    ...turret,
-    cooldownMax: attackIntervalMs(turret.cooldownMax),
-  };
 }
 
 /**

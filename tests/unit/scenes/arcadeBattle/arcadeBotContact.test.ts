@@ -1,18 +1,10 @@
 /**
  * arcadeBotContact — specification: a Skirmish ship is described to the AI
- * with its faction as its side and the AI's real firing envelope.
+ * with its faction as its side and its primary weapon's real envelope.
  */
 
 import { describe, it, expect } from "vitest";
-import {
-  SKIRMISH_FIRING_ARC_DEG,
-  SKIRMISH_WEAPON_RANGE_PX,
-  toBotContact,
-} from "../../../../src/scenes/arcadeBattle/arcadeBotContact";
-import {
-  AI_AIM_CONE_DEG,
-  AI_MAX_FIRE_RANGE_PX,
-} from "../../../../src/scenes/arcadeBattle/aiFiringSolution";
+import { toBotContact } from "../../../../src/scenes/arcadeBattle/arcadeBotContact";
 
 const SHIP = {
   id: "enemy_0",
@@ -27,6 +19,7 @@ const SHIP = {
   maxShields: 12,
   control: { speed: 3 },
   stress: { isStressed: true },
+  combatStats: { firingArc: 75, weaponRange: 250 },
 };
 
 describe("toBotContact", () => {
@@ -48,12 +41,10 @@ describe("toBotContact", () => {
     });
   });
 
-  it("uses the AI's firing cone and reach as the weapon envelope", () => {
+  it("uses its primary weapon's range and firing arc as the envelope", () => {
     const contact = toBotContact(SHIP);
-    expect(contact.firingArcDeg).toBe(SKIRMISH_FIRING_ARC_DEG);
-    expect(SKIRMISH_FIRING_ARC_DEG).toBe(AI_AIM_CONE_DEG * 2);
-    expect(contact.weaponRange).toBe(SKIRMISH_WEAPON_RANGE_PX);
-    expect(SKIRMISH_WEAPON_RANGE_PX).toBe(AI_MAX_FIRE_RANGE_PX);
+    expect(contact.firingArcDeg).toBe(75);
+    expect(contact.weaponRange).toBe(250);
   });
 
   it("reports a destroyed ship as not alive, never with negative hull", () => {

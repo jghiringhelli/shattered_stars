@@ -29,6 +29,7 @@ import {
   INITIAL_STRESS,
   type StressState,
 } from "../ArcadeStress";
+import { flightCapabilitiesOf } from "./FlightCapabilities";
 import {
   stepMotion,
   type CompletedCycle,
@@ -83,6 +84,7 @@ export function createShipControl(
     SHIP_SIZES[def?.baseStats.size ?? "small"] ?? FALLBACK_BASE_SIZE_PX,
     getMovementProfile(definitionId),
     def?.baseStats.speed ?? { min: 1, max: 5 },
+    flightCapabilitiesOf(definitionId),
   );
 }
 

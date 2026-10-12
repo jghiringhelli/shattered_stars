@@ -102,6 +102,25 @@ async function waitForPlayerManeuver(
   );
 }
 
+/** The shared secondary-weapons glue of the Skirmish scene, read in-page. */
+async function weaponsProbe<T>(page: Page, read: string): Promise<T> {
+  return page.evaluate((expr: string) => {
+    const scene = (window as any).game.scene.getScene("ArcadeBattleScene");
+    const weapons = scene.secondaryWeapons;
+    const pid = weapons.playerShipId();
+    return new Function("weapons", "pid", `return ${expr};`)(weapons, pid);
+  }, read);
+}
+
+const playerCloaked = (page: Page): Promise<boolean> =>
+  weaponsProbe(page, "weapons.runtime.isCloaked(pid)");
+const feedbackLabel = (page: Page): Promise<string | null> =>
+  weaponsProbe(page, "weapons.feedback.lastLabel");
+const lastFireOutcome = (page: Page): Promise<string | null> =>
+  weaponsProbe(page, "weapons.lastFireOutcome");
+const selectedSecondary = (page: Page): Promise<number> =>
+  weaponsProbe(page, "weapons.runtime.arsenalOf(pid).selected");
+
 /** Monkeypatch a scene method to count invocations; returns a reader for the live count. */
 async function countSceneCalls(
   page: Page,
@@ -128,7 +147,7 @@ test.describe("ArcadeBattleScene — keyboard playthrough", () => {
   test("primary weapon autofires with zero player input", async ({ page }) => {
     suppressWebGLNoise(page);
     await openArcade(page, CONFED_KESTREL);
-    const getFireCalls = await countSceneCalls(page, "fireSelectedWeapon");
+    const getFireCalls = await countSceneCalls(page, "firePrimaries");
     await page.waitForTimeout(2_000);
     expect(await getFireCalls()).toBeGreaterThan(5);
   });
@@ -189,13 +208,28 @@ test.describe("ArcadeBattleScene — keyboard playthrough", () => {
     await waitForPlayerManeuver(page, "turn_left");
   });
 
-  test("Shift+Q queues a segnor loop (distinct from plain Q)", async ({
+  test("Shift+Q queues a segnor loop (distinct from plain Q) on a ship whose dial has it", async ({
+    page,
+  }) => {
+    suppressWebGLNoise(page);
+    await openArcade(page, {
+      factionId: "synthetic_collective",
+      controller: "player",
+      ships: ["synth_stalker"],
+    });
+    await holdGameKey(page, "Q", 100, { shift: true });
+    await waitForPlayerManeuver(page, "segnor_left");
+  });
+
+  test("Shift+Q is refused, with HUD feedback, on a ship without Segnor", async ({
     page,
   }) => {
     suppressWebGLNoise(page);
     await openArcade(page, CONFED_KESTREL);
     await holdGameKey(page, "Q", 100, { shift: true });
-    await waitForPlayerManeuver(page, "segnor_left");
+    await expect
+      .poll(() => feedbackLabel(page))
+      .toBe("SEGNOR'S LOOP NOT ON DIAL");
   });
 
   test("T queues a tallon roll", async ({ page }) => {
@@ -205,24 +239,36 @@ test.describe("ArcadeBattleScene — keyboard playthrough", () => {
     await waitForPlayerManeuver(page, "tallon_left");
   });
 
-  test("C toggles cloak on", async ({ page }) => {
+  test("C cloaks a ship with a cloaking device", async ({ page }) => {
     suppressWebGLNoise(page);
-    await openArcade(page, CONFED_KESTREL);
+    await openArcade(page, {
+      factionId: "free_confederation",
+      controller: "player",
+      ships: ["confed_raven"],
+    });
     await holdGameKey(page, "C", 100);
-    await page.waitForTimeout(50);
-    expect((await getPlayerShip(page)).isCloaked).toBe(true);
+    await expect.poll(() => playerCloaked(page)).toBe(true);
   });
 
-  test("Shift+Space (FIRE_SECONDARY) reaches deployBomb without disabling autofire", async ({
+  test("C does nothing on a ship without a cloak, and says so", async ({
     page,
   }) => {
     suppressWebGLNoise(page);
     await openArcade(page, CONFED_KESTREL);
-    const getBombCalls = await countSceneCalls(page, "deployBomb");
-    const getFireCalls = await countSceneCalls(page, "fireSelectedWeapon");
+    await holdGameKey(page, "C", 100);
+    await page.waitForTimeout(100);
+    expect(await playerCloaked(page)).toBe(false);
+    expect(await feedbackLabel(page)).toBe("NO CLOAKING DEVICE");
+  });
+
+  test("Shift+Space (FIRE_SECONDARY) reaches the secondary weapons without disabling autofire", async ({
+    page,
+  }) => {
+    suppressWebGLNoise(page);
+    await openArcade(page, CONFED_KESTREL);
+    const getFireCalls = await countSceneCalls(page, "firePrimaries");
     await holdGameKey(page, "Space", 100, { shift: true });
-    await page.waitForTimeout(500);
-    expect(await getBombCalls()).toBeGreaterThanOrEqual(1);
+    await expect.poll(() => lastFireOutcome(page)).not.toBeNull();
     expect(await getFireCalls()).toBeGreaterThan(0);
   });
 
@@ -245,40 +291,19 @@ test.describe("ArcadeBattleScene — keyboard playthrough", () => {
     expect((await getPlayerShip(page)).crewMode).toBe("commander");
   });
 
-  test("TAB cycles the selected weapon slot on a ship with ordnance equipped", async ({
+  test("TAB cycles the selected secondary slot on a ship with two", async ({
     page,
   }) => {
     suppressWebGLNoise(page);
     await openArcade(page, {
       factionId: "terran_hegemony",
       controller: "player",
-      ships: ["terran_vindicator"],
-      loadoutChoices: { "0": "vindicator_strike" },
+      ships: ["terran_hammer"],
+      loadoutChoices: { "0": "hammer_devastator" },
     });
-    // Capture selectedWeaponSlot immediately inside selectNextWeapon — autofire
-    // may fire-and-exhaust the newly selected ordnance within the same tick,
-    // and fireSelectedWeapon's "nothing ready" fallback then resets the slot
-    // back to -1 (pre-existing, intentional weapon-cycling behavior — not an
-    // input-wiring defect). Reading immediately avoids that race.
-    await page.evaluate(() => {
-      const scene = (window as any).game.scene.getScene(
-        "ArcadeBattleScene",
-      ) as any;
-      const orig = scene.selectNextWeapon.bind(scene);
-      const w = window as any;
-      w.__slotAfterSelect = null;
-      scene.selectNextWeapon = (ship: unknown) => {
-        const r = orig(ship);
-        w.__slotAfterSelect = scene.selectedWeaponSlot;
-        return r;
-      };
-    });
+    expect(await selectedSecondary(page)).toBe(0);
     await holdGameKey(page, "Tab", 100);
-    await page.waitForTimeout(20);
-    const slotAfterSelect = await page.evaluate(
-      () => (window as any).__slotAfterSelect,
-    );
-    expect(slotAfterSelect).toBe(0);
+    await expect.poll(() => selectedSecondary(page)).toBe(1);
   });
 });
 
@@ -343,27 +368,32 @@ test.describe("ArcadeBattleScene — touch controls", () => {
     );
   });
 
-  test("a single tap on the action zone reaches deployBomb (FIRE_SECONDARY)", async ({
+  test("a single tap on the action zone reaches the secondary weapons (FIRE_SECONDARY)", async ({
     page,
   }) => {
     suppressWebGLNoise(page);
     await openArcade(page, CONFED_KESTREL);
-    const getBombCalls = await countSceneCalls(page, "deployBomb");
     await page.mouse.move(ACTION.x, ACTION.y);
     await page.mouse.down();
     await page.waitForTimeout(30);
     await page.mouse.up();
-    await page.waitForTimeout(500); // single-tap fires after the 350ms double-tap window
-    expect(await getBombCalls()).toBeGreaterThanOrEqual(1);
+    // A single tap fires after the 350 ms double-tap window.
+    await expect.poll(() => lastFireOutcome(page)).not.toBeNull();
   });
 
-  test("holding the action zone toggles cloak on", async ({ page }) => {
+  test("holding the action zone cloaks a ship with a cloaking device", async ({
+    page,
+  }) => {
     suppressWebGLNoise(page);
-    await openArcade(page, CONFED_KESTREL);
+    await openArcade(page, {
+      factionId: "free_confederation",
+      controller: "player",
+      ships: ["confed_raven"],
+    });
     await page.mouse.move(ACTION.x, ACTION.y);
     await page.mouse.down();
     await page.waitForTimeout(500); // hold threshold is 400ms
-    expect((await getPlayerShip(page)).isCloaked).toBe(true);
+    expect(await playerCloaked(page)).toBe(true);
     await page.mouse.up();
   });
 });
@@ -402,7 +432,7 @@ test.describe("ArcadeBattleScene — gamepad controls", () => {
     await setFakeGamepadAxes(page, [0, 0, 0, 0]);
   });
 
-  test("tapping face button 2 reaches deployBomb (FIRE_SECONDARY)", async ({
+  test("tapping face button 2 reaches the secondary weapons (FIRE_SECONDARY)", async ({
     page,
   }) => {
     suppressWebGLNoise(page);
@@ -412,10 +442,8 @@ test.describe("ArcadeBattleScene — gamepad controls", () => {
       "Phaser did not register the fake gamepad in this environment",
     );
 
-    const getBombCalls = await countSceneCalls(page, "deployBomb");
     await tapFakeGamepadButton(page, 2, 150);
-    await page.waitForTimeout(200);
-    expect(await getBombCalls()).toBeGreaterThanOrEqual(1);
+    await expect.poll(() => lastFireOutcome(page)).not.toBeNull();
   });
 });
 

@@ -16,6 +16,7 @@ import {
   checkProjectileHit,
   isProjectileAlive,
 } from "../core/Projectile";
+import { ORDNANCE_UPGRADES } from "../data/upgrades/weapons";
 
 /** Arcade laser/turret bolt speed (px/s) — see createProjectile. */
 export const BOLT_SPEED = 2500;
@@ -26,9 +27,18 @@ const TARGET_RADIUS = 15;
 /** Simulation step (matches the fixed 60 Hz arcade update). */
 const STEP_MS = 1000 / 60;
 
-/** Homing profiles from ArcadeOrdnance SLOT_TYPE_PROPS. */
-export const HOMING_MISSILE = { turnRate: 90, turnBudget: 360 } as const;
-export const HOMING_TORPEDO = { turnRate: 50, turnBudget: 240 } as const;
+/** @returns A launcher card's homing profile (src/data/upgrades/weapons). */
+function homingOf(cardId: string): { turnRate: number; turnBudget: number } {
+  const weapon = ORDNANCE_UPGRADES[cardId]?.weapon;
+  return {
+    turnRate: weapon?.homingTurnRate ?? 0,
+    turnBudget: weapon?.homingTurnBudget ?? 0,
+  };
+}
+
+/** Homing profiles of the stock missile and torpedo cards. */
+export const HOMING_MISSILE = homingOf("concussion_missile");
+export const HOMING_TORPEDO = homingOf("proton_torpedo");
 
 /** Parameters for a single hit-rate measurement. */
 export interface HitRateParams {

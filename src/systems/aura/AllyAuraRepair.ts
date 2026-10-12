@@ -6,9 +6,11 @@
  *
  * A mode ship carries only its hull id and quick build; role and size come
  * from the hull definition, the unique pilot and upgrades from the build.
- * Only the repair channels are applied here — the damage / mitigation /
- * stress buffs stay Skirmish-only until each mode reads them at its own
- * consumption points (the resolved buffs are returned for that).
+ * Only the repair channels are applied here; the damage / hit-chance /
+ * mitigation / stress buffs are returned for each mode to apply at its own
+ * consumption points (resolveDiceAttack attackerAura / targetAura,
+ * stressModifiersOf aura, DamageRules.damageMitigationOf). A projector's
+ * pilot ability shapes its aura through its folded sheet (AuraShipFacts).
  *
  * Pure apart from the sink it is handed.
  */
@@ -20,6 +22,8 @@ import { uniquePilotOf } from "../../data/squadRules";
 import { isBridgeOffline, type CapitalSystemsState } from "../CapitalSystems";
 import { resolveSupportAuras, type ActiveAura } from "../SupportAura";
 import type { AuraShip } from "./FactionAuras";
+import type { CombatModifiers } from "../../core/CombatModifiers";
+import { auraFactsOf, auraShipFacts } from "./AuraShipFacts";
 
 /** What a mode's ship must expose to project or receive an aura. */
 export interface AuraFieldShip {
@@ -38,6 +42,12 @@ export interface AuraFieldShip {
    * side (a mirror match never heals the enemy); else the faction decides.
    */
   readonly owner?: string;
+  /**
+   * The ship's folded modifier sheet (quick build, pilot ability, relics,
+   * campaign abilities). When set, its aura knobs are read from it; else
+   * from the quick build (auraShipFacts).
+   */
+  readonly modifiers?: CombatModifiers;
 }
 
 /** Repair rates a covered ship receives this frame. */
@@ -105,6 +115,9 @@ export function auraShipOf(ship: AuraFieldShip): AuraShip {
     systemsOnline: ship.capitalSystems
       ? !isBridgeOffline(ship.capitalSystems)
       : true,
+    ...(ship.modifiers
+      ? auraFactsOf(ship.modifiers)
+      : auraShipFacts(ship.definitionId, ship.loadoutId)),
   };
 }
 

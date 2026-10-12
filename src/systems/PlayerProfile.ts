@@ -8,6 +8,7 @@
 
 import type { FactionId } from "../config";
 import { XP_REWARDS } from "../data/ProgressionData";
+import { browserStore } from "./keyValueStore";
 
 export interface PlayerProfileStats {
   battles: number;
@@ -95,7 +96,7 @@ function seedStore(): ProfileStore {
 
 function persist(store: ProfileStore): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    browserStore().setItem(STORAGE_KEY, JSON.stringify(store));
   } catch (e) {
     console.error("Failed to save player profiles:", e);
   }
@@ -103,7 +104,7 @@ function persist(store: ProfileStore): void {
 
 function readStore(): ProfileStore {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = browserStore().getItem(STORAGE_KEY);
     if (!raw) {
       const seeded = seedStore();
       persist(seeded);

@@ -7,7 +7,8 @@
  */
 
 import { browserStore } from "../systems/keyValueStore";
-import { isTelemetryEnabled } from "../systems/SettingsStorage";
+import { isTelemetryEnabled, loadSettings } from "../systems/SettingsStorage";
+import { BUILD_INFO } from "../buildInfo";
 import {
   TelemetryLog,
   type TelemetryData,
@@ -129,9 +130,15 @@ export function telemetryEvents(): readonly TelemetryEvent[] {
   return telemetryLog().events();
 }
 
-/** @returns The log as an export JSON document. */
+/**
+ * @returns The log as an export JSON document, with the build and the
+ *   player's settings so a shared export identifies its context.
+ */
 export function exportTelemetryJson(): string {
-  return telemetryLog().exportJson();
+  return telemetryLog().exportJson({
+    build: BUILD_INFO,
+    settings: loadSettings(),
+  });
 }
 
 /** Delete the stored log. */

@@ -21,6 +21,7 @@ import {
   combatantOf,
   resolveDiceAttack,
 } from "../../arcade/systems/DiceAttack";
+import { armorReductionOf } from "../../arcade/systems/DamageRules";
 import { forgetMarkedTarget } from "../../arcade/systems/SquadMark";
 import { creditKill } from "../../systems/arena/BattleScore";
 import type { CombatState, SideTally } from "./ArenaCombatState";
@@ -145,9 +146,13 @@ function fireAt(
     roll: state.random(),
     targetMarked: shot.marked,
     levers: state.rules.shotLevers,
+    targetArmor: armorReductionOf(target.definitionId),
   });
+  state.weapons?.onAttack(attacker.id);
   if (!result.hit) return;
-  const damage = result.damage;
+  const cloak = state.weapons?.incomingDamageFactor(target.id) ?? 1;
+  const damage =
+    cloak < 1 ? Math.max(1, Math.round(result.damage * cloak)) : result.damage;
   const stress = result.stressOnTarget + shotStressBonus(shot, state.rules);
   target.flight = {
     ...target.flight,
@@ -159,7 +164,7 @@ function fireAt(
   tally.hits += 1;
   tally.damage += damage;
   tally.hitsByArc[shot.position] += 1;
-  if (target.hull <= 0) destroy(attacker, target, state, nowMs);
+  if (target.hull <= 0) destroyShip(attacker, target, state, nowMs);
 }
 
 /**
@@ -169,7 +174,7 @@ function fireAt(
  * @param state - Combat state (mutated).
  * @param nowMs - Arena time (ms).
  */
-function destroy(
+export function destroyShip(
   killer: ArenaShip,
   victim: ArenaShip,
   state: CombatState,
@@ -195,6 +200,6 @@ function destroy(
     const ship = state.ships.find((s) => s.id === caught.id);
     if (!ship) continue;
     Object.assign(ship, absorbDamage(ship, blast));
-    if (ship.hull <= 0 && ship.alive) destroy(victim, ship, state, nowMs);
+    if (ship.hull <= 0 && ship.alive) destroyShip(victim, ship, state, nowMs);
   }
 }

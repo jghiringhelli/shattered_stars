@@ -6,7 +6,7 @@
  * Pure: no Phaser. Scenes call these at their hit / kill points.
  */
 
-import { DURABILITY_SCALE, ORDNANCE_DAMAGE_SCALE } from "../config";
+import { ORDNANCE_DAMAGE_SCALE } from "../config";
 import type { ShipPose } from "../core/ArcadeControls";
 import type { CombatModifiers } from "../core/CombatModifiers";
 import type { StressState } from "./ArcadeStress";
@@ -89,8 +89,8 @@ export interface KillReward {
 }
 
 /**
- * Reward for a kill: shields restored (miniature points, scaled to
- * real-time HP) and a fresh frenzy window (only for pilots whose ability
+ * Reward for a kill: shields restored (real-time HP, applied as is — like
+ * every regen/repair knob) and a fresh frenzy window (only for pilots whose ability
  * grants them).
  *
  * @param attacker - The ship that made the kill.
@@ -105,7 +105,7 @@ export function rewardKill(
   return {
     shields: Math.min(
       attacker.maxShields,
-      attacker.shields + modifiers.shieldsPerKill * DURABILITY_SCALE,
+      attacker.shields + modifiers.shieldsPerKill,
     ),
     frenzyUntilMs:
       modifiers.killFrenzyLaserBonus > 0

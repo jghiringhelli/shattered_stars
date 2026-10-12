@@ -8,6 +8,7 @@ import {
   type CampaignSaveData,
 } from "../../../src/systems/CampaignSaveManager";
 import type { FactionId } from "../../../src/config";
+import { resetBrowserStore } from "../../../src/systems/keyValueStore";
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -37,6 +38,7 @@ describe("CampaignSaveManager", () => {
   beforeEach(() => {
     localStorageMock.clear();
     vi.clearAllMocks();
+    resetBrowserStore();
   });
 
   afterEach(() => {

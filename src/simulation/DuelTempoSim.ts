@@ -12,6 +12,9 @@
  * special-recharge / attack-cap tempo on a flight clock (see TempoVariant);
  * without one the round is the engine's, bit for bit.
  *
+ * Each ship flies its quick build's secondaries (duelRoundWeapons), as in
+ * the scenes.
+ *
  * Not modelled: wingman bonuses and death blasts (they change nothing
  * before the first kill in a 1v1), Ace Duel ad-hoc dice abilities.
  */
@@ -33,6 +36,7 @@ import {
   living,
   type RoundState,
 } from "./duelRoundCombat";
+import { armRound, fireSecondaries } from "./duelRoundWeapons";
 import {
   ENGINE_TEMPO,
   immunityLedgerFor,
@@ -75,8 +79,10 @@ export interface DuelTempoResult {
   readonly attacks: Readonly<Record<1 | 2, number>>;
   /** Scene time (ms) of every damaging hit, keyed "attacker>target". */
   readonly hitTimes: ReadonlyMap<string, readonly number[]>;
-  /** Hits landed by each side. */
+  /** Primary hits landed by each side. */
   readonly hits: Readonly<Record<1 | 2, number>>;
+  /** Ordnance and turret hits landed by each side. */
+  readonly ordnanceHits: Readonly<Record<1 | 2, number>>;
   /** Damage dealt by each side (shields + hull). */
   readonly damage: Readonly<Record<1 | 2, number>>;
   /** Time from weapons-live to the first kill (ms); null when nobody died. */
@@ -107,12 +113,14 @@ export function simulateDuelRound(config: DuelTempoConfig): DuelTempoResult {
     tempo,
     attacks: { 1: 0, 2: 0 },
     hits: { 1: 0, 2: 0 },
+    ordnanceHits: { 1: 0, 2: 0 },
     damage: { 1: 0, 2: 0 },
     hitTimes: new Map(),
     nowMs: 0,
     firstKillMs: null,
     specialsUsed: 0,
   };
+  armRound(state);
   const winner = playRound(state);
   return {
     durationMs: winner === null ? null : state.nowMs - DUEL_BANNER_MS,
@@ -120,6 +128,7 @@ export function simulateDuelRound(config: DuelTempoConfig): DuelTempoResult {
     attacks: state.attacks,
     hitTimes: state.hitTimes,
     hits: state.hits,
+    ordnanceHits: state.ordnanceHits,
     damage: state.damage,
     firstKillMs:
       state.firstKillMs === null ? null : state.firstKillMs - DUEL_BANNER_MS,
@@ -137,7 +146,7 @@ function playRound(state: RoundState): 1 | 2 | null {
   while (state.nowMs < endMs && winner === null) {
     state.nowMs += LOGIC_DELTA;
     stepRound(state);
-    winner = survivingSide(state.ships);
+    winner = roundWinner(state.ships);
   }
   return winner;
 }
@@ -208,6 +217,7 @@ function stepRound(state: RoundState): void {
   for (const ship of living(state.ships)) pilot(state, ship, contacts);
   for (const ship of living(state.ships)) fly(state, ship);
   if (state.nowMs <= DUEL_BANNER_MS) return;
+  fireSecondaries(state);
   for (const ship of living(state.ships)) fireIfReady(state, ship);
 }
 
@@ -264,8 +274,20 @@ function setFlight(
   ship.angle = motion.angle;
 }
 
-function survivingSide(ships: readonly DuelSimShip[]): 1 | 2 | null {
-  const alive = new Set(living(ships).map((ship) => ship.side));
-  if (alive.size !== 1) return null;
-  return alive.has(1) ? 1 : 2;
+/**
+ * The round ends the moment a side has no ship left, as in the scenes'
+ * checkRoundEnd: a mutual wipe-out (e.g. two decisive torpedoes) goes to
+ * side 1, the player's seat.
+ *
+ * @param ships - Every ship of the round.
+ * @returns The winning side, or null while both sides fly.
+ */
+export function roundWinner(
+  ships: readonly { readonly side: 1 | 2; readonly hull: number }[],
+): 1 | 2 | null {
+  const alive = (side: 1 | 2): boolean =>
+    ships.some((ship) => ship.side === side && ship.hull > 0);
+  if (!alive(2)) return 1;
+  if (!alive(1)) return 2;
+  return null;
 }

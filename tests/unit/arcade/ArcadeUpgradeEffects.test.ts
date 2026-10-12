@@ -3,8 +3,6 @@ import {
   loadoutUpgradeIds,
   resolveUpgradeModifiers,
   applyControlModifiers,
-  applyOrdnanceModifiers,
-  applyTurretModifiers,
   resolveLoadoutModifiers,
 } from "../../../src/arcade/ArcadeUpgradeEffects";
 import { PILOT_CARDS } from "../../../src/systems/SquadBuilder";
@@ -12,8 +10,6 @@ import { PILOT_ABILITY_REALTIME } from "../../../src/data/pilotAbilityEffects";
 import { combineEffects } from "../../../src/core/CombatModifiers";
 import { resolveUpgradeModifiers as upgradesOnly } from "../../../src/arcade/ArcadeUpgradeEffects";
 import { UPGRADE_DEFINITIONS } from "../../../src/systems/UpgradeSystem";
-import { buildOrdnanceSlots } from "../../../src/arcade/ArcadeOrdnance";
-import { buildTurretSlot } from "../../../src/arcade/ArcadeTurret";
 import { createControlState } from "../../../src/core/ArcadeControls";
 import { NEUTRAL_MODIFIERS } from "../../../src/core/CombatModifiers";
 import { SHIP_LOADOUTS } from "../../../src/data/ShipLoadouts";
@@ -98,52 +94,6 @@ describe("applyControlModifiers", () => {
   it("leaves a bare ship's recharge times untouched", () => {
     const base = createControlState(SHIP);
     expect(applyControlModifiers(base, NEUTRAL_MODIFIERS)).toEqual(base);
-  });
-});
-
-describe("applyOrdnanceModifiers", () => {
-  it("adds charges from a weapons engineer", () => {
-    const slots = buildOrdnanceSlots(["proton_torpedo"]);
-    const [slot] = applyOrdnanceModifiers(
-      slots,
-      resolveUpgradeModifiers(["weapons_engineer"]),
-    );
-    expect(slot!.charges).toBe(3);
-    expect(slot!.maxCharges).toBe(3);
-  });
-
-  it("shortens reloads from a fire-control system", () => {
-    const slots = buildOrdnanceSlots(["concussion_missile"]);
-    const [slot] = applyOrdnanceModifiers(
-      slots,
-      resolveUpgradeModifiers(["fire_control_system"]),
-    );
-    expect(slot!.cooldownMax).toBeCloseTo(slots[0]!.cooldownMax * 0.85);
-  });
-
-  it("extends homing only on homing ordnance", () => {
-    const slots = buildOrdnanceSlots(["concussion_missile", "proton_bomb"]);
-    const [missile, bomb] = applyOrdnanceModifiers(
-      slots,
-      resolveUpgradeModifiers(["targeting_computer"]),
-    );
-    expect(missile!.homingTurnBudget).toBe(slots[0]!.homingTurnBudget + 120);
-    expect(bomb!.homingTurnBudget).toBe(0);
-  });
-});
-
-describe("applyTurretModifiers", () => {
-  it("returns null for a ship without a turret", () => {
-    expect(applyTurretModifiers(null, NEUTRAL_MODIFIERS)).toBeNull();
-  });
-
-  it("speeds up the turret with a veteran gunner", () => {
-    const turret = buildTurretSlot(["twin_laser_turret"]);
-    const upgraded = applyTurretModifiers(
-      turret,
-      resolveUpgradeModifiers(["veteran_gunner"]),
-    );
-    expect(upgraded!.cooldownMax).toBeCloseTo(turret!.cooldownMax * 0.7);
   });
 });
 

@@ -68,27 +68,31 @@ export function realTimeDurability(
   };
 }
 
+/** Milliseconds per second (rate conversion). */
+const MS_PER_SECOND = 1000;
+
 /**
- * Shields after a frame of regeneration at a rate given in miniature shield
- * points per second (support aura, power redirect), scaled to real-time HP.
+ * Shields after a frame of regeneration at a rate given in real-time shield
+ * HP per second (power redirect). Every regen rate is HP/s; the scale is
+ * applied once, where a miniature constant is converted (below), never here.
  *
  * @param shields - Current shields.
  * @param maxShields - Shield cap.
- * @param miniaturePerSecond - Regeneration rate in miniature points / s.
+ * @param hpPerSecond - Regeneration rate in real-time HP / s.
  * @param deltaMs - Frame length (ms).
  * @returns New shields (fractional), never above the cap and never lowered.
  */
 export function regenerateScaledShields(
   shields: number,
   maxShields: number,
-  miniaturePerSecond: number,
+  hpPerSecond: number,
   deltaMs: number,
 ): number {
-  if (miniaturePerSecond <= 0 || shields >= maxShields) return shields;
-  const gain = (miniaturePerSecond * DURABILITY_SCALE * deltaMs) / 1000;
+  if (hpPerSecond <= 0 || shields >= maxShields) return shields;
+  const gain = (hpPerSecond * deltaMs) / MS_PER_SECOND;
   return Math.min(maxShields, shields + gain);
 }
 
-/** Shield regen while the commander's power is on shields (miniature pts / s). */
+/** Shield regen while the commander's power is on shields (real-time HP / s). */
 export const POWER_SHIELD_REGEN_PER_SECOND =
-  POWER_REDIRECT_SHIELD_REGEN_PER_SEC;
+  POWER_REDIRECT_SHIELD_REGEN_PER_SEC * DURABILITY_SCALE;

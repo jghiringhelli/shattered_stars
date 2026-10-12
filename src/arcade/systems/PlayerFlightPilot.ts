@@ -41,6 +41,8 @@ export const FLIGHT_EDGES: readonly FlightEdge[] = [
   "TALLON_LEFT",
   "TALLON_RIGHT",
   "BOOST",
+  "BARREL_ROLL_LEFT",
+  "BARREL_ROLL_RIGHT",
 ];
 
 /** Edges delivered as press events (throttle is detected from held state). */

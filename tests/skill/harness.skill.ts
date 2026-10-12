@@ -24,6 +24,8 @@ import {
 } from "../../src/simulation/skill";
 
 const SHIP = "terran_gladius";
+/** Gladius has no boost on its action bar; this ship does. */
+const BOOST_SHIP = "terran_viper";
 const MIRROR_SEEDS = Number(process.env.SKILL_MIRROR_SEEDS ?? 200);
 /** A fair coin over MIRROR_SEEDS battles stays inside this band (~3.4 sigma at 200). */
 const MIRROR_BAND = { min: 0.38, max: 0.62 };
@@ -42,11 +44,11 @@ function duel(
 }
 
 /** Fly a lone ship with a fixed intent; return the maneuvers it committed and its events. */
-function flyIntent(intent: PilotIntent, cycles: number) {
+function flyIntent(intent: PilotIntent, cycles: number, ship = SHIP) {
   const hands = new PilotHands();
   hands.setIntent(intent);
-  const dial = getShipDial(SHIP);
-  let flight = createCycleFlight(SHIP, { x: 3000, y: 3000, angle: 0 });
+  const dial = getShipDial(ship);
+  let flight = createCycleFlight(ship, { x: 3000, y: 3000, angle: 0 });
   const committed: string[] = [];
   const events: string[] = [];
   const speeds: number[] = [];
@@ -122,8 +124,17 @@ describe("PilotHands flies the shared pilot controls like a human", () => {
   });
 
   it("boosts_with_the_boost_key", () => {
-    const { events } = flyIntent({ ...IDLE_INTENT, boost: true }, 2);
+    const { events } = flyIntent(
+      { ...IDLE_INTENT, boost: true },
+      2,
+      BOOST_SHIP,
+    );
     expect(events.filter((e) => e === "boost")).toHaveLength(1);
+  });
+
+  it("refuses_boost_when_the_action_bar_lacks_it", () => {
+    const { events } = flyIntent({ ...IDLE_INTENT, boost: true }, 2);
+    expect(events).not.toContain("boost");
   });
 
   it("steps_the_throttle_one_notch_per_tap_without_triggering_gestures", () => {

@@ -1,8 +1,10 @@
 /**
  * HullRepair — the real-time hull repair mechanic and the shared repair step.
  *
- * Hull repair rates are authored in miniature hull points per second (like
- * shield regen) and scaled by DURABILITY_SCALE to real-time HP. Hull repair
+ * Every rate (shield regen and hull repair) is authored in REAL-TIME hit
+ * points per second and applied as is: nothing in the repair pipeline
+ * rescales it by DURABILITY_SCALE (values once written in miniature points
+ * were converted at their source). Hull repair
  * pauses for {@link HULL_REPAIR_DAMAGE_PAUSE_MS} after the ship takes any
  * damage, so crews and drones patch the hull between engagements rather
  * than out-healing incoming fire. Shield regeneration keeps its existing
@@ -10,7 +12,6 @@
  * destroyed ship. Pure, no Phaser.
  */
 
-import { DURABILITY_SCALE } from "../../../config";
 import type { DurabilitySnapshot } from "./RepairEvents";
 
 /** Hull repair waits this long after the last hit (6 maneuver cycles). */
@@ -25,9 +26,9 @@ export interface RepairStepInput {
   readonly maxHull: number;
   readonly shields: number;
   readonly maxShields: number;
-  /** Miniature shield points per second. */
+  /** Real-time shield HP per second. */
   readonly shieldRegenPerSecond: number;
-  /** Miniature hull points per second. */
+  /** Real-time hull HP per second. */
   readonly hullRepairPerSecond: number;
   readonly deltaMs: number;
   /** Time since the ship last lost hull or shields. */
@@ -35,10 +36,10 @@ export interface RepairStepInput {
 }
 
 /**
- * A value after restoring at a miniature-scale rate for a frame, capped.
+ * A value after restoring at a real-time rate for a frame, capped.
  * @param value - Current real-time value.
  * @param max - Cap.
- * @param ratePerSecond - Miniature points per second.
+ * @param ratePerSecond - Real-time HP per second.
  * @param deltaMs - Frame length (ms).
  * @returns The restored value.
  */
@@ -49,7 +50,7 @@ function restore(
   deltaMs: number,
 ): number {
   if (ratePerSecond <= 0 || value >= max) return value;
-  const gain = (ratePerSecond * DURABILITY_SCALE * deltaMs) / MS_PER_SECOND;
+  const gain = (ratePerSecond * deltaMs) / MS_PER_SECOND;
   return Math.min(max, value + gain);
 }
 

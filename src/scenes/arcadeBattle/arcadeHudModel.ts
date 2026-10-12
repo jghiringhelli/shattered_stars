@@ -1,16 +1,14 @@
 /**
  * arcadeHudModel — turns Skirmish scene state into the plain data the
  * holographic HUD draws: the player readout, radar/edge contacts and the
- * marked target (the weapon bar lives in arcadeWeaponSlots, the side panels
- * in arcadeStatusModel).
+ * marked target (the weapon bar comes from the shared weapon HUD model,
+ * battleUi/weaponHud; the side panels from arcadeStatusModel).
  *
  * Pure: no Phaser. The scene hands in read-only views of its ships.
  */
 
 import type { ShipControlState } from "../../core/ArcadeControls";
 import type { ManeuverDirection } from "../../core/types";
-import type { ArcadeOrdnanceSlot } from "../../arcade/ArcadeOrdnance";
-import type { ArcadeTurretSlot } from "../../arcade/ArcadeTurret";
 import type { StressState } from "../../arcade/ArcadeStress";
 import type { ShipSize } from "../../config";
 import type {
@@ -18,18 +16,9 @@ import type {
   CameraViewSnapshot,
   ContactHudState,
   PlayerHudState,
+  WeaponSlotDescriptor,
 } from "../../ui/hud/types";
 import { nearestInArc, type ArcCandidate } from "./arcTargeting";
-import { toWeaponSlots } from "./arcadeWeaponSlots";
-
-export {
-  BOMB_HINT,
-  cooldownFraction,
-  NEXT_WEAPON_HINT,
-  nextWeaponSlot,
-  toWeaponSlots,
-  TURRET_HINT,
-} from "./arcadeWeaponSlots";
 
 /** Half-width of the forward arc in which the HUD picks the player's target (°). */
 export const TARGET_ARC_HALF_DEG = 60;
@@ -44,8 +33,6 @@ export interface HudShipView extends ArcCandidate {
   readonly isCloaked: boolean;
   readonly stress: StressState;
   readonly control: ShipControlState;
-  readonly ordnanceSlots: ReadonlyArray<ArcadeOrdnanceSlot>;
-  readonly turretSlot: ArcadeTurretSlot | null;
 }
 
 const MANEUVER_LABELS: Readonly<Record<ManeuverDirection, string>> = {
@@ -166,7 +153,8 @@ export interface HudSnapshotInput {
   readonly player: HudShipView | null;
   readonly ships: ReadonlyArray<HudShipView>;
   readonly playerFaction: string;
-  readonly selectedWeaponSlot: number;
+  /** The player's weapon bar (primary + secondaries), left to right. */
+  readonly weapons: ReadonlyArray<WeaponSlotDescriptor>;
   readonly camera: CameraViewSnapshot;
   readonly worldSize: number;
   readonly sizeOf: (definitionId: string) => ShipSize;
@@ -203,7 +191,7 @@ export function buildBattleHudSnapshot(input: HudSnapshotInput): HudFrameModel {
     snapshot: {
       player: player ? toPlayerHudState(player) : null,
       contacts,
-      weapons: player ? toWeaponSlots(player, input.selectedWeaponSlot) : [],
+      weapons: player ? input.weapons : [],
       camera: input.camera,
     },
   };

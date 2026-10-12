@@ -32,14 +32,20 @@ export interface BootLoadingView {
 /**
  * Build the loading view centred on the screen.
  *
- * @param scene - BootScene (during preload).
+ * @param scene - The loading scene (during preload).
+ * @param options - `paintBackground: false` leaves the camera clear colour
+ *   alone (scenes that paint their own background after loading).
  * @returns Progress / destroy handle.
  */
-export function createBootLoadingView(scene: Phaser.Scene): BootLoadingView {
+export function createBootLoadingView(
+  scene: Phaser.Scene,
+  options: { readonly paintBackground?: boolean } = {},
+): BootLoadingView {
   const { width, height } = scene.cameras.main;
   const cx = width / 2;
   const cy = height / 2;
-  scene.cameras.main.setBackgroundColor(MENU_CLEAR_COLOR);
+  if (options.paintBackground !== false)
+    scene.cameras.main.setBackgroundColor(MENU_CLEAR_COLOR);
   const title = scene.add
     .text(cx, cy + LOADING.titleDy, "SHATTERED STARS", {
       ...holoFont(LOADING.titleSize, "300"),

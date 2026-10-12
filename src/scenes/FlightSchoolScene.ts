@@ -56,12 +56,18 @@ import { LessonPanel } from "./flightSchool/LessonPanel";
 import { SchoolCombat, type SchoolShot } from "./flightSchool/SchoolCombat";
 import { SchoolField } from "./flightSchool/SchoolField";
 import { setSchoolFlight, type SchoolShip } from "./flightSchool/schoolShips";
+import type {
+  BattleWeapons,
+  BattleWeaponsLink,
+  WeaponHit,
+} from "./battleUi/BattleWeapons";
+import { createSceneWeapons, weaponBodyOf } from "./battleUi/sceneWeapons";
+import { NEUTRAL_MODIFIERS } from "../core/CombatModifiers";
 
 /** Edge intents the lessons look at. */
-const WATCHED: ReadonlySet<ActionIntent> = new Set([
-  "CONFIRM",
-  "FIRE_SECONDARY",
-]);
+const WATCHED: ReadonlySet<ActionIntent> = new Set(["CONFIRM"]);
+/** The trainee's secondary: a rack of homing missiles (real ordnance). */
+const TRAINING_ORDNANCE: readonly string[] = ["concussion_missile"];
 const COMPLETE_TEXT =
   "You are cleared for combat, pilot.\nEvery key and button you learned can be rebound in Settings › Controls / Gamepad.\n\nPress ENTER or ESC to return to the menu.";
 
@@ -76,8 +82,10 @@ export class FlightSchoolScene extends Phaser.Scene {
   private pressed = new Set<ActionIntent>();
   private subscriptions: number[] = [];
   private primaryHits = 0;
-  private secondaryShots = 0;
+  private secondaryHits = 0;
   private finished = false;
+  /** The shared secondary-weapons runtime (the lesson fires real missiles). */
+  private weapons: BattleWeapons | null = null;
 
   constructor() {
     super({ key: "FlightSchoolScene" });
@@ -94,12 +102,23 @@ export class FlightSchoolScene extends Phaser.Scene {
     this.panel = new LessonPanel(this);
     this.machine = startFlightSchool(this.time.now);
     this.primaryHits = 0;
-    this.secondaryShots = 0;
+    this.secondaryHits = 0;
     this.finished = false;
+    this.weapons = createSceneWeapons(
+      this,
+      this.weaponsLink(),
+      this.combat.tempoLedger,
+    );
+    this.armTrainee();
     this.setupInput();
     this.enterLesson();
     trackModeStart("flight_school");
     this.cameras.main.fadeIn(200);
+  }
+
+  /** The secondary-weapons glue (e2e). */
+  get secondaryWeapons(): BattleWeapons | null {
+    return this.weapons;
   }
 
   /** The step machine state (e2e / debugging). */
@@ -114,7 +133,8 @@ export class FlightSchoolScene extends Phaser.Scene {
     this.flyBots(delta);
     this.tickShips(delta);
     if (this.pilot.takeMarkRequest()) this.markHudTarget();
-    if (this.pressed.has("FIRE_SECONDARY")) this.fireSecondary();
+    // Secondaries first: a held or chosen launch is this cycle's attack.
+    this.weapons?.update(delta, time);
     this.combat
       .fire([...this.field.ships.values()], this.field.crew, {
         deltaMs: delta,
@@ -156,6 +176,8 @@ export class FlightSchoolScene extends Phaser.Scene {
     teardownSceneInput();
     this.pilot.detach();
     this.hud?.destroy();
+    this.weapons?.destroy();
+    this.weapons = null;
   }
 
   private flyPlayer(time: number, delta: number): void {
@@ -170,6 +192,7 @@ export class FlightSchoolScene extends Phaser.Scene {
       worldSize: BATTLEFIELD_SIZE,
     });
     setSchoolFlight(ship, { motion: result.motion, stress: result.stress });
+    this.weapons?.showRefusals(result.refusals, ship);
     for (const event of result.events)
       playFlightEventFx(this, {
         event,
@@ -234,14 +257,58 @@ export class FlightSchoolScene extends Phaser.Scene {
       );
   }
 
-  private fireSecondary(): void {
+  /** Loads the trainee's missile rack (on start and after a respawn). */
+  private armTrainee(): void {
     const player = this.field.player;
-    const target = [...this.field.ships.values()].find(
-      (s) => (s.role === "drone" || s.role === "bot") && s.hull > 0,
+    this.weapons?.runtime.equip(player.id, {
+      definitionId: player.definitionId,
+      upgradeIds: TRAINING_ORDNANCE,
+      modifiers: NEUTRAL_MODIFIERS,
+    });
+  }
+
+  /** @returns What the secondary weapons read from (and ask of) the course. */
+  private weaponsLink(): BattleWeaponsLink {
+    return {
+      bodies: () =>
+        [...this.field.ships.values()]
+          .filter((ship) => ship.role !== "beacon")
+          .map((ship) => weaponBodyOf(ship, ship.owner, 1)),
+      wantedTargetOf: (shipId: string) =>
+        shipId === this.field.player.id
+          ? playerTargetId({
+              ships: this.field.ships.values(),
+              playerId: shipId,
+              isAlly: (s: SchoolShip) => s.owner === "player",
+              worldSize: BATTLEFIELD_SIZE,
+            })
+          : (this.field.crew?.targetOf(shipId) ?? null),
+      playerShipId: () => this.field.player.id,
+      playerSide: () => "player",
+      sideOf: (shipId: string) => this.field.ships.get(shipId)?.owner ?? null,
+      applyHit: (hit: WeaponHit) => this.applyWeaponHit(hit),
+    };
+  }
+
+  /**
+   * A secondary weapon's hit, through the course's damage path; the
+   * trainee's hits count toward the secondary lesson.
+   *
+   * @param hit - The hit from the weapons runtime.
+   */
+  private applyWeaponHit(hit: WeaponHit): void {
+    const target = this.field.ships.get(hit.targetId);
+    const attacker = this.field.ships.get(hit.attackerId);
+    if (!target || !attacker || target.hull <= 0) return;
+    if (attacker.role === "player") this.secondaryHits++;
+    this.effects.createExplosion(target.x, target.y, "small");
+    this.onKill(
+      this.combat.land(attacker, target, {
+        damage: hit.damage,
+        stress: hit.stress,
+        nowMs: this.time.now,
+      }),
     );
-    this.secondaryShots++;
-    if (target)
-      this.effects.fireMissile(player.x, player.y, target.x, target.y);
   }
 
   private onShot(shot: SchoolShot): void {
@@ -255,6 +322,11 @@ export class FlightSchoolScene extends Phaser.Scene {
       shot.hit,
     );
     if (shot.hit && attacker.role === "player") this.primaryHits++;
+    this.onKill(shot);
+  }
+
+  private onKill(shot: SchoolShot): void {
+    const { attacker, target } = shot;
     if (!shot.killed) return;
     this.effects.createExplosion(target.x, target.y, "medium");
     this.combat.forget(target.id);
@@ -269,6 +341,7 @@ export class FlightSchoolScene extends Phaser.Scene {
     });
     this.field.spawnPlayer();
     this.pilot.reset();
+    this.armTrainee();
     this.panel.flashToast(
       "Ship lost — respawned. No penalty in Flight School.",
     );
@@ -284,6 +357,7 @@ export class FlightSchoolScene extends Phaser.Scene {
         worldSize: BATTLEFIELD_SIZE,
         markedId:
           this.field.crew?.markedTargetOf("player", this.time.now) ?? null,
+        secondaryWeapons: this.weapons?.hudSlots() ?? [],
       }),
     );
   }
@@ -301,7 +375,7 @@ export class FlightSchoolScene extends Phaser.Scene {
       barrelRollCooldownMs: control.barrelRollCooldown,
       pressed: this.pressed,
       primaryHits: this.primaryHits,
-      secondaryShots: this.secondaryShots,
+      secondaryHits: this.secondaryHits,
       markedTargetId: this.field.crew?.markedTargetOf("player", nowMs) ?? null,
       beaconOnScreen: this.field.beaconOnScreen(this.cameras.main),
       enemiesAlive: this.field.enemiesAlive(),

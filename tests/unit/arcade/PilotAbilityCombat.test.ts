@@ -4,6 +4,7 @@
  */
 
 import { DURABILITY_SCALE } from "../../../src/config";
+import { PILOT_ABILITY_REALTIME } from "../../../src/data/pilotAbilityEffects";
 import { describe, it, expect } from "vitest";
 import {
   deathBlastTargets,
@@ -120,14 +121,20 @@ describe("laserHitBonus", () => {
 });
 
 describe("rewardKill", () => {
-  it("restores shields per kill (scaled miniature points), capped at max", () => {
+  it("restores shields per kill in real-time HP (never rescaled), capped at max", () => {
     const roomy = { shields: 1, maxShields: 100 };
-    expect(rewardKill(pilot({ shieldsPerKill: 1 }, roomy), 0).shields).toBe(
-      1 + DURABILITY_SCALE,
+    expect(rewardKill(pilot({ shieldsPerKill: 6 }, roomy), 0).shields).toBe(
+      1 + 6,
     );
     expect(
       rewardKill(pilot({ shieldsPerKill: 1 }, { shields: 3 }), 0).shields,
     ).toBe(3);
+  });
+
+  it("keeps Plunder at one shield token (DURABILITY_SCALE HP) per kill", () => {
+    expect(PILOT_ABILITY_REALTIME["plunder"]?.shieldsPerKill).toBe(
+      DURABILITY_SCALE,
+    );
   });
 
   it("opens a frenzy window for frenzy pilots only", () => {

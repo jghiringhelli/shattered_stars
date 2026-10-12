@@ -40,6 +40,7 @@ import {
   type NodeCombat,
 } from "./nodeCombat";
 import { ARENA_CENTER, spawnFleet, type NodeShip } from "./nodeShips";
+import { armNode, fireNodeSecondaries } from "./nodeWeapons";
 import { spawnBossReinforcements, spawnWave } from "./nodeWaves";
 import type { NodeBattle } from "./nodeBattle";
 
@@ -72,6 +73,8 @@ export interface NodeBattleResult {
   readonly kills: number;
   readonly firstKillMs: number | null;
   readonly specialsUsed: number;
+  /** Ordnance and turret hits landed (every side). */
+  readonly ordnanceHits: number;
   readonly playerShips: number;
   readonly enemyShips: number;
   /** Player ships the asteroid belt destroyed. */
@@ -113,6 +116,7 @@ export function simulateNodeBattle(
     kills: battle.rules.killCount,
     firstKillMs: battle.firstKillMs,
     specialsUsed: battle.specialsUsed,
+    ordnanceHits: battle.weapons?.hits ?? 0,
     playerShips: battle.rules.fleet().length,
     enemyShips: battle.enemiesSpawned,
     beltLosses: battle.beltLosses,
@@ -159,7 +163,9 @@ function openBattle(run: RunState, playerBeltDamage: boolean): NodeBattle {
     beltLosses: 0,
     playerBeltDamage,
     bossPhases: new Map(),
+    weapons: null,
   };
+  battle.weapons = armNode(battle.combat, () => battle.nowMs);
   return battle;
 }
 
@@ -181,6 +187,8 @@ function stepBattle(battle: NodeBattle): void {
   for (const ship of combat.ships) if (ship.hull > 0) pilot(battle, ship);
   for (const ship of combat.ships) if (ship.hull > 0) fly(battle, ship);
   applyBelt(battle);
+  if (battle.weapons)
+    fireNodeSecondaries(battle.weapons, combat, nowMs, LOGIC_DELTA);
   resolveNodeCombat(combat, nowMs, LOGIC_DELTA);
 }
 

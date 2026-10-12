@@ -29,9 +29,9 @@ function input(over: Partial<RepairStepInput> = {}): RepairStepInput {
 }
 
 describe("repairStep", () => {
-  it("repairs miniature hull points scaled to real-time HP", () => {
-    const after = repairStep(input({ hullRepairPerSecond: 0.1 }));
-    expect(after.hull).toBeCloseTo(24 + 0.1 * DURABILITY_SCALE, 10);
+  it("repairs real-time hull HP per second (no DURABILITY_SCALE)", () => {
+    const after = repairStep(input({ hullRepairPerSecond: 1.2 }));
+    expect(after.hull).toBeCloseTo(24 + 1.2, 10);
   });
 
   it("never repairs hull above max hull", () => {
@@ -56,9 +56,18 @@ describe("repairStep", () => {
 
   it("regenerates shields without the damage pause (existing behaviour)", () => {
     const after = repairStep(
-      input({ shieldRegenPerSecond: 0.1, msSinceDamage: 0 }),
+      input({ shieldRegenPerSecond: 1.2, msSinceDamage: 0 }),
     );
-    expect(after.shields).toBeCloseTo(12 + 0.1 * DURABILITY_SCALE, 10);
+    expect(after.shields).toBeCloseTo(12 + 1.2, 10);
+  });
+
+  it("restores exactly r HP in one second at rate r (rates are HP/s)", () => {
+    const after = repairStep(
+      input({ shieldRegenPerSecond: 2, hullRepairPerSecond: 3 }),
+    );
+    expect(after.shields).toBeCloseTo(12 + 2, 10);
+    expect(after.hull).toBeCloseTo(24 + 3, 10);
+    expect(after.shields).not.toBeCloseTo(12 + 2 * DURABILITY_SCALE, 1);
   });
 
   it("never regenerates shields above max shields", () => {

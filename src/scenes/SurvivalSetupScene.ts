@@ -53,6 +53,7 @@ import {
   HOLO_TYPE_SCALE,
 } from "../ui/theme/HoloTheme";
 import { toCssColor } from "../ui/theme/colorMath";
+import { audioManager } from "../audio/AudioManager";
 
 /** Screen grid. */
 const SETUP_LAYOUT = {
@@ -112,6 +113,7 @@ export class SurvivalSetupScene extends Phaser.Scene {
     this.service = runServiceOf(this.registry);
     this.selectedShipId = this.starters()[0]!;
     addMenuBackdrop(this, { textureId: "starfield_deep" });
+    audioManager.playSubmenuMusic();
     this.header = addMenuHeader(this, {
       title: "Survival",
       subtitle:

@@ -34,8 +34,8 @@ export interface FlightSchoolObservation {
   readonly pressed: ReadonlySet<ActionIntent>;
   /** Primary hits landed on training targets (running total). */
   readonly primaryHits: number;
-  /** Secondary weapons fired (running total). */
-  readonly secondaryShots: number;
+  /** Secondary-weapon hits landed by the trainee (running total). */
+  readonly secondaryHits: number;
   readonly markedTargetId: string | null;
   readonly beaconOnScreen: boolean;
   readonly enemiesAlive: number;
@@ -177,8 +177,8 @@ export const FLIGHT_SCHOOL_STEPS: readonly FlightSchoolStep[] = [
     title: "Secondary ordnance",
     scenario: "drone",
     prompt: (k) =>
-      `Press [${k("FIRE_SECONDARY")}] to launch your secondary ordnance at the drone.`,
-    isDone: (obs, memo) => obs.secondaryShots > memo.first.secondaryShots,
+      `Missiles need a LOCK: keep the drone within range for one cycle until the ring on your missile slot turns green, with it ahead of your nose, then press [${k("FIRE_SECONDARY")}]. [${k("WEAPON_CYCLE")}] switches secondary weapons.`,
+    isDone: (obs, memo) => obs.secondaryHits > memo.first.secondaryHits,
   },
   {
     id: "mark",

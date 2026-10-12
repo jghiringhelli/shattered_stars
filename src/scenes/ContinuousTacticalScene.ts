@@ -11,6 +11,7 @@
  * - Combat happens in real-time based on position and arc
  */
 
+import { weaponBarSlots } from "./battleUi/sceneWeapons";
 import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
 import { addShipVisual } from "../rendering/ShipVisual";
@@ -60,6 +61,7 @@ import {
 } from "./ContinuousBaseScene";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { InputManager } from "../input/InputManager";
+import { openSettingsOverBattle } from "./battleUi/openSettingsOverBattle";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import { trackModeEnd, trackModeStart } from "../telemetry/telemetry";
 import { matchStats } from "../telemetry/matchTelemetry";
@@ -238,6 +240,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
 
     renderBattleStarfield(this, BATTLEFIELD_SIZE, { includeNebula: false });
     matchStats.start("continuous", {}, this.events);
+    this.createWeapons();
     this.spawnShips();
     this.createHealthBars();
     this.createRepairFeedback();
@@ -300,6 +303,13 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     this.inputSubscriptionIds.forEach((id) => InputManager.off(id));
     this.inputSubscriptionIds = [];
     teardownSceneInput();
+    this.weapons?.destroy();
+    this.weapons = null;
+  }
+
+  /** @returns The selected ship: the human fires its secondaries. */
+  protected override weaponsPlayerShipId(): string | null {
+    return this.selectedShipId;
   }
 
   override update(time: number, delta: number): void {
@@ -595,7 +605,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       this.spawnDefaultShips();
     }
     this.crewAiSquads();
-    audioManager.playFactionMusic(this.playerFaction, "tactical");
+    audioManager.playFactionMusic(this.playerFaction, "combat");
 
     for (const ship of this.ships.values()) {
       this.createShipSprite(ship);
@@ -946,9 +956,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
         this.scene.restart();
       },
       onSettings: () => {
-        this.scene.launch("SettingsScene", {
-          returnScene: "ContinuousTacticalScene",
-        });
+        openSettingsOverBattle(this);
       },
       onQuit: () => {
         this.scene.start("MainMenuScene");
@@ -1088,12 +1096,13 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
           this.bots.markedTarget(this.playerFaction, this.time.now),
         ),
         weapons: ship
-          ? [
+          ? weaponBarSlots(
               primaryWeaponSlot(
                 ship.weaponCooldown,
                 this.attackIntervalOf(ship),
               ),
-            ]
+              this.weapons?.hudSlots() ?? [],
+            )
           : [],
         camera: cameraViewFrom(this.cameras.main),
       },

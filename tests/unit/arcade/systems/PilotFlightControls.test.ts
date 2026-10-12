@@ -20,6 +20,7 @@ import {
   type StressState,
 } from "../../../../src/arcade/ArcadeStress";
 import { createControlState } from "../../../../src/core/ArcadeControls";
+import { createShipControl } from "../../../../src/arcade/systems/CycleFlight";
 import { getShipDial } from "../../../../src/data/ShipDefinitions";
 import { BATTLEFIELD_SIZE } from "../../../../src/config";
 import type { ShipState } from "../../../../src/core/types";
@@ -265,6 +266,36 @@ describe("PilotFlightControls — dashes", () => {
     expect(second.motion.y).toBe(first.motion.y);
     expect(second.events).toEqual([]);
   });
+
+  it("BARREL_ROLL_LEFT / RIGHT (gamepad button) roll once, like the left+right chord", () => {
+    const left = applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      flown(),
+      frame({ edges: edges("BARREL_ROLL_LEFT") }),
+      BATTLEFIELD_SIZE,
+    );
+    expect(left.events).toEqual(["barrel_roll"]);
+    expect(left.motion.x).toBeLessThan(SHIP.x);
+    const right = applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      flown(),
+      frame({ edges: edges("BARREL_ROLL_RIGHT") }),
+      BATTLEFIELD_SIZE,
+    );
+    expect(right.events).toEqual(["barrel_roll"]);
+    expect(right.motion.x).toBeGreaterThan(SHIP.x);
+  });
+
+  it("a roll button does not latch steering: the held stick keeps banking", () => {
+    const r = applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      flown(),
+      frame({ left: true, edges: edges("BARREL_ROLL_RIGHT") }),
+      BATTLEFIELD_SIZE,
+    );
+    expect(r.events).toEqual(["barrel_roll"]);
+    expect(r.pilot.rollLatched).toBe(false);
+  });
 });
 
 describe("PilotFlightControls — committed maneuvers stay queued until the cycle flies them", () => {
@@ -354,5 +385,85 @@ describe("PilotFlightControls — committed maneuvers stay queued until the cycl
     expect(
       frames(committed, { right: true }, 2).motion.control.nextManeuver,
     ).toBe("drift_right");
+  });
+});
+
+describe("PilotFlightControls — card and stress limits (X-Wing)", () => {
+  /** A ship flying the real control state of `definitionId`. */
+  function carded(definitionId: string, stress: StressState = INITIAL_STRESS) {
+    return flown({
+      motion: {
+        x: SHIP.x,
+        y: SHIP.y,
+        angle: 0,
+        control: createShipControl(definitionId, SHIP),
+      },
+      stress,
+      dial: getShipDial(definitionId),
+    });
+  }
+  const STRESSED: StressState = { level: 0.9, isStressed: true };
+  const press = (ship: FlownShip, ...list: FlightEdge[]) =>
+    applyPilotFlightInput(
+      INITIAL_PILOT_CONTROL,
+      ship,
+      frame({ edges: edges(...list) }),
+      BATTLEFIELD_SIZE,
+    );
+
+  it("a stressed pilot is refused red Tallon and Segnor too", () => {
+    const r = press(carded("terran_viper", STRESSED), "TALLON_LEFT");
+    expect(r.motion.control.nextManeuver).toBeNull();
+    expect(r.refusals).toEqual([{ action: "tallon", reason: "stressed" }]);
+  });
+
+  it("a stressed pilot may still fly a white special", () => {
+    const r = press(carded("synth_hunter", STRESSED), "SEGNOR_LEFT");
+    expect(r.motion.control.nextManeuver).toBe("segnor_left");
+    expect(r.refusals).toEqual([]);
+  });
+
+  it("a stressed pilot is refused boost and barrel roll", () => {
+    const boosted = press(carded("terran_viper", STRESSED), "BOOST");
+    expect(boosted.motion.y).toBe(SHIP.y);
+    expect(boosted.events).toEqual([]);
+    expect(boosted.refusals).toEqual([{ action: "boost", reason: "stressed" }]);
+    const rolled = press(carded("terran_viper", STRESSED), "BARREL_ROLL_LEFT");
+    expect(rolled.events).toEqual([]);
+    expect(rolled.refusals).toEqual([
+      { action: "barrel_roll", reason: "stressed" },
+    ]);
+  });
+
+  it("a special not on the dial is refused", () => {
+    const r = press(carded("terran_viper"), "SEGNOR_RIGHT");
+    expect(r.motion.control.nextManeuver).toBeNull();
+    expect(r.refusals).toEqual([{ action: "segnor", reason: "not_on_dial" }]);
+  });
+
+  it("a dash not on the action bar is refused", () => {
+    const r = press(carded("terran_gladius"), "BOOST");
+    expect(r.events).toEqual([]);
+    expect(r.refusals).toEqual([{ action: "boost", reason: "no_action" }]);
+  });
+
+  it("a huge ship cannot K-turn, loop, roll or boost", () => {
+    const ship = carded("terran_imperator");
+    for (const edge of [
+      "KTURN",
+      "SEGNOR_LEFT",
+      "TALLON_RIGHT",
+      "BOOST",
+    ] as const) {
+      const r = press(ship, edge);
+      expect(r.events).toEqual([]);
+      expect(r.refusals).toHaveLength(1);
+    }
+  });
+
+  it("a calm pilot with the card flies them and is refused nothing", () => {
+    const r = press(carded("terran_viper"), "KTURN");
+    expect(r.motion.control.nextManeuver).toBe("kturn");
+    expect(r.refusals).toEqual([]);
   });
 });

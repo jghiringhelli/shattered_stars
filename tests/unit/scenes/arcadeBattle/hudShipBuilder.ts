@@ -4,8 +4,6 @@
 
 import { createControlState } from "../../../../src/core/ArcadeControls";
 import { INITIAL_STRESS } from "../../../../src/arcade/ArcadeStress";
-import type { ArcadeOrdnanceSlot } from "../../../../src/arcade/ArcadeOrdnance";
-import type { ArcadeTurretSlot } from "../../../../src/arcade/ArcadeTurret";
 import type { HudShipView } from "../../../../src/scenes/arcadeBattle/arcadeHudModel";
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
@@ -28,8 +26,6 @@ export class HudShipBuilder {
       isCloaked: false,
       stress: INITIAL_STRESS,
       control: createControlState(pose, 32),
-      ordnanceSlots: [],
-      turretSlot: null,
     };
   }
 
@@ -77,55 +73,7 @@ export class HudShipBuilder {
     return this;
   }
 
-  withOrdnance(...slots: ArcadeOrdnanceSlot[]): this {
-    this.ship.ordnanceSlots = slots;
-    return this;
-  }
-
-  withTurret(turret: ArcadeTurretSlot): this {
-    this.ship.turretSlot = turret;
-    return this;
-  }
-
   build(): HudShipView {
     return { ...this.ship };
   }
-}
-
-/** An ordnance slot with defaults. */
-export function ordnanceSlot(
-  patch: Partial<ArcadeOrdnanceSlot> = {},
-): ArcadeOrdnanceSlot {
-  return {
-    slotIndex: 0,
-    name: "Concussion Missiles",
-    ordnanceClass: "missile",
-    damage: 15,
-    isHoming: true,
-    homingTurnRate: 90,
-    homingTurnBudget: 180,
-    stressOnHit: 0,
-    cooldownMax: 4000,
-    cooldownRemaining: 0,
-    charges: 2,
-    maxCharges: 2,
-    ...patch,
-  };
-}
-
-/** A turret slot with defaults. */
-export function turretSlot(
-  patch: Partial<ArcadeTurretSlot> = {},
-): ArcadeTurretSlot {
-  return {
-    definitionId: "ion_turret",
-    name: "Ion Turret",
-    damage: 1,
-    range: 350,
-    cooldownMax: 1000,
-    stressOnHit: 0,
-    cooldownRemaining: 0,
-    turretFacing: 0,
-    ...patch,
-  };
 }

@@ -35,6 +35,8 @@ export interface DuelSimShip {
   readonly id: string;
   readonly definitionId: string;
   readonly side: 1 | 2;
+  /** Its quick build (secondaries are armed from it). */
+  readonly loadoutId: string | null;
   x: number;
   y: number;
   angle: number;
@@ -95,6 +97,7 @@ function buildShip(spec: ShipSpec): DuelSimShip {
     id: spec.id,
     definitionId: spec.definitionId,
     side: spec.side,
+    loadoutId: spec.loadoutId,
     ...pose,
     hull: combatStats.hull,
     maxHull: combatStats.maxHull,

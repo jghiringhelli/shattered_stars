@@ -245,60 +245,6 @@ export class EffectsManager {
     });
   }
 
-  /**
-   * Create missile trail effect
-   */
-  fireMissile(
-    fromX: number,
-    fromY: number,
-    toX: number,
-    toY: number,
-    duration: number = 500,
-  ): void {
-    audioManager.playSoundAt("missile_launch", fromX, fromY, 0.7);
-
-    const missile = this.scene.add.graphics();
-    missile.setDepth(15);
-    missile.setPosition(fromX, fromY);
-
-    // Draw missile
-    missile.fillStyle(0x888888, 1);
-    missile.fillTriangle(0, -4, -3, 4, 3, 4);
-    missile.fillStyle(0xff6600, 0.8);
-    missile.fillCircle(0, 6, 3);
-
-    // Calculate angle
-    const angle = Phaser.Math.Angle.Between(fromX, fromY, toX, toY);
-    missile.setRotation(angle + Math.PI / 2);
-
-    // Animate missile
-    this.scene.tweens.add({
-      targets: missile,
-      x: toX,
-      y: toY,
-      duration,
-      ease: "Quad.in",
-      onUpdate: () => {
-        // Add smoke trail
-        const smoke = this.scene.add.graphics();
-        smoke.setDepth(5);
-        smoke.fillStyle(0x666666, 0.4);
-        smoke.fillCircle(missile.x, missile.y, 2);
-        this.scene.tweens.add({
-          targets: smoke,
-          alpha: 0,
-          scale: 2,
-          duration: 300,
-          onComplete: () => smoke.destroy(),
-        });
-      },
-      onComplete: () => {
-        missile.destroy();
-        this.createExplosion(toX, toY, "medium");
-      },
-    });
-  }
-
   // ==========================================
   // SHIELD EFFECTS
   // ==========================================

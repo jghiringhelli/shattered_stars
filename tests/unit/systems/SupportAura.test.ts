@@ -1,3 +1,4 @@
+import { DURABILITY_SCALE } from "../../../src/config";
 import { describe, it, expect } from "vitest";
 import {
   resolveSupportAuras,
@@ -158,7 +159,8 @@ describe("faction aura effects", () => {
     const { buffs } = resolveSupportAuras(ships);
     const regen = buffs.get("ally")!.shieldRegenPerSecond;
     expect(regen).toBe(FACTION_AURAS.ascendant_empire.magnitude);
-    expect(regen).toBeLessThanOrEqual(0.25);
+    // Slow: at most a quarter shield token (DURABILITY_SCALE HP) per second.
+    expect(regen).toBeLessThanOrEqual(0.25 * DURABILITY_SCALE);
   });
 
   it("Corsairs Raider's Cadence eases maneuver stress by a tier", () => {

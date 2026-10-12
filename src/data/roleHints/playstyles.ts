@@ -70,6 +70,9 @@ const KNOB_VOTES: Readonly<Record<keyof CombatModifiers, KnobVote>> = {
   stressOnHit: up("suppressor"),
   projectsAura: up("support", DEFINING_WEIGHT),
   auraRadiusBonus: up("support"),
+  auraMagnitudeBonus: up("support"),
+  auraStressReliefTiers: up("support"),
+  auraHitChanceBonus: up("support"),
   deathBlastDamage: up("brawler"),
 };
 

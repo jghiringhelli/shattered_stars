@@ -41,7 +41,10 @@ export const CONTROL_GROUPS: readonly ControlGroup[] = [
       { label: "Primary Weapon", intents: [] }, // always autofires, no input
       { label: "K-Turn (180°)", intents: ["KTURN"] },
       { label: "Boost Dash", intents: ["BOOST"] },
-      { label: "Barrel Roll", intents: ["BARREL_ROLL"] },
+      {
+        label: "Barrel Roll",
+        intents: ["BARREL_ROLL", "BARREL_ROLL_LEFT", "BARREL_ROLL_RIGHT"],
+      },
       {
         label: "Sharp Turn",
         intents: ["SHARP_TURN_LEFT", "SHARP_TURN_RIGHT"],
@@ -120,6 +123,8 @@ const NICE_KEY_NAMES: Record<string, string> = {
 const GAMEPAD_AXIS_NAMES: Record<number, string> = {
   0: "Left Stick",
   1: "Left Stick",
+  2: "Right Stick flick",
+  3: "Right Stick flick",
 };
 
 const TOUCH_STICK_INTENTS: ReadonlySet<ActionIntent> = new Set([

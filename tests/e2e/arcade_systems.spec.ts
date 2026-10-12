@@ -136,98 +136,79 @@ test.describe("ArcadeBattleScene — stress HUD", () => {
 // ─────────────────────────────────────────────
 
 test.describe("ArcadeBattleScene — cloak system", () => {
-  test("enemy sprite alpha is ~0.12 when isCloaked is injected", async ({
+  /**
+   * Fits a ship with a cloaking device (Raven) through the shared weapons
+   * runtime and engages it, or drops it again.
+   */
+  async function setCloak(
+    page: Page,
+    which: "player" | "enemy",
+    cloaked: boolean,
+  ): Promise<string> {
+    return page.evaluate(
+      async ({ who, on }) => {
+        const { NEUTRAL_MODIFIERS } =
+          await import("/src/core/CombatModifiers.ts");
+        const scene = (window as any).game.scene.getScene("ArcadeBattleScene");
+        const id =
+          who === "player"
+            ? scene.playerShipId
+            : [...scene.ships.keys()].find(
+                (k: string) => k !== scene.playerShipId,
+              );
+        const runtime = scene.secondaryWeapons.runtime;
+        runtime.equip(id, {
+          definitionId: "confed_raven",
+          upgradeIds: [],
+          modifiers: NEUTRAL_MODIFIERS,
+        });
+        if (on) runtime.toggleCloak(id);
+        return id;
+      },
+      { who: which, on: cloaked },
+    );
+  }
+
+  async function spriteAlpha(page: Page, id: string): Promise<number> {
+    return page.evaluate(
+      (shipId) =>
+        (window as any).game.scene
+          .getScene("ArcadeBattleScene")
+          .shipSprites?.get(shipId)?.alpha ?? -1,
+      id,
+    );
+  }
+
+  test("enemy sprite alpha is ~0.12 while it is cloaked", async ({ page }) => {
+    suppressWebGLNoise(page);
+    await openArcadeScene(page);
+    const id = await setCloak(page, "enemy", true);
+    await page.waitForTimeout(200);
+    expect(await spriteAlpha(page, id)).toBeCloseTo(0.12, 1);
+  });
+
+  test("player sprite alpha is ~0.45 while the player ship is cloaked", async ({
     page,
   }) => {
     suppressWebGLNoise(page);
     await openArcadeScene(page);
-
-    await page.evaluate(() => {
-      const scene = (window as any).game.scene.getScene(
-        "ArcadeBattleScene",
-      ) as any;
-      const enemyId = [...scene.ships.keys()].find(
-        (id: string) => id !== scene.playerShipId,
-      );
-      const enemy = scene.ships.get(enemyId);
-      if (enemy) {
-        enemy.isCloaked = true;
-        enemy.cloakTimer = 8;
-      }
-    });
+    const id = await setCloak(page, "player", true);
     await page.waitForTimeout(200);
-
-    const alpha = await page.evaluate(() => {
-      const scene = (window as any).game.scene.getScene(
-        "ArcadeBattleScene",
-      ) as any;
-      const enemyId = [...scene.ships.keys()].find(
-        (id: string) => id !== scene.playerShipId,
-      );
-      const sprite = scene.shipSprites?.get(enemyId);
-      return sprite?.alpha ?? -1;
-    });
-    expect(alpha).toBeCloseTo(0.12, 1);
+    expect(await spriteAlpha(page, id)).toBeCloseTo(0.45, 1);
   });
 
-  test("player sprite alpha is ~0.45 when player ship is cloaked", async ({
-    page,
-  }) => {
+  test("sprite alpha returns to 1.0 once the cloak drops", async ({ page }) => {
     suppressWebGLNoise(page);
     await openArcadeScene(page);
-
-    await page.evaluate(() => {
-      const scene = (window as any).game.scene.getScene(
-        "ArcadeBattleScene",
-      ) as any;
-      const ship = scene.ships.get(scene.playerShipId);
-      if (ship) {
-        ship.isCloaked = true;
-        ship.cloakTimer = 8;
-      }
-    });
+    const id = await setCloak(page, "enemy", true);
+    await page.evaluate(
+      (shipId) =>
+        (window as any).game.scene
+          .getScene("ArcadeBattleScene")
+          .secondaryWeapons.runtime.breakCloak(shipId),
+      id,
+    );
     await page.waitForTimeout(200);
-
-    const alpha = await page.evaluate(() => {
-      const scene = (window as any).game.scene.getScene(
-        "ArcadeBattleScene",
-      ) as any;
-      const sprite = scene.shipSprites?.get(scene.playerShipId);
-      return sprite?.alpha ?? -1;
-    });
-    expect(alpha).toBeCloseTo(0.45, 1);
-  });
-
-  test("sprite alpha returns to 1.0 after cloak expires", async ({ page }) => {
-    suppressWebGLNoise(page);
-    await openArcadeScene(page);
-
-    // Set cloak then immediately expire it
-    await page.evaluate(() => {
-      const scene = (window as any).game.scene.getScene(
-        "ArcadeBattleScene",
-      ) as any;
-      const enemyId = [...scene.ships.keys()].find(
-        (id: string) => id !== scene.playerShipId,
-      );
-      const enemy = scene.ships.get(enemyId);
-      if (enemy) {
-        enemy.isCloaked = false;
-        enemy.cloakTimer = 0;
-      }
-    });
-    await page.waitForTimeout(200);
-
-    const alpha = await page.evaluate(() => {
-      const scene = (window as any).game.scene.getScene(
-        "ArcadeBattleScene",
-      ) as any;
-      const enemyId = [...scene.ships.keys()].find(
-        (id: string) => id !== scene.playerShipId,
-      );
-      const sprite = scene.shipSprites?.get(enemyId);
-      return sprite?.alpha ?? -1;
-    });
-    expect(alpha).toBeCloseTo(1.0, 1);
+    expect(await spriteAlpha(page, id)).toBeCloseTo(1.0, 1);
   });
 });

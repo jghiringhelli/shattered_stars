@@ -85,6 +85,19 @@ import {
   primaryShotTarget,
 } from "../arcade/systems/DuelPrimaryFire";
 import { DuelHud } from "./duel/DuelHud";
+import type {
+  BattleWeapons,
+  BattleWeaponsLink,
+  WeaponHit,
+} from "./battleUi/BattleWeapons";
+import { createSceneWeapons, weaponBodyOf } from "./battleUi/sceneWeapons";
+import {
+  armorReductionOf,
+  damageMitigationOf,
+  shotAurasOf,
+} from "../arcade/systems/DamageRules";
+import type { ActiveAura } from "../systems/SupportAura";
+import { applyAllyAuraRepairs } from "../systems/aura/AllyAuraRepair";
 import { buildDuelHudSnapshot, playerTargetId } from "./duel/duelHudSnapshot";
 import { showDuelEndScreen } from "./duel/DuelEndScreen";
 import {
@@ -106,6 +119,7 @@ import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { PauseMenu } from "../ui/PauseMenu";
 import { networkService } from "../services/NetworkService";
 import { InputManager } from "../input/InputManager";
+import { openSettingsOverBattle } from "./battleUi/openSettingsOverBattle";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import {
   trackDeath,
@@ -206,6 +220,10 @@ export class DogfightScene extends Phaser.Scene {
   private enemyShipIds: string[] = [];
   /** Round tempo: a struck ship ignores the same attacker until the next cycle. */
   private readonly hitLedger = new HitImmunityLedger();
+  /** Secondary weapons (missiles, torpedoes, turrets, bombs, mines, cloak). */
+  private weapons: BattleWeapons | null = null;
+  /** Faction auras resolved this frame (buffs every shot and stress tick). */
+  private auras: ReadonlyMap<string, ActiveAura> = new Map();
 
   // Match state
   private matchFormat: MatchFormat = "best_of_3";
@@ -344,6 +362,7 @@ export class DogfightScene extends Phaser.Scene {
     this.background.startShootingStars();
 
     this.resetMatchState();
+    this.weapons = createSceneWeapons(this, this.weaponsLink(), this.hitLedger);
 
     if (this.isOnlineMode) {
       // Both players already picked faction/ship in the lobby — skip the
@@ -385,6 +404,8 @@ export class DogfightScene extends Phaser.Scene {
     this.pilot.detach();
     this.hud?.destroy();
     this.hud = null;
+    this.weapons?.destroy();
+    this.weapons = null;
     this.hitLedger.clear();
     if (this.isOnlineMode) {
       networkService.off("game_action", this.onRemoteAction, this);
@@ -482,6 +503,7 @@ export class DogfightScene extends Phaser.Scene {
     this.isPaused = false;
     this.pilot.reset();
     this.hitLedger.clear();
+    this.weapons?.runtime.clear();
     this.crew = null;
   }
 
@@ -671,7 +693,7 @@ export class DogfightScene extends Phaser.Scene {
       this.events,
     );
 
-    audioManager.playFactionMusic(this.playerFaction, "combat");
+    audioManager.playBattleMusic("dogfight", this.playerFaction);
 
     this.hud = new DuelHud(this, {
       accent: factionAccent(this.playerFaction),
@@ -776,7 +798,11 @@ export class DogfightScene extends Phaser.Scene {
     this.updateAI(time, delta);
     this.flyShips(delta);
     // Ships close in during the ROUND banner; weapons go live with the round.
-    if (this.isRoundActive) this.processCombat(delta);
+    if (this.isRoundActive) {
+      // Secondaries first: a held or chosen launch is this cycle's attack.
+      this.weapons?.update(delta, this.time.now);
+      this.processCombat(delta);
+    }
     this.updateSprites();
     this.updateCameraFollow();
     this.updateHud();
@@ -794,6 +820,7 @@ export class DogfightScene extends Phaser.Scene {
         camera: cameraViewFrom(this.cameras.main),
         worldSize: BATTLEFIELD_SIZE,
         markedId: this.crew?.markedTargetOf(PLAYER_SIDE, this.time.now) ?? null,
+        secondaryWeapons: this.weapons?.hudSlots() ?? [],
       }),
     );
   }
@@ -891,7 +918,7 @@ export class DogfightScene extends Phaser.Scene {
         this.scene.restart();
       },
       onSettings: () => {
-        this.scene.launch("SettingsScene", { returnScene: "DogfightScene" });
+        openSettingsOverBattle(this);
       },
       onQuit: () => {
         this.scene.start("MainMenuScene");
@@ -911,6 +938,8 @@ export class DogfightScene extends Phaser.Scene {
     if (this.isPaused) {
       this.cameras.main.setZoom(1.0);
       this.pauseMenu.show();
+    } else {
+      this.pauseMenu.hide();
     }
   }
 
@@ -948,6 +977,14 @@ export class DogfightScene extends Phaser.Scene {
     };
     ship.modifiers = equipQuickBuild(ship, loadoutId);
     ship.flight = equipFlight(ship.flight, ship.modifiers);
+    // Online, each client arms (and fires the turret of) its own ship only.
+    if (!this.isOnlineMode || owner === "player") {
+      this.weapons?.equip(id, {
+        definitionId: defId,
+        loadoutId,
+        modifiers: ship.modifiers,
+      });
+    }
 
     this.ships.set(id, ship);
     matchStats.record({
@@ -1026,7 +1063,7 @@ export class DogfightScene extends Phaser.Scene {
         worldSize: BATTLEFIELD_SIZE,
         dial: ship.dial,
         cycleMs: CYCLE_DURATION_MS,
-        modifiers: stressModifiersOf(ship.modifiers),
+        modifiers: stressModifiersOf(ship.modifiers, this.auras.get(ship.id)),
       });
       this.setFlight(ship, tick.state);
       this.repairFeedback?.selfRepair(ship, deltaMs);
@@ -1044,6 +1081,13 @@ export class DogfightScene extends Phaser.Scene {
         .setAngle(ship.angle);
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
+    // Faction auras (support ships, hero pilots): repairs now, buffs at
+    // every shot and stress tick — the same in every battle mode.
+    this.auras = applyAllyAuraRepairs(
+      [...this.ships.values()].filter((ship) => ship.hull > 0),
+      this.repairFeedback,
+      deltaMs,
+    );
   }
 
   /**
@@ -1132,6 +1176,7 @@ export class DogfightScene extends Phaser.Scene {
         ledger: this.hitLedger,
         nowMs: this.time.now,
         preferredId: this.crew?.targetOf(ship.id) ?? null,
+        worldSize: BATTLEFIELD_SIZE,
       });
       if (!target) continue;
       this.fireAt(ship, target);
@@ -1163,8 +1208,16 @@ export class DogfightScene extends Phaser.Scene {
       roll: random.next(),
       targetMarked:
         this.crew?.isMarkedShot(attacker.id, target.id, this.time.now) ?? false,
+      ...shotAurasOf(this.auras, attacker.id, target.id),
+      targetArmor: armorReductionOf(target.definitionId),
     });
-    if (result.hit) this.applyHit(attacker, target, result);
+    this.weapons?.onAttack(attacker.id);
+    const cloak = this.weapons?.incomingDamageFactor(target.id) ?? 1;
+    if (result.hit)
+      this.applyHit(attacker, target, {
+        ...result,
+        damage: Math.max(1, Math.round(result.damage * cloak)),
+      });
     matchStats.record({
       kind: "shot",
       friendly: attacker.owner === "player",
@@ -1230,6 +1283,68 @@ export class DogfightScene extends Phaser.Scene {
     this.hitLedger.recordHit(attacker.id, target.id, this.time.now);
     this.healthBars.get(target.id)?.update(target.hull, target.shields);
     if (wasAlive && target.hull <= 0) this.onShipDestroyed(attacker, target);
+  }
+
+  /** @returns What the secondary weapons read from (and ask of) this scene. */
+  private weaponsLink(): BattleWeaponsLink {
+    return {
+      bodies: () =>
+        [...this.ships.values()].map((ship) =>
+          weaponBodyOf(
+            ship,
+            ship.owner,
+            damageMitigationOf(
+              ship.modifiers,
+              this.fliesWithWingman(ship),
+              this.auras.get(ship.id),
+            ),
+          ),
+        ),
+      wantedTargetOf: (shipId: string) =>
+        shipId === this.playerShipIds[0]
+          ? playerTargetId({
+              ships: this.ships.values(),
+              playerId: shipId,
+              isAlly: (ship) => ship.owner === PLAYER_SIDE,
+              worldSize: BATTLEFIELD_SIZE,
+            })
+          : (this.crew?.targetOf(shipId) ?? null),
+      playerShipId: () => this.playerShipIds[0] ?? null,
+      playerSide: () => PLAYER_SIDE,
+      sideOf: (shipId: string) => this.ships.get(shipId)?.owner ?? null,
+      isBotControlled: (shipId: string) =>
+        !this.isOnlineMode && shipId !== this.playerShipIds[0],
+      applyHit: (hit: WeaponHit) => this.applyWeaponHit(hit),
+      spriteOf: (shipId: string) => this.shipSprites.get(shipId),
+    };
+  }
+
+  /**
+   * A secondary weapon's hit (missile, torpedo, turret, bomb, mine): the
+   * same shields-then-hull path as a laser; a blast can catch the
+   * dropper's own side (friendly fire).
+   *
+   * @param hit - The hit from the weapons runtime.
+   */
+  private applyWeaponHit(hit: WeaponHit): void {
+    const target = this.ships.get(hit.targetId);
+    if (!target || target.hull <= 0) return;
+    const attacker = this.ships.get(hit.attackerId) ?? target;
+    matchStats.record({
+      kind: "hit",
+      friendly: attacker.owner === "player",
+      weapon: "ordnance",
+    });
+    this.applyHit(attacker, target, {
+      hit: true,
+      damage: hit.damage,
+      stressOnTarget: hit.stress,
+    });
+  }
+
+  /** The secondary-weapons glue (e2e). */
+  get secondaryWeapons(): BattleWeapons | null {
+    return this.weapons;
   }
 
   /**
@@ -1361,6 +1476,7 @@ export class DogfightScene extends Phaser.Scene {
     });
     this.setFlight(ship, { motion: result.motion, stress: result.stress });
     this.playFlightEvents(ship, result.events, origin);
+    this.weapons?.showRefusals(result.refusals, ship);
     matchStats.record({ kind: "flight", events: result.events });
     matchStats.record({
       kind: "stress",

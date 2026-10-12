@@ -11,10 +11,12 @@
  * Mutates the battle. Pure: no Phaser.
  */
 
+import { BATTLEFIELD_SIZE } from "../../config";
 import { applyInstantStress } from "../../arcade/ArcadeStress";
 import { nearestTargetInArc } from "../../arcade/systems/ArcTargeting";
 import { attackIntervalMs } from "../../arcade/systems/CombatTempo";
 import type { HitImmunityLedger } from "../../arcade/systems/CombatTempo";
+import type { WeaponsDriver } from "../../arcade/weapons/WeaponsDriver";
 import {
   absorbDamage,
   combatantOf,
@@ -26,6 +28,7 @@ import {
   hasWingman,
   rewardKill,
 } from "../../arcade/PilotAbilityCombat";
+import { armorReductionOf } from "../../arcade/systems/DamageRules";
 import { realTimeRunBonuses } from "../../arcade/systems/SurvivalDurability";
 import type { SquadBattleAi } from "../../arcade/systems/SquadBattleAi";
 import { calculateHitChance } from "../../data/ModeBalancing";
@@ -65,6 +68,8 @@ export interface NodeCombat {
   readonly onKill: (victim: NodeShip, byPlayer: boolean) => void;
   /** A boss was hit (phase check). */
   readonly onBossHit: (boss: NodeShip) => void;
+  /** The ships' secondaries (nodeWeapons.armNode). */
+  weapons?: WeaponsDriver;
 }
 
 /**
@@ -135,6 +140,7 @@ export function findTarget(
   return nearestTargetInArc(ship, combat.ships, {
     rangePx: ship.combatStats.weaponRange + rangeBonus,
     arcDeg: ship.combatStats.firingArc,
+    worldSize: BATTLEFIELD_SIZE,
     isHostile: (other) => other.owner !== ship.owner,
     isEligible: (other) => !combat.ledger.isImmune(ship.id, other.id, nowMs),
     preferredId: ship.bot?.targetId ?? null,
@@ -189,14 +195,19 @@ function fireBolt(combat: NodeCombat, bolt: Bolt): void {
     nowMs,
     roll: combat.rng.next(),
     targetMarked: bolt.marked,
+    targetArmor: armorReductionOf(target.definitionId),
   });
+  combat.weapons?.onAttack(attacker.id);
   if (!result.hit) return;
   if (result.stressOnTarget > 0)
     target.flight = {
       ...target.flight,
       stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
     };
-  dealDamage(combat, target, result.damage, nowMs);
+  const cloak = combat.weapons?.incomingDamageFactor(target.id) ?? 1;
+  const damage =
+    cloak < 1 ? Math.max(1, Math.round(result.damage * cloak)) : result.damage;
+  dealDamage(combat, target, damage, nowMs);
   if (result.damage > 0) combat.ledger.recordHit(attacker.id, target.id, nowMs);
   if (target.hull > 0) return;
   resolveKill(combat, attacker, target, nowMs);
@@ -216,7 +227,7 @@ function baseDamageOf(
   return crit ? base * CRIT_DAMAGE_MULTIPLIER : base;
 }
 
-function dealDamage(
+export function dealDamage(
   combat: NodeCombat,
   target: NodeShip,
   incoming: number,
@@ -236,7 +247,7 @@ function dealDamage(
   if (target.rank === "boss") combat.onBossHit(target);
 }
 
-function resolveKill(
+export function resolveKill(
   combat: NodeCombat,
   killer: NodeShip,
   victim: NodeShip,

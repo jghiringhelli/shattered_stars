@@ -175,7 +175,7 @@ export class ShipRepairFeedback {
   /**
    * Restore at the given rates, then report and refresh the overlay.
    * @param ship - The ship (mutated).
-   * @param rates - Shield and hull rates (miniature points / s).
+   * @param rates - Shield and hull rates (real-time HP / s).
    * @param deltaMs - Frame length (ms).
    * @param quietMs - Time since the ship last took damage.
    * @param sources - Credited sources per channel.

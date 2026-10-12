@@ -38,9 +38,10 @@ export const SCENARIO_TIME_LIMIT_MS = 300_000;
 export const X_WING_RANGE_BANDS = 3;
 
 /**
- * One X-Wing range band in Skirmish px: the Skirmish primary reach
- * (AI_MAX_FIRE_RANGE_PX = 1200 px, which plays the part of range 3) split
- * into the ruler's three bands. A unit test keeps the two in step.
+ * One band of the OBJECTIVE ruler in px. Scenario objectives (control
+ * zones, satellites, salvage) keep their tabletop proportion of the board
+ * on the 6000 px battlefield, so their ruler is map-scaled; weapon ranges
+ * use the combat bands (config RANGE_1–RANGE_3) in every mode instead.
  */
 export const SCENARIO_RANGE_BAND_PX = 400;
 

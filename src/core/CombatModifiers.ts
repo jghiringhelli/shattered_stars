@@ -24,11 +24,14 @@ export interface CombatModifiers {
   readonly bonusDamageVsUnshielded: number;
   /** Multiplier (≤1 is protective) applied to every incoming hit. */
   readonly damageTakenMultiplier: number;
-  /** Shield points regenerated per second while below max shields. */
+  /**
+   * Real-time shield HP regenerated per second while below max shields
+   * (never rescaled by DURABILITY_SCALE: one shield token is 12 HP).
+   */
   readonly shieldRegenPerSecond: number;
   /**
-   * Miniature hull points repaired per second while below max hull, paused
-   * for a few seconds after the ship takes damage (src/arcade/systems/repair).
+   * Real-time hull HP repaired per second while below max hull, paused for a
+   * few seconds after the ship takes damage (src/arcade/systems/repair).
    */
   readonly hullRepairPerSecond: number;
   /** Multiplier on stress accrued from flying maneuvers (<1 = calmer pilot). */
@@ -57,6 +60,12 @@ export interface CombatModifiers {
   readonly projectsAura: boolean;
   /** Fractional increase to the radius of the aura this ship projects. */
   readonly auraRadiusBonus: number;
+  /** Fractional increase to the strength of the aura this ship projects. */
+  readonly auraMagnitudeBonus: number;
+  /** Stress-relief tiers this ship's aura grants allies inside it. */
+  readonly auraStressReliefTiers: number;
+  /** Hit-chance bonus this ship's aura grants allies inside it (0–1). */
+  readonly auraHitChanceBonus: number;
 
   // --- Conditional knobs (pilot abilities), read per hit -------------------
   /** Laser damage added when the target is at range 1. */
@@ -75,7 +84,7 @@ export interface CombatModifiers {
   readonly damagedLaserBonus: number;
   /** Laser damage added for a short frenzy after each kill. */
   readonly killFrenzyLaserBonus: number;
-  /** Shield points restored on each kill. */
+  /** Real-time shield HP restored on each kill. */
   readonly shieldsPerKill: number;
   /** Extra notches on the ship's top speed. */
   readonly maxSpeedBonus: number;
@@ -107,6 +116,9 @@ export const NEUTRAL_MODIFIERS: CombatModifiers = {
   cloakDurationBonus: 0,
   projectsAura: false,
   auraRadiusBonus: 0,
+  auraMagnitudeBonus: 0,
+  auraStressReliefTiers: 0,
+  auraHitChanceBonus: 0,
   closeRangeLaserBonus: 0,
   rearArcLaserBonus: 0,
   bullseyeLaserBonus: 0,
@@ -135,6 +147,15 @@ export const MAX_STRESS_RELIEF_TIERS = 2;
 /** Stacked command upgrades never widen an aura by more than 50%. */
 export const MAX_AURA_RADIUS_BONUS = 0.5;
 
+/** Stacked pilot/command effects never strengthen an aura by more than 50%. */
+export const MAX_AURA_MAGNITUDE_BONUS = 0.5;
+
+/**
+ * Auras never add more than 10% hit chance to an ally's shot (a Focus /
+ * Target Lock shared by a coordinator, not a guaranteed hit).
+ */
+export const MAX_AURA_HIT_CHANCE_BONUS = 0.1;
+
 /** A ship's top speed never rises more than one notch above its dial. */
 export const MAX_SPEED_BONUS = 1;
 
@@ -151,6 +172,9 @@ const ADDITIVE_KEYS = [
   "stressOnHit",
   "cloakDurationBonus",
   "auraRadiusBonus",
+  "auraMagnitudeBonus",
+  "auraStressReliefTiers",
+  "auraHitChanceBonus",
   "closeRangeLaserBonus",
   "rearArcLaserBonus",
   "bullseyeLaserBonus",
@@ -198,59 +222,49 @@ export function combineEffects(
   return clampModifiers(sheet);
 }
 
+/** Multiplicative knobs and the floor stacking can never push them below. */
+const FLOORS: ReadonlyArray<
+  readonly [(typeof MULTIPLICATIVE_KEYS)[number], number]
+> = [
+  ["damageTakenMultiplier", MIN_DAMAGE_TAKEN_MULTIPLIER],
+  ["wingmanDamageTakenMultiplier", MIN_DAMAGE_TAKEN_MULTIPLIER],
+  ["stressRateMultiplier", MIN_STRESS_RATE_MULTIPLIER],
+  ["boostCooldownMultiplier", MIN_COOLDOWN_MULTIPLIER],
+  ["barrelRollCooldownMultiplier", MIN_COOLDOWN_MULTIPLIER],
+  ["kturnCooldownMultiplier", MIN_COOLDOWN_MULTIPLIER],
+  ["ordnanceCooldownMultiplier", MIN_COOLDOWN_MULTIPLIER],
+  ["turretCooldownMultiplier", MIN_COOLDOWN_MULTIPLIER],
+];
+
+/** Additive knobs and the cap stacking can never push them above. */
+const CAPS: ReadonlyArray<readonly [(typeof ADDITIVE_KEYS)[number], number]> = [
+  ["stressReliefTiers", MAX_STRESS_RELIEF_TIERS],
+  ["auraRadiusBonus", MAX_AURA_RADIUS_BONUS],
+  ["auraMagnitudeBonus", MAX_AURA_MAGNITUDE_BONUS],
+  ["auraStressReliefTiers", MAX_STRESS_RELIEF_TIERS],
+  ["auraHitChanceBonus", MAX_AURA_HIT_CHANCE_BONUS],
+  ["maxSpeedBonus", MAX_SPEED_BONUS],
+];
+
 /**
  * Apply the stacking floors and caps to a modifier sheet.
  * @param sheet - The raw combined sheet.
  * @returns A sheet within the documented bounds.
  */
 function clampModifiers(sheet: MutableModifiers): CombatModifiers {
-  return {
-    ...sheet,
-    damageTakenMultiplier: Math.max(
-      MIN_DAMAGE_TAKEN_MULTIPLIER,
-      sheet.damageTakenMultiplier,
-    ),
-    stressRateMultiplier: Math.max(
-      MIN_STRESS_RATE_MULTIPLIER,
-      sheet.stressRateMultiplier,
-    ),
-    stressReliefTiers: Math.min(
-      MAX_STRESS_RELIEF_TIERS,
-      sheet.stressReliefTiers,
-    ),
-    auraRadiusBonus: Math.min(MAX_AURA_RADIUS_BONUS, sheet.auraRadiusBonus),
-    maxSpeedBonus: Math.min(MAX_SPEED_BONUS, sheet.maxSpeedBonus),
-    wingmanDamageTakenMultiplier: Math.max(
-      MIN_DAMAGE_TAKEN_MULTIPLIER,
-      sheet.wingmanDamageTakenMultiplier,
-    ),
-    boostCooldownMultiplier: Math.max(
-      MIN_COOLDOWN_MULTIPLIER,
-      sheet.boostCooldownMultiplier,
-    ),
-    barrelRollCooldownMultiplier: Math.max(
-      MIN_COOLDOWN_MULTIPLIER,
-      sheet.barrelRollCooldownMultiplier,
-    ),
-    kturnCooldownMultiplier: Math.max(
-      MIN_COOLDOWN_MULTIPLIER,
-      sheet.kturnCooldownMultiplier,
-    ),
-    ordnanceCooldownMultiplier: Math.max(
-      MIN_COOLDOWN_MULTIPLIER,
-      sheet.ordnanceCooldownMultiplier,
-    ),
-    turretCooldownMultiplier: Math.max(
-      MIN_COOLDOWN_MULTIPLIER,
-      sheet.turretCooldownMultiplier,
-    ),
-  };
+  const clamped: MutableModifiers = { ...sheet };
+  for (const [key, floor] of FLOORS) {
+    clamped[key] = Math.max(floor, clamped[key]);
+  }
+  for (const [key, cap] of CAPS) clamped[key] = Math.min(cap, clamped[key]);
+  return clamped;
 }
 
 /**
  * Forward-laser damage for one bolt, after upgrade bonuses.
  *
- * @param baseDamage - Damage before upgrades (stress penalty already applied).
+ * @param baseDamage - Damage before upgrades. X-Wing has no "stressed pilots
+ *   deal less damage" rule, so nothing here penalises a stressed shooter.
  * @param modifiers - The firing ship's modifier sheet.
  * @param isStressed - Whether the firing pilot is currently stressed.
  * @returns Damage carried by the bolt.

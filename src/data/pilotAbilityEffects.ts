@@ -7,9 +7,15 @@
  *   the card's condition (range 1, behind the target, bullseye, wingman,
  *   stressed, damaged, after a kill) — see src/arcade/ShotConditions.ts.
  * - "Free boost / barrel roll" becomes a faster recharge of that action.
- * - Support abilities that act on friendlies project the faction aura.
+ * - Support abilities that act on friendlies project the faction aura; the
+ *   aura knobs on the pilot's sheet shape it (wider radius, stronger
+ *   magnitude, stress relief or hit chance for allies inside) — read by the
+ *   aura resolver through AuraShip (src/systems/aura/AuraShipFacts.ts).
  * - Force "Action:" abilities fire on their own on a recharge, read as a
  *   steady rate (shield regeneration, stress inflicted per hit).
+ * - Regen / repair rates and shields-per-kill are REAL-TIME hit points
+ *   (HP/s, HP per kill), never rescaled: one shield token is
+ *   DURABILITY_SCALE (12) HP, so 1.2 HP/s restores a token every 10 s.
  * - "While no friendly is near" reads as protection that a nearby wingman
  *   cancels (a wingman damage-taken drawback).
  *
@@ -48,7 +54,7 @@ export const PILOT_ABILITY_REALTIME: Readonly<Record<string, RealtimeEffect>> =
     elusive: { damageTakenMultiplier: 0.9 },
     hold_the_line: { wingmanDamageTakenMultiplier: 0.8 },
     radiant_judgment: { closeRangeLaserBonus: 1, damageTakenMultiplier: 0.95 },
-    regenerative_matrix: { shieldRegenPerSecond: 0.15 },
+    regenerative_matrix: { shieldRegenPerSecond: 1.8 },
     smugglers_luck: { damageTakenMultiplier: 0.92, cloakDurationBonus: 0.5 },
     stalwart: { damageTakenMultiplier: 0.85 },
 
@@ -80,30 +86,56 @@ export const PILOT_ABILITY_REALTIME: Readonly<Record<string, RealtimeEffect>> =
     // --- After a kill / on destruction ---------------------------------------
     assimilation: { wingmanDamageTakenMultiplier: 0.9 },
     blood_frenzy: { killFrenzyLaserBonus: 1 },
-    plunder: { shieldsPerKill: 1 },
+    plunder: { shieldsPerKill: 12 },
     self_destruct: { deathBlastDamage: 2 },
 
     // --- Support (acts on friendlies: projects the faction aura) -------------
-    coordinated_assault: { projectsAura: true, auraRadiusBonus: 0.2 },
+    // Card: friendlies at range 0-2 may Focus / Target Lock -> allies in a
+    // 20% wider aura shoot 5% more accurately.
+    coordinated_assault: {
+      projectsAura: true,
+      auraRadiusBonus: 0.2,
+      auraHitChanceBonus: 0.05,
+    },
     covering_fire: { projectsAura: true, wingmanDamageTakenMultiplier: 0.9 },
-    data_link: { projectsAura: true, auraRadiusBonus: 0.25 },
-    healing_aura: { projectsAura: true, shieldRegenPerSecond: 0.1 },
+    // Card: friendlies at range 0-2 reroll 1 attack die -> a 25% wider,
+    // 15% stronger hive link.
+    data_link: {
+      projectsAura: true,
+      auraRadiusBonus: 0.25,
+      auraMagnitudeBonus: 0.15,
+    },
+    healing_aura: { projectsAura: true, shieldRegenPerSecond: 1.2 },
     hive_mind: { wingmanLaserBonus: 1, wingmanDamageTakenMultiplier: 0.9 },
-    informant: { projectsAura: true },
+    // Card: reveal an enemy's planned maneuver -> allies dodge better: the
+    // aura is 30% stronger.
+    informant: { projectsAura: true, auraMagnitudeBonus: 0.3 },
     inspiring_presence: { projectsAura: true, stressReliefTiers: 1 },
     networked_aim: { projectsAura: true, wingmanLaserBonus: 1 },
-    rally: { projectsAura: true, auraRadiusBonus: 0.1 },
-    shield_transfer: { projectsAura: true, shieldRegenPerSecond: 0.05 },
+    // Card: remove 1 stress from a friendly -> allies in a 10% wider aura
+    // fly one stress tier easier.
+    rally: {
+      projectsAura: true,
+      auraRadiusBonus: 0.1,
+      auraStressReliefTiers: 1,
+    },
+    shield_transfer: { projectsAura: true, shieldRegenPerSecond: 0.6 },
     swarm_tactics: { wingmanLaserBonus: 1, auraRadiusBonus: 0.05 },
 
     // --- Force (automatic on a recharge) -------------------------------------
     force_barrier: { projectsAura: true, wingmanDamageTakenMultiplier: 0.85 },
-    force_guidance: { projectsAura: true, auraRadiusBonus: 0.15 },
-    force_heal: { projectsAura: true, shieldRegenPerSecond: 0.2 },
+    // Card: an attacker at range 0-3 rerolls up to 2 dice -> a 15% wider,
+    // 20% stronger aura.
+    force_guidance: {
+      projectsAura: true,
+      auraRadiusBonus: 0.15,
+      auraMagnitudeBonus: 0.2,
+    },
+    force_heal: { projectsAura: true, shieldRegenPerSecond: 2.4 },
     force_push: { stressOnHit: 0.1 },
     // Card: "When a friendly ship at range 0-1 defends, spend 1 Force: the
     // defender adds 1 evade" — protection for ships flying together, not
-    // self-healing. The old self-regen reading (0.3 shield/s, x DURABILITY_SCALE)
+    // self-healing. The old self-regen reading (0.3 shield tokens/s = 3.6 HP/s)
     // out-healed most fighters' fire at x12 HP: expert pilots could not
     // finish a novice Paladin in 3 minutes (skill gate 1). Same price (6).
     force_shield: { projectsAura: true, wingmanDamageTakenMultiplier: 0.88 },
@@ -126,8 +158,8 @@ export const PILOT_ABILITY_REALTIME: Readonly<Record<string, RealtimeEffect>> =
       damageTakenMultiplier: 0.92,
       barrelRollCooldownMultiplier: 0.9,
     },
-    shield_upgrade: { shieldRegenPerSecond: 0.1 },
-    regenerative_shields: { shieldRegenPerSecond: 0.2 },
+    shield_upgrade: { shieldRegenPerSecond: 1.2 },
+    regenerative_shields: { shieldRegenPerSecond: 2.4 },
     barrel_roll_efficiency: { barrelRollCooldownMultiplier: 0.75 },
     boost_expertise: {
       boostCooldownMultiplier: 0.85,

@@ -12,6 +12,8 @@ import Phaser from "phaser";
 import type { FactionId } from "../config";
 import type { EncyclopediaEntry } from "../data/ShipEncyclopedia";
 import { getShipDefinition } from "../data/ShipDefinitions";
+import { shipArtAssetById } from "../assets/assetManifest";
+import { requestTexture } from "../assets/textureLoading";
 import { shipHint } from "../data/roleHints";
 import { addContainedImage } from "./picker/catalogHelpers";
 import { createHoloPanel, type HoloPanel } from "./hud/HoloPanel";
@@ -66,6 +68,8 @@ export class EncyclopediaDetailPanel {
   private readonly artFrame: Phaser.GameObjects.Graphics;
   private readonly artPlaceholderLabel: Phaser.GameObjects.Text;
   private artImage: Phaser.GameObjects.Image | null = null;
+  /** Art key of the entry on display (late downloads for others are ignored). */
+  private shownArtKey = "";
   private readonly nameText: Phaser.GameObjects.Text;
   private readonly roleBadge: Phaser.GameObjects.Graphics;
   private readonly roleText: Phaser.GameObjects.Text;
@@ -190,6 +194,7 @@ export class EncyclopediaDetailPanel {
 
   private updateArt(entry: EncyclopediaEntry, accent: number): void {
     const { scene, artRect } = this;
+    this.shownArtKey = entry.artKey;
     this.artImage?.destroy();
     this.artImage = null;
     this.artFrame.clear();
@@ -201,9 +206,7 @@ export class EncyclopediaDetailPanel {
       cornerTicks: true,
     });
     if (!scene.textures.exists(entry.artKey)) {
-      this.artPlaceholderLabel.setText(
-        "[ Art not generated — run scripts/generate_ship_art.py ]",
-      );
+      this.requestArt(entry, accent);
       return;
     }
     const inset = DETAIL_LAYOUT.artInset;
@@ -216,6 +219,31 @@ export class EncyclopediaDetailPanel {
       artRect.height - inset * 2,
     );
     this.artPlaceholderLabel.setText("");
+  }
+
+  /**
+   * Download the entry's art on demand (it is not loaded at boot) and draw
+   * it if the entry is still the one shown when it arrives.
+   */
+  private requestArt(entry: EncyclopediaEntry, accent: number): void {
+    const asset = shipArtAssetById(entry.shipId);
+    const missing = "[ Art not generated — run scripts/generate_ship_art.py ]";
+    if (!asset || asset.key !== entry.artKey) {
+      this.artPlaceholderLabel.setText(missing);
+      return;
+    }
+    this.artPlaceholderLabel.setText("LOADING ART…");
+    requestTexture(
+      this.scene,
+      asset,
+      () => {
+        if (this.shownArtKey === entry.artKey) this.updateArt(entry, accent);
+      },
+      () => {
+        if (this.shownArtKey === entry.artKey)
+          this.artPlaceholderLabel.setText(missing);
+      },
+    );
   }
 
   private updateTextBlocks(entry: EncyclopediaEntry): void {

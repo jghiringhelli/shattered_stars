@@ -21,6 +21,10 @@ import {
 } from "../systems/MovementSystem";
 import { CYCLE_DURATION_MS } from "../config";
 import type { MovementProfile } from "../data/ShipDefinitions";
+import {
+  UNRESTRICTED_CAPABILITIES,
+  type FlightCapabilities,
+} from "./flightCapabilityTypes";
 
 /**
  * Floating-point slack when deciding a cycle is complete (ms). 30 ticks of
@@ -61,6 +65,13 @@ export interface ShipControlState {
   barrelRollCooldownMax: number;
   boostCooldown: number;
   boostCooldownMax: number;
+
+  /**
+   * Specials on the ship's dial and dashes on its action bar (stress and
+   * card rules in src/arcade/systems/FlightCapabilities). Omitted =
+   * unrestricted (legacy and test control states).
+   */
+  capabilities?: FlightCapabilities;
 }
 
 /**
@@ -86,12 +97,14 @@ export const BARREL_ROLL_RECHARGE_MS = 3000;
  * @param movementProfile - "fighter" (default) or "capital" (boat easing).
  * @param speedBounds     - Ship's actual speed.min/max (from ShipDefinition.baseStats);
  *                          defaults to the generic 1-5 fighter range when omitted.
+ * @param capabilities    - Specials/dashes the ship may fly (unrestricted when omitted).
  */
 export function createControlState(
   ship: ShipPose,
   baseSize: number = 0,
   movementProfile: MovementProfile = "fighter",
   speedBounds: { min: number; max: number } = { min: 1, max: 5 },
+  capabilities: FlightCapabilities = UNRESTRICTED_CAPABILITIES,
 ): ShipControlState {
   const minSpeed = speedBounds.min;
   const maxSpeed = speedBounds.max;
@@ -113,6 +126,7 @@ export function createControlState(
     barrelRollCooldownMax: BARREL_ROLL_RECHARGE_MS,
     boostCooldown: 0,
     boostCooldownMax: BOOST_RECHARGE_MS,
+    capabilities,
   };
   return startManeuver(ship, base, "straight");
 }

@@ -76,6 +76,11 @@ export interface WeaponSlotDescriptor {
   readonly selected: boolean;
   /** Optional binding hint shown on the slot, e.g. "1". */
   readonly keyHint?: string;
+  /**
+   * Target-lock progress of a missile/torpedo slot: 0 = none, (0, 1) =
+   * acquiring, 1 = locked. Omitted for weapons that need no lock.
+   */
+  readonly lock?: number;
 }
 
 /**

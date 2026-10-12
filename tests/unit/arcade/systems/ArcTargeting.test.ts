@@ -15,7 +15,8 @@ import {
 
 /** Shooter at the origin facing up (angle 0 = up, screen y grows downward). */
 const SHOOTER = { id: "s", faction: "a", x: 0, y: 0, angle: 0 };
-const WEAPON = { rangePx: 250, arcDeg: 90 };
+const WORLD = 6000;
+const WEAPON = { rangePx: 250, arcDeg: 90, worldSize: WORLD };
 
 function foe(id: string, x: number, y: number, hull = 4): ArcCandidate {
   return { id, faction: "b", x, y, hull };
@@ -150,16 +151,36 @@ describe("nearestHostile", () => {
   it("finds the nearest living hostile anywhere, even behind", () => {
     const behind = foe("behind", 0, 400);
     const farAhead = foe("ahead", 0, -900);
-    expect(nearestHostile(SHOOTER, [farAhead, behind])).toBe(behind);
+    expect(nearestHostile(SHOOTER, [farAhead, behind], WORLD)).toBe(behind);
   });
 
   it("skips destroyed ships and friends", () => {
     const friend = { ...foe("f", 0, -50), faction: "a" };
-    expect(nearestHostile(SHOOTER, [friend, foe("d", 0, -60, 0)])).toBeNull();
+    expect(
+      nearestHostile(SHOOTER, [friend, foe("d", 0, -60, 0)], WORLD),
+    ).toBeNull();
   });
 
   it("uses the hostility filter when given", () => {
     const mirror = { ...foe("mirror", 0, -50), faction: "a" };
-    expect(nearestHostile(SHOOTER, [mirror], () => true)).toBe(mirror);
+    expect(nearestHostile(SHOOTER, [mirror], WORLD, () => true)).toBe(mirror);
+  });
+});
+
+describe("ArcTargeting across the map seam (torus)", () => {
+  const AT_TOP_EDGE = { id: "s", faction: "a", x: 3000, y: 20, angle: 0 };
+  it("fires at an enemy just across the top edge", () => {
+    const acrossSeam = foe("seam", 3000, WORLD - 100);
+    expect(nearestTargetInArc(AT_TOP_EDGE, [acrossSeam], WEAPON)).toBe(
+      acrossSeam,
+    );
+  });
+
+  it("measures nearestHostile the short way round", () => {
+    const acrossSeam = foe("seam", 3000, WORLD - 100);
+    const midField = foe("mid", 3000, 900);
+    expect(nearestHostile(AT_TOP_EDGE, [midField, acrossSeam], WORLD)).toBe(
+      acrossSeam,
+    );
   });
 });

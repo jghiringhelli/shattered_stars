@@ -90,6 +90,7 @@ export function applyPilotFlightInput(
     motion: flown.motion,
     stress: flown.stress,
     events: [],
+    refusals: [],
   };
   const edge = (e: FlightEdge): boolean => input.edges.has(e);
   const gestures = updateGestures({
@@ -149,7 +150,7 @@ export function applyPilotFlightInput(
     flown,
     flight,
     edge("BOOST") || has("boost"),
-    gestures.actions,
+    [...gestures.actions, ...rollButtonsOf(input.edges)],
     worldSize,
   );
 
@@ -163,7 +164,22 @@ export function applyPilotFlightInput(
     motion: flight.motion,
     stress: flight.stress,
     events: flight.events,
+    refusals: flight.refusals,
   };
+}
+
+/**
+ * Gamepad roll buttons as the gesture actions the chord would produce. A
+ * button is a press, not a held chord, so it never latches steering.
+ *
+ * @param edges - This frame's flight edges.
+ * @returns The barrel-roll actions pressed this frame.
+ */
+function rollButtonsOf(edges: ReadonlySet<FlightEdge>): GestureAction[] {
+  const actions: GestureAction[] = [];
+  if (edges.has("BARREL_ROLL_LEFT")) actions.push("barrel_roll_left");
+  if (edges.has("BARREL_ROLL_RIGHT")) actions.push("barrel_roll_right");
+  return actions;
 }
 
 /**

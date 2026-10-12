@@ -18,7 +18,7 @@ import {
 } from "../../../../src/config";
 import { getModeCombatStats } from "../../../../src/data/ModeBalancing";
 import { applyLoadoutEffects } from "../../../../src/systems/BattleHelpers";
-import { buildOrdnanceSlots } from "../../../../src/arcade/ArcadeOrdnance";
+import { secondarySpecOf } from "../../../../src/arcade/weapons/weaponSpecs";
 import { UPGRADE_DEFINITIONS } from "../../../../src/systems/UpgradeSystem";
 import { SHIP_LOADOUTS } from "../../../../src/data/ShipLoadouts";
 import { SHIP_DEFINITIONS } from "../../../../src/data/ShipDefinitions";
@@ -121,7 +121,7 @@ describe("every real ship can be damaged and destroyed", () => {
 
 describe("ordnance and blasts", () => {
   it("ordnance slots hit for the card's damage times the ordnance scale", () => {
-    const [slot] = buildOrdnanceSlots(["concussion_missile"]);
+    const slot = secondarySpecOf("concussion_missile");
     const card = UPGRADE_DEFINITIONS["concussion_missile"]!;
     expect(slot!.damage).toBe(card.weapon!.damage * ORDNANCE_DAMAGE_SCALE);
   });

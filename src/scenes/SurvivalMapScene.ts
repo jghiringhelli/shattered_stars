@@ -16,6 +16,7 @@ import { FACTION_NAMES_SHORT } from "../data/survival/factionNames";
 import { sectorName } from "../data/survival/sectors";
 import { isCombatNode } from "../data/survival/nodes";
 import { audioManager } from "../audio/AudioManager";
+import { survivalMapMusic } from "../audio/musicContexts";
 import { createHoverButton } from "../ui/ButtonFactory";
 import { addMenuBackdrop, addMenuHeader } from "../ui/menu/MenuScaffold";
 import { factionAccent, HOLO_PALETTE } from "../ui/theme/HoloTheme";
@@ -71,7 +72,7 @@ export class SurvivalMapScene extends Phaser.Scene {
       accent: factionAccent(run.faction),
     });
     audioManager.initialize();
-    audioManager.playFactionMusic(run.faction, "tactical");
+    audioManager.playMusic(survivalMapMusic(run.activeKind));
     this.mapView = new SectorMapView(this);
     this.statusPanel = new RunStatusPanel(this);
     this.choicePanel = new SurvivalChoicePanel(this, run.faction);
@@ -120,6 +121,8 @@ export class SurvivalMapScene extends Phaser.Scene {
   }
 
   private continueFlow(run: RunState): void {
+    // Shop → Starport Cantina; travelling the map → Long Haul.
+    audioManager.playMusic(survivalMapMusic(run.activeKind));
     if (run.pendingRewards.length > 0) {
       this.flows.showReward(run);
       return;

@@ -99,7 +99,6 @@ export class CampaignScene extends Phaser.Scene {
     this.pendingResearch = null;
     addMenuBackdrop(this, { textureId: BACKDROP_TEXTURE });
     audioManager.initialize();
-    audioManager.playMusic("menu_theme");
     this.input.keyboard?.on("keydown-ESC", this.goBack, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.keyboard?.off("keydown-ESC", this.goBack, this);
@@ -142,6 +141,7 @@ export class CampaignScene extends Phaser.Scene {
   // ── Faction select ─────────────────────────────────────────────────────
 
   private showFactionSelect(): void {
+    audioManager.playSubmenuMusic();
     const container = this.enterPhase("faction_select");
     const header = addMenuHeader(this, {
       title: "CAMPAIGN",
@@ -196,6 +196,7 @@ export class CampaignScene extends Phaser.Scene {
       CampaignSaveManager.save(this.saveData);
     }
     audioManager.playSound("ui_select", 0.7);
+    audioManager.playFactionMusic(factionId, "tactical");
     this.showMissionMap();
   }
 

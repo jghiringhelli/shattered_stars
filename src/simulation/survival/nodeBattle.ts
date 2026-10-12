@@ -9,6 +9,7 @@ import type { BeltConfig } from "../../systems/arena/ArenaBoundary";
 import type { SurvivalBattleRules } from "../../systems/survival/SurvivalBattleRules";
 import type { SurvivalRunController } from "../../systems/survival/SurvivalRunController";
 import type { NodeCombat } from "./nodeCombat";
+import type { NodeWeapons } from "./nodeWeapons";
 
 /** The battle in progress (mutable simulation state). */
 export interface NodeBattle {
@@ -31,4 +32,6 @@ export interface NodeBattle {
   readonly playerBeltDamage: boolean;
   /** Phases started per boss id. */
   readonly bossPhases: Map<string, number>;
+  /** Every ship's secondaries (set right after the battle opens). */
+  weapons: NodeWeapons | null;
 }

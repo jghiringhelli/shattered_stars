@@ -59,7 +59,6 @@ export const MODIFICATION_UPGRADES: Readonly<
     pointCost: 6,
     creditCost: 300,
     requiredShipSize: ["tiny", "small"],
-    effects: { agilityBonus: 1 },
     realtime: { damageTakenMultiplier: 0.85 },
   },
   combat_configuration: {
@@ -69,7 +68,6 @@ export const MODIFICATION_UPGRADES: Readonly<
     description: "+1 laser damage, but takes 15% more damage.",
     pointCost: 2,
     creditCost: 100,
-    effects: { attackBonus: 1, agilityBonus: -1 },
     realtime: { laserDamageBonus: 1, damageTakenMultiplier: 1.15 },
   },
   evasion_configuration: {
@@ -80,7 +78,6 @@ export const MODIFICATION_UPGRADES: Readonly<
       "Takes 10% less damage, but maneuver stress builds 15% faster.",
     pointCost: 2,
     creditCost: 100,
-    effects: { agilityBonus: 1 },
     realtime: { damageTakenMultiplier: 0.9, stressRateMultiplier: 1.15 },
   },
   ace_pilot_title: {

@@ -105,6 +105,29 @@ describe("upgrade catalog", () => {
     expect(free).toEqual([]);
   });
 
+  it("never counts a card twice: a stat bonus is dropped when the card has its real-time knob", () => {
+    // One representation per card (damage rules unified across modes):
+    // attack dice vs laser damage, agility dice vs damage taken.
+    const doubled = CARDS.filter((card) => {
+      const effects = card.effects ?? {};
+      const realtime = card.realtime ?? {};
+      const attackTwice =
+        (effects.attackBonus ?? 0) !== 0 &&
+        (realtime.laserDamageBonus ?? 0) !== 0;
+      const agilityTwice =
+        (effects.agilityBonus ?? 0) !== 0 &&
+        (realtime.damageTakenMultiplier ?? 1) !== 1;
+      return attackTwice || agilityTwice;
+    }).map((card) => card.id);
+    expect(doubled).toEqual([]);
+  });
+
+  it("gives the Heavy Laser Cannon +1 damage once (laser knob, no attack die)", () => {
+    const hlc = UPGRADE_DEFINITIONS["heavy_laser_cannon"];
+    expect(hlc?.realtime?.laserDamageBonus).toBe(1);
+    expect(hlc?.effects?.attackBonus ?? 0).toBe(0);
+  });
+
   it("derives the aura-granting set from cards that project an aura", () => {
     const projecting = CARDS.filter((card) => card.realtime?.projectsAura).map(
       (card) => card.id,

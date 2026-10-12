@@ -8,6 +8,7 @@
  * Pure: no Phaser.
  */
 
+import { weaponBarSlots } from "../battleUi/sceneWeapons";
 import type { CycleFlightState } from "../../arcade/systems/CycleFlight";
 import {
   inPrimaryArc,
@@ -55,6 +56,8 @@ export interface DuelHudInput<T extends DuelHudShip> {
   readonly worldSize: number;
   /** The target the player's side has marked (SquadMark), or null/omitted. */
   readonly markedId?: string | null;
+  /** Secondary weapons and turret of the player's ship (BattleWeapons). */
+  readonly secondaryWeapons?: readonly WeaponSlotDescriptor[];
 }
 
 /** What picking the player's HUD target needs (a DuelHudInput without camera). */
@@ -87,7 +90,13 @@ export function buildDuelHudSnapshot<T extends DuelHudShip>(
           markedId: input.markedId ?? null,
         }),
       ),
-    weapons: alivePlayer === null ? [] : [primarySlot(alivePlayer)],
+    weapons:
+      alivePlayer === null
+        ? []
+        : weaponBarSlots(
+            primarySlot(alivePlayer),
+            input.secondaryWeapons ?? [],
+          ),
     camera: input.camera,
   };
 }
@@ -122,7 +131,9 @@ export function duelTargetId(
   enemies: ReadonlyArray<Pick<DuelHudShip, "id" | "x" | "y">>,
   worldSize: number,
 ): string | null {
-  const inSights = enemies.find((enemy) => inPrimaryArc(player, enemy));
+  const inSights = enemies.find((enemy) =>
+    inPrimaryArc(player, enemy, worldSize),
+  );
   if (inSights) return inSights.id;
   let nearest: string | null = null;
   let nearestDistance = Number.POSITIVE_INFINITY;

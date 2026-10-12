@@ -39,6 +39,7 @@ import {
   type CombatState,
 } from "./skill/ArenaCombat";
 import { ENGINE_RULES } from "./skill/ArenaRules";
+import { armArena, resolveWeaponsTick } from "./skill/ArenaWeapons";
 import {
   commandSquads,
   createSquads,
@@ -149,7 +150,7 @@ export function runScenarioMatch(
   const loop: MatchLoop = {
     ships,
     squads: createSquads(battle),
-    combat: newCombat(ships, random),
+    combat: armedCombat(ships, random),
     tracker: new ScenarioFrameTracker("A", BATTLEFIELD_SIZE),
     director: new ScenarioDirector(BATTLEFIELD_SIZE),
     state: createScenarioState(
@@ -171,8 +172,8 @@ export function runScenarioMatch(
   };
 }
 
-function newCombat(ships: ArenaShip[], random: () => number): CombatState {
-  return {
+function armedCombat(ships: ArenaShip[], random: () => number): CombatState {
+  const combat: CombatState = {
     ships,
     ledger: new HitImmunityLedger(),
     rules: ENGINE_RULES,
@@ -183,6 +184,8 @@ function newCombat(ships: ArenaShip[], random: () => number): CombatState {
     recentHits: new Map(),
     marks: NO_SQUAD_MARKS,
   };
+  armArena(combat);
+  return combat;
 }
 
 function stepMatch(loop: MatchLoop): void {
@@ -207,6 +210,7 @@ function stepMatch(loop: MatchLoop): void {
     if (ship.alive) pilotScenarioShip(loop, ship, contacts);
   for (const ship of ships) if (ship.alive) flyShip(ship);
   loop.nowMs += TICK_MS;
+  resolveWeaponsTick(combat, loop.nowMs, TICK_MS);
   resolveCombatTick(combat, loop.nowMs, TICK_MS);
   const before = loop.state.crates.filter((c) => c.carrierId).length;
   loop.state = stepScenario(

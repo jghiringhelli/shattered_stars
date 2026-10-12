@@ -28,7 +28,7 @@ export const HULL_REPAIR_PROJECTIONS: ReadonlySet<ProjectionKind> = new Set([
  * @param effect - The projector's faction aura effect.
  * @param kind - How the ship qualifies to project.
  * @param magnitude - The aura magnitude after class scaling.
- * @returns Miniature hull points per second (0 for non-repair fields).
+ * @returns Real-time hull HP per second (0 for non-repair fields).
  */
 export function auraHullRepairRate(
   effect: AuraEffectType,

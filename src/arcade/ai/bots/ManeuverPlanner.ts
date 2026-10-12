@@ -133,10 +133,11 @@ export function candidateOptions(self: OwnShipView): PlanOption[] {
   if (turnSpeed !== null)
     for (const maneuver of TURN_OPTIONS)
       options.push({ maneuver, speed: turnSpeed });
-  if (!self.kturnReady) return options;
-  if (!self.isStressed) options.push({ maneuver: "kturn", speed: self.speed });
+  // Only what the card and stress allow (BotView.availableSpecials).
+  if (self.kturnReady) options.push({ maneuver: "kturn", speed: self.speed });
   for (const maneuver of SPECIAL_OPTIONS)
-    options.push({ maneuver, speed: self.speed });
+    if (self.availableSpecials.includes(maneuver))
+      options.push({ maneuver, speed: self.speed });
   return options;
 }
 

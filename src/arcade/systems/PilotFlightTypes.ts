@@ -10,6 +10,7 @@ import type { StressState } from "../ArcadeStress";
 import type { HeldSteering } from "../SteeringIntent";
 import type { MotionState } from "./ShipMotion";
 import type { ThrottleMemory } from "./PilotThrottle";
+import type { FlightRefusal } from "./FlightCapabilities";
 
 /** Edge-triggered flight intents (fired once per key press). */
 export type FlightEdge =
@@ -22,7 +23,10 @@ export type FlightEdge =
   | "SEGNOR_RIGHT"
   | "TALLON_LEFT"
   | "TALLON_RIGHT"
-  | "BOOST";
+  | "BOOST"
+  /** Gamepad roll buttons (keyboard rolls with the left+right chord). */
+  | "BARREL_ROLL_LEFT"
+  | "BARREL_ROLL_RIGHT";
 
 /** One frame of flight input. */
 export interface FlightInput {
@@ -65,4 +69,6 @@ export interface FlightControlResult {
   readonly motion: MotionState;
   readonly stress: StressState;
   readonly events: FlightEvent[];
+  /** Specials and dashes refused by the card or stress rules (HUD feedback). */
+  readonly refusals: readonly FlightRefusal[];
 }

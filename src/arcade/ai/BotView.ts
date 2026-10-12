@@ -8,6 +8,12 @@
  */
 
 import { canBarrelRoll, canBoost, canKTurn } from "../../core/ArcadeControls";
+import {
+  UNRESTRICTED_CAPABILITIES,
+  dashRefusal,
+  specialRefusal,
+  type SpecialManeuver,
+} from "../systems/FlightCapabilities";
 import type { ManeuverDefinition } from "../../core/types";
 import { CYCLE_DURATION_MS } from "../../config";
 import type { CycleFlightState } from "../systems/CycleFlight";
@@ -94,8 +100,50 @@ export function ownShipView(input: OwnShipInput): OwnShipView {
     dial: input.dial,
     msToCommit: (1 - control.maneuverProgress) * CYCLE_DURATION_MS,
     endPose: end ? { x: end.x, y: end.y, angle: end.angle } : pose,
-    kturnReady: input.maneuverable && canKTurn(control),
-    boostReady: input.maneuverable && canBoost(control),
-    barrelRollReady: input.maneuverable && canBarrelRoll(control),
+    ...flyableActions(input, stress.isStressed),
+  };
+}
+
+const SPECIALS: readonly SpecialManeuver[] = [
+  "kturn",
+  "segnor_left",
+  "segnor_right",
+  "tallon_left",
+  "tallon_right",
+];
+
+/**
+ * What the pilot may fly beyond its basic dial right now: recharged, on
+ * its card (dial / action bar) and allowed under stress — the same rules
+ * the controls apply (FlightCapabilities), so a bot never plans a refusal.
+ *
+ * @param input - Own ship, flight, dial and whether its hull may flip/dash.
+ * @param isStressed - Whether the pilot is stressed.
+ * @returns Ready flags and the specials it may queue.
+ */
+function flyableActions(
+  input: OwnShipInput,
+  isStressed: boolean,
+): Pick<
+  OwnShipView,
+  "kturnReady" | "availableSpecials" | "boostReady" | "barrelRollReady"
+> {
+  const control = input.flight.motion.control;
+  const caps = control.capabilities ?? UNRESTRICTED_CAPABILITIES;
+  const recharged = input.maneuverable && canKTurn(control);
+  const availableSpecials = recharged
+    ? SPECIALS.filter((s) => specialRefusal(caps, s, isStressed) === null)
+    : [];
+  return {
+    kturnReady: availableSpecials.includes("kturn"),
+    availableSpecials,
+    boostReady:
+      input.maneuverable &&
+      canBoost(control) &&
+      dashRefusal(caps, "boost", isStressed) === null,
+    barrelRollReady:
+      input.maneuverable &&
+      canBarrelRoll(control) &&
+      dashRefusal(caps, "barrel_roll", isStressed) === null,
   };
 }

@@ -8,6 +8,8 @@
 import Phaser from "phaser";
 import type { ShipDefinition } from "../../core/types";
 import { isStarterPick } from "../../data/ProgressionData";
+import { shipSpriteAsset } from "../../assets/assetManifest";
+import { swapWhenLoaded } from "../../assets/textureLoading";
 import { HOLO_PALETTE } from "../theme/HoloTheme";
 import { secondaryTags } from "./catalogHelpers";
 import { drawLockGlyph, drawTagChip, TAG_CHIP_HEIGHT } from "./pickerGlyphs";
@@ -135,6 +137,7 @@ function buildHeadline(
     .image(x + CARD.spriteCentreX, y + spec.height / 2, spriteKey)
     .setDisplaySize(CARD.spriteSize, CARD.spriteSize)
     .setAlpha(locked ? CARD.lockedSpriteAlpha : 1);
+  swapWhenLoaded(scene, sprite, shipSpriteAsset(def), "stretch");
   const name = addPickerText(
     scene,
     { x: x + CARD.textX, y: y + CARD.nameY },

@@ -15,7 +15,7 @@ export interface CampaignShipBonuses {
   readonly agilityBonus: number;
   /** × time between attacks (< 1 = faster). */
   readonly weaponIntervalMultiplier: number;
-  /** + shield points regenerated per second. */
+  /** + real-time shield HP regenerated per second (never rescaled). */
   readonly shieldRegenPerSecond: number;
   /** × incoming damage (< 1 = tougher). */
   readonly damageTakenMultiplier: number;

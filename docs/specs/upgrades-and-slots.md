@@ -16,9 +16,9 @@ Every card MUST change real-time combat (tested in `UpgradeCatalog.test.ts`):
 | Card kind | Where its effect lives | Read by |
 |---|---|---|
 | Stat cards (hull, shields) | `effects.hullBonus/shieldBonus` | every mode (`applyLoadoutEffects`) |
-| Attack/agility dice | `effects.attackBonus/agilityBonus` | dice-based modes (ModeBalancing) |
-| Behaviour cards | `realtime` → `CombatModifiers` (`src/core/CombatModifiers.ts`) | arcade scene |
-| Turret / ordnance | `weapon` → `WeaponProfile` | `ArcadeTurret`, `ArcadeOrdnance` |
+| Attack/agility dice | `effects.attackBonus/agilityBonus` | every mode (ModeBalancing dice) — never on a card that already has the equivalent `realtime` knob |
+| Behaviour cards | `realtime` → `CombatModifiers` (`src/core/CombatModifiers.ts`) | every mode |
+| Turret / ordnance | `weapon` → `WeaponProfile` (damage, reload, `rangeBand`, homing, `device`) | `src/arcade/weapons` (every mode) |
 
 `CombatModifiers` knobs: laser damage (flat, calm-only, vs unshielded), damage
 taken, shield regen, hull repair, maneuver stress rate and relief tiers, boost / barrel
@@ -29,20 +29,53 @@ Stacking: additive bonuses sum, multipliers multiply, then clamp
 (damage taken ≥ 0.5×, recharge ≥ 0.4×, stress rate ≥ 0.5×, relief ≤ 2 tiers,
 aura radius ≤ +50%).
 
+### Secondary weapons — one model in every mode (`src/arcade/weapons/`)
+
+Skirmish, Epic Format, Scenarios, Dogfight, Ace Duel, Boss Raid, Continuous
+Tactical, Survival, Campaign and Flight School all run the same runtime
+(`SecondaryWeapons`, driven by the Phaser-free `WeaponsDriver` and wired by
+`src/scenes/battleUi/BattleWeapons.ts`); a scene only maps its ships to
+`WeaponBody`s (`weaponBodies.ts`) and applies `hit` events through its own
+shields-then-hull path. The headless sims (skill arena, scenario, duel and
+Survival node sims) drive the same `WeaponsDriver`, so the telemetry battery
+and the skill gates measure the game with its ordnance. Every scene and sim
+runs the weapons step **before** primary fire each frame.
+
+| Weapon | Rule (from the card's `WeaponProfile`) |
+|---|---|
+| Missile / torpedo | Needs a **lock** on the pilot's target (target within range 3 for one 500 ms cycle; the launch spends it), the target inside the front arc (80°) and the card's range band (default 2–3; config `RANGE_1..3`). Leaves the nose on the ship's heading (the pilot aims the launcher) and steers for its target's intercept point (lead guidance) at the card's turn rate — torpedoes track slowly, a hard break still shakes a missile. On impact the warhead rolls its attack (card damage as dice) against the target's agility with the same odds as turrets and primaries (`calculateHitChance`) — agile interceptors shrug off missiles, as in X-Wing. A hit deals card damage × `ORDNANCE_DAMAGE_SCALE` (10: a decisive strike, proton torpedo 50). The launch, and the warhead while it flies, is this attacker's attack on the target (`HitImmunityLedger`): no launch at a target it already hit this cycle — a human's press is held for up to one cycle ("LAUNCH QUEUED") and fires as soon as the cycle clears. |
+| Bomb | Dropped astern (one speed-1 template); blasts 2 cycles later, every ship within range 1 (friendly fire). |
+| Mine | Dropped astern; arms after a cycle; the first **enemy** touching it sets it off (IFF); the blast hits every ship in reach; fizzles after 45 s. |
+| Turret | 360° within its band (default 1–2), the pilot's target first, finite traverse (240°/s), primary-laser dice for its card damage, at most one attack per cycle. Skirmish gunner crew aims it by hand. |
+| Cannon | A `realtime` modifier of the primary laser (no separate weapon). |
+| Cloak | Only ships whose action bar has `cloak` (Raven, Owl, Specter, Phantom, Shadow); 8 s (+ Phantom Strike), 15 s recharge, attacking breaks it, half damage taken while cloaked, cannot be locked. |
+
+Controls: FIRE_SECONDARY (Shift+Space / tap / pad X) fires the selected slot,
+WEAPON_CYCLE (Tab / RB) selects the next, CLOAK (C). The HUD weapon bar shows
+each slot's kind, charges, reload and lock ring; refusals ("NO LOCK", "OUT OF
+ARC", "NO CLOAKING DEVICE"…) flash above the ship. Bots use ordnance through
+`src/arcade/ai/OrdnanceDecision.ts`: launch only legal shots, drop devices
+only with an enemy close astern and no friend in the blast, cloak when an
+enemy has them in its sights.
+
 ### Repair (`src/arcade/systems/repair/`)
 
-Rates are authored in miniature points per second and scaled by
-`DURABILITY_SCALE` to real-time HP; repairs never exceed max values and never
-revive a destroyed ship.
+Every regen / repair knob (`shieldRegenPerSecond`, `hullRepairPerSecond`,
+aura regen and hull repair, Survival relics/affixes, Campaign armory and
+research, `shieldsPerKill`) is authored in **real-time hit points** (HP/s, HP
+per kill) and applied as is — nothing in the repair pipeline multiplies by
+`DURABILITY_SCALE`. One shield/hull token is `DURABILITY_SCALE` (12) HP, so a
+card that "restores 1 shield every ~8 s" carries 12 / 8 ≈ 1.44 HP/s. Repairs
+never exceed max values and never revive a destroyed ship.
 
 | Source | Knob / rule | Cards |
 |---|---|---|
-| Own shield regen | `shieldRegenPerSecond` (no pause) | Repair Astromech (R2-style, 0.12/s), Jury-Rigged Deflectors, Regenerative Shields, ability regen |
-| Own hull repair | `hullRepairPerSecond`, paused `HULL_REPAIR_DAMAGE_PAUSE_MS` (3 s) after any hit | Mechanic crew (0.08/s), Patch Astromech (R5-style, 0.05/s) |
+| Own shield regen | `shieldRegenPerSecond` (no pause) | Repair Astromech (R2-style, 1.44 HP/s), Jury-Rigged Deflectors, Regenerative Shields, ability regen |
+| Own hull repair | `hullRepairPerSecond`, paused `HULL_REPAIR_DAMAGE_PAUSE_MS` (3 s) after any hit | Mechanic crew (0.96 HP/s), Patch Astromech (R5-style, 0.6 HP/s) |
 | Repair field | Ascendant Aegis Field: shield regen; projected by a support or capital ship it also repairs allied hull at `AURA_HULL_REPAIR_RATIO` (¼) of its rate, same 3 s pause (`src/systems/aura/AuraRepair.ts`) | — |
 | Damage control | A capital's emergency repair / power-to-engines order (Skirmish) | — |
 
-Hull repair cards stay below 0.1 hull/s (tested) so repair patches a hull
+Hull repair cards stay below one hull token per 10 s (1.2 HP/s, tested) so repair patches a hull
 between engagements and never out-heals incoming fire.
 
 Every repair is reported as a `RepairEvent {shipId, kind: hull|shield, amount,
@@ -65,7 +98,7 @@ damage control (3); plain shield regen only shimmers.
 +1 hull = 3 · +1 shield = 4 · +1 laser damage = 5 (cannon) or 3 with a drawback ·
 40% faster recharge on one maneuver = 3 · 15% less damage taken ≈ 5–6 ·
 aura projection = 4 · trade-off configuration = 2 · illicit = clean equivalent − 1 ·
-shield regen ≈ 0.12/s = 4 · hull repair (out of fire) 0.05/s = 3, 0.08/s = 4.
+shield regen ≈ 1.44 HP/s = 4 · hull repair (out of fire) 0.6 HP/s = 3, 0.96 HP/s = 4.
 
 ## 2. Slots (`SHIP_SLOTS` in `src/data/ShipSlots.ts`)
 

@@ -21,7 +21,6 @@ import {
   CYCLE_DURATION_MS,
   type ShipSize,
 } from "../src/config";
-import { MANEUVER_TEMPLATES } from "../src/systems/MovementSystem";
 import {
   measureManeuver,
   expectedStraightPx,
@@ -29,8 +28,8 @@ import {
   XWING_FACING_CHANGE,
   XWING_BASE_MM,
   TRUE_ARC_CHORD,
+  DIAL_DIRECTIONS,
 } from "../src/simulation/XWingReference";
-import type { ManeuverDirection } from "../src/core/types";
 
 type Verdict = "PASS" | "WARN" | "FAIL";
 interface Row {
@@ -40,7 +39,11 @@ interface Row {
 }
 
 const SPEEDS = [1, 2, 3, 4, 5] as const;
-const DIRECTIONS = Object.keys(MANEUVER_TEMPLATES) as ManeuverDirection[];
+/**
+ * The X-Wing dial directions only: the arcade-only drift templates have no
+ * X-Wing facing to compare against (XWingReference.NON_DIAL_DIRECTIONS).
+ */
+const DIRECTIONS = DIAL_DIRECTIONS;
 const EPS = 1e-6;
 
 /** MOV-1: straight displacement = speed*40 + baseSize. */
@@ -71,7 +74,7 @@ function checkFacing(rows: Row[]): void {
     gate: "MOV-2 facing change (MUST)",
     detail: bad.length
       ? `mismatch: ${bad.join(", ")}`
-      : "all 10 directions match",
+      : `all ${DIRECTIONS.length} dial directions match`,
     verdict: bad.length ? "FAIL" : "PASS",
   });
 }

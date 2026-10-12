@@ -72,7 +72,25 @@ describe("conflict detection", () => {
   });
 
   it("a flight intent may share a button with a menu-only intent", () => {
-    expect(findButtonConflicts(defaults, "CLOAK", A)).toEqual([]);
+    // A is CONFIRM (menu) and BOOST (flight).
+    expect(findButtonConflicts(defaults, "BOOST", A)).toEqual([]);
+  });
+
+  it("gives every flight special a default gamepad input", () => {
+    const bound = new Set(defaults.map((b) => b.intent));
+    const specials = [
+      "BOOST",
+      "KTURN",
+      "SEGNOR_LEFT",
+      "SEGNOR_RIGHT",
+      "TALLON_LEFT",
+      "TALLON_RIGHT",
+      "BARREL_ROLL_LEFT",
+      "BARREL_ROLL_RIGHT",
+      "FIRE_SECONDARY",
+      "WEAPON_CYCLE",
+    ] as const;
+    expect(specials.filter((intent) => !bound.has(intent))).toEqual([]);
   });
 
   it("a flight intent may share a button with a tactical-only intent", () => {
@@ -106,7 +124,7 @@ describe("rebindGamepadIntent", () => {
   });
 
   it("unbinds the displaced intent when the rebound one had no button", () => {
-    const result = rebindGamepadIntent(defaults, {}, "CLOAK", X);
+    const result = rebindGamepadIntent(defaults, {}, "SHARP_TURN_LEFT", X);
     expect(result.displaced).toEqual(["FIRE_SECONDARY"]);
     const bindings = applyGamepadOverrides(defaults, result.overrides);
     expect(primaryButton(bindings, "FIRE_SECONDARY")).toBeNull();

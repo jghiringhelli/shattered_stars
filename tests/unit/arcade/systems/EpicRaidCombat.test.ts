@@ -209,3 +209,53 @@ describe("raid calibration invariants", () => {
     expect(bossTempoMs(BOSS_ABILITY_BASE_MS.tick)).toBeLessThanOrEqual(30_000);
   });
 });
+
+describe("resolveBossShot — faction aura", () => {
+  it("adds the attacker's aura damage bonus to a hit on the boss", async () => {
+    const { resolveBossShot } =
+      await import("../../../../src/arcade/systems/EpicRaidCombat");
+    const { NEUTRAL_AURA } =
+      await import("../../../../src/systems/SupportAura");
+    const { NEUTRAL_MODIFIERS } =
+      await import("../../../../src/core/CombatModifiers");
+    const { INITIAL_STRESS } =
+      await import("../../../../src/arcade/ArcadeStress");
+    const attacker = {
+      x: 0,
+      y: 0,
+      angle: 0,
+      hull: 10,
+      maxHull: 10,
+      shields: 0,
+      maxShields: 0,
+      stress: INITIAL_STRESS,
+      modifiers: NEUTRAL_MODIFIERS,
+      frenzyUntilMs: 0,
+    };
+    const boss = {
+      x: 0,
+      y: -200,
+      angle: 180,
+      hull: 100,
+      maxHull: 100,
+      shields: 10,
+      maxShields: 10,
+      armor: 0,
+    };
+    const shot = {
+      attacker,
+      boss,
+      hitChance: 1,
+      baseDamage: 2,
+      attackerHasWingman: false,
+      nowMs: 0,
+      roll: 0,
+    };
+    const plain = resolveBossShot(shot as never);
+    const buffed = resolveBossShot({
+      ...shot,
+      attackerAura: { ...NEUTRAL_AURA, damageBonus: 1 },
+    } as never);
+    expect(buffed).toBe(plain + 1);
+  });
+});

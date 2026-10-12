@@ -12,6 +12,7 @@
 import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
 import { InputManager } from "../input/InputManager";
+import { openSettingsOverBattle } from "./battleUi/openSettingsOverBattle";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import { trackModeEnd, trackModeStart } from "../telemetry/telemetry";
 import { matchStats } from "../telemetry/matchTelemetry";
@@ -89,6 +90,10 @@ import {
 } from "../core/CombatModifiers";
 import { random } from "../utils/random";
 import { torusDistance } from "../core/Torus";
+import {
+  inArcEnvelope,
+  type ArcEnvelope,
+} from "../arcade/weapons/FiringGeometry";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import {
   raidBotSkill,
@@ -134,6 +139,23 @@ import { raidBriefing, showSortieBriefing } from "../ui/briefing";
 import { FACTION_NAMES_SHORT } from "../data/survival/factionNames";
 import { RaidHud } from "./epicRaid/RaidHud";
 import { BOSS_CONTACT_ID, raidContacts } from "./epicRaid/raidHudSnapshot";
+import type {
+  BattleWeapons,
+  BattleWeaponsLink,
+  WeaponHit,
+} from "./battleUi/BattleWeapons";
+import {
+  createSceneWeapons,
+  weaponBarSlots,
+  weaponBodyOf,
+} from "./battleUi/sceneWeapons";
+import {
+  armorReductionOf,
+  damageMitigationOf,
+  shotAurasOf,
+} from "../arcade/systems/DamageRules";
+import type { ActiveAura } from "../systems/SupportAura";
+import type { WeaponBody } from "../arcade/weapons/weaponTypes";
 import {
   bossContact,
   escortWaveKey,
@@ -255,6 +277,20 @@ function worldDistance(
   return torusDistance(a.x, a.y, b.x, b.y, BATTLEFIELD_SIZE);
 }
 
+/** Hull radius of the boss sprite (px): its edge counts for range and arc. */
+const BOSS_HULL_RADIUS_PX = 60;
+
+/**
+ * @param ship - A firing ship.
+ * @returns Its primary weapon's range and arc.
+ */
+function primaryEnvelopeOf(ship: EpicShip): ArcEnvelope {
+  return {
+    maxRangePx: ship.combatStats.weaponRange,
+    arcDeg: ship.combatStats.firingArc,
+  };
+}
+
 /** What {@link EpicBattleScene.createShip} needs to build a flying ship. */
 interface ShipSpawn {
   readonly id: string;
@@ -335,6 +371,10 @@ export class EpicBattleScene extends Phaser.Scene {
 
   /** X-Wing round tempo: who struck whom this maneuver cycle. */
   private readonly hitLedger = new HitImmunityLedger();
+  /** Secondary weapons (missiles, torpedoes, turrets, bombs, mines, cloak). */
+  private weapons: BattleWeapons | null = null;
+  /** Faction auras resolved this frame (buffs every shot and stress tick). */
+  private auras: ReadonlyMap<string, ActiveAura> = new Map();
 
   /** The raid's AI: escorts' and wingmen's bot pilots, squads and marks. */
   private readonly bots = new BattleBots({
@@ -359,6 +399,8 @@ export class EpicBattleScene extends Phaser.Scene {
     this.inputSubscriptionIds = [];
     teardownSceneInput();
     this.pilot.detach();
+    this.weapons?.destroy();
+    this.weapons = null;
   }
 
   create(): void {
@@ -396,6 +438,7 @@ export class EpicBattleScene extends Phaser.Scene {
     );
     this.background.startShootingStars();
 
+    this.weapons = createSceneWeapons(this, this.weaponsLink(), this.hitLedger);
     this.resetState();
     this.difficulty =
       this.difficultyDefault.next(defaultDifficulty()) ?? this.difficulty;
@@ -439,6 +482,7 @@ export class EpicBattleScene extends Phaser.Scene {
     this.pilot.reset();
     this.pilotedShipId = null;
     this.hitLedger.clear();
+    this.weapons?.runtime.clear();
     this.bots.reset();
     this.escortWaves = 0;
     this.lastBossAbilityTime = 0;
@@ -494,7 +538,7 @@ export class EpicBattleScene extends Phaser.Scene {
     );
     this.cameras.main.setZoom(RAID_ZOOM.battle);
 
-    audioManager.playMusic("combat_high");
+    audioManager.playBattleMusic("boss", this.playerFaction);
 
     this.setupInput();
     this.createPauseMenu();
@@ -535,6 +579,8 @@ export class EpicBattleScene extends Phaser.Scene {
 
     this.updateAI(time, delta);
     this.flyShips(delta);
+    // Secondaries first: a held or chosen launch is this cycle's attack.
+    this.weapons?.update(delta, this.time.now);
     this.processCombat(delta);
     this.processBossAbilities(time);
     this.updateSprites();
@@ -569,12 +615,13 @@ export class EpicBattleScene extends Phaser.Scene {
           this.bots.markedTarget(RAID_PLAYER_SIDE, this.time.now),
         ),
         weapons: flagship
-          ? [
+          ? weaponBarSlots(
               primaryWeaponSlot(
                 flagship.weaponCooldown,
                 attackIntervalMs(flagship.combatStats.weaponCooldown),
               ),
-            ]
+              this.weapons?.hudSlots() ?? [],
+            )
           : [],
         camera: cameraViewFrom(this.cameras.main),
       },
@@ -652,7 +699,7 @@ export class EpicBattleScene extends Phaser.Scene {
         this.scene.restart();
       },
       onSettings: () => {
-        this.scene.launch("SettingsScene", { returnScene: "EpicBattleScene" });
+        openSettingsOverBattle(this);
       },
       onQuit: () => {
         this.scene.start("MainMenuScene");
@@ -1071,7 +1118,87 @@ export class EpicBattleScene extends Phaser.Scene {
     };
     ship.modifiers = equipQuickBuild(ship, spawn.loadoutId);
     ship.flight = equipFlight(ship.flight, ship.modifiers);
+    this.weapons?.equip(id, {
+      definitionId: defId,
+      loadoutId: spawn.loadoutId,
+      modifiers: ship.modifiers,
+    });
     return ship;
+  }
+
+  /** @returns What the secondary weapons read from (and ask of) this scene. */
+  private weaponsLink(): BattleWeaponsLink {
+    return {
+      bodies: () => this.weaponBodies(),
+      wantedTargetOf: (shipId: string) => {
+        const ship = this.ships.get(shipId);
+        if (!ship) return null;
+        if (shipId === this.pilotedShipId) return this.flagshipTargetId(ship);
+        return this.markedTargetOf(ship) ?? this.bots.pilotTargetOf(shipId);
+      },
+      playerShipId: () => this.pilotedShipId,
+      playerSide: () => "player",
+      sideOf: (shipId: string) =>
+        shipId === BOSS_CONTACT_ID
+          ? "ai"
+          : (this.ships.get(shipId)?.owner ?? null),
+      applyHit: (hit: WeaponHit) => this.applyWeaponHit(hit),
+      spriteOf: (shipId: string) => this.shipSprites.get(shipId),
+    };
+  }
+
+  /** @returns Every ship and the boss as the secondary weapons see them. */
+  private weaponBodies(): WeaponBody[] {
+    const bodies = [...this.ships.values()].map((ship) =>
+      weaponBodyOf(
+        ship,
+        ship.owner,
+        damageMitigationOf(
+          ship.modifiers,
+          this.fliesWithWingman(ship),
+          this.auras.get(ship.id),
+        ),
+      ),
+    );
+    const boss = this.boss;
+    if (boss && boss.totalHull > 0) {
+      bodies.push({
+        id: boss.id,
+        side: "ai",
+        x: boss.x,
+        y: boss.y,
+        angle: boss.angle,
+        hull: boss.totalHull,
+        agilityDice: BOSS_AGILITY_DICE,
+        hitRadiusPx: BOSS_HULL_RADIUS_PX,
+      });
+    }
+    return bodies;
+  }
+
+  /**
+   * A secondary weapon's hit: on the boss through its shields and sections,
+   * on a ship through the laser's shields-then-hull path.
+   *
+   * @param hit - The hit from the weapons runtime.
+   */
+  private applyWeaponHit(hit: WeaponHit): void {
+    if (this.boss && hit.targetId === this.boss.id) {
+      this.damageBoss(this.boss, hit.damage);
+      return;
+    }
+    const target = this.ships.get(hit.targetId);
+    if (!target || target.hull <= 0) return;
+    this.setFlight(target, {
+      ...target.flight,
+      stress: applyInstantStress(target.flight.stress, hit.stress),
+    });
+    this.damageShip(target, hit.damage, this.ships.get(hit.attackerId) ?? null);
+  }
+
+  /** The secondary-weapons glue (e2e). */
+  get secondaryWeapons(): BattleWeapons | null {
+    return this.weapons;
   }
   private createShipSprite(ship: EpicShip): void {
     const container = this.add.container(
@@ -1133,7 +1260,7 @@ export class EpicBattleScene extends Phaser.Scene {
         worldSize: BATTLEFIELD_SIZE,
         dial: ship.dial,
         cycleMs: CYCLE_DURATION_MS,
-        modifiers: stressModifiersOf(ship.modifiers),
+        modifiers: stressModifiersOf(ship.modifiers, this.auras.get(ship.id)),
       });
       this.setFlight(ship, tick.state);
       this.regenerateShipShields(ship, deltaMs);
@@ -1156,7 +1283,11 @@ export class EpicBattleScene extends Phaser.Scene {
         .setAngle(ship.angle);
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
-    applyAllyAuraRepairs(this.ships.values(), this.repairFeedback, deltaMs);
+    this.auras = applyAllyAuraRepairs(
+      this.ships.values(),
+      this.repairFeedback,
+      deltaMs,
+    );
   }
 
   /**
@@ -1267,17 +1398,25 @@ export class EpicBattleScene extends Phaser.Scene {
 
   /**
    * @param ship - A ship.
-   * @returns Whether the standing boss is within its weapon range.
+   * @returns Whether any part of the standing boss is within its weapon
+   *   range and firing arc.
    */
-  private bossInRange(ship: EpicShip): boolean {
+  private bossInArc(ship: EpicShip): boolean {
     if (!this.boss || this.boss.totalHull <= 0) return false;
-    return worldDistance(ship, this.boss) < ship.combatStats.weaponRange;
+    return inArcEnvelope(
+      ship,
+      this.boss,
+      primaryEnvelopeOf(ship),
+      BATTLEFIELD_SIZE,
+      BOSS_HULL_RADIUS_PX,
+    );
   }
 
   /**
-   * What a ship shoots now: its squad's mark, then its pilot's target (AI
-   * ships), then the nearest enemy ship in range, then the boss in range —
-   * the escort screen first unless the boss is marked.
+   * What a ship shoots now, among enemies inside its weapon range and
+   * firing arc (torus-aware): its squad's mark, then its pilot's target (AI
+   * ships), then the nearest enemy ship, then the boss — the escort screen
+   * first unless the boss is marked.
    *
    * @param ship - A living ship.
    * @returns Target id (the boss's for the boss), or null.
@@ -1290,12 +1429,20 @@ export class EpicBattleScene extends Phaser.Scene {
     const inRange = enemies
       .map((enemy) => ({
         id: enemy.id,
+        pose: enemy,
         distance: worldDistance(ship, enemy),
       }))
-      .filter((entry) => entry.distance < ship.combatStats.weaponRange)
+      .filter((entry) =>
+        inArcEnvelope(
+          ship,
+          entry.pose,
+          primaryEnvelopeOf(ship),
+          BATTLEFIELD_SIZE,
+        ),
+      )
       .sort((a, b) => a.distance - b.distance)
       .map((entry) => entry.id);
-    if (isPlayerSide && this.boss && this.bossInRange(ship))
+    if (isPlayerSide && this.boss && this.bossInArc(ship))
       inRange.push(this.boss.id);
     return pickShotTarget(inRange, [
       this.markedTargetOf(ship),
@@ -1342,6 +1489,7 @@ export class EpicBattleScene extends Phaser.Scene {
       nowMs: this.time.now,
       roll: random.next(),
       targetMarked: this.markedTargetOf(attacker) === this.boss.id,
+      ...shotAurasOf(this.auras, attacker.id, this.boss.id),
     });
     const hit = damage > 0;
     matchStats.record({ kind: "shot", friendly: true, weapon: "primary", hit });
@@ -1443,6 +1591,8 @@ export class EpicBattleScene extends Phaser.Scene {
       nowMs: this.time.now,
       roll: random.next(),
       targetMarked: this.markedTargetOf(attacker) === target.id,
+      ...shotAurasOf(this.auras, attacker.id, target.id),
+      targetArmor: armorReductionOf(target.definitionId),
     });
 
     this.effectsManager.fireLaser(
@@ -1459,12 +1609,18 @@ export class EpicBattleScene extends Phaser.Scene {
       weapon: "primary",
       hit: result.hit,
     });
+    this.weapons?.onAttack(attacker.id);
     if (!result.hit) return false;
     this.setFlight(target, {
       ...target.flight,
       stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
     });
-    this.damageShip(target, result.damage, attacker);
+    const cloak = this.weapons?.incomingDamageFactor(target.id) ?? 1;
+    this.damageShip(
+      target,
+      Math.max(1, Math.round(result.damage * cloak)),
+      attacker,
+    );
     return result.damage > 0;
   }
 
@@ -1559,6 +1715,7 @@ export class EpicBattleScene extends Phaser.Scene {
     if (!ship) return;
     this.hitLedger.forget(shipId);
     this.bots.remove(shipId);
+    this.weapons?.forget(shipId);
     matchStats.record({
       kind: "kill",
       victimFriendly: ship.owner === "player",
@@ -1714,6 +1871,7 @@ export class EpicBattleScene extends Phaser.Scene {
     });
     this.setFlight(ship, { motion: result.motion, stress: result.stress });
     this.playFlightEvents(ship, result.events, origin);
+    this.weapons?.showRefusals(result.refusals, ship);
     matchStats.record({ kind: "flight", events: result.events });
     matchStats.record({
       kind: "stress",

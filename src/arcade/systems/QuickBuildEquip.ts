@@ -8,8 +8,10 @@
  * like applyLoadoutEffects (called right after the ship is built).
  */
 
-import { DURABILITY_SCALE } from "../../config";
-import type { CombatModifiers } from "../../core/CombatModifiers";
+import {
+  MAX_STRESS_RELIEF_TIERS,
+  type CombatModifiers,
+} from "../../core/CombatModifiers";
 import { getEquippableLoadouts } from "../../data/ShipLoadouts";
 import { uniquePilotOf } from "../../data/squadRules";
 import {
@@ -20,7 +22,11 @@ import {
   applyControlModifiers,
   resolveLoadoutModifiers,
 } from "../ArcadeUpgradeEffects";
+import type { ActiveAura } from "../../systems/SupportAura";
 import type { CycleFlightState, StressModifiers } from "./CycleFlight";
+
+/** Milliseconds per second (rate conversion). */
+const MS_PER_SECOND = 1000;
 
 /**
  * Loadouts for a squad: chosen ones are kept; every other ship gets its
@@ -84,21 +90,31 @@ export function equipFlight(
 }
 
 /**
- * The part of a modifier sheet that shapes cycle stress.
+ * The part of a modifier sheet (plus the faction aura covering the ship)
+ * that shapes cycle stress.
  *
  * @param modifiers - The ship's modifier sheet.
+ * @param aura - The aura covering the ship this frame (omitted = none):
+ *   its stress-relief tiers add to the sheet's, capped at
+ *   MAX_STRESS_RELIEF_TIERS.
  * @returns Relief tiers and stress-rate multiplier for tickCycleFlight.
  */
-export function stressModifiersOf(modifiers: CombatModifiers): StressModifiers {
+export function stressModifiersOf(
+  modifiers: CombatModifiers,
+  aura?: ActiveAura,
+): StressModifiers {
   return {
-    reliefTiers: modifiers.stressReliefTiers,
+    reliefTiers: Math.min(
+      MAX_STRESS_RELIEF_TIERS,
+      modifiers.stressReliefTiers + (aura?.stressReliefTiers ?? 0),
+    ),
     rateMultiplier: modifiers.stressRateMultiplier,
   };
 }
 
 /**
- * Shields after regenerating for a frame (the effect's rate is in
- * miniature shield points per second, scaled to real-time HP).
+ * Shields after regenerating for a frame (the sheet's rate is real-time
+ * shield HP per second, applied as is).
  *
  * @param shields - Current shields.
  * @param maxShields - Shield cap.
@@ -117,7 +133,6 @@ export function regenerateShields(
   }
   return Math.min(
     maxShields,
-    shields +
-      (modifiers.shieldRegenPerSecond * DURABILITY_SCALE * deltaMs) / 1000,
+    shields + (modifiers.shieldRegenPerSecond * deltaMs) / MS_PER_SECOND,
   );
 }

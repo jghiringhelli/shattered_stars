@@ -1,15 +1,19 @@
 /**
  * duelRoundCombat — a duel round's state and its primary-weapon fire, as the
  * Dogfight / Ace Duel scenes resolve it (DuelPrimaryFire target choice, dice
- * attack with the squad mark, stress, shields then hull, hit immunity),
- * timed on the round's tempo (flight clock). Used by DuelTempoSim.
+ * attack with the squad mark and armour, stress, shields then hull, hit
+ * immunity, a cloaked target's damage factor), timed on the round's tempo
+ * (flight clock). Secondary hits land through {@link strike} too
+ * (duelRoundWeapons). Used by DuelTempoSim.
  *
  * Mutates the round. Pure: no Phaser.
  */
 
-import { LOGIC_DELTA } from "../config";
+import { BATTLEFIELD_SIZE, LOGIC_DELTA } from "../config";
 import { applyInstantStress } from "../arcade/ArcadeStress";
 import type { HitImmunityLedger } from "../arcade/systems/CombatTempo";
+import { armorReductionOf } from "../arcade/systems/DamageRules";
+import type { WeaponsDriver } from "../arcade/weapons/WeaponsDriver";
 import {
   absorbDamage,
   combatantOf,
@@ -30,13 +34,19 @@ export interface RoundState {
   readonly rng: RandomGenerator;
   readonly tempo: ResolvedTempo;
   readonly attacks: Record<1 | 2, number>;
+  /** Primary hits (hit rate = hits / attacks). */
   readonly hits: Record<1 | 2, number>;
+  /** Ordnance and turret hits. */
+  readonly ordnanceHits: Record<1 | 2, number>;
+  /** Damage from every weapon. */
   readonly damage: Record<1 | 2, number>;
   readonly hitTimes: Map<string, number[]>;
   /** Real time (ms). */
   nowMs: number;
   firstKillMs: number | null;
   specialsUsed: number;
+  /** The ships' secondaries (duelRoundWeapons.armRound). */
+  weapons?: WeaponsDriver;
 }
 
 /**
@@ -64,6 +74,7 @@ export function fireIfReady(state: RoundState, ship: DuelSimShip): void {
     ledger: state.ledger,
     nowMs: flightNow(state),
     preferredId: state.crew.targetOf(ship.id),
+    worldSize: BATTLEFIELD_SIZE,
   });
   if (!target) return;
   attack(state, ship, target);
@@ -95,24 +106,37 @@ function attack(
       target.id,
       flightNow(state),
     ),
+    targetArmor: armorReductionOf(target.definitionId),
   });
+  state.weapons?.onAttack(attacker.id);
   if (!result.hit) return;
-  land(state, attacker, target, result);
+  const cloak = state.weapons?.incomingDamageFactor(target.id) ?? 1;
+  const damage =
+    cloak < 1 ? Math.max(1, Math.round(result.damage * cloak)) : result.damage;
+  state.hits[attacker.side] += 1;
+  strike(state, attacker, target, { damage, stress: result.stressOnTarget });
 }
 
-function land(
+/**
+ * Land a hit: stress, shields then hull, the tempo ledger, the hit log and
+ * the kill.
+ * @param state - The round (mutated).
+ * @param attacker - Who hit.
+ * @param target - Who was hit.
+ * @param hit - Final damage and stress.
+ */
+export function strike(
   state: RoundState,
   attacker: DuelSimShip,
   target: DuelSimShip,
-  result: ReturnType<typeof resolveDiceAttack>,
+  hit: { readonly damage: number; readonly stress: number },
 ): void {
   target.flight = {
     ...target.flight,
-    stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
+    stress: applyInstantStress(target.flight.stress, hit.stress),
   };
   const before = target.hull + target.shields;
-  Object.assign(target, absorbDamage(target, result.damage));
-  state.hits[attacker.side] += 1;
+  Object.assign(target, absorbDamage(target, hit.damage));
   state.damage[attacker.side] += before - (target.hull + target.shields);
   state.ledger.recordHit(attacker.id, target.id, flightNow(state));
   const key = `${attacker.id}>${target.id}`;

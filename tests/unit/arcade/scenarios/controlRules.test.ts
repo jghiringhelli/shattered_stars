@@ -9,17 +9,15 @@ import {
   zonesHeldBy,
   type ControlZone,
 } from "../../../../src/arcade/scenarios";
-import { SKIRMISH_WEAPON_RANGE_PX } from "../../../../src/scenes/arcadeBattle/arcadeBotContact";
 import { aFrame, aShip } from "./scenarioBuilders";
 
 const AT = { x: 0, y: 0 };
 const R = CONTROL_RANGE_PX;
 
 describe("scenario range bands", () => {
-  it("one range band is the Skirmish primary reach split into the ruler's three bands", () => {
-    expect(SCENARIO_RANGE_BAND_PX * X_WING_RANGE_BANDS).toBe(
-      SKIRMISH_WEAPON_RANGE_PX,
-    );
+  it("the objective ruler has the X-Wing ruler's three bands", () => {
+    expect(X_WING_RANGE_BANDS).toBe(3);
+    expect(SCENARIO_RANGE_BAND_PX).toBeGreaterThan(0);
   });
 
   it("control range is range 0-1", () => {

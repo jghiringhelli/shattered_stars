@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { createSeededRng } from "../../../src/utils/random";
 import {
   getModeCombatStats,
   calculateHitChance,
@@ -458,6 +459,7 @@ describe("resolveTurnBasedAttack", () => {
         false,
         true,
         false,
+        createSeededRng(i + 1).next,
       ).hitsLanded;
       withoutFocusTotal += resolveTurnBasedAttack(
         3,
@@ -467,6 +469,7 @@ describe("resolveTurnBasedAttack", () => {
         false,
         false,
         false,
+        createSeededRng(i + 1).next,
       ).hitsLanded;
     }
     expect(withFocusTotal).toBeLessThanOrEqual(withoutFocusTotal);
@@ -589,6 +592,7 @@ describe("resolveTurnBasedAttack", () => {
         false,
         true,
         false,
+        createSeededRng(i + 1).next,
       ).hullDamaged;
       withoutFocusDamage += resolveTurnBasedAttack(
         4,
@@ -598,6 +602,7 @@ describe("resolveTurnBasedAttack", () => {
         false,
         false,
         false,
+        createSeededRng(i + 1).next,
       ).hullDamaged;
     }
     expect(withFocusDamage).toBeLessThanOrEqual(withoutFocusDamage);

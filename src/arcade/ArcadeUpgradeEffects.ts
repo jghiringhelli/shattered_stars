@@ -18,8 +18,6 @@ import { getShipLoadouts } from "../data/ShipLoadouts";
 import { PILOT_ABILITY_REALTIME } from "../data/pilotAbilityEffects";
 import { PILOT_CARDS } from "../systems/SquadBuilder";
 import { UPGRADE_DEFINITIONS } from "../systems/UpgradeSystem";
-import type { ArcadeOrdnanceSlot } from "./ArcadeOrdnance";
-import type { ArcadeTurretSlot } from "./ArcadeTurret";
 
 /**
  * Upgrade ids equipped by a loadout (empty for the bare ship or an unknown id).
@@ -103,48 +101,5 @@ export function applyControlModifiers(
       control.barrelRollCooldownMax * modifiers.barrelRollCooldownMultiplier,
     kturnCooldownMax:
       control.kturnCooldownMax * modifiers.kturnCooldownMultiplier,
-  };
-}
-
-/**
- * Apply reload, extra-charge and homing modifiers to ordnance slots.
- *
- * @param slots - Slots built from the loadout's ordnance cards.
- * @param modifiers - The ship's modifier sheet.
- * @returns New slots with the modifiers baked in.
- */
-export function applyOrdnanceModifiers(
-  slots: ReadonlyArray<ArcadeOrdnanceSlot>,
-  modifiers: CombatModifiers,
-): ArcadeOrdnanceSlot[] {
-  return slots.map((slot) => {
-    const charges = slot.maxCharges + modifiers.ordnanceBonusCharges;
-    return {
-      ...slot,
-      cooldownMax: slot.cooldownMax * modifiers.ordnanceCooldownMultiplier,
-      homingTurnBudget: slot.isHoming
-        ? slot.homingTurnBudget + modifiers.homingTurnBonus
-        : slot.homingTurnBudget,
-      charges,
-      maxCharges: charges,
-    };
-  });
-}
-
-/**
- * Apply the rate-of-fire modifier to a turret slot.
- *
- * @param slot - Turret built from the loadout's turret card (or null).
- * @param modifiers - The ship's modifier sheet.
- * @returns A new turret slot, or null when the ship has no turret.
- */
-export function applyTurretModifiers(
-  slot: ArcadeTurretSlot | null,
-  modifiers: CombatModifiers,
-): ArcadeTurretSlot | null {
-  if (!slot) return null;
-  return {
-    ...slot,
-    cooldownMax: slot.cooldownMax * modifiers.turretCooldownMultiplier,
   };
 }

@@ -16,6 +16,8 @@ import type { BattleSpec } from "../../src/simulation/skill/ArenaSpec";
 
 const FALCONS = { side1: ["confed_falcon"], side2: ["confed_falcon"] } as const;
 const SEEDS = [11, 12, 13, 14, 15, 16, 17, 18];
+/** Duel medians move a few seconds with ordnance in play: compare over more rounds. */
+const TEMPO_SEEDS = Array.from({ length: 24 }, (_, i) => 11 + i);
 
 function squadSpec(seed: number): BattleSpec {
   const side = {
@@ -52,7 +54,13 @@ describe("tempo variants in the sims", () => {
     const round = simulateDuelRound({ ...FALCONS, seed: 7 });
     expect(round.firstKillMs).toBe(round.durationMs);
     expect(round.damage[1] + round.damage[2]).toBeGreaterThan(0);
-    expect(round.hits[1] + round.hits[2]).toBeGreaterThan(0);
+    // Primary and ordnance hits are reported apart (hit rate = primaries).
+    const allHits =
+      round.hits[1] +
+      round.hits[2] +
+      round.ordnanceHits[1] +
+      round.ordnanceHits[2];
+    expect(allHits).toBeGreaterThan(0);
     expect(round.specialsUsed).toBeGreaterThanOrEqual(0);
   });
 
@@ -65,7 +73,7 @@ describe("tempo variants in the sims", () => {
   it("stretches a duel when the cycle (and the attack cap with it) is longer", () => {
     const median = (cycleMs: number) =>
       medianDurationMs(
-        SEEDS.map((seed) =>
+        TEMPO_SEEDS.map((seed) =>
           simulateDuelRound({
             ...FALCONS,
             seed,

@@ -1462,9 +1462,10 @@ export function isAbilityConditionMet(
         context.attacker.hull < context.attacker.maxHull - condition.threshold
       );
 
-    case "outnumbered":
+    case "outnumbered": {
       const allyCount = context.nearbyAllies?.length ?? 0;
       return allyCount === 0;
+    }
 
     case "near_ally":
       if (!context.nearbyAllies) return false;

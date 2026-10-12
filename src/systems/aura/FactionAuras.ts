@@ -8,7 +8,8 @@
  * - Dedicated support ships project by role, radius scaling with hull size.
  * - Capital ships project a huge field at reduced strength (help, not break).
  * - Hero (unique-pilot) ships project a small field — useful in tight swarms.
- * - Any ship carrying a coordinator crew upgrade projects a size-scaled field.
+ * - Any ship carrying a coordinator crew upgrade, or whose pilot ability
+ *   projects the aura (its sheet's projectsAura), projects a size-scaled field.
  *
  * Radius and magnitude scale inversely with size so a capital's broad field is
  * gentle while a hero's tight field is full strength — total power stays even
@@ -38,6 +39,19 @@ export interface AuraShip {
   readonly maxShields: number;
   /** False when a disabled subsystem (e.g. a capital's bridge) blocks projection. Defaults to online. */
   readonly systemsOnline?: boolean;
+  // --- Pilot-sheet aura knobs (auraShipFacts / auraFactsOf). Omitted = the
+  // ship's folded sheet is unknown: eligibility and radius fall back to its
+  // equipped cards, and there is no magnitude bonus or pilot extra.
+  /** The ship's sheet projects the aura (pilot ability or command card). */
+  readonly projectsAura?: boolean;
+  /** Fractional radius increase from the folded sheet (cards + pilot). */
+  readonly auraRadiusBonus?: number;
+  /** Fractional strength increase of the aura this ship projects. */
+  readonly auraMagnitudeBonus?: number;
+  /** Stress-relief tiers this ship's aura grants allies inside it. */
+  readonly auraStressReliefTiers?: number;
+  /** Hit-chance bonus this ship's aura grants allies inside it. */
+  readonly auraHitChanceBonus?: number;
 }
 
 /** The distinct effect a faction aura applies to covered allies. */
@@ -46,7 +60,7 @@ export type AuraEffectType =
   | "damage_reduction" // flat fraction of incoming damage removed
   | "swarm_evade" // incoming-damage reduction scaling with nearby swarm size
   | "stress_relief" // maneuvers count as N difficulty tiers easier
-  | "shield_regen"; // slow shield regeneration (rate per second)
+  | "shield_regen"; // slow shield regeneration (real-time HP per second)
 
 /** A faction's signature aura definition. */
 export interface FactionAura {
@@ -177,8 +191,9 @@ export const FACTION_AURAS: Record<FactionId, FactionAura> = {
     faction: "ascendant_empire",
     effect: "shield_regen",
     radius: 220,
-    magnitude: 0.2,
-    description: "Allied ships slowly regenerate shields (0.2/s).",
+    // Real-time shield HP per second (0.2 shield tokens/s x DURABILITY_SCALE).
+    magnitude: 2.4,
+    description: "Allied ships slowly regenerate shields (2.4 HP/s).",
   },
 };
 
@@ -195,7 +210,8 @@ export interface ProjectionScale {
 /**
  * Determine whether and how a ship projects its faction aura.
  *
- * Priority: capital > dedicated support > coordinator crew > hero pilot.
+ * Priority: capital > dedicated support > coordinator crew or aura-projecting
+ * pilot sheet > hero pilot.
  * A ship matches at most one kind so its aura is never double-counted.
  *
  * @param ship - The candidate projector.
@@ -218,7 +234,10 @@ export function projectionScaleFor(ship: AuraShip): ProjectionScale | null {
       magnitudeScale: SIZE_MAGNITUDE_MULTIPLIER[ship.size],
     };
   }
-  if (ship.equippedUpgrades.some((id) => AURA_GRANTING_CREW.has(id))) {
+  if (
+    ship.projectsAura === true ||
+    ship.equippedUpgrades.some((id) => AURA_GRANTING_CREW.has(id))
+  ) {
     return {
       kind: "crew",
       radiusScale: SIZE_RADIUS_MULTIPLIER[ship.size],

@@ -279,11 +279,9 @@ export class CampaignMissionDirector {
       case "music":
         if (action.cue === "victory")
           audioManager.playFactionStinger(this.bridge.factionId, "victory");
-        else
-          audioManager.playFactionMusic(
-            this.bridge.factionId,
-            action.cue === "tension" ? "tactical" : action.cue,
-          );
+        else if (action.cue === "tension")
+          audioManager.playMusic("tension_alert");
+        else audioManager.playFactionMusic(this.bridge.factionId, action.cue);
         return;
       case "spawn": {
         const flagship = this.bridge.flagship() ?? {

@@ -20,6 +20,7 @@ import {
 
 const RANGE = 250;
 const ARC = 75;
+const WORLD = 6000;
 
 function gunner(overrides: Partial<PrimaryGunner> = {}): PrimaryGunner {
   return {
@@ -44,23 +45,27 @@ const enemyOfSide1 = (c: Candidate): boolean => c.side !== 1;
 
 describe("inPrimaryArc", () => {
   it("accepts a target straight ahead of a north-facing ship", () => {
-    expect(inPrimaryArc(gunner(), { x: 0, y: -100 })).toBe(true);
+    expect(inPrimaryArc(gunner(), { x: 0, y: -100 }, WORLD)).toBe(true);
   });
 
   it("rejects a target beyond weapon range", () => {
-    expect(inPrimaryArc(gunner(), { x: 0, y: -RANGE - 1 })).toBe(false);
+    expect(inPrimaryArc(gunner(), { x: 0, y: -RANGE - 1 }, WORLD)).toBe(false);
   });
 
   it("rejects a target outside half the firing arc", () => {
-    expect(inPrimaryArc(gunner(), { x: 100, y: -50 })).toBe(false);
+    expect(inPrimaryArc(gunner(), { x: 100, y: -50 }, WORLD)).toBe(false);
   });
 
   it("rejects a target directly beside a ship whose heading is near 360", () => {
-    expect(inPrimaryArc(gunner({ angle: 359 }), { x: -100, y: 0 })).toBe(false);
+    expect(inPrimaryArc(gunner({ angle: 359 }), { x: -100, y: 0 }, WORLD)).toBe(
+      false,
+    );
   });
 
   it("accepts a target ahead of a ship whose heading is negative", () => {
-    expect(inPrimaryArc(gunner({ angle: -90 }), { x: -100, y: 0 })).toBe(true);
+    expect(inPrimaryArc(gunner({ angle: -90 }), { x: -100, y: 0 }, WORLD)).toBe(
+      true,
+    );
   });
 });
 
@@ -74,6 +79,7 @@ describe("primaryShotTarget", () => {
         isEnemy: enemyOfSide1,
         ledger: new HitImmunityLedger(),
         nowMs: 0,
+        worldSize: WORLD,
       }),
     ).toBe(target);
   });
@@ -87,6 +93,7 @@ describe("primaryShotTarget", () => {
         candidates: [candidate()],
         isEnemy: enemyOfSide1,
         ledger,
+        worldSize: WORLD,
         nowMs: ATTACK_INTERVAL_MS - 1,
       }),
     ).toBeNull();
@@ -101,6 +108,7 @@ describe("primaryShotTarget", () => {
         candidates: [candidate()],
         isEnemy: enemyOfSide1,
         ledger,
+        worldSize: WORLD,
         nowMs: ATTACK_INTERVAL_MS,
       }),
     ).not.toBeNull();
@@ -116,6 +124,7 @@ describe("primaryShotTarget", () => {
         candidates: [candidate(), other],
         isEnemy: enemyOfSide1,
         ledger,
+        worldSize: WORLD,
         nowMs: 10,
       }),
     ).toBe(other);
@@ -129,6 +138,7 @@ describe("primaryShotTarget", () => {
         isEnemy: enemyOfSide1,
         ledger: new HitImmunityLedger(),
         nowMs: 0,
+        worldSize: WORLD,
       }),
     ).toBeNull();
   });
@@ -141,6 +151,7 @@ describe("primaryShotTarget", () => {
         isEnemy: () => true,
         ledger: new HitImmunityLedger(),
         nowMs: 0,
+        worldSize: WORLD,
       }),
     ).toBeNull();
   });
@@ -154,6 +165,7 @@ describe("primaryShotTarget", () => {
         isEnemy: enemyOfSide1,
         ledger: new HitImmunityLedger(),
         nowMs: 0,
+        worldSize: WORLD,
         preferredId: "c",
       }),
     ).toBe(preferred);
@@ -168,6 +180,7 @@ describe("primaryShotTarget", () => {
         isEnemy: enemyOfSide1,
         ledger: new HitImmunityLedger(),
         nowMs: 0,
+        worldSize: WORLD,
         preferredId: "c",
       }),
     ).toBe(first);
@@ -183,6 +196,7 @@ describe("primaryShotTarget", () => {
         candidates: [first, candidate({ id: "c", y: -150 })],
         isEnemy: enemyOfSide1,
         ledger,
+        worldSize: WORLD,
         nowMs: 10,
         preferredId: "c",
       }),
@@ -209,5 +223,23 @@ describe("primary weapon cadence", () => {
   it("clamps the cooldown fraction to [0, 1]", () => {
     expect(primaryCooldownFraction(-5, 400)).toBe(0);
     expect(primaryCooldownFraction(ATTACK_INTERVAL_MS * 3, 400)).toBe(1);
+  });
+});
+
+describe("primary fire across the map seam (torus)", () => {
+  it("engages an enemy dead ahead across the top edge", () => {
+    const atEdge = gunner({ x: 3000, y: 30 });
+    const acrossSeam = candidate({ x: 3000, y: WORLD - 70 });
+    expect(inPrimaryArc(atEdge, acrossSeam, WORLD)).toBe(true);
+    expect(
+      primaryShotTarget({
+        gunner: atEdge,
+        candidates: [acrossSeam],
+        isEnemy: enemyOfSide1,
+        ledger: new HitImmunityLedger(),
+        nowMs: 0,
+        worldSize: WORLD,
+      }),
+    ).toBe(acrossSeam);
   });
 });

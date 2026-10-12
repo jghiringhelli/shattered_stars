@@ -45,7 +45,7 @@ export const SQUADRON_RELICS: readonly Relic[] = [
     archetype: "squadron",
     tags: ["escort", "shields"],
     pool: "base",
-    description: "Escorts gain +1 damage and regenerate 1 shield per second",
+    description: "Escorts gain +1 damage and regenerate 1 shield HP/s",
     effects: [
       {
         kind: "static",
@@ -64,7 +64,9 @@ export const SQUADRON_RELICS: readonly Relic[] = [
     pool: "fleet_pack",
     description: "Escorts detonate when destroyed, damaging nearby enemies",
     effects: [
-      { kind: "static", scope: "escorts", effect: { deathBlastDamage: 8 } },
+      // Miniature 2 = 20 HP per death, the same blast as a pilot's
+      // Self-Destruct; 8 (80 HP) turned every lost escort into a wave wipe.
+      { kind: "static", scope: "escorts", effect: { deathBlastDamage: 2 } },
     ],
   },
   {
@@ -90,7 +92,7 @@ export const BULWARK_RELICS: readonly Relic[] = [
     archetype: "bulwark",
     tags: ["kill", "shields"],
     pool: "base",
-    description: "Each kill restores 6 shield points",
+    description: "Each kill restores 6 shield HP",
     effects: [
       { kind: "static", scope: "fleet", effect: { shieldsPerKill: 6 } },
     ],
@@ -131,7 +133,7 @@ export const BULWARK_RELICS: readonly Relic[] = [
     archetype: "bulwark",
     tags: ["shields"],
     pool: "base",
-    description: "+2 shield regen per second for the fleet",
+    description: "+2 shield HP/s regen for the fleet",
     effects: [
       { kind: "static", scope: "fleet", effect: { shieldRegenPerSecond: 2 } },
     ],

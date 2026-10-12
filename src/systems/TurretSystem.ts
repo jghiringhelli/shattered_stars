@@ -5,17 +5,17 @@
  * Supports different turret types: single, dual, and 360° turrets.
  */
 
-import type { ShipState } from '../core/types';
-import type { RandomGenerator } from '../utils/random';
-import { getDefaultRng } from '../utils/random';
-import { distance } from './MovementSystem';
-import { isInArc, angleToTarget } from './MovementSystem';
+import type { ShipState } from "../core/types";
+import type { RandomGenerator } from "../utils/random";
+import { getDefaultRng } from "../utils/random";
+import { distance } from "./MovementSystem";
+import { isInArc, angleToTarget } from "./MovementSystem";
 
 // ============================================
 // Turret Types
 // ============================================
 
-export type TurretArcType = 'single' | 'double' | 'full';
+export type TurretArcType = "single" | "double" | "full";
 
 export interface TurretDefinition {
   readonly id: string;
@@ -45,110 +45,110 @@ export interface TurretDefinition {
 export const TURRET_DEFINITIONS: Record<string, TurretDefinition> = {
   // Single arc turrets (90°)
   light_turret: {
-    id: 'light_turret',
-    name: 'Light Turret',
-    arcType: 'single',
+    id: "light_turret",
+    name: "Light Turret",
+    arcType: "single",
     arcSize: 90,
     attackDice: 2,
     range: { min: 1, max: 2 },
     bonusAtRange1: 1,
     requiresTargetLock: false,
     pointCost: 3,
-    description: 'Rotatable 90° arc. +1 die at range 1',
+    description: "Rotatable 90° arc. +1 die at range 1",
   },
 
   ion_cannon_turret: {
-    id: 'ion_cannon_turret',
-    name: 'Ion Cannon Turret',
-    arcType: 'single',
+    id: "ion_cannon_turret",
+    name: "Ion Cannon Turret",
+    arcType: "single",
     arcSize: 90,
     attackDice: 3,
     range: { min: 1, max: 3 },
     bonusAtRange1: 0,
     requiresTargetLock: false,
     pointCost: 5,
-    description: 'Apply ion tokens equal to damage dealt',
+    description: "Apply ion tokens equal to damage dealt",
   },
 
   // Double arc turrets (180° - front and back, or left and right)
   dorsal_turret: {
-    id: 'dorsal_turret',
-    name: 'Dorsal Turret',
-    arcType: 'double',
+    id: "dorsal_turret",
+    name: "Dorsal Turret",
+    arcType: "double",
     arcSize: 180,
     attackDice: 2,
     range: { min: 1, max: 2 },
     bonusAtRange1: 1,
     requiresTargetLock: false,
     pointCost: 4,
-    description: 'Covers front and rear arcs',
+    description: "Covers front and rear arcs",
   },
 
   ventral_turret: {
-    id: 'ventral_turret',
-    name: 'Ventral Turret',
-    arcType: 'double',
+    id: "ventral_turret",
+    name: "Ventral Turret",
+    arcType: "double",
     arcSize: 180,
     attackDice: 2,
     range: { min: 1, max: 2 },
     bonusAtRange1: 1,
     requiresTargetLock: false,
     pointCost: 4,
-    description: 'Covers left and right arcs',
+    description: "Covers left and right arcs",
   },
 
   // Full 360° turrets
   agile_gunner: {
-    id: 'agile_gunner',
-    name: 'Agile Gunner',
-    arcType: 'full',
+    id: "agile_gunner",
+    name: "Agile Gunner",
+    arcType: "full",
     arcSize: 360,
     attackDice: 2,
     range: { min: 1, max: 2 },
     bonusAtRange1: 0,
     requiresTargetLock: false,
     pointCost: 6,
-    description: 'Full 360° arc coverage',
+    description: "Full 360° arc coverage",
   },
 
   veteran_turret_gunner: {
-    id: 'veteran_turret_gunner',
-    name: 'Veteran Turret Gunner',
-    arcType: 'full',
+    id: "veteran_turret_gunner",
+    name: "Veteran Turret Gunner",
+    arcType: "full",
     arcSize: 360,
     attackDice: 3,
     range: { min: 1, max: 3 },
     bonusAtRange1: 0,
     requiresTargetLock: false,
     pointCost: 8,
-    description: 'Full arc, long range, may attack after performing action',
+    description: "Full arc, long range, may attack after performing action",
   },
 
   // Special turrets
   blaster_turret: {
-    id: 'blaster_turret',
-    name: 'Blaster Turret',
-    arcType: 'single',
+    id: "blaster_turret",
+    name: "Blaster Turret",
+    arcType: "single",
     arcSize: 90,
     attackDice: 3,
     range: { min: 1, max: 2 },
     bonusAtRange1: 0,
     requiresTargetLock: true, // Requires lock to fire
     pointCost: 4,
-    description: 'Requires target lock. High firepower',
+    description: "Requires target lock. High firepower",
   },
 
   heavy_laser_turret: {
-    id: 'heavy_laser_turret',
-    name: 'Heavy Laser Turret',
-    arcType: 'single',
+    id: "heavy_laser_turret",
+    name: "Heavy Laser Turret",
+    arcType: "single",
     arcSize: 90,
     attackDice: 4,
     range: { min: 2, max: 3 },
     bonusAtRange1: 0, // Can't fire at range 1!
     requiresTargetLock: false,
     pointCost: 7,
-    description: 'Cannot attack at range 1. High damage at range',
+    description: "Cannot attack at range 1. High damage at range",
   },
 };
 
@@ -188,9 +188,9 @@ export function createTurretState(definitionId: string): TurretState {
 export function getTurretArcRange(
   shipAngle: number,
   turret: TurretState,
-  definition: TurretDefinition
+  definition: TurretDefinition,
 ): { start: number; end: number } {
-  if (definition.arcType === 'full') {
+  if (definition.arcType === "full") {
     return { start: 0, end: 360 };
   }
 
@@ -198,8 +198,8 @@ export function getTurretArcRange(
   const arcCenter = (shipAngle + turret.facing + 360) % 360;
   const halfArc = definition.arcSize / 2;
 
-  let start = (arcCenter - halfArc + 360) % 360;
-  let end = (arcCenter + halfArc + 360) % 360;
+  const start = (arcCenter - halfArc + 360) % 360;
+  const end = (arcCenter + halfArc + 360) % 360;
 
   return { start, end };
 }
@@ -211,9 +211,9 @@ export function isTargetInTurretArc(
   ship: ShipState,
   target: ShipState,
   turret: TurretState,
-  definition: TurretDefinition
+  definition: TurretDefinition,
 ): boolean {
-  if (definition.arcType === 'full') {
+  if (definition.arcType === "full") {
     return true; // 360° turret can hit anything
   }
 
@@ -224,7 +224,7 @@ export function isTargetInTurretArc(
   const arcCenter = (ship.angle + turret.facing + 360) % 360;
 
   // For double turrets, check both arcs (front/back or left/right)
-  if (definition.arcType === 'double') {
+  if (definition.arcType === "double") {
     // Check primary arc
     if (isInArc(arcCenter, angleTo, definition.arcSize / 2)) {
       return true;
@@ -245,16 +245,16 @@ export function canTurretFire(
   ship: ShipState,
   target: ShipState,
   turret: TurretState,
-  definition: TurretDefinition
+  definition: TurretDefinition,
 ): { valid: boolean; reason?: string } {
   // Check if disabled
   if (turret.isDisabled) {
-    return { valid: false, reason: 'Turret is disabled' };
+    return { valid: false, reason: "Turret is disabled" };
   }
 
   // Check if already fired
   if (turret.hasFired) {
-    return { valid: false, reason: 'Turret has already fired this round' };
+    return { valid: false, reason: "Turret has already fired this round" };
   }
 
   // Check range
@@ -262,25 +262,31 @@ export function canTurretFire(
   const rangeBand = dist <= 100 ? 1 : dist <= 200 ? 2 : dist <= 300 ? 3 : null;
 
   if (rangeBand === null) {
-    return { valid: false, reason: 'Target out of range' };
+    return { valid: false, reason: "Target out of range" };
   }
 
   if (rangeBand < definition.range.min) {
-    return { valid: false, reason: `Cannot fire at range ${rangeBand} (minimum ${definition.range.min})` };
+    return {
+      valid: false,
+      reason: `Cannot fire at range ${rangeBand} (minimum ${definition.range.min})`,
+    };
   }
 
   if (rangeBand > definition.range.max) {
-    return { valid: false, reason: `Target beyond maximum range ${definition.range.max}` };
+    return {
+      valid: false,
+      reason: `Target beyond maximum range ${definition.range.max}`,
+    };
   }
 
   // Check arc
   if (!isTargetInTurretArc(ship, target, turret, definition)) {
-    return { valid: false, reason: 'Target not in turret arc' };
+    return { valid: false, reason: "Target not in turret arc" };
   }
 
   // Check target lock requirement
   if (definition.requiresTargetLock && ship.hasTargetLock !== target.id) {
-    return { valid: false, reason: 'Requires target lock on defender' };
+    return { valid: false, reason: "Requires target lock on defender" };
   }
 
   return { valid: true };
@@ -291,7 +297,7 @@ export function canTurretFire(
  */
 export function rotateTurret(
   turret: TurretState,
-  newFacing: number
+  newFacing: number,
 ): TurretState {
   // Normalize to 0-360
   const normalizedFacing = ((newFacing % 360) + 360) % 360;
@@ -309,19 +315,19 @@ export function autoRotateTurretToTarget(
   ship: ShipState,
   target: ShipState,
   turret: TurretState,
-  definition: TurretDefinition
+  definition: TurretDefinition,
 ): TurretState {
-  if (definition.arcType === 'full') {
+  if (definition.arcType === "full") {
     return turret; // No rotation needed for 360° turret
   }
 
   // Calculate desired facing (relative to ship)
   const absoluteAngle = angleToTarget(ship.x, ship.y, target.x, target.y);
-  const relativeFacing = ((absoluteAngle - ship.angle) + 360) % 360;
+  const relativeFacing = (absoluteAngle - ship.angle + 360) % 360;
 
   // Snap to nearest valid position
   let snappedFacing: number;
-  if (definition.arcType === 'double') {
+  if (definition.arcType === "double") {
     // Double turrets can face front/rear or left/right
     // Snap to nearest 90° increment
     snappedFacing = Math.round(relativeFacing / 90) * 90;
@@ -338,9 +344,9 @@ export function autoRotateTurretToTarget(
  */
 export function getTurretRotationOptions(
   turret: TurretState,
-  definition: TurretDefinition
+  definition: TurretDefinition,
 ): number[] {
-  if (definition.arcType === 'full') {
+  if (definition.arcType === "full") {
     return []; // No rotation options for 360°
   }
 
@@ -359,7 +365,7 @@ export function fireTurret(
   target: ShipState,
   turret: TurretState,
   definition: TurretDefinition,
-  rng: RandomGenerator = getDefaultRng()
+  rng: RandomGenerator = getDefaultRng(),
 ): {
   success: boolean;
   hits: number;
@@ -394,16 +400,17 @@ export function fireTurret(
   const totalHits = hits + crits;
 
   // Ion cannon turret special: ion tokens equal to damage
-  const ionTokens = definition.id === 'ion_cannon_turret' ? totalHits : 0;
+  const ionTokens = definition.id === "ion_cannon_turret" ? totalHits : 0;
 
   return {
     success: totalHits > 0,
     hits,
     crits,
     ionTokens,
-    message: totalHits > 0
-      ? `${definition.name} hit! ${hits} hits, ${crits} crits`
-      : `${definition.name} missed!`,
+    message:
+      totalHits > 0
+        ? `${definition.name} hit! ${hits} hits, ${crits} crits`
+        : `${definition.name} missed!`,
   };
 }
 
@@ -433,9 +440,9 @@ export function markTurretFired(turret: TurretState): TurretState {
 export function calculateOptimalTurretFacing(
   ship: ShipState,
   enemies: readonly ShipState[],
-  definition: TurretDefinition
+  definition: TurretDefinition,
 ): number {
-  if (definition.arcType === 'full' || enemies.length === 0) {
+  if (definition.arcType === "full" || enemies.length === 0) {
     return 0; // Default facing
   }
 
@@ -444,7 +451,7 @@ export function calculateOptimalTurretFacing(
     .filter((e) => e.hull > 0)
     .map((e) => {
       const absAngle = angleToTarget(ship.x, ship.y, e.x, e.y);
-      return ((absAngle - ship.angle) + 360) % 360;
+      return (absAngle - ship.angle + 360) % 360;
     });
 
   // Try each standard facing and count enemies in arc
@@ -467,7 +474,7 @@ export function calculateOptimalTurretFacing(
       }
 
       // For double turrets, check opposite arc too
-      if (definition.arcType === 'double') {
+      if (definition.arcType === "double") {
         const oppositeCenter = (arcCenter + 180) % 360;
         let oppDiff = Math.abs(enemyAngle - oppositeCenter);
         if (oppDiff > 180) oppDiff = 360 - oppDiff;

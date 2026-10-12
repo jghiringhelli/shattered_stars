@@ -7,6 +7,7 @@
  */
 
 import type { HitImmunityLedger } from "../../arcade/systems/CombatTempo";
+import type { WeaponsDriver } from "../../arcade/weapons/WeaponsDriver";
 import type { SquadMarks } from "../../arcade/systems/SquadMark";
 import type { SideScore } from "../../systems/arena/BattleScore";
 import type { ArcPosition } from "../../arcade/ai/AiGeometry";
@@ -20,7 +21,11 @@ export type { SideId } from "./ArenaSide";
 /** What one side's guns did over a battle. */
 export interface SideTally {
   shots: number;
+  /** Primary hits (hit rate = hits / shots). */
   hits: number;
+  /** Ordnance and turret hits (WeaponsDriver), apart from the primary hit rate. */
+  ordnanceHits: number;
+  /** Damage from every weapon. */
   damage: number;
   kills: number;
   /** Hits by where the attacker sat around its target. */
@@ -42,6 +47,7 @@ export function emptyTally(): SideTally {
   return {
     shots: 0,
     hits: 0,
+    ordnanceHits: 0,
     damage: 0,
     kills: 0,
     hitsByArc: { front: 0, flank: 0, rear: 0 },
@@ -76,4 +82,6 @@ export interface CombatState {
   readonly tempo?: ResolvedTempo;
   /** Clock time of the first kill (combat's clock), once one happened. */
   firstKillAtMs?: number;
+  /** The ships' secondaries (ArenaWeapons.armArena); omitted = primaries only. */
+  weapons?: WeaponsDriver;
 }

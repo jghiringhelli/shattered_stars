@@ -78,6 +78,22 @@ import {
   nearestTargetInArc,
 } from "../arcade/systems/ArcTargeting";
 import { squadHudSnapshot } from "../arcade/systems/FlagshipHudSnapshot";
+import type {
+  BattleWeapons,
+  BattleWeaponsLink,
+  WeaponHit,
+} from "./battleUi/BattleWeapons";
+import {
+  createSceneWeapons,
+  weaponBodyOf,
+  withSecondaryWeapons,
+} from "./battleUi/sceneWeapons";
+import {
+  armorReductionOf,
+  damageMitigationOf,
+  shotAurasOf,
+} from "../arcade/systems/DamageRules";
+import type { ActiveAura } from "../systems/SupportAura";
 import {
   ACE_ATTACK_BONUS,
   BOSS_ATTACK_BONUS,
@@ -127,6 +143,7 @@ import { withCampaignBonuses } from "../arcade/systems/CampaignLoadoutBonuses";
 import { missionVictoryRecord } from "../arcade/systems/CampaignVictory";
 import { CAMPAIGN_PILOTS } from "../data/PilotData";
 import { audioManager } from "../audio/AudioManager";
+import { campaignBattleMode } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
 import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import { renderBattleStarfield } from "../rendering/Starfield";
@@ -152,6 +169,7 @@ import {
 } from "../systems/CapitalSystems";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { InputManager } from "../input/InputManager";
+import { openSettingsOverBattle } from "./battleUi/openSettingsOverBattle";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 
 /** Extra weapon range in pixels granted per point of an evolution's agility bonus. */
@@ -267,6 +285,10 @@ export class CampaignBattleScene extends Phaser.Scene {
 
   /** X-Wing round tempo: a struck target ignores its attacker for a cycle. */
   private readonly hitLedger = new HitImmunityLedger();
+  /** Secondary weapons (missiles, torpedoes, turrets, bombs, mines, cloak). */
+  private weapons: BattleWeapons | null = null;
+  /** Faction auras resolved this frame (buffs every shot and stress tick). */
+  private auras: ReadonlyMap<string, ActiveAura> = new Map();
 
   // Camera follow (manual — toroid wrap makes Phaser's startFollow jump at the seam)
   private cameraVirtualX = BATTLEFIELD_SIZE / 2;
@@ -348,6 +370,8 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.battleHud?.destroy();
     this.battleHud = null;
     this.resultOverlay = null;
+    this.weapons?.destroy();
+    this.weapons = null;
   }
 
   create(): void {
@@ -357,7 +381,10 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(0x0a0a1a);
     addPaintedSpaceBackground(this, "planet_gas_giant", 0);
 
-    audioManager.playFactionMusic(this.factionId, "combat");
+    audioManager.playBattleMusic(
+      campaignBattleMode(this.mission),
+      this.factionId,
+    );
 
     this.effectsManager = new EffectsManager(this);
     this.repairFeedback = new ShipRepairFeedback({
@@ -391,6 +418,7 @@ export class CampaignBattleScene extends Phaser.Scene {
       faction: this.factionId,
     });
     matchStats.start("campaign", { mission: this.mission.id }, this.events);
+    this.weapons = createSceneWeapons(this, this.weaponsLink(), this.hitLedger);
     this.spawnInitialShips();
 
     if (ShipTelemetry.isEnabled()) {
@@ -430,6 +458,8 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.director.update(time, delta);
     this.updateAI(time, delta);
     this.flyShips(delta);
+    // Secondaries first: a held or chosen launch is this cycle's attack.
+    this.weapons?.update(delta, this.time.now);
     this.processCombat(delta);
     this.updateCameraFollow();
     this.checkDelayedSpawns(delta);
@@ -479,6 +509,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.modeHud.updateObjectives(this.director.tracker());
     const flagship = this.ships.get(this.playerShipIds[0] ?? "") ?? null;
     if (flagship) {
+      audioManager.reportPlayerHull(flagship.hull / flagship.maxHull);
       this.healthBars.get(flagship.id)?.destroy();
       this.healthBars.delete(flagship.id);
     }
@@ -494,7 +525,7 @@ export class CampaignBattleScene extends Phaser.Scene {
       camera: cameraViewFrom(this.cameras.main),
     });
     this.battleHud?.update({
-      ...snapshot,
+      ...withSecondaryWeapons(snapshot, this.weapons?.hudSlots() ?? []),
       contacts: [...snapshot.contacts, ...this.director.contacts()],
     });
   }
@@ -506,7 +537,7 @@ export class CampaignBattleScene extends Phaser.Scene {
   private hudTargetOf(ship: CampaignShip): string | null {
     const target =
       this.findTarget(ship) ??
-      nearestHostile(ship, this.ships.values(), (other) => {
+      nearestHostile(ship, this.ships.values(), BATTLEFIELD_SIZE, (other) => {
         return other.owner !== ship.owner;
       });
     return target?.id ?? null;
@@ -559,9 +590,7 @@ export class CampaignBattleScene extends Phaser.Scene {
         this.scene.restart();
       },
       onSettings: () => {
-        this.scene.launch("SettingsScene", {
-          returnScene: "CampaignBattleScene",
-        });
+        openSettingsOverBattle(this);
       },
       onQuit: () => {
         this.scene.start("CampaignScene", { factionId: this.factionId });
@@ -576,6 +605,8 @@ export class CampaignBattleScene extends Phaser.Scene {
     if (this.isPaused) {
       this.cameras.main.setZoom(1.0);
       this.pauseMenu.show();
+    } else {
+      this.pauseMenu.hide();
     }
   }
 
@@ -1026,6 +1057,11 @@ export class CampaignBattleScene extends Phaser.Scene {
       );
     }
     ship.flight = equipFlight(ship.flight, ship.modifiers);
+    this.weapons?.equip(ship.id, {
+      definitionId,
+      loadoutId: spawn.loadoutId,
+      modifiers: ship.modifiers,
+    });
     return ship;
   }
 
@@ -1126,7 +1162,7 @@ export class CampaignBattleScene extends Phaser.Scene {
         worldSize: BATTLEFIELD_SIZE,
         dial: ship.dial,
         cycleMs: CYCLE_DURATION_MS,
-        modifiers: stressModifiersOf(ship.modifiers),
+        modifiers: stressModifiersOf(ship.modifiers, this.auras.get(ship.id)),
       });
       this.setFlight(ship, tick.state);
       this.regenerateShipShields(ship, deltaMs);
@@ -1140,7 +1176,11 @@ export class CampaignBattleScene extends Phaser.Scene {
         });
       this.syncShipVisuals(ship);
     }
-    applyAllyAuraRepairs(this.ships.values(), this.repairFeedback, deltaMs);
+    this.auras = applyAllyAuraRepairs(
+      this.ships.values(),
+      this.repairFeedback,
+      deltaMs,
+    );
   }
 
   /**
@@ -1276,6 +1316,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     return nearestTargetInArc(ship, this.ships.values(), {
       rangePx: ship.combatStats.weaponRange,
       arcDeg: ship.combatStats.firingArc,
+      worldSize: BATTLEFIELD_SIZE,
       isHostile: (other) => other.owner !== ship.owner,
       isEligible: (other) =>
         !this.hitLedger.isImmune(ship.id, other.id, now) &&
@@ -1311,6 +1352,8 @@ export class CampaignBattleScene extends Phaser.Scene {
         target.id,
         this.time.now,
       ),
+      ...shotAurasOf(this.auras, attacker.id, target.id),
+      targetArmor: armorReductionOf(target.definitionId),
     });
 
     this.effectsManager.fireLaser(
@@ -1327,17 +1370,90 @@ export class CampaignBattleScene extends Phaser.Scene {
       weapon: "primary",
       hit: result.hit,
     });
+    this.weapons?.onAttack(attacker.id);
     if (!result.hit) return;
+    const cloak = this.weapons?.incomingDamageFactor(target.id) ?? 1;
+    this.landHit(attacker, target, {
+      damage: Math.max(1, Math.round(result.damage * cloak)),
+      stress: result.stressOnTarget,
+    });
+  }
 
+  /**
+   * A hit lands (laser or secondary weapon): stress, damage, the
+   * attacker's immunity tick and the kill.
+   *
+   * @param attacker - The ship credited with the hit.
+   * @param target - The ship hit.
+   * @param hit - Damage and stress to apply.
+   */
+  private landHit(
+    attacker: CampaignShip,
+    target: CampaignShip,
+    hit: { readonly damage: number; readonly stress: number },
+  ): void {
     this.setFlight(target, {
       ...target.flight,
-      stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
+      stress: applyInstantStress(target.flight.stress, hit.stress),
     });
-    this.applyDamage(target, result.damage);
-    if (result.damage > 0) {
+    this.applyDamage(target, hit.damage);
+    if (hit.damage > 0) {
       this.hitLedger.recordHit(attacker.id, target.id, this.time.now);
     }
     if (target.hull <= 0) this.killShip(target, attacker);
+  }
+
+  /** @returns What the secondary weapons read from (and ask of) this scene. */
+  private weaponsLink(): BattleWeaponsLink {
+    return {
+      bodies: () =>
+        [...this.ships.values()].map((ship) =>
+          weaponBodyOf(
+            ship,
+            ship.owner,
+            damageMitigationOf(
+              ship.modifiers,
+              this.fliesWithWingman(ship),
+              this.auras.get(ship.id),
+            ),
+          ),
+        ),
+      wantedTargetOf: (shipId: string) => {
+        const ship = this.ships.get(shipId);
+        if (!ship) return null;
+        return ship.bot ? ship.bot.targetId : this.hudTargetOf(ship);
+      },
+      playerShipId: () => this.playerShipIds[0] ?? null,
+      playerSide: () => "player",
+      sideOf: (shipId: string) => this.ships.get(shipId)?.owner ?? null,
+      isBotControlled: (shipId: string) => !!this.ships.get(shipId)?.bot,
+      applyHit: (hit: WeaponHit) => this.applyWeaponHit(hit),
+      spriteOf: (shipId: string) => this.shipSprites.get(shipId),
+    };
+  }
+
+  /**
+   * A secondary weapon's hit, through the laser's path (hero overcharge,
+   * boss systems, mission kill credit). A ship already destroyed (its mine
+   * still on the field) is credited to its side.
+   *
+   * @param hit - The hit from the weapons runtime.
+   */
+  private applyWeaponHit(hit: WeaponHit): void {
+    const target = this.ships.get(hit.targetId);
+    if (!target || target.hull <= 0) return;
+    const attacker = this.ships.get(hit.attackerId) ?? {
+      ...target,
+      id: hit.attackerId,
+      owner: target.owner === "player" ? "ai" : "player",
+      hull: 0,
+    };
+    this.landHit(attacker, target, { damage: hit.damage, stress: hit.stress });
+  }
+
+  /** The secondary-weapons glue (e2e). */
+  get secondaryWeapons(): BattleWeapons | null {
+    return this.weapons;
   }
 
   /**
@@ -1457,6 +1573,7 @@ export class CampaignBattleScene extends Phaser.Scene {
       });
     this.hitLedger.forget(shipId);
     this.squadAi.forget(shipId);
+    this.weapons?.forget(shipId);
 
     const sprite = this.shipSprites.get(shipId);
     if (sprite) {
@@ -1573,6 +1690,7 @@ export class CampaignBattleScene extends Phaser.Scene {
       worldSize: BATTLEFIELD_SIZE,
     });
     this.applyControls(ship, result, origin);
+    this.weapons?.showRefusals(result.refusals, ship);
     matchStats.record({ kind: "flight", events: result.events });
     matchStats.record({
       kind: "stress",

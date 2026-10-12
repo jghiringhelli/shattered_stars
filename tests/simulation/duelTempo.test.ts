@@ -13,6 +13,7 @@ import {
   DUEL_BANNER_MS,
   DUEL_ROUND_LIMIT_MS,
   medianDurationMs,
+  roundWinner,
   simulateDuelRound,
   type DuelTempoConfig,
   type DuelTempoResult,
@@ -71,6 +72,14 @@ describe("duel round tempo (headless)", () => {
     expect(again.winner).toBe(falconRounds[0]!.winner);
   });
 
+  it("flies_each_ships_quick_build_secondaries_falcons_land_torpedoes", () => {
+    const ordnanceHits = falconRounds.reduce(
+      (sum, r) => sum + r.ordnanceHits[1] + r.ordnanceHits[2],
+      0,
+    );
+    expect(ordnanceHits).toBeGreaterThan(0);
+  });
+
   it("holds fire through the ROUND banner", () => {
     for (const round of falconRounds) {
       for (const times of round.hitTimes.values()) {
@@ -107,6 +116,23 @@ describe("duel round tempo (headless)", () => {
   });
 });
 
+describe("roundWinner (as DogfightScene / AceDuelScene.checkRoundEnd)", () => {
+  const ship = (side: 1 | 2, hull: number) => ({ side, hull });
+
+  it("is null while both sides fly", () => {
+    expect(roundWinner([ship(1, 5), ship(2, 5)])).toBeNull();
+  });
+
+  it("goes to the side left standing", () => {
+    expect(roundWinner([ship(1, 5), ship(2, 0)])).toBe(1);
+    expect(roundWinner([ship(1, 0), ship(2, 5)])).toBe(2);
+  });
+
+  it("ends_a_mutual_wipe_out_at_once_for_side_1_like_the_scenes", () => {
+    expect(roundWinner([ship(1, 0), ship(2, 0)])).toBe(1);
+  });
+});
+
 describe("medianDurationMs", () => {
   const round = (durationMs: number | null): DuelTempoResult => ({
     durationMs,
@@ -114,6 +140,7 @@ describe("medianDurationMs", () => {
     attacks: { 1: 0, 2: 0 },
     hitTimes: new Map(),
     hits: { 1: 0, 2: 0 },
+    ordnanceHits: { 1: 0, 2: 0 },
     damage: { 1: 0, 2: 0 },
     firstKillMs: durationMs,
     specialsUsed: 0,

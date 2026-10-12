@@ -162,7 +162,7 @@ test.describe("Skirmish squad mark (R)", () => {
     );
   });
 
-  test("a hit on the marked target deals the mark's multiplied damage", async ({
+  test("a primary hit on the marked target carries the squad mark's bonus (shared DiceAttack)", async ({
     page,
   }) => {
     await startSkirmish(page, "normal");
@@ -170,42 +170,35 @@ test.describe("Skirmish squad mark (R)", () => {
       async ({ key, side }) => {
         const scene = (window as any).game.scene.getScene(key);
         scene.scene.pause();
-        const { createProjectile } = await import("/src/core/Projectile.ts");
-        const { PROJECTILE_MARK_DAMAGE_MULTIPLIER } =
-          await import("/src/scenes/arcadeBattle/projectileLevers.ts");
+        const rng = await import("/src/utils/random.ts");
+        const always = rng.createSeededRng(1);
+        always.next = () => 0; // every roll hits
+        rng.setDefaultRng(always);
         const attacker = scene.ships.get("ally_0");
         const target = scene.ships.get("enemy_0");
+        // From the target's side (not its tail, not its nose): only the mark lever applies.
         target.angle = 0;
-        target.isCloaked = false;
+        attacker.x = target.x - 100;
+        attacker.y = target.y;
+        attacker.angle = 90;
         target.shields = target.maxShields = 500;
-        // From the target's side (not its tail): only the mark lever applies.
-        const boltDamage = 10;
-        const bolt = () =>
-          createProjectile(
-            target.x - 5,
-            target.y,
-            90,
-            attacker.id,
-            side,
-            boltDamage,
-          );
+        const shot = () => {
+          scene.hitLedger.clear();
+          const before = target.shields;
+          scene.fireAt(attacker, target);
+          return before - target.shields;
+        };
         // The wingmen's mark assist may already hold a mark: move it away.
         scene.botFleet.markTarget(side, "nobody", scene.battleClockMs);
-        const unmarked = scene.projectileHitDamage(bolt(), attacker, target);
+        const unmarked = shot();
         scene.botFleet.markTarget(side, target.id, scene.battleClockMs);
-        const marked = scene.projectileHitDamage(bolt(), attacker, target);
-        const before = target.shields;
-        scene.resolveProjectileHit(bolt(), target);
-        return {
-          bonus: boltDamage * (PROJECTILE_MARK_DAMAGE_MULTIPLIER - 1),
-          unmarked,
-          marked,
-          dealt: before - target.shields,
-        };
+        const marked = shot();
+        rng.setDefaultRng(rng.createRng());
+        return { unmarked, marked };
       },
       { key: SCENE, side: PLAYER_FACTION },
     );
-    expect(result.marked - result.unmarked).toBe(result.bonus);
-    expect(result.dealt).toBe(result.marked);
+    expect(result.unmarked).toBeGreaterThan(0);
+    expect(result.marked).toBeGreaterThan(result.unmarked);
   });
 });

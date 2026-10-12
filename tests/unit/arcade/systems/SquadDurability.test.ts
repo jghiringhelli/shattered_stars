@@ -46,13 +46,13 @@ describe("Survival run bonuses", () => {
     expect(real.maxShields).toBe(2 * DURABILITY_SCALE);
   });
 
-  it("shield regen keeps its weight against scaled shields", () => {
+  it("shield regen is already real-time HP/s and is never rescaled", () => {
     const real = realTimeRunBonuses({
       maxHull: 0,
       maxShields: 0,
       shieldRegen: 0.5,
     });
-    expect(real.shieldRegenPerSecond).toBe(0.5 * DURABILITY_SCALE);
+    expect(real.shieldRegenPerSecond).toBe(0.5);
   });
 
   it("a hull bonus keeps its share of a starter's hull", () => {

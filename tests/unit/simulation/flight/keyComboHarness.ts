@@ -18,6 +18,7 @@ import {
   tickCycleFlight,
   type CycleFlightState,
 } from "../../../../src/arcade/systems/CycleFlight";
+import { UNRESTRICTED_CAPABILITIES } from "../../../../src/core/flightCapabilityTypes";
 import type { FlightEvent } from "../../../../src/arcade/systems/PilotFlightTypes";
 import { getShipDial } from "../../../../src/data/ShipDefinitions";
 import { BATTLEFIELD_SIZE, CYCLE_DURATION_MS } from "../../../../src/config";
@@ -104,7 +105,20 @@ export function flyScript(options: ScriptOptions): FlightTrace {
   const pilot = new PlayerFlightPilot(intents);
   pilot.attach();
   const dial = getShipDial(options.shipId);
-  let flight = createCycleFlight(options.shipId, options.start);
+  // Keys → geometry only: fly the trainer configuration (every special and
+  // dash unlocked, as in Flight School). Card limits have their own specs
+  // (FlightCapabilities, PilotFlightControls, e2e key-bindings).
+  const built = createCycleFlight(options.shipId, options.start);
+  let flight: CycleFlightState = {
+    ...built,
+    motion: {
+      ...built.motion,
+      control: {
+        ...built.motion.control,
+        capabilities: UNRESTRICTED_CAPABILITIES,
+      },
+    },
+  };
   let cycleStart: Pose = options.start;
   const pending = [...options.events].sort((a, b) => a.atMs - b.atMs);
   const trace: FlightTrace = {

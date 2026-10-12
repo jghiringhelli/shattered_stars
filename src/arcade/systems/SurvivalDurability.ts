@@ -1,9 +1,10 @@
 /**
  * SurvivalDurability — Survival's hit-point rules on the real-time scale.
  *
- * Drafted run bonuses (hull, shields, shield regen) and the asteroid belt
- * are authored in miniature points, so they are multiplied by
- * DURABILITY_SCALE once to keep their weight against x4 hulls. Elite and
+ * Drafted hull / shield bonuses and the asteroid belt are authored in
+ * miniature points, so they are multiplied by DURABILITY_SCALE once to keep
+ * their weight against x4 hulls. Shield regen is real-time HP per second,
+ * like every regen/repair knob, and is never rescaled. Elite and
  * boss multipliers apply to stats that are already scaled (getModeCombatStats
  * + loadout), so they are NOT scaled again.
  */
@@ -31,11 +32,13 @@ export interface DurabilityCaps {
   readonly maxShields: number;
 }
 
-/** The drafted run bonuses that add hit points (miniature points). */
+/** The drafted run bonuses that add hit points. */
 export interface RunDurabilityBonuses {
+  /** Miniature hull points. */
   readonly maxHull: number;
+  /** Miniature shield points. */
   readonly maxShields: number;
-  /** Shield points regenerated per second. */
+  /** Real-time shield HP regenerated per second. */
   readonly shieldRegen: number;
 }
 
@@ -47,7 +50,8 @@ export interface RealTimeRunBonuses {
 }
 
 /**
- * @param bonuses - The run's drafted bonuses (miniature points).
+ * @param bonuses - The run's drafted bonuses (hull/shields in miniature
+ *   points, regen in HP/s).
  * @returns The same bonuses in real-time hit points.
  */
 export function realTimeRunBonuses(
@@ -56,7 +60,7 @@ export function realTimeRunBonuses(
   return {
     maxHull: bonuses.maxHull * DURABILITY_SCALE,
     maxShields: bonuses.maxShields * DURABILITY_SCALE,
-    shieldRegenPerSecond: bonuses.shieldRegen * DURABILITY_SCALE,
+    shieldRegenPerSecond: bonuses.shieldRegen,
   };
 }
 

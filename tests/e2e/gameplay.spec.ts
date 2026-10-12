@@ -413,31 +413,36 @@ test.describe("ArcadeBattleScene Gameplay", () => {
   test("SPACE fires a projectile", async ({ page }) => {
     await page.keyboard.press("Space");
 
-    // Projectiles are fast and may expire before we sample, but pressing SPACE
-    // should not throw. We poll briefly and accept count >= 0.
+    // Primaries resolve instantly (no projectile); pressing SPACE must not
+    // throw. Ordnance in flight is sampled to prove the accessor is live.
     await page.waitForTimeout(100);
     const count = await page.evaluate(() => {
       const scene = (window as any).game.scene.getScene(
         "ArcadeBattleScene",
       ) as any;
-      return scene?.projectiles?.length ?? 0;
+      return scene?.secondaryWeapons?.runtime?.shotsInFlight?.length ?? 0;
     });
     expect(count).toBeGreaterThanOrEqual(0); // no crash is the minimum bar
   });
 
-  test("holding SPACE continuously fires projectiles", async ({ page }) => {
+  test("holding SPACE leaves the autofiring primary running", async ({
+    page,
+  }) => {
+    // Lasers autofire at anything in arc and range (no fire key).
+    await page.evaluate(() => {
+      const scene = (window as any).game.scene.getScene("ArcadeBattleScene");
+      const fire = scene.firePrimaries.bind(scene);
+      (window as any).__primaryTicks = 0;
+      scene.firePrimaries = (dt: number) => {
+        (window as any).__primaryTicks++;
+        return fire(dt);
+      };
+    });
     await page.keyboard.down("Space");
     await page.waitForTimeout(200);
-
-    const count = await page.evaluate(() => {
-      const scene = (window as any).game.scene.getScene(
-        "ArcadeBattleScene",
-      ) as any;
-      return scene?.projectiles?.length ?? 0;
-    });
     await page.keyboard.up("Space");
-
-    expect(count).toBeGreaterThan(0);
+    const ticks = await page.evaluate(() => (window as any).__primaryTicks);
+    expect(ticks).toBeGreaterThan(0);
   });
 
   // ─── pause + QUIT returns to menu ────────────────────────────────────────

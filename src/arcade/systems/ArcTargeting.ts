@@ -1,20 +1,21 @@
 /**
- * ArcTargeting — pick the ship a primary weapon fires at: the pilot's
- * preferred target (its bot's choice, the squad mark) when it is inside
- * weapon range and the forward firing arc, else the nearest hostile that
- * is. Pure (no Phaser), shared by the squad battle scenes (Survival, Campaign).
+ * ArcTargeting — THE target picker of every battle mode's primary weapon:
+ * the pilot's preferred target (its bot's choice, the squad mark) when it
+ * is inside weapon range and the forward firing arc, else the nearest
+ * hostile that is. Range and bearing are measured the short way across the
+ * torus seam (FiringGeometry), so a ship at the map edge sees and shoots
+ * an enemy just across it. Pure (no Phaser).
  */
 
-/** Degrees → radians. */
-const DEG_TO_RAD = Math.PI / 180;
-/** Ship angles are 0 = up; screen angles are 0 = right. */
-const HEADING_TO_SCREEN_DEG = 90;
+import { inArcEnvelope, torusRangePx } from "../weapons/FiringGeometry";
+
 const FULL_TURN_RAD = Math.PI * 2;
 
 /** The firing ship: where it is, where it points, and its weapon envelope. */
 export interface ArcShooter {
   readonly id: string;
-  readonly faction: string;
+  /** Default hostility test (any other faction); omit when sides are given. */
+  readonly faction?: string;
   readonly x: number;
   readonly y: number;
   /** Heading in degrees, 0 = up, clockwise positive. */
@@ -24,7 +25,7 @@ export interface ArcShooter {
 /** A ship that may be fired at. */
 export interface ArcCandidate {
   readonly id: string;
-  readonly faction: string;
+  readonly faction?: string;
   readonly x: number;
   readonly y: number;
   readonly hull: number;
@@ -36,6 +37,8 @@ export interface ArcWeapon<T> {
   readonly rangePx: number;
   /** Full firing arc in degrees (half on each side of the nose). */
   readonly arcDeg: number;
+  /** Map edge length (px): ranges and bearings wrap across the seam. */
+  readonly worldSize: number;
   /** Extra filter, e.g. "not immune to this attacker"; default: all. */
   readonly isEligible?: (candidate: T) => boolean;
   /**
@@ -67,20 +70,20 @@ export function angleBetweenRad(a: number, b: number): number {
  *
  * @param shooter - The firing ship.
  * @param point - The point.
- * @param weapon - Range and arc.
+ * @param weapon - Range, arc and map size.
  * @returns True when the point can be fired at.
  */
 export function isInFiringArc(
   shooter: ArcShooter,
   point: { readonly x: number; readonly y: number },
-  weapon: Pick<ArcWeapon<unknown>, "rangePx" | "arcDeg">,
+  weapon: Pick<ArcWeapon<unknown>, "rangePx" | "arcDeg" | "worldSize">,
 ): boolean {
-  const dx = point.x - shooter.x;
-  const dy = point.y - shooter.y;
-  if (Math.hypot(dx, dy) >= weapon.rangePx) return false;
-  const facing = (shooter.angle - HEADING_TO_SCREEN_DEG) * DEG_TO_RAD;
-  const halfArc = (weapon.arcDeg / 2) * DEG_TO_RAD;
-  return angleBetweenRad(Math.atan2(dy, dx), facing) < halfArc;
+  return inArcEnvelope(
+    shooter,
+    point,
+    { maxRangePx: weapon.rangePx, arcDeg: weapon.arcDeg },
+    weapon.worldSize,
+  );
 }
 
 /**
@@ -89,12 +92,14 @@ export function isInFiringArc(
  *
  * @param shooter - The ship asking.
  * @param candidates - Every ship on the field.
+ * @param worldSize - Map edge length (px).
  * @param isHostile - Who counts as hostile; default: any other faction.
  * @returns The nearest hostile, or null when none is alive.
  */
 export function nearestHostile<T extends ArcCandidate>(
   shooter: ArcShooter,
   candidates: Iterable<T>,
+  worldSize: number,
   isHostile: (candidate: T) => boolean = (other) =>
     other.faction !== shooter.faction,
 ): T | null {
@@ -104,7 +109,7 @@ export function nearestHostile<T extends ArcCandidate>(
     if (other.hull <= 0 || other.id === shooter.id || !isHostile(other)) {
       continue;
     }
-    const distance = Math.hypot(other.x - shooter.x, other.y - shooter.y);
+    const distance = torusRangePx(shooter, other, worldSize);
     if (distance < bestDistance) {
       best = other;
       bestDistance = distance;
@@ -119,7 +124,7 @@ export function nearestHostile<T extends ArcCandidate>(
  *
  * @param shooter - The firing ship.
  * @param candidates - Every ship on the field.
- * @param weapon - Range, arc, eligibility/hostility filters, preferred target.
+ * @param weapon - Range, arc, map size, filters, preferred target.
  * @returns The target, or null when none is in range and arc.
  */
 export function nearestTargetInArc<T extends ArcCandidate>(
@@ -136,7 +141,7 @@ export function nearestTargetInArc<T extends ArcCandidate>(
       continue;
     }
     const preferred = other.id === weapon.preferredId;
-    const distance = Math.hypot(other.x - shooter.x, other.y - shooter.y);
+    const distance = torusRangePx(shooter, other, weapon.worldSize);
     if (!preferred && distance >= bestDistance) continue;
     if (!isInFiringArc(shooter, other, weapon)) continue;
     if (weapon.isEligible && !weapon.isEligible(other)) continue;

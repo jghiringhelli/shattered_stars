@@ -9,6 +9,8 @@ import type { FactionId } from "../../config";
 import { TEAM_LABELS } from "../../core/squadTypes";
 import { SHIP_DEFINITIONS } from "../../data/ShipDefinitions";
 import { getShipLoadouts } from "../../data/ShipLoadouts";
+import { shipSpriteAssetById } from "../../assets/assetManifest";
+import { swapWhenLoaded } from "../../assets/textureLoading";
 import { createHoverButton, createToggleButton } from "../ButtonFactory";
 import type { HoloPressButton } from "../menu/HoloPressButton";
 import type { HoloButtonVariant } from "../hud/holoButtonStyle";
@@ -258,5 +260,7 @@ function createShipBadge(
   const sprite = scene.add
     .image(L.spriteX, cy, key)
     .setDisplaySize(L.spriteSize, L.spriteSize);
+  const art = shipSpriteAssetById(spec.shipId);
+  if (art) swapWhenLoaded(scene, sprite, art, "stretch");
   return [badge, sprite];
 }

@@ -8,6 +8,7 @@
  */
 
 import Phaser from "phaser";
+import { audioManager } from "../audio/AudioManager";
 import {
   getAllEncyclopediaEntries,
   getEncyclopediaEntry,
@@ -59,6 +60,7 @@ export class EncyclopediaScene extends Phaser.Scene {
   create(): void {
     const regions = encyclopediaRegions(this.scale.width, this.scale.height);
     addMenuBackdrop(this, { textureId: BACKDROP_TEXTURE });
+    audioManager.playSubmenuMusic();
     this.header = addMenuHeader(this, {
       title: "SHIP ENCYCLOPEDIA",
       subtitle: " ",

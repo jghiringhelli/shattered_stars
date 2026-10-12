@@ -45,6 +45,13 @@ describe("simulateNodeBattle", () => {
     expect(again.won).toBe(battle.won);
   });
 
+  it("flies_each_ships_quick_build_secondaries_the_vipers_missiles_land", () => {
+    const ordnanceHits = [7, 8, 9, 10, 11]
+      .map((seed) => simulateNodeBattle(firstCombat(seed)).ordnanceHits)
+      .reduce((sum, hits) => sum + hits, 0);
+    expect(ordnanceHits).toBeGreaterThan(0);
+  });
+
   it("fights the run's fleet (flagship + free wingman) against the node's wave and reports a decision", () => {
     expect(battle.playerShips).toBe(1 + FREE_STARTING_ESCORTS);
     expect(battle.enemyShips).toBeGreaterThanOrEqual(1);

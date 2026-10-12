@@ -10,6 +10,7 @@
 
 import Phaser from "phaser";
 import { createHoloButton } from "../../ui/hud/HoloButton";
+import { MenuFocus } from "../../ui/menu/MenuFocus";
 import { HoloPanel } from "../../ui/hud/HoloPanel";
 import { addPinned, createHoloText } from "../../ui/hud/holoPrimitives";
 import {
@@ -122,7 +123,7 @@ export function createPauseOverlay(
     { label: "Settings", variant: "secondary", onClick: actions.onSettings },
     { label: "Quit to menu", variant: "danger", onClick: actions.onQuit },
   ] as const;
-  buttons.forEach((spec, i) => {
+  const created = buttons.map((spec, i) => {
     const button = createHoloButton(
       scene,
       columnX,
@@ -132,7 +133,11 @@ export function createPauseOverlay(
     );
     button.setScrollFactor(0, 0, true);
     panel.add(button);
+    return button;
   });
+  // ↑/↓ + ENTER, D-pad + A — keyboard/gamepad players can reach Quit.
+  const focus = new MenuFocus(scene, created);
+  root.once(Phaser.GameObjects.Events.DESTROY, () => focus.destroy());
   addControlsReference(scene, panel);
   return root;
 }

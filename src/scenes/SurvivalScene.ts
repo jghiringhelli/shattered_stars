@@ -44,6 +44,22 @@ import {
   nearestTargetInArc,
 } from "../arcade/systems/ArcTargeting";
 import { squadHudSnapshot } from "../arcade/systems/FlagshipHudSnapshot";
+import type {
+  BattleWeapons,
+  BattleWeaponsLink,
+  WeaponHit,
+} from "./battleUi/BattleWeapons";
+import {
+  createSceneWeapons,
+  weaponBodyOf,
+  withSecondaryWeapons,
+} from "./battleUi/sceneWeapons";
+import {
+  armorReductionOf,
+  damageMitigationOf,
+  shotAurasOf,
+} from "../arcade/systems/DamageRules";
+import type { ActiveAura } from "../systems/SupportAura";
 import {
   bossDurability,
   bossMultiplier,
@@ -54,6 +70,7 @@ import {
 import { EffectsManager } from "../rendering/EffectsManager";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
+import { survivalBattleMode } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
 import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import {
@@ -158,6 +175,7 @@ import type {
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { PauseMenu } from "../ui/PauseMenu";
 import { InputManager } from "../input/InputManager";
+import { openSettingsOverBattle } from "./battleUi/openSettingsOverBattle";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 
 /** Starter ships moved to data/survival/starters; re-exported for callers. */
@@ -336,6 +354,10 @@ export class SurvivalScene extends Phaser.Scene {
 
   /** X-Wing round tempo: a struck target ignores its attacker for a cycle. */
   private readonly hitLedger = new HitImmunityLedger();
+  /** Secondary weapons (missiles, torpedoes, turrets, bombs, mines, cloak). */
+  private weapons: BattleWeapons | null = null;
+  /** Faction auras resolved this frame (buffs every shot and stress tick). */
+  private auras: ReadonlyMap<string, ActiveAura> = new Map();
 
   /** The human pilot's flight input (InputManager-driven) — flies the flagship. */
   private readonly pilot = new PlayerFlightPilot(InputManager);
@@ -396,7 +418,6 @@ export class SurvivalScene extends Phaser.Scene {
     addPaintedSpaceBackground(this, "starfield_deep", 0);
 
     audioManager.initialize();
-    audioManager.playFactionMusic(this.playerFaction, "combat");
 
     this.effectsManager = new EffectsManager(this);
     this.repairFeedback = new ShipRepairFeedback({
@@ -422,6 +443,7 @@ export class SurvivalScene extends Phaser.Scene {
     this.background.startShootingStars();
 
     this.beltGraphics = this.add.graphics().setDepth(1);
+    this.weapons = createSceneWeapons(this, this.weaponsLink(), this.hitLedger);
     this.resetState();
     this.createHUD();
     this.setupInput();
@@ -461,6 +483,8 @@ export class SurvivalScene extends Phaser.Scene {
     this.battleHud = null;
     this.beltWarning?.destroy();
     this.beltWarning = null;
+    this.weapons?.destroy();
+    this.weapons = null;
   }
 
   private resetState(): void {
@@ -469,6 +493,11 @@ export class SurvivalScene extends Phaser.Scene {
     this.enemySerial = 0;
     this.battleEnded = false;
     this.openRunBattle();
+    // Sector boss → Dreadnought, belt-heavy node → Threading the Belt.
+    audioManager.playBattleMusic(
+      survivalBattleMode(this.rules.plan),
+      this.playerFaction,
+    );
     this.beltConfig = survivalBelt(this.rules.plan.beltSteps);
     this.drawBelt();
     this.isWaveActive = false;
@@ -598,6 +627,8 @@ export class SurvivalScene extends Phaser.Scene {
 
     this.updateAI(time, delta);
     this.flyShips(delta);
+    // Secondaries first: a held or chosen launch is this cycle's attack.
+    this.weapons?.update(delta, this.time.now);
     this.processCombat(delta);
     this.applyBeltDamage(delta);
     this.updateSprites();
@@ -659,7 +690,10 @@ export class SurvivalScene extends Phaser.Scene {
       `Wing ${this.playerShipIds.length}/${MAX_FLEET} · +${this.rules.salvageEarned} ⚙`,
     );
     const flagship = this.ships.get(this.playerShipIds[0] ?? "") ?? null;
-    if (flagship) this.retireHealthBar(flagship.id);
+    if (flagship) {
+      this.retireHealthBar(flagship.id);
+      audioManager.reportPlayerHull(flagship.hull / flagship.maxHull);
+    }
     this.beltWarning?.update(
       flagship,
       ARENA_CENTER,
@@ -667,15 +701,18 @@ export class SurvivalScene extends Phaser.Scene {
       this.time.now,
     );
     this.battleHud?.update({
-      ...squadHudSnapshot({
-        flagship,
-        ships: this.ships.values(),
-        targetId: flagship ? this.hudTargetOf(flagship) : null,
-        markedId: this.squadAi.playerMarkOf(this.time.now),
-        cooldownRemainingMs: flagship?.weaponCooldown ?? 0,
-        attackIntervalMs: flagship ? this.attackIntervalOf(flagship) : 0,
-        camera: cameraViewFrom(this.cameras.main),
-      }),
+      ...withSecondaryWeapons(
+        squadHudSnapshot({
+          flagship,
+          ships: this.ships.values(),
+          targetId: flagship ? this.hudTargetOf(flagship) : null,
+          markedId: this.squadAi.playerMarkOf(this.time.now),
+          cooldownRemainingMs: flagship?.weaponCooldown ?? 0,
+          attackIntervalMs: flagship ? this.attackIntervalOf(flagship) : 0,
+          camera: cameraViewFrom(this.cameras.main),
+        }),
+        this.weapons?.hudSlots() ?? [],
+      ),
       boundary: { center: ARENA_CENTER, radius: this.beltConfig.safeRadius },
     });
   }
@@ -733,7 +770,7 @@ export class SurvivalScene extends Phaser.Scene {
         this.scene.start("SurvivalSetupScene");
       },
       onSettings: () => {
-        this.scene.launch("SettingsScene", { returnScene: "SurvivalScene" });
+        openSettingsOverBattle(this);
       },
       onQuit: () => {
         // The run stays saved at the node before this battle ("Continue").
@@ -754,6 +791,8 @@ export class SurvivalScene extends Phaser.Scene {
     if (this.isPaused) {
       this.cameras.main.setZoom(1.0);
       this.pauseMenu.show();
+    } else {
+      this.pauseMenu.hide();
     }
   }
 
@@ -1033,6 +1072,9 @@ export class SurvivalScene extends Phaser.Scene {
     )
       return;
     this.bossPhases.set(boss.id, started + 1);
+    if (started + 1 >= this.rules.plan.bossPhases) {
+      audioManager.setBossFinalPhase(true);
+    }
     boss.shields = boss.maxShields;
     this.showMessage(
       `BOSS PHASE ${started + 1}`,
@@ -1176,6 +1218,11 @@ export class SurvivalScene extends Phaser.Scene {
     };
     ship.modifiers = equipQuickBuild(ship, spawn.loadoutId);
     ship.flight = equipFlight(ship.flight, ship.modifiers);
+    this.weapons?.equip(id, {
+      definitionId,
+      loadoutId: spawn.loadoutId,
+      modifiers: ship.modifiers,
+    });
     const { hull, maxHull, shields, maxShields } = ship;
     ship.combatStats = { ...combatStats, hull, maxHull, shields, maxShields };
 
@@ -1239,7 +1286,7 @@ export class SurvivalScene extends Phaser.Scene {
         worldSize: BATTLEFIELD_SIZE,
         dial: ship.dial,
         cycleMs: CYCLE_DURATION_MS,
-        modifiers: stressModifiersOf(ship.modifiers),
+        modifiers: stressModifiersOf(ship.modifiers, this.auras.get(ship.id)),
       });
       this.setFlight(ship, tick.state);
       this.repairFeedback?.selfRepair(ship, deltaMs);
@@ -1254,7 +1301,11 @@ export class SurvivalScene extends Phaser.Scene {
       this.syncShipSprite(ship, deltaMs);
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
-    applyAllyAuraRepairs(this.ships.values(), this.repairFeedback, deltaMs);
+    this.auras = applyAllyAuraRepairs(
+      this.ships.values(),
+      this.repairFeedback,
+      deltaMs,
+    );
   }
 
   /**
@@ -1494,6 +1545,7 @@ export class SurvivalScene extends Phaser.Scene {
     return nearestTargetInArc(ship, this.ships.values(), {
       rangePx: ship.combatStats.weaponRange + rangeBonus,
       arcDeg: ship.combatStats.firingArc,
+      worldSize: BATTLEFIELD_SIZE,
       isHostile: (other) => other.owner !== ship.owner,
       isEligible: (other) => !this.hitLedger.isImmune(ship.id, other.id, now),
       preferredId: this.wantedTargetOf(ship, now),
@@ -1582,6 +1634,8 @@ export class SurvivalScene extends Phaser.Scene {
       nowMs: this.time.now,
       roll: this.rules.rng.next(),
       targetMarked: marked,
+      ...shotAurasOf(this.auras, attacker.id, target.id),
+      targetArmor: armorReductionOf(target.definitionId),
     });
     this.effectsManager.fireLaser(
       attacker.x,
@@ -1597,15 +1651,36 @@ export class SurvivalScene extends Phaser.Scene {
       weapon: "primary",
       hit: result.hit,
     });
+    this.weapons?.onAttack(attacker.id);
     if (!result.hit) return;
-    if (result.stressOnTarget > 0) {
+    const cloak = this.weapons?.incomingDamageFactor(target.id) ?? 1;
+    this.landHit(attacker, target, {
+      damage: Math.max(1, Math.round(result.damage * cloak)),
+      stress: result.stressOnTarget,
+    });
+  }
+
+  /**
+   * A hit lands (laser or secondary weapon): stress, damage shields first
+   * then hull, the attacker's immunity tick, and the kill.
+   *
+   * @param attacker - The ship credited with the hit.
+   * @param target - The ship hit.
+   * @param hit - Damage and stress to apply.
+   */
+  private landHit(
+    attacker: SurvivalShip,
+    target: SurvivalShip,
+    hit: { readonly damage: number; readonly stress: number },
+  ): void {
+    if (hit.stress > 0) {
       this.setFlight(target, {
         ...target.flight,
-        stress: applyInstantStress(target.flight.stress, result.stressOnTarget),
+        stress: applyInstantStress(target.flight.stress, hit.stress),
       });
     }
-    this.dealDamage(target, result.damage);
-    if (result.damage > 0) {
+    this.dealDamage(target, hit.damage);
+    if (hit.damage > 0) {
       this.hitLedger.recordHit(attacker.id, target.id, this.time.now);
     }
     if (target.hull > 0) return;
@@ -1616,6 +1691,56 @@ export class SurvivalScene extends Phaser.Scene {
         sector: this.rules.plan.sector,
       });
     this.destroyShip(target.id, attacker.owner === "player");
+  }
+
+  /** @returns What the secondary weapons read from (and ask of) this scene. */
+  private weaponsLink(): BattleWeaponsLink {
+    return {
+      bodies: () => {
+        const sides = this.livingBySide();
+        return [...this.ships.values()].map((ship) =>
+          weaponBodyOf(
+            ship,
+            ship.owner,
+            damageMitigationOf(
+              ship.modifiers,
+              hasWingman(ship, sides.get(ship.owner) ?? []),
+              this.auras.get(ship.id),
+            ),
+          ),
+        );
+      },
+      wantedTargetOf: (shipId: string) => {
+        const ship = this.ships.get(shipId);
+        if (!ship) return null;
+        return shipId === this.pilotedShipId
+          ? this.hudTargetOf(ship)
+          : this.wantedTargetOf(ship, this.time.now);
+      },
+      playerShipId: () => this.pilotedShipId,
+      playerSide: () => "player",
+      sideOf: (shipId: string) => this.ships.get(shipId)?.owner ?? null,
+      applyHit: (hit: WeaponHit) => this.applyWeaponHit(hit),
+      spriteOf: (shipId: string) => this.shipSprites.get(shipId),
+    };
+  }
+
+  /**
+   * A secondary weapon's hit, through the same path as a laser hit (relic
+   * damage rules, boss systems, kills and salvage).
+   *
+   * @param hit - The hit from the weapons runtime.
+   */
+  private applyWeaponHit(hit: WeaponHit): void {
+    const target = this.ships.get(hit.targetId);
+    if (!target || target.hull <= 0) return;
+    const attacker = this.ships.get(hit.attackerId) ?? target;
+    this.landHit(attacker, target, { damage: hit.damage, stress: hit.stress });
+  }
+
+  /** The secondary-weapons glue (e2e). */
+  get secondaryWeapons(): BattleWeapons | null {
+    return this.weapons;
   }
 
   /**
@@ -1778,6 +1903,7 @@ export class SurvivalScene extends Phaser.Scene {
     }
     this.hitLedger.forget(shipId);
     this.squadAi.forget(shipId);
+    this.weapons?.forget(shipId);
     this.affixLabels.get(shipId)?.destroy();
     this.affixLabels.delete(shipId);
 
@@ -1888,6 +2014,7 @@ export class SurvivalScene extends Phaser.Scene {
       worldSize: BATTLEFIELD_SIZE,
     });
     this.applyControls(ship, result, origin);
+    this.weapons?.showRefusals(result.refusals, ship);
     matchStats.record({ kind: "flight", events: result.events });
     matchStats.record({
       kind: "stress",
@@ -1935,9 +2062,14 @@ export class SurvivalScene extends Phaser.Scene {
    * @returns The nearest living ship of the other side, or null.
    */
   private findClosestEnemy(ship: SurvivalShip): SurvivalShip | null {
-    return nearestHostile(ship, this.ships.values(), (other) => {
-      return other.owner !== ship.owner;
-    });
+    return nearestHostile(
+      ship,
+      this.ships.values(),
+      BATTLEFIELD_SIZE,
+      (other) => {
+        return other.owner !== ship.owner;
+      },
+    );
   }
 
   private updateSprites(): void {
