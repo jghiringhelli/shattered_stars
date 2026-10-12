@@ -1,12 +1,14 @@
 /**
  * ReinforcementController — runs a reinforcement-pool battle inside the
  * Skirmish scene behind a few one-line hooks. It registers the opening
- * squads with the pure ReinforcementDirector, notices destroyed ships,
- * spawns every reinforcement the director deploys (warped in at its side's
- * edge with arrival protection, AI ships enlisted with the bot fleet by the
- * scene's adopt hook), drives the HUD panel and the player's picker, keeps
- * the camera on a wingman while the player's ship is down, and ends the
- * match (unless a scenario owns the result).
+ * squads with the pure ReinforcementDirector (one pool and cap per team,
+ * one sub-reserve per squad), notices destroyed ships, spawns every
+ * reinforcement the director deploys (warped in at its team's edge with
+ * arrival protection, AI ships enlisted with the bot fleet by the scene's
+ * adopt hook), drives the HUD panel and the local human's picker (online
+ * every seat has its own, fed by its own input stream through `choose`),
+ * keeps the camera on a teammate while the local ship is down, and ends
+ * the match (unless a scenario owns the result).
  */
 
 import type Phaser from "phaser";
@@ -20,13 +22,13 @@ import {
   type ReinforcementSetup,
 } from "../../../arcade/reinforcements";
 import type { ScenarioSide } from "../../../arcade/scenarios";
-import type { ArcadeShip } from "../arcadeShipFactory";
+import { teamKey } from "../../../arcade/teams";
 import type { CameraFocus, ReinforcementSceneLink } from "./reinforcementLink";
 import { spawnArcadeShip } from "../arcadeShipFactory";
 import { matchStats } from "../../../telemetry/matchTelemetry";
 import { ReinforcementHud } from "./ReinforcementHud";
 import { ReinforcementPicker } from "./ReinforcementPicker";
-import { deployToast } from "./reinforcementHudModel";
+import { deployToast, type ReinforcementView } from "./reinforcementHudModel";
 import { showSummaryStrip } from "./reinforcementSummaryStrip";
 import {
   endDetails,
@@ -40,13 +42,20 @@ import {
 } from "./reinforcementReadout";
 import {
   buildDirectorSetup,
-  freshShipId,
   openingRegistrations,
   reinforcementPose,
   sideOrder,
 } from "./reinforcementSetup";
+import {
+  deploymentSpawnSpec,
+  freshShipId,
+  localViewOf,
+  memberKey,
+  scenePilotOf,
+  squadOfMember,
+} from "./reinforcementPilots";
 
-/** Ships previewed from the player's reserve on the HUD. */
+/** Ships previewed from the local human's reserve on the HUD. */
 const PREVIEW_COUNT = 3;
 
 /**
@@ -77,7 +86,7 @@ export class ReinforcementController {
 
   /**
    * @param scene - The battle scene.
-   * @param setup - Parsed rules and side plans.
+   * @param setup - Parsed rules and squad plans.
    * @param link - Scene accessors.
    */
   constructor(
@@ -85,27 +94,23 @@ export class ReinforcementController {
     setup: ReinforcementSetup,
     private readonly link: ReinforcementSceneLink,
   ) {
-    const opening = [...link.ships.values()].map((ship) => ({
-      id: ship.id,
-      faction: ship.faction,
-      definitionId: ship.definitionId,
-      loadoutId: ship.loadoutId,
-      owner: ship.owner,
-    }));
-    this.sides = sideOrder(link.playerFaction, opening);
+    const opening = [...link.ships.values()];
+    this.sides = sideOrder(link.playerTeam, link.squadTeams).map(teamKey);
     this.director = new ReinforcementDirector(
       buildDirectorSetup({
         setup,
-        playerFaction: link.playerFaction,
+        playerTeam: link.playerTeam,
+        squadTeams: link.squadTeams,
+        humanSquads: link.humanSquads,
         ships: opening,
         ownsOutcome: !link.hasScenario,
-        nextShipId: (_faction, pilot) => this.issueId(pilot),
+        nextShipId: (member, pilot) => this.issueId(member, pilot),
       }),
     );
-    for (const reg of openingRegistrations(opening)) {
+    for (const reg of openingRegistrations(opening, link.humanSquads)) {
       this.director.registerInitial(
         reg.shipId,
-        reg.faction,
+        reg.member,
         reg.option,
         reg.pilot,
       );
@@ -135,11 +140,16 @@ export class ReinforcementController {
 
   /** Everything the battle shows and knows (e2e / telemetry). */
   get readout(): ReinforcementReadout {
-    return buildReadout(this.director, this.hud.readout, this.picker.readout);
+    return buildReadout(
+      this.director,
+      this.view.member,
+      this.hud.readout,
+      this.picker.readout,
+    );
   }
 
   /**
-   * One logic tick: losses, deployments, picker, HUD, end of match.
+   * One logic tick: losses, deployments, pickers, HUD, end of match.
    * @param deltaMs - Tick length.
    * @param nowMs - Battle time.
    * @returns True (the reinforcement rules own victory, flee and the clock).
@@ -161,13 +171,15 @@ export class ReinforcementController {
   }
 
   /**
-   * The player picks a picker row (click, key 1–6, Enter, e2e).
+   * A human picks a row of their picker (click, key 1–6, Enter, e2e; online
+   * every seat's pick arrives through its own input stream).
    * @param index - Row index.
+   * @param squad - The human's squad (default: this client's).
    * @returns Whether a ship deployed.
    */
-  choose(index: number): boolean {
-    if (this.ended) return false;
-    const deployment = this.director.choose(index);
+  choose(index: number, squad = this.link.localSquad): boolean {
+    if (this.ended || squad === null) return false;
+    const deployment = this.director.choose(index, memberKey(squad));
     if (!deployment) return false;
     this.spawn(deployment);
     this.refreshViews();
@@ -183,14 +195,16 @@ export class ReinforcementController {
     return this.shield.isProtected(shipId, nowMs);
   }
 
-  /** @returns Where the camera looks while the player's ship is down, else null. */
+  /** @returns Where the camera looks while the local ship is down, else null. */
   cameraFocus(): CameraFocus | null {
-    if (this.director.playerShipId !== null) return null;
-    const wingman = [...this.link.ships.values()].find(
-      (s) =>
-        s.hull > 0 && s.owner === "ai" && s.faction === this.link.playerFaction,
+    const member = this.view.member;
+    if (member === null || this.director.pilotShipOf(member) !== null)
+      return null;
+    const team = this.link.squadTeams[this.link.localSquad ?? -1];
+    const teammate = [...this.link.ships.values()].find(
+      (s) => s.hull > 0 && s.team === team,
     );
-    const at = wingman ?? this.pose(this.link.playerFaction, 0);
+    const at = teammate ?? this.pose(this.view.side, 0);
     return { x: at.x, y: at.y, control: { speed: 1 } };
   }
 
@@ -250,13 +264,19 @@ export class ReinforcementController {
     this.shield.clear();
   }
 
+  /** @returns The local pilot's team and squad. */
+  private get view(): ReinforcementView {
+    return localViewOf(this.link);
+  }
+
   private noteLosses(): void {
+    const local = this.view.member;
+    const localShip = local === null ? null : this.director.pilotShipOf(local);
     for (const id of [...this.alive]) {
       const ship = this.link.ships.get(id);
       if (ship && ship.hull > 0) continue;
       // The picker's buttons hit-test correctly only at zoom 1.
-      if (id === this.director.playerShipId && this.link.showPicker !== false)
-        this.scene.cameras.main.setZoom(1);
+      if (id === localShip) this.scene.cameras.main.setZoom(1);
       this.alive.delete(id);
       this.shield.forget(id);
       this.director.shipDestroyed(id);
@@ -264,39 +284,34 @@ export class ReinforcementController {
   }
 
   private spawn(deployment: Deployment): void {
-    const pose = this.pose(deployment.faction, deployment.slot);
-    const ship = spawnArcadeShip({
-      id: deployment.shipId,
-      definitionId: deployment.option.definitionId,
-      loadoutId: deployment.option.loadoutId,
-      faction: deployment.faction as ArcadeShip["faction"],
-      pilot: deployment.pilot,
-      ...pose,
-    });
-    this.link.adopt(ship);
+    const pose = this.pose(deployment.side, deployment.slot);
+    const ship = spawnArcadeShip(
+      deploymentSpawnSpec(deployment, this.link, pose),
+    );
+    const pilotSquad =
+      deployment.pilot === "player" ? squadOfMember(deployment.member) : null;
+    this.link.adopt(ship, pilotSquad);
     this.alive.add(ship.id);
     this.shield.protect(
       ship.id,
       this.nowMs,
       this.director.rules.arrivalProtectionMs,
     );
-    this.hud.notify(
-      deployToast(deployment, this.link.playerFaction),
-      this.scene.time.now,
-    );
+    const view = this.view;
+    this.hud.notify(deployToast(deployment, view), this.scene.time.now);
     matchStats.record({
       kind: "deploy",
-      friendly: deployment.faction === this.link.playerFaction,
+      friendly: deployment.side === view.side,
       count: 1,
     });
   }
 
   private pose(
-    faction: string,
+    side: string,
     slot: number,
   ): { x: number; y: number; angle: number } {
     return reinforcementPose({
-      faction,
+      side,
       slot,
       sides: this.sides,
       worldSize: this.link.worldSize,
@@ -305,20 +320,24 @@ export class ReinforcementController {
   }
 
   private refreshViews(): void {
+    const { side, member } = this.view;
     this.hud.update({
       sides: this.director.summaries(),
-      preview: this.director.reservePreview(PREVIEW_COUNT),
+      viewSide: side,
+      preview: this.director.reservePreview(PREVIEW_COUNT, member),
       camera: this.scene.cameras.main,
       nowMs: this.scene.time.now,
     });
-    this.picker.update(
-      this.link.showPicker === false ? null : this.director.picker,
-    );
+    this.picker.update(member === null ? null : this.director.pickerOf(member));
   }
 
-  private issueId(pilot: Parameters<typeof freshShipId>[0]): string {
+  private issueId(
+    member: string,
+    pilot: Parameters<typeof freshShipId>[0],
+  ): string {
+    const squad = squadOfMember(member);
     const id = freshShipId(
-      pilot,
+      scenePilotOf({ pilot, squad }, this.link),
       (candidate) =>
         this.link.ships.has(candidate) || this.issuedIds.has(candidate),
     );

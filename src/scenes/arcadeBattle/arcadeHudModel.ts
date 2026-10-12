@@ -19,11 +19,14 @@ import type {
   WeaponSlotDescriptor,
 } from "../../ui/hud/types";
 import { nearestInArc, type ArcCandidate } from "./arcTargeting";
+import { relationOf, type TeamId } from "../../arcade/teams";
 
 /** Half-width of the forward arc in which the HUD picks the player's target (°). */
 export const TARGET_ARC_HALF_DEG = 60;
 /** What the HUD reads of a ship. */
 export interface HudShipView extends ArcCandidate {
+  /** Its team: allies and enemies are read from it, never from faction. */
+  readonly team: TeamId;
   readonly definitionId: string;
   readonly angle: number;
   readonly hull: number;
@@ -88,7 +91,8 @@ export function toPlayerHudState(ship: HudShipView): PlayerHudState {
 /** Who is looking at the contacts. */
 export interface ContactPerspective {
   readonly playerId: string | null;
-  readonly playerFaction: string;
+  /** The viewer's team (allies = same team, whatever their faction). */
+  readonly playerTeam: TeamId;
   readonly targetId: string | null;
   /** The player's side's marked target (SquadMark); omitted/null = none. */
   readonly markedId?: string | null;
@@ -110,7 +114,7 @@ export function toContacts(
   const contacts: ContactHudState[] = [];
   for (const ship of ships) {
     if (ship.id === view.playerId || ship.hull <= 0) continue;
-    const isAlly = ship.faction === view.playerFaction;
+    const isAlly = relationOf(view.playerTeam, ship.team) === "ally";
     if (!isAlly && ship.isCloaked) continue;
     contacts.push({
       id: ship.id,
@@ -126,7 +130,7 @@ export function toContacts(
 }
 
 /**
- * The player's target: the nearest visible enemy in the forward arc — the
+ * The player's target: the nearest visible enemy (another team) in the forward arc — the
  * same ship a homing missile fired now would lock.
  *
  * @param player - The player's ship.
@@ -140,7 +144,7 @@ export function selectHudTargetId(
   worldSize: number,
 ): string | null {
   const enemies = [...ships].filter(
-    (s) => s.faction !== player.faction && s.hull > 0 && !s.isCloaked,
+    (s) => s.team !== player.team && s.hull > 0 && !s.isCloaked,
   );
   return (
     nearestInArc(player, player.angle, enemies, TARGET_ARC_HALF_DEG, worldSize)
@@ -152,7 +156,8 @@ export interface HudSnapshotInput {
   /** The player's ship; null (or destroyed) hides player-centric widgets. */
   readonly player: HudShipView | null;
   readonly ships: ReadonlyArray<HudShipView>;
-  readonly playerFaction: string;
+  /** The viewer's team. */
+  readonly playerTeam: TeamId;
   /** The player's weapon bar (primary + secondaries), left to right. */
   readonly weapons: ReadonlyArray<WeaponSlotDescriptor>;
   readonly camera: CameraViewSnapshot;
@@ -181,7 +186,7 @@ export function buildBattleHudSnapshot(input: HudSnapshotInput): HudFrameModel {
     : null;
   const contacts = toContacts(input.ships, {
     playerId: input.player?.id ?? null,
-    playerFaction: input.playerFaction,
+    playerTeam: input.playerTeam,
     targetId,
     markedId: input.markedId ?? null,
     sizeOf: input.sizeOf,

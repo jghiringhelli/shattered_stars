@@ -29,6 +29,7 @@ function parseArgs(): { ticks: number } {
 interface FakeShip {
   id: string;
   faction: string;
+  team: number;
   hull: number;
   x: number;
   y: number;
@@ -41,6 +42,7 @@ function generateShips(count: number): FakeShip[] {
     ships.push({
       id: `ship_${i}`,
       faction: factions[i % 2]!,
+      team: i % 2,
       hull: 5 + Math.floor(Math.random() * 5),
       x: Math.random() * 4000,
       y: Math.random() * 4000,
@@ -101,7 +103,7 @@ function benchmarkTier(
 
     const cache = buildFrameCache(ships);
     resolveCollisions(projectiles, cache.aliveShips, 15);
-    checkVictoryCondition(cache, "alpha");
+    checkVictoryCondition(cache, 0);
 
     const elapsed = performance.now() - start;
     times.push(elapsed);

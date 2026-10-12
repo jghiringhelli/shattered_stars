@@ -7,13 +7,14 @@ import {
 import { scenarioShipValue } from "../../../../src/arcade/scenarios";
 import { shipPointCost } from "../../../../src/systems/arena/BattleScore";
 
-const PLAYER = "free_confederation";
+/** The player's team. */
+const PLAYER = 0;
 
 function source(
   overrides: Partial<ScenarioShipSource> & { id: string },
 ): ScenarioShipSource {
   return {
-    faction: PLAYER,
+    team: PLAYER,
     definitionId: "confed_kestrel",
     x: 0,
     y: 0,
@@ -51,16 +52,45 @@ describe("ScenarioFrameTracker", () => {
     expect(tracker.build([], 16).reserves).toBeUndefined();
   });
 
-  it("maps the player's faction to the player side and every other to the enemy", () => {
+  it("maps the player's team to the player side and every other team to the enemy", () => {
     const tracker = new ScenarioFrameTracker(PLAYER, 6000);
     const frame = tracker.build(
-      [source({ id: "p" }), source({ id: "e", faction: "void_corsairs" })],
+      [
+        source({ id: "p" }),
+        source({ id: "e", team: 1 }),
+        source({ id: "f", team: 2 }),
+      ],
       16,
     );
     expect(frame.ships.map((s) => [s.id, s.side])).toEqual([
       ["p", "player"],
       ["e", "enemy"],
+      ["f", "enemy"],
     ]);
+  });
+
+  it("scenario control is by team: a mirror match splits one faction into two sides", () => {
+    const tracker = new ScenarioFrameTracker(PLAYER, 6000);
+    const frame = tracker.build(
+      [
+        source({ id: "mine", definitionId: "terran_viper" }),
+        source({ id: "theirs", definitionId: "terran_viper", team: 1 }),
+      ],
+      16,
+    );
+    expect(frame.ships.map((s) => s.side)).toEqual(["player", "enemy"]);
+  });
+
+  it("a mixed-faction team scores as one side", () => {
+    const tracker = new ScenarioFrameTracker(PLAYER, 6000);
+    const frame = tracker.build(
+      [
+        source({ id: "mine", definitionId: "terran_viper" }),
+        source({ id: "mate", definitionId: "corsair_raider" }),
+      ],
+      16,
+    );
+    expect(frame.ships.map((s) => s.side)).toEqual(["player", "player"]);
   });
 
   it("describes weight, value, health and stress", () => {

@@ -8,7 +8,6 @@ export * from "./limits";
 export * from "./messages";
 export * from "./codec";
 export * from "./timing";
-export * from "./teamFactions";
 export {
   validateClientMessage,
   readLoadout,

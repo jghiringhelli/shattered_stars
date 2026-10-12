@@ -2,8 +2,9 @@
  * Survival roguelite — the ships of one battle wave (pure), shared by
  * SurvivalScene and the headless node sim: the run's threat scaled by the
  * node plan (SurvivalRunController.scaledWaveSize), the node's extra
- * elites, and the boss on a boss node's last wave, each with its quick
- * build (planWaveRoster).
+ * elites on its last wave only, and the boss on a boss node's last wave,
+ * each with its quick build (planWaveRoster). The waves before a node's
+ * last are regular patrols (CombatNodePlan.WAVES_PER_NODE).
  *
  * A boss wave fields the boss alone: no bonus elite (the old endless mode
  * added one to every milestone wave; against a fleet of 1–2 ships it made
@@ -60,10 +61,11 @@ export interface NodeWaveInput {
 export function nodeWaveRoster(input: NodeWaveInput): WaveSlot[] {
   const { rules, controller, spec } = input;
   const plan = rules.plan;
+  const extraElites = spec.index >= spec.total ? plan.extraElites : 0;
   const size = controller.scaledWaveSize(
     input.playerShips,
     plan.threatMultiplier,
-    plan.extraElites,
+    extraElites,
     plan.maxRegulars,
     REGULARS_PER_EXTRA_ELITE,
   );

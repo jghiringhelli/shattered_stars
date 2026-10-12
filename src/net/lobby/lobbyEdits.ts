@@ -9,7 +9,6 @@ import type { FactionId } from "../../config";
 import { ALL_FACTIONS } from "../../ui/lobby/lobbyData";
 import {
   MODE_RULES,
-  sidesAreFactions,
   type Loadout,
   type RoomPlayerView,
   type RoomView,
@@ -48,15 +47,16 @@ export function pendingLoadout(
 }
 
 /**
- * The faction a newly seated pilot starts on: in squad battles (a side is
- * one faction) their team's faction, else one the other team does not fly.
+ * The faction a newly seated pilot starts on — a suggestion, not a rule (a
+ * side is a team: mirror and mixed-faction teams are allowed): in squad
+ * battles their teammate's faction, else one the other team does not fly.
  *
  * @param room - The room.
  * @param me - The local player.
  * @returns The faction.
  */
 function seatFaction(room: RoomView, me: RoomPlayerView): FactionId {
-  if (!sidesAreFactions(room.mode)) return DEFAULT_FACTION;
+  if (MODE_RULES[room.mode].maxShips === 1) return DEFAULT_FACTION;
   const others = room.players.filter((p) => p.id !== me.id && p.loadout);
   const teammate = others.find((p) => p.team === me.team);
   if (teammate?.loadout) return teammate.loadout.faction as FactionId;

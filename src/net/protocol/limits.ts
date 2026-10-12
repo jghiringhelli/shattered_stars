@@ -28,8 +28,8 @@ export interface ModeRules {
 /**
  * Dogfight is a 1v1 duel (one ship each). Skirmish seats up to 2v2: each
  * human flies the flagship of their squad, the rest are AI wingmen.
- * Scenario and Reinforcements are 1v1 squad battles: their objectives and
- * reinforcement pools are defined per side, and a side is one faction.
+ * Scenario and Reinforcements are 1v1 squad battles. A side is a team, not
+ * a faction: either seat may fly any faction (mirror matches included).
  */
 export const MODE_RULES: Readonly<Record<MatchMode, ModeRules>> = {
   dogfight: {

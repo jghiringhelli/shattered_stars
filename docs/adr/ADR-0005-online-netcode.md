@@ -139,17 +139,19 @@ and arbitrated by the server, with hash-based desync detection and snapshot resy
   sim clock (`tick × TICK_MS` / `battleClockMs`), never `scene.time.now` or frame delta.
   Round flow (Dogfight's banner → weapons live, round end → next round) is data timers on
   the sim clock. Combat dice and bots draw from `DeterministicRng`s seeded by the match.
-- **Seats.** Seat 0's side is the simulation's "player" side on every client. Each human
+- **Seats.** Seat 0's team is the simulation's "player" side on every client. Each human
   seat has a `SeatInput` (decoded tick input as held/press/onAny, plus its command); the
   Dogfight flies every seat through its own `PlayerFlightPilot`, the Skirmish scene through
   per-ship `PilotControlState`s. Every seat ship also has a bot, which flies it only while the
-  relay's AI-control flag is set. Reinforcement picks are input commands; a seat whose ship
-  is lost takes the next ship its faction deploys. Settings that steer the simulation (mark
+  relay's AI-control flag is set. Reinforcement picks are input commands of the picking
+  seat: every human seat has its own picker (its squad's sub-reserve inside its team's
+  pool) and flies the replacement it deploys. Settings that steer the simulation (mark
   assist, difficulty) are fixed online.
-- **Squad battles: a side is one faction** (the Skirmish scene's sides are factions):
-  `teamFactionConflict` — teammates share a faction, the teams differ — is enforced by the
-  relay's start check and shown by the lobby.
-- **Hash** (every tick traced, every 30 sent): ship poses, durability, speed, stress and
+- **Squad battles: a side is a team** (2026-10-12, protocol 3): hostility, marks, auras,
+  pools, scenario sides and results key on the team (seat → `team_<n>`), never on faction,
+  so mirror matches and mixed-faction teams are allowed (the old `teamFactionConflict`
+  start rule is gone).
+- **Hash** (every tick traced, every 30 sent): ship poses, teams, durability, speed, stress and
   cooldowns, ordnance on the field, clocks, scores and RNG states (floats at 1/1024).
 - **Snapshot / restore.** `StateGraph` serializes the simulation objects reachable from a
   per-scene root (ships, bot fleet / crew, weapons driver, tempo ledger, repair tracker,

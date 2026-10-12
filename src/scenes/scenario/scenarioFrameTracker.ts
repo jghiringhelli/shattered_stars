@@ -1,7 +1,7 @@
 /**
  * scenarioFrameTracker — turns the Skirmish scene's ship records into the
- * Scenario rules' per-frame view: sides (the player's faction vs everyone
- * else), control weight (medium and bigger count double), scenario value
+ * Scenario rules' per-frame view: sides (the player's team vs every other
+ * team — never faction, so a mirror match has two sides), control weight (medium and bigger count double), scenario value
  * (squad cost), health and stress, plus the events since the last frame —
  * destructions (detected from hull reaching 0) and evasive actions (boost /
  * barrel roll, reported by the scene's flight hook).
@@ -22,11 +22,12 @@ import type { FlightEvent } from "../../arcade/systems/PilotFlightTypes";
 import type { ObjectivePoint } from "../../arcade/objectives";
 import { getShipDefinition } from "../../data/ShipDefinitions";
 import { shipPointCost } from "../../systems/arena/BattleScore";
+import type { TeamId } from "../../arcade/teams";
 
 /** What the tracker reads of a Skirmish ship record. */
 export interface ScenarioShipSource {
   readonly id: string;
-  readonly faction: string;
+  readonly team: TeamId;
   readonly definitionId: string;
   readonly x: number;
   readonly y: number;
@@ -51,12 +52,12 @@ export class ScenarioFrameTracker {
   private pending: ScenarioEvent[] = [];
 
   /**
-   * @param playerFaction - The human player's faction (the "player" side).
+   * @param playerTeam - The human player's team (the "player" side).
    * @param worldSize - Torus side length.
    * @param pointsPerSquadPoint - Scenario value of one squad point.
    */
   constructor(
-    private readonly playerFaction: string,
+    private readonly playerTeam: TeamId,
     private readonly worldSize: number,
     private readonly pointsPerSquadPoint: number = SCENARIO_POINTS_PER_SQUAD_POINT,
   ) {}
@@ -65,8 +66,8 @@ export class ScenarioFrameTracker {
    * @param ship - A ship record.
    * @returns Its scenario side.
    */
-  sideOf(ship: { readonly faction: string }): ScenarioSide {
-    return ship.faction === this.playerFaction ? "player" : "enemy";
+  sideOf(ship: { readonly team: TeamId }): ScenarioSide {
+    return ship.team === this.playerTeam ? "player" : "enemy";
   }
 
   /**

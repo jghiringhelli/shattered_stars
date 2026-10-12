@@ -66,29 +66,33 @@ describe("ArcadeOnline", () => {
     expect(online.isHumanFlown("player_0")).toBe(true);
   });
 
-  it("hands a seat whose ship is lost the next ship its faction deploys", () => {
+  it("maps every seat to its own squad (its picker and replacement ships)", () => {
     const online = make();
-    online.assignShip(1, "enemy_0");
-    const alive = new Set(["enemy_0"]);
-    expect(
-      online.claimReinforcement("enemy_5", "void_corsairs", (id) =>
-        alive.has(id),
-      ),
-    ).toBe(-1);
-    alive.delete("enemy_0");
-    expect(
-      online.claimReinforcement("enemy_5", "terran_hegemony", (id) =>
-        alive.has(id),
-      ),
-    ).toBe(-1);
-    expect(
-      online.claimReinforcement("enemy_5", "void_corsairs", (id) =>
-        alive.has(id),
-      ),
-    ).toBe(1);
-    expect(online.shipOf(1)).toBe("enemy_5");
+    expect(online.squadOf(0)).toBe(0);
+    expect(online.squadOf(1)).toBe(1);
+    expect(online.seatOfSquad(1)).toBe(1);
+    expect(online.seatOfSquad(5)).toBe(-1);
+    expect(online.localSquad).toBe(1);
   });
 
+  it("reads each seat's team, and the local team, side keys of every human team", () => {
+    const online = make();
+    expect(online.localTeam).toBe(1);
+    expect([...online.humanSides].sort()).toEqual(["team_0", "team_1"]);
+  });
+
+  it("a mirror match: two seats of one faction on two teams", () => {
+    const mirror = {
+      ...CONFIG,
+      factions: CONFIG.factions.map((f) => ({
+        ...f,
+        factionId: "terran_hegemony",
+      })),
+    };
+    const online = new ArcadeOnline(readOnlineBattle(mirror)!);
+    expect(online.battle.seats.map((s) => s.team)).toEqual([0, 1]);
+    expect(online.localVictory(false)).toBe(true);
+  });
   it("keeps each seat's flight memory apart", () => {
     const online = make();
     online.assignShip(0, "player_0");

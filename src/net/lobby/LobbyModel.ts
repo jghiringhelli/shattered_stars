@@ -8,7 +8,6 @@ import type { NetClientState } from "../client/NetClient";
 import type { ServerUrlSource } from "../onlineConfig";
 import {
   MODE_RULES,
-  teamFactionConflict,
   type MatchMode,
   type MatchStart,
   type RefusalReason,
@@ -245,14 +244,8 @@ export function readyBlocker(state: LobbyState): string | null {
   if (!state.room || !me) return "Not in a room";
   if (!me.loadout) return "Pick your ship first";
   if (!me.connected) return "Reconnecting…";
-  switch (teamFactionConflict(state.room.mode, state.room.players)) {
-    case "same_faction":
-      return "Each side is one faction: pick a different faction from the other team";
-    case "mixed_team":
-      return "Teammates fly the same faction: match your team's faction";
-    default:
-      return null;
-  }
+  // Any faction on any team: mirror matches and mixed-faction teams are fine.
+  return null;
 }
 
 /** @param state - Lobby state. @returns Seats still open in the room. */

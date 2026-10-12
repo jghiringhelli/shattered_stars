@@ -1,10 +1,15 @@
 /**
  * reinforcementSetup — the pure half of the Skirmish scene's reinforcement
- * glue: which sides fight (the player's first), what the opening squads
- * cost, every side's plan (the player's reserve — planned in the Squad
- * Builder or built from its strategy — and the AI's strategy rotations),
- * where an arrival warps in (Skirmish deploy edges, or a scenario's
- * deployment lines) and fresh ship ids.
+ * glue: which team sides fight (the player's team first) and their member
+ * squads, what the opening squads cost, every squad's sub-reserve (a human
+ * squad's reserve — planned in the Squad Builder or built from its
+ * strategy — and an AI squad's strategy rotation), where an arrival warps
+ * in (Skirmish deploy edges, or a scenario's deployment lines) and fresh
+ * ship ids.
+ *
+ * Pools and field caps are per TEAM; each squad of a team (human or AI)
+ * keeps its own sub-reserve and deploys ships of its own faction; every
+ * human squad has its own picker.
  *
  * Pure: no Phaser.
  */
@@ -22,35 +27,42 @@ import {
   type DeployOption,
   type DeployPilot,
   type DeployPose,
+  type DirectorMemberSetup,
   type DirectorSetup,
   type ReinforcementSetup,
+  type SquadPlan,
 } from "../../../arcade/reinforcements";
 import { homePoint } from "../../../arcade/scenarios";
+import { teamKey, type TeamId } from "../../../arcade/teams";
 import { getShipDefinition } from "../../../data/ShipDefinitions";
+import { memberKey } from "./reinforcementPilots";
+
+export {
+  freshShipId,
+  memberKey,
+  scenePilotOf,
+  squadOfMember,
+} from "./reinforcementPilots";
 
 /** Heading of each scenario side's deployment line (0 = up). */
 const SCENARIO_FACING = { player: 0, enemy: 180 } as const;
-
-/** Id prefix of each pilot's ships (matches the opening squad's ids). */
-const ID_PREFIX: Readonly<Record<DeployPilot, string>> = {
-  player: "player",
-  wingman: "ally",
-  ai: "enemy",
-};
 
 /** An opening-squad ship as the setup reads it. */
 export interface OpeningShip {
   readonly id: string;
   readonly faction: string;
+  readonly team: TeamId;
+  /** Its battle-config squad. */
+  readonly squad: number;
   readonly definitionId: string;
   readonly loadoutId: string | null;
-  readonly owner: "player" | "ai";
 }
 
 /** An opening ship's registration with the director. */
 export interface OpeningRegistration {
   readonly shipId: string;
-  readonly faction: string;
+  /** Its squad's member key. */
+  readonly member: string;
   readonly option: DeployOption;
   readonly pilot: DeployPilot;
 }
@@ -58,7 +70,11 @@ export interface OpeningRegistration {
 /** What the director setup is built from. */
 export interface DirectorSetupInput {
   readonly setup: ReinforcementSetup;
-  readonly playerFaction: string;
+  readonly playerTeam: TeamId;
+  /** Every config squad's team (index = squad). */
+  readonly squadTeams: readonly TeamId[];
+  /** Human squads → the ship their human flies at the start. */
+  readonly humanSquads: ReadonlyMap<number, string>;
   readonly ships: readonly OpeningShip[];
   readonly ownsOutcome: boolean;
   readonly nextShipId: DirectorSetup["nextShipId"];
@@ -66,7 +82,8 @@ export interface DirectorSetupInput {
 
 /** Where an arrival goes. */
 export interface PoseInput {
-  readonly faction: string;
+  /** The arrival's team side key. */
+  readonly side: string;
   /** The side's arrival number. */
   readonly slot: number;
   /** Side order (the player's first). */
@@ -77,63 +94,55 @@ export interface PoseInput {
 }
 
 /**
- * @param playerFaction - The human's faction.
- * @param ships - The opening ships.
- * @returns Every faction, the player's first, then in order of appearance.
+ * @param playerTeam - The human's team.
+ * @param squadTeams - Every squad's team.
+ * @returns Every team, the player's first, then in order of appearance.
  */
 export function sideOrder(
-  playerFaction: string,
-  ships: readonly OpeningShip[],
-): string[] {
-  return [...new Set([playerFaction, ...ships.map((s) => s.faction)])];
+  playerTeam: TeamId,
+  squadTeams: readonly TeamId[],
+): TeamId[] {
+  return [...new Set([playerTeam, ...squadTeams])];
 }
 
 /**
  * @param ships - The opening ships.
- * @returns Their registrations (the player's ship, wingmen, AI ships).
+ * @param humanSquads - Human squads → their human's opening ship.
+ * @returns Their registrations (humans' ships, their wingmen, AI squads' ships).
  */
 export function openingRegistrations(
   ships: readonly OpeningShip[],
+  humanSquads: ReadonlyMap<number, string>,
 ): OpeningRegistration[] {
-  const player = ships.find((s) => s.owner === "player");
   return ships.map((ship) => ({
     shipId: ship.id,
-    faction: ship.faction,
+    member: memberKey(ship.squad),
     option: optionOf(ship),
     pilot:
-      ship.owner === "player"
+      humanSquads.get(ship.squad) === ship.id
         ? "player"
-        : ship.faction === player?.faction
+        : humanSquads.has(ship.squad)
           ? "wingman"
           : "ai",
   }));
 }
 
 /**
- * @param input - Parsed setup, the player's faction, opening ships, ids.
- * @returns The director's setup.
+ * @param input - Parsed setup, teams, humans, opening ships, ids.
+ * @returns The director's setup: one side per team, one member per squad.
  */
 export function buildDirectorSetup(input: DirectorSetupInput): DirectorSetup {
-  const { setup, playerFaction } = input;
-  const { rules } = setup;
-  const sides = sideOrder(playerFaction, input.ships).map((faction) => {
-    const plan = setup.sides[faction] ?? {
-      strategy: "balanced",
-      reserve: null,
-    };
-    const options =
-      faction === playerFaction
-        ? playerReserve(input, plan.strategy, plan.reserve)
-        : toDeployOptions(
-            strategyRotation(faction as FactionId, plan.strategy, rules.format),
-          );
-    return { faction, strategy: plan.strategy, plan: options };
-  });
+  const { setup, squadTeams } = input;
+  const sides = sideOrder(input.playerTeam, squadTeams).map((team) => ({
+    key: teamKey(team),
+    members: squadTeams.flatMap((squadTeam, squad) =>
+      squadTeam === team ? [memberSetup(input, squad)] : [],
+    ),
+  }));
   return {
-    rules,
-    playerFaction,
+    rules: setup.rules,
+    playerSide: teamKey(input.playerTeam),
     sides,
-    playerCatalog: factionCatalog(playerFaction as FactionId, rules.format),
     ownsOutcome: input.ownsOutcome,
     nextShipId: input.nextShipId,
   };
@@ -144,7 +153,7 @@ export function buildDirectorSetup(input: DirectorSetupInput): DirectorSetup {
  * @returns The arrival's pose.
  */
 export function reinforcementPose(input: PoseInput): DeployPose {
-  const index = Math.max(0, input.sides.indexOf(input.faction));
+  const index = Math.max(0, input.sides.indexOf(input.side));
   if (!input.scenario)
     return deployPose(
       sideHome(index, input.sides.length, input.worldSize),
@@ -156,21 +165,6 @@ export function reinforcementPose(input: PoseInput): DeployPose {
 }
 
 /**
- * @param pilot - Who will fly the ship.
- * @param isTaken - Whether an id is in use.
- * @returns The pilot's first free id (`enemy_3`, `ally_1`, `player_2`...).
- */
-export function freshShipId(
-  pilot: DeployPilot,
-  isTaken: (id: string) => boolean,
-): string {
-  for (let n = 0; ; n++) {
-    const id = `${ID_PREFIX[pilot]}_${n}`;
-    if (!isTaken(id)) return id;
-  }
-}
-
-/**
  * @param battleConfig - The registry's battle config.
  * @returns Every ship a reinforced battle may deploy (texture preload), or
  *   none for a classic battle.
@@ -179,36 +173,66 @@ export function reinforcementShipIds(battleConfig: unknown): string[] {
   const setup = parseReinforcementSetup(battleConfig);
   if (!setup) return [];
   const format = setup.rules.format;
-  const ids = Object.entries(setup.sides).flatMap(([faction, plan]) => [
-    ...strategyRotation(faction as FactionId, plan.strategy, format),
-    ...(plan.reserve ?? []),
-    ...(setup.rules.choice === "open"
-      ? factionCatalog(faction as FactionId, format)
-      : buildReserve(
-          faction as FactionId,
-          plan.strategy,
-          setup.rules.poolPoints,
-          format,
-        )),
-  ]);
+  const ids = setup.squads
+    .filter((plan) => plan.faction !== "")
+    .flatMap((plan) => {
+      const faction = plan.faction as FactionId;
+      return [
+        ...strategyRotation(faction, plan.strategy, format),
+        ...(plan.reserve ?? []),
+        ...(setup.rules.choice === "open"
+          ? factionCatalog(faction, format)
+          : buildReserve(
+              faction,
+              plan.strategy,
+              setup.rules.poolPoints,
+              format,
+            )),
+      ];
+    });
   return [...new Set(ids.map((entry) => entry.definitionId))];
 }
 
-function playerReserve(
+function memberSetup(
   input: DirectorSetupInput,
-  strategy: Parameters<typeof buildReserve>[1],
-  planned: ReinforcementSetup["sides"][string]["reserve"],
+  squad: number,
+): DirectorMemberSetup {
+  const plan: SquadPlan = input.setup.squads[squad] ?? {
+    faction: input.ships.find((s) => s.squad === squad)?.faction ?? "",
+    strategy: "balanced",
+    reserve: null,
+  };
+  const { rules } = input.setup;
+  const faction = plan.faction as FactionId;
+  const human = input.humanSquads.has(squad);
+  return {
+    key: memberKey(squad),
+    faction: plan.faction,
+    human,
+    strategy: plan.strategy,
+    plan: human
+      ? humanReserve(input, squad, plan)
+      : toDeployOptions(strategyRotation(faction, plan.strategy, rules.format)),
+    catalog: human ? factionCatalog(faction, rules.format) : [],
+  };
+}
+
+function humanReserve(
+  input: DirectorSetupInput,
+  squad: number,
+  plan: SquadPlan,
 ): DeployOption[] {
   const { rules } = input.setup;
-  if (planned && planned.length > 0) return toDeployOptions(planned);
-  const opening = openingRegistrations(input.ships)
-    .filter((r) => r.faction === input.playerFaction)
-    .reduce((sum, r) => sum + r.option.cost, 0);
+  if (plan.reserve && plan.reserve.length > 0)
+    return toDeployOptions(plan.reserve);
+  const opening = input.ships
+    .filter((ship) => ship.squad === squad)
+    .reduce((sum, ship) => sum + optionOf(ship).cost, 0);
   const budget = Math.max(rules.fieldCapPoints, rules.poolPoints - opening);
   return toDeployOptions(
     buildReserve(
-      input.playerFaction as FactionId,
-      strategy,
+      plan.faction as FactionId,
+      plan.strategy,
       budget,
       rules.format,
     ),

@@ -19,8 +19,13 @@ const kestrel = toDeployOption({
 })!;
 const wasp = toDeployOption({ definitionId: "confed_wasp", loadoutId: null })!;
 
+/** The viewer: team 1, squad 0. */
+const VIEW = { side: "team_1", member: "squad_0" };
+
 const summary = (overrides: Partial<SideSummary> = {}): SideSummary => ({
+  key: "team_1",
   faction: "free_confederation",
+  factions: ["free_confederation"],
   isPlayerSide: true,
   poolPoints: 1000,
   remainingPoints: 640,
@@ -43,17 +48,21 @@ const row = (overrides: Partial<PickerOption> = {}): PickerOption => ({
 });
 
 describe("reinforcement HUD text", () => {
-  it("a side row names the side, pool left and field vs cap", () => {
-    expect(sideRow(summary())).toBe("YOU  POOL 640  FIELD 180/250");
+  it("a side row names the side (by the viewer's team), pool left and field vs cap", () => {
+    expect(sideRow(summary(), VIEW.side)).toBe("YOU  POOL 640  FIELD 180/250");
     expect(
-      sideRow(summary({ isPlayerSide: false, faction: "void_corsairs" })),
+      sideRow(summary({ key: "team_2", isPlayerSide: false }), VIEW.side),
     ).toBe("FOE  POOL 640  FIELD 180/250");
   });
 
+  it("a mirror-match opponent of the viewer's faction is still the FOE", () => {
+    expect(sideRow(summary({ key: "team_2" }), VIEW.side)).toMatch(/^FOE/);
+  });
+
   it("an exhausted side says so in words, not just colour", () => {
-    expect(sideRow(summary({ remainingPoints: 0, exhausted: true }))).toContain(
-      "EXHAUSTED",
-    );
+    expect(
+      sideRow(summary({ remainingPoints: 0, exhausted: true }), VIEW.side),
+    ).toContain("EXHAUSTED");
   });
 
   it("the pool tone warns at a quarter and is danger when empty", () => {
@@ -72,25 +81,26 @@ describe("reinforcement HUD text", () => {
   it("deploy notifications say whose ship arrived, with a direction glyph", () => {
     const base = {
       shipId: "x",
-      faction: "void_corsairs",
+      side: "team_2",
+      member: "squad_1",
+      faction: "free_confederation",
       option: wasp,
       slot: 0,
     };
-    expect(deployToast({ ...base, pilot: "ai" }, "free_confederation")).toBe(
+    expect(deployToast({ ...base, pilot: "ai" }, VIEW)).toBe(
       `▼ FOE  ${wasp.label.toUpperCase()}  ${wasp.cost} PTS`,
     );
+    const ours = { ...base, side: "team_1", faction: "void_corsairs" };
+    expect(deployToast({ ...ours, pilot: "ai" }, VIEW)).toMatch(/^▲ ALLY  /);
     expect(
-      deployToast(
-        { ...base, faction: "free_confederation", pilot: "wingman" },
-        "free_confederation",
-      ),
+      deployToast({ ...ours, member: "squad_0", pilot: "wingman" }, VIEW),
     ).toMatch(/^▲ ALLY  /);
     expect(
-      deployToast(
-        { ...base, faction: "free_confederation", pilot: "player" },
-        "free_confederation",
-      ),
+      deployToast({ ...ours, member: "squad_0", pilot: "player" }, VIEW),
     ).toMatch(/^★ YOU  /);
+    expect(
+      deployToast({ ...ours, member: "squad_2", pilot: "player" }, VIEW),
+    ).toMatch(/^▲ ALLY  /);
   });
 });
 

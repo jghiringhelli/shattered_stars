@@ -1,7 +1,9 @@
 /**
- * directorSides — the per-side state a reinforced match keeps (ledger, AI
- * plan or player reserve, arrival counter, when it may next deploy) and the
- * read-only summaries the HUD, end screen and telemetry show.
+ * directorSides — the per-team state a reinforced match keeps (one pool
+ * ledger and field cap for the team, its member squads, arrival counter,
+ * when its AI squads may next deploy) and the read-only summaries the HUD,
+ * end screen and telemetry show. Coalitions: the player's team vs every
+ * other team.
  *
  * Pure.
  */
@@ -11,42 +13,42 @@ import {
   createSideLedger,
   fieldPoints,
   remainingPoints,
+  retireShip,
   type SideLedger,
 } from "./poolLedger";
-import { PICKER_MAX_OPTIONS } from "./directorTypes";
+import type { DirectorSideSetup } from "./directorTypes";
+import {
+  createMemberState,
+  memberOptions,
+  type MemberState,
+} from "./directorMembers";
 import { isSideExhausted } from "./quotaRules";
 import type { ReinforcedSide, SideStanding } from "./reinforcementOutcome";
-import {
-  pickerOptions,
-  type PickerOption,
-  type PlayerReserve,
-} from "./reserveQueue";
-import type { PlannerState } from "./strategyPlanner";
-import type {
-  DeployOption,
-  ReinforcementRules,
-  StrategyId,
-} from "./reinforcementTypes";
+import type { ReinforcementRules } from "./reinforcementTypes";
 
-/** One side's runtime state. */
+/** One team's runtime state. */
 export interface SideState {
-  readonly faction: string;
+  /** The team's side key. */
+  readonly key: string;
   readonly isPlayerSide: boolean;
-  readonly strategy: StrategyId;
+  /** The team's pool and field (shared by its squads). */
   readonly ledger: SideLedger;
-  /** AI sides: the strategy plan. */
-  readonly planner: PlannerState;
-  /** The player's side: the reserve. */
-  readonly reserve: PlayerReserve;
+  /** Its squads, in setup order. */
+  readonly members: readonly MemberState[];
   /** Reinforcements deployed (numbers arrival slots). */
   readonly arrivals: number;
-  /** Battle time from which the side may deploy (AI deploy delay). */
+  /** Battle time from which its AI squads may deploy (AI deploy delay). */
   readonly readyAtMs: number;
 }
 
 /** What the HUD and end screen show of a side. */
 export interface SideSummary {
+  /** The team's side key. */
+  readonly key: string;
+  /** Its first squad's faction. */
   readonly faction: string;
+  /** Every squad's faction, in order (a mixed team lists several). */
+  readonly factions: readonly string[];
   readonly isPlayerSide: boolean;
   readonly poolPoints: number;
   readonly remainingPoints: number;
@@ -58,7 +60,7 @@ export interface SideSummary {
   readonly exhausted: boolean;
 }
 
-/** A coalition's totals (the player's side vs everyone else). */
+/** A coalition's totals (the player's team vs everyone else). */
 export interface CoalitionStats {
   readonly deployed: number;
   readonly lost: number;
@@ -70,60 +72,93 @@ export interface CoalitionStats {
 
 /**
  * @param rules - Match rules.
- * @param faction - The side's faction.
- * @param isPlayerSide - Whether the human flies for it.
- * @param strategy - Its strategy.
- * @param plan - AI: the rotation; the player's side: the reserve.
+ * @param setup - The team and its squads.
+ * @param isPlayerSide - Whether it is the player's team.
  * @returns A fresh side.
  */
 export function createSideState(
   rules: ReinforcementRules,
-  faction: string,
+  setup: DirectorSideSetup,
   isPlayerSide: boolean,
-  strategy: StrategyId,
-  plan: readonly DeployOption[],
 ): SideState {
   return {
-    faction,
+    key: setup.key,
     isPlayerSide,
-    strategy,
     ledger: createSideLedger(rules),
-    planner: { rotation: plan, cursor: 0 },
-    reserve: { entries: plan, cursor: 0 },
+    members: setup.members.map(createMemberState),
     arrivals: 0,
     readyAtMs: 0,
   };
 }
 
 /**
- * @param side - A side.
+ * @param side - A team.
+ * @param key - One of its squads.
+ * @param update - The squad's new state.
+ * @returns The team with that squad replaced.
+ */
+export function withMember(
+  side: SideState,
+  key: string,
+  update: (member: MemberState) => MemberState,
+): SideState {
+  return {
+    ...side,
+    members: side.members.map((m) => (m.key === key ? update(m) : m)),
+  };
+}
+
+/**
+ * A ship of the team was destroyed: it leaves the field, the team's AI
+ * squads wait the deploy delay, and the human who flew it gets a picker.
+ *
+ * @param side - The team.
+ * @param shipId - The ship.
+ * @param after - When the AI may deploy again, and the picker countdown.
+ * @returns The updated team.
+ */
+export function retireFromSide(
+  side: SideState,
+  shipId: string,
+  after: { readonly readyAtMs: number; readonly pickerMs: number },
+): SideState {
+  return {
+    ...side,
+    ledger: retireShip(side.ledger, shipId),
+    readyAtMs: after.readyAtMs,
+    members: side.members.map((m) =>
+      m.pilotId === shipId
+        ? { ...m, pilotId: null, pickerMs: after.pickerMs }
+        : m,
+    ),
+  };
+}
+
+/**
+ * @param side - A team.
  * @param rules - Match rules.
- * @param playerCatalog - Extra ships the player may pick (open choice).
- * @returns Whether it has nothing alive and nothing it can deploy.
+ * @returns Whether it has nothing alive and nothing any squad can deploy.
  */
 export function sideExhausted(
   side: SideState,
   rules: ReinforcementRules,
-  playerCatalog: readonly DeployOption[],
 ): boolean {
-  const options = side.isPlayerSide
-    ? [
-        ...side.reserve.entries,
-        ...(rules.choice === "open" ? playerCatalog : []),
-      ]
-    : side.planner.rotation;
+  const options = side.members.flatMap((m) => memberOptions(m, rules));
   return isSideExhausted(side.ledger, rules.quotas, options);
 }
 
 /**
- * @param side - A side.
+ * @param side - A team.
  * @param exhausted - Whether it is exhausted.
  * @returns Its summary.
  */
 export function summarize(side: SideState, exhausted: boolean): SideSummary {
   const { ledger } = side;
+  const factions = [...new Set(side.members.map((m) => m.faction))];
   return {
-    faction: side.faction,
+    key: side.key,
+    faction: factions[0] ?? "",
+    factions,
     isPlayerSide: side.isPlayerSide,
     poolPoints: ledger.poolPoints,
     remainingPoints: remainingPoints(ledger),
@@ -170,33 +205,16 @@ export function coalitionOf(
 
 /**
  * @param sides - Every side.
- * @param faction - A side.
- * @returns Roles of every living ship of the other sides.
+ * @param key - A team.
+ * @returns Roles of every living ship of the other teams.
  */
 export function opposingRolesOf(
   sides: Iterable<SideState>,
-  faction: string,
+  key: string,
 ): ShipRole[] {
   return [...sides]
-    .filter((side) => side.faction !== faction)
+    .filter((side) => side.key !== key)
     .flatMap((side) => [...side.ledger.field.values()].map((e) => e.role));
-}
-
-/**
- * @param side - The player's side.
- * @param count - How many.
- * @returns The next reserve ships from the cursor on (repeating).
- */
-export function reservePreviewOf(
-  side: SideState,
-  count: number,
-): DeployOption[] {
-  const { entries, cursor } = side.reserve;
-  if (entries.length === 0) return [];
-  return Array.from(
-    { length: count },
-    (_, i) => entries[(cursor + i) % entries.length]!,
-  );
 }
 
 /**
@@ -226,50 +244,25 @@ export function matchTotals(
 }
 
 /**
- * @param side - The player's side.
- * @param rules - Match rules.
- * @param catalog - Ships the player may pick besides the reserve.
- * @returns The picker rows.
- */
-export function pickerRowsFor(
-  side: SideState,
-  rules: ReinforcementRules,
-  catalog: readonly DeployOption[],
-): PickerOption[] {
-  return pickerOptions({
-    reserve: side.reserve,
-    catalog,
-    choice: rules.choice,
-    ledger: side.ledger,
-    quotas: rules.quotas,
-    maxOptions: PICKER_MAX_OPTIONS,
-  });
-}
-
-/**
  * @param coalition - One coalition's sides.
  * @param rules - Match rules.
- * @param playerCatalog - Extra ships the player may pick.
  * @returns Whether every side of it is exhausted.
  */
 export function coalitionExhausted(
   coalition: readonly SideState[],
   rules: ReinforcementRules,
-  playerCatalog: readonly DeployOption[],
 ): boolean {
-  return coalition.every((side) => sideExhausted(side, rules, playerCatalog));
+  return coalition.every((side) => sideExhausted(side, rules));
 }
 
 /**
  * @param sides - Every side.
  * @param rules - Match rules.
- * @param playerCatalog - Extra ships the player may pick.
  * @returns Both coalitions as the outcome reads them.
  */
 export function standingsOf(
   sides: Iterable<SideState>,
   rules: ReinforcementRules,
-  playerCatalog: readonly DeployOption[],
 ): Readonly<Record<ReinforcedSide, SideStanding>> {
   const all = [...sides];
   const totals = matchTotals(all);
@@ -277,11 +270,7 @@ export function standingsOf(
     playerSide: boolean,
     side: ReinforcedSide,
   ): SideStanding => ({
-    exhausted: coalitionExhausted(
-      coalitionOf(all, playerSide),
-      rules,
-      playerCatalog,
-    ),
+    exhausted: coalitionExhausted(coalitionOf(all, playerSide), rules),
     destroyedPoints: totals[side].destroyedPoints,
   });
   return { player: standing(true, "player"), enemy: standing(false, "enemy") };

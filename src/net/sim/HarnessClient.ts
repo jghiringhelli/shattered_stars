@@ -7,7 +7,6 @@
 
 import {
   PROTOCOL_VERSION,
-  sidesAreFactions,
   type ClientMessage,
   type Loadout,
   type MatchMode,
@@ -22,9 +21,6 @@ import type { LatencyEstimate, LockstepSimulation } from "../lockstep/types";
 import { LatencyLane, type LinkConditions } from "./LatencyLane";
 import type { RelayEndpoint, RelayHost } from "./RelayHost";
 import type { VirtualScheduler } from "./VirtualScheduler";
-
-/** The faction team B flies in squad battles (team A flies the harness loadout's). */
-const SECOND_TEAM_FACTION = "terran_hegemony";
 
 /** A simulated player. */
 export interface HarnessClientSpec {
@@ -170,13 +166,8 @@ export class HarnessClient {
       this.wiring.publishCode(code);
     if (team === null || this.configured) return;
     this.configured = true;
-    const { loadout } = this.wiring;
-    // Squad battles: a side is one faction, so team B flies another one.
-    const faction =
-      team === 1 && sidesAreFactions(this.wiring.mode)
-        ? SECOND_TEAM_FACTION
-        : loadout.faction;
-    this.send({ t: "set_loadout", loadout: { ...loadout, faction } });
+    // Both teams fly the harness loadout: a side is a team, never a faction.
+    this.send({ t: "set_loadout", loadout: this.wiring.loadout });
     this.send({ t: "set_ready", ready: true });
   }
 

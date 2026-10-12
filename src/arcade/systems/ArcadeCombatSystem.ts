@@ -25,7 +25,7 @@ export interface HitResult {
  */
 export function resolveCollisions(
   projectiles: readonly Projectile[],
-  aliveShips: readonly ArcadeShipView[],
+  aliveShips: readonly (ArcadeShipView & { readonly faction: string })[],
   hitRadius: number = 15,
 ): HitResult[] {
   const hits: HitResult[] = [];

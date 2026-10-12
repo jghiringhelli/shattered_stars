@@ -158,7 +158,7 @@ describe("LobbyModel", () => {
     ).toMatch(/no online server/i);
   });
 
-  it("blocks ready without a ship and on a shared faction in reinforcements", () => {
+  it("blocks ready without a ship, never on a shared faction (mirror match)", () => {
     const noShip = reduceLobby(online(), {
       kind: "server",
       message: {
@@ -185,7 +185,7 @@ describe("LobbyModel", () => {
           message: { t: "room", room: clash },
         }),
       ),
-    ).toMatch(/different faction/i);
+    ).toBeNull();
     expect(
       readyBlocker(
         reduceLobby(online(), {
@@ -232,26 +232,26 @@ describe("team factions", () => {
       },
     });
 
-  it("blocks ready while both teams of a squad battle fly one faction", () => {
+  it("lets both teams of a squad battle fly one faction (mirror match)", () => {
     for (const mode of ["skirmish", "scenario", "reinforcements"] as const)
       expect(
         readyBlocker(withPlayers(mode, ["void_corsairs", "void_corsairs"])),
-      ).toMatch(/different faction/i);
+      ).toBeNull();
     expect(
       readyBlocker(withPlayers("dogfight", ["void_corsairs", "void_corsairs"])),
     ).toBeNull();
   });
 
-  it("asks teammates of a squad battle to fly one faction", () => {
+  it("lets teammates of a squad battle fly different factions", () => {
     const mixed = withPlayers(
       "skirmish",
       ["void_corsairs", "terran_hegemony", "free_confederation"],
       [0, 1, 0],
     );
-    expect(readyBlocker(mixed)).toMatch(/same faction/i);
+    expect(readyBlocker(mixed)).toBeNull();
   });
 
-  it("seats a newcomer on a faction the other team does not fly", () => {
+  it("suggests a newcomer a faction the other team does not fly", () => {
     const state = withPlayers("reinforcements", ["free_confederation", null]);
     const asGuest: LobbyState = { ...state, localId: "p1" };
     expect(pendingLoadout(asGuest, null)?.faction).not.toBe(
@@ -259,7 +259,7 @@ describe("team factions", () => {
     );
   });
 
-  it("seats a newcomer on the faction their teammate flies", () => {
+  it("suggests a newcomer the faction their teammate flies", () => {
     const state = withPlayers(
       "skirmish",
       ["terran_hegemony", "void_corsairs", null],
@@ -359,12 +359,30 @@ describe("matchSetup", () => {
     ).toEqual(["remote", "player"]);
   });
 
-  it("states the reinforcement rules explicitly with one pool per faction", () => {
+  it("states the reinforcement rules explicitly with one plan per seat's squad", () => {
     const config = buildOnlineBattleConfig(MATCH, 0);
     expect(config["battle"]).toBe("reinforcements");
-    expect(
-      Object.keys((config["reinforcements"] as { sides: object }).sides),
-    ).toEqual(["void_corsairs", "terran_hegemony"]);
+    const squads = (config["reinforcements"] as { squads: unknown[] }).squads;
+    expect(squads).toHaveLength(MATCH.seats.length);
+  });
+
+  it("seats every squad on its own team, whatever the factions", () => {
+    const mirror = {
+      ...MATCH,
+      seats: MATCH.seats.map((s) => ({
+        ...s,
+        loadout: { ...s.loadout, faction: "terran_hegemony" },
+      })),
+    };
+    const config = buildOnlineBattleConfig(mirror, 1);
+    const factions = config["factions"] as {
+      teamId: string;
+      factionId: string;
+    }[];
+    expect(factions.map((f) => f.teamId)).toEqual(
+      MATCH.seats.map((s) => `team_${s.team}`),
+    );
+    expect(new Set(factions.map((f) => f.factionId)).size).toBe(1);
   });
 
   it("defaults a scenario room to the first scenario and never inherits local prefs", () => {

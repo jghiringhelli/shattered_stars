@@ -21,6 +21,7 @@ import {
   onlineDebug,
   openOnlineLobby,
   startOnlineMatch,
+  startOnlineRoom,
   waitForTicks,
   type OnlineDebug,
 } from "./helpers/onlineBattle";
@@ -31,8 +32,47 @@ const NETSIM = "40,15";
 const MATCH_TICKS = 3600;
 /** Real time allowed to simulate them (stalls included). */
 const PLAY_TIMEOUT_MS = 100_000;
+/** The same minute with four clients on one machine (each renders a full battle). */
+const FOUR_CLIENT_PLAY_TIMEOUT_MS = 300_000;
+const FOUR_CLIENT_TEST_TIMEOUT_MS = 480_000;
+
+const HEG = "terran_hegemony";
+const COR = "void_corsairs";
+const HEGEMONY_SQUAD = {
+  faction: HEG,
+  ships: ["terran_gladius", "terran_viper", "terran_viper"],
+};
+const CORSAIR_SQUAD = {
+  faction: COR,
+  ships: ["corsair_raider", "corsair_raider", "corsair_raider"],
+};
 
 let relay: RunningRelay;
+
+/** Reads an expression over the page's ArcadeBattleScene (`scene`). */
+async function arcade<T>(page: Page, expression: string): Promise<T> {
+  return page.evaluate(
+    (expr) =>
+      new Function("scene", `return ${expr};`)(
+        (window as any).game.scene.getScene("ArcadeBattleScene"),
+      ),
+    expression,
+  ) as Promise<T>;
+}
+
+/** Every seat's faction and team, and its flagship's team, as this client simulates them. */
+async function seatSides(
+  page: Page,
+): Promise<{ faction: string; team: number }[]> {
+  const sides = await arcade<
+    { faction: string; team: number; shipTeam: number }[]
+  >(
+    page,
+    "scene.online.battle.seats.map((s, i) => ({ faction: s.faction, team: s.team, shipTeam: scene.ships.get(scene.online.shipOf(i)).team }))",
+  );
+  for (const side of sides) expect(side.shipTeam).toBe(side.team);
+  return sides.map(({ faction, team }) => ({ faction, team }));
+}
 
 test.beforeAll(async () => {
   relay = await startRelayServer(
@@ -51,16 +91,18 @@ test.afterAll(async () => {
 });
 
 /** Both pilots fly until the battle has run `MATCH_TICKS` ticks. */
-async function playMinute(pages: readonly Page[], sceneKey: string) {
+async function playMinute(
+  pages: readonly Page[],
+  sceneKey: string,
+  timeoutMs = PLAY_TIMEOUT_MS,
+) {
   const flying = pages.map(async (page, i) => {
     for (let round = 0; round < 8; round++)
       await flyAround(page, i * 7 + round);
   });
   await Promise.all([
     ...flying,
-    ...pages.map((p) =>
-      waitForTicks(p, sceneKey, MATCH_TICKS, PLAY_TIMEOUT_MS),
-    ),
+    ...pages.map((p) => waitForTicks(p, sceneKey, MATCH_TICKS, timeoutMs)),
   ]);
 }
 
@@ -134,6 +176,96 @@ test.describe("online battles stay in lockstep", () => {
     expectIdentical(debug[0]!, debug[1]!, MATCH_TICKS - 600);
     await host.context().close();
     await guest.context().close();
+  });
+
+  test("Reinforcements mirror match (Hegemony vs Hegemony): two teams, a picker per seat, hashes identical", async ({
+    browser,
+  }) => {
+    const host = await openOnlineLobby(browser, relay.port, NETSIM);
+    const guest = await openOnlineLobby(browser, relay.port, NETSIM);
+    await startOnlineMatch(host, guest, "reinforcements", "ArcadeBattleScene", [
+      HEGEMONY_SQUAD,
+      HEGEMONY_SQUAD,
+    ]);
+    await waitForTicks(host, "ArcadeBattleScene", 240, 30_000);
+    for (const page of [host, guest]) {
+      const sides = await seatSides(page);
+      expect(sides.map((s) => s.faction)).toEqual([HEG, HEG]);
+      expect(sides.map((s) => s.team)).toEqual([0, 1]);
+      expect(await arcade<boolean>(page, "scene.gameEnded")).toBe(false);
+    }
+    const members = await Promise.all(
+      [host, guest].map((p) =>
+        arcade<string>(p, "scene.reinforcementReadout.localMember"),
+      ),
+    );
+    expect(members).toEqual(["squad_0", "squad_1"]);
+    const youRows = await Promise.all(
+      [host, guest].map((p) =>
+        arcade<string[]>(
+          p,
+          "scene.reinforcementReadout.hud.rows.map((r) => r.slice(0, 3))",
+        ),
+      ),
+    );
+    expect(youRows).toEqual([
+      ["YOU", "FOE"],
+      ["FOE", "YOU"],
+    ]);
+    await expectGuestSteersOnHost(host, guest, "ArcadeBattleScene");
+    await playMinute([host, guest], "ArcadeBattleScene");
+    const debug = [
+      await onlineDebug(host, "ArcadeBattleScene"),
+      await onlineDebug(guest, "ArcadeBattleScene"),
+    ];
+    report("Reinforcements mirror", debug);
+    expectIdentical(debug[0]!, debug[1]!, MATCH_TICKS - 600);
+    await host.context().close();
+    await guest.context().close();
+  });
+
+  test("Skirmish 2v2 with mixed-faction teams: four clients hash identically", async ({
+    browser,
+  }) => {
+    // Four game clients share one machine: lockstep runs at the slowest one's pace.
+    test.setTimeout(FOUR_CLIENT_TEST_TIMEOUT_MS);
+    const pages: Page[] = [];
+    for (let i = 0; i < 4; i++)
+      pages.push(await openOnlineLobby(browser, relay.port, NETSIM));
+    // Seats alternate teams: team 0 = Hegemony + Corsairs, team 1 = Corsairs + Hegemony.
+    await startOnlineRoom(pages, "skirmish", "ArcadeBattleScene", [
+      HEGEMONY_SQUAD,
+      CORSAIR_SQUAD,
+      CORSAIR_SQUAD,
+      HEGEMONY_SQUAD,
+    ]);
+    for (const page of pages)
+      await waitForTicks(page, "ArcadeBattleScene", 240, 30_000);
+    const sides = await seatSides(pages[0]!);
+    expect(sides.map((s) => s.team)).toEqual([0, 1, 0, 1]);
+    expect(sides.map((s) => s.faction)).toEqual([HEG, COR, COR, HEG]);
+    const allies = await Promise.all(
+      pages.map((p) => arcade<string[]>(p, "scene.hudReadout.rosterLabels")),
+    );
+    for (const labels of allies)
+      expect(labels).toEqual(
+        expect.arrayContaining([
+          expect.stringMatching(
+            /^▲ (HEGEMONY \+ CORSAIRS|CORSAIRS \+ HEGEMONY)$/,
+          ),
+          expect.stringMatching(
+            /^▼ (HEGEMONY \+ CORSAIRS|CORSAIRS \+ HEGEMONY)$/,
+          ),
+        ]),
+      );
+    await playMinute(pages, "ArcadeBattleScene", FOUR_CLIENT_PLAY_TIMEOUT_MS);
+    const debug = await Promise.all(
+      pages.map((p) => onlineDebug(p, "ArcadeBattleScene")),
+    );
+    report("Skirmish 2v2 mixed", debug);
+    for (const other of debug.slice(1))
+      expectIdentical(debug[0]!, other, MATCH_TICKS - 600);
+    for (const page of pages) await page.context().close();
   });
 
   test("Skirmish: a client that reloads mid-battle rejoins through a snapshot and is back in lockstep", async ({

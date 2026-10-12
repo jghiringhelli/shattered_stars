@@ -27,6 +27,9 @@ import type { ArenaLoop, LoopHooks } from "./arenaLoop";
 import { setArenaFlight, type ArenaShip } from "./skill/ArenaShip";
 import { TICK_MS } from "./skill/ArenaSpec";
 
+/** Arena side → its team (side A is the player's team). */
+const SIDE_TEAM = { A: 0, B: 1 } as const;
+
 /** A scenario being played on an arena loop. */
 export interface ScenarioRun {
   readonly tracker: ScenarioFrameTracker;
@@ -42,7 +45,7 @@ export interface ScenarioRun {
  */
 export function createScenarioRun(definition: ScenarioDefinition): ScenarioRun {
   return {
-    tracker: new ScenarioFrameTracker("A", BATTLEFIELD_SIZE),
+    tracker: new ScenarioFrameTracker(SIDE_TEAM.A, BATTLEFIELD_SIZE),
     director: new ScenarioDirector(BATTLEFIELD_SIZE),
     state: createScenarioState(definition, BATTLEFIELD_SIZE),
     pickups: 0,
@@ -128,7 +131,7 @@ export function scoreScenario(
     run.tracker.build(
       loop.ships.map((s) => ({
         ...s,
-        faction: s.side,
+        team: SIDE_TEAM[s.side],
         hull: s.alive ? s.hull : 0,
         stress: { isStressed: s.flight.stress.isStressed },
       })),

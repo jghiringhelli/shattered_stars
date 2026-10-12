@@ -2,7 +2,8 @@
  * nodeWaveRoster — the ships of one roguelite battle wave (shared by
  * SurvivalScene and the headless node sim). ADR-0004 fairness pass: a boss
  * wave fields the boss (and its phase reinforcements later) but no longer a
- * bonus expert elite on top.
+ * bonus expert elite on top. Node-length pass: a node's regular patrols come
+ * first; its elites and boss arrive on its last wave.
  */
 
 import { describe, it, expect } from "vitest";
@@ -60,15 +61,20 @@ describe("nodeWaveRoster", () => {
       RunBuilder.aRun().withAscension(1).build(),
       "elite",
     );
-    expect(count(waves(elite, 2)[0]!.slots, "elite")).toBe(2);
+    expect(count(waves(elite, 2).at(-1)!.slots, "elite")).toBe(2);
   });
 
-  it("gives an elite node its one elite, flying alone", () => {
+  it("gives an elite node its one elite on its last wave, flying alone, after regular patrols", () => {
     const run = atActiveNode(RunBuilder.aRun().build(), "elite");
-    const [wave] = waves(run, 2);
-    expect(count(wave!.slots, "elite")).toBe(1);
-    expect(count(wave!.slots, "boss")).toBe(0);
-    expect(count(wave!.slots, "regular")).toBe(0);
+    const all = waves(run, 2);
+    const last = all.at(-1)!;
+    expect(count(last.slots, "elite")).toBe(1);
+    expect(count(last.slots, "boss")).toBe(0);
+    expect(count(last.slots, "regular")).toBe(0);
+    for (const patrol of all.slice(0, -1)) {
+      expect(count(patrol.slots, "elite")).toBe(0);
+      expect(count(patrol.slots, "regular")).toBeGreaterThanOrEqual(1);
+    }
   });
 
   it("draws elites from the sector's roles: heavy fighters in sector 1, gunships only as a sector-3 fallback", () => {
@@ -76,7 +82,7 @@ describe("nodeWaveRoster", () => {
     const roleOf = (sector: number) => {
       const run = { ...base, sector };
       const rules = new SurvivalBattleRules(run, planCombat(run)!);
-      const [wave] = waves(run, 2);
+      const wave = waves(run, 2).at(-1);
       const elite = wave!.slots.find((s) => s.tier === "elite")!;
       return rules
         .roster(rules.plan.enemyFaction)

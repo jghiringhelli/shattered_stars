@@ -44,7 +44,7 @@ describe("reinforcement battle config", () => {
     expect(setup?.rules.choice).toBe("planned");
   });
 
-  it("reads each side's strategy and reserve, dropping malformed entries", () => {
+  it("reads legacy per-faction plans into each squad, dropping malformed entries", () => {
     const setup = parseReinforcementSetup({
       factions,
       battle: "reinforcements",
@@ -63,24 +63,52 @@ describe("reinforcement battle config", () => {
         },
       },
     });
-    const player = setup?.sides["free_confederation"];
+    const player = setup?.squads[0];
     expect(player?.strategy).toBe("swarm");
     expect(player?.reserve).toEqual([
       { definitionId: "confed_wasp", loadoutId: null },
       { definitionId: "confed_kestrel", loadoutId: "kestrel_striker" },
     ]);
-    expect(setup?.sides["void_corsairs"]).toEqual({
+    expect(setup?.squads[1]).toEqual({
+      faction: "void_corsairs",
       strategy: "balanced",
       reserve: null,
     });
   });
 
-  it("gives every faction a plan, Balanced by default", () => {
+  it("gives every squad a plan, Balanced by default", () => {
     const setup = parseReinforcementSetup({
       factions,
       battle: "reinforcements",
     });
-    expect(setup?.sides["void_corsairs"]?.strategy).toBe("balanced");
-    expect(setup?.sides["free_confederation"]?.reserve).toBeNull();
+    expect(setup?.squads.map((s) => s.faction)).toEqual([
+      "free_confederation",
+      "void_corsairs",
+    ]);
+    expect(setup?.squads[1]?.strategy).toBe("balanced");
+    expect(setup?.squads[0]?.reserve).toBeNull();
+  });
+
+  it("per-squad plans let a mirror match plan each side apart", () => {
+    const mirror = [
+      { ...factions[0]!, factionId: "void_corsairs" },
+      factions[1]!,
+    ];
+    const setup = parseReinforcementSetup({
+      factions: mirror,
+      battle: "reinforcements",
+      reinforcements: {
+        squads: [
+          {
+            strategy: "aces",
+            reserve: [{ definitionId: "corsair_venom", loadoutId: null }],
+          },
+          { strategy: "swarm" },
+        ],
+      },
+    });
+    expect(setup?.squads.map((s) => s.strategy)).toEqual(["aces", "swarm"]);
+    expect(setup?.squads[0]?.reserve).toHaveLength(1);
+    expect(setup?.squads[1]?.reserve).toBeNull();
   });
 });

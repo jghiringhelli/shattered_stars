@@ -97,7 +97,7 @@ describe("toPlayerHudState", () => {
 describe("toContacts", () => {
   const view = (targetId: string | null = null) => ({
     playerId: "player_0",
-    playerFaction: "free_confederation",
+    playerTeam: 0,
     targetId,
     sizeOf,
   });
@@ -107,11 +107,21 @@ describe("toContacts", () => {
     expect(contacts).toEqual([]);
   });
 
-  it("labels allies and enemies by faction", () => {
+  it("labels allies and enemies by team", () => {
     const ally = HudShipBuilder.aPlayer("ally_0").build();
     const enemy = HudShipBuilder.anEnemy().build();
     const sides = toContacts([ally, enemy], view()).map((c) => c.side);
     expect(sides).toEqual(["ally", "enemy"]);
+  });
+
+  it("a same-faction ship of another team is an enemy (mirror match)", () => {
+    const mirror = HudShipBuilder.aPlayer("enemy_0").onTeam(1).build();
+    expect(toContacts([mirror], view()).map((c) => c.side)).toEqual(["enemy"]);
+  });
+
+  it("a teammate of another faction is an ally (mixed team)", () => {
+    const mate = HudShipBuilder.anEnemy("ally_0").onTeam(0).build();
+    expect(toContacts([mate], view()).map((c) => c.side)).toEqual(["ally"]);
   });
 
   it("drops destroyed ships", () => {
@@ -168,6 +178,16 @@ describe("selectHudTargetId", () => {
     expect(selectHudTargetId(player, [behind, ahead], WORLD)).toBe("ahead");
   });
 
+  it("targets a same-faction enemy and never a teammate of another faction", () => {
+    const player = HudShipBuilder.aPlayer().at(1000, 1000, 0).build();
+    const mate = HudShipBuilder.anEnemy("mate").onTeam(0).at(1000, 900).build();
+    const mirror = HudShipBuilder.aPlayer("mirror")
+      .onTeam(1)
+      .at(1000, 600)
+      .build();
+    expect(selectHudTargetId(player, [mate, mirror], WORLD)).toBe("mirror");
+  });
+
   it("ignores cloaked enemies and allies", () => {
     const player = HudShipBuilder.aPlayer().at(1000, 1000, 0).build();
     const ally = HudShipBuilder.aPlayer("ally_0").at(1000, 900).build();
@@ -182,7 +202,7 @@ describe("buildBattleHudSnapshot", () => {
     ships: player
       ? [player, HudShipBuilder.anEnemy().at(1000, 700).build()]
       : [],
-    playerFaction: "free_confederation",
+    playerTeam: 0,
     weapons: WEAPON_BAR,
     camera: CAMERA,
     worldSize: WORLD,

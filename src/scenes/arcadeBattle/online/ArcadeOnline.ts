@@ -2,11 +2,12 @@
  * ArcadeOnline — the online Skirmish / Scenario / Reinforcements battle's
  * seat model, owned by ArcadeBattleScene during an online match:
  * - reads the canonical seats from the lobby's battle config (seat order,
- *   faction, team); seat 0's squad is the simulation's "player" side on
- *   every client, only presentation reads the local seat;
+ *   squad, faction, team — teams are independent of factions: mirror and
+ *   mixed-faction teams are fine); seat 0's team is the simulation's
+ *   "player" side on every client, only presentation reads the local seat;
  * - one SeatInput per human seat, fed from the lockstep tick, and which
- *   ship each seat flies (a seat whose ship is lost takes the next ship its
- *   faction deploys; the relay may hand a seat to the AI);
+ *   ship each seat flies (a seat whose ship is lost flies the replacement
+ *   its own squad's picker deploys; the relay may hand a seat to the AI);
  * - the match's saveable RNGs (combat dice, bot fleet).
  * Pure: no Phaser.
  */
@@ -17,10 +18,13 @@ import { decodePilotInput } from "../../../net/input/PilotInputCodec";
 import { DeterministicRng } from "../../../net/lockstep/DeterministicRng";
 import type { OnlineBattleContext } from "../../../net/lobby/matchSetup";
 import type { TeamId, TickInput } from "../../../net/protocol";
+import { parseTeamId, teamKey } from "../../../arcade/teams";
 
 /** One human seat of the battle. */
 export interface OnlineArcadeSeat {
   readonly seat: number;
+  /** Its squad's index in the battle config. */
+  readonly squad: number;
   readonly faction: string;
   readonly team: TeamId;
 }
@@ -60,12 +64,18 @@ export function readOnlineBattle(config: unknown): OnlineArcadeBattle | null {
     | undefined;
   if (!c?.online || typeof c.seed !== "number" || !c.factions) return null;
   const seats = c.factions
-    .filter((f) => typeof f.seat === "number")
-    .map((f) => ({
-      seat: f.seat!,
-      faction: f.factionId,
-      team: (f.teamId === "team_1" ? 1 : 0) as TeamId,
-    }))
+    .flatMap((f, squad) =>
+      typeof f.seat === "number"
+        ? [
+            {
+              seat: f.seat,
+              squad,
+              faction: f.factionId,
+              team: (parseTeamId(f.teamId) ?? 0) as TeamId,
+            },
+          ]
+        : [],
+    )
     .sort((a, b) => a.seat - b.seat);
   return {
     seed: c.seed,
@@ -96,14 +106,34 @@ export class ArcadeOnline {
     return this.battle.localSeat;
   }
 
-  /** @returns The faction this client flies. */
+  /** @returns The faction this client flies (music, stingers). */
   get localFaction(): string {
     return this.battle.seats[this.localSeat]?.faction ?? "";
   }
 
-  /** @returns Factions a human flies (their squads take no AI leader). */
-  get humanFactions(): ReadonlySet<string> {
-    return new Set(this.battle.seats.map((s) => s.faction));
+  /** @returns The team this client flies for (allies, HUD, colours). */
+  get localTeam(): TeamId {
+    return this.battle.seats[this.localSeat]?.team ?? 0;
+  }
+
+  /** @returns The squad this client flies (its picker). */
+  get localSquad(): number {
+    return this.squadOf(this.localSeat);
+  }
+
+  /** @returns Side keys of every team a human flies for (no AI leader). */
+  get humanSides(): ReadonlySet<string> {
+    return new Set(this.battle.seats.map((s) => teamKey(s.team)));
+  }
+
+  /** @param seat - A seat. @returns Its squad's config index, or -1. */
+  squadOf(seat: number): number {
+    return this.battle.seats[seat]?.squad ?? -1;
+  }
+
+  /** @param squad - A config squad. @returns The seat flying it, or -1. */
+  seatOfSquad(squad: number): number {
+    return this.battle.seats.findIndex((s) => s.squad === squad);
   }
 
   /** @param inputs - Every seat's input for this tick. */
@@ -144,30 +174,6 @@ export class ArcadeOnline {
       consume: (intent) => input.consume(intent),
       pressed: (intent) => input.pressed(intent),
     };
-  }
-
-  /**
-   * A reinforcement warped in: a seat (other than seat 0, whose ship the
-   * reinforcement director replaces itself) of its faction without a
-   * living ship takes it.
-   *
-   * @param shipId - The new ship.
-   * @param faction - Its faction.
-   * @param isAlive - Whether a ship id is alive.
-   * @returns The seat that took it, or -1.
-   */
-  claimReinforcement(
-    shipId: string,
-    faction: string,
-    isAlive: (shipId: string) => boolean,
-  ): number {
-    const seat = this.battle.seats.findIndex((s, index) => {
-      if (index === 0 || s.faction !== faction) return false;
-      const current = this.seatShips[index];
-      return current === null || current === undefined || !isAlive(current);
-    });
-    if (seat >= 0) this.seatShips[seat] = shipId;
-    return seat;
   }
 
   /**

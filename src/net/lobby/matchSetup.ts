@@ -140,15 +140,16 @@ function modeFields(match: MatchStart): Record<string, unknown> {
         scenario: match.options.scenarioId ?? SCENARIO_IDS[0],
         battle: "classic",
       };
-    case "reinforcements": {
-      const sides: Record<string, { strategy: "balanced" }> = {};
-      for (const seat of match.seats)
-        sides[seat.loadout.faction] = { strategy: "balanced" };
+    case "reinforcements":
+      // One plan per seat's squad (index-aligned with `factions`): a mirror
+      // or mixed-faction team never merges two squads' plans.
       return {
         battle: "reinforcements",
-        reinforcements: { format: "skirmish", sides },
+        reinforcements: {
+          format: "skirmish",
+          squads: match.seats.map(() => ({ strategy: "balanced" })),
+        },
       };
-    }
     default:
       return { battle: "classic" };
   }

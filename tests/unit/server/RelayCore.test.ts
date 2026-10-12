@@ -154,7 +154,7 @@ describe("RelayCore rooms", () => {
     expect(host.conn.last("room")!.room.phase).toBe("lobby");
   });
 
-  it("starts a squad battle only when each team flies its own faction", () => {
+  it("starts a squad battle whatever the factions (mirror match)", () => {
     const h = createCoreHarness();
     const host = h.connect("Host");
     const guest = h.connect("Guest");
@@ -172,11 +172,13 @@ describe("RelayCore rooms", () => {
       h.send(p.session, { t: "set_ready", ready: true });
     }
     h.clock.advance(h.config.startCountdownMs * 2);
-    expect(host.conn.last("match_start")).toBeUndefined();
-    h.send(guest.session, squad("terran_hegemony"));
-    h.send(guest.session, { t: "set_ready", ready: true });
-    h.clock.advance(h.config.startCountdownMs);
-    expect(host.conn.last("match_start")).toBeDefined();
+    const start = host.conn.last("match_start");
+    expect(start).toBeDefined();
+    expect(start!.match.seats.map((s) => s.loadout.faction)).toEqual([
+      "void_corsairs",
+      "void_corsairs",
+    ]);
+    expect(new Set(start!.match.seats.map((s) => s.team)).size).toBe(2);
   });
 
   it("passes host to the next seat when the host leaves", () => {

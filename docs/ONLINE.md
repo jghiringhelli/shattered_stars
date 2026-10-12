@@ -19,9 +19,9 @@ type an address: the relay URL is baked into the build. Design and measurements:
 - **Rooms by code** (5 characters, no look-alikes, e.g. `K7Q2X`) and **quick match**
   (pairs the two oldest players waiting on the same mode and build; 20 s ready check).
 - **Modes:** Dogfight 1v1 · Skirmish up to 2v2 · Scenario 1v1 · Reinforcements 1v1.
-  In the squad battles (every mode but Dogfight) a side is one faction: teammates fly the
-  same faction and the two teams different ones — the relay will not start a room that
-  breaks this and the lobby says why (READY stays disabled).
+  A side is a **team**, never a faction: any seat may fly any faction, so mirror matches
+  (Hegemony vs Hegemony) and mixed-faction teams start like any other room (protocol 3).
+  Seat → team is canonical (the room's team, `team_<n>` in the battle config).
 - **Ready check + countdown** (3 s) → `match_start` with one seed, canonical seats and the
   input delay sized from everyone's ping.
 - **Heartbeat** (WebSocket ping every 5 s, drop after 15 s silence; clients ping every 2 s
@@ -38,13 +38,15 @@ type an address: the relay URL is baked into the build. Design and measurements:
 
 - The lobby starts the battle scene with the relay's match (canonical seats, seed, input
   delay): DogfightScene for duels, ArcadeBattleScene for Skirmish / Scenario /
-  Reinforcements. Seat 0's side is the simulation's "player" side on every client; the
-  camera, HUD, colours and end screen show each client its own seat.
+  Reinforcements. Seat 0's team is the simulation's "player" side on every client; the
+  camera, HUD, colours (ally/enemy by team) and end screen show each client its own seat.
 - Every client simulates every seat at 60 Hz from the same inputs (`OnlineBattleLink` →
   `LockstepSession`). Each seat's pilot (flight, weapon keys, squad mark, crew stations)
-  flies from its input stream; a reinforcement pick travels as an input command, and the
-  picker's 5 s auto-accept runs on the simulation clock. A seat whose ship is lost takes
-  the next ship its faction deploys.
+  flies from its input stream. Reinforcements: pools and field caps are per team; every
+  seat's squad keeps its own sub-reserve and **every human seat has its own picker**,
+  driven by its own input stream (a pick travels as that seat's input command; the 5 s
+  auto-accept runs on the simulation clock). A seat whose ship is lost flies the
+  replacement its own picker deploys. Hashes and snapshots carry every ship's team.
 - A player who drops or leaves is flown by the same bot on every client (the relay's
   AI-control fill); a notice says so, and they rejoin through a snapshot (ONLINE again
   after a reload, within the 30 s window). Nobody can pause a shared battle: PAUSE offers

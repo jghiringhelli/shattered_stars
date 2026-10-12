@@ -138,18 +138,14 @@ export class SquadReinforcementSetup {
       format,
     );
     this.save({ ...this.prefs, factionId: faction, reserve });
-    const sides: Record<
-      string,
-      { strategy: StrategyId; reserve?: readonly ReserveEntry[] }
-    > = {};
-    for (const slot of factions) {
-      if (!slot.factionId) continue;
-      sides[slot.factionId] =
-        slot === player
-          ? { strategy: this.prefs.strategy, reserve }
-          : { strategy: AI_STRATEGY };
-    }
-    return { battle: "reinforcements", reinforcements: { format, sides } };
+    // One plan per squad (index = battle-config squad), so a mirror match
+    // never merges two sides' plans under one faction.
+    const squads = factions.map((slot) =>
+      slot === player
+        ? { strategy: this.prefs.strategy, reserve }
+        : { strategy: AI_STRATEGY },
+    );
+    return { battle: "reinforcements", reinforcements: { format, squads } };
   }
 
   /** Destroy the controls (and an open editor). */

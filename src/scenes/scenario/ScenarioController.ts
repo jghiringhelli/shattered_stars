@@ -144,11 +144,11 @@ export class ScenarioController {
   /**
    * Put both sides on their deployment lines (before sprites are made).
    * @param ships - Every ship record (mutated).
-   * @param playerFaction - The human player's faction.
+   * @param playerTeam - The human player's team (the "player" side).
    */
-  deploy(ships: readonly ScenarioSceneShip[], playerFaction: string): void {
+  deploy(ships: readonly ScenarioSceneShip[], playerTeam: number): void {
     const tracker = new ScenarioFrameTracker(
-      playerFaction,
+      playerTeam,
       this.link.worldSize,
       this.state.definition.pointsPerSquadPoint,
     );
