@@ -27,10 +27,12 @@ export const CYCLE_DURATION_MS = 500; // Fixed duration of every maneuver cycle
 export const DURABILITY_SCALE = 12;
 
 /**
- * Ordnance, bombs and death blasts hit this many times their card damage —
- * a decisive strike against DURABILITY_SCALE hit points, with few charges.
+ * Ordnance, bombs and death blasts hit this many times their card damage:
+ * strong but never a one-shot against DURABILITY_SCALE hit points (x10 let
+ * a proton torpedo kill a full-health light fighter and ended some duels
+ * in 3-10 s; x2 kept Falcon duels ~34 s with the skill gates >= 95%).
  */
-export const ORDNANCE_DAMAGE_SCALE = 10;
+export const ORDNANCE_DAMAGE_SCALE = 2;
 /**
  * Heading change per cycle for a sustained (held-key) arcade turn.
  *

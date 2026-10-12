@@ -143,3 +143,27 @@ describe("ordnance and blasts", () => {
     expect(deathBlastDamage(victim)).toBe(2 * ORDNANCE_DAMAGE_SCALE);
   });
 });
+
+describe("ordnance lethality (user decision: strong, never a one-shot)", () => {
+  it("no single torpedo or missile hit destroys a full-health light fighter", () => {
+    const fighters = Object.values(SHIP_DEFINITIONS).filter(
+      (def) => def.role === "light_fighter",
+    );
+    const weakest = Math.min(
+      ...fighters.map((def) => {
+        const stats = getModeCombatStats(def.id, "arcade");
+        return stats.hull + stats.shields;
+      }),
+    );
+    const strongest = Math.max(
+      ...Object.keys(UPGRADE_DEFINITIONS)
+        .map((id) => secondarySpecOf(id))
+        .filter(
+          (spec) =>
+            spec && (spec.kind === "missile" || spec.kind === "torpedo"),
+        )
+        .map((spec) => spec!.damage),
+    );
+    expect(strongest).toBeLessThan(weakest);
+  });
+});

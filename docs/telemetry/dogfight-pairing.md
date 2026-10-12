@@ -26,3 +26,17 @@ the scene, the telemetry battery and `scripts/duel_tempo_report.ts`;
 `tests/balance/DogfightDefaultPairing.test.ts` keeps it within ±10 % at average v average.
 After the change `npm run telemetry:report` shows the Dogfight rows at 35 % (novice, 13 %
 timeouts) / 50 % (average) / 60 % (expert) side-1 wins.
+
+## Update (2026-10-12): ordnance at x2
+
+With ORDNANCE_DAMAGE_SCALE lowered from 10 to 2, Falcon v Legionnaire drifted to 59-60 % at
+average/expert. A Confederation x Terran fighter matrix (DuelTempoSim, both seatings) found
+Sparrow v Stiletto the fairest pair at every tier over 600 rounds (two seed ranges):
+53 % average, 55 % expert, 49 % novice. It is the new default.
+
+| Pairing | average | expert | novice |
+|---|---|---|---|
+| Falcon v Legionnaire | 59 % | 60 % | 48 % |
+| Sparrow v Stiletto | 53 % | 55 % | 49 % |
+| Owl v Viper | 60 % | 58 % | 36 % |
+| Hawk v Centurion | 48 % | 70 % | 49 % |
