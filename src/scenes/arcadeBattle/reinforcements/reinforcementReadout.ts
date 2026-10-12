@@ -33,6 +33,9 @@ export interface ReinforcementReadout {
   readonly fieldCapPoints: number;
   readonly choice: string;
   readonly sides: readonly SideSummary[];
+  /** The local human's squad (member key), or null. */
+  readonly localMember: string | null;
+  /** The ship the local human flies now (null between ships). */
   readonly playerShipId: string | null;
   readonly picker: {
     readonly rows: readonly PickerRowReadout[];
@@ -49,23 +52,26 @@ export interface ReinforcementReadout {
 
 /**
  * @param director - The match.
+ * @param member - The local human's squad (its picker and ship), or null.
  * @param hud - What the panel shows.
  * @param shownPicker - What the picker shows.
  * @returns The snapshot.
  */
 export function buildReadout(
   director: ReinforcementDirector,
+  member: string | null,
   hud: ReinforcementReadout["hud"],
   shownPicker: { rows: string[]; enabled: boolean[]; countdown: string },
 ): ReinforcementReadout {
-  const picker = director.picker;
+  const picker = member === null ? null : director.pickerOf(member);
   return {
     format: director.rules.format,
     poolPoints: director.rules.poolPoints,
     fieldCapPoints: director.rules.fieldCapPoints,
     choice: director.rules.choice,
     sides: director.summaries(),
-    playerShipId: director.playerShipId,
+    localMember: member,
+    playerShipId: member === null ? null : director.pilotShipOf(member),
     picker: picker && {
       rows: picker.options.map((row) => ({
         definitionId: row.option.definitionId,

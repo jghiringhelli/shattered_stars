@@ -44,8 +44,8 @@ import {
   stepArenaLoop,
   type ArenaLoop,
   type LoopHooks,
-  type SideSkill,
 } from "./arenaLoop";
+import { crewSlotSkill, type CrewSkill } from "./crewSkill";
 import {
   createScenarioRun,
   deployOnScenarioLines,
@@ -54,6 +54,7 @@ import {
   scoreScenario,
   type ScenarioRun,
 } from "./scenarioRun";
+import { teamKey } from "../arcade/teams";
 import { sideOf, type SquadList } from "./balance/squadLists";
 import type { SideId } from "./skill/ArenaSide";
 
@@ -62,7 +63,8 @@ export interface ReinforcedSideSpec {
   /** The opening squad (its faction is the side's). */
   readonly opening: SquadList;
   readonly strategy: StrategyId;
-  readonly skill: SideSkill;
+  /** One skill for every pilot, or a difficulty's slot plan (reinforcements continue the slots). */
+  readonly skill: CrewSkill;
 }
 
 /** A reinforced battle to run. */
@@ -89,6 +91,9 @@ export interface ReinforcedBattleResult {
   readonly scenarioScore?: Readonly<Record<SideId, number>>;
 }
 
+/** Each arena side is its own team and its own (single) squad. */
+const TEAM: Readonly<Record<SideId, number>> = { A: 0, B: 1 };
+
 /** Safety stop: no reinforced battle outlasts this (ms). */
 const HARD_STOP_MS = 400_000;
 
@@ -97,7 +102,9 @@ interface ReinforcedLoop {
   readonly director: ReinforcementDirector;
   readonly factions: Readonly<Record<SideId, FactionId>>;
   readonly sides: readonly string[];
-  readonly skills: Readonly<Record<SideId, SideSkill>>;
+  readonly skills: Readonly<Record<SideId, CrewSkill>>;
+  /** Pilots crewed per side so far (the next ship's slot). */
+  readonly crewed: Record<SideId, number>;
   readonly alive: Set<string>;
   readonly deployments: Record<SideId, number>;
   readonly scenario: ScenarioRun | null;
@@ -140,29 +147,41 @@ function createReinforcedLoop(spec: ReinforcedBattleSpec): ReinforcedLoop {
     B: spec.enemy.opening.faction,
   };
   const opening = openingShips(loop, factions);
+  // The player flies side A's first ship; the rest of A are wingmen.
+  const humans = new Map([[TEAM.A, opening[0]!.id]]);
   const director = new ReinforcementDirector(
     buildDirectorSetup({
       setup: {
         rules: rulesFor(spec.scenario ? "scenario" : "skirmish"),
-        sides: {
-          [factions.A]: { strategy: spec.player.strategy, reserve: null },
-          [factions.B]: { strategy: spec.enemy.strategy, reserve: null },
-        },
+        squads: [
+          {
+            faction: factions.A,
+            strategy: spec.player.strategy,
+            reserve: null,
+          },
+          { faction: factions.B, strategy: spec.enemy.strategy, reserve: null },
+        ],
       },
-      playerFaction: factions.A,
+      playerTeam: TEAM.A,
+      squadTeams: [TEAM.A, TEAM.B],
+      humanSquads: humans,
       ships: opening,
       ownsOutcome: !spec.scenario,
       nextShipId: idSource(loop),
     }),
   );
-  for (const reg of openingRegistrations(opening))
-    director.registerInitial(reg.shipId, reg.faction, reg.option, reg.pilot);
+  for (const reg of openingRegistrations(opening, humans))
+    director.registerInitial(reg.shipId, reg.member, reg.option, reg.pilot);
   return {
     loop,
     director,
     factions,
-    sides: sideOrder(factions.A, opening),
+    sides: sideOrder(TEAM.A, [TEAM.A, TEAM.B]).map(teamKey),
     skills: { A: spec.player.skill, B: spec.enemy.skill },
+    crewed: {
+      A: spec.player.opening.ships.length,
+      B: spec.enemy.opening.ships.length,
+    },
     alive: new Set(loop.ships.map((s) => s.id)),
     deployments: { A: 0, B: 0 },
     scenario: spec.scenario
@@ -177,12 +196,13 @@ function openingShips(
   loop: ArenaLoop,
   factions: Readonly<Record<SideId, FactionId>>,
 ): OpeningShip[] {
-  return loop.ships.map((ship, index) => ({
+  return loop.ships.map((ship) => ({
     id: ship.id,
     faction: factions[ship.side],
+    team: TEAM[ship.side],
+    squad: TEAM[ship.side],
     definitionId: ship.definitionId,
     loadoutId: ship.loadoutId,
-    owner: index === 0 ? "player" : "ai",
   }));
 }
 
@@ -213,15 +233,15 @@ function reinforce(state: ReinforcedLoop): void {
 const TICK_DELTA_MS = 1000 / 60;
 
 function spawn(state: ReinforcedLoop, deployment: Deployment): void {
-  const side: SideId = deployment.faction === state.factions.A ? "A" : "B";
+  const side: SideId = deployment.side === state.sides[0] ? "A" : "B";
   const ship = addShip(state.loop, {
     id: deployment.shipId,
     side,
     definitionId: deployment.option.definitionId,
     loadoutId: deployment.option.loadoutId,
-    skill: state.skills[side],
+    skill: crewSlotSkill(state.skills[side], state.crewed[side]++),
     pose: reinforcementPose({
-      faction: deployment.faction,
+      side: deployment.side,
       slot: deployment.slot,
       sides: state.sides,
       worldSize: BATTLEFIELD_SIZE,

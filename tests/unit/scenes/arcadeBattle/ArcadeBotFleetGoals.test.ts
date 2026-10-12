@@ -52,7 +52,7 @@ function contact(
 function flyEnemy(withGoal: boolean): { x: number; boosted: boolean } {
   const fleet = new ArcadeBotFleet({
     difficulty: "hard",
-    playerFaction: "free_confederation",
+    playerSide: "free_confederation",
     random: createSeededRng(3).next,
     worldSize: WORLD,
   });

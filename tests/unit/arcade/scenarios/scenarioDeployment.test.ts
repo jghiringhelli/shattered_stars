@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  SCENARIO_DEFINITIONS,
   SCENARIO_DEPLOY_OFFSET_PX,
   SCENARIO_DEPLOY_SPACING_PX,
+  SCENARIO_IDS,
   deploymentPoses,
   homePoint,
 } from "../../../../src/arcade/scenarios";
@@ -37,6 +39,33 @@ describe("deploymentPoses", () => {
       C - 2 * SCENARIO_DEPLOY_SPACING_PX,
     ]);
   });
+
+  it("deploys the opponent as the player's line turned half a circle about the centre (no seat favoured)", () => {
+    const player = deploymentPoses(5, "player", WORLD);
+    const enemy = deploymentPoses(5, "enemy", WORLD);
+    enemy.forEach((pose, i) => {
+      expect(pose.x).toBeCloseTo(WORLD - player[i]!.x, 9);
+      expect(pose.y).toBeCloseTo(WORLD - player[i]!.y, 9);
+      expect(pose.angle).toBe((player[i]!.angle + 180) % 360);
+    });
+  });
+});
+
+describe("scenario layouts", () => {
+  it.each(SCENARIO_IDS)(
+    "%s places its objectives point-symmetric about the centre (each seat sees the same board)",
+    (id) => {
+      const slots = SCENARIO_DEFINITIONS[id].slots;
+      for (const slot of slots)
+        expect(
+          slots.some(
+            (other) =>
+              Math.abs(other.dx + slot.dx) < 1e-9 &&
+              Math.abs(other.dy + slot.dy) < 1e-9,
+          ),
+        ).toBe(true);
+    },
+  );
 });
 
 describe("homePoint", () => {

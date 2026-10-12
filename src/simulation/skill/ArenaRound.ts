@@ -96,9 +96,12 @@ export function createSquads(spec: BattleSpec): Map<SideId, SquadCommand> {
       side,
       new SquadCommand({
         side,
-        aiLeader: true,
+        aiLeader: setup.aiLeader ?? true,
         worldSize: BATTLEFIELD_SIZE,
         ...(setup.coordination ? { coordination: setup.coordination } : {}),
+        ...(setup.reactionMs !== undefined
+          ? { reactionMs: setup.reactionMs }
+          : {}),
       }),
     );
   }

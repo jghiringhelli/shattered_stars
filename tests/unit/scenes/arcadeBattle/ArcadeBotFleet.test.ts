@@ -9,10 +9,12 @@ import {
   ArcadeBotFleet,
   WINGMAN_SKILL,
 } from "../../../../src/scenes/arcadeBattle/ArcadeBotFleet";
+import type { BotContact } from "../../../../src/arcade/ai";
 import {
-  BRUTAL_REACTION_SCALE,
-  type BotContact,
-} from "../../../../src/arcade/ai";
+  CLASSIC_BRUTAL_REACTION_SCALE,
+  squadSkillPlan,
+  squadSlotSkill,
+} from "../../../../src/arcade/ai/BotDifficulty";
 import { createCycleFlight } from "../../../../src/arcade/systems/CycleFlight";
 import { getShipDial } from "../../../../src/data/ShipDefinitions";
 import { createSeededRng } from "../../../../src/utils/random";
@@ -61,7 +63,7 @@ const SQUADS: readonly BotContact[] = [
 function fleetAt(difficulty: string): ArcadeBotFleet {
   return new ArcadeBotFleet({
     difficulty,
-    playerFaction: PLAYER,
+    playerSide: PLAYER,
     random: createSeededRng(7).next,
     worldSize: WORLD,
   });
@@ -79,22 +81,47 @@ function commandFor(
 
 describe("ArcadeBotFleet tiers", () => {
   it.each([
-    ["easy", "novice"],
+    ["easy", "average"],
     ["normal", "average"],
     ["hard", "expert"],
     ["brutal", "expert"],
-  ])("enemy pilots fly %s as %s", (difficulty, tier) => {
+  ])("an enemy squad's first pilot flies %s as %s", (difficulty, tier) => {
     const fleet = fleetAt(difficulty);
     fleet.enlist("enemy_0", ENEMY);
     expect(fleet.tierOf("enemy_0")).toBe(tier);
   });
 
+  it("crews its squad slot by slot from the difficulty's squad plan (Easy: novice wingmen)", () => {
+    const fleet = fleetAt("easy");
+    const plan = squadSkillPlan("easy", "classic");
+    ["enemy_0", "enemy_1", "enemy_2", "enemy_3"].forEach((id) =>
+      fleet.enlist(id, ENEMY),
+    );
+    ["enemy_0", "enemy_1", "enemy_2", "enemy_3"].forEach((id, slot) =>
+      expect(fleet.tierOf(id)).toBe(squadSlotSkill(plan, slot).tier),
+    );
+    expect(fleet.tierOf("enemy_1")).toBe("novice");
+  });
+
+  it("crews a reinforced battle from the reinforced plan", () => {
+    const fleet = new ArcadeBotFleet({
+      difficulty: "brutal",
+      playerSide: PLAYER,
+      random: createSeededRng(7).next,
+      worldSize: WORLD,
+      squadFormat: "reinforced",
+    });
+    expect(fleet.skillFor(ENEMY).reactionScale).toBe(
+      squadSkillPlan("brutal", "reinforced").slots[0]!.reactionScale,
+    );
+  });
+
   it("gives brutal pilots the faster reaction", () => {
     expect(fleetAt("brutal").skillFor(ENEMY).reactionScale).toBe(
-      BRUTAL_REACTION_SCALE,
+      CLASSIC_BRUTAL_REACTION_SCALE,
     );
     expect(fleetAt("hard").skillFor(ENEMY).reactionScale).toBeGreaterThan(
-      BRUTAL_REACTION_SCALE,
+      CLASSIC_BRUTAL_REACTION_SCALE,
     );
   });
 
@@ -135,11 +162,11 @@ describe("ArcadeBotFleet squads and marks", () => {
     expect(fleet.markedTargetOf(PLAYER, 1000)).toBe(focus);
   });
 
-  it("a novice enemy squad focuses without marking", () => {
+  it("an Easy enemy squad still marks its focus (an unmarked squad loses ~100 %)", () => {
     const fleet = fleetAt("easy");
     commandFor(fleet, SQUADS, 1000);
     expect(fleet.orderFor("enemy_0", ENEMY)?.focusTargetId).not.toBeNull();
-    expect(fleet.markedTargetOf(ENEMY, 1000)).toBeNull();
+    expect(fleet.markedTargetOf(ENEMY, 1000)).not.toBeNull();
   });
 
   it("has the wingmen focus the target the player marked", () => {

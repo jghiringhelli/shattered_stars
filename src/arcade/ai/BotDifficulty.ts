@@ -3,17 +3,21 @@
  * fly it. The in-game AI and the skill gates fly the same bots, so a label
  * picks a tier that is measured by the gates, and a reaction scale that
  * tunes it between tiers. The scales were set on the real engine (an
- * average "player" bot against each label, every mode — docs/balance/):
- * Easy ~85–100 %, Normal ~50 %, Hard ~15–30 %, Brutal ~10 % in duels and
- * classic squads.
+ * average "player" bot against each label — docs/balance/), targeting Easy
+ * ~80 %, Normal ~50 %, Hard ~25–30 %, Brutal ~10–15 %.
+ *
+ * Duels (Dogfight, Ace Duel) — {@link difficultyToTier}:
  *
  * | label            | tier    | reaction scale | reaction / decision cadence |
  * |------------------|---------|----------------|-----------------------------|
- * | easy             | novice  | 0.7            | 350 ms / 210 ms             |
+ * | easy             | average | 2.2            | 550 ms / 330 ms             |
  * | normal, medium   | average | 1              | 250 ms / 150 ms             |
- * | hard             | expert  | 1.75           | 210 ms / 88 ms              |
- * | brutal, mythic   | expert  | 1              | 120 ms / 50 ms              |
+ * | hard             | expert  | 1.55           | 186 ms / 78 ms              |
+ * | brutal, mythic   | expert  | 0.85           | 102 ms / 43 ms              |
  * | anything else    | average | 1              | 250 ms / 150 ms             |
+ *
+ * Squad modes (Skirmish, Scenario, Continuous, Epic escorts) crew a side
+ * slot by slot — {@link squadSkillPlan}.
  *
  * Pure: no Phaser.
  */
@@ -22,20 +26,24 @@ import type { BotProfile, BotTier } from "./BotTypes";
 import { TIER_PROFILES } from "./bots/BotKit";
 
 /**
- * Easy = a novice reacting this much faster: at 1 the average bot won 97 %
- * of Dogfights against it; at 0.7, 85 %.
+ * Easy = an average pilot reacting this much slower. Once the bots stopped
+ * weaving (PilotHands stale-turn fix) any novice lost ~100 % of duels to the
+ * average bot; average at ×2 won it 74 % (Dogfight) / 81 % (Ace Duel), ×3
+ * 95–97 %.
  */
-export const EASY_REACTION_SCALE = 0.7;
+export const EASY_REACTION_SCALE = 2.2;
 
 /**
- * Hard = an expert reacting this much slower: at 1 (the old Hard) the
- * average bot won only 6–13 %, a cliff after Normal's 50 %; at 1.75 it wins
- * 24 % (Dogfight), 31 % (Ace Duel), 14 % (classic squads).
+ * Hard = an expert reacting this much slower: ×1.75 left the average bot
+ * 34 % (Dogfight) / 39 % (Ace Duel), ×1.4 21 % / 25 %.
  */
-export const HARD_REACTION_SCALE = 1.75;
+export const HARD_REACTION_SCALE = 1.55;
 
-/** Brutal (and Epic "mythic") = the expert as the skill gates measure it. */
-export const BRUTAL_REACTION_SCALE = 1;
+/**
+ * Brutal (and Epic "mythic") = an expert reacting this much faster than the
+ * gates' expert: ×1 left 11 % (Dogfight) / 17 % (Ace Duel), ×0.7 14 % (Ace).
+ */
+export const BRUTAL_REACTION_SCALE = 0.85;
 
 /** The tier and reaction a difficulty label flies with. */
 export interface BotSkill {
@@ -44,8 +52,11 @@ export interface BotSkill {
   readonly reactionScale: number;
 }
 
+/** Training opponents (Flight School's exam): a novice reacting a little faster. */
+export const TRAINING_SKILL: BotSkill = { tier: "novice", reactionScale: 0.7 };
+
 const SKILL_BY_LABEL: Readonly<Record<string, BotSkill>> = {
-  easy: { tier: "novice", reactionScale: EASY_REACTION_SCALE },
+  easy: { tier: "average", reactionScale: EASY_REACTION_SCALE },
   normal: { tier: "average", reactionScale: 1 },
   medium: { tier: "average", reactionScale: 1 },
   hard: { tier: "expert", reactionScale: HARD_REACTION_SCALE },
@@ -83,4 +94,125 @@ export function botProfile(tier: BotTier, reactionScale = 1): BotProfile {
     reactionMs: base.reactionMs * reactionScale,
     decisionIntervalMs: base.decisionIntervalMs * reactionScale,
   };
+}
+
+/** How a squad battle is fought: one squad each (classic) or reinforcement pools. */
+export type SquadFormat = "classic" | "reinforced";
+
+/** Classic-squad Hard: an expert reacting this much slower (27.5 %). */
+export const CLASSIC_HARD_REACTION_SCALE = 1.2;
+/** Classic-squad Brutal: an expert reacting this much faster (19 %). */
+export const CLASSIC_BRUTAL_REACTION_SCALE = 0.35;
+/** Reinforced / Scenario Hard: an expert reacting this much slower (27 %). */
+export const REINFORCED_HARD_REACTION_SCALE = 1.75;
+/** Reinforced / Scenario Brutal: an expert reacting this much faster (16 %). */
+export const REINFORCED_BRUTAL_REACTION_SCALE = 0.4;
+
+/**
+ * How a difficulty label crews an AI squad: a skill per ship slot (cycled —
+ * slot i flies `slots[i % slots.length]`, reinforcements continuing the
+ * count) and whether its leader marks a focus target.
+ */
+export interface SquadSkillPlan {
+  readonly slots: readonly BotSkill[];
+  readonly marks: boolean;
+}
+
+const skill = (tier: BotTier, reactionScale = 1): BotSkill => ({
+  tier,
+  reactionScale,
+});
+
+/**
+ * Squad crews per label and format, measured on the real engine (an average
+ * player bot's squad with the mark v the auto-fill opponent; classic 600
+ * battles, reinforced 250 per cell — difficultyCurve, docs/balance/):
+ * - a squad that never marks loses ~100 % to one that does (even average
+ *   pilots), so every label marks and Easy is weakened by novice wingmen
+ *   behind an average leader instead;
+ * - classic squads (3–4 ships) compress toward 50 % while reinforcement
+ *   pools (~10 ships a side over 3 minutes) amplify the better side, so the
+ *   formats need different crews: Easy 84 % / 82–85 %, Hard expert at
+ *   ×1.2 / ×1.75 reaction 27.5 % / 27 %, Brutal 19 % / 16 % (expert pilots
+ *   are the bots' ceiling: ×0.35–0.6 reaction all land at 17–21 %).
+ */
+const SQUAD_PLANS: Readonly<
+  Record<SquadFormat, Readonly<Record<string, SquadSkillPlan>>>
+> = {
+  classic: {
+    easy: {
+      slots: [skill("average"), skill("novice"), skill("novice")],
+      marks: true,
+    },
+    normal: { slots: [skill("average")], marks: true },
+    hard: {
+      slots: [skill("expert", CLASSIC_HARD_REACTION_SCALE)],
+      marks: true,
+    },
+    brutal: {
+      slots: [skill("expert", CLASSIC_BRUTAL_REACTION_SCALE)],
+      marks: true,
+    },
+  },
+  reinforced: {
+    easy: {
+      slots: [skill("average"), skill("average"), skill("novice")],
+      marks: true,
+    },
+    normal: { slots: [skill("average")], marks: true },
+    hard: {
+      slots: [skill("expert", REINFORCED_HARD_REACTION_SCALE)],
+      marks: true,
+    },
+    brutal: {
+      slots: [skill("expert", REINFORCED_BRUTAL_REACTION_SCALE)],
+      marks: true,
+    },
+  },
+};
+
+/** Label aliases (Epic's names). */
+const SQUAD_LABEL_ALIASES: Readonly<Record<string, string>> = {
+  medium: "normal",
+  mythic: "brutal",
+};
+
+/**
+ * @param difficulty - A squad mode's difficulty label (any case; Epic's
+ *   "medium" / "mythic" map to normal / brutal; unknown = normal).
+ * @param format - Classic squads or reinforcement pools.
+ * @returns The crew plan of an AI squad at that difficulty.
+ */
+export function squadSkillPlan(
+  difficulty: string,
+  format: SquadFormat = "classic",
+): SquadSkillPlan {
+  const label = difficulty.toLowerCase();
+  const plans = SQUAD_PLANS[format];
+  return plans[SQUAD_LABEL_ALIASES[label] ?? label] ?? plans["normal"]!;
+}
+
+/**
+ * @param plan - A squad's crew plan.
+ * @param slot - The ship's slot (0-based enlistment order on its side).
+ * @returns The skill that ship flies with.
+ */
+export function squadSlotSkill(plan: SquadSkillPlan, slot: number): BotSkill {
+  const index =
+    ((Math.floor(slot) % plan.slots.length) + plan.slots.length) %
+    plan.slots.length;
+  return plan.slots[index]!;
+}
+
+/**
+ * @param plan - A squad's crew plan.
+ * @returns The skill its squad command perceives with: its quickest pilot.
+ */
+export function squadLeaderSkill(plan: SquadSkillPlan): BotSkill {
+  return plan.slots.reduce((best, s) =>
+    botProfile(s.tier, s.reactionScale).reactionMs <
+    botProfile(best.tier, best.reactionScale).reactionMs
+      ? s
+      : best,
+  );
 }

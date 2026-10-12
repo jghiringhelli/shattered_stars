@@ -7,7 +7,7 @@
 
 import Phaser from "phaser";
 import { BATTLEFIELD_SIZE } from "../../config";
-import { difficultyToTier } from "../../arcade/ai";
+import { TRAINING_SKILL } from "../../arcade/ai/BotDifficulty";
 import { DuelBotCrew } from "../../arcade/systems/DuelBotCrew";
 import type { FlightSchoolScenario } from "../../tutorial/FlightSchoolSteps";
 import { random } from "../../utils/random";
@@ -142,7 +142,7 @@ export class SchoolField {
   }
 
   private createCrew(): DuelBotCrew {
-    const novice = difficultyToTier("easy");
+    const novice = TRAINING_SKILL;
     return new DuelBotCrew({
       roster: [...this.ships.values()]
         .filter((ship) => ship.role !== "beacon")

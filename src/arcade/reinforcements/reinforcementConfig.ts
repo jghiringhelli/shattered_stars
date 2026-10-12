@@ -10,11 +10,15 @@
  *     format?: "skirmish" | "epic" | "scenario",  // inferred when absent
  *     poolPoints?: number, fieldCapPoints?: number,
  *     choice?: "open" | "planned",
+ *     squads?: Array<{ strategy?: StrategyId, reserve?: ReserveEntry[] }>,
  *     sides?: { [factionId]: { strategy?: StrategyId, reserve?: ReserveEntry[] } },
  *   },
  * }
  * ```
  *
+ * `squads` is index-aligned with `factions` (one plan per squad, so a
+ * mirror match plans each side apart); the older per-faction `sides`
+ * block still applies to every squad of that faction without a squad plan.
  * Anything malformed falls back to the format's defaults. Pure.
  */
 
@@ -37,10 +41,15 @@ export interface SidePlan {
   readonly reserve: readonly ReserveEntry[] | null;
 }
 
-/** A reinforced battle's rules and every faction's plan. */
+/** One squad's plan, with its faction. */
+export interface SquadPlan extends SidePlan {
+  readonly faction: string;
+}
+
+/** A reinforced battle's rules and every squad's plan (index = config squad). */
 export interface ReinforcementSetup {
   readonly rules: ReinforcementRules;
-  readonly sides: Readonly<Record<string, SidePlan>>;
+  readonly squads: readonly SquadPlan[];
 }
 
 type Loose = Readonly<Record<string, unknown>>;
@@ -65,7 +74,7 @@ export function parseReinforcementSetup(
   const rules: ReinforcementRules = isChoice(choice)
     ? { ...base, choice }
     : base;
-  return { rules, sides: sidePlans(battleConfig, block) };
+  return { rules, squads: squadPlans(battleConfig, block) };
 }
 
 /**
@@ -94,29 +103,29 @@ function formatOf(config: Loose, block: Loose): ReinforcementFormat {
   return config["gameMode"] === "epic" ? "epic" : "skirmish";
 }
 
-function sidePlans(config: Loose, block: Loose): Record<string, SidePlan> {
-  const declared = isRecord(block["sides"]) ? block["sides"] : {};
-  const plans: Record<string, SidePlan> = {};
+function squadPlans(config: Loose, block: Loose): SquadPlan[] {
+  const bySquad = Array.isArray(block["squads"]) ? block["squads"] : [];
+  const byFaction = isRecord(block["sides"]) ? block["sides"] : {};
   const factions = Array.isArray(config["factions"]) ? config["factions"] : [];
-  const ids = factions.flatMap((slot: unknown) =>
-    isRecord(slot) && typeof slot["factionId"] === "string"
-      ? [slot["factionId"]]
-      : [],
-  );
-  for (const id of new Set([...ids, ...Object.keys(declared)])) {
-    const raw = declared[id];
-    const side = isRecord(raw) ? raw : {};
-    const strategy = side["strategy"];
-    plans[id] = {
-      strategy: isStrategyId(strategy) ? strategy : "balanced",
-      reserve: Array.isArray(side["reserve"])
-        ? parseReserveEntries(side["reserve"])
-        : null,
-    };
-  }
-  return plans;
+  return factions.map((slot: unknown, index: number) => {
+    const faction =
+      isRecord(slot) && typeof slot["factionId"] === "string"
+        ? slot["factionId"]
+        : "";
+    const raw = isRecord(bySquad[index]) ? bySquad[index] : byFaction[faction];
+    return { faction, ...planOf(isRecord(raw) ? raw : {}) };
+  });
 }
 
+function planOf(side: Loose): SidePlan {
+  const strategy = side["strategy"];
+  return {
+    strategy: isStrategyId(strategy) ? strategy : "balanced",
+    reserve: Array.isArray(side["reserve"])
+      ? parseReserveEntries(side["reserve"])
+      : null,
+  };
+}
 function numberField(
   block: Loose,
   key: "poolPoints" | "fieldCapPoints",

@@ -116,6 +116,18 @@ async function killWave(page: Page): Promise<void> {
   });
 }
 
+/**
+ * Kills the node's waves one after the other: all of them, or every wave
+ * before its last (an elite / boss node's elites and boss arrive last).
+ */
+async function killWaves(page: Page, keepLast = false): Promise<void> {
+  const waves: number = await page.evaluate(
+    () => (window as any).game.scene.getScene("SurvivalScene").rules.plan.waves,
+  );
+  for (let wave = 0; wave < waves - (keepLast ? 1 : 0); wave++)
+    await killWave(page);
+}
+
 test.describe("Survival roguelite — a seeded run", () => {
   test("map → battle → damage persists → shop → resume → death summary", async ({
     page,
@@ -142,7 +154,7 @@ test.describe("Survival roguelite — a seeded run", () => {
     });
     expect(nodeCount).toBe(run0.map.rows.flat().length);
 
-    // Enter a combat node; take damage; clear its wave.
+    // Enter a combat node; take damage; clear its waves.
     await travelAs(page, "combat");
     await waitForScene(page, "SurvivalScene", 30_000);
     await page.waitForFunction(
@@ -157,7 +169,7 @@ test.describe("Survival roguelite — a seeded run", () => {
       const flagship = s.ships.get(s.playerShipIds[0]);
       flagship.hull = Math.round(flagship.maxHull * 0.5);
     });
-    await killWave(page);
+    await killWaves(page);
     await waitForScene(page, "SurvivalMapScene", 15_000);
 
     // Back on the map: hull damage persisted, a power draft is waiting.
@@ -290,6 +302,8 @@ test.describe("Survival roguelite — nodes", () => {
     await launchSeededRun(page);
     await travelAs(page, "elite");
     await waitForScene(page, "SurvivalScene", 30_000);
+    // The node's elite arrives on its last wave, after the regular patrols.
+    await killWaves(page, true);
     await page.waitForFunction(
       () =>
         ((window as any).game.scene.getScene("SurvivalScene")?.affixLabels

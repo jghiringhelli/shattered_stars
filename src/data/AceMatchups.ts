@@ -66,7 +66,9 @@ export const ACE_MATCHUPS: readonly AceMatchup[] = [
       name: "Vortex Ace",
       faction: "void_corsairs",
       ships: ["corsair_phantom"],
-      abilities: ["fearless", "outmaneuver"],
+      // Evade Mastery + Predator (was Fearless + Outmaneuver): the Viper
+      // won 67 % at expert once the bots stopped weaving; now 45 / 59 %.
+      abilities: ["evade_mastery", "predator"],
     },
   },
   {
@@ -85,7 +87,10 @@ export const ACE_MATCHUPS: readonly AceMatchup[] = [
       name: "Confederation Freighter Captain",
       faction: "free_confederation",
       ships: ["confed_hawk"],
-      abilities: ["stealth_device", "fearless"],
+      // Stealth Device + Marksmanship (was + Fearless): the Marauder won
+      // 68 % at expert after the Hawk Assault build lost its Heavy Laser
+      // Cannon; now 45 / 57 %.
+      abilities: ["stealth_device", "marksmanship"],
     },
   },
   {
@@ -104,7 +109,9 @@ export const ACE_MATCHUPS: readonly AceMatchup[] = [
       name: "Empire Archon",
       faction: "ascendant_empire",
       ships: ["ascendant_judgment"],
-      abilities: ["tenacity", "fearless"],
+      // Fearless + Iron Discipline (was Tenacity + Fearless): the Eradicator
+      // won 68 % at expert; now 46 / 47 %.
+      abilities: ["fearless", "iron_discipline"],
     },
   },
   {

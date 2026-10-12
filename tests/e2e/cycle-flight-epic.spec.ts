@@ -106,11 +106,11 @@ async function readCrew(page: Page): Promise<
       await import("/src/arcade/systems/EpicAiFlight.ts");
     const scene = (window as any).game.scene.getScene(key);
     const crew = (ids: string[], side: "escort" | "wingman") =>
-      ids.map((id) => ({
+      ids.map((id, slot) => ({
         id,
         side,
         tier: scene.bots.tierOf(id),
-        expected: raidBotSkill(side, scene.difficulty).tier,
+        expected: raidBotSkill(side, scene.difficulty, slot).tier,
         pilotTarget: scene.bots.pilotTargetOf(id),
       }));
     return [

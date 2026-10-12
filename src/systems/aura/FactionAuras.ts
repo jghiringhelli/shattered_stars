@@ -74,6 +74,11 @@ export interface FactionAura {
   readonly radius: number;
   /** Base effect strength; units depend on {@link effect}. */
   readonly magnitude: number;
+  /**
+   * Hit-chance bonus (0–1) the field also grants covered allies, scaled by
+   * the projector's class like the magnitude; omitted = none.
+   */
+  readonly hitChanceBonus?: number;
   readonly description: string;
 }
 
@@ -144,11 +149,18 @@ export function auraRadiusBonusFor(upgradeIds: ReadonlyArray<string>): number {
 /**
  * The signature aura for each faction, tuned to its playstyle.
  *
- * - Terran Hegemony (elite/formation): coordinated offense.
+ * - Terran Hegemony (elite/formation): coordinated offense over a broad
+ *   field (a +1 bonus inside 260 px needed a formation the bots rarely held:
+ *   +6 win points on the auto-fill list, +16 when a support covered it).
  * - Free Confederation (balanced/versatile): reliable damage mitigation.
  * - Synthetic Collective (swarm/drones): mitigation that grows with the swarm.
- * - Void Corsairs (fast raiders): stress-free aggressive maneuvering.
+ * - Void Corsairs (fast raiders): stress-free maneuvering and sharper
+ *   strafing runs (stress relief alone did nothing once a fight started).
  * - Ascendant Empire (heavy shields/support): slow, powerful shield regen.
+ *
+ * Each field was valued on the real engine (a 3-ship list — support
+ * projector + two fighters — with its aura on v off against every other
+ * faction's, docs/balance/): every aura is worth roughly the same.
  */
 export const FACTION_AURAS: Record<FactionId, FactionAura> = {
   terran_hegemony: {
@@ -156,9 +168,9 @@ export const FACTION_AURAS: Record<FactionId, FactionAura> = {
     name: "Coordinated Fire",
     faction: "terran_hegemony",
     effect: "damage",
-    radius: 260,
-    magnitude: 1,
-    description: "Allied ships in formation deal +1 damage.",
+    radius: 380,
+    magnitude: 0.6,
+    description: "Allied ships nearby deal +0.6 damage per hit.",
   },
   free_confederation: {
     id: "rallying_banner",
@@ -185,7 +197,9 @@ export const FACTION_AURAS: Record<FactionId, FactionAura> = {
     effect: "stress_relief",
     radius: 300,
     magnitude: 1,
-    description: "Allied maneuvers build stress one tier slower.",
+    hitChanceBonus: 0.05,
+    description:
+      "Allied maneuvers build stress one tier slower and shots gain +5% to hit.",
   },
   ascendant_empire: {
     id: "aegis_field",

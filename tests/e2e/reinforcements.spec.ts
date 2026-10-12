@@ -195,7 +195,7 @@ test.describe("Squad Builder — battle type and reserve", () => {
     );
     expect(config.battle).toBe("reinforcements");
     expect(config.aiDifficulty).toBe("normal");
-    const side = config.reinforcements.sides[P];
+    const side = config.reinforcements.squads[0];
     expect(side.strategy).toBe("swarm");
     expect(side.reserve.at(-1)).toEqual(planned.picked);
     const stored = await page.evaluate(() =>
@@ -357,7 +357,17 @@ test.describe("Reinforcement battle", () => {
     );
     const fresh = (await arrival.jsonValue())!;
     expect(fresh.shielded).toBe(true);
-    expect(fresh.tier).toBe("novice");
+    // Easy crews its squad slot by slot (BotDifficulty.squadSkillPlan,
+    // reinforced: an average leader with novice wingmen); an arrival is
+    // enlisted on the next slot.
+    const easyTiers = await page.evaluate(async () => {
+      const { squadSkillPlan } =
+        await import("/src/arcade/ai/BotDifficulty.ts");
+      return squadSkillPlan("easy", "reinforced").slots.map(
+        (s: { tier: string }) => s.tier,
+      );
+    });
+    expect(easyTiers).toContain(fresh.tier);
     const after = sideOf(await readout(page), E);
     expect(after.remainingPoints).toBeLessThan(before.remainingPoints);
     expect(after.fieldPoints).toBeLessThanOrEqual(250);

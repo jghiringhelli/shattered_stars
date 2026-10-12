@@ -33,8 +33,11 @@ the `speed` power did nothing once escorts were bot-flown.
 
 ### 2. Battles reuse SurvivalScene
 - `CombatNodePlan` turns (node kind, sector, row, ascension) into the battle:
-  **1 wave** for every node kind (a boss node used to send an escort wave first — see the
-  fairness pass below). Threat = ADR-0003's `computeThreat(run, ships)` ×
+  **several waves** per node — combat 3, elite 4, boss 5 in sector 1, +1 per later sector
+  (`WAVES_PER_NODE`, `EXTRA_WAVES_PER_SECTOR`; see the node-length pass below). Regular patrols
+  come first; an elite node's elite and a boss node's boss arrive on its **last** wave. Enemy hits
+  on the fleet deal ×0.62 (`BASE_ENEMY_DAMAGE_MULTIPLIER`, applied in `RelicCombatEngine`).
+  Threat = ADR-0003's `computeThreat(run, ships)` ×
   `ROGUELITE_THREAT_SCALE (0.45) × (1 + 0.25·(sector−1) + 0.04·row) × ascension`;
   regulars per wave are capped at **2** (`MAX_REGULARS_PER_WAVE`) in every sector. Elites come
   from the node only (no threat elites): an elite node fields 1 elite (2 at ascension 1) that
@@ -43,8 +46,8 @@ the `speed` power did nothing once escorts were bot-flown.
 - Elites are drawn by sector (`ELITE_ROLES_BY_SECTOR`): heavy fighters in sector 1, heavy
   fighters / bombers in sector 2, bombers in sector 3 (gunships only as a fallback — they are
   the bosses' hull).
-- AI tiers come from an **effective wave** = `4·(sector−1) + ⌊row/2⌋ + 1` (+3 at
-  ascension 3): sector 1 novices (its last rows average), sector 2 average, sector 3 average
+- AI tiers come from an **effective wave** = `4·(sector−1) + ⌊row/2⌋ + 1` (+1 at
+  ascension 3), the same for every wave of a node: sector 1 novices (its last rows average), sector 2 average, sector 3 average
   turning expert from its fifth row (`AVERAGE_LAST_WAVE = 10`). Elites fly the wave's tier
   (+50 % hull, +1 die, an affix; Ace = +1 tier). Sector bosses fly average / expert / expert
   (`SURVIVAL_SECTOR_BOSS_TIERS`) on their equipped hull (`bossMultiplier` = 1 for waves 5–15).
@@ -52,7 +55,7 @@ the `speed` power did nothing once escorts were bot-flown.
   average-tier bot), so the player has a squad — squad orders and the mark — from node 1. It
   counts toward `MAX_ESCORTS`; meta escort packages add on top (`FREE_STARTING_ESCORTS`).
 - The belt starts `4·(sector−1) + ⌊row/2⌋` squeezes in (+2 at ascension 2), capped at
-  **12**, and squeezes once more per wave. Its damage ramps 6 → 12 HP/s at the wall
+  **12**, and holds that squeeze for every wave of the node. Its damage ramps 6 → 12 HP/s at the wall
   (0.5 + 0.05/squeeze miniature points, capped at 1 — `SurvivalBelt`), a third of the old
   36 HP/s unsqueezed peak. While the player's ship is within the avoid margin or in the belt,
   `BeltWarningHud` shows a pulsing screen-edge frame, a warning icon, a text line ("BELT AHEAD —
@@ -75,7 +78,8 @@ the `speed` power did nothing once escorts were bot-flown.
   if the flagship dies the first surviving escort becomes the flagship.
 - Enemy faction per node is seeded from every faction except the player's — **the Free
   Confederation now appears**. Intel (the faction) shows in the node preview.
-- **Elite affixes** (1, or 2 at ascension 7): Shielded, Swift, Ace (+1 AI tier), Regenerating,
+- **Elite affixes** (1, or 2 at ascension 7): Shielded, Swift, Ace (+1 AI tier), Regenerating
+  (+50 % shields, 0.24 HP/s),
   Volatile, Marksman, Juggernaut — shown as a label above the elite and announced.
 - **Boss phases**: at 50 % (2 phases) / 66 %, 33 % (3 phases) the boss restores its
   shields and calls 2 reinforcements.
@@ -293,3 +297,58 @@ Adopted `BASE_ENEMY_HULL_MULTIPLIER` 0.55 (src/data/survival/ascension.ts): S1 �
 S3 ≥ 50 % ✔, run win 25–31.5 % ✔ (bottom half of the band, as before). **Node length** re-measured as the
 owner asked: median 16–19 s (p90 37–48 s), still below the 45–90 s target — the fairness-pass finding
 stands (every lengthening lever measured so far costs the run win); owner decision pending.
+
+## Node-length pass (2026-10-12, balance round 2)
+
+**Owner decision:** longer nodes — regular nodes 45–90 s, elite / boss 60–120 s — through **more waves
+per node plus lower enemy lethality**, the run rebalanced to the same targets (S1 ≥ 80 %, S2 ≥ 65 %,
+S3 ≥ 50 %, A0 run win 25–40 %, gradual ascension).
+
+**Three AI bugs surfaced on the way (measured, fixed in shared AI code, skill gates still green):**
+1. **Ghost squad mark** (`SquadCommand`): a player-led squad with mark assist re-marked a target it
+   still *perceived* (reaction delay) right after it died, then refreshed that dead mark forever, so
+   every wave after the first was fought without the mark (+0.35 hit, +5 damage). Wave 2 took 53 s
+   (median) against wave 1's 18 s with identical enemies; with the fix both take ~17 s. Dead or
+   departed ships are no longer focused or marked (also Skirmish / Campaign wingmen).
+2. **Stale sharp turn** (`PilotHands`): right after a cycle committed, the hands re-keyed the turn
+   judged *before* the commit (from the pose the new maneuver starts at), and the one-turn-per-cycle
+   guard then blocked the corrected decision. A pilot with its target or safe point astern queued
+   turn_left / turn_right / turn_left… and weaved straight out — the source of nearly every belt
+   death (31 of 34 lost nodes). A turn now waits for the pilot's next decision after a commit; the
+   belt escape also judges its turn from the maneuver's end pose (`BotPilot.escapeIntent`).
+3. **Torus wrap through the belt**: the AI chased foes "the short way" across the arena's wrap, which
+   lies inside the belt, so both sides bounced between belt and centre for minutes (5 % of
+   multi-wave nodes hit the sim's 360 s limit). Survival's AI now reasons in a non-wrapping world
+   (`SURVIVAL_AI_WORLD_SIZE` = 2× the battlefield; SurvivalScene + SurvivalNodeSim).
+
+**Levers** (`npm run telemetry:survival`, average autopilot):
+- `WAVES_PER_NODE` combat 3 / elite 4 / boss 5 in sector 1, `EXTRA_WAVES_PER_SECTOR` 1 (the fleet
+  grows stronger, later waves fall faster); patrols first, the node's elites / boss on its last wave.
+- Every wave of a node keeps the node's AI tier and belt squeeze (squeezing per wave turned long
+  nodes into belt deaths).
+- `BASE_ENEMY_DAMAGE_MULTIPLIER` 0.62 — every enemy hit on the fleet (lasers, ordnance, death blasts)
+  scaled in `RelicCombatEngine.incomingMultiplier`, shared by the scene and the sim.
+- Veteran Wings (ascension 3): tier shift 3 → 1 (a full band made sector 1 average from node 1 and
+  dropped the run win from 16.5 % at A2 to 1 % at A3).
+- Regen cap (balance request R2, ≥ 0.72 HP/s is unkillable): Regen Lattice 2 → 0.24 HP/s + 4 shield
+  HP per kill, Escort Foundry 1 → 0.12 HP/s (+1 damage, −10 % damage taken), Bulwark set 3 → 0.24 HP/s
+  + −15 % damage taken, Regenerating affix 2 → 0.24 HP/s + 50 % shields, Regen Coils 0.5 → 0.12 HP/s
+  (it cost ~10 points of run win before lethality was re-tuned).
+
+| Config (A0, 200 runs) | S1 | S2 | S3 | combat | elite | boss | run win | combat / elite / boss median |
+|---|---|---|---|---|---|---|---|---|
+| before (1 wave, seeds 1–100) | 94 % | 86 % | 89 % | 95 % | 74 % | 82 % | 17 % | 16 / 24 / 22 s |
+| 3 waves, damage ×0.6 (AI bugs in) | 47 % | 33 % | — | 49 % | 20 % | 18 % | 0 % | 168 / 166 / 109 s (53 timeouts) |
+| + ghost-mark fix | 83 % | 80 % | 85 % | 88 % | 56 % | 65 % | 5 % | 39 / 88 / 86 s |
+| + no wrap for the AI | 86 % | 82 % | 82 % | 90 % | 59 % | 69 % | 5 % | 39 / 93 / 61 s |
+| + stale-turn fix, damage ×1.0 | 98 % | 82 % | 91 % | 92 % | 85 % | 93 % | 23 % | 44 / 56 / 41 s |
+| + waves by sector (3/4/4 +1) | 95 % | 75 % | 88 % | 91 % | 87 % | 81 % | 11 % | 50 / 78 / 59 s |
+| + damage ×0.75 | 97 % | 86 % | 93 % | 94 % | 89 % | 90 % | 29 % | 49 / 77 / 59 s |
+| + regen cap (R2) | 97 % | 83 % | 90 % | 93 % | 88 % | 88 % | 20.5 % | 50 / 76 / 59 s |
+| + damage ×0.62 | 98 % | 88 % | 92 % | 95 % | 89 % | 92 % | 32 % | 50 / 75 / 59 s |
+| **+ boss 5 waves (adopted), seeds 1–200** | **98 %** | **87 %** | **93 %** | 94 % | 91 % | 90 % | **30.5 %** | **50 / 75 / 72 s** |
+| adopted, seeds 201–400 | 99 % | 87 % | 91 % | — | — | — | **29 %** | — |
+
+Node length p10 / median / p90 (adopted): combat 38 / 50 / 71 s, elite 53 / 75 / 99 s, boss
+57 / 72 / 104 s ✔. Ascension (seeds 1–200): A1 23 %, A2 16.5 %, A3 9.5 %, A4 9 %, A5 4 %, A7 4 % —
+a gradual curve (before: A3 fell to 1 %).

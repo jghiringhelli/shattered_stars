@@ -104,11 +104,7 @@ describe("rosterTeams", () => {
       .withHull(6, 12)
       .withShields(1, 4)
       .build();
-    const teams = rosterTeams(
-      [enemy, player],
-      "free_confederation",
-      "player_0",
-    );
+    const teams = rosterTeams([enemy, player], 0, "player_0");
     expect(teams.map((t) => t.isPlayerSide)).toEqual([true, false]);
     expect(teams[0]!.pips[0]).toEqual({
       hullFraction: 0.5,
@@ -119,9 +115,28 @@ describe("rosterTeams", () => {
     expect(teams[1]!.pips[0]!.alive).toBe(false);
   });
 
-  it("labels factions in plain words", () => {
-    const teams = rosterTeams([HudShipBuilder.anEnemy().build()], "x", null);
-    expect(teams[0]!.label).toBe("VOID CORSAIRS");
+  it("labels a team by its faction in plain words, side spelled by a glyph", () => {
+    const teams = rosterTeams([HudShipBuilder.anEnemy().build()], 0, null);
+    expect(teams[0]!.label).toBe("▼ VOID CORSAIRS");
+  });
+
+  it("groups by team: a mirror match shows two rows of one faction, told apart in words", () => {
+    const mine = HudShipBuilder.aPlayer().build();
+    const theirs = HudShipBuilder.aPlayer("enemy_0").onTeam(1).build();
+    const teams = rosterTeams([theirs, mine], 0, "player_0");
+    expect(teams.map((t) => t.label)).toEqual([
+      "▲ FREE CONFEDERATION",
+      "▼ FREE CONFEDERATION",
+    ]);
+    expect(teams.map((t) => t.isPlayerSide)).toEqual([true, false]);
+  });
+
+  it("a mixed-faction team is one row naming both factions", () => {
+    const mine = HudShipBuilder.aPlayer().build();
+    const mate = HudShipBuilder.anEnemy("ally_0").onTeam(0).build();
+    const [team] = rosterTeams([mine, mate], 0, "player_0");
+    expect(team!.label).toBe("▲ CONFEDERATION + CORSAIRS");
+    expect(team!.pips).toHaveLength(2);
   });
 
   it("drops the oldest fallen ships past one line of pips (reinforcement battles)", () => {
@@ -129,7 +144,7 @@ describe("rosterTeams", () => {
       HudShipBuilder.anEnemy().withHull(0).build(),
     );
     const living = [1, 2, 3].map((i) => HudShipBuilder.anEnemy().build());
-    const [team] = rosterTeams([...fallen, ...living], "x", null);
+    const [team] = rosterTeams([...fallen, ...living], 0, null);
     expect(team!.pips).toHaveLength(ROSTER_MAX_PIPS);
     expect(team!.pips.filter((p) => p.alive)).toHaveLength(3);
   });
@@ -140,7 +155,7 @@ describe("rosterTeams", () => {
     );
     const [team] = rosterTeams(
       [HudShipBuilder.anEnemy().withHull(0).build(), ...living],
-      "x",
+      0,
       null,
     );
     expect(team!.pips).toHaveLength(ROSTER_MAX_PIPS + 2);

@@ -19,6 +19,52 @@ function carried(
 }
 
 describe("salvage pick-up", () => {
+  it("never hands an exact tie between the sides to whoever is listed first or last", () => {
+    for (const order of [
+      ["p", "e"],
+      ["e", "p"],
+    ]) {
+      const ships = order.map((id) =>
+        aShip({
+          id,
+          side: id === "p" ? "player" : "enemy",
+          x: 0,
+          y: id === "p" ? 40 : -40,
+        }),
+      );
+      const { crates } = stepSalvage({
+        crates: loose(),
+        cooldowns: new Map(),
+        frame: aFrame(ships),
+        nowMs: 0,
+      });
+      expect(crates[0]!.carrierId).toBeNull();
+    }
+  });
+
+  it("gives an exact tie to the side carrying fewer crates", () => {
+    const crates: SalvageCrate[] = [
+      ...createCrates([{ x: 0, y: 0, label: "1" }]),
+      {
+        ...createCrates([{ x: 900, y: 0, label: "2" }])[0]!,
+        id: "crate_held",
+        carrierId: "p2",
+        carrierSide: "player",
+      },
+    ];
+    const result = stepSalvage({
+      crates,
+      cooldowns: new Map(),
+      frame: aFrame([
+        aShip({ id: "p", side: "player", x: 0, y: 40 }),
+        aShip({ id: "e", side: "enemy", x: 0, y: -40 }),
+        aShip({ id: "p2", side: "player", x: 900, y: 0 }),
+      ]),
+      nowMs: 0,
+    });
+    expect(result.crates[0]!.carrierSide).toBe("enemy");
+  });
+
   it("an unstressed ship at range 0 picks the crate up", () => {
     const { crates } = stepSalvage({
       crates: loose(),

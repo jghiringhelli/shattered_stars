@@ -323,6 +323,8 @@ export class EpicBattleScene extends Phaser.Scene {
 
   private playerShipIds: string[] = [];
   private escortShipIds: string[] = [];
+  /** Escorts given a pilot so far (their squad-plan crew slot). */
+  private escortsCrewed = 0;
 
   // Boss state
   private boss: BossShip | null = null;
@@ -469,6 +471,7 @@ export class EpicBattleScene extends Phaser.Scene {
     this.bossSectionBars.clear();
     this.playerShipIds = [];
     this.escortShipIds = [];
+    this.escortsCrewed = 0;
     this.boss = null;
     if (this.bossSprite) {
       this.bossSprite.destroy();
@@ -995,7 +998,8 @@ export class EpicBattleScene extends Phaser.Scene {
    * @param squadKey - Its squad.
    */
   private crewShip(shipId: string, side: EpicAiSide, squadKey: string): void {
-    const skill = raidBotSkill(side, this.difficulty);
+    const slot = side === "escort" ? this.escortsCrewed++ : 0;
+    const skill = raidBotSkill(side, this.difficulty, slot);
     this.bots.addPilot({
       shipId,
       tier: skill.tier,

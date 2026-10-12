@@ -510,11 +510,14 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 - **ai/** - THE in-game AI = the skill-gate bots (no Phaser). Scenes give each AI ship a **BotPilot**
   (`new BotPilot(tier, {reactionScale, random|seed})`, `fly(frame)` / `onCycleCommitted` / `reset`, same
   shape as PlayerFlightPilot; flies only through applyPilotFlightInput) with the tier from
-  **difficultyToTier** (easy=novice ×0.7 reaction, normal=average, hard=expert ×1.75, brutal=expert ×1), and each
+  **difficultyToTier** in duels (easy=average ×2.2 reaction, normal=average, hard=expert ×1.55,
+  brutal=expert ×0.85) and **squadSkillPlan** in squad modes (Skirmish classic / reinforced, Scenario,
+  Continuous, Epic escorts: a skill per ship slot, e.g. Easy = an average leader with novice wingmen;
+  every plan marks — an unmarked squad loses ~100 %), and each
   squad side a **SquadCommand** (orders + SquadMark; `aiLeader: false` on the player's side, where the
   player marks with MARK_TARGET — R / R3 — read via `PlayerFlightPilot.takeMarkRequest()`; `assistMark`
   lets wingmen mark their own focus while the player has none, never overriding a live player mark).
-  Novice squads focus without marking; the mark bonus needs 2+ living ships on the side.
+  The mark bonus needs 2+ living ships on the side.
   **SquadBattleAi** (Survival/Campaign) adds hazard escape (`safePointFor` → BotPilot `safePoint`)
 - **systems/repair/** - Repair events (hull/shield, source kind + ship) consumed by the per-ship overlay
   (src/ui/hud/overlay, `ShipRepairFeedback`) and pooled repair drones (src/rendering/repairDrones);
@@ -534,10 +537,17 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 - **systems/FlightCapabilities.ts** - specials only if on the dial, dashes only if on the action bar,
   stressed pilots refused red specials and every action, huge ships none (player and bots alike)
 - **systems/ArcTargeting.ts** - THE primary target picker (torus-aware range + arc) of every mode
+- **teams/** - Side identity of squad battles (Skirmish, Epic, Scenario, Reinforcements, online):
+  every ArcadeShip has a `team` (+ its config `squad`); hostility, targeting, squad marks
+  (`teamKey(team)` side keys), auras (`resolveTeamAuras`: same team AND same faction), pools,
+  scenario sides, victory, HUD/radar/roster and telemetry key on team — faction is only looks,
+  builds, points and aura doctrine. Config `teamId: "team_<n>"`; a squad without one is its own
+  team (mirror matches work). Squads spawn via `src/scenes/arcadeBattle/squadDeployment.ts`
 - **reinforcements/** - Reinforcement-pool battles (default for Skirmish, Epic, Scenario;
-  Classic stays a Squad Builder toggle): per-side pool (1000; Epic 1200) spent on every
-  deploy, on-field cap (250; Epic 500), category quotas (bombers / aces / capitals), strategy
-  presets + AI planner, the player's reserve + replacement picker (auto-accepts in 5 s),
+  Classic stays a Squad Builder toggle): per-TEAM pool (1000; Epic 1200) spent on every
+  deploy, on-field cap per team (250; Epic 500), each squad of a team its own sub-reserve
+  (`reinforcements.squads[i]`, index = config squad), category quotas (bombers / aces / capitals), strategy
+  presets + AI planner, every human squad its own reserve + replacement picker (auto-accepts in 5 s),
   pool exhaustion or 3:00 destroyed points decide. Pure `ReinforcementDirector`; scene glue in
   src/scenes/arcadeBattle/reinforcements/ (ReinforcementController, HUD panel, picker).
   Reinforced scenarios play to higher thresholds (reinforcedScenario.ts).
@@ -615,9 +625,11 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
   ArcadeBattleScene (src/scenes/arcadeBattle/online/*) run on the session: `step(tick, inputs)` at
   TICK_MS, sim clock (never `time.now`/frame delta in sim code), seeded saveable RNGs, every seat flown
   from its input (the relay's AI-control flag hands a seat to its bot), hash/snapshot/restore.
-  Squad battles: a side is one faction (relay + lobby enforce `teamFactionConflict`).
+  Squad battles: a side is a TEAM (seat → `team_<n>`), never a faction — mirror and mixed-faction
+  teams are allowed (protocol 3); every human seat has its own reinforcement picker (its input stream).
 - Rule: online battles are built in canonical seat order; only presentation may read `localSeat`.
-- E2E: `tests/e2e/online-battle.spec.ts` (two browsers behind `?netsim=latency,jitter,loss`).
+- E2E: `tests/e2e/online-battle.spec.ts` (two/four browsers behind `?netsim=latency,jitter,loss`:
+  mirror 1v1, mixed-faction 2v2); offline teams: `tests/e2e/teams.spec.ts`.
 
 
 ## Factions

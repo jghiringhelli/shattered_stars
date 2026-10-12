@@ -1,6 +1,7 @@
 /**
  * EpicAiFlight — specification tests for who flies the Boss Raid's AI
- * ships: escorts at the raid difficulty's bot tier, wingmen always average.
+ * ships: escorts crewed slot by slot from the raid difficulty's squad plan
+ * (BotDifficulty.squadSkillPlan), wingmen always average.
  */
 
 import { describe, it, expect } from "vitest";
@@ -10,26 +11,31 @@ import {
   type EpicDifficulty,
 } from "../../../../src/arcade/systems/EpicAiFlight";
 import {
-  BRUTAL_REACTION_SCALE,
-  EASY_REACTION_SCALE,
-  HARD_REACTION_SCALE,
-} from "../../../../src/arcade/ai";
+  squadSkillPlan,
+  squadSlotSkill,
+} from "../../../../src/arcade/ai/BotDifficulty";
 
 describe("raidBotSkill — escorts", () => {
   it.each([
-    ["easy", "novice", EASY_REACTION_SCALE],
-    ["medium", "average", 1],
-    ["hard", "expert", HARD_REACTION_SCALE],
-    ["mythic", "expert", BRUTAL_REACTION_SCALE],
+    ["easy", "easy"],
+    ["medium", "normal"],
+    ["hard", "hard"],
+    ["mythic", "brutal"],
   ] as const)(
-    "flies %s escorts as %s pilots (reaction x%s)",
-    (difficulty, tier, reactionScale) => {
-      expect(raidBotSkill("escort", difficulty)).toEqual({
-        tier,
-        reactionScale,
-      });
+    "crews %s escorts slot by slot from the %s squad plan",
+    (difficulty, label) => {
+      const plan = squadSkillPlan(label, "classic");
+      for (const slot of [0, 1, 2, 3])
+        expect(raidBotSkill("escort", difficulty, slot)).toEqual(
+          squadSlotSkill(plan, slot),
+        );
     },
   );
+
+  it("leads an easy raid's escorts with an average pilot and novice wingmen", () => {
+    expect(raidBotSkill("escort", "easy", 0).tier).toBe("average");
+    expect(raidBotSkill("escort", "easy", 1).tier).toBe("novice");
+  });
 });
 
 describe("raidBotSkill — wingmen", () => {

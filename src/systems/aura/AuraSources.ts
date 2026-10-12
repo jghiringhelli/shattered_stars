@@ -143,7 +143,9 @@ export function buildSources(ships: ReadonlyArray<AuraShip>): SourceInfo[] {
       effect: aura.effect,
       hullRepair: auraHullRepairRate(aura.effect, projection.kind, magnitude),
       stressRelief: ship.auraStressReliefTiers ?? 0,
-      hitChance: ship.auraHitChanceBonus ?? 0,
+      hitChance:
+        (ship.auraHitChanceBonus ?? 0) +
+        (aura.hitChanceBonus ?? 0) * projection.magnitudeScale,
       allyShieldRegen: ship.auraShieldRegenPerSecond ?? 0,
     });
   }
@@ -160,7 +162,9 @@ function withFactionEffect(acc: ActiveAura, source: SourceInfo): ActiveAura {
   const { magnitude } = source;
   switch (source.effect) {
     case "damage":
-      return { ...acc, damageBonus: acc.damageBonus + Math.round(magnitude) };
+      // Fractional: a hit's damage is dithered (DamageRules), so +0.6 adds
+      // 0.6 per hit on average.
+      return { ...acc, damageBonus: acc.damageBonus + magnitude };
     case "damage_reduction":
       return {
         ...acc,

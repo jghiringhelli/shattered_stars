@@ -17,18 +17,24 @@ import type { RunState } from "./RunTypes";
 export type CombatKind = "combat" | "elite" | "boss";
 
 /**
- * Waves fought per battle node, by kind. One wave for every kind: at the
- * game's combat tempo a 1–3 ship wave already takes about a minute, and a
- * boss node's separate escort wave before the boss wave cost the fleet so
- * much persisted hull that a 2-ship wing cleared ~13 % of bosses (ADR-0004
- * sweep). The boss arrives alone (NodeWaveRoster); its phases call in
- * reinforcements.
+ * Waves fought per sector-1 battle node, by kind (later sectors add
+ * {@link EXTRA_WAVES_PER_SECTOR}). Regular waves come first; an elite node's
+ * elite and a boss node's boss arrive on its last wave (NodeWaveRoster), so
+ * elite and boss nodes fight more waves than a combat node (60–120 s against
+ * 45–90 s). A node used to be a single wave (~16 s median); several waves at
+ * a lower enemy lethality (ascension.BASE_ENEMY_DAMAGE_MULTIPLIER) make it
+ * 50 / 75 / 72 s median (ADR-0004, node-length pass 2026-10-12).
  */
 export const WAVES_PER_NODE: Readonly<Record<CombatKind, number>> = {
-  combat: 1,
-  elite: 1,
-  boss: 1,
+  combat: 3,
+  elite: 4,
+  boss: 5,
 };
+/**
+ * Waves a node adds per sector beyond the first: the fleet grows stronger
+ * and clears a wave faster, so later nodes field more of them.
+ */
+export const EXTRA_WAVES_PER_SECTOR = 1;
 
 /**
  * Base scale on the inherited threat curve for roguelite battles. The old
@@ -91,6 +97,8 @@ export interface CombatPlan {
   /** Wave number used for AI tiers (survivalEnemyTier). */
   readonly effectiveWave: number;
   readonly enemyHullMultiplier: number;
+  /** Multiplier on the damage enemies deal to the player's fleet. */
+  readonly enemyDamageMultiplier: number;
   /** Belt tightening steps at the node's first wave. */
   readonly beltSteps: number;
   readonly bossPhases: number;
@@ -123,7 +131,7 @@ export function planCombat(run: RunState): CombatPlan | null {
     kind,
     sector: run.sector,
     row,
-    waves: WAVES_PER_NODE[kind],
+    waves: WAVES_PER_NODE[kind] + (run.sector - 1) * EXTRA_WAVES_PER_SECTOR,
     enemyFaction: pickEnemyFaction(
       rngFor(run.seed, "faction", nodeId),
       run.faction,
@@ -138,6 +146,7 @@ export function planCombat(run: RunState): CombatPlan | null {
     eliteAffixCount: rules.eliteAffixCount,
     effectiveWave,
     enemyHullMultiplier: rules.enemyHullMultiplier,
+    enemyDamageMultiplier: rules.enemyDamageMultiplier,
     beltSteps: Math.min(
       MAX_BELT_STEPS,
       (run.sector - 1) * BELT_STEPS_PER_SECTOR +

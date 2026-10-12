@@ -1,8 +1,9 @@
 /**
  * Regenerating elite — a simulation-style spec that the Survival
- * "Regenerating" affix (2 shield HP/s) leaves an elite killable. Before the
- * regen units were fixed the repair step multiplied the affix by
- * DURABILITY_SCALE (24 HP/s), which out-healed a whole starter wing.
+ * "Regenerating" affix (0.24 shield HP/s, +50 % shields; 2 HP/s before the
+ * R2 regen cap) leaves an elite killable. Before the regen units were fixed
+ * the repair step multiplied the affix by DURABILITY_SCALE (24 HP/s), which
+ * out-healed a whole starter wing.
  *
  * Expected-value fight on the real rules: Survival combat stats, the elite
  * hull multiplier, both sides' default quick builds, the affix effect folded
@@ -52,6 +53,8 @@ const KILL_DEADLINE_MS = 120_000;
 const WING_SIZE = 2;
 /** The wing fires from the elite's flank (neither rear arc nor head-on). */
 const FLANK_OFFSET_PX = 200;
+/** The affix's rate before the R2 regen cap (HP/s). */
+const OLD_AFFIX_HP_PER_S = 2;
 
 interface Elite {
   hull: number;
@@ -188,17 +191,17 @@ function timeToKill(
 describe("Survival Regenerating elite", () => {
   const factions = Object.keys(FACTION_STARTER_SHIPS) as FactionId[];
 
-  it("regenerates 2 shield HP per second (not x DURABILITY_SCALE)", () => {
+  it("regenerates 0.24 shield HP per second (not x DURABILITY_SCALE)", () => {
     const { modifiers } = regeneratingElite(HEAVY_STARTERS.terran_hegemony);
-    expect(modifiers.shieldRegenPerSecond).toBe(2);
+    expect(modifiers.shieldRegenPerSecond).toBe(0.24);
   });
 
-  it("was unkillable when the pipeline rescaled the affix by DURABILITY_SCALE", () => {
+  it("was unkillable at the old 2 HP/s rate rescaled by DURABILITY_SCALE", () => {
     expect(
       timeToKill(
         FACTION_STARTER_SHIPS.free_confederation,
         HEAVY_STARTERS.synthetic_collective,
-        DURABILITY_SCALE,
+        (OLD_AFFIX_HP_PER_S / 0.24) * DURABILITY_SCALE,
       ),
     ).toBe(Infinity);
   });

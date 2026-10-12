@@ -4,7 +4,7 @@
  * of the given tier through DuelBotCrew (sides of 2+ ships under a
  * SquadCommand that marks its focus), cycle flight, quick-build equipment
  * and secondaries (duelRoundWeapons), Ace Duel abilities (sheet + ad hoc
- * dice odds, regenerative shields per cycle), own repair and faction auras
+ * dice odds), own repair and faction auras
  * (simAuras), dice attacks with the squad mark, and the round tempo (one
  * attack per maneuver cycle, hit immunity per attacker). An optional
  * {@link TempoVariant} replays the round at a what-if tempo on a flight
@@ -19,8 +19,6 @@ import type { BotContact, BotTier } from "../arcade/ai";
 import { tickCycleFlight } from "../arcade/systems/CycleFlight";
 import { DuelBotCrew } from "../arcade/systems/DuelBotCrew";
 import { stressModifiersOf } from "../arcade/systems/QuickBuildEquip";
-import { adHocAbilities } from "../arcade/systems/AceDuelAbilities";
-import { shieldsAfterCycle } from "../arcade/systems/AceDuelPilotAi";
 import { DamagePauseTracker, updateSimAuras } from "./simAuras";
 import { countSpecialActions } from "../telemetry/matchStatTypes";
 import { createSeededRng } from "../utils/random";
@@ -247,11 +245,6 @@ function fly(state: RoundState, ship: DuelSimShip): void {
   setFlight(ship, tick.state.motion, tick.state.stress);
   if (!tick.completed) return;
   state.crew.onCycleCommitted(ship);
-  ship.shields = shieldsAfterCycle(
-    ship.shields,
-    ship.maxShields,
-    adHocAbilities(ship.abilities),
-  );
 }
 
 /**

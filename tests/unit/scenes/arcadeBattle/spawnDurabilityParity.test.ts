@@ -47,6 +47,8 @@ function skirmishShip(
       definitionId,
       loadoutId,
       faction: "free_confederation",
+      team: 0,
+      squad: 0,
       pilot,
       ...POSE,
     }),

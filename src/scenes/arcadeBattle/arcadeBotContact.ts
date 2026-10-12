@@ -10,11 +10,12 @@
  */
 
 import type { BotContact } from "../../arcade/ai/BotView";
+import { teamKey, type TeamId } from "../../arcade/teams";
 
 /** What the AI reads of a Skirmish ship record. */
 export interface BotContactSource {
   readonly id: string;
-  readonly faction: string;
+  readonly team: TeamId;
   readonly definitionId: string;
   readonly x: number;
   readonly y: number;
@@ -32,13 +33,13 @@ export interface BotContactSource {
 }
 
 /**
- * @param ship - A Skirmish ship record (its faction is its side).
+ * @param ship - A Skirmish ship record (its team is its side, never its faction).
  * @returns The ship as BotPilot / SquadCommand see it.
  */
 export function toBotContact(ship: BotContactSource): BotContact {
   return {
     id: ship.id,
-    side: ship.faction,
+    side: teamKey(ship.team),
     definitionId: ship.definitionId,
     x: ship.x,
     y: ship.y,

@@ -43,8 +43,8 @@ export const RESEARCH_TREE: readonly ResearchTier[] = [
     optionB: {
       id: "shield_harmonics",
       name: "Shield Harmonics",
-      description: "+10% shields and +1 shield HP/s regeneration.",
-      bonuses: { shieldMultiplier: 1.1, shieldRegenPerSecond: 1 },
+      description: "+20% shields and +0.12 shield HP/s regeneration.",
+      bonuses: { shieldMultiplier: 1.2, shieldRegenPerSecond: 0.12 },
     },
   },
   {

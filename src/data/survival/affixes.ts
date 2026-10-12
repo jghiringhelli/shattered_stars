@@ -49,8 +49,9 @@ export const ELITE_AFFIXES: readonly EliteAffix[] = [
     id: "regenerating",
     name: "Regenerating",
     icon: "♻",
-    description: "Regenerates 2 shield HP/s",
-    effect: { shieldRegenPerSecond: 2 },
+    description: "+50% shields that regenerate 0.24 shield HP/s",
+    shieldMultiplier: 1.5,
+    effect: { shieldRegenPerSecond: 0.24 },
   },
   {
     id: "volatile",

@@ -678,8 +678,10 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       name: "Hawk Assault",
       shipId: "confed_hawk",
       pilotId: "ironwing_chen",
-      upgrades: ["marksman", "heavy_laser_cannon", "seeker_missile"],
-      description: "Heavy assault build",
+      // Marksman + Seeker: with the Heavy Laser Cannon too it won 71–97 % of
+      // duels with 64–71-pt heavy builds (balance round 2); now ~56 % overall.
+      upgrades: ["marksman", "seeker_missile"],
+      description: "Marksman strike build with seeker missiles",
       role: "offense",
     },
     {

@@ -51,6 +51,8 @@ const ELLIPSIS = "…";
 /** What the panel shows this frame. */
 export interface ReinforcementHudFrame {
   readonly sides: readonly SideSummary[];
+  /** The viewer's team side key (its row reads YOU). */
+  readonly viewSide: string;
   readonly preview: readonly DeployOption[];
   readonly camera: CameraLike;
   /** Scene time (ms). */
@@ -126,7 +128,7 @@ export class ReinforcementHud {
     const t = hudRootTransform(camera.zoom, camera.width, camera.height);
     this.root.setPosition(t.x, t.y).setScale(t.scale);
     this.layout(camera.width);
-    this.drawRows(frame.sides);
+    this.drawRows(frame.sides, frame.viewSide);
     this.fitPreview(frame.preview);
     this.fadeEvent(frame.nowMs);
   }
@@ -165,12 +167,12 @@ export class ReinforcementHud {
     );
   }
 
-  private drawRows(sides: readonly SideSummary[]): void {
+  private drawRows(sides: readonly SideSummary[], viewSide: string): void {
     this.bars.clear();
     this.rows.forEach((row, i) => {
       const side = sides[i];
       if (!side) return;
-      setText(row, sideRow(side));
+      setText(row, sideRow(side, viewSide));
       const color = TONE_COLORS[poolTone(side)];
       row.setColor(toCssColor(color));
       const share =

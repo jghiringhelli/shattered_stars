@@ -57,7 +57,12 @@ export function hashArcade(view: ArcadeHashView): number {
     addShip(h, ship, [
       ship.control,
       ship.stress,
-      { cooldown: ship.weaponCooldown, crew: ship.crewMode },
+      {
+        cooldown: ship.weaponCooldown,
+        crew: ship.crewMode,
+        team: ship.team,
+        squad: ship.squad,
+      },
     ]);
   }
   addOrdnance(h, view.shots, view.devices);

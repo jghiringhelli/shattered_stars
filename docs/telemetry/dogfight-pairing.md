@@ -40,3 +40,22 @@ Sparrow v Stiletto the fairest pair at every tier over 600 rounds (two seed rang
 | Sparrow v Stiletto | 53 % | 55 % | 49 % |
 | Owl v Viper | 60 % | 58 % | 36 % |
 | Hawk v Centurion | 48 % | 70 % | 49 % |
+
+## Update (balance round 2): the bots stop weaving
+
+A PilotHands bug (a turn judged before a cycle committed was re-keyed after it, so pilots with
+their target astern alternated left / right turns) made every bot fly worse; with it fixed
+(see ADR-0004, node-length pass) a 1v1 between price classes became one-sided and the Stiletto
+beat the Sparrow 67 % at average on every build pairing (sparrow_swarm / sparrow_ace v
+stiletto_ace / stiletto_basic: 33–40 %). A 40-pair FC x TH screen (default builds, 30 seeds,
+both seatings) put the same-class interceptors closest; confirmed over 60 seeds per seating:
+
+| Pairing (player v bot) | novice | average | expert |
+|---|---|---|---|
+| Sparrow v Stiletto (old default) | — | 33 % | — |
+| Owl v Raptor | (2 decided) | 43 % | 52 % |
+| Owl v Gladius | 0 % | 39 % | 47 % |
+| Raven v Gladius | 8 % | 39 % | 25 % |
+| **Raven v Raptor (new default)** | 75 % of 12 decided | **50 %** | **57 %** |
+
+Novice duels mostly time out (novices rarely land the kill within the limit).

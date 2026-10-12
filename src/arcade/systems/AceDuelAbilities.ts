@@ -2,11 +2,11 @@
  * AceDuelAbilities — how a preset duel ace's pilot abilities act in a shot.
  *
  * Abilities with a real-time reading (PILOT_ABILITY_REALTIME) fold into the
- * ship's modifier sheet next to its quick build, so DiceAttack applies them.
- * Only duel abilities with no real-time entry keep their ad-hoc reading:
- * extra attack / defense dice, marksmanship's chance of +1 damage, and
- * regenerative_shields per maneuver cycle (AceDuelPilotAi). Membership in
- * the table decides, so an ability never acts both ways.
+ * ship's modifier sheet next to its quick build, so DiceAttack applies them
+ * (regenerative_shields: steady regeneration at its sheet rate). Only duel
+ * abilities with no real-time entry keep their ad-hoc reading: extra attack
+ * / defense dice and marksmanship's chance of +1 damage. Membership in the
+ * table decides, so an ability never acts both ways.
  *
  * Pure: no Phaser, no randomness of its own.
  */

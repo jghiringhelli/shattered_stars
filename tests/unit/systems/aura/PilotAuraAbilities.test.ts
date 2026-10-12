@@ -121,7 +121,7 @@ describe("coordinated_assault (allies may Focus / Target Lock)", () => {
   it("gives allies inside +5% hit chance on top of the faction damage", () => {
     expect(buffAt(pilot, 100)).toMatchObject({
       hitChanceBonus: 0.05,
-      damageBonus: 1,
+      damageBonus: FACTION_AURAS[faction].magnitude,
     });
   });
 

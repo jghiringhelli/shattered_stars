@@ -60,8 +60,8 @@ export const ARMORY_MODS: readonly ArmoryMod[] = [
     name: "Regenerative Emitters",
     slot: "shields",
     cost: 200,
-    description: "Shields regenerate 1.5 HP/s in combat.",
-    bonuses: { shieldRegenPerSecond: 1.5 },
+    description: "+15% shields that regenerate 0.24 HP/s in combat.",
+    bonuses: { shieldMultiplier: 1.15, shieldRegenPerSecond: 0.24 },
   },
   {
     id: "overcharged_cannons",

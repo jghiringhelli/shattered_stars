@@ -97,7 +97,10 @@ export class SurvivalBattleRules {
       ),
       speed: run.progression.bonuses.speed,
     };
-    this.engine = new RelicCombatEngine(this.loadout);
+    this.engine = new RelicCombatEngine(
+      this.loadout,
+      plan.enemyDamageMultiplier,
+    );
   }
 
   /** @returns The fleet to spawn, flagship first. */
@@ -138,8 +141,10 @@ export class SurvivalBattleRules {
       total: plan.waves,
       isBossWave: plan.kind === "boss" && this.wave === plan.waves,
       faction: plan.enemyFaction,
-      tierWave: plan.effectiveWave + this.wave - 1,
-      beltSteps: plan.beltSteps + this.wave - 1,
+      // Every wave of a node flies the node's tier (its sector and row) and
+      // its belt: squeezing per wave turned longer nodes into belt deaths.
+      tierWave: plan.effectiveWave,
+      beltSteps: plan.beltSteps,
     };
     return this.current;
   }

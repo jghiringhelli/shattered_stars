@@ -66,8 +66,15 @@ export class RelicCombatEngine {
   >();
   private readonly triggers: { on: RelicTrigger; buff: TimedBuff }[];
 
-  /** @param loadout - The run's relics, mutations and Drive investment. */
-  constructor(private readonly loadout: FleetLoadout) {
+  /**
+   * @param loadout - The run's relics, mutations and Drive investment.
+   * @param enemyDamageScale - Multiplier on every hit the fleet takes (the
+   *   node's enemy lethality, CombatPlan.enemyDamageMultiplier); default 1.
+   */
+  constructor(
+    private readonly loadout: FleetLoadout,
+    private readonly enemyDamageScale = 1,
+  ) {
     this.triggers = [
       ...relicEffectsOf(loadout).flatMap((e) =>
         e.kind === "trigger" ? [{ on: e.on, buff: e.buff }] : [],
@@ -188,7 +195,8 @@ export class RelicCombatEngine {
    * @param role - Its role.
    * @param escortsAlive - Living escorts.
    * @param nowMs - Scene time.
-   * @returns Multiplier on the incoming damage (<1 protects).
+   * @returns Multiplier on the incoming damage (<1 protects): the node's
+   *   enemy lethality, live buffs and Formation Lock.
    */
   incomingMultiplier(
     shipId: string,
@@ -196,7 +204,7 @@ export class RelicCombatEngine {
     escortsAlive: number,
     nowMs: number,
   ): number {
-    let multiplier = 1;
+    let multiplier = this.enemyDamageScale;
     for (const { buff } of this.live(shipId, nowMs))
       multiplier *= buff.damageTakenMultiplier ?? 1;
     if (role === "flagship") {

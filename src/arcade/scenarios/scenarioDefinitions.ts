@@ -57,7 +57,13 @@ const OBJECTIVE_SPREAD_PX = 3 * CONTROL_RANGE_PX;
 /** Crates lie this far apart (px): range 1.5. */
 const CRATE_SPREAD_PX = 600;
 
-/** Network nodes alternate this far above / below the centre line (px). */
+/**
+ * Network nodes sit this far off the centre line (px): A toward the
+ * player's line, C toward the opponent's, B on the centre — point-symmetric
+ * about the centre, so both seats see the same board. (A and C both toward
+ * the player and B toward the opponent gave the opponent's seat 65 % of
+ * reinforced Scrambles; mirrored, the player's.)
+ */
 const NODE_STAGGER_PX = 250;
 
 /**
@@ -124,8 +130,8 @@ export const SCENARIO_DEFINITIONS: Readonly<
     objectiveKind: "scramble",
     slots: [
       { dx: -OBJECTIVE_SPREAD_PX, dy: NODE_STAGGER_PX, label: "A" },
-      { dx: 0, dy: -NODE_STAGGER_PX, label: "B" },
-      { dx: OBJECTIVE_SPREAD_PX, dy: NODE_STAGGER_PX, label: "C" },
+      { dx: 0, dy: 0, label: "B" },
+      { dx: OBJECTIVE_SPREAD_PX, dy: -NODE_STAGGER_PX, label: "C" },
     ],
   },
 };

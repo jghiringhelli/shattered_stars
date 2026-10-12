@@ -9,6 +9,7 @@
 
 import { runBattle, type BattleResult } from "../skill/SkillArena";
 import type { SideSkill } from "../arenaLoop";
+import type { CrewSkill } from "../crewSkill";
 import { sideOf, type SquadList } from "./squadLists";
 import { addTallies, EMPTY_TALLY, type WinTally } from "./balanceStats";
 
@@ -20,10 +21,10 @@ export interface MatchupSpec {
   readonly a: SquadList;
   readonly b: SquadList;
   readonly seeds: readonly number[];
-  /** Pilots of list A; default average. */
-  readonly skillA?: SideSkill;
-  /** Pilots of list B; default average. */
-  readonly skillB?: SideSkill;
+  /** Pilots of list A (a skill or a difficulty's slot plan); default average. */
+  readonly skillA?: CrewSkill;
+  /** Pilots of list B (a skill or a difficulty's slot plan); default average. */
+  readonly skillB?: CrewSkill;
   readonly timeLimitMs?: number;
 }
 

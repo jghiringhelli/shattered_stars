@@ -12,6 +12,7 @@ import {
 } from "../../../../src/arcade/ai/SquadCommand";
 import type { BotContact } from "../../../../src/arcade/ai/BotView";
 import {
+  forgetMarkedTarget,
   markedTargetOf,
   NO_SQUAD_MARKS,
   placeMark,
@@ -142,5 +143,24 @@ describe("SquadCommand — mark assist never overrides the player", () => {
     const marked = placeMark(NO_SQUAD_MARKS, "red", "hidden_boss", 0);
     const marks = run(command, battle(), marked, 1000);
     expect(markedTargetOf(marks, "red", 1000)).toBe("hidden_boss");
+  });
+});
+
+describe("SquadCommand — mark assist after a kill", () => {
+  it("never re-marks an enemy that left the battle while still perceived", () => {
+    const command = new SquadCommand({
+      side: "red",
+      aiLeader: false,
+      assistMark: true,
+    });
+    let marks = run(command, battle());
+    expect(markedTargetOf(marks, "red", 1000)).toBe("b2");
+    // b2 dies: the scene drops it from the battle and forgets its mark, but
+    // the squad's delayed picture still shows it for one reaction delay.
+    const survivors = battle().filter((s) => s.id !== "b2");
+    marks = forgetMarkedTarget(marks, "b2");
+    for (let t = 1050; t <= 3000; t += 50)
+      marks = command.update({ nowMs: t, ships: survivors, marks });
+    expect(markedTargetOf(marks, "red", 3000)).toBe("b1");
   });
 });

@@ -3,7 +3,10 @@ import {
   SurvivalBattleRules,
   type EquipTarget,
 } from "../../../../src/systems/survival/SurvivalBattleRules";
-import { planCombat } from "../../../../src/systems/survival/CombatNodePlan";
+import {
+  planCombat,
+  WAVES_PER_NODE,
+} from "../../../../src/systems/survival/CombatNodePlan";
 import { maneuverDifficultyOf } from "../../../../src/systems/survival/maneuverDifficulty";
 import { NEUTRAL_MODIFIERS } from "../../../../src/core/CombatModifiers";
 import { DURABILITY_SCALE } from "../../../../src/config";
@@ -71,21 +74,29 @@ describe("SurvivalBattleRules — the player's fleet", () => {
     rules.equipPlayer(flagship, "flagship", run.flagship);
     rules.equipPlayer(escort, "escort", run.flagship);
     expect(flagship.modifiers.shieldRegenPerSecond).toBe(0);
-    expect(escort.modifiers.shieldRegenPerSecond).toBe(2);
+    expect(escort.modifiers.shieldRegenPerSecond).toBe(0.24);
   });
 });
 
 describe("SurvivalBattleRules — waves and enemies", () => {
-  it("sends the boss with a boss node's single wave (its phases bring the reinforcements)", () => {
+  it("sends the boss on a boss node's last wave, after its regular patrols (its phases bring the reinforcements)", () => {
     const rules = rulesFor(atActiveNode(RunBuilder.aRun().build(), "boss"));
-    expect(rules.plan.waves).toBe(1);
-    const only = rules.nextWave();
-    expect(only).toMatchObject({ index: 1, total: 1, isBossWave: true });
+    expect(rules.plan.waves).toBe(WAVES_PER_NODE.boss);
+    for (let i = 1; i < WAVES_PER_NODE.boss; i++) {
+      expect(rules.nextWave()).toMatchObject({ index: i, isBossWave: false });
+      expect(rules.onLastWave).toBe(false);
+    }
+    const last = rules.nextWave();
+    expect(last).toMatchObject({
+      index: WAVES_PER_NODE.boss,
+      total: WAVES_PER_NODE.boss,
+      isBossWave: true,
+    });
     expect(rules.onLastWave).toBe(true);
-    expect(rules.currentWave()).toBe(only);
+    expect(rules.currentWave()).toBe(last);
   });
 
-  it("steps tiers and the belt each wave of a multi-wave node, the boss arriving last", () => {
+  it("keeps the node's pilot tier and belt on every wave (no squeeze mid-node)", () => {
     const run = atActiveNode(RunBuilder.aRun().build(), "boss");
     const rules = new SurvivalBattleRules(run, {
       ...planCombat(run)!,
@@ -96,8 +107,10 @@ describe("SurvivalBattleRules — waves and enemies", () => {
     expect(rules.onLastWave).toBe(false);
     const second = rules.nextWave();
     expect(second.isBossWave).toBe(true);
-    expect(second.tierWave).toBe(first.tierWave + 1);
-    expect(second.beltSteps).toBe(first.beltSteps + 1);
+    expect(second.tierWave).toBe(first.tierWave);
+    expect(second.tierWave).toBe(rules.plan.effectiveWave);
+    expect(second.beltSteps).toBe(first.beltSteps);
+    expect(second.beltSteps).toBe(rules.plan.beltSteps);
     expect(rules.onLastWave).toBe(true);
     expect(rules.currentWave()).toBe(second);
   });

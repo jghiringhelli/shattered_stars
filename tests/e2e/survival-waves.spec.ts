@@ -99,7 +99,7 @@ test.describe("SurvivalScene — wave escalation", () => {
 // ─── Sector boss ──────────────────────────────────────────────────────────────
 
 test.describe("SurvivalScene — sector boss", () => {
-  test("a boss node sends the boss alone, with its phases, on its only wave", async ({
+  test("a boss node sends the boss alone, with its phases, on its last wave after the patrols", async ({
     page,
   }) => {
     await page.goto("/");
@@ -135,12 +135,44 @@ test.describe("SurvivalScene — sector boss", () => {
       });
     });
     await waitForScene(page, "SurvivalScene");
-    await page.waitForFunction(
+    // The regular patrols come first; the boss arrives on the node's last wave.
+    const waves: number = await page.evaluate(
       () =>
-        ((window as any).game.scene.getScene("SurvivalScene") as any)
-          ?.isWaveActive === true,
+        ((window as any).game.scene.getScene("SurvivalScene") as any).rules.plan
+          .waves,
+    );
+    for (let wave = 1; wave < waves; wave++) {
+      await page.waitForFunction(
+        () => {
+          const s = (window as any).game.scene.getScene("SurvivalScene") as any;
+          return s?.isWaveActive === true && s.enemyShipIds.length > 0;
+        },
+        undefined,
+        { timeout: 15_000 },
+      );
+      const bossEarly = await page.evaluate(() => {
+        const s = (window as any).game.scene.getScene("SurvivalScene") as any;
+        const early = [...s.ships.values()].some((sh: any) =>
+          String(sh.id).startsWith("boss_"),
+        );
+        for (const id of [...s.enemyShipIds]) s.destroyShip(id, true);
+        s.checkWaveComplete();
+        return early;
+      });
+      expect(bossEarly).toBe(false);
+    }
+    await page.waitForFunction(
+      () => {
+        const s = (window as any).game.scene.getScene("SurvivalScene") as any;
+        return (
+          s?.isWaveActive === true &&
+          [...s.ships.values()].some((sh: any) =>
+            String(sh.id).startsWith("boss_"),
+          )
+        );
+      },
       undefined,
-      { timeout: 10_000 },
+      { timeout: 15_000 },
     );
     const result = await page.evaluate(async () => {
       const { bossMultiplier } =
@@ -165,7 +197,7 @@ test.describe("SurvivalScene — sector boss", () => {
       };
     });
     expect(result.kind).toBe("boss");
-    expect(result.waves).toBe(1);
+    expect(result.waves).toBeGreaterThan(1);
     expect(result.phases).toBeGreaterThanOrEqual(1);
     expect(result.tracked).toBe(1);
     // The boss flies alone (no bonus elite, no regulars to squad-mark with).

@@ -87,42 +87,63 @@ export async function session(
 
 /**
  * Host opens a room in `mode`, the guest joins by code, both fly the given
- * factions (a squad battle's sides are factions), ready up and land in
- * `sceneKey`.
+ * squads (any factions: a side is a team), ready up and land in `sceneKey`.
  */
 export async function startOnlineMatch(
   host: Page,
   guest: Page,
   mode: string,
   sceneKey: string,
+  squads: readonly OnlineSquad[] = SQUADS,
 ): Promise<void> {
-  await session(host, "selectMode", mode);
-  await session(host, "createRoom");
-  await waitForLobby(host, "s.room !== null");
-  const code = await host.evaluate(
-    () => (window as any).game.registry.get("onlineSession").state.room.code,
-  );
-  await session(guest, "joinRoom", code);
-  await waitForLobby(
-    host,
-    "s.room.players.length === 2 && s.room.players.every((p) => p.loadout)",
-  );
-  if (mode !== "dogfight") {
-    await session(host, "setLoadout", SQUADS[0]);
-    await session(guest, "setLoadout", SQUADS[1]);
-    await waitForLobby(
-      host,
-      `s.room.players.every((p) => p.loadout && p.loadout.ships.length === 3)`,
-    );
-  }
-  await session(host, "setReady", true);
-  await session(guest, "setReady", true);
-  await waitForScene(host, sceneKey, 30_000);
-  await waitForScene(guest, sceneKey, 30_000);
+  await startOnlineRoom([host, guest], mode, sceneKey, squads);
 }
 
-/** Squads of the e2e squad battles (one faction per side). */
-const SQUADS = [
+/** A seat's squad (the room loadout). */
+export interface OnlineSquad {
+  readonly faction: string;
+  readonly ships: readonly string[];
+}
+
+/**
+ * The first page opens a room in `mode`, every other page joins by code in
+ * order (the relay seats them 0, 1, 2… and, in team modes, alternates their
+ * teams), each flies its squad, all ready up and land in `sceneKey`.
+ */
+export async function startOnlineRoom(
+  pages: readonly Page[],
+  mode: string,
+  sceneKey: string,
+  squads: readonly OnlineSquad[] = SQUADS,
+): Promise<void> {
+  const [host, ...guests] = pages;
+  await session(host!, "selectMode", mode);
+  await session(host!, "createRoom");
+  await waitForLobby(host!, "s.room !== null");
+  const code = await host!.evaluate(
+    () => (window as any).game.registry.get("onlineSession").state.room.code,
+  );
+  for (const [i, guest] of guests.entries()) {
+    await session(guest, "joinRoom", code);
+    await waitForLobby(host!, `s.room.players.length === ${i + 2}`);
+  }
+  await waitForLobby(host!, "s.room.players.every((p) => p.loadout)");
+  if (mode !== "dogfight") {
+    for (const [i, page] of pages.entries())
+      await session(page, "setLoadout", squads[i % squads.length]);
+    const key = (l: OnlineSquad) => `${l.faction}:${l.ships.join(",")}`;
+    const wanted = pages.map((_, i) => key(squads[i % squads.length]!));
+    await waitForLobby(
+      host!,
+      `[...s.room.players].sort((a, b) => a.seat - b.seat).map((p) => p.loadout ? p.loadout.faction + ":" + p.loadout.ships.join(",") : "").join("|") === ${JSON.stringify(wanted.join("|"))}`,
+    );
+  }
+  for (const page of pages) await session(page, "setReady", true);
+  for (const page of pages) await waitForScene(page, sceneKey, 30_000);
+}
+
+/** Default squads of the e2e squad battles (two factions; any pairing is allowed). */
+const SQUADS: readonly OnlineSquad[] = [
   {
     faction: "terran_hegemony",
     ships: ["terran_gladius", "terran_viper", "terran_viper"],
@@ -131,7 +152,7 @@ const SQUADS = [
     faction: "void_corsairs",
     ships: ["corsair_raider", "corsair_raider", "corsair_raider"],
   },
-] as const;
+];
 
 /** @returns The battle scene's online diagnostics. */
 export async function onlineDebug(

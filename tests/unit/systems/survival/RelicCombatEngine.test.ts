@@ -75,9 +75,14 @@ describe("FleetEffects", () => {
     const three = loadout({
       relicIds: ["capacitor_bank", "regen_lattice", "ablative_hull"],
     });
-    const regen = (l: FleetLoadout) =>
-      combineEffects(staticEffectsFor(l, "escort", 0)).shieldRegenPerSecond;
-    expect(regen(three) - regen(two)).toBe(3);
+    const sheet = (l: FleetLoadout) =>
+      combineEffects(staticEffectsFor(l, "escort", 0));
+    expect(
+      sheet(three).shieldRegenPerSecond - sheet(two).shieldRegenPerSecond,
+    ).toBeCloseTo(0.24, 10);
+    expect(
+      sheet(three).damageTakenMultiplier / sheet(two).damageTakenMultiplier,
+    ).toBeCloseTo(0.85, 10);
   });
 
   it("scales flagship max hull with systems mutations", () => {
@@ -123,6 +128,16 @@ describe("RelicCombatEngine triggers", () => {
     engine.onFlightEvent("p0", "flagship", "barrel_roll", 0);
     expect(engine.incomingMultiplier("p0", "flagship", 0, 1000)).toBe(0.5);
     expect(engine.incomingMultiplier("p0", "flagship", 0, 2000)).toBe(1);
+  });
+
+  it("scales every incoming hit by the node's enemy lethality, on top of buffs", () => {
+    const engine = new RelicCombatEngine(
+      loadout({ relicIds: ["slipstream_vanes"] }),
+      0.75,
+    );
+    expect(engine.incomingMultiplier("e1", "escort", 0, 0)).toBe(0.75);
+    engine.onFlightEvent("p0", "flagship", "barrel_roll", 0);
+    expect(engine.incomingMultiplier("p0", "flagship", 0, 1000)).toBe(0.375);
   });
 
   it("restores shields on a barrel roll with Phase Flicker", () => {

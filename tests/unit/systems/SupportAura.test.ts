@@ -284,7 +284,9 @@ describe("class-based aura scaling", () => {
   });
 
   it("a capital projects a broad field at reduced magnitude", () => {
-    const reach = base * SIZE_RADIUS_MULTIPLIER.huge - 20;
+    const reach =
+      FACTION_AURAS.free_confederation.radius * SIZE_RADIUS_MULTIPLIER.huge -
+      20;
     const { buffs } = resolveSupportAuras([
       ship({
         id: "cap",
@@ -379,5 +381,61 @@ describe("command upgrades widen the projected aura", () => {
 
   it("adds nothing for ships without command upgrades", () => {
     expect(auraRadiusBonusFor(["hull_upgrade"])).toBe(0);
+  });
+});
+
+describe("faction aura rework (balance round 2)", () => {
+  it("Coordinated Fire passes a fractional damage bonus through (hits dither it) over a wide field", () => {
+    const aura = FACTION_AURAS.terran_hegemony;
+    expect(Number.isInteger(aura.magnitude)).toBe(false);
+    expect(aura.radius).toBeGreaterThanOrEqual(
+      FACTION_AURAS.void_corsairs.radius,
+    );
+    const { buffs } = resolveSupportAuras([
+      ship({ id: "sup", role: "support", x: 0, y: 0 }),
+      ship({ id: "ally", x: aura.radius - 10, y: 0 }),
+    ]);
+    expect(buffs.get("ally")!.damageBonus).toBeCloseTo(aura.magnitude, 10);
+  });
+
+  it("Raider's Cadence grants covered allies a hit-chance bonus besides stress relief", () => {
+    const aura = FACTION_AURAS.void_corsairs;
+    expect(aura.hitChanceBonus ?? 0).toBeGreaterThan(0);
+    const { buffs } = resolveSupportAuras([
+      ship({
+        id: "sup",
+        role: "support",
+        faction: "void_corsairs",
+        x: 0,
+        y: 0,
+      }),
+      ship({ id: "ally", faction: "void_corsairs", x: 50, y: 0 }),
+      ship({ id: "far", faction: "void_corsairs", x: aura.radius + 50, y: 0 }),
+    ]);
+    expect(buffs.get("ally")!.stressReliefTiers).toBe(1);
+    expect(buffs.get("ally")!.hitChanceBonus).toBeCloseTo(
+      aura.hitChanceBonus!,
+      10,
+    );
+    expect(buffs.get("far")?.hitChanceBonus ?? 0).toBe(0);
+  });
+
+  it("scales the hit-chance bonus with the projector's class like the field's strength", () => {
+    const aura = FACTION_AURAS.void_corsairs;
+    const { buffs } = resolveSupportAuras([
+      ship({
+        id: "cap",
+        role: "capital",
+        size: "huge",
+        faction: "void_corsairs",
+        x: 0,
+        y: 0,
+      }),
+      ship({ id: "ally", faction: "void_corsairs", x: 50, y: 0 }),
+    ]);
+    expect(buffs.get("ally")!.hitChanceBonus).toBeCloseTo(
+      aura.hitChanceBonus! * 0.6,
+      10,
+    );
   });
 });

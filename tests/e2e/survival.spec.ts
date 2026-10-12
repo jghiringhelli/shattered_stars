@@ -75,6 +75,16 @@ async function clearWave(page: any): Promise<void> {
   });
 }
 
+/** Clears every wave of the node (its waves arrive one after the other). */
+async function clearNode(page: any): Promise<void> {
+  const waves = await page.evaluate(
+    () =>
+      ((window as any).game.scene.getScene("SurvivalScene") as any).rules.plan
+        .waves as number,
+  );
+  for (let wave = 0; wave < waves; wave++) await clearWave(page);
+}
+
 /** Clicks the first enabled card of the map's open choice panel. */
 async function clickMapCard(page: any, index = 0): Promise<void> {
   await page.waitForFunction(
@@ -175,14 +185,14 @@ test.describe("SurvivalScene — waves", () => {
   test("clearing a wave that is not the last sends the next one", async ({
     page,
   }) => {
-    // Every node kind is one wave today (ADR-0004); the scene still flies
-    // multi-wave nodes, so give this combat node's plan a second wave
-    // before its first wave arrives (2 s after the scene starts).
+    // A combat node fights several waves (CombatNodePlan.WAVES_PER_NODE).
     await launchNode(page, "combat");
-    await page.evaluate(() => {
-      const s = (window as any).game.scene.getScene("SurvivalScene") as any;
-      s.rules.plan.waves = 2;
-    });
+    const waves = await page.evaluate(
+      () =>
+        ((window as any).game.scene.getScene("SurvivalScene") as any).rules.plan
+          .waves,
+    );
+    expect(waves).toBeGreaterThan(1);
     await clearWave(page);
     await page.waitForFunction(
       () => {
@@ -208,7 +218,7 @@ test.describe("SurvivalScene — node cleared", () => {
     page,
   }) => {
     await launchSurvival(page);
-    await clearWave(page);
+    await clearNode(page);
     await waitForScene(page, "SurvivalMapScene", 10_000);
     const before = await page.evaluate(() => {
       const map = (window as any).game.scene.getScene(
@@ -247,7 +257,7 @@ test.describe("SurvivalScene — node cleared", () => {
 
   test("a reroll card spends a reroll charge and redraws", async ({ page }) => {
     await launchSurvival(page);
-    await clearWave(page);
+    await clearNode(page);
     await waitForScene(page, "SurvivalMapScene", 10_000);
     const read = () =>
       page.evaluate(() => {

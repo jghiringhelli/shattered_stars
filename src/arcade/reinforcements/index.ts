@@ -79,6 +79,7 @@ export {
   parseReserveEntries,
   type ReinforcementSetup,
   type SidePlan,
+  type SquadPlan,
 } from "./reinforcementConfig";
 export {
   DEPLOY_EDGE_OFFSET_PX,
@@ -105,6 +106,7 @@ export {
   type DeployPilot,
   type Deployment,
   type DirectorSetup,
+  type DirectorMemberSetup,
   type DirectorSideSetup,
   type PickerView,
 } from "./directorTypes";

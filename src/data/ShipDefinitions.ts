@@ -987,7 +987,9 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 4 },
       size: "small",
       actions: ["focus", "target_lock", "barrel_roll"],
-      pointCost: 50,
+      // Top of its pricing tolerance (expected 50 ± 3): the hull played like
+      // +17 % more points than its price after the bots stopped weaving.
+      pointCost: 53,
     },
     spriteKey: "ship_confed_hawk",
     description:

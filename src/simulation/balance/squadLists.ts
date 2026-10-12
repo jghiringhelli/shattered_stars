@@ -16,7 +16,7 @@ import { getShipDefinition } from "../../data/ShipDefinitions";
 import { getLoadoutById } from "../../data/ShipLoadouts";
 import type { QuickBuildSquad } from "../../data/SquadronPresets";
 import type { SideSpec } from "../skill/ArenaSpec";
-import type { SideSkill } from "../arenaLoop";
+import { crewSlotSkill, crewSquadSetup, type CrewSkill } from "../crewSkill";
 
 /** Every faction, in roster order. */
 export const BALANCE_FACTIONS: readonly FactionId[] = [
@@ -152,17 +152,20 @@ export function monoList(
 
 /**
  * @param list - A squad.
- * @param skill - Its pilots' tier and reaction.
+ * @param skill - Its pilots' tier and reaction, or a difficulty's slot plan.
  * @returns The arena side (squad layer on).
  */
-export function sideOf(list: SquadList, skill: SideSkill): SideSpec {
+export function sideOf(list: SquadList, skill: CrewSkill): SideSpec {
   return {
-    ships: list.ships.map((ship) => ({
-      definitionId: ship.definitionId,
-      loadoutId: ship.loadoutId,
-      tier: skill.tier,
-      reactionScale: skill.reactionScale,
-    })),
-    squad: {},
+    ships: list.ships.map((ship, slot) => {
+      const pilot = crewSlotSkill(skill, slot);
+      return {
+        definitionId: ship.definitionId,
+        loadoutId: ship.loadoutId,
+        tier: pilot.tier,
+        reactionScale: pilot.reactionScale,
+      };
+    }),
+    squad: crewSquadSetup(skill),
   };
 }

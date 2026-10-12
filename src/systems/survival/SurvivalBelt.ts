@@ -7,7 +7,7 @@
  * a third of that, so straying is punished without being a death sentence.
  */
 
-import { DURABILITY_SCALE } from "../../config";
+import { BATTLEFIELD_SIZE, DURABILITY_SCALE } from "../../config";
 import {
   tightenBelt,
   type BeltConfig,
@@ -28,6 +28,15 @@ export const SURVIVAL_BELT_DAMAGE_RAMP: BeltDamageRamp = {
 /** Most real-time damage the belt deals per second, at its wall (HP/s). */
 export const SURVIVAL_BELT_MAX_REAL_DPS =
   SURVIVAL_BELT_DAMAGE_RAMP.maxPerSecond * DURABILITY_SCALE;
+
+/**
+ * The world size Survival's AI pilots and squads reason in (SquadBattleAi):
+ * twice the battlefield, so the torus never wraps for them. The arena's
+ * wrap lies inside the belt — chasing a foe "the short way" across it sent
+ * both sides into the belt, back to the centre and in again for minutes
+ * (5 % of multi-wave nodes stalled to the sim's time limit).
+ */
+export const SURVIVAL_AI_WORLD_SIZE = BATTLEFIELD_SIZE * 2;
 
 /**
  * @param steps - Squeezes so far (node plan + waves).

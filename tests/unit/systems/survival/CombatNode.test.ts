@@ -1,12 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
   combatKindOf,
+  EXTRA_WAVES_PER_SECTOR,
   MAX_BELT_STEPS,
   MAX_REGULARS_PER_WAVE,
   planCombat,
   shouldStartNextBossPhase,
   WAVES_PER_NODE,
 } from "../../../../src/systems/survival/CombatNodePlan";
+import { BASE_ENEMY_DAMAGE_MULTIPLIER } from "../../../../src/data/survival/ascension";
 import { ROGUELITE_THREAT_SCALE } from "../../../../src/systems/survival/CombatNodePlan";
 import {
   completeCombat,
@@ -57,6 +59,24 @@ describe("planCombat", () => {
     expect(survivalEnemyTier(planCombat(deep)!.effectiveWave, "regular")).toBe(
       "expert",
     );
+  });
+
+  it("fights more waves in later sectors, one more on elite nodes and two more on boss nodes", () => {
+    const at = (kind: "combat" | "elite" | "boss", sector: number) =>
+      planCombat({ ...atActiveNode(RunBuilder.aRun().build(), kind), sector })!
+        .waves;
+    expect(at("combat", 1)).toBe(WAVES_PER_NODE.combat);
+    expect(at("combat", 3)).toBe(
+      WAVES_PER_NODE.combat + 2 * EXTRA_WAVES_PER_SECTOR,
+    );
+    expect(at("elite", 2)).toBe(at("combat", 2) + 1);
+    expect(at("boss", 2)).toBe(at("combat", 2) + 2);
+  });
+
+  it("carries the run's enemy lethality into the plan", () => {
+    const plan = planCombat(atActiveNode(RunBuilder.aRun().build(), "combat"))!;
+    expect(plan.enemyDamageMultiplier).toBe(BASE_ENEMY_DAMAGE_MULTIPLIER);
+    expect(BASE_ENEMY_DAMAGE_MULTIPLIER).toBeLessThan(1);
   });
 
   it("fields at most two regulars per wave in every sector (sector 3 flew four experts)", () => {

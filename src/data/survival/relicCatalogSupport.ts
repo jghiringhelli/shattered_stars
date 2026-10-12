@@ -45,12 +45,17 @@ export const SQUADRON_RELICS: readonly Relic[] = [
     archetype: "squadron",
     tags: ["escort", "shields"],
     pool: "base",
-    description: "Escorts gain +1 damage and regenerate 1 shield HP/s",
+    description:
+      "Escorts gain +1 damage, take 10% less damage and regenerate 0.12 shield HP/s",
     effects: [
       {
         kind: "static",
         scope: "escorts",
-        effect: { laserDamageBonus: 1, shieldRegenPerSecond: 1 },
+        effect: {
+          laserDamageBonus: 1,
+          damageTakenMultiplier: 0.9,
+          shieldRegenPerSecond: 0.12,
+        },
       },
     ],
   },
@@ -133,9 +138,14 @@ export const BULWARK_RELICS: readonly Relic[] = [
     archetype: "bulwark",
     tags: ["shields"],
     pool: "base",
-    description: "+2 shield HP/s regen for the fleet",
+    description:
+      "+0.24 shield HP/s regen and +4 shield HP per kill for the fleet",
     effects: [
-      { kind: "static", scope: "fleet", effect: { shieldRegenPerSecond: 2 } },
+      {
+        kind: "static",
+        scope: "fleet",
+        effect: { shieldRegenPerSecond: 0.24, shieldsPerKill: 4 },
+      },
     ],
   },
   {

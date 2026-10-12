@@ -46,7 +46,11 @@ export function homePoint(
  * @param count - Ships on the side.
  * @param side - The side.
  * @param worldSize - Torus side.
- * @returns One start pose per ship: centre first, then alternately left and right.
+ * @returns One start pose per ship: centre first, then alternately left and
+ *   right of the ship's own heading — so the opponent's line is the
+ *   player's turned half a circle about the centre (a mirrored fan-out
+ *   handed one seat the pilots' left/right habits: the player seat won
+ *   35 % of reinforced Salvage Missions).
  */
 export function deploymentPoses(
   count: number,
@@ -54,10 +58,11 @@ export function deploymentPoses(
   worldSize: number,
 ): DeployPose[] {
   const home = homePoint(side, worldSize);
+  const lateral = side === "player" ? 1 : -1;
   return Array.from({ length: count }, (_, i) => {
     const step = Math.ceil(i / 2) * (i % 2 === 1 ? -1 : 1);
     return {
-      x: home.x + step * SCENARIO_DEPLOY_SPACING_PX,
+      x: home.x + lateral * step * SCENARIO_DEPLOY_SPACING_PX,
       y: home.y,
       angle: FACING[side],
     };

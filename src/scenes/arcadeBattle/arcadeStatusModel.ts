@@ -5,6 +5,7 @@
  */
 
 import type { ShipControlState } from "../../core/ArcadeControls";
+import type { TeamId } from "../../arcade/teams";
 import {
   canEmergencyRepair,
   canFireMainBeam,
@@ -156,6 +157,7 @@ export function formatSeconds(ms: number): string {
 export interface RosterShipView {
   readonly id: string;
   readonly faction: string;
+  readonly team: TeamId;
   readonly hull: number;
   readonly maxHull: number;
   readonly shields: number;
@@ -170,53 +172,79 @@ export interface RosterPip {
   readonly isPlayer: boolean;
 }
 
-/** One faction's row in the roster. */
+/** One team's row in the roster. */
 export interface RosterTeam {
-  readonly factionId: string;
+  readonly team: TeamId;
+  /** Factions flying for it, in order of appearance. */
+  readonly factions: readonly string[];
+  /** "▲ TERRAN HEGEMONY" (▼ for other teams; mixed teams "▲ HEGEMONY + CORSAIRS"). */
   readonly label: string;
   readonly isPlayerSide: boolean;
   readonly pips: ReadonlyArray<RosterPip>;
 }
 
+/** Side glyphs of a roster row: the label never relies on colour alone. */
+const ALLY_GLYPH = "▲";
+const ENEMY_GLYPH = "▼";
+
 /**
- * Pips a faction keeps at most while some are fallen ships: one roster line
+ * Pips a team keeps at most while some are fallen ships: one roster line
  * (184 px panel − 2 × 12 px padding, 14 px per pip). Reinforcement battles
  * deploy many ships; the oldest fallen pips go first, living ships stay.
  */
 export const ROSTER_MAX_PIPS = 11;
 
 /**
- * Ships grouped by faction, the player's side first.
+ * Ships grouped by team, the player's team first.
  *
  * @param ships - Every ship in the battle (dead ones show as empty pips,
  *   the oldest dropped past {@link ROSTER_MAX_PIPS}).
- * @param playerFaction - The player's faction.
+ * @param playerTeam - The viewer's team.
  * @param playerId - The player's ship id.
- * @returns One team per faction.
+ * @returns One row per team.
  */
 export function rosterTeams(
   ships: Iterable<RosterShipView>,
-  playerFaction: string,
+  playerTeam: TeamId,
   playerId: string | null,
 ): RosterTeam[] {
-  const byFaction = new Map<string, RosterPip[]>();
+  const byTeam = new Map<TeamId, { factions: string[]; pips: RosterPip[] }>();
   for (const ship of ships) {
-    const pips = byFaction.get(ship.faction) ?? [];
-    pips.push({
+    const row = byTeam.get(ship.team) ?? { factions: [], pips: [] };
+    if (!row.factions.includes(ship.faction)) row.factions.push(ship.faction);
+    row.pips.push({
       hullFraction: fraction(ship.hull, ship.maxHull),
       shieldFraction: fraction(ship.shields, ship.maxShields),
       alive: ship.hull > 0,
       isPlayer: ship.id === playerId,
     });
-    byFaction.set(ship.faction, pips);
+    byTeam.set(ship.team, row);
   }
-  const teams = [...byFaction].map(([factionId, pips]) => ({
-    factionId,
-    label: factionId.replace(/_/g, " ").toUpperCase(),
-    isPlayerSide: factionId === playerFaction,
-    pips: withoutOldestFallen(pips),
+  const teams = [...byTeam].map(([team, row]) => ({
+    team,
+    factions: row.factions,
+    label: rosterLabel(row.factions, team === playerTeam),
+    isPlayerSide: team === playerTeam,
+    pips: withoutOldestFallen(row.pips),
   }));
   return teams.sort((a, b) => Number(b.isPlayerSide) - Number(a.isPlayerSide));
+}
+
+/**
+ * @param factions - A team's factions.
+ * @param isPlayerSide - Whether it is the viewer's team.
+ * @returns Its row label: glyph, then the faction (full name alone, short names mixed).
+ */
+function rosterLabel(
+  factions: readonly string[],
+  isPlayerSide: boolean,
+): string {
+  const words = factions.map((f) => f.replace(/_/g, " ").toUpperCase());
+  const name =
+    words.length === 1
+      ? words[0]!
+      : words.map((w) => w.split(" ").pop()!).join(" + ");
+  return `${isPlayerSide ? ALLY_GLYPH : ENEMY_GLYPH} ${name}`;
 }
 
 /** @returns The pips minus the oldest fallen ones past {@link ROSTER_MAX_PIPS}. */

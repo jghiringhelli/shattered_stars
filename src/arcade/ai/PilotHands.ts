@@ -68,6 +68,12 @@ export class PilotHands {
   private rollFrame = -1;
   private lastThrottleTapMs = Number.NEGATIVE_INFINITY;
   private sharpTurnSent = false;
+  /**
+   * The cycle committed since the last decision: the intent was judged from
+   * where the old maneuver ended — where the new one starts — so its sharp
+   * turn (a one-shot key) waits for the pilot's next decision.
+   */
+  private steeringStale = false;
 
   /**
    * Take a new decision: steering/throttle persist, one-shots arm once.
@@ -75,6 +81,7 @@ export class PilotHands {
    */
   setIntent(intent: PilotIntent): void {
     this.intent = intent;
+    this.steeringStale = false;
     if (intent.special) this.pendingSpecial = intent.special;
     if (intent.boost) this.pendingBoost = true;
     if (intent.barrelRoll && this.rollFrame < 0)
@@ -132,6 +139,7 @@ export class PilotHands {
   onCycleCommitted(started: ManeuverDirection): void {
     this.memory = onPilotCycleCommitted(this.memory, started);
     this.sharpTurnSent = false;
+    this.steeringStale = true;
   }
 
   /**
@@ -195,7 +203,8 @@ export class PilotHands {
     if (wanted === "straight") return NO_KEYS;
     const side = wanted.endsWith("left") ? "left" : "right";
     if (wanted.startsWith("turn")) {
-      if (queued !== wanted && !this.sharpTurnSent) {
+      // One edge per cycle: a stale turn would use it up and block the fix.
+      if (queued !== wanted && !this.sharpTurnSent && !this.steeringStale) {
         edges.add(side === "left" ? "SHARP_TURN_LEFT" : "SHARP_TURN_RIGHT");
         this.sharpTurnSent = true;
       }

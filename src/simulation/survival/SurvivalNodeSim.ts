@@ -29,7 +29,10 @@ import { planCombat } from "../../systems/survival/CombatNodePlan";
 import type { CombatOutcome } from "../../systems/survival/CombatResolution";
 import type { RunState } from "../../systems/survival/RunTypes";
 import { SurvivalBattleRules } from "../../systems/survival/SurvivalBattleRules";
-import { survivalBelt } from "../../systems/survival/SurvivalBelt";
+import {
+  survivalBelt,
+  SURVIVAL_AI_WORLD_SIZE,
+} from "../../systems/survival/SurvivalBelt";
 import { SurvivalRunController } from "../../systems/survival/SurvivalRunController";
 import { countSpecialActions } from "../../telemetry/matchStatTypes";
 import { createSeededRng } from "../../utils/random";
@@ -126,7 +129,7 @@ function openBattle(run: RunState, playerBeltDamage: boolean): NodeBattle {
   const rng = createSeededRng(plan.combatSeed ^ 0x5bd1e995);
   let belt = survivalBelt(plan.beltSteps);
   const squadAi = new SquadBattleAi({
-    worldSize: BATTLEFIELD_SIZE,
+    worldSize: SURVIVAL_AI_WORLD_SIZE,
     random: () => rng.next(),
     assistMark: true,
     safePointFor: (x, y) => beltRetreatPoint({ x, y }, ARENA_CENTER, belt),

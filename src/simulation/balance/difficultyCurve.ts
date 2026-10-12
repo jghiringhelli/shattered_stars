@@ -12,7 +12,12 @@
  */
 
 import type { FactionId } from "../../config";
-import { difficultyToTier, type BotSkill } from "../../arcade/ai/BotDifficulty";
+import {
+  difficultyToTier,
+  squadSkillPlan,
+  type BotSkill,
+} from "../../arcade/ai/BotDifficulty";
+import type { CrewSkill } from "../crewSkill";
 import { SCENARIO_IDS, type ScenarioId } from "../../arcade/scenarios";
 import { pickOpponentFaction } from "../../core/squadTypes";
 import { ACE_MATCHUPS } from "../../data/AceMatchups";
@@ -53,7 +58,38 @@ export function playerVersusDifficulty(
   label: DifficultyLabel,
   seeds: readonly number[],
 ): WinTally {
-  return playerVersusSkill(mode, difficultyToTier(label), seeds);
+  switch (mode) {
+    case "classic":
+      return playerVersusCrew(mode, squadSkillPlan(label, "classic"), seeds);
+    case "reinforced":
+    case "scenario":
+      return playerVersusCrew(mode, squadSkillPlan(label, "reinforced"), seeds);
+    default:
+      return playerVersusSkill(mode, difficultyToTier(label), seeds);
+  }
+}
+
+/**
+ * The player bot's squad-mode games against an AI crew (a skill or a
+ * difficulty's slot plan).
+ * @param mode - A squad mode.
+ * @param ai - The AI side's crew.
+ * @param seeds - Seeds (multiplied by the mode's lists).
+ * @returns The player's tally.
+ */
+export function playerVersusCrew(
+  mode: "classic" | "reinforced" | "scenario",
+  ai: CrewSkill,
+  seeds: readonly number[],
+): WinTally {
+  switch (mode) {
+    case "classic":
+      return eachFaction((f) => classic(f, ai, seeds));
+    case "reinforced":
+      return eachFaction((f) => reinforced(f, ai, seeds));
+    case "scenario":
+      return eachFaction((f, i) => reinforced(f, ai, seeds, scenarioFor(i)));
+  }
 }
 
 /**
@@ -127,7 +163,7 @@ function eachFaction(
 
 function classic(
   faction: FactionId,
-  ai: BotSkill,
+  ai: CrewSkill,
   seeds: readonly number[],
 ): WinTally {
   return runSquadMatchup({
@@ -141,7 +177,7 @@ function classic(
 
 function reinforced(
   faction: FactionId,
-  ai: BotSkill,
+  ai: CrewSkill,
   seeds: readonly number[],
   scenario?: ScenarioId,
 ): WinTally {

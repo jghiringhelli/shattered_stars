@@ -1,8 +1,9 @@
 /**
  * BotDifficulty — specification tests: difficulty labels map onto the tiers
- * the skill gates measure, tuned on the real engine (docs/balance/): Easy is
- * a quicker novice, Hard a slower-reacting expert, Brutal the expert as the
- * gates measure it; unknown labels fly the average pilot.
+ * the skill gates measure, tuned on the real engine (docs/balance/): duel
+ * Easy is a slow-reacting average pilot (novices lost ~100 % once the bots
+ * stopped weaving), Hard a slower-reacting expert, Brutal a quicker expert;
+ * unknown labels fly the average pilot. Squad modes crew slot by slot.
  */
 
 import { describe, expect, it } from "vitest";
@@ -10,15 +11,19 @@ import {
   BRUTAL_REACTION_SCALE,
   EASY_REACTION_SCALE,
   HARD_REACTION_SCALE,
+  TRAINING_SKILL,
   botProfile,
   difficultyToTier,
+  squadLeaderSkill,
+  squadSkillPlan,
+  squadSlotSkill,
 } from "../../../../src/arcade/ai/BotDifficulty";
 import { TIER_PROFILES } from "../../../../src/arcade/ai/bots/BotKit";
 
 describe("difficultyToTier", () => {
   it("maps the duel difficulties onto the gate tiers", () => {
     expect(difficultyToTier("easy")).toEqual({
-      tier: "novice",
+      tier: "average",
       reactionScale: EASY_REACTION_SCALE,
     });
     expect(difficultyToTier("normal")).toEqual({
@@ -35,9 +40,14 @@ describe("difficultyToTier", () => {
     });
   });
 
-  it("makes every step up react at least as fast within a tier", () => {
-    expect(EASY_REACTION_SCALE).toBeLessThan(1);
-    expect(HARD_REACTION_SCALE).toBeGreaterThan(BRUTAL_REACTION_SCALE);
+  it("slows Easy's average pilot and Hard's expert, and quickens Brutal's", () => {
+    expect(EASY_REACTION_SCALE).toBeGreaterThan(1);
+    expect(HARD_REACTION_SCALE).toBeGreaterThan(1);
+    expect(BRUTAL_REACTION_SCALE).toBeLessThan(1);
+  });
+
+  it("keeps a novice for training (Flight School's exam)", () => {
+    expect(TRAINING_SKILL.tier).toBe("novice");
   });
 
   it("maps the epic raid's labels too", () => {
@@ -71,5 +81,57 @@ describe("botProfile", () => {
       TIER_PROFILES.expert.decisionIntervalMs * HARD_REACTION_SCALE,
     );
     expect(hard.headingNoiseDeg).toBe(TIER_PROFILES.expert.headingNoiseDeg);
+  });
+});
+
+describe("squadSkillPlan — squad modes", () => {
+  const strength = (s: { tier: string; reactionScale: number }): number =>
+    ({ novice: 0, average: 1, expert: 2 })[s.tier]! * 10 - s.reactionScale;
+
+  it("crews every squad label with marks (a squad that never marks loses ~100 %)", () => {
+    for (const format of ["classic", "reinforced"] as const)
+      for (const label of ["easy", "normal", "hard", "brutal"])
+        expect(squadSkillPlan(label, format).marks).toBe(true);
+  });
+
+  it("orders the labels easy < normal < hard < brutal in both formats", () => {
+    for (const format of ["classic", "reinforced"] as const) {
+      const best = (label: string) =>
+        Math.max(...squadSkillPlan(label, format).slots.map(strength));
+      const mean = (label: string) => {
+        const slots = squadSkillPlan(label, format).slots;
+        return slots.reduce((sum, s) => sum + strength(s), 0) / slots.length;
+      };
+      expect(mean("easy")).toBeLessThan(mean("normal"));
+      expect(best("normal")).toBeLessThan(best("hard"));
+      expect(best("hard")).toBeLessThan(best("brutal"));
+    }
+  });
+
+  it("crews Easy as an average leader with novice wingmen, Normal as average pilots", () => {
+    const easy = squadSkillPlan("easy", "classic");
+    expect(squadSlotSkill(easy, 0).tier).toBe("average");
+    expect(squadSlotSkill(easy, 1).tier).toBe("novice");
+    expect(squadSkillPlan("normal", "reinforced").slots).toEqual([
+      { tier: "average", reactionScale: 1 },
+    ]);
+  });
+
+  it("cycles slots for reinforcements and leads with the quickest pilot", () => {
+    const easy = squadSkillPlan("easy", "reinforced");
+    const n = easy.slots.length;
+    expect(squadSlotSkill(easy, n)).toEqual(squadSlotSkill(easy, 0));
+    expect(squadSlotSkill(easy, n + 2)).toEqual(squadSlotSkill(easy, 2));
+    expect(squadLeaderSkill(easy).tier).toBe("average");
+  });
+
+  it("maps Epic's labels and unknown labels (any case)", () => {
+    expect(squadSkillPlan("Mythic", "classic")).toEqual(
+      squadSkillPlan("brutal", "classic"),
+    );
+    expect(squadSkillPlan("medium")).toEqual(squadSkillPlan("normal"));
+    expect(squadSkillPlan("whatever", "reinforced")).toEqual(
+      squadSkillPlan("normal", "reinforced"),
+    );
   });
 });

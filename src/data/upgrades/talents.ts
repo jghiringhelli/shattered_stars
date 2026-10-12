@@ -154,10 +154,14 @@ export const ILLICIT_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
     id: "jury_rigged_deflectors",
     name: "Jury-Rigged Deflectors",
     slotType: "illicit",
-    description: "Regenerates 1 shield every ~67 seconds, but -1 hull.",
+    description:
+      "Regenerates 1 shield every ~200 seconds, but nursing the scrap deflectors builds stress 20% faster.",
     pointCost: 1,
     creditCost: 50,
-    effects: { hullBonus: -1 },
-    realtime: { shieldRegenPerSecond: 0.18 },
+    // Was -1 hull + 0.18 HP/s: a trap on every hull (squad mirrors, 600
+    // battles: -6 pts on a 4-hull Venom, -9 on a 2-hull Fang, which it left
+    // at 1 hull). Without the hull loss it is safe on 2-hull light
+    // fighters: -0.1 (Fang) / 0 (Venom) pts — a 1-pt illicit filler.
+    realtime: { shieldRegenPerSecond: 0.06, stressRateMultiplier: 1.2 },
   },
 };

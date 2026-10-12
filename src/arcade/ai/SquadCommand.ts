@@ -140,9 +140,14 @@ export class SquadCommand {
       .filter((s) => s.side === this.side)
       .map(contactSnapshot)
       .filter((s) => s.alive);
+    // Ships gone from the battle (destroyed) are dropped from the delayed
+    // picture: marking one would leave a ghost mark the squad refreshes forever.
+    const present = new Set(
+      frame.ships.filter((s) => s.alive).map((s) => s.id),
+    );
     const enemies = this.history
       .perceive(frame.nowMs, this.reactionMs, "")
-      .filter((s) => s.side !== this.side);
+      .filter((s) => s.side !== this.side && present.has(s.id));
     const playerMark = this.aiLeader
       ? null
       : markedTargetOf(frame.marks, this.side, frame.nowMs);
@@ -150,7 +155,9 @@ export class SquadCommand {
     this.focus = [...this.orders.values()][0]?.focusTargetId ?? null;
     if (!this.aiLeader && !this.assistMark) return frame.marks;
     if (playerMark)
-      return placeMark(frame.marks, this.side, playerMark, frame.nowMs);
+      return present.has(playerMark)
+        ? placeMark(frame.marks, this.side, playerMark, frame.nowMs)
+        : frame.marks;
     return this.focus
       ? placeMark(frame.marks, this.side, this.focus, frame.nowMs)
       : clearMark(frame.marks, this.side);

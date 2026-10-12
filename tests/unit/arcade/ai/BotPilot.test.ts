@@ -29,11 +29,12 @@ function fly(
   cycles: number,
   pilot = new BotPilot(tier, { seed: 7 }),
   safePoint: { x: number; y: number } | null = null,
+  startAngle = 0,
 ) {
   const self = contact("ai", "ai", definitionId, {
     x: 3000,
     y: 3000,
-    angle: 0,
+    angle: startAngle,
   });
   const enemy = contact("player", "player", "terran_gladius", enemyPose);
   const dial = getShipDial(definitionId);
@@ -93,8 +94,31 @@ describe("BotPilot", () => {
       { x: 3600, y: 3000 },
     );
     const angle = ((escaping.flight.motion.angle % 360) + 360) % 360;
+    const { x, y } = escaping.flight.motion;
+    const bearing =
+      ((Math.atan2(3600 - x, -(3000 - y)) * 180) / Math.PI + 360) % 360;
+    const offNose = Math.abs(((angle - bearing + 540) % 360) - 180);
     expect(angle).toBeGreaterThan(45);
-    expect(angle).toBeLessThan(135);
+    expect(offNose).toBeLessThan(45);
+  });
+
+  it("turns around for a safe point dead astern instead of weaving away from it", () => {
+    // Heading 60°, safe point 600 px away at bearing 240° (dead astern).
+    const safePoint = { x: 3000 - 600 * Math.sin(Math.PI / 3), y: 3300 };
+    const { flight } = fly(
+      "average",
+      "terran_gladius",
+      { x: 5500, y: 500, angle: 0 },
+      14,
+      new BotPilot("average", { seed: 7 }),
+      safePoint,
+      60,
+    );
+    const distance = Math.hypot(
+      flight.motion.x - safePoint.x,
+      flight.motion.y - safePoint.y,
+    );
+    expect(distance).toBeLessThan(300);
   });
 
   it("is deterministic for a seed", () => {

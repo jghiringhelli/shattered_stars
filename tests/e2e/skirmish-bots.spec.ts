@@ -14,7 +14,8 @@ import {
 } from "./helpers/game";
 
 const SCENE = "ArcadeBattleScene";
-const PLAYER_FACTION = "free_confederation";
+/** The player's team side key (squads without a teamId: the player's is team 0). */
+const PLAYER_SIDE = "team_0";
 
 /** Starts a Skirmish: kestrel + two wingmen against three venoms. */
 async function startSkirmish(
@@ -196,7 +197,7 @@ test.describe("Skirmish squad mark (R)", () => {
         rng.setDefaultRng(rng.createRng());
         return { unmarked, marked };
       },
-      { key: SCENE, side: PLAYER_FACTION },
+      { key: SCENE, side: PLAYER_SIDE },
     );
     expect(result.unmarked).toBeGreaterThan(0);
     expect(result.marked).toBeGreaterThan(result.unmarked);

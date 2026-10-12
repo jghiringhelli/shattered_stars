@@ -7,7 +7,11 @@
  * Pure: no Phaser.
  */
 
-import { difficultyToTier, type BotSkill } from "../ai/BotDifficulty";
+import {
+  squadSkillPlan,
+  squadSlotSkill,
+  type BotSkill,
+} from "../ai/BotDifficulty";
 
 /** Boss Raid difficulty tiers. */
 export type EpicDifficulty = "easy" | "medium" | "hard" | "mythic";
@@ -19,17 +23,22 @@ export type EpicAiSide = "escort" | "wingman";
 export const WINGMAN_SKILL: BotSkill = { tier: "average", reactionScale: 1 };
 
 /**
- * The bot that flies a raid AI ship: escorts at the raid difficulty's tier
- * (easy novice, medium average, hard expert, mythic expert with Brutal
- * reaction), wingmen always average.
+ * The bot that flies a raid AI ship: escorts crewed slot by slot from the
+ * raid difficulty's squad plan (BotDifficulty.squadSkillPlan, classic:
+ * easy = an average leader with novice wingmen, medium average, hard /
+ * mythic experts), wingmen always average.
  *
  * @param side - Escort (boss side) or wingman (player side).
  * @param difficulty - Raid difficulty.
+ * @param slot - The escort's crew slot (0-based spawn order); default 0.
  * @returns Tier and reaction scale.
  */
 export function raidBotSkill(
   side: EpicAiSide,
   difficulty: EpicDifficulty,
+  slot = 0,
 ): BotSkill {
-  return side === "wingman" ? WINGMAN_SKILL : difficultyToTier(difficulty);
+  return side === "wingman"
+    ? WINGMAN_SKILL
+    : squadSlotSkill(squadSkillPlan(difficulty, "classic"), slot);
 }

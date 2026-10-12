@@ -29,9 +29,7 @@ import { PlayerFlightPilot } from "../arcade/systems/PlayerFlightPilot";
 import type { FlightEvent } from "../arcade/systems/PilotFlightTypes";
 import { difficultyToTier, type BotContact, type BotSkill } from "../arcade/ai";
 import { DuelBotCrew } from "../arcade/systems/DuelBotCrew";
-import { shieldsAfterCycle } from "../arcade/systems/AceDuelPilotAi";
 import {
-  adHocAbilities,
   duelModifiers,
   duelShotOdds,
   marksmanshipDamage,
@@ -1032,9 +1030,8 @@ export class AceDuelScene extends Phaser.Scene {
 
   /**
    * End-of-cycle bookkeeping: the ship's pilot (the human's or its bot)
-   * learns which maneuver the new cycle started, and regenerative_shields
-   * restores a shield (unless it acts through the modifier sheet as steady
-   * regeneration instead).
+   * learns which maneuver the new cycle started. (regenerative_shields acts
+   * through the modifier sheet as steady regeneration.)
    *
    * @param ship - The ship whose cycle just committed.
    */
@@ -1044,14 +1041,6 @@ export class AceDuelScene extends Phaser.Scene {
       const { currentManeuver } = ship.flight.motion.control;
       this.pilot.onCycleCommitted(currentManeuver ?? "straight");
     }
-    const shields = shieldsAfterCycle(
-      ship.shields,
-      ship.maxShields,
-      adHocAbilities(ship.abilities),
-    );
-    if (shields === ship.shields) return;
-    ship.shields = shields;
-    this.healthBars.get(ship.id)?.update(ship.hull, ship.shields);
   }
 
   /**

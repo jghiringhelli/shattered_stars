@@ -20,11 +20,16 @@ export {
 export {
   difficultyToTier,
   botProfile,
+  squadLeaderSkill,
+  squadSkillPlan,
+  squadSlotSkill,
   BRUTAL_REACTION_SCALE,
   EASY_REACTION_SCALE,
   HARD_REACTION_SCALE,
   DEFAULT_BOT_SKILL,
   type BotSkill,
+  type SquadFormat,
+  type SquadSkillPlan,
 } from "./BotDifficulty";
 export {
   contactSnapshot,

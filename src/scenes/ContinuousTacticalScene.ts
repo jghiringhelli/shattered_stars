@@ -30,7 +30,7 @@ import {
 import type { AIDifficultyLevel } from "../ai/AIDifficulty";
 import { defaultDifficulty } from "../systems/SettingsStorage";
 import { createCycleFlight } from "../arcade/systems/CycleFlight";
-import { difficultyToTier } from "../arcade/ai";
+import { squadSkillPlan, squadSlotSkill } from "../arcade/ai";
 import {
   squadQuickBuilds,
   type LoadoutChoices,
@@ -542,17 +542,21 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
 
   /**
    * Crews every AI faction: one AI-led squad per faction (focus fire,
-   * flanking, cohesion, its leader's mark — novices focus without marking),
-   * each ship flown by a bot at the tier the match difficulty maps to.
+   * flanking, cohesion, its leader's mark), each ship flown by a bot from
+   * the match difficulty's squad plan, slot by slot within its faction
+   * (BotDifficulty.squadSkillPlan).
    */
   private crewAiSquads(): void {
-    const skill = difficultyToTier(this.aiDifficulty);
+    const plan = squadSkillPlan(this.aiDifficulty, "classic");
     const ships = this.squadShips(this.enemyShipIds);
-    const aiLeader = skill.tier !== "novice";
     for (const faction of new Set(ships.map((ship) => ship.faction))) {
-      this.bots.addSquad({ key: faction, side: faction, aiLeader });
+      this.bots.addSquad({ key: faction, side: faction, aiLeader: plan.marks });
     }
+    const crewed = new Map<string, number>();
     for (const ship of ships) {
+      const slot = crewed.get(ship.faction) ?? 0;
+      crewed.set(ship.faction, slot + 1);
+      const skill = squadSlotSkill(plan, slot);
       this.bots.addPilot({
         shipId: ship.id,
         tier: skill.tier,

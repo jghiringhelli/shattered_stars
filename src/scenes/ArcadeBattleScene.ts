@@ -157,11 +157,7 @@ import { hullFractionOf } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
 import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
-import {
-  resolveSupportAuras,
-  type AuraShip,
-  type ActiveAura,
-} from "../systems/SupportAura";
+import { type AuraShip, type ActiveAura } from "../systems/SupportAura";
 import { auraFactsOf } from "../systems/aura/AuraShipFacts";
 import { HitImmunityLedger } from "../arcade/systems/CombatTempo";
 import {
@@ -202,8 +198,6 @@ import {
 import type { ScenarioReadout } from "./scenario/scenarioReadout";
 import type { ScreenRect } from "../ui/hud/screenRect";
 import {
-  createArcadeShip,
-  equipLoadout,
   spawnArcadeShip,
   type ArcadeShip,
 } from "./arcadeBattle/arcadeShipFactory";
@@ -214,12 +208,17 @@ import {
 import type { ReinforcementSceneLink } from "./arcadeBattle/reinforcements/reinforcementLink";
 import type { ReinforcementReadout } from "./arcadeBattle/reinforcements/reinforcementReadout";
 import { reinforcementShipIds } from "./arcadeBattle/reinforcements/reinforcementSetup";
+import { parseReinforcementSetup } from "../arcade/reinforcements";
 import {
   ArcadeOnline,
   readOnlineBattle,
   type PilotKeys,
 } from "./arcadeBattle/online/ArcadeOnline";
-import { planOnlineDeployment } from "./arcadeBattle/online/onlineDeployment";
+import {
+  planSquadDeployment,
+  type SquadSlot,
+} from "./arcadeBattle/squadDeployment";
+import { resolveTeamAuras, teamKey, type TeamId } from "../arcade/teams";
 import {
   hashArcade,
   readSimFields,
@@ -272,6 +271,19 @@ const LASER_BOLT_FLIGHT_MS = 110;
 /** Bolt graphics point "up"; screen atan2 0 points right. */
 const NORTH_UP_OFFSET_DEG = 90;
 const KILL_SCORE = 100;
+/** The battle a config without squads flies: a Confederation trio vs a Hegemony trio. */
+const DEFAULT_SQUADS: readonly SquadSlot[] = [
+  {
+    factionId: "free_confederation",
+    controller: "player",
+    ships: ["confed_sparrow", "confed_wasp", "confed_wasp"],
+  },
+  {
+    factionId: "terran_hegemony",
+    controller: "ai",
+    ships: ["terran_gladius", "terran_viper", "terran_viper"],
+  },
+];
 /** Seeds drawn for a battle whose config names none: [0, 2^31). */
 const RANDOM_BATTLE_SEED_RANGE = 2 ** 31;
 
@@ -336,7 +348,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   get enemyShipIds(): string[] {
     const out: string[] = [];
     for (const s of this.ships.values()) {
-      if (s.owner === "ai" && s.faction !== this.playerFaction) out.push(s.id);
+      if (s.owner === "ai" && s.team !== this.playerTeam) out.push(s.id);
     }
     return out;
   }
@@ -370,7 +382,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private prevThrustDownHeld = false;
   private inputSubscriptionIds: number[] = [];
 
+  /** The home squad's faction (music and stingers only — never sides). */
   private playerFaction: FactionId = "free_confederation";
+  /** The simulation's "player" team (offline: the player's; online: seat 0's). */
+  private playerTeam: TeamId = 0;
+  /** The home squad's battle-config index. */
+  private playerSquad = 0;
+  /** Every battle-config squad's team (index = squad). */
+  private squadTeams: TeamId[] = [];
   private score = 0;
   private lastTime = 0;
   private accumulator = 0;
@@ -414,7 +433,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private cameraVirtualX = BATTLEFIELD_SIZE / 2;
   private cameraVirtualY = BATTLEFIELD_SIZE / 2;
 
-  /** The AI: a bot pilot per AI ship, a squad command per faction, the marks. */
+  /** The AI: a bot pilot per AI ship, a squad command per team, the marks. */
   private botFleet: ArcadeBotFleet | null = null;
 
   /** X-Wing 2.0 scenario (battleConfig.scenario), or null for a plain Skirmish. */
@@ -429,7 +448,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   // Online battle (input lockstep through the relay): every client simulates
   // every seat from the same seed and inputs in canonical seat order — seat
-  // 0's squad is the simulation's "player" side; only presentation (camera,
+  // 0's team is the simulation's "player" side; only presentation (camera,
   // HUD, own colours) reads the local seat. Null offline.
   private online: ArcadeOnline | null = null;
   private net: OnlineBattleLink | null = null;
@@ -464,14 +483,16 @@ export class ArcadeBattleScene extends Phaser.Scene {
   aiTargetOf(shipId: string): string | null {
     const ship = this.ships.get(shipId);
     if (!ship || !this.botFleet) return null;
-    return this.botFleet.targetIdFor(ship.id, ship.faction);
+    return this.botFleet.targetIdFor(ship.id, teamKey(ship.team));
   }
 
   /** The target the player's side has marked right now, or null. */
   get playerMarkedTargetId(): string | null {
     return (
-      this.botFleet?.markedTargetOf(this.playerFaction, this.battleClockMs) ??
-      null
+      this.botFleet?.markedTargetOf(
+        teamKey(this.playerTeam),
+        this.battleClockMs,
+      ) ?? null
     );
   }
 
@@ -510,7 +531,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       radarRect: () => this.hud?.layoutRects()["radar"],
       reserves: () => this.reinforcements?.reserves() ?? null,
       viewSide: () =>
-        this.viewFaction() === this.playerFaction ? "player" : "enemy",
+        this.viewTeam() === this.playerTeam ? "player" : "enemy",
       onEnd: (result) => {
         this.gameEnded = true;
         this.finishBattle(
@@ -525,10 +546,14 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const online = this.online;
     return {
       worldSize: BATTLEFIELD_SIZE,
-      playerFaction: this.playerFaction,
+      playerTeam: this.playerTeam,
+      squadTeams: this.squadTeams,
+      humanSquads: this.humanSquads(),
+      primarySquad: this.playerSquad,
+      localSquad: online ? online.localSquad : this.playerSquad,
       ships: this.ships,
       hasScenario: this.scenario !== null,
-      adopt: (ship) => this.adoptShip(ship),
+      adopt: (ship, pilotSquad) => this.adoptShip(ship, pilotSquad),
       onEnd: (victory) => {
         this.gameEnded = true;
         const winner = this.reinforcements?.result?.winner;
@@ -541,36 +566,59 @@ export class ArcadeBattleScene extends Phaser.Scene {
                 op: PILOT_COMMANDS.deployReserve,
                 arg: index,
               }),
-            showPicker: online.localSeat === 0,
           }
         : {}),
     };
   }
 
+  /** @returns Every human squad → the ship its human flies now. */
+  private humanSquads(): Map<number, string> {
+    const online = this.online;
+    if (!online)
+      return new Map(
+        this.playerShipId ? [[this.playerSquad, this.playerShipId]] : [],
+      );
+    const squads = new Map<number, string>();
+    online.seats.forEach((_, seat) => {
+      const shipId = online.shipOf(seat);
+      if (shipId) squads.set(online.squadOf(seat), shipId);
+    });
+    return squads;
+  }
+
   /**
    * A reinforcement warped in: its record, sprite and overlay, an AI pilot
-   * (squad membership comes with its faction), or the player's view. Online
-   * a seat that lost its ship takes the next one its faction deploys.
+   * (squad membership comes with its team), and — when it is a human's
+   * replacement — that human's controls (offline the player's view; online
+   * the seat flying that squad).
    *
    * @param ship - The new ship.
+   * @param pilotSquad - The human squad whose human flies it now, or null.
    */
-  private adoptShip(ship: ArcadeShip): void {
+  private adoptShip(ship: ArcadeShip, pilotSquad: number | null): void {
     this.ships.set(ship.id, ship);
     this.armShip(ship);
-    if (ship.owner === "player") {
-      this.playerShipId = ship.id;
-      this.online?.assignShip(0, ship.id);
-      this.pilotControls.delete(ship.id);
-    } else {
-      this.botFleet?.enlist(ship.id, ship.faction);
-      this.online?.claimReinforcement(
-        ship.id,
-        ship.faction,
-        (id) => (this.ships.get(id)?.hull ?? 0) > 0,
-      );
-    }
+    if (pilotSquad !== null) this.seatHuman(ship.id, pilotSquad);
+    if (ship.owner === "ai" || this.online)
+      this.botFleet?.enlist(ship.id, teamKey(ship.team));
     this.createShipSprite(ship);
     this.createHealthBar(ship);
+  }
+
+  /**
+   * @param shipId - A human's replacement ship.
+   * @param squad - The human's squad.
+   */
+  private seatHuman(shipId: string, squad: number): void {
+    this.pilotControls.delete(shipId);
+    const online = this.online;
+    if (!online) {
+      this.playerShipId = shipId;
+      return;
+    }
+    const seat = online.seatOfSquad(squad);
+    if (seat >= 0) online.assignShip(seat, shipId);
+    if (seat === 0) this.playerShipId = shipId;
   }
 
   shutdown(): void {
@@ -789,7 +837,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       currentShields: ship.shields,
       side: overlaySide(
         id === this.viewShipId(),
-        ship.faction === this.viewFaction(),
+        ship.team === this.viewTeam(),
       ),
       definitionId: ship.definitionId,
     });
@@ -968,11 +1016,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
       );
     const own = this.ships.get(this.viewShipId() ?? "");
     if (own && own.hull > 0) return own;
-    const faction = this.viewFaction();
+    const team = this.viewTeam();
     return (
-      [...this.ships.values()].find(
-        (s) => s.hull > 0 && s.faction === faction,
-      ) ?? null
+      [...this.ships.values()].find((s) => s.hull > 0 && s.team === team) ??
+      null
     );
   }
 
@@ -982,18 +1029,25 @@ export class ArcadeBattleScene extends Phaser.Scene {
     return this.online.shipOf(this.online.localSeat);
   }
 
-  /** @returns The faction this client flies (presentation: allies, HUD, music). */
+  /** @returns The faction this client flies (presentation: music, stingers). */
   private viewFaction(): FactionId {
     return (
       (this.online?.localFaction as FactionId | undefined) ?? this.playerFaction
     );
   }
 
-  /** @returns The mark of this client's side (HUD, overlays). */
+  /** @returns The team this client flies for (presentation: allies, HUD, colours). */
+  private viewTeam(): TeamId {
+    return this.online?.localTeam ?? this.playerTeam;
+  }
+
+  /** @returns The mark of this client's team (HUD, overlays). */
   private viewMarkedTargetId(): string | null {
     return (
-      this.botFleet?.markedTargetOf(this.viewFaction(), this.battleClockMs) ??
-      null
+      this.botFleet?.markedTargetOf(
+        teamKey(this.viewTeam()),
+        this.battleClockMs,
+      ) ?? null
     );
   }
 
@@ -1098,7 +1152,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   /**
    * Every human pilot's input this tick: offline the player's keys; online
-   * each seat's lockstep input (and seat 0's reinforcement pick).
+   * each seat's lockstep input (and that seat's own reinforcement pick).
    *
    * @param deltaMs - Tick length (ms).
    */
@@ -1110,9 +1164,11 @@ export class ArcadeBattleScene extends Phaser.Scene {
         this.handlePilotInput(ship, this.localKeys, deltaMs);
       return;
     }
-    const pick = online.seats[0]?.takeCommand();
-    if (pick?.op === PILOT_COMMANDS.deployReserve)
-      this.reinforcements?.choose(pick.arg);
+    online.seats.forEach((seat, index) => {
+      const pick = seat.takeCommand();
+      if (pick?.op === PILOT_COMMANDS.deployReserve)
+        this.reinforcements?.choose(pick.arg, online.squadOf(index));
+    });
     online.seats.forEach((seat, index) => {
       const ship = this.ships.get(online.shipOf(index) ?? "");
       const keys = online.keysOf(index);
@@ -1267,9 +1323,12 @@ export class ArcadeBattleScene extends Phaser.Scene {
       BATTLEFIELD_SIZE,
     );
     if (!targetId || !this.botFleet) return;
-    this.botFleet.markTarget(player.faction, targetId, this.battleClockMs);
-    if (player.faction === this.playerFaction)
-      this.scenario?.onPlayerMark(targetId);
+    this.botFleet.markTarget(
+      teamKey(player.team),
+      targetId,
+      this.battleClockMs,
+    );
+    if (player.team === this.playerTeam) this.scenario?.onPlayerMark(targetId);
     if (player.id !== this.viewShipId()) return;
     matchStats.record({ kind: "mark" });
     const target = this.ships.get(targetId);
@@ -1358,7 +1417,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   /**
-   * Recomputes each faction's support aura for this tick and applies the slow
+   * Recomputes every team's support auras for this tick and applies the slow
    * shield-regen effect. Damage, mitigation and stress-relief effects are read
    * at their own consumption points from {@link activeAuras}. Uses the shared
    * pure {@link resolveSupportAuras} resolver so gameplay matches telemetry.
@@ -1366,7 +1425,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
    * @param deltaMs - Elapsed simulation time for this tick, in milliseconds.
    */
   private updateAuras(deltaMs: number): void {
-    const snapshot: AuraShip[] = [];
+    const snapshot: (AuraShip & { team: TeamId })[] = [];
     for (const ship of this.ships.values()) {
       const size =
         getShipDefinition(ship.definitionId)?.baseStats.size ?? "small";
@@ -1375,6 +1434,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
         x: ship.x,
         y: ship.y,
         faction: ship.faction,
+        team: ship.team,
         role: ship.role,
         size,
         isUnique: ship.isUniquePilot,
@@ -1389,7 +1449,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       });
     }
 
-    const { buffs, coveredShipIds } = resolveSupportAuras(snapshot);
+    const { buffs, coveredShipIds } = resolveTeamAuras(snapshot);
     this.activeAuras = buffs;
 
     const viewId = this.viewShipId();
@@ -1415,10 +1475,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
    * @returns Whether another ship of its side flies within wingman range.
    */
   private fliesWithWingman(ship: ArcadeShip): boolean {
-    return hasWingman(
-      ship,
-      this.frameCache?.aliveByFaction.get(ship.faction) ?? [],
-    );
+    return hasWingman(ship, this.frameCache?.aliveByTeam.get(ship.team) ?? []);
   }
 
   /**
@@ -1435,7 +1492,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     if (attacker && attacker.hull > 0) {
       Object.assign(attacker, rewardKill(attacker, this.battleClockMs));
     }
-    const enemies = this.frameCache?.aliveEnemiesOf(victim.faction) ?? [];
+    const enemies = this.frameCache?.aliveEnemiesOf(victim.team) ?? [];
     const blast = deathBlastDamage(victim);
     for (const target of deathBlastTargets(victim, enemies)) {
       const ship = this.ships.get(target.id);
@@ -1481,10 +1538,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private recordDestruction(target: ArcadeShip): void {
     matchStats.record({
       kind: "kill",
-      victimFriendly: target.faction === this.viewFaction(),
+      victimFriendly: target.team === this.viewTeam(),
       victimIsPlayer: target.id === this.viewShipId(),
     });
-    if (target.faction === this.playerFaction) {
+    if (target.team === this.playerTeam) {
       this.enemySideScore = creditKill(
         this.enemySideScore,
         target.definitionId,
@@ -1501,7 +1558,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   /**
-   * The AI's turn this tick: every faction's squad command re-plans and
+   * The AI's turn this tick: every team's squad command re-plans and
    * updates its mark, then every AI ship's bot pilot flies one frame through
    * the player's controls and the ship fires at what its pilot is after.
    *
@@ -1621,7 +1678,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
         [...this.ships.values()].map((ship) =>
           weaponBodyOf(
             ship,
-            ship.faction,
+            teamKey(ship.team),
             damageMitigationOf(
               ship.modifiers,
               this.fliesWithWingman(ship),
@@ -1631,8 +1688,11 @@ export class ArcadeBattleScene extends Phaser.Scene {
         ),
       wantedTargetOf: (shipId: string) => this.preferredTargetOf(shipId),
       playerShipId: () => this.viewShipId(),
-      playerSide: () => this.viewFaction(),
-      sideOf: (shipId: string) => this.ships.get(shipId)?.faction ?? null,
+      playerSide: () => teamKey(this.viewTeam()),
+      sideOf: (shipId: string) => {
+        const ship = this.ships.get(shipId);
+        return ship ? teamKey(ship.team) : null;
+      },
       isBotControlled: (shipId: string) => !this.isHumanFlown(shipId),
       applyHit: (hit: WeaponHit) => this.applyWeaponHit(hit),
     };
@@ -1649,7 +1709,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     if (this.isHumanFlown(ship.id)) {
       return selectHudTargetId(ship, this.ships.values(), BATTLEFIELD_SIZE);
     }
-    return this.botFleet?.targetIdFor(ship.id, ship.faction) ?? null;
+    return this.botFleet?.targetIdFor(ship.id, teamKey(ship.team)) ?? null;
   }
 
   /**
@@ -1684,6 +1744,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
         rangePx: ship.combatStats.weaponRange,
         arcDeg: ship.combatStats.firingArc,
         worldSize: BATTLEFIELD_SIZE,
+        isHostile: (other) => other.team !== ship.team,
         isEligible: (other) => !this.isImmuneTo(ship, other),
         preferredId: this.preferredTargetOf(ship.id),
       });
@@ -1715,12 +1776,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
       nowMs: now,
       roll: random.next(),
       targetMarked:
-        this.botFleet?.isMarkedBy(attacker.faction, target.id, now) ?? false,
+        this.botFleet?.isMarkedBy(teamKey(attacker.team), target.id, now) ??
+        false,
       ...this.aurasOf(attacker, target),
       targetArmor: armorReductionOf(target.definitionId),
     });
     this.weapons?.onAttack(attacker.id);
-    const friendly = attacker.faction === this.viewFaction();
+    const friendly = attacker.team === this.viewTeam();
     matchStats.record({
       kind: "shot",
       friendly,
@@ -1795,7 +1857,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       damage *= this.turretFactor(attacker);
     matchStats.record({
       kind: "hit",
-      friendly: attacker?.faction === this.viewFaction(),
+      friendly: attacker?.team === this.viewTeam(),
       weapon: "ordnance",
     });
     this.landHit(attacker, target, {
@@ -1850,7 +1912,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.applyHitDamage(target, hit.damage);
     matchStats.record({
       kind: "damage",
-      toFriendly: target.faction === this.viewFaction(),
+      toFriendly: target.team === this.viewTeam(),
       shield: before.shields - target.shields,
       hull: before.hull - target.hull,
     });
@@ -1867,8 +1929,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
     if (this.cameraShakeEnabled && involvesPlayer)
       this.cameras.main.shake(50, 0.005);
     if (target.hull > 0) return;
-    const viewFaction = this.viewFaction();
-    if (attacker?.faction === viewFaction && target.faction !== viewFaction) {
+    const viewTeam = this.viewTeam();
+    if (attacker?.team === viewTeam && target.team !== viewTeam) {
       this.score += KILL_SCORE;
       this.showFloatingText(target.x, target.y - 40, "KILL!", "#ffff00");
     }
@@ -1909,24 +1971,27 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   private spawnShips(): void {
     const battleConfig = this.registry.get("battleConfig") as
-      | {
-          factions: Array<{
-            factionId: FactionId;
-            controller: "player" | "ai";
-            ships: string[];
-            loadoutChoices?: Record<string, string>;
-          }>;
-        }
-      | undefined;
-
-    if (this.online && battleConfig?.factions?.length) {
-      this.spawnOnline(battleConfig.factions);
-    } else if (battleConfig?.factions?.length) {
-      this.spawnFromConfig(battleConfig.factions);
-    } else {
-      this.spawnDefaultShips();
+      { factions?: SquadSlot[] } | undefined;
+    const squads = battleConfig?.factions?.length
+      ? battleConfig.factions
+      : DEFAULT_SQUADS;
+    const plan = planSquadDeployment(squads, {
+      worldSize: BATTLEFIELD_SIZE,
+      buildsOf: quickBuildsOf,
+      ...(this.online ? { homeSeat: 0 } : {}),
+    });
+    this.playerFaction = plan.playerFaction;
+    this.playerTeam = plan.playerTeam;
+    this.playerSquad = plan.playerSquad;
+    this.squadTeams = [...plan.squadTeams];
+    for (const spec of plan.specs) {
+      const ship = spawnArcadeShip(spec);
+      this.ships.set(ship.id, ship);
     }
-    this.scenario?.deploy([...this.ships.values()], this.playerFaction);
+    this.playerShipId = "player_0";
+    for (const [seat, shipId] of plan.seatShips)
+      this.online?.assignShip(seat, shipId);
+    this.scenario?.deploy([...this.ships.values()], this.playerTeam);
 
     for (const ship of this.ships.values()) {
       this.armShip(ship);
@@ -1937,39 +2002,12 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   /**
-   * An online battle's opening squads, in canonical seat order: seat 0's
-   * squad is the "player" side, every seat flies its squad's first ship.
-   *
-   * @param factions - The battle config's squads (each with its seat).
-   */
-  private spawnOnline(
-    factions: Array<{
-      factionId: FactionId;
-      ships: string[];
-      loadoutChoices?: Record<string, string>;
-      teamId?: string;
-      seat?: number;
-    }>,
-  ): void {
-    const plan = planOnlineDeployment(factions, BATTLEFIELD_SIZE, (slot) =>
-      quickBuildsOf(slot as (typeof factions)[number]),
-    );
-    this.playerFaction = plan.playerFaction;
-    for (const spec of plan.specs) {
-      const ship = spawnArcadeShip(spec);
-      this.ships.set(ship.id, ship);
-    }
-    this.playerShipId = "player_0";
-    for (const [seat, shipId] of plan.seatShips)
-      this.online?.assignShip(seat, shipId);
-  }
-
-  /**
    * The battle's AI: difficulty and seed from the battle config (Squad
    * Builder sets `aiDifficulty`; online rooms set `seed`), and a bot pilot
-   * for every AI-flown ship. Online every human seat's ship has a bot too
-   * (it flies only while the relay hands that seat to the AI), and every
-   * human-led squad follows the player's squad rules.
+   * for every AI-flown ship. Squads are teams (side keys), never factions.
+   * Online every human seat's ship has a bot too (it flies only while the
+   * relay hands that seat to the AI), and every human-led team follows the
+   * player's squad rules.
    *
    * @returns The fleet, every AI ship enlisted.
    */
@@ -1981,157 +2019,19 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const online = this.online;
     const fleet = new ArcadeBotFleet({
       difficulty: config?.aiDifficulty ?? DEFAULT_SKIRMISH_DIFFICULTY,
-      playerFaction: this.playerFaction,
+      playerSide: teamKey(this.playerTeam),
       random: online
         ? () => online.fleetRng.next()
         : createSeededRng(seed).next,
       worldSize: BATTLEFIELD_SIZE,
-      ...(online
-        ? { humanFactions: online.humanFactions, markAssist: true }
-        : {}),
+      squadFormat: parseReinforcementSetup(config) ? "reinforced" : "classic",
+      ...(online ? { humanSides: online.humanSides, markAssist: true } : {}),
     });
     for (const ship of this.ships.values()) {
-      if (ship.owner === "ai" || online) fleet.enlist(ship.id, ship.faction);
+      if (ship.owner === "ai" || online)
+        fleet.enlist(ship.id, teamKey(ship.team));
     }
     return fleet;
-  }
-
-  private spawnFromConfig(
-    factions: Array<{
-      factionId: FactionId;
-      controller: "player" | "ai";
-      ships: string[];
-      loadoutChoices?: Record<string, string>;
-    }>,
-  ): void {
-    const playerSlot =
-      factions.find((f) => f.controller === "player") ?? factions[0]!;
-    const enemySlots = factions.filter((f) => f !== playerSlot);
-    this.playerFaction = playerSlot.factionId;
-    // Ships the Squad Builder left without a pick fly their default quick
-    // build (as reinforcements and every other mode do), never bare hulls.
-    const playerBuilds = quickBuildsOf(playerSlot);
-
-    // Spawn player-controlled ship (first in player slot)
-    const playerShipId = playerSlot.ships[0] ?? "confed_sparrow";
-    const playerShip = spawnArcadeShip({
-      id: "player_0",
-      definitionId: playerShipId,
-      loadoutId: playerBuilds[0] ?? null,
-      faction: playerSlot.factionId,
-      pilot: "player",
-      x: BATTLEFIELD_SIZE / 2,
-      y: BATTLEFIELD_SIZE / 2 + 50,
-      angle: 0,
-    });
-    this.ships.set(playerShip.id, playerShip);
-    this.playerShipId = playerShip.id;
-
-    // Remaining player-slot ships are AI allies in wing formation
-    const wingOffsets = [
-      { x: -280, y: 350 },
-      { x: 280, y: 350 },
-      { x: 0, y: 550 },
-    ];
-    playerSlot.ships.slice(1).forEach((shipId, i) => {
-      const offset = wingOffsets[i] ?? { x: (i - 1) * 160, y: 400 };
-      const ally = spawnArcadeShip({
-        id: `ally_${i}`,
-        definitionId: shipId,
-        loadoutId: playerBuilds[i + 1] ?? null,
-        faction: playerSlot.factionId,
-        pilot: "wingman",
-        x: BATTLEFIELD_SIZE / 2 + offset.x,
-        y: BATTLEFIELD_SIZE / 2 + offset.y,
-        angle: 0,
-      });
-      this.ships.set(ally.id, ally);
-    });
-
-    // All enemy slots spawn spread around the far side
-    const totalEnemies = enemySlots.reduce((sum, s) => sum + s.ships.length, 0);
-    let enemyIndex = 0;
-    for (const slot of enemySlots) {
-      const builds = quickBuildsOf(slot);
-      slot.ships.forEach((shipId, shipIdx) => {
-        const angle = (enemyIndex / Math.max(totalEnemies, 1)) * Math.PI * 2;
-        const radius = 1200;
-        const enemy = spawnArcadeShip({
-          id: `enemy_${enemyIndex}`,
-          definitionId: shipId,
-          loadoutId: builds[shipIdx] ?? null,
-          faction: slot.factionId,
-          pilot: "ai",
-          x: BATTLEFIELD_SIZE / 2 + Math.cos(angle) * radius,
-          y: BATTLEFIELD_SIZE / 2 + Math.sin(angle) * radius - 1000,
-          angle: 180,
-        });
-        this.ships.set(enemy.id, enemy);
-        enemyIndex++;
-      });
-    }
-  }
-
-  private spawnDefaultShips(): void {
-    const playerShip = createArcadeShip({
-      id: "player_0",
-      definitionId: "confed_sparrow",
-      faction: "free_confederation",
-      owner: "player",
-      x: BATTLEFIELD_SIZE / 2,
-      y: BATTLEFIELD_SIZE / 2 + 50,
-      angle: 0,
-    });
-    this.ships.set(playerShip.id, playerShip);
-    this.playerShipId = playerShip.id;
-
-    const wingOffsets = [
-      { x: -280, y: 350 },
-      { x: 280, y: 350 },
-    ];
-    for (let i = 0; i < wingOffsets.length; i++) {
-      const offset = wingOffsets[i]!;
-      const ally = createArcadeShip({
-        id: `ally_${i}`,
-        definitionId: "confed_wasp",
-        faction: "free_confederation",
-        owner: "ai",
-        x: BATTLEFIELD_SIZE / 2 + offset.x,
-        y: BATTLEFIELD_SIZE / 2 + offset.y,
-        angle: 0,
-      });
-      this.ships.set(ally.id, ally);
-    }
-
-    for (let i = 0; i < 3; i++) {
-      const angle = (i / 3) * Math.PI * 2;
-      const radius = 1200;
-      const enemy = createArcadeShip({
-        id: `enemy_${i}`,
-        definitionId: i === 0 ? "terran_gladius" : "terran_viper",
-        faction: "terran_hegemony",
-        owner: "ai",
-        x: BATTLEFIELD_SIZE / 2 + Math.cos(angle) * radius,
-        y: BATTLEFIELD_SIZE / 2 + Math.sin(angle) * radius - 1000,
-        angle: 180,
-      });
-      this.ships.set(enemy.id, enemy);
-    }
-    this.equipDefaultBuilds();
-  }
-
-  /** Every ship of the default battle flies its side's default quick builds. */
-  private equipDefaultBuilds(): void {
-    const squads = new Map<string, ArcadeShip[]>();
-    for (const ship of this.ships.values()) {
-      squads.set(ship.faction, [...(squads.get(ship.faction) ?? []), ship]);
-    }
-    for (const squad of squads.values()) {
-      const builds = assignQuickBuilds(squad.map((ship) => ship.definitionId));
-      squad.forEach((ship, index) =>
-        equipLoadout(ship, builds[index] ?? undefined),
-      );
-    }
   }
 
   private createShipSprite(ship: ArcadeShip): void {
@@ -2273,7 +2173,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       crewMode: player?.crewMode ?? "pilot",
       commanderOrders: player?.commanderOrders ?? null,
       ships: [...this.ships.values()],
-      playerFaction: this.viewFaction(),
+      playerTeam: this.viewTeam(),
       weapons: player ? this.weaponBar(player) : [],
       camera: this.cameras.main,
       score: this.score,
@@ -2496,7 +2396,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     if (!this.frameCache) return null;
     let nearest: ArcadeShip | null = null;
     let nearestDist = Infinity;
-    for (const view of this.frameCache.aliveEnemiesOf(ship.faction)) {
+    for (const view of this.frameCache.aliveEnemiesOf(ship.team)) {
       const dist = torusRangePx(ship, view, BATTLEFIELD_SIZE);
       if (dist < nearestDist) {
         nearestDist = dist;
@@ -2519,6 +2419,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       rangePx: MAIN_BEAM_RANGE_PX,
       arcDeg: ship.combatStats.firingArc,
       worldSize: BATTLEFIELD_SIZE,
+      isHostile: (other) => other.team !== ship.team,
       isEligible: (other) => !this.isArrivalShielded(other),
     });
     if (!target) return;
@@ -2568,7 +2469,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   ): { dx: number; dy: number; distance: number } | null {
     let best: { dx: number; dy: number; distance: number } | null = null;
     for (const s of this.frameCache?.aliveShips ?? []) {
-      if (s.faction === this.playerFaction) continue;
+      if (s.team === this.playerTeam) continue;
       const { dx, dy } = torusDelta(
         player.x,
         player.y,
@@ -2584,7 +2485,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   private checkVictory(): void {
     if (!this.frameCache) return;
-    const result = checkVictoryCondition(this.frameCache, this.playerFaction);
+    const result = checkVictoryCondition(this.frameCache, this.playerTeam);
     if (result.outcome === "victory") {
       this.gameEnded = true;
       this.finishBattle(true);

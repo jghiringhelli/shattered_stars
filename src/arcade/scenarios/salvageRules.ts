@@ -1,9 +1,11 @@
 /**
  * salvageRules — X-Wing 2.0 "Salvage Mission" for both sides, in real time:
  * an unstressed ship not already carrying, at range 0 of a loose crate,
- * picks it up (nearest eligible ship first); a carried crate follows its
- * carrier; a boost or barrel roll drops it where the action started and
- * destruction drops it at the wreck. A ship that just dropped a crate waits
+ * picks it up (nearest eligible ship first; an exact tie between the sides
+ * goes to the side carrying fewer crates, else waits a frame); a carried
+ * crate follows its carrier; a boost or barrel roll drops it where the
+ * action started and destruction drops it at the wreck. A ship that just
+ * dropped a crate waits
  * {@link SALVAGE_REPICKUP_COOLDOWN_MS} before it can pick one up again.
  *
  * The mission objectives' SALVAGE_MODEL is player-only and delivers crates
@@ -27,6 +29,9 @@ import type {
   ScenarioShip,
   ScenarioSide,
 } from "./scenarioTypes";
+
+/** Distance difference (px) under which two ships reach a crate together. */
+const PICKUP_TIE_PX = 1e-6;
 
 /** One salvage step's input. */
 export interface SalvageStepInput {
@@ -154,10 +159,11 @@ function pickUp(
     !cooldowns.has(ship.id);
   return crates.map((crate) => {
     if (crate.carrierId) return crate;
-    const picker = nearestWithin(
+    const picker = pickerFor(
       crate,
       frame.ships.filter(eligible),
       frame.worldSize,
+      (side) => cratesCarriedBy(crates, side),
     );
     if (!picker) return crate;
     carrying.add(picker.id);
@@ -169,6 +175,45 @@ function pickUp(
       carrierSide: picker.side,
     };
   });
+}
+
+/**
+ * Who picks a loose crate up: the nearest eligible ship at range 0. Ships of
+ * both sides equally near (a mirrored approach — the two flagships reach
+ * the centre crate on the same frame) are a tie, never settled by list
+ * order (the later side took the centre crate in every reinforced Salvage
+ * Mission and won 79 % of them): the side carrying fewer crates takes it;
+ * still even, nobody does this frame.
+ *
+ * @param at - A crate.
+ * @param ships - Eligible ships.
+ * @param worldSize - Torus side.
+ * @param carriedBy - Crates a side carries now.
+ * @returns The ship that picks it up, or null.
+ */
+function pickerFor(
+  at: ObjectivePoint,
+  ships: readonly ScenarioShip[],
+  worldSize: number,
+  carriedBy: (side: ScenarioSide) => number,
+): ScenarioShip | null {
+  const player = nearestWithin(
+    at,
+    ships.filter((s) => s.side === "player"),
+    worldSize,
+  );
+  const enemy = nearestWithin(
+    at,
+    ships.filter((s) => s.side === "enemy"),
+    worldSize,
+  );
+  if (!player || !enemy) return player ?? enemy;
+  const gap =
+    distanceBetween(player, at, worldSize) -
+    distanceBetween(enemy, at, worldSize);
+  if (Math.abs(gap) > PICKUP_TIE_PX) return gap < 0 ? player : enemy;
+  const lead = carriedBy("player") - carriedBy("enemy");
+  return lead === 0 ? null : lead < 0 ? player : enemy;
 }
 
 /**

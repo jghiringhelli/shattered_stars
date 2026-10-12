@@ -22,12 +22,21 @@ export const POOL_WARNING_FRACTION = 0.25;
 
 const MS_PER_SECOND = 1000;
 
+/** Who is looking: the local pilot's team and squad. */
+export interface ReinforcementView {
+  /** The viewer's team side key. */
+  readonly side: string;
+  /** The viewer's squad (member key), or null for a spectator. */
+  readonly member: string | null;
+}
+
 /**
- * @param side - A side's summary.
- * @returns "YOU  POOL 640  FIELD 180/250" (FOE for opponents; EXHAUSTED when out).
+ * @param side - A team's summary.
+ * @param viewSide - The viewer's team side key.
+ * @returns "YOU  POOL 640  FIELD 180/250" (FOE for other teams; EXHAUSTED when out).
  */
-export function sideRow(side: SideSummary): string {
-  const who = side.isPlayerSide ? "YOU" : "FOE";
+export function sideRow(side: SideSummary, viewSide: string): string {
+  const who = side.key === viewSide ? "YOU" : "FOE";
   const pool = side.exhausted ? "EXHAUSTED" : `POOL ${side.remainingPoints}`;
   return `${who}  ${pool}  FIELD ${side.fieldPoints}/${side.fieldCapPoints}`;
 }
@@ -54,16 +63,17 @@ export function nextLine(preview: readonly DeployOption[]): string {
 
 /**
  * @param deployment - A ship that just warped in.
- * @param playerFaction - The human's faction.
- * @returns The notification line.
+ * @param view - The viewer's team and squad.
+ * @returns The notification line (by team: a same-faction foe is a FOE).
  */
 export function deployToast(
   deployment: Deployment,
-  playerFaction: string,
+  view: ReinforcementView,
 ): string {
   const ship = `${deployment.option.label.toUpperCase()}  ${deployment.option.cost} PTS`;
-  if (deployment.pilot === "player") return `★ YOU  ${ship}`;
-  if (deployment.faction === playerFaction) return `▲ ALLY  ${ship}`;
+  if (deployment.pilot === "player" && deployment.member === view.member)
+    return `★ YOU  ${ship}`;
+  if (deployment.side === view.side) return `▲ ALLY  ${ship}`;
   return `▼ FOE  ${ship}`;
 }
 

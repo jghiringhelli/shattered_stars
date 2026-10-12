@@ -28,6 +28,7 @@ import {
   type ModeCombatStats,
 } from "../../data/ModeBalancing";
 import type { FactionId } from "../../config";
+import type { TeamId } from "../../arcade/teams";
 import { getShipDefinition, getShipDial } from "../../data/ShipDefinitions";
 import { uniquePilotOf } from "../../data/squadRules";
 import { applyLoadoutEffects } from "../../systems/BattleHelpers";
@@ -70,6 +71,10 @@ export interface ArcadeShip extends ShipState {
   isUniquePilot: boolean;
   /** Scene time (ms) until which a kill-frenzy pilot ability is active. */
   frenzyUntilMs: number;
+  /** The team it flies for: hostility, allies, marks and victory read this, never faction. */
+  readonly team: TeamId;
+  /** Index of the battle-config squad it belongs to (reinforcement sub-reserve, online seat). */
+  readonly squad: number;
 }
 
 /** Where and what a new ship is. */
@@ -78,6 +83,8 @@ export interface ArcadeShipSpec {
   readonly definitionId: string;
   readonly faction: FactionId;
   readonly owner: "player" | "ai";
+  readonly team: TeamId;
+  readonly squad: number;
   readonly x: number;
   readonly y: number;
   /** Heading in degrees, 0 = up, clockwise. */
@@ -141,6 +148,8 @@ export function createArcadeShip(spec: ArcadeShipSpec): ArcadeShip {
     modifiers: NEUTRAL_MODIFIERS,
     isUniquePilot: false,
     frenzyUntilMs: 0,
+    team: spec.team,
+    squad: spec.squad,
   };
 }
 

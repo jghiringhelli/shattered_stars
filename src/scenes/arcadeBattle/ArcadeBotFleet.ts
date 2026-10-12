@@ -1,18 +1,20 @@
 /**
  * ArcadeBotFleet — the Skirmish scene's AI: one BotPilot per AI ship and one
- * SquadCommand per faction, plus the battle's squad marks.
+ * SquadCommand per side (a team's side key, never a faction — a mirror
+ * match fields one faction on two sides), plus the battle's squad marks.
  *
  * The AI flies the same bots the skill gates measure, through the player's
  * own controls. Tiers:
- * - enemy factions fly the battle's difficulty (difficultyToTier: easy ->
- *   novice, normal -> average, hard -> expert, brutal -> expert with faster
- *   reaction);
+ * - enemy sides are crewed from the battle difficulty's squad plan
+ *   (BotDifficulty.squadSkillPlan, classic or reinforced): a skill per ship
+ *   slot in enlistment order, reinforcements continuing the slots (Easy: an
+ *   average leader with novice wingmen; Hard / Brutal: experts);
  * - the player's AI wingmen fly {@link WINGMAN_SKILL} at every difficulty —
  *   difficulty sets the opposition, not how good the player's help is.
  *
- * Squads: every enemy faction's command has an AI leader that marks its
- * focus (novice squads focus without marking — focus fire is a skill); the
- * player's faction has none — the player marks (R), and the wingmen focus
+ * Squads: every enemy side's command has an AI leader that marks its focus
+ * (a squad that never marks loses ~100 %, so every plan marks); the
+ * player's side has none — the player marks (R), and the wingmen focus
  * the player's mark, or mark the coordinator's choice while there is none
  * (mark assist — Settings › Gameplay › Wingmen Mark Assist). A side down to
  * one living ship flies on its own (no orders, no mark), as SquadMark defines.
@@ -25,13 +27,19 @@ import {
   DEFAULT_BOT_SKILL,
   SquadCommand,
   botProfile,
-  difficultyToTier,
   type BotContact,
   type BotSkill,
   type BotTier,
   type Point,
   type SquadOrder,
 } from "../../arcade/ai";
+import {
+  squadLeaderSkill,
+  squadSkillPlan,
+  squadSlotSkill,
+  type SquadFormat,
+  type SquadSkillPlan,
+} from "../../arcade/ai/BotDifficulty";
 import type { CycleFlightState } from "../../arcade/systems/CycleFlight";
 import type { FlightControlResult } from "../../arcade/systems/PilotFlightTypes";
 import { isMarkAssistEnabled } from "../../systems/SettingsStorage";
@@ -59,19 +67,24 @@ export const MIN_SQUAD_SIZE = 2;
 export interface ArcadeBotFleetOptions {
   /** The battle's difficulty label (battleConfig.aiDifficulty). */
   readonly difficulty: string;
-  /** The human player's faction (its squad has no AI leader). */
-  readonly playerFaction: string;
+  /** The human player's side key (its team's squad has no AI leader). */
+  readonly playerSide: string;
   /** The battle's seeded random source (shared by every pilot). */
   readonly random: () => number;
   /** Torus side length (px). */
   readonly worldSize: number;
   /**
-   * Every faction a human leads (online: one per seat's squad); default:
-   * the player's faction only. Their squads take the player's rules.
+   * Every side a human leads (online: each seat's team); default: the
+   * player's side only. Their squads take the player's rules.
    */
-  readonly humanFactions?: ReadonlySet<string>;
+  readonly humanSides?: ReadonlySet<string>;
   /** Mark assist for the human squads; default: the local setting (online fixes it). */
   readonly markAssist?: boolean;
+  /**
+   * Classic squads or reinforcement pools: picks the difficulty's squad
+   * plan (BotDifficulty.squadSkillPlan); default classic.
+   */
+  readonly squadFormat?: SquadFormat;
 }
 
 /** One frame of one AI ship. */
@@ -84,7 +97,9 @@ export interface FleetFlightInput {
 }
 
 export class ArcadeBotFleet {
-  private readonly enemySkill: BotSkill;
+  private readonly squadPlan: SquadSkillPlan;
+  /** AI pilots enlisted per side so far (the next ship's crew slot). */
+  private readonly crewed = new Map<string, number>();
   private readonly pilots = new Map<string, BotPilot>();
   private readonly squadCommands = new Map<string, SquadCommand>();
   private marks: SquadMarks = NO_SQUAD_MARKS;
@@ -93,7 +108,10 @@ export class ArcadeBotFleet {
 
   /** @param options - Difficulty, player faction, random source, world size. */
   constructor(private readonly options: ArcadeBotFleetOptions) {
-    this.enemySkill = difficultyToTier(options.difficulty);
+    this.squadPlan = squadSkillPlan(
+      options.difficulty,
+      options.squadFormat ?? "classic",
+    );
   }
 
   /** The battle's current squad marks (every side). */
@@ -102,35 +120,47 @@ export class ArcadeBotFleet {
   }
 
   /**
-   * @param side - A faction.
-   * @returns The tier and reaction scale its AI ships fly with.
+   * @param side - A side.
+   * @param slot - A ship's crew slot on that side (0 = its first AI pilot).
+   * @returns The tier and reaction scale that ship flies with: the
+   *   difficulty's squad plan for AI sides, the wingman tier for human ones.
    */
-  skillFor(side: string): BotSkill {
-    return this.isHumanSide(side) ? WINGMAN_SKILL : this.enemySkill;
+  skillFor(side: string, slot = 0): BotSkill {
+    return this.isHumanSide(side)
+      ? WINGMAN_SKILL
+      : squadSlotSkill(this.squadPlan, slot);
   }
 
   /** @param side - A faction. @returns Whether a human leads it. */
   private isHumanSide(side: string): boolean {
     return (
-      this.options.humanFactions?.has(side) ??
-      side === this.options.playerFaction
+      this.options.humanSides?.has(side) ?? side === this.options.playerSide
     );
   }
 
   /**
    * Give an AI ship its pilot (replacing any it had).
    * @param shipId - The ship.
-   * @param side - Its faction.
-   * @param skill - Tier and reaction; default: {@link skillFor} its side.
+   * @param side - Its side.
+   * @param skill - Tier and reaction; default: {@link skillFor} its side's
+   *   next crew slot (reinforcements continue the slots).
    */
-  enlist(shipId: string, side: string, skill = this.skillFor(side)): void {
+  enlist(shipId: string, side: string, skill?: BotSkill): void {
+    const pilotSkill = skill ?? this.skillFor(side, this.nextSlot(side));
     this.pilots.set(
       shipId,
-      new BotPilot(skill.tier, {
-        reactionScale: skill.reactionScale,
+      new BotPilot(pilotSkill.tier, {
+        reactionScale: pilotSkill.reactionScale,
         random: this.options.random,
       }),
     );
+  }
+
+  /** @param side - A side. @returns Its next crew slot (and counts it). */
+  private nextSlot(side: string): number {
+    const slot = this.crewed.get(side) ?? 0;
+    this.crewed.set(side, slot + 1);
+    return slot;
   }
 
   /**
@@ -289,11 +319,13 @@ export class ArcadeBotFleet {
   private squadFor(side: string): SquadCommand {
     let squad = this.squadCommands.get(side);
     if (squad) return squad;
-    const skill = this.skillFor(side);
     const isPlayerSide = this.isHumanSide(side);
+    const skill = isPlayerSide
+      ? WINGMAN_SKILL
+      : squadLeaderSkill(this.squadPlan);
     squad = new SquadCommand({
       side,
-      aiLeader: !isPlayerSide && skill.tier !== "novice",
+      aiLeader: !isPlayerSide && this.squadPlan.marks,
       assistMark:
         isPlayerSide && (this.options.markAssist ?? isMarkAssistEnabled()),
       reactionMs: botProfile(skill.tier, skill.reactionScale).reactionMs,

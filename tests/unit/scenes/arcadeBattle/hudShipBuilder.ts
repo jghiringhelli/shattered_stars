@@ -12,11 +12,12 @@ type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 export class HudShipBuilder {
   private ship: Mutable<HudShipView>;
 
-  private constructor(id: string, faction: string) {
+  private constructor(id: string, faction: string, team: number) {
     const pose = { x: 1000, y: 1000, angle: 0 };
     this.ship = {
       id,
       faction,
+      team,
       definitionId: "confed_kestrel",
       ...pose,
       hull: 12,
@@ -31,12 +32,12 @@ export class HudShipBuilder {
 
   /** @returns A player-side ship. */
   static aPlayer(id = "player_0"): HudShipBuilder {
-    return new HudShipBuilder(id, "free_confederation");
+    return new HudShipBuilder(id, "free_confederation", 0);
   }
 
   /** @returns An enemy ship. */
   static anEnemy(id = "enemy_0"): HudShipBuilder {
-    return new HudShipBuilder(id, "void_corsairs");
+    return new HudShipBuilder(id, "void_corsairs", 1);
   }
 
   at(x: number, y: number, angle = 0): this {
@@ -55,6 +56,16 @@ export class HudShipBuilder {
   withShields(shields: number, maxShields = this.ship.maxShields): this {
     this.ship.shields = shields;
     this.ship.maxShields = maxShields;
+    return this;
+  }
+
+  onTeam(team: number): this {
+    this.ship.team = team;
+    return this;
+  }
+
+  ofFaction(faction: string): this {
+    this.ship.faction = faction;
     return this;
   }
 

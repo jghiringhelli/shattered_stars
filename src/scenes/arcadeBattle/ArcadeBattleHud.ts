@@ -64,7 +64,8 @@ export interface ArcadeHudFrame {
   readonly crewMode: CrewRole;
   readonly commanderOrders: CommanderOrders | null;
   readonly ships: ReadonlyArray<HudShipView>;
-  readonly playerFaction: string;
+  /** The viewer's team (allies vs enemies on the radar, roster, edges). */
+  readonly playerTeam: number;
   /** The player's weapon bar (primary + secondaries), left to right. */
   readonly weapons: ReadonlyArray<WeaponSlotDescriptor>;
   readonly camera: CameraLike;
@@ -89,6 +90,10 @@ export interface ArcadeHudReadout {
   /** The contact shown as the squad's marked target, or null. */
   readonly markedId: string | null;
   readonly contactCount: number;
+  /** Contacts shown as allies (same team as the viewer, whatever their faction). */
+  readonly allyContactCount: number;
+  /** Roster rows, viewer's team first ("▲ TERRAN HEGEMONY", "▼ …"). */
+  readonly rosterLabels: ReadonlyArray<string>;
   readonly edgeArrowCount: number;
   readonly weaponIds: ReadonlyArray<string>;
   readonly selectedWeaponId: string | null;
@@ -106,6 +111,8 @@ const EMPTY_READOUT: ArcadeHudReadout = {
   targetId: null,
   markedId: null,
   contactCount: 0,
+  allyContactCount: 0,
+  rosterLabels: [],
   edgeArrowCount: 0,
   weaponIds: [],
   selectedWeaponId: null,
@@ -131,6 +138,7 @@ export class ArcadeBattleHud {
   };
   private isShown = true;
   private last: ArcadeHudReadout = EMPTY_READOUT;
+  private rosterLabels: string[] = [];
 
   /**
    * @param scene - The battle scene.
@@ -191,7 +199,7 @@ export class ArcadeBattleHud {
     const { snapshot, targetId } = buildBattleHudSnapshot({
       player: frame.player,
       ships: frame.ships,
-      playerFaction: frame.playerFaction,
+      playerTeam: frame.playerTeam,
       weapons: frame.weapons,
       camera,
       worldSize: this.config.worldSize,
@@ -214,6 +222,9 @@ export class ArcadeBattleHud {
       markedId:
         snapshot.contacts.find((contact) => contact.isMarked)?.id ?? null,
       contactCount: snapshot.contacts.length,
+      allyContactCount: snapshot.contacts.filter((c) => c.side === "ally")
+        .length,
+      rosterLabels: this.rosterLabels,
       edgeArrowCount: this.battleHud.edgeArrowCount,
       weaponIds: snapshot.weapons.map((slot) => slot.id),
       selectedWeaponId: selected?.id ?? null,
@@ -262,9 +273,13 @@ export class ArcadeBattleHud {
       matchClockTone(remaining),
       frame.score,
     );
-    this.roster.update(
-      rosterTeams(frame.ships, frame.playerFaction, frame.player?.id ?? null),
+    const teams = rosterTeams(
+      frame.ships,
+      frame.playerTeam,
+      frame.player?.id ?? null,
     );
+    this.rosterLabels = teams.map((team) => team.label);
+    this.roster.update(teams);
     const rows =
       frame.crewMode === "commander" && frame.commanderOrders
         ? commanderOrderRows(frame.commanderOrders, frame.nowMs)

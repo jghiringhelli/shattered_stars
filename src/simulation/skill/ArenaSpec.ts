@@ -38,6 +38,10 @@ export interface ShipEntry {
 export interface SquadSetup {
   /** Coordination behaviours; default all on. */
   readonly coordination?: CoordinationOptions;
+  /** The leader marks its focus (false: focus fire without marking); default true. */
+  readonly aiLeader?: boolean;
+  /** Delay of the squad's shared picture (ms); default the average pilot's. */
+  readonly reactionMs?: number;
 }
 
 /** One side of a battle. */

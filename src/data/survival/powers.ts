@@ -258,10 +258,10 @@ export const ATOMS: readonly Power[] = [
     "bul_regen",
     "bulwark",
     "Regen Coils",
-    "+0.5 shield HP/s regen",
+    "+0.12 shield HP/s regen",
     "💠",
     "shieldRegen",
-    0.5,
+    0.12,
   ),
   atom(
     "bul_evade",

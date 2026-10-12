@@ -196,7 +196,11 @@ export class BotPilot {
 
 /**
  * The bot's intent turned into a hazard escape: it steers for the safe point
- * (no specials, no dash) and keeps shooting whatever it was targeting.
+ * (no specials, no dash) and keeps shooting whatever it was targeting. The
+ * turn is judged from where the maneuver in flight ends (the next one starts
+ * there): judged from the current pose, a ship with the point dead astern
+ * queued the opposite of the turn it was flying, cycle after cycle, and
+ * weaved straight into the hazard.
  *
  * @param intent - What the bot decided.
  * @param self - Its own ship.
@@ -209,7 +213,7 @@ function escapeIntent(
   frame: BotFlightFrame,
 ): PilotIntent {
   const point = frame.safePoint ?? self;
-  const error = offNoseDeg(self, point, frame.worldSize);
+  const error = offNoseDeg(self.endPose, point, frame.worldSize);
   return {
     ...IDLE_INTENT,
     maneuver: steerForError(error, ESCAPE_STEER, self.isStressed),

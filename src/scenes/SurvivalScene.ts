@@ -28,7 +28,10 @@ import {
   beltRetreatPoint,
   type BeltConfig,
 } from "../systems/arena/ArenaBoundary";
-import { survivalBelt } from "../systems/survival/SurvivalBelt";
+import {
+  SURVIVAL_AI_WORLD_SIZE,
+  survivalBelt,
+} from "../systems/survival/SurvivalBelt";
 import { BeltWarningHud } from "../ui/survival/BeltWarningHud";
 import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
@@ -363,7 +366,7 @@ export class SurvivalScene extends Phaser.Scene {
   private readonly pilot = new PlayerFlightPilot(InputManager);
   /** Bots, squad orders and marks of every AI-flown ship (enemies, escorts). */
   private readonly squadAi = new SquadBattleAi({
-    worldSize: BATTLEFIELD_SIZE,
+    worldSize: SURVIVAL_AI_WORLD_SIZE,
     safePointFor: (x, y) =>
       beltRetreatPoint(
         { x, y },
@@ -806,8 +809,8 @@ export class SurvivalScene extends Phaser.Scene {
 
   /**
    * Sends the node's next wave: its size comes from the run's threat scaled
-   * by the node plan (sector, row, ascension), the belt squeezes one step,
-   * and the boss arrives on a boss node's last wave.
+   * by the node plan (sector, row, ascension), the belt holds the node's
+   * squeeze, and the elite / boss arrive on the node's last wave.
    */
   private startNextWave(): void {
     if (this.battleEnded) return;
