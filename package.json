@@ -1,13 +1,15 @@
 {
   "name": "shattered-stars",
   "version": "0.1.0",
+  "private": true,
+  "license": "UNLICENSED",
   "description": "Tactical dogfighting arcade game with X-Wing Miniatures mechanics",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "lint": "eslint src --ext .ts",
+    "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
@@ -28,7 +30,9 @@
     "verify:loop": "tsx scripts/verify_loop.ts",
     "playthrough:director": "tsx scripts/playthrough_director.ts",
     "balance:roles": "tsx scripts/role_matchup_matrix.ts",
-    "start:server": "tsx scripts/p2p_server.ts"
+    "start:server": "tsx server/src/main.ts",
+    "build:server": "esbuild server/src/main.ts --bundle --platform=node --target=node20 --format=cjs --outfile=server/dist/server.cjs --external:bufferutil --external:utf-8-validate",
+    "measure:net": "tsx scripts/net_measure.ts"
   },
   "dependencies": {
     "@types/seedrandom": "^3.0.8",
@@ -39,6 +43,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.3",
     "@playwright/test": "^1.58.2",
     "@stryker-mutator/core": "^9.6.0",
     "@stryker-mutator/typescript-checker": "^9.6.0",

@@ -19,6 +19,6 @@
     "isolatedModules": true,
     "noEmit": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "server/src/**/*"],
   "exclude": ["node_modules", "dist", "tests"]
 }

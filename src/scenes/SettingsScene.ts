@@ -255,6 +255,9 @@ export class SettingsScene extends Phaser.Scene {
     if (this.returnScene) {
       const battle = this.scene.get(this.returnScene);
       if (this.controlsChanged && battle) rebuildSceneInput(battle);
+      // The battle was paused under Settings (openSettingsOverBattle);
+      // resuming it shows its pause menu again.
+      this.scene.resume(this.returnScene);
       this.scene.stop();
       return;
     }

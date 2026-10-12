@@ -10,6 +10,8 @@
 import type Phaser from "phaser";
 import { FACTION_COLORS } from "../config";
 import type { FactionId, ShipSize } from "../config";
+import { shipSpriteAssetById } from "../assets/assetManifest";
+import { swapWhenLoaded } from "../assets/textureLoading";
 
 export interface ShipVisualOptions {
   /** Ship definition id — resolves the `ship_<id>` individual art texture. */
@@ -51,6 +53,11 @@ export function addShipVisual(
   if (textureKey) {
     const img = scene.add.image(0, 0, textureKey);
     img.setDisplaySize(size * 1.8, size * 1.8);
+    // Ships spawned after preload (waves, reinforcements) show the faction
+    // placeholder for a moment and switch to their art once it downloads.
+    const art = shipSpriteAssetById(definitionId);
+    if (art && textureKey !== spriteKey)
+      swapWhenLoaded(scene, img, art, "stretch");
     // Composited normally: the art carries a real alpha channel, so the ship
     // occludes what it flies over instead of being added to it.
     container.add(img);

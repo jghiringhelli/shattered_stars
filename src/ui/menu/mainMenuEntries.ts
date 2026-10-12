@@ -93,9 +93,9 @@ export const MAIN_MENU_ENTRIES: ReadonlyArray<MainMenuEntry> = [
   {
     label: "ONLINE",
     icon: "network",
-    description: "Build a squad and battle other pilots over the network.",
-    target: "SquadBuilderScene",
-    data: { initialMode: "online" },
+    description:
+      "Quick match or play friends by room code: dogfights and squad battles.",
+    target: "LobbyScene",
     group: "network",
   },
   {

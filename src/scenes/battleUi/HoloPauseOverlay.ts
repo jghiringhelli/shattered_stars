@@ -9,11 +9,13 @@ import Phaser from "phaser";
 import type { FactionId } from "../../config";
 import {
   createHoloButton,
+  type HoloButton,
   type HoloButtonVariant,
 } from "../../ui/hud/HoloButton";
 import { createHoloPanel } from "../../ui/hud/HoloPanel";
 import { HOLO_DEPTH, HOLO_SPACING } from "../../ui/theme/HoloTheme";
 import { showConfirmDialog } from "../../ui/ConfirmDialog";
+import { MenuFocus } from "../../ui/menu/MenuFocus";
 import { openBugReport } from "../../utils/BugReport";
 
 /** Battlefield dimming behind the menu. */
@@ -48,6 +50,7 @@ interface PauseEntry {
 /** Holographic pause menu, hidden until {@link HoloPauseOverlay.show}. */
 export class HoloPauseOverlay {
   private readonly root: Phaser.GameObjects.Container;
+  private readonly focus: MenuFocus;
 
   /**
    * @param config - Owning scene, accent and menu callbacks.
@@ -75,10 +78,36 @@ export class HoloPauseOverlay {
       panelHeight / 2 +
       LAYOUT.headerAllowance +
       LAYOUT.buttonPitch / 2;
-    const buttons = entries.map((entry, index) =>
+    const buttons = this.createButtons(scene, entries, firstY);
+    this.root = scene.add
+      .container(0, 0, [dim, panel, ...buttons])
+      .setDepth(HOLO_DEPTH.menuPanel)
+      .setScrollFactor(0, 0, true)
+      .setVisible(false);
+    // ↑/↓ + ENTER, D-pad + A — keyboard/gamepad players can reach Quit.
+    this.focus = new MenuFocus(scene, buttons, {
+      isActive: () => this.root.visible,
+    });
+    this.root.once(Phaser.GameObjects.Events.DESTROY, () =>
+      this.focus.destroy(),
+    );
+  }
+
+  /**
+   * @param scene - Owning scene.
+   * @param entries - Menu entries, top to bottom.
+   * @param firstY - Centre y of the first button.
+   * @returns The buttons, in focus order.
+   */
+  private createButtons(
+    scene: Phaser.Scene,
+    entries: readonly PauseEntry[],
+    firstY: number,
+  ): HoloButton[] {
+    return entries.map((entry, index) =>
       createHoloButton(
         scene,
-        width / 2,
+        scene.scale.width / 2,
         firstY + index * LAYOUT.buttonPitch,
         {
           width: LAYOUT.buttonWidth,
@@ -89,11 +118,6 @@ export class HoloPauseOverlay {
         entry.onClick,
       ),
     );
-    this.root = scene.add
-      .container(0, 0, [dim, panel, ...buttons])
-      .setDepth(HOLO_DEPTH.menuPanel)
-      .setScrollFactor(0, 0, true)
-      .setVisible(false);
   }
 
   /** Whether the menu is showing. */
@@ -108,6 +132,7 @@ export class HoloPauseOverlay {
 
   /** Hide the menu. */
   hide(): void {
+    this.focus.clear();
     this.root.setVisible(false);
   }
 

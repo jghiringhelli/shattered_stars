@@ -30,6 +30,8 @@ const HELD_INTENTS: ReadonlySet<ActionIntent> = new Set([
 export class GamepadAdapter implements InputAdapter {
   readonly source: InputSource = "gamepad";
   private prevButtonState: Map<number, boolean> = new Map();
+  /** Axis directions past their deadzone last poll (edge detection). */
+  private prevActiveAxes: Set<string> = new Set();
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -44,6 +46,7 @@ export class GamepadAdapter implements InputAdapter {
 
   destroy(): void {
     this.prevButtonState.clear();
+    this.prevActiveAxes.clear();
   }
 
   isAvailable(): boolean {
@@ -63,6 +66,7 @@ export class GamepadAdapter implements InputAdapter {
       if (btn) currentButtonState.set(binding.button, btn.pressed);
     }
 
+    const activeAxes = new Set<string>();
     for (const binding of this.bindings) {
       if (binding.button !== undefined) {
         const pressed = currentButtonState.get(binding.button) ?? false;
@@ -78,24 +82,47 @@ export class GamepadAdapter implements InputAdapter {
           value: 1,
         });
       } else if (binding.axis !== undefined) {
-        const axisValue = pad.axes[binding.axis]?.getValue() ?? 0;
-        const deadzone = binding.deadzone ?? 0.15;
-        const active =
-          binding.axisDirection === "negative"
-            ? axisValue < -deadzone
-            : axisValue > deadzone;
-        if (!active) continue;
-
-        events.push({
-          intent: binding.intent,
-          timestamp: Date.now(),
-          source: this.source,
-          value: Math.min(1, Math.abs(axisValue)),
-        });
+        const event = this.pollAxis(pad, binding, activeAxes);
+        if (event) events.push(event);
       }
     }
 
     this.prevButtonState = currentButtonState;
+    this.prevActiveAxes = activeAxes;
     return events;
+  }
+
+  /**
+   * Held intents (steer, throttle, pan) fire every frame the stick is past
+   * the deadzone; edge intents (right-stick flick maneuvers) fire once per
+   * flick, like a button press.
+   *
+   * @param pad - The polled pad.
+   * @param binding - An axis binding.
+   * @param activeAxes - Collects the axis directions active this frame.
+   * @returns The event to dispatch, or null.
+   */
+  private pollAxis(
+    pad: Phaser.Input.Gamepad.Gamepad,
+    binding: GamepadBinding,
+    activeAxes: Set<string>,
+  ): InputEvent | null {
+    const axisValue = pad.axes[binding.axis!]?.getValue() ?? 0;
+    const deadzone = binding.deadzone ?? 0.15;
+    const active =
+      binding.axisDirection === "negative"
+        ? axisValue < -deadzone
+        : axisValue > deadzone;
+    if (!active) return null;
+    const axisKey = `${binding.axis}:${binding.axisDirection}:${deadzone}`;
+    activeAxes.add(axisKey);
+    if (!HELD_INTENTS.has(binding.intent) && this.prevActiveAxes.has(axisKey))
+      return null;
+    return {
+      intent: binding.intent,
+      timestamp: Date.now(),
+      source: this.source,
+      value: Math.min(1, Math.abs(axisValue)),
+    };
   }
 }

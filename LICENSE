@@ -1,0 +1,44 @@
+Shattered Stars — Proprietary License
+Copyright (c) 2026 Juan Carlos Ghiringhelli. All rights reserved.
+
+"The Game" means Shattered Stars: its source code, compiled builds, art,
+music, sound, text, data and every other file in this repository, except the
+third-party components listed in public/THIRD_PARTY_NOTICES.txt.
+
+1. Free-to-play alpha. You may play the official hosted builds of the Game
+   (for example the GitHub Pages build linked from README.md) free of charge,
+   for personal, non-commercial use.
+
+2. No other rights are granted. Except as stated in section 1, and except for
+   the viewing and forking that GitHub's Terms of Service allow for public
+   repositories, you may not copy, modify, merge, publish, distribute, host,
+   sublicense, sell, or create derivative works of the Game, in whole or in
+   part, without prior written permission from the copyright holder.
+
+3. Contributions. Bug reports and feedback are welcome. By submitting code or
+   other material to this repository you agree that it may be used in the
+   Game under these terms.
+
+4. Third-party components keep their own licenses (Phaser, seedrandom and
+   immer are MIT-licensed); see public/THIRD_PARTY_NOTICES.txt.
+
+5. AI-generated content. The Game's art was generated with Stable Diffusion
+   (DreamShaper 8 and LoRAs, via Forge and ComfyUI). Most of its music was
+   created by the copyright holder with Suno (suno.com); additional faction
+   tracks (Synthetic Collective, Ascendant Empire) were generated with
+   ACE-Step via Harmonia. Much of the code was written with AI coding
+   assistants. All of it was directed, selected and integrated by the
+   copyright holder.
+
+6. Trademarks. Shattered Stars is an independent fan game inspired by the
+   X-Wing Miniatures Game. It is not affiliated with, endorsed, sponsored or
+   approved by Lucasfilm Ltd., The Walt Disney Company, Atomic Mass Games or
+   Fantasy Flight Games. Star Wars, X-Wing and related names are trademarks
+   of their respective owners; all other trademarks belong to their owners.
+
+7. No warranty. THE GAME IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+   NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR
+   OTHER LIABILITY ARISING FROM, OUT OF OR IN CONNECTION WITH THE GAME OR ITS
+   USE. This is an alpha: it may crash, and saved progress may be lost.

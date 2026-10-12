@@ -29,7 +29,16 @@ export interface MenuFocusOptions {
   readonly columns?: number;
   /** Only navigate while this returns true (e.g. overlay visible). */
   readonly isActive?: () => boolean;
+  /**
+   * A modal (confirm dialog) takes the scene's keyboard/gamepad focus: while
+   * it exists, every other MenuFocus in the scene ignores input, so ENTER
+   * can't re-activate the menu underneath. Nested modals: the newest wins.
+   */
+  readonly modal?: boolean;
 }
+
+/** Open modal focus controllers per scene, newest last. */
+const modalStacks = new WeakMap<Phaser.Scene, MenuFocus[]>();
 
 /** Keys handled by the focus controller. */
 const NAV_EVENTS = [
@@ -75,6 +84,11 @@ export class MenuFocus {
     private readonly options: MenuFocusOptions = {},
   ) {
     const columns = Math.max(1, options.columns ?? 1);
+    if (options.modal) {
+      const stack = modalStacks.get(scene) ?? [];
+      stack.push(this);
+      modalStacks.set(scene, stack);
+    }
     const steps: Record<NavEvent, () => void> = {
       "keydown-UP": () => this.move(-columns),
       "keydown-DOWN": () => this.move(columns),
@@ -88,13 +102,23 @@ export class MenuFocus {
     if (!keyboard) return;
     for (const event of NAV_EVENTS) {
       const handler = (keyEvent?: KeyboardEvent): void => {
-        if (this.options.isActive && !this.options.isActive()) return;
+        if (!this.accepting()) return;
         if (this.isRepeatDelivery(keyEvent)) return;
         steps[event]();
       };
       keyboard.on(event, handler);
       this.handlers.push([event, handler]);
     }
+  }
+
+  /**
+   * @returns Whether this controller may react to input now: its own gate
+   *   allows it and no newer modal in the scene has taken focus.
+   */
+  private accepting(): boolean {
+    if (this.options.isActive && !this.options.isActive()) return false;
+    const stack = modalStacks.get(this.scene);
+    return !stack?.length || stack[stack.length - 1] === this;
   }
 
   /**
@@ -109,7 +133,7 @@ export class MenuFocus {
     this.gamepadHandler = (_pad, button) => {
       const event = GAMEPAD_NAV[button.index];
       if (!event) return;
-      if (this.options.isActive && !this.options.isActive()) return;
+      if (!this.accepting()) return;
       steps[event]();
     };
     gamepad.on("down", this.gamepadHandler);
@@ -162,8 +186,11 @@ export class MenuFocus {
     this.index = -1;
   }
 
-  /** Remove keyboard and gamepad listeners. */
+  /** Remove keyboard and gamepad listeners (and release modal focus). */
   destroy(): void {
+    const stack = modalStacks.get(this.scene);
+    const position = stack?.indexOf(this) ?? -1;
+    if (stack && position >= 0) stack.splice(position, 1);
     const keyboard = this.scene.input?.keyboard;
     for (const [event, handler] of this.handlers) keyboard?.off(event, handler);
     this.handlers.length = 0;

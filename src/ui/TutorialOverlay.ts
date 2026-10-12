@@ -8,6 +8,7 @@
 
 import { keyboardLabelFor } from "./ControlsReference";
 import type { ActionIntent } from "../input/InputTypes";
+import { browserStore } from "../systems/keyValueStore";
 
 const SEEN_KEY = "ss_tutorial_seen_v1";
 
@@ -30,14 +31,14 @@ const QUICK_TIPS: ReadonlyArray<{
 
 /** Shows the first-launch overlay unless the player already dismissed it. */
 export function initTutorialOverlay(): void {
-  if (typeof window === "undefined" || typeof localStorage === "undefined") {
+  if (typeof window === "undefined" || typeof document === "undefined") {
     return;
   }
   // Automated test contexts (Playwright sets navigator.webdriver) always start
   // with empty localStorage — never show a blocking overlay there, it would
   // intercept every menu click in every e2e spec.
   if (typeof navigator !== "undefined" && navigator.webdriver === true) return;
-  if (localStorage.getItem(SEEN_KEY) === "1") return;
+  if (browserStore().getItem(SEEN_KEY) === "1") return;
 
   const overlay = document.getElementById("tutorial-overlay");
   const tipsList = document.getElementById("tutorial-tips");
@@ -70,10 +71,10 @@ function onKeydown(e: KeyboardEvent): void {
  * finishes (BootScene), whichever happens first.
  */
 export function hideTutorialOverlay(): void {
-  if (typeof window === "undefined" || typeof localStorage === "undefined") {
+  if (typeof window === "undefined" || typeof document === "undefined") {
     return;
   }
-  localStorage.setItem(SEEN_KEY, "1");
+  browserStore().setItem(SEEN_KEY, "1");
   document.getElementById("tutorial-overlay")?.classList.add("hidden");
   window.removeEventListener("keydown", onKeydown);
 }

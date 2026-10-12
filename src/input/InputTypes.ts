@@ -45,6 +45,10 @@ export type ActionIntent =
   | "BOOST"
   | "KTURN"
   | "BARREL_ROLL"
+  // Direct barrel-roll buttons (gamepad right-stick flicks): the keyboard's
+  // left+right chord is impossible on one analog stick.
+  | "BARREL_ROLL_LEFT"
+  | "BARREL_ROLL_RIGHT"
   // Continuous flight — discrete precision maneuvers (ArcadeBattleScene's
   // richer gesture/stress model; unbound in the simpler dial-based scenes)
   | "SHARP_TURN_LEFT"

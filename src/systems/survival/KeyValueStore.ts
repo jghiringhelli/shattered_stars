@@ -4,12 +4,10 @@
  * and the browser's localStorage is just one adapter.
  */
 
+import { browserStore, type KeyValueStore } from "../keyValueStore";
+
 /** Minimal synchronous key/value store (localStorage-compatible). */
-export interface KeyValueStore {
-  getItem(key: string): string | null;
-  setItem(key: string, value: string): void;
-  removeItem(key: string): void;
-}
+export type { KeyValueStore };
 
 /** Process-local store, used when localStorage is unavailable (private mode, SSR). */
 export class MemoryStore implements KeyValueStore {
@@ -32,20 +30,11 @@ export class MemoryStore implements KeyValueStore {
 }
 
 /**
- * @returns The browser's localStorage when usable, else a MemoryStore.
+ * @returns The shared never-throwing browser store (memory-backed when
+ *   storage is blocked or full).
  */
 export function defaultStore(): KeyValueStore {
-  try {
-    if (typeof localStorage !== "undefined") {
-      const probe = "__ss_probe__";
-      localStorage.setItem(probe, probe);
-      localStorage.removeItem(probe);
-      return localStorage;
-    }
-  } catch {
-    // Storage blocked (privacy mode / quota): fall through to memory.
-  }
-  return new MemoryStore();
+  return browserStore();
 }
 
 /**

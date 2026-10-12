@@ -29,6 +29,29 @@ class InputManagerClass {
   // Held state for continuous inputs (movement, etc.)
   private heldIntents: Map<ActionIntent, InputEvent> = new Map();
 
+  /** Intents not dispatched while a modal owns them (count per intent). */
+  private suppressed: Map<ActionIntent, number> = new Map();
+
+  /**
+   * Stop dispatching `intent` (adapters keep polling, so presses made while
+   * suppressed are consumed, not replayed). Used by modals, e.g. a confirm
+   * dialog over the pause menu must not let ESC toggle pause underneath.
+   *
+   * @param intent - Intent to hold back.
+   * @returns Release function (idempotent).
+   */
+  suppress(intent: ActionIntent): () => void {
+    this.suppressed.set(intent, (this.suppressed.get(intent) ?? 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const remaining = (this.suppressed.get(intent) ?? 1) - 1;
+      if (remaining > 0) this.suppressed.set(intent, remaining);
+      else this.suppressed.delete(intent);
+    };
+  }
+
   /**
    * Register an input adapter
    */
@@ -155,6 +178,7 @@ class InputManagerClass {
   }
 
   private dispatch(event: InputEvent): void {
+    if (this.suppressed.has(event.intent)) return;
     for (const sub of this.subscriptions) {
       if (sub.intent === event.intent || sub.intent === "*") {
         try {
@@ -179,6 +203,7 @@ class InputManagerClass {
     this.adapters.clear();
     this.subscriptions = [];
     this.heldIntents.clear();
+    this.suppressed.clear();
   }
 }
 

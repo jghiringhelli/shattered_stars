@@ -90,6 +90,12 @@ export const DEFAULT_TOUCH_BINDINGS: readonly TouchBinding[] = [
   { gesture: "hold", intent: "CLOAK" },
 ];
 
+/**
+ * Right-stick flicks must pass this deflection to fire a maneuver, so a
+ * resting or lightly brushed stick never rolls the ship.
+ */
+export const RIGHT_STICK_FLICK_DEADZONE = 0.6;
+
 export const DEFAULT_GAMEPAD_BINDINGS: readonly GamepadBinding[] = [
   // D-pad for camera
   { button: 12, intent: "PAN_UP" }, // D-pad up
@@ -105,19 +111,40 @@ export const DEFAULT_GAMEPAD_BINDINGS: readonly GamepadBinding[] = [
   { axis: 0, axisDirection: "positive", intent: "STEER_RIGHT", deadzone: 0.2 },
   { axis: 1, axisDirection: "negative", intent: "THRUST_UP", deadzone: 0.2 },
   { axis: 1, axisDirection: "positive", intent: "THRUST_DOWN", deadzone: 0.2 },
-  // Triggers for zoom
-  { button: 6, intent: "ZOOM_OUT" }, // LT
-  { button: 7, intent: "ZOOM_IN" }, // RT
+  // Triggers: Tallon rolls (camera zoom is wheel/auto in every scene; no
+  // scene reads the ZOOM intents, so the triggers are free for flight)
+  { button: 6, intent: "TALLON_LEFT" }, // LT
+  { button: 7, intent: "TALLON_RIGHT" }, // RT
   // Face buttons
   { button: 0, intent: "CONFIRM" }, // A / Cross
+  { button: 0, intent: "BOOST" }, // A / Cross (flight)
   { button: 1, intent: "CANCEL" }, // B / Circle
   { button: 2, intent: "FIRE_SECONDARY" }, // X / Square
   { button: 3, intent: "FOCUS_SELECTED" }, // Y / Triangle
   { button: 2, intent: "EXECUTE_ACTION" }, // X / Square (tactical dial confirm)
-  // Bumpers for cycling / weapon cycle
+  // Bumpers for cycling / weapon cycle / K-turn
   { button: 4, intent: "CYCLE_PREV" }, // LB
+  { button: 4, intent: "KTURN" }, // LB (flight)
   { button: 5, intent: "CYCLE_NEXT" }, // RB
   { button: 5, intent: "WEAPON_CYCLE" }, // RB
+  // D-pad in flight (it pans the camera in tactical scenes)
+  { button: 14, intent: "SEGNOR_LEFT" }, // D-pad left
+  { button: 15, intent: "SEGNOR_RIGHT" }, // D-pad right
+  { button: 12, intent: "CLOAK" }, // D-pad up
+  { button: 8, intent: "CREW_CYCLE" }, // Back / View
+  // Right-stick flick left/right: barrel roll (edge-triggered, firm flick)
+  {
+    axis: 2,
+    axisDirection: "negative",
+    intent: "BARREL_ROLL_LEFT",
+    deadzone: RIGHT_STICK_FLICK_DEADZONE,
+  },
+  {
+    axis: 2,
+    axisDirection: "positive",
+    intent: "BARREL_ROLL_RIGHT",
+    deadzone: RIGHT_STICK_FLICK_DEADZONE,
+  },
   // Start/Select
   { button: 9, intent: "PAUSE" }, // Start
   // Right-stick click: mark the HUD target as the squad's focus

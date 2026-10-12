@@ -24,7 +24,7 @@ export const MENU_TRANSITION_BUDGET_MS = 400;
 /** UI sound levels on the UI bus. */
 const UI_SOUND = { hover: 0.45, press: 0.7, back: 0.6 } as const;
 /** Gamepad button index of B / Circle. */
-const GAMEPAD_BACK_BUTTON = 1;
+export const GAMEPAD_BACK_BUTTON = 1;
 /** Menu clear colour channels for fades (MENU_CLEAR_COLOR 0x03070d). */
 const FADE_RGB = [3, 7, 13] as const;
 /** Scene data key marking a transition in flight. */

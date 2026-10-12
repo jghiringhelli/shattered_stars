@@ -17,9 +17,17 @@ class FakeImage {
   blendMode: unknown = "untouched";
   displayWidth = 0;
   displayHeight = 0;
+  readonly active = true;
 
-  constructor(readonly textureKey: string) {}
+  constructor(public textureKey: string) {}
 
+  get texture(): { key: string } {
+    return { key: this.textureKey };
+  }
+  setTexture(key: string): this {
+    this.textureKey = key;
+    return this;
+  }
   setDisplaySize(width: number, height: number): this {
     this.displayWidth = width;
     this.displayHeight = height;
@@ -62,6 +70,31 @@ class FakeGraphics {
   }
 }
 
+/** Minimal once/on/off/emit emitter, standing in for Phaser's. */
+class FakeEmitter {
+  private readonly handlers = new Map<
+    string,
+    Array<(...a: unknown[]) => void>
+  >();
+  on(event: string, fn: (...a: unknown[]) => void): this {
+    this.handlers.set(event, [...(this.handlers.get(event) ?? []), fn]);
+    return this;
+  }
+  once(event: string, fn: (...a: unknown[]) => void): this {
+    return this.on(event, fn);
+  }
+  off(event: string, fn: (...a: unknown[]) => void): this {
+    this.handlers.set(
+      event,
+      (this.handlers.get(event) ?? []).filter((h) => h !== fn),
+    );
+    return this;
+  }
+  emit(event: string, ...args: unknown[]): void {
+    for (const fn of this.handlers.get(event) ?? []) fn(...args);
+  }
+}
+
 /**
  * Build a fake scene whose texture store contains exactly `loadedKeys`.
  *
@@ -70,15 +103,33 @@ class FakeGraphics {
  */
 function fakeScene(loadedKeys: readonly string[]) {
   const added: unknown[] = [];
+  const loaded = new Set(loadedKeys);
+  const textures = Object.assign(new FakeEmitter(), {
+    exists: (key: string) => loaded.has(key),
+  });
+  const requested: string[] = [];
+  const load = Object.assign(new FakeEmitter(), {
+    image: (key: string) => requested.push(key),
+    atlas: (key: string) => requested.push(key),
+    isLoading: () => false,
+    start: () => undefined,
+  });
   const scene = {
-    textures: { exists: (key: string) => loadedKeys.includes(key) },
+    textures,
+    load,
+    events: new FakeEmitter(),
     add: {
       image: (_x: number, _y: number, key: string) => new FakeImage(key),
       graphics: () => new FakeGraphics(),
     },
   };
   const container = { add: (obj: unknown) => added.push(obj) };
-  return { scene, container, added };
+  /** Simulate the requested texture finishing its download. */
+  const finishLoad = (key: string): void => {
+    loaded.add(key);
+    textures.emit(`addtexture-${key}`);
+  };
+  return { scene, container, added, requested, finishLoad };
 }
 
 const OPTIONS = {
@@ -149,5 +200,22 @@ describe("addShipVisual", () => {
     const image = visual.image as unknown as FakeImage;
     expect(image.displayWidth).toBe(image.displayHeight);
     expect(image.displayWidth).toBeGreaterThan(OPTIONS.size);
+  });
+
+  it("downloads missing ship art on demand and swaps the placeholder at the same size", () => {
+    const { scene, container, requested, finishLoad } = fakeScene([
+      "ship_terran_hegemony_small",
+    ]);
+    const visual = addShipVisual(
+      scene as never,
+      container as never,
+      OPTIONS as never,
+    );
+    const image = visual.image as unknown as FakeImage;
+    const sizeBefore = image.displayWidth;
+    expect(requested).toEqual(["ship_terran_javelin"]);
+    finishLoad("ship_terran_javelin");
+    expect(image.textureKey).toBe("ship_terran_javelin");
+    expect(image.displayWidth).toBe(sizeBefore);
   });
 });

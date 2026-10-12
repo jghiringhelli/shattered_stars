@@ -17,6 +17,7 @@ import {
 } from "../ui/MenuSelection";
 import { punch } from "../ui/UIJuice";
 import { openBugReport } from "../utils/BugReport";
+import { BUILD_INFO, formatVersionTag } from "../buildInfo";
 import { addFooterHint, addMenuBackdrop } from "../ui/menu/MenuScaffold";
 import {
   MAIN_MENU_ENTRIES,
@@ -49,6 +50,8 @@ const ENTRANCE = {
 
 export class MainMenuScene extends Phaser.Scene {
   private titleText!: Phaser.GameObjects.Text;
+  /** Build tag in the bottom-right corner (e2e reads it). */
+  private versionTag: Phaser.GameObjects.Text | null = null;
   private menuItems: Phaser.GameObjects.Container[] = [];
   private selectedIndex = 0;
   private briefing!: MainMenuBriefing;
@@ -66,8 +69,10 @@ export class MainMenuScene extends Phaser.Scene {
     // Defer AudioContext creation until the first user gesture (Chrome autoplay policy).
     const initAudio = (): void => {
       audioManager.initialize();
-      audioManager.playMusic("menu_theme");
+      audioManager.playMenuMusic();
     };
+    // Returning from a mode: the context already exists, so crossfade now.
+    audioManager.playMenuMusic();
     this.input.once("pointerdown", initAudio);
     this.input.keyboard!.once("keydown", initAudio);
 
@@ -135,8 +140,13 @@ export class MainMenuScene extends Phaser.Scene {
       "↑ ↓  NAVIGATE        ENTER  SELECT        F  FLIGHT SCHOOL",
     );
     const muted = MAIN_MENU_LAYOUT.footerColor;
-    this.add
-      .text(width - MAIN_MENU_LAYOUT.margin, height - 16, "v0.1.0 ALPHA", muted)
+    this.versionTag = this.add
+      .text(
+        width - MAIN_MENU_LAYOUT.margin,
+        height - 16,
+        formatVersionTag(BUILD_INFO),
+        muted,
+      )
       .setLetterSpacing(1.5)
       .setOrigin(1, 0.5);
 

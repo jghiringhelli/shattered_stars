@@ -57,4 +57,24 @@ describe("openBugReport", () => {
     const params = new URL(url).searchParams;
     expect(params.get("labels")).toBe("bug");
   });
+
+  it("attaches the build, settings and recent telemetry to the body", () => {
+    openBugReport({ sceneKey: "DogfightScene" });
+
+    const [url] = openSpy.mock.calls[0];
+    const body = new URL(url).searchParams.get("body") ?? "";
+    expect(body).toContain("Build: v");
+    expect(body).toContain("Settings:");
+    expect(body).toContain("telemetry events:");
+  });
+
+  it("keeps the whole issue URL under GitHub's practical length limit", () => {
+    openBugReport({ sceneKey: "DogfightScene" });
+
+    const [url] = openSpy.mock.calls[0];
+    expect((url as string).length).toBeLessThan(MAX_ISSUE_URL_LENGTH);
+  });
 });
+
+/** github.com rejects new-issue URLs much past ~8 KB. */
+const MAX_ISSUE_URL_LENGTH = 8000;

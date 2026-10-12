@@ -3,15 +3,18 @@
 Purpose: verify the Skirmish MVP is fun, correct, and shippable. Run through this
 checklist before every merge to `master` and before each release build.
 
-**Scope:** Skirmish mode only. Terran Hegemony vs. Free Confederation, 200-point
-squads. Other modes and factions are gated off for MVP.
+**Scope:** Sections 2–11 walk through Skirmish (Terran Hegemony vs. Free
+Confederation, 200-point squads) in depth. Every other mode (Survival, Epic
+Format, Boss Raid, Dogfight, Ace Duel, Campaign, Flight School) is open in the
+alpha: give each a short pass using sections 10 and 12. Known problems are
+listed in [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
 
 ---
 
 ## How to use this doc
 
-1. Boot dev server: `npm run dev`
-2. Open `http://localhost:5173/`
+1. Boot dev server: `npm run dev` (or test a production build: `npm run build && npm run preview`)
+2. Open `http://localhost:3000/` (dev) or the URL `vite preview` prints
 3. Walk through each section in order
 4. Mark each item PASS / FAIL / SKIP
 5. File any FAIL as a GitHub issue with the section header as the label
@@ -50,7 +53,7 @@ Expected total run time: **~15 minutes** for a full pass.
 - [ ] 6 ships spawn: 1 player, 2 AI wingmen, 3 enemies
 - [ ] Ships spawn within ~1200px of player (visible on radar/screen)
 - [ ] Camera follows player smoothly, no jump on wraparound
-- [ ] Hold ArrowUp + Space: player fires; laser bolts visible; enemies react
+- [ ] Hold ArrowUp toward an enemy: primary lasers fire on their own in arc and range; enemies react
 - [ ] Land a kill: SCORE increases by 100; "KILL!" floating text appears
 - [ ] Kill all enemies: VICTORY! screen shows within 1 second
 - [ ] RETRY button restarts battle; MAIN MENU button returns to menu
@@ -101,8 +104,9 @@ projectiles disappear at seam without hitting.
 
 - [ ] ArrowLeft / ArrowRight steer the ship
 - [ ] ArrowUp accelerates; speed cap enforced
-- [ ] Space fires primary weapon (respects cooldown)
-- [ ] Shift + Space or dedicated key fires ordnance (if equipped)
+- [ ] Primary weapon fires automatically at targets in arc and range
+- [ ] Shift + Space fires the selected secondary (if equipped); Tab cycles it
+- [ ] Gamepad: A boost, LB K-turn, LT/RT Tallon, D-pad ←/→ Segnor, right-stick flick barrel roll, X secondary, RB cycle
 - [ ] K-turn triggers on the correct key; ship flips 180°; cooldown enforced
 - [ ] Boost triggers; visible speed jump; stress increases
 - [ ] Barrel roll triggers; brief invulnerability window; cooldown enforced
@@ -143,6 +147,9 @@ projectiles disappear at seam without hitting.
 
 - [ ] ESC pauses the battle; overlay appears; ship stops moving
 - [ ] ESC again resumes; no state drift or jitter
+- [ ] ↑/↓ + Enter (or D-pad + A) reach every pause button
+- [ ] SETTINGS opens on top of the battle; clicks don't reach the pause menu; ESC returns to the pause menu
+- [ ] QUIT TO MENU: the dialog focuses CANCEL; Enter/ESC/B cancel and the battle stays paused; ← + Enter (or D-pad ← + A) quits
 - [ ] Pause during flee warning: warning HUD hides; resume shows it again
 
 **FAIL if:** pause doesn't stop simulation, resume causes visual glitch.
@@ -189,3 +196,15 @@ Everything else can ship with a documented known-issue if the fix isn't ready.
 | Date | Version | Notes |
 |------|---------|-------|
 | 2026-07-28 | v0.1 | Initial MVP playtest guide |
+
+---
+
+## 12. Release build checks
+
+- [ ] Main-menu corner shows `vX.Y.Z ALPHA · <sha> · <date>` matching the commit
+- [ ] REPORT A BUG opens a GitHub issue pre-filled with build, settings and recent events
+- [ ] DevTools › Network: the main menu appears after < 10 MB transferred; entering a mode shows a LOADING bar while its art downloads
+- [ ] Boot with storage blocked (Chrome: Settings › Privacy › Block all cookies) → menu loads, the "won't be saved" banner shows, a battle plays
+- [ ] Credits scroll shows the AI-content disclosure and the non-affiliation disclaimer
+
+**FAIL if:** black screen, missing version tag, or the first menu needs more than ~10 MB.

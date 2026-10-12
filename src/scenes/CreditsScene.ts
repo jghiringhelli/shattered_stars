@@ -21,10 +21,7 @@ import {
 import { holoFont } from "../ui/theme/holoFont";
 import { HOLO_PALETTE } from "../ui/theme/HoloTheme";
 import { toCssColor } from "../ui/theme/colorMath";
-
-/** Line styles of the credit roll. */
-type CreditStyle =
-  "title" | "subtitle" | "section" | "role" | "name" | "small" | "spacer";
+import { CREDITS, type CreditStyle } from "../data/credits";
 
 /** Typography + advance per credit style. */
 const CREDIT_STYLES: Readonly<
@@ -90,60 +87,6 @@ const SECTION_RULE_GAP = 16;
 const SCROLL = { normal: 0.5, fast: 2, reverse: -1 } as const;
 /** Bottom edge of the visible roll (above the footer hint). */
 const ROLL_BOTTOM_INSET = 36;
-
-const CREDITS: ReadonlyArray<{
-  readonly text: string;
-  readonly style: CreditStyle;
-}> = [
-  { text: "SHATTERED STARS", style: "title" },
-  { text: "", style: "spacer" },
-  { text: "A Tactical Starship Combat Game", style: "subtitle" },
-  { text: "", style: "spacer" },
-  { text: "", style: "spacer" },
-  { text: "DEVELOPMENT", style: "section" },
-  { text: "GAME DESIGN", style: "role" },
-  { text: "Shattered Stars Team", style: "name" },
-  { text: "", style: "spacer" },
-  { text: "PROGRAMMING", style: "role" },
-  { text: "Built with Claude AI", style: "name" },
-  { text: "", style: "spacer" },
-  { text: "ART DIRECTION", style: "role" },
-  { text: "Procedural Generation", style: "name" },
-  { text: "", style: "spacer" },
-  { text: "", style: "spacer" },
-  { text: "TECHNOLOGY", style: "section" },
-  { text: "GAME ENGINE", style: "role" },
-  { text: "Phaser 3", style: "name" },
-  { text: "", style: "spacer" },
-  { text: "LANGUAGE", style: "role" },
-  { text: "TypeScript", style: "name" },
-  { text: "", style: "spacer" },
-  { text: "BUILD TOOL", style: "role" },
-  { text: "Vite", style: "name" },
-  { text: "", style: "spacer" },
-  { text: "", style: "spacer" },
-  { text: "INSPIRATION", style: "section" },
-  { text: "X-Wing Miniatures Game", style: "name" },
-  { text: "Fantasy Flight Games", style: "small" },
-  { text: "", style: "spacer" },
-  { text: "Star Wars", style: "name" },
-  { text: "Lucasfilm", style: "small" },
-  { text: "", style: "spacer" },
-  { text: "Wing Commander", style: "name" },
-  { text: "Origin Systems", style: "small" },
-  { text: "", style: "spacer" },
-  { text: "", style: "spacer" },
-  { text: "SPECIAL THANKS", style: "section" },
-  { text: "PLAYTESTERS", style: "role" },
-  { text: "You!", style: "name" },
-  { text: "", style: "spacer" },
-  { text: "", style: "spacer" },
-  { text: "", style: "spacer" },
-  { text: "Thank you for playing!", style: "subtitle" },
-  { text: "", style: "spacer" },
-  { text: "", style: "spacer" },
-  { text: "", style: "spacer" },
-];
 
 export class CreditsScene extends Phaser.Scene {
   private creditsContainer!: Phaser.GameObjects.Container;

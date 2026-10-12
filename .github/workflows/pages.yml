@@ -1,12 +1,12 @@
 name: Deploy to GitHub Pages
 
-# Manual-only by design: this workflow is prepared but does NOT auto-publish.
-# Run it from the Actions tab (Run workflow) when you are ready to go live.
-# To enable automatic deploys, uncomment the `push` trigger below.
+# Publishes the game when the `release` branch is pushed (and on demand from
+# the Actions tab). The same gates as CI run first; a red build never ships.
+# One-time setup: Settings > Pages > Source: "GitHub Actions" (docs/RELEASE.md).
 on:
+  push:
+    branches: [release]
   workflow_dispatch:
-  # push:
-  #   branches: [master, main]
 
 # Least-privilege token: allow Pages deploy + OIDC id-token, nothing else.
 permissions:
@@ -22,25 +22,42 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint
+        run: npm run lint
+
       - name: Type check
         run: npx tsc --noEmit
 
-      - name: Build
-        run: npm run build
+      - name: Unit, balance and simulation tests
+        run: npx vitest run tests/unit tests/balance tests/simulation
 
       - name: Configure Pages
+        id: pages
         uses: actions/configure-pages@v5
+
+      # Pages serves project sites under /<repo>/; vite.config.ts reads BASE_PATH.
+      - name: Build
+        run: npm run build
+        env:
+          # Relay address players connect to (Settings → Variables → Actions → VITE_ONLINE_URL,
+          # e.g. wss://shattered-stars-relay.fly.dev). Empty = online play shows "no server configured".
+          VITE_ONLINE_URL: ${{ vars.VITE_ONLINE_URL }}
+          # Players are only matched with identical builds (lockstep needs identical game data).
+          VITE_GAME_BUILD: ${{ github.sha }}
+        env:
+          BASE_PATH: ${{ steps.pages.outputs.base_path }}/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

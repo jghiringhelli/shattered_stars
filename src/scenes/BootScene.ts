@@ -1,17 +1,24 @@
 /**
- * Boot scene - handles asset loading and initialization
+ * Boot scene — generates placeholder textures, loads only what the main menu
+ * draws (BOOT_ASSETS, ~2 MB), then hands over to the menu. Ship sprites,
+ * portraits, encyclopedia art and other backdrops load per scene through the
+ * preload gate installed here (see src/assets/), so the first menu appears
+ * after a few MB instead of the whole art library.
  */
 
 import Phaser from "phaser";
 import { FACTION_COLORS, SHIP_SIZES } from "../config";
-import { SHIP_DEFINITIONS } from "../data/ShipDefinitions";
-import { loadPortraitImages } from "./boot/BootPortraitLoader";
 import { PlayerProfileManager } from "../systems/PlayerProfile";
 import {
   initTutorialOverlay,
   hideTutorialOverlay,
 } from "../ui/TutorialOverlay";
 import { createBootLoadingView } from "../ui/menu/BootLoadingView";
+import { BOOT_ASSETS } from "../assets/assetManifest";
+import { queueAssets } from "../assets/textureLoading";
+import { installScenePreloadGates } from "../assets/scenePreloadGate";
+import { browserStore } from "../systems/keyValueStore";
+import { installStorageWarning } from "../ui/StorageWarningToast";
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -24,51 +31,26 @@ export class BootScene extends Phaser.Scene {
     // once loading completes (or by the player, whichever comes first).
     initTutorialOverlay();
 
-    // Show loading progress
     const loadingView = createBootLoadingView(this);
     this.load.on("progress", (value: number) => {
       loadingView.setProgress(value);
     });
-
-    this.load.on("complete", () => {
+    this.load.once("complete", () => {
       loadingView.destroy();
       hideTutorialOverlay();
     });
 
-    // Generate placeholder ship textures programmatically
+    // Faction+size placeholder ships (shown until a ship's art has loaded).
     this.generatePlaceholderTextures();
-
-    // Load pilot portrait images for campaign debrief
-    loadPortraitImages(this.load);
-
-    // Load ship thumbnail images for campaign debrief stats
-    this.loadCampaignShipThumbnails();
-
-    // Load cinematic art for encyclopedia (768x512 wide landscape per ship)
-    this.loadEncyclopediaArt();
-
-    // Load small in-battle ship sprites for every ship (used by all real-time
-    // battle scenes; loading them all at boot means no scene needs its own
-    // per-roster preload() — the texture is already there by the time any
-    // scene starts).
-    this.loadBattleSprites();
-
-    // Load SD-generated StarCraft-inspired UI textures (fail-silent if not generated)
-    this.loadUiTextures();
-
-    // Load SD-generated painted space backgrounds (fail-silent if not generated)
-    this.loadBackgroundTextures();
-
-    // Fallback: generate portrait_command programmatically if PNG not found
-    this.registerPortraitFallback();
+    queueAssets(this, BOOT_ASSETS);
   }
 
   create(): void {
+    installScenePreloadGates(this.game.scene.getScenes(false));
+    installStorageWarning(browserStore());
     this.applyProfileFromUrl();
-    // Transition to main menu
     this.scene.start("MainMenuScene");
   }
-
   /**
    * Select the active player profile from a `?profile=<id>` URL param, if present.
    * Enables quick testing (e.g. ?profile=dev-unlock-all, ?profile=test-veteran).
@@ -197,123 +179,5 @@ export class BootScene extends Phaser.Scene {
     graphics.lineStyle(2, 0x00ff00, 1);
     graphics.strokeCircle(20, 20, 18);
     graphics.generateTexture("selection_indicator", 40, 40);
-  }
-
-  /**
-   * Generate a programmatic star/badge placeholder for portrait_command if the PNG is absent.
-   * Registered before loader runs so it fires exactly once on load complete.
-   */
-  private registerPortraitFallback(): void {
-    this.load.once(Phaser.Loader.Events.COMPLETE, () => {
-      if (this.textures.exists("portrait_command")) return;
-      const g = this.make.graphics({ x: 0, y: 0 });
-      g.fillStyle(0x0a1a3a, 1);
-      g.fillRect(0, 0, 128, 128);
-      g.fillStyle(0x4488cc, 1);
-      const cx = 64,
-        cy = 56,
-        r = 28;
-      for (let i = 0; i < 5; i++) {
-        const a = (i * 72 - 90) * (Math.PI / 180);
-        const ia = (i * 72 + 36 - 90) * (Math.PI / 180);
-        g.fillTriangle(
-          cx + Math.cos(a) * r,
-          cy + Math.sin(a) * r,
-          cx + Math.cos(ia) * (r * 0.4),
-          cy + Math.sin(ia) * (r * 0.4),
-          cx,
-          cy + r * 0.15,
-        );
-      }
-      g.generateTexture("portrait_command", 128, 128);
-      g.destroy();
-    });
-  }
-
-  /**
-   * Load SD-generated StarCraft-inspired UI textures from public/assets/ui/.
-   * Missing files fail silently — Phaser skips 404s without error.
-   * Generate these with: python scripts/generate_ui_textures.py
-   */
-  private loadUiTextures(): void {
-    const base = "assets/ui";
-    this.load.image("tex_menu_bg", `${base}/ui_menu_bg.png`);
-    this.load.image("tex_title_frame", `${base}/ui_title_frame.png`);
-  }
-
-  /**
-   * Load SD-generated painted space backgrounds (nebulae/planets/galaxy/starfield)
-   * from public/assets/backgrounds/. Missing files fail silently — Phaser skips
-   * 404s without error, so scenes can fall back to the procedural starfield.
-   * Generate these with: python scripts/generate_backgrounds.py
-   */
-  private loadBackgroundTextures(): void {
-    const base = "assets/backgrounds";
-    const ids = [
-      "nebula_blue",
-      "nebula_purple",
-      "nebula_teal",
-      "nebula_crimson",
-      "planet_rocky",
-      "planet_gas_giant",
-      "planet_ice",
-      "starfield_deep",
-      "galaxy_spiral",
-    ];
-    for (const id of ids) {
-      this.load.image(`bg_${id}`, `${base}/${id}.png`);
-    }
-  }
-
-  /**
-   * Load all ship sprites for every ship definition.
-   * Key: def.spriteKey (e.g. "ship_terran_raptor")
-   * Path: assets/ships/<faction>/<id>.png
-   * Missing files fail silently — Phaser skips 404s.
-   */
-  private loadCampaignShipThumbnails(): void {
-    Object.values(SHIP_DEFINITIONS).forEach(({ id, faction, spriteKey }) => {
-      this.load.image(spriteKey, `assets/ships/${faction}/${id}.png`);
-    });
-  }
-
-  /**
-   * Load wide cinematic encyclopedia art for all ships (768×512 PNGs).
-   * Missing files are expected (art is generated separately via generate_ship_art.py).
-   * Phaser logs a console.warn for every 404 before the loaderror event fires, so we
-   * suppress those warnings for ship_art_* keys for the duration of this load phase.
-   */
-  private loadEncyclopediaArt(): void {
-    const originalWarn = console.warn.bind(console);
-    const silenceArtWarnings = (...args: unknown[]): void => {
-      const first = args[0];
-      if (typeof first === "string" && first.includes("Failed to process file"))
-        return;
-      originalWarn(...args);
-    };
-    console.warn = silenceArtWarnings;
-    this.load.once("complete", () => {
-      console.warn = originalWarn;
-    });
-
-    Object.values(SHIP_DEFINITIONS).forEach(({ id, faction }) => {
-      this.load.image(
-        `ship_art_${id}`,
-        `assets/ships/encyclopedia/${faction}/${id}_art.png`,
-      );
-    });
-  }
-
-  /**
-   * Load the small in-battle sprite PNG for every ship (missing files are
-   * expected and silently fall back to the faction+size placeholder texture
-   * at render time — see src/rendering/ShipVisual.ts).
-   */
-  private loadBattleSprites(): void {
-    Object.values(SHIP_DEFINITIONS).forEach(({ id, faction }) => {
-      const key = `ship_${id}`;
-      if (this.textures.exists(key)) return;
-      this.load.image(key, `assets/ships/${faction}/${id}.png`);
-    });
   }
 }

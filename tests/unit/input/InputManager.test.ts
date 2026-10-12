@@ -175,3 +175,56 @@ describe("InputManager", () => {
     expect(goodCallback).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("InputManager.suppress", () => {
+  beforeEach(() => {
+    InputManager.destroy();
+  });
+
+  const pausePress = (): InputEvent => ({
+    intent: "PAUSE",
+    timestamp: 1,
+    source: "keyboard",
+    value: 1,
+  });
+
+  it("holds back a suppressed intent while a modal is open", () => {
+    InputManager.registerAdapter(makeAdapter("keyboard", [pausePress()]));
+    const onPause = vi.fn();
+    InputManager.on("PAUSE", onPause);
+    const release = InputManager.suppress("PAUSE");
+    InputManager.update();
+    expect(onPause).not.toHaveBeenCalled();
+    release();
+    InputManager.update();
+    expect(onPause).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps other intents flowing while one is suppressed", () => {
+    InputManager.registerAdapter(
+      makeAdapter("keyboard", [
+        { intent: "CONFIRM", timestamp: 1, source: "keyboard", value: 1 },
+      ]),
+    );
+    const onConfirm = vi.fn();
+    InputManager.on("CONFIRM", onConfirm);
+    InputManager.suppress("PAUSE");
+    InputManager.update();
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays suppressed until every holder releases, and release is idempotent", () => {
+    InputManager.registerAdapter(makeAdapter("keyboard", [pausePress()]));
+    const onPause = vi.fn();
+    InputManager.on("PAUSE", onPause);
+    const first = InputManager.suppress("PAUSE");
+    const second = InputManager.suppress("PAUSE");
+    first();
+    first();
+    InputManager.update();
+    expect(onPause).not.toHaveBeenCalled();
+    second();
+    InputManager.update();
+    expect(onPause).toHaveBeenCalledTimes(1);
+  });
+});

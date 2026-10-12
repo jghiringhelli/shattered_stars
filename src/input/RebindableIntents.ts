@@ -34,6 +34,8 @@ export const REBINDABLE_INTENTS: readonly RebindableIntent[] = [
   { intent: "SEGNOR_RIGHT", label: "Segnor Loop Right", group: "flight" },
   { intent: "TALLON_LEFT", label: "Tallon Roll Left", group: "flight" },
   { intent: "TALLON_RIGHT", label: "Tallon Roll Right", group: "flight" },
+  { intent: "BARREL_ROLL_LEFT", label: "Barrel Roll Left", group: "flight" },
+  { intent: "BARREL_ROLL_RIGHT", label: "Barrel Roll Right", group: "flight" },
   { intent: "BOOST", label: "Boost (extra key)", group: "flight" },
   { intent: "FIRE_SECONDARY", label: "Fire Secondary", group: "combat" },
   { intent: "WEAPON_CYCLE", label: "Cycle Weapon", group: "combat" },
