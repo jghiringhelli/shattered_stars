@@ -245,7 +245,7 @@ function matchesAny(msg: string, res: RegExp[]): boolean {
 /** Extract the trailing asset key from a Phaser "Failed to process file" message. */
 function assetKey(msg: string): string {
   const m = msg.match(/(?:image|texture)\s+(\S+)\s*$/i);
-  return m ? m[1] : msg.slice(-40);
+  return m?.[1] ?? msg.slice(-40);
 }
 
 /** Largest per-frame step per ship, and count of non-finite steps. */
@@ -260,8 +260,8 @@ function stepStats(samples: Sample[]): { max: number; nan: number } {
   for (const list of byShip.values()) {
     for (let i = 1; i < list.length; i++) {
       const step = Math.hypot(
-        list[i].x - list[i - 1].x,
-        list[i].y - list[i - 1].y,
+        list[i]!.x - list[i - 1]!.x,
+        list[i]!.y - list[i - 1]!.y,
       );
       if (!Number.isFinite(step)) nan++;
       else max = Math.max(max, step);
@@ -335,7 +335,7 @@ async function verify(cap: Capture, s: Scenario): Promise<Inv[]> {
     must: false,
     passed: known.length === 0,
     detail: known.length
-      ? `${known.length} known (${known[0].slice(0, 50)})`
+      ? `${known.length} known (${known[0]!.slice(0, 50)})`
       : "none",
   });
   inv.push({

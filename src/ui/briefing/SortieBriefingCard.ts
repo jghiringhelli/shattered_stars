@@ -15,7 +15,7 @@ import Phaser from "phaser";
 import { HoloPanel } from "../hud/HoloPanel";
 import { pinTree } from "../modeHud/screenSpace";
 import { holoFont } from "../theme/holoFont";
-import { HOLO_DEPTH, HOLO_PALETTE, HOLO_SPACING } from "../theme/HoloTheme";
+import { HOLO_DEPTH, HOLO_PALETTE } from "../theme/HoloTheme";
 import { toCssColor } from "../theme/colorMath";
 import { playBriefingStinger } from "./briefingStinger";
 import {

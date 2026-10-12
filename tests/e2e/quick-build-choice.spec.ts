@@ -267,7 +267,7 @@ test.describe("Survival / Ace Duel setup — quick-build chooser", () => {
       for (const matchup of ACE_MATCHUPS) {
         for (const side of [1, 2] as const) {
           const ships = side === 1 ? matchup.side1.ships : matchup.side2.ships;
-          if (quickBuildOptions(ships[0]).length < 2) continue;
+          if (quickBuildOptions(ships[0]!).length < 2) continue;
           scene.selectedMatchup = matchup;
           scene.playerSide = side;
           scene.showSetupScreen();

@@ -143,7 +143,7 @@ import { withCampaignBonuses } from "../arcade/systems/CampaignLoadoutBonuses";
 import { missionVictoryRecord } from "../arcade/systems/CampaignVictory";
 import { CAMPAIGN_PILOTS } from "../data/PilotData";
 import { audioManager } from "../audio/AudioManager";
-import { campaignBattleMode } from "../audio/musicContexts";
+import { bossFinalPhase, campaignBattleMode } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
 import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import { renderBattleStarfield } from "../rendering/Starfield";
@@ -507,6 +507,7 @@ export class CampaignBattleScene extends Phaser.Scene {
    */
   private updateHud(): void {
     this.modeHud.updateObjectives(this.director.tracker());
+    audioManager.setBossFinalPhase(bossFinalPhase(this.ships.values()));
     const flagship = this.ships.get(this.playerShipIds[0] ?? "") ?? null;
     if (flagship) {
       audioManager.reportPlayerHull(flagship.hull / flagship.maxHull);

@@ -6,6 +6,7 @@
  */
 
 import type { BattleMusicMode, MusicTrack } from "./musicTracks";
+import { BOSS_PHASE_3_HULL_RATIO } from "../systems/EpicBossRules";
 
 /**
  * Survival belt squeeze at a node's first wave from which the asteroid track
@@ -73,4 +74,41 @@ export function nextLowHullTension(
   if (hullFraction <= 0) return false;
   if (active) return hullFraction <= TENSION_EXIT_HULL_FRACTION;
   return hullFraction <= TENSION_ENTER_HULL_FRACTION;
+}
+
+/** The parts of a ship that matter to tension music. */
+export interface MusicHull {
+  readonly hull: number;
+  readonly maxHull: number;
+}
+
+/**
+ * The flagship hull fraction fed to the low-hull tension layer.
+ *
+ * @param ship - The player's flagship, or null once it is lost.
+ * @returns Hull / max hull; 0 for a lost ship or one without max hull.
+ */
+export function hullFractionOf(ship: MusicHull | null | undefined): number {
+  if (!ship || ship.maxHull <= 0) return 0;
+  return ship.hull / ship.maxHull;
+}
+
+/** A battle ship that may be tagged as a boss. */
+export interface MusicBossCandidate extends MusicHull {
+  readonly tags?: readonly string[];
+}
+
+/**
+ * Whether a boss is in its final phase: a living boss at or under Boss
+ * Raid's critical-phase hull ratio (for modes without scripted phases).
+ *
+ * @param ships - The battle's ships; bosses carry the "boss" tag.
+ * @returns True while any living boss is that low.
+ */
+export function bossFinalPhase(ships: Iterable<MusicBossCandidate>): boolean {
+  for (const ship of ships) {
+    if (!ship.tags?.includes("boss") || ship.hull <= 0) continue;
+    if (hullFractionOf(ship) <= BOSS_PHASE_3_HULL_RATIO) return true;
+  }
+  return false;
 }

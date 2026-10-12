@@ -525,7 +525,7 @@ test.describe("SquadBuilderScene — validation and navigation", () => {
               ]),
             ).values(),
           ]
-            .sort((a: number, b: number) => b - a)
+            .sort((a, b) => (b as number) - (a as number))
             .join("v")
         : null;
     });

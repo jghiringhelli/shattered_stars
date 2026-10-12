@@ -115,6 +115,12 @@ export const DEFAULT_GAMEPAD_BINDINGS: readonly GamepadBinding[] = [
   // scene reads the ZOOM intents, so the triggers are free for flight)
   { button: 6, intent: "TALLON_LEFT" }, // LT
   { button: 7, intent: "TALLON_RIGHT" }, // RT
+  // Commander orders (capital ship, crew role commander) share the Tallon
+  // triggers and the Segnor d-pad: no capital ship can fly either.
+  { button: 6, intent: "COMMANDER_ORDER_1" }, // LT
+  { button: 7, intent: "COMMANDER_ORDER_2" }, // RT
+  { button: 14, intent: "COMMANDER_ORDER_3" }, // D-pad left
+  { button: 15, intent: "COMMANDER_ORDER_4" }, // D-pad right
   // Face buttons
   { button: 0, intent: "CONFIRM" }, // A / Cross
   { button: 0, intent: "BOOST" }, // A / Cross (flight)
@@ -122,17 +128,19 @@ export const DEFAULT_GAMEPAD_BINDINGS: readonly GamepadBinding[] = [
   { button: 2, intent: "FIRE_SECONDARY" }, // X / Square
   { button: 3, intent: "FOCUS_SELECTED" }, // Y / Triangle
   { button: 2, intent: "EXECUTE_ACTION" }, // X / Square (tactical dial confirm)
-  // Bumpers for cycling / weapon cycle / K-turn
+  // Bumpers: cycle selection (tactical) / hard turns (flight, keyboard Q/E)
   { button: 4, intent: "CYCLE_PREV" }, // LB
-  { button: 4, intent: "KTURN" }, // LB (flight)
+  { button: 4, intent: "SHARP_TURN_LEFT" }, // LB (flight)
   { button: 5, intent: "CYCLE_NEXT" }, // RB
-  { button: 5, intent: "WEAPON_CYCLE" }, // RB
+  { button: 5, intent: "SHARP_TURN_RIGHT" }, // RB (flight)
   // D-pad in flight (it pans the camera in tactical scenes)
   { button: 14, intent: "SEGNOR_LEFT" }, // D-pad left
   { button: 15, intent: "SEGNOR_RIGHT" }, // D-pad right
   { button: 12, intent: "CLOAK" }, // D-pad up
+  { button: 13, intent: "WEAPON_CYCLE" }, // D-pad down
   { button: 8, intent: "CREW_CYCLE" }, // Back / View
-  // Right-stick flick left/right: barrel roll (edge-triggered, firm flick)
+  // Right-stick flicks (edge-triggered, firm flick): ←/→ barrel roll,
+  // ↓ K-turn (turn about)
   {
     axis: 2,
     axisDirection: "negative",
@@ -143,6 +151,12 @@ export const DEFAULT_GAMEPAD_BINDINGS: readonly GamepadBinding[] = [
     axis: 2,
     axisDirection: "positive",
     intent: "BARREL_ROLL_RIGHT",
+    deadzone: RIGHT_STICK_FLICK_DEADZONE,
+  },
+  {
+    axis: 3,
+    axisDirection: "positive",
+    intent: "KTURN",
     deadzone: RIGHT_STICK_FLICK_DEADZONE,
   },
   // Start/Select

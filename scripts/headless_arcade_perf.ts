@@ -49,14 +49,18 @@ function generateShips(count: number): FakeShip[] {
   return ships;
 }
 
-function generateProjectiles(ships: FakeShip[]): Projectile[] {
-  const projs: Projectile[] = [];
+/** Benchmark projectile: a real Projectile plus a fixed velocity to drift it each tick. */
+type BenchProjectile = Projectile & { vx: number; vy: number };
+
+function generateProjectiles(ships: FakeShip[]): BenchProjectile[] {
+  const projs: BenchProjectile[] = [];
   for (const ship of ships) {
     for (let j = 0; j < PROJECTILES_PER_SHIP; j++) {
       projs.push({
         id: `proj_${ship.id}_${j}`,
         x: ship.x + (Math.random() - 0.5) * 100,
         y: ship.y + (Math.random() - 0.5) * 100,
+        angle: 0,
         vx: Math.cos(Math.random() * Math.PI * 2) * 300,
         vy: Math.sin(Math.random() * Math.PI * 2) * 300,
         damage: 2,
@@ -65,6 +69,7 @@ function generateProjectiles(ships: FakeShip[]): Projectile[] {
         lifetime: 2000,
         maxLifetime: 2000,
         speed: 300,
+        isHoming: false,
         homingTargetId: null,
         homingTurnRate: 0,
         homingTurnBudget: 0,

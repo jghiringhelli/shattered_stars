@@ -12,7 +12,6 @@ import {
   BANK_HOLD_THRESHOLD_MS,
   DOUBLE_TAP_WINDOW_MS,
   CHORD_WINDOW_MS,
-  STRESSED_MAX_DEFLECTION as BANK_DEFLECTION,
   type GestureState,
 } from "../../../src/arcade/ArcadeInputGestures";
 

@@ -13,8 +13,8 @@
  * - Ship-specific handling characteristics
  */
 
-import type { ShipSize } from '../config';
-import type { ShipRole, ShipState, ShipStats } from '../core/types';
+import type { ShipSize } from "../config";
+import type { ShipRole, ShipState } from "../core/types";
 
 // ============================================
 // Flight Physics Constants
@@ -62,7 +62,10 @@ export interface HandlingProfile {
 /**
  * Default handling profiles by ship size and role
  */
-export function getHandlingProfile(size: ShipSize, role: ShipRole): HandlingProfile {
+export function getHandlingProfile(
+  size: ShipSize,
+  role: ShipRole,
+): HandlingProfile {
   // Base by size
   const sizeProfiles: Record<ShipSize, HandlingProfile> = {
     tiny: {
@@ -174,7 +177,10 @@ export function getHandlingProfile(size: ShipSize, role: ShipRole): HandlingProf
     deceleration: base.deceleration * (mods.deceleration ?? 1),
     maxSpeed: base.maxSpeed * (mods.maxSpeed ?? 1),
     turnRate: base.turnRate * (mods.turnRate ?? 1),
-    driftCapability: Math.min(1, base.driftCapability * (mods.driftCapability ?? 1)),
+    driftCapability: Math.min(
+      1,
+      base.driftCapability * (mods.driftCapability ?? 1),
+    ),
     afterburnerDuration: mods.afterburnerDuration ?? base.afterburnerDuration,
     afterburnerCooldown: mods.afterburnerCooldown ?? base.afterburnerCooldown,
     inertia: base.inertia * (mods.inertia ?? 1),
@@ -196,10 +202,10 @@ export function getHandlingProfile(size: ShipSize, role: ShipRole): HandlingProf
  * they're just shakier getting there and harder to aim.
  */
 export interface SkillModifiers {
-  readonly turnRate: number;            // 0.65 → 1.00
-  readonly acceleration: number;        // 0.72 → 1.00
-  readonly deceleration: number;        // 0.72 → 1.00
-  readonly inertia: number;             // 1.60 → 1.00  (multiplier, higher = more sluggish)
+  readonly turnRate: number; // 0.65 → 1.00
+  readonly acceleration: number; // 0.72 → 1.00
+  readonly deceleration: number; // 0.72 → 1.00
+  readonly inertia: number; // 1.60 → 1.00  (multiplier, higher = more sluggish)
   readonly afterburnerDuration: number; // 0.75 → 1.00
   readonly afterburnerCooldown: number; // 1.30 → 1.00  (multiplier, higher = longer wait)
 }
@@ -217,9 +223,9 @@ export function getSkillModifiers(pilotSkill: number): SkillModifiers {
     turnRate: 0.65 + 0.35 * t,
     acceleration: 0.72 + 0.28 * t,
     deceleration: 0.72 + 0.28 * t,
-    inertia: 1.60 - 0.60 * t,
+    inertia: 1.6 - 0.6 * t,
     afterburnerDuration: 0.75 + 0.25 * t,
-    afterburnerCooldown: 1.30 - 0.30 * t,
+    afterburnerCooldown: 1.3 - 0.3 * t,
   };
 }
 
@@ -229,7 +235,7 @@ export function getSkillModifiers(pilotSkill: number): SkillModifiers {
  */
 export function applySkillToHandling(
   profile: HandlingProfile,
-  pilotSkill: number
+  pilotSkill: number,
 ): HandlingProfile {
   const mods = getSkillModifiers(pilotSkill);
   return {
@@ -308,7 +314,7 @@ export function createFlightState(
   size: ShipSize,
   role: ShipRole,
   initialAngle: number = 0,
-  pilotSkill: number = 6
+  pilotSkill: number = 6,
 ): FlightState {
   return {
     shipId,
@@ -336,7 +342,7 @@ export function createFlightState(
 export function processFlightInput(
   state: FlightState,
   input: FlightInput,
-  deltaTime: number
+  deltaTime: number,
 ): FlightState {
   let newState = { ...state };
 
@@ -357,7 +363,11 @@ export function processFlightInput(
   if (input.throttleChange !== undefined) {
     newState.targetThrottle = Math.max(
       0,
-      Math.min(1, newState.targetThrottle + input.throttleChange * FLIGHT_CONSTANTS.THROTTLE_INCREMENT)
+      Math.min(
+        1,
+        newState.targetThrottle +
+          input.throttleChange * FLIGHT_CONSTANTS.THROTTLE_INCREMENT,
+      ),
     );
   }
 
@@ -375,13 +385,15 @@ export function processFlightInput(
       : state.handling.deceleration * FLIGHT_CONSTANTS.THROTTLE_SMOOTH_RATE;
 
   newState.currentThrottle +=
-    Math.sign(throttleDiff) * Math.min(Math.abs(throttleDiff), throttleRate * deltaTime);
+    Math.sign(throttleDiff) *
+    Math.min(Math.abs(throttleDiff), throttleRate * deltaTime);
 
   // Afterburner handling
   newState = processAfterburner(newState, input, deltaTime);
 
   // Calculate max speed for current state
-  let effectiveMaxSpeed = FLIGHT_CONSTANTS.BASE_MAX_SPEED * state.handling.maxSpeed;
+  let effectiveMaxSpeed =
+    FLIGHT_CONSTANTS.BASE_MAX_SPEED * state.handling.maxSpeed;
   if (newState.isAfterburnerActive) {
     effectiveMaxSpeed *= FLIGHT_CONSTANTS.AFTERBURNER_MULTIPLIER;
   }
@@ -399,11 +411,16 @@ export function processFlightInput(
   // Inertia makes acceleration slower
   const effectiveAccel = accelRate / state.handling.inertia;
   newState.currentSpeed +=
-    Math.sign(speedDiff) * Math.min(Math.abs(speedDiff), effectiveAccel * effectiveMaxSpeed * deltaTime);
+    Math.sign(speedDiff) *
+    Math.min(
+      Math.abs(speedDiff),
+      effectiveAccel * effectiveMaxSpeed * deltaTime,
+    );
 
   // Apply drag at low throttle
   if (newState.currentThrottle < 0.1 && newState.currentSpeed > 0) {
-    const drag = FLIGHT_CONSTANTS.DRAG_COEFFICIENT * effectiveMaxSpeed * deltaTime;
+    const drag =
+      FLIGHT_CONSTANTS.DRAG_COEFFICIENT * effectiveMaxSpeed * deltaTime;
     newState.currentSpeed = Math.max(0, newState.currentSpeed - drag);
   }
 
@@ -419,7 +436,8 @@ export function processFlightInput(
     // During drift, velocity doesn't fully align with facing
     const driftRadians = (newState.driftAngle * Math.PI) / 180;
     const blendFactor = 0.3; // How much facing affects velocity during drift
-    const effectiveAngle = driftRadians + (facingRadians - driftRadians) * blendFactor;
+    const effectiveAngle =
+      driftRadians + (facingRadians - driftRadians) * blendFactor;
     newState.velocityX = Math.sin(effectiveAngle) * newState.currentSpeed;
     newState.velocityY = -Math.cos(effectiveAngle) * newState.currentSpeed;
   } else {
@@ -436,7 +454,7 @@ export function processFlightInput(
 function processAfterburner(
   state: FlightState,
   input: FlightInput,
-  deltaTime: number
+  deltaTime: number,
 ): FlightState {
   const newState = { ...state };
 
@@ -448,18 +466,26 @@ function processAfterburner(
   // Recharge fuel when not in use
   if (!newState.isAfterburnerActive && newState.afterburnerFuel < 1) {
     const rechargeRate = 1 / state.handling.afterburnerCooldown;
-    newState.afterburnerFuel = Math.min(1, newState.afterburnerFuel + rechargeRate * deltaTime);
+    newState.afterburnerFuel = Math.min(
+      1,
+      newState.afterburnerFuel + rechargeRate * deltaTime,
+    );
   }
 
   // Activate afterburner
-  if (input.afterburner && newState.afterburnerFuel > 0 && newState.afterburnerCooldownRemaining <= 0) {
+  if (
+    input.afterburner &&
+    newState.afterburnerFuel > 0 &&
+    newState.afterburnerCooldownRemaining <= 0
+  ) {
     newState.isAfterburnerActive = true;
   }
 
   // Deactivate when released or empty
   if (!input.afterburner || newState.afterburnerFuel <= 0) {
     if (newState.isAfterburnerActive) {
-      newState.afterburnerCooldownRemaining = state.handling.afterburnerCooldown * 0.3; // Partial cooldown
+      newState.afterburnerCooldownRemaining =
+        state.handling.afterburnerCooldown * 0.3; // Partial cooldown
     }
     newState.isAfterburnerActive = false;
   }
@@ -471,7 +497,8 @@ function processAfterburner(
     if (newState.afterburnerFuel <= 0) {
       newState.afterburnerFuel = 0;
       newState.isAfterburnerActive = false;
-      newState.afterburnerCooldownRemaining = state.handling.afterburnerCooldown;
+      newState.afterburnerCooldownRemaining =
+        state.handling.afterburnerCooldown;
     }
   }
 
@@ -484,7 +511,7 @@ function processAfterburner(
 function processTurning(
   state: FlightState,
   input: FlightInput,
-  deltaTime: number
+  deltaTime: number,
 ): FlightState {
   const newState = { ...state };
 
@@ -498,7 +525,9 @@ function processTurning(
   let baseTurnRate = FLIGHT_CONSTANTS.BASE_TURN_RATE * state.handling.turnRate;
 
   // Turn rate decreases at higher speeds
-  const speedRatio = state.currentSpeed / (FLIGHT_CONSTANTS.BASE_MAX_SPEED * state.handling.maxSpeed);
+  const speedRatio =
+    state.currentSpeed /
+    (FLIGHT_CONSTANTS.BASE_MAX_SPEED * state.handling.maxSpeed);
   const speedPenalty =
     1 - speedRatio * (1 - FLIGHT_CONSTANTS.MIN_TURN_RATE_AT_MAX_SPEED);
   baseTurnRate *= speedPenalty;
@@ -510,11 +539,12 @@ function processTurning(
 
   // Apply turn with inertia
   const targetAngularVelocity = input.turnDirection * baseTurnRate;
-  const angularAccel = baseTurnRate * 2 / state.handling.inertia;
+  const angularAccel = (baseTurnRate * 2) / state.handling.inertia;
   const angularDiff = targetAngularVelocity - newState.angularVelocity;
 
   newState.angularVelocity +=
-    Math.sign(angularDiff) * Math.min(Math.abs(angularDiff), angularAccel * deltaTime);
+    Math.sign(angularDiff) *
+    Math.min(Math.abs(angularDiff), angularAccel * deltaTime);
 
   // Apply rotation
   newState.targetAngle += newState.angularVelocity * deltaTime;
@@ -532,7 +562,7 @@ function processTurning(
 function processDrift(
   state: FlightState,
   input: FlightInput,
-  deltaTime: number
+  deltaTime: number,
 ): FlightState {
   const newState = { ...state };
 
@@ -544,22 +574,31 @@ function processDrift(
 
   // Initiate drift
   if (input.drift && !state.isDrifting) {
-    const speedRatio = state.currentSpeed / (FLIGHT_CONSTANTS.BASE_MAX_SPEED * state.handling.maxSpeed);
+    const speedRatio =
+      state.currentSpeed /
+      (FLIGHT_CONSTANTS.BASE_MAX_SPEED * state.handling.maxSpeed);
     if (speedRatio >= FLIGHT_CONSTANTS.DRIFT_THRESHOLD) {
       newState.isDrifting = true;
       // Store current velocity direction as drift angle
-      newState.driftAngle = Math.atan2(state.velocityX, -state.velocityY) * (180 / Math.PI);
+      newState.driftAngle =
+        Math.atan2(state.velocityX, -state.velocityY) * (180 / Math.PI);
     }
   }
 
   // Maintain or exit drift
   if (newState.isDrifting) {
     // Speed decay during drift
-    const decay = FLIGHT_CONSTANTS.DRIFT_SPEED_DECAY * state.handling.driftCapability;
-    newState.currentSpeed = Math.max(0, newState.currentSpeed - decay * deltaTime * 100);
+    const decay =
+      FLIGHT_CONSTANTS.DRIFT_SPEED_DECAY * state.handling.driftCapability;
+    newState.currentSpeed = Math.max(
+      0,
+      newState.currentSpeed - decay * deltaTime * 100,
+    );
 
     // Exit drift at low speed
-    const speedRatio = newState.currentSpeed / (FLIGHT_CONSTANTS.BASE_MAX_SPEED * state.handling.maxSpeed);
+    const speedRatio =
+      newState.currentSpeed /
+      (FLIGHT_CONSTANTS.BASE_MAX_SPEED * state.handling.maxSpeed);
     if (speedRatio < FLIGHT_CONSTANTS.DRIFT_THRESHOLD * 0.5 || !input.drift) {
       newState.isDrifting = false;
     }
@@ -574,7 +613,7 @@ function processDrift(
 export function applyFlightMovement(
   ship: ShipState,
   flightState: FlightState,
-  deltaTime: number
+  deltaTime: number,
 ): { x: number; y: number; angle: number } {
   return {
     x: ship.x + flightState.velocityX * deltaTime,
@@ -588,7 +627,7 @@ export function applyFlightMovement(
  */
 export function applyDamageToFlight(
   state: FlightState,
-  damagePercent: number
+  damagePercent: number,
 ): FlightState {
   const newState = { ...state };
 
@@ -614,7 +653,7 @@ export function applyDamageToFlight(
 export function getThrottleIncrements(): number[] {
   return [
     0.25, // 25% - Large change
-    0.10, // 10% - Medium change
+    0.1, // 10% - Medium change
     0.05, // 5% - Small change
     0.02, // 2% - Fine adjustment
     0.01, // 1% - Precision
@@ -626,7 +665,7 @@ export function getThrottleIncrements(): number[] {
  */
 export function calculateThrottleForSpeed(
   targetSpeed: number,
-  handling: HandlingProfile
+  handling: HandlingProfile,
 ): number {
   const maxSpeed = FLIGHT_CONSTANTS.BASE_MAX_SPEED * handling.maxSpeed;
   return Math.max(0, Math.min(1, targetSpeed / maxSpeed));
@@ -655,7 +694,8 @@ export function getFlightTelemetry(state: FlightState): FlightTelemetry {
     throttlePercent: state.currentThrottle * 100,
     turnRatePercent: (Math.abs(state.angularVelocity) / maxTurnRate) * 100,
     afterburnerPercent: state.afterburnerFuel * 100,
-    afterburnerReady: state.afterburnerCooldownRemaining <= 0 && state.afterburnerFuel > 0.1,
+    afterburnerReady:
+      state.afterburnerCooldownRemaining <= 0 && state.afterburnerFuel > 0.1,
     isDrifting: state.isDrifting,
     isStalled: state.isStalled,
     heading: Math.round(state.targetAngle),
@@ -669,7 +709,7 @@ export function predictPosition(
   currentX: number,
   currentY: number,
   flightState: FlightState,
-  seconds: number
+  seconds: number,
 ): { x: number; y: number } {
   // Simple linear prediction (doesn't account for acceleration)
   return {
@@ -688,14 +728,17 @@ export function calculateInterceptAngle(
   targetY: number,
   targetVelocityX: number,
   targetVelocityY: number,
-  projectileSpeed: number
+  projectileSpeed: number,
 ): number | null {
   // Vector to target
   const dx = targetX - shipX;
   const dy = targetY - shipY;
 
   // Quadratic formula for intercept time
-  const a = targetVelocityX * targetVelocityX + targetVelocityY * targetVelocityY - projectileSpeed * projectileSpeed;
+  const a =
+    targetVelocityX * targetVelocityX +
+    targetVelocityY * targetVelocityY -
+    projectileSpeed * projectileSpeed;
   const b = 2 * (dx * targetVelocityX + dy * targetVelocityY);
   const c = dx * dx + dy * dy;
 
@@ -720,6 +763,7 @@ export function calculateInterceptAngle(
   const interceptY = targetY + targetVelocityY * t;
 
   // Calculate angle to intercept point
-  const angle = Math.atan2(interceptX - shipX, -(interceptY - shipY)) * (180 / Math.PI);
+  const angle =
+    Math.atan2(interceptX - shipX, -(interceptY - shipY)) * (180 / Math.PI);
   return (angle + 360) % 360;
 }

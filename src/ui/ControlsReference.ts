@@ -120,12 +120,26 @@ const NICE_KEY_NAMES: Record<string, string> = {
   FIVE: "5",
 };
 
-const GAMEPAD_AXIS_NAMES: Record<number, string> = {
-  0: "Left Stick",
-  1: "Left Stick",
-  2: "Right Stick flick",
-  3: "Right Stick flick",
+/** Stick-axis labels by axis and direction (right-stick flicks name theirs). */
+const GAMEPAD_AXIS_NAMES: Record<string, string> = {
+  "0:negative": "Left Stick",
+  "0:positive": "Left Stick",
+  "1:negative": "Left Stick",
+  "1:positive": "Left Stick",
+  "2:negative": "Right Stick ←/→ flick",
+  "2:positive": "Right Stick ←/→ flick",
+  "3:negative": "Right Stick ↑ flick",
+  "3:positive": "Right Stick ↓ flick",
 };
+
+/**
+ * @param binding - A stick-axis binding.
+ * @returns How the Controls screen names it.
+ */
+function gamepadAxisLabel(binding: GamepadBinding): string {
+  const key = `${binding.axis}:${binding.axisDirection ?? "positive"}`;
+  return GAMEPAD_AXIS_NAMES[key] ?? `Axis ${binding.axis}`;
+}
 
 const TOUCH_STICK_INTENTS: ReadonlySet<ActionIntent> = new Set([
   "STEER_LEFT",
@@ -209,8 +223,7 @@ export function gamepadLabelFor(
     .filter((b) => intents.includes(b.intent))
     .map((b) => {
       if (b.button !== undefined) return gamepadButtonLabel(b.button);
-      if (b.axis !== undefined)
-        return GAMEPAD_AXIS_NAMES[b.axis] ?? `Axis ${b.axis}`;
+      if (b.axis !== undefined) return gamepadAxisLabel(b);
       return "";
     });
   return uniqueJoin(labels);

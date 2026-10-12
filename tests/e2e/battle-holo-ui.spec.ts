@@ -34,7 +34,10 @@ test("Boss Raid: the boss spawns at BOSS_HP_SCALE real-time hit points", async (
     const { BOSS_HP_SCALE } =
       await import("/src/arcade/systems/EpicRaidCombat.ts");
     const scene = (window as any).game.scene.getScene("EpicBattleScene");
-    const def = BOSS_DEFINITIONS[scene.selectedBossFaction];
+    const def =
+      BOSS_DEFINITIONS[
+        scene.selectedBossFaction as keyof typeof BOSS_DEFINITIONS
+      ];
     return {
       hull: scene.boss.maxTotalHull,
       expectedHull: def.totalHull * BOSS_HP_SCALE,

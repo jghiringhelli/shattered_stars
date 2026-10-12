@@ -55,7 +55,7 @@ async function openArcade(
       g.registry.set("battleConfig", { factions: [p, e] });
       setTimeout(() => g.scene.start("ArcadeBattleScene"), 100);
     },
-    [playerSlot, enemySlot],
+    [playerSlot, enemySlot] as [ArcadeFactionSlot, ArcadeFactionSlot],
   );
   await waitForScene(page, "ArcadeBattleScene");
   await page.waitForFunction(

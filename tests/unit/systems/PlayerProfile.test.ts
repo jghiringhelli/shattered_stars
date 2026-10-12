@@ -118,7 +118,7 @@ describe("PlayerProfileManager", () => {
       for (const p of PlayerProfileManager.list().slice(1))
         PlayerProfileManager.delete(p.id);
       const remaining = PlayerProfileManager.list();
-      PlayerProfileManager.delete(remaining[0].id);
+      PlayerProfileManager.delete(remaining[0]!.id);
       expect(PlayerProfileManager.list().length).toBe(1);
     });
   });

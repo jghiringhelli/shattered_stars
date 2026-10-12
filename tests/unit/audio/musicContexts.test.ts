@@ -6,6 +6,9 @@
  * - Survival map: the shop plays the cantina, travel plays Long Haul.
  * - Low hull raises the Shields Low tension layer, with hysteresis so it
  *   does not flap around the threshold.
+ * - Any battle's flagship hull feeds it (a lost flagship reads as 0 hull).
+ * - A boss at or under Boss Raid's critical-phase hull ratio is in its final
+ *   phase (Campaign bosses have no scripted phases).
  */
 
 import { describe, it, expect } from "vitest";
@@ -13,11 +16,52 @@ import {
   BELT_HEAVY_STEPS,
   TENSION_ENTER_HULL_FRACTION,
   TENSION_EXIT_HULL_FRACTION,
+  bossFinalPhase,
   campaignBattleMode,
+  hullFractionOf,
   nextLowHullTension,
   survivalBattleMode,
   survivalMapMusic,
 } from "../../../src/audio/musicContexts";
+import { BOSS_PHASE_3_HULL_RATIO } from "../../../src/systems/EpicBossRules";
+
+describe("flagship hull fraction", () => {
+  it("is hull over max hull", () => {
+    expect(hullFractionOf({ hull: 30, maxHull: 120 })).toBe(0.25);
+  });
+
+  it("reads a lost flagship as no hull (tension released)", () => {
+    expect(hullFractionOf(null)).toBe(0);
+  });
+
+  it("reads a ship without max hull as no hull", () => {
+    expect(hullFractionOf({ hull: 5, maxHull: 0 })).toBe(0);
+  });
+});
+
+describe("boss final phase", () => {
+  const boss = (hull: number) => ({ hull, maxHull: 100, tags: ["boss"] });
+
+  it("is on once a living boss reaches the critical-phase hull ratio", () => {
+    expect(bossFinalPhase([boss(BOSS_PHASE_3_HULL_RATIO * 100)])).toBe(true);
+  });
+
+  it("is off while every boss is above it", () => {
+    expect(bossFinalPhase([boss(BOSS_PHASE_3_HULL_RATIO * 100 + 1)])).toBe(
+      false,
+    );
+  });
+
+  it("ignores destroyed bosses", () => {
+    expect(bossFinalPhase([boss(0)])).toBe(false);
+  });
+
+  it("ignores ships that are not bosses", () => {
+    expect(bossFinalPhase([{ hull: 1, maxHull: 100, tags: ["ace"] }])).toBe(
+      false,
+    );
+  });
+});
 
 describe("survival battle music", () => {
   it("plays the boss track at sector bosses, even in a dense belt", () => {

@@ -234,7 +234,6 @@ export async function runDrillScenario(
     page,
     s.drill!,
     s.sceneKey,
-    "ships",
     startMs,
   );
   const shot = await takeShot(page, outDir, s.mode);

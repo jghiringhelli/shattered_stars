@@ -23,7 +23,7 @@ function read(rel: string): string {
 /** First capture group of the first matching line, or a fallback. */
 function firstMatch(text: string, re: RegExp, fallback: string): string {
   const m = text.match(re);
-  return m ? m[1].trim() : fallback;
+  return m?.[1] !== undefined ? m[1].trim() : fallback;
 }
 
 function identity(): void {
@@ -33,7 +33,7 @@ function identity(): void {
   const inline = fc.match(/tags:\s*\[(.+)\]/);
   const block = [...fc.matchAll(/^\s*-\s*([A-Z_]+)\s*$/gm)].map((m) => m[1]);
   const tags = inline
-    ? inline[1].trim()
+    ? inline[1]!.trim()
     : block.length
       ? block.join(", ")
       : "—";

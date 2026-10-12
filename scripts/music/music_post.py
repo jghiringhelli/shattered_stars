@@ -290,10 +290,16 @@ def _last_json(text: str) -> dict[str, str]:
 
 
 LIMITER_CEILING_DBFS = -2.0
-"""Sample-peak ceiling; leaves headroom for codec overshoot so encoded true peak stays ≤ -1 dBTP."""
+"""Sample-peak ceiling; leaves headroom for codec overshoot so encoded true peak stays ≤ TARGET_TRUE_PEAK_DB."""
+PEAK_RETRY_MARGIN_DB = 0.3
+"""Extra ceiling cut per retry beyond the measured overshoot (Vorbis overshoot varies a little)."""
+MAX_MASTER_PASSES = 4
+"""Normalise → encode → measure passes before giving up on the true-peak ceiling."""
 
 
-def normalise_loudness(source: Path, target: Path) -> dict[str, str]:
+def normalise_loudness(source: Path, target: Path,
+                       ceiling_dbfs: float = LIMITER_CEILING_DBFS,
+                       force_limiter: bool = False) -> dict[str, str]:
     """Static-gain EBU R128 normalisation to TARGET_LUFS.
 
     A single gain value keeps the loop seam level-continuous (loudnorm's
@@ -303,20 +309,52 @@ def normalise_loudness(source: Path, target: Path) -> dict[str, str]:
 
     @param source: Input WAV.
     @param target: Normalised WAV.
-    @returns: {'normalization_type', 'gain_db', 'input_i', 'input_tp'}.
+    @param ceiling_dbfs: Limiter sample-peak ceiling.
+    @param force_limiter: Limit even when the measured peak would not need it
+        (an earlier encode overshot the true-peak ceiling).
+    @returns: {'normalization_type', 'gain_db', 'input_i', 'input_tp', 'ceiling_dbfs'}.
     """
     measured = _last_json(_ffmpeg(["-i", str(source), "-af", _loudnorm_filter(), "-f", "null", "-"]))
     gain_db = TARGET_LUFS - float(measured["input_i"])
-    needs_limiter = float(measured["input_tp"]) + gain_db > TARGET_TRUE_PEAK_DB
+    needs_limiter = force_limiter or float(measured["input_tp"]) + gain_db > TARGET_TRUE_PEAK_DB
     filters = f"volume={gain_db:.2f}dB"
     if needs_limiter:
-        ceiling = 10 ** (LIMITER_CEILING_DBFS / 20)
+        ceiling = 10 ** (ceiling_dbfs / 20)
         filters += f",alimiter=limit={ceiling:.4f}:attack=5:release=80:level=false"
     _ffmpeg(["-i", str(source), "-af", filters, "-ar", str(SAMPLE_RATE),
              "-c:a", "pcm_s24le", str(target)])
     return {"normalization_type": "gain+limiter" if needs_limiter else "gain",
             "gain_db": f"{gain_db:.2f}", "input_i": measured["input_i"],
-            "input_tp": measured["input_tp"]}
+            "input_tp": measured["input_tp"], "ceiling_dbfs": f"{ceiling_dbfs:.2f}"}
+
+
+def master_and_encode(source: Path, master: Path, out_dir: Path,
+                      track_id: str) -> dict[str, object]:
+    """Normalise and encode, then verify the ENCODED true peak of every format.
+
+    Lossy codecs overshoot the master's peaks; when either encode lands above
+    TARGET_TRUE_PEAK_DB the master is limited again at a ceiling lowered by
+    the overshoot (+ margin) and re-encoded.
+
+    @param source: Cut (looped / one-shot) WAV.
+    @param master: Normalised WAV to write.
+    @param out_dir: Game music directory.
+    @param track_id: File stem.
+    @returns: {'normalisation', 'sizes', 'encoded' (per extension), 'passes'}.
+    @raises RuntimeError: When the ceiling is still exceeded after MAX_MASTER_PASSES.
+    """
+    ceiling, force = LIMITER_CEILING_DBFS, False
+    for attempt in range(1, MAX_MASTER_PASSES + 1):
+        normalisation = normalise_loudness(source, master, ceiling, force)
+        sizes = encode_web(master, out_dir, track_id)
+        encoded = {ext: measure_encoded(out_dir / f"{track_id}.{ext}") for ext in sizes}
+        worst = max(e["true_peak_db"] for e in encoded.values())
+        if worst <= TARGET_TRUE_PEAK_DB:
+            return {"normalisation": normalisation, "sizes": sizes,
+                    "encoded": encoded, "passes": attempt}
+        ceiling -= worst - TARGET_TRUE_PEAK_DB + PEAK_RETRY_MARGIN_DB
+        force = True
+    raise RuntimeError(f"{track_id}: encoded true peak {worst} dBTP > {TARGET_TRUE_PEAK_DB}")
 
 
 def encode_web(source: Path, out_dir: Path, track_id: str) -> dict[str, int]:

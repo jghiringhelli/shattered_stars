@@ -106,7 +106,7 @@ projectiles disappear at seam without hitting.
 - [ ] ArrowUp accelerates; speed cap enforced
 - [ ] Primary weapon fires automatically at targets in arc and range
 - [ ] Shift + Space fires the selected secondary (if equipped); Tab cycles it
-- [ ] Gamepad: A boost, LB K-turn, LT/RT Tallon, D-pad ←/→ Segnor, right-stick flick barrel roll, X secondary, RB cycle
+- [ ] Gamepad: A boost, LB/RB hard turns, right-stick flick ↓ K-turn, LT/RT Tallon, D-pad ←/→ Segnor, right-stick flick ←/→ barrel roll, X secondary, D-pad ↓ cycle, commander orders LT/RT/D-pad ←/→ (capitals)
 - [ ] K-turn triggers on the correct key; ship flips 180°; cooldown enforced
 - [ ] Boost triggers; visible speed jump; stress increases
 - [ ] Barrel roll triggers; brief invulnerability window; cooldown enforced

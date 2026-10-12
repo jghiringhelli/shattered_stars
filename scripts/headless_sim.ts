@@ -1,5 +1,11 @@
 /**
- * Headless Battle Simulation CLI
+ * Headless Battle Simulation CLI — LEGACY (abstract dice/turn model).
+ *
+ * Runs the abstract BattleSimulator at miniature scale, not the real-time
+ * engine: its faction matrix is mostly draws and does not predict play.
+ * For balance decisions use `npm run balance:report` (the real engine:
+ * skill arena, DuelTempoSim, ReinforcedBattleSim, ScenarioMatchSim —
+ * docs/balance/latest.md).
  *
  * Runs AI vs AI battles using preset loadouts and reports win rates / balance data.
  * Uses upgrade-aware BattleSimulator (loadout bonuses applied to SimShips).

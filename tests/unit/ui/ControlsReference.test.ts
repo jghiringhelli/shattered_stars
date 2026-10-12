@@ -39,9 +39,29 @@ describe("ControlsReference", () => {
   });
 
   it("falls back to an em dash when no binding exists for a device", () => {
-    // COMMANDER_ORDER_1 has no gamepad/touch binding by design (documented gap).
-    expect(gamepadLabelFor(["COMMANDER_ORDER_1"])).toBe("—");
+    // Commander orders have no touch gesture by design (documented gap).
     expect(touchLabelFor(["COMMANDER_ORDER_1"])).toBe("—");
+  });
+
+  it("lists the gamepad hard turns, K-turn flick and commander orders", () => {
+    expect(gamepadLabelFor(["SHARP_TURN_LEFT", "SHARP_TURN_RIGHT"])).toBe(
+      "LB / RB",
+    );
+    expect(gamepadLabelFor(["KTURN"])).toBe("Right Stick ↓ flick");
+    expect(
+      gamepadLabelFor([
+        "COMMANDER_ORDER_1",
+        "COMMANDER_ORDER_2",
+        "COMMANDER_ORDER_3",
+        "COMMANDER_ORDER_4",
+      ]),
+    ).toBe("LT / RT / D-Left / D-Right");
+  });
+
+  it("names the right-stick flick direction of a barrel roll", () => {
+    expect(
+      gamepadLabelFor(["BARREL_ROLL", "BARREL_ROLL_LEFT", "BARREL_ROLL_RIGHT"]),
+    ).toBe("Right Stick ←/→ flick");
   });
 
   it("lists the squad mark on R and right-stick click (no touch gesture is free)", () => {

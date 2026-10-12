@@ -37,7 +37,7 @@ async function lesson(page: Page): Promise<string | null> {
           "radar",
           "status_ring",
           "final_fight",
-        ][state.index];
+        ][state.index]!;
   }, SCENE);
 }
 

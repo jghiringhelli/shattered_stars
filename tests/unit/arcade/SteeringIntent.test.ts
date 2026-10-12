@@ -75,9 +75,10 @@ function flyHeld(
       control = { ...control, nextManeuver: maneuver };
       const result = updateManeuver(control, CYCLE_DURATION_MS / 10);
       control = result.control;
-      ship.x = result.position.x;
-      ship.y = result.position.y;
-      ship.angle = result.position.angle;
+      const position = result.position!;
+      ship.x = position.x;
+      ship.y = position.y;
+      ship.angle = position.angle;
       pathLength += Math.hypot(ship.x - prevX, ship.y - prevY);
       prevX = ship.x;
       prevY = ship.y;

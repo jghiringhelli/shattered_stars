@@ -50,14 +50,11 @@ def process(track: dict, defaults: dict, root: Path, work: Path) -> dict[str, ob
                                                defaults["loop_crossfade_seconds"], segment,
                                                defaults["loop_start_search_seconds"])
     master = work / f"{track['id']}.wav"
-    normalisation = post.normalise_loudness(cut, master)
-    sizes = post.encode_web(master, GAME_MUSIC_DIR, track["id"])
+    mastered = post.master_and_encode(cut, master, GAME_MUSIC_DIR, track["id"])
     return {"id": track["id"], "source_take": Path(track["source"]).stem,
             "kind": "one-shot" if one_shot else "loop", "seconds": round(length, 2),
             "seam_similarity": seam, "source_problems": list(qc.problems),
-            "source_clip_fraction": qc.clip_fraction, "sizes": sizes,
-            "encoded": post.measure_encoded(GAME_MUSIC_DIR / f"{track['id']}.ogg"),
-            "normalisation": normalisation}
+            "source_clip_fraction": qc.clip_fraction, **mastered}
 
 
 def main() -> int:

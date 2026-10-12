@@ -10,6 +10,9 @@ import {
 import type { FactionId } from "../../../src/config";
 import { resetBrowserStore } from "../../../src/systems/keyValueStore";
 
+/** A pre-v1 save as stored on disk: only the original fields exist. */
+type LegacyCampaignSave = Parameters<typeof CampaignSaveManager.migrate>[0];
+
 // Mock localStorage
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
@@ -89,7 +92,7 @@ describe("CampaignSaveManager", () => {
       CampaignSaveManager.save(save);
 
       // The save function updates lastPlayed, so we check the stored value
-      const storedCall = localStorageMock.setItem.mock.calls[0];
+      const storedCall = localStorageMock.setItem.mock.calls[0]!;
       const storedData = JSON.parse(storedCall[1]) as CampaignSaveData;
       // lastPlayed should be equal or greater (same millisecond possible)
       expect(storedData.lastPlayed).toBeGreaterThanOrEqual(originalTime);
@@ -383,7 +386,7 @@ describe("CampaignSaveManager", () => {
 
   describe("migrate", () => {
     it("should update version number", () => {
-      const oldSave: CampaignSaveData = {
+      const oldSave: LegacyCampaignSave = {
         version: 0,
         factionId: "terran_hegemony",
         currentMission: 3,
@@ -401,7 +404,7 @@ describe("CampaignSaveManager", () => {
     });
 
     it("should preserve all other data during migration", () => {
-      const oldSave: CampaignSaveData = {
+      const oldSave: LegacyCampaignSave = {
         version: 0,
         factionId: "void_corsairs",
         currentMission: 5,

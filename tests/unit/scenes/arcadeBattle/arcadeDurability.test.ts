@@ -1,7 +1,7 @@
 /**
- * Skirmish real-time durability — specification tests: card hull/shields,
- * floors, repairs and regeneration are all at DURABILITY_SCALE, and the
- * commander's main beam hits at ordnance scale.
+ * Skirmish real-time durability — specification tests: scene-local repairs
+ * and regeneration are at DURABILITY_SCALE, and the commander's main beam
+ * hits at ordnance scale. (Ship hull/shields: spawnDurabilityParity.test.ts.)
  */
 
 import { describe, it, expect } from "vitest";
@@ -17,59 +17,15 @@ import {
   POWER_REDIRECT_SHIELD_REGEN_PER_SEC,
 } from "../../../../src/systems/ShipCrew";
 import {
-  DEFAULT_SQUAD_DURABILITY,
   EMERGENCY_HULL_REPAIR,
   EMERGENCY_SHIELD_REPAIR,
   ENGINE_REPAIR_PER_SECOND,
   MAIN_BEAM_HIT_DAMAGE,
-  PLAYER_HULL_FLOOR,
-  PLAYER_SHIELD_FLOOR,
   POWER_SHIELD_REGEN_PER_SECOND,
-  WINGMAN_HULL_FLOOR,
-  realTimeDurability,
   regenerateScaledShields,
 } from "../../../../src/scenes/arcadeBattle/arcadeDurability";
-import { getShipDefinition } from "../../../../src/data/ShipDefinitions";
-
-describe("realTimeDurability", () => {
-  it("scales a card's hull and shields by DURABILITY_SCALE", () => {
-    expect(realTimeDurability({ hull: 3, shields: 1 })).toEqual({
-      hull: 3 * DURABILITY_SCALE,
-      shields: 1 * DURABILITY_SCALE,
-    });
-  });
-
-  it("gives the Kestrel its card points at the durability scale", () => {
-    const card = getShipDefinition("confed_kestrel")!.baseStats;
-    expect(realTimeDurability(card).hull).toBe(card.hull * DURABILITY_SCALE);
-  });
-
-  it("falls back to a scaled 4 hull / 2 shields for unknown ships", () => {
-    expect(realTimeDurability(undefined)).toEqual({
-      hull: 4 * DURABILITY_SCALE,
-      shields: 2 * DURABILITY_SCALE,
-    });
-  });
-});
 
 describe("scene-local HP sources", () => {
-  it("scale the player and wingman floors", () => {
-    expect(PLAYER_HULL_FLOOR).toBe(6 * DURABILITY_SCALE);
-    expect(PLAYER_SHIELD_FLOOR).toBe(3 * DURABILITY_SCALE);
-    expect(WINGMAN_HULL_FLOOR).toBe(4 * DURABILITY_SCALE);
-  });
-
-  it("scale the demo squad", () => {
-    expect(DEFAULT_SQUAD_DURABILITY.player).toEqual({
-      hull: 8 * DURABILITY_SCALE,
-      shields: 4 * DURABILITY_SCALE,
-    });
-    expect(DEFAULT_SQUAD_DURABILITY.wingman).toEqual({
-      hull: 5 * DURABILITY_SCALE,
-      shields: 3 * DURABILITY_SCALE,
-    });
-  });
-
   it("scale the commander's repairs", () => {
     expect(EMERGENCY_SHIELD_REPAIR).toBe(
       EMERGENCY_REPAIR_SHIELD_AMOUNT * DURABILITY_SCALE,

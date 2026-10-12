@@ -6,11 +6,7 @@
 
 import type { RandomGenerator } from "../utils/random";
 import { getDefaultRng } from "../utils/random";
-import type {
-  AttackDiceFace,
-  DefenseDiceFace,
-  AttackResult,
-} from "../core/types";
+import type { AttackDiceFace, DefenseDiceFace } from "../core/types";
 import { clampWithWarning } from "../core/errors";
 
 // ============================================

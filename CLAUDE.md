@@ -510,7 +510,7 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 - **ai/** - THE in-game AI = the skill-gate bots (no Phaser). Scenes give each AI ship a **BotPilot**
   (`new BotPilot(tier, {reactionScale, random|seed})`, `fly(frame)` / `onCycleCommitted` / `reset`, same
   shape as PlayerFlightPilot; flies only through applyPilotFlightInput) with the tier from
-  **difficultyToTier** (easy=novice, normal=average, hard=expert, brutal=expert ×0.5 reaction), and each
+  **difficultyToTier** (easy=novice ×0.7 reaction, normal=average, hard=expert ×1.75, brutal=expert ×1), and each
   squad side a **SquadCommand** (orders + SquadMark; `aiLeader: false` on the player's side, where the
   player marks with MARK_TARGET — R / R3 — read via `PlayerFlightPilot.takeMarkRequest()`; `assistMark`
   lets wingmen mark their own focus while the player has none, never overriding a live player mark).
@@ -574,6 +574,11 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 - **ModeBalancing.ts** - Per-mode stat adjustments
 - **upgrades/** - Upgrade catalog by category; every card has a real-time effect (spec: docs/specs/upgrades-and-slots.md)
 - **ShipSlots.ts** - Slot bar per ship (single source); **ShipLoadouts.ts** - quick-build loadouts, validated by **loadoutRules.ts**
+- **loadouts/** - per-faction roster builds that fly every pilot card and every upgrade card (merged after
+  ShipLoadouts; reach gate: QuickBuildReach.test.ts); **quickBuildIndex.ts** - builds flying a pilot / card
+- **abilityPricing.ts** - ONE price scale for cards (`cardPointValue`) and pilot abilities, calibrated with the
+  skill arena (card vs no card); every knob reaches every mode (tests/unit/arcade/CardEffectsEveryMode.test.ts)
+- **encyclopedia/** - codex entries (ships, pilots, upgrades by slot, factions) + search/filter for EncyclopediaScene
 - **shipPricing.ts** - Bare-hull price heuristic (role anchor + lever deltas); variants must differ on real-time levers (spec: docs/specs/ship-variants.md, gate: ShipVariants.test.ts)
 
 
@@ -602,7 +607,17 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 - **src/net/lockstep/** - LockstepSession (60 Hz input lockstep, adaptive delay, pacing, hashes, resync)
 - **src/net/client/NetClient.ts** - WebSocket client (heartbeat, RTT, reconnect); **src/net/lobby/** - OnlineSession + LobbyModel + canonical match setup
 - **src/net/sim/** - Latency simulator + ReferenceDuelSim (tests, `npm run measure:net`)
+- **src/net/battle/** - OnlineBattleLink (what a battle scene holds online: lockstep session, local
+  input sampler, per-tick hash trace, HUD notices), SeatInput (a seat's decoded tick input),
+  LocalPilotSampler; **src/net/lockstep/StateGraph** - generic snapshot/restore of the scenes'
+  simulation objects (in place), **snapshotPacking** (LZ77, resync snapshots)
+- **Battle scenes online** - DogfightScene (src/scenes/duel/online/DogfightOnline) and
+  ArcadeBattleScene (src/scenes/arcadeBattle/online/*) run on the session: `step(tick, inputs)` at
+  TICK_MS, sim clock (never `time.now`/frame delta in sim code), seeded saveable RNGs, every seat flown
+  from its input (the relay's AI-control flag hands a seat to its bot), hash/snapshot/restore.
+  Squad battles: a side is one faction (relay + lobby enforce `teamFactionConflict`).
 - Rule: online battles are built in canonical seat order; only presentation may read `localSeat`.
+- E2E: `tests/e2e/online-battle.spec.ts` (two browsers behind `?netsim=latency,jitter,loss`).
 
 
 ## Factions
@@ -635,6 +650,12 @@ npm test -- --run
 ```
 
 All tests must pass. Current: 4159 unit/balance/sim tests + 374 e2e tests (`npm run test:skill`: 24 gate tests).
+
+Balance harness (src/simulation/balance — the same real engine: skill arena squads, DuelTempoSim with Ace
+abilities, ReinforcedBattleSim on the pure ReinforcementDirector, ScenarioMatchSim): CI guardrails in tests/balance
+(< 60 s, fixed seeds); `npm run balance:report` writes docs/balance/latest.md (factions classic/reinforced/presets,
+Ace presets, difficulty curve per mode, scenarios, value per point of every hull, Wilson 95 % CIs). Hull prices follow
+real-time stats (src/data/shipPricing.ts, docs/specs/ship-variants.md).
 
 Piloting gates (src/simulation/skill — the game's own AI from src/arcade/ai, BotPilot + SquadCommand,
 flying the real engine through the player's inputs): fast smoke versions run in the unit suite (tests/unit/simulation/skill); the full

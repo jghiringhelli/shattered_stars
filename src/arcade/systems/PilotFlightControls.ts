@@ -92,7 +92,6 @@ export function applyPilotFlightInput(
     events: [],
     refusals: [],
   };
-  const edge = (e: FlightEdge): boolean => input.edges.has(e);
   const gestures = updateGestures({
     state: pilot.gesture,
     leftDown: input.left,
@@ -103,8 +102,51 @@ export function applyPilotFlightInput(
     deltaMs: input.deltaMs,
     allowChordBarrelRoll: input.allowChordBarrelRoll,
   });
-  const has = (a: GestureAction): boolean => gestures.actions.includes(a);
+  const pressed: FramePresses = {
+    edge: (e) => input.edges.has(e),
+    has: (a) => gestures.actions.includes(a),
+  };
+  const throttle = applyThrottleInput(flight, pilot, pressed);
+  const steered = applySteeringInput(pilot, input, pressed);
+  applySteering(flown, flight, steered.steering, hardTurnOf(pressed));
+  applySpecials(flown, flight, specialRequestsOf(pressed));
+  applyDashes(
+    flown,
+    flight,
+    pressed.edge("BOOST") || pressed.has("boost"),
+    [...gestures.actions, ...rollButtonsOf(input.edges)],
+    worldSize,
+  );
+  return {
+    pilot: { gesture: gestures.state, ...steered, throttle },
+    motion: flight.motion,
+    stress: flight.stress,
+    events: flight.events,
+    refusals: flight.refusals,
+  };
+}
 
+/** This frame's presses: edge intents and recognised arrow gestures. */
+interface FramePresses {
+  readonly edge: (e: FlightEdge) => boolean;
+  readonly has: (a: GestureAction) => boolean;
+}
+
+/**
+ * Throttle keys and the throttle half of gestures (↑ for boost/Tallon,
+ * ↓ for K-turn/Segnor) change the speed by one step.
+ *
+ * @param flight - Motion being built this frame (mutated).
+ * @param pilot - Input memory from the previous frame.
+ * @param pressed - This frame's presses.
+ * @returns The throttle memory after this frame.
+ */
+function applyThrottleInput(
+  flight: Flight,
+  pilot: PilotControlState,
+  pressed: FramePresses,
+): PilotControlState["throttle"] {
+  const { edge, has } = pressed;
   const throttled = applyThrottle(flight.motion.control, pilot.throttle, {
     upPressed: edge("THRUST_UP"),
     downPressed: edge("THRUST_DOWN"),
@@ -116,22 +158,54 @@ export function applyPilotFlightInput(
       has("segnor_loop_right"),
   });
   flight.motion = { ...flight.motion, control: throttled.control };
+  return throttled.memory;
+}
 
-  const rolled = has("barrel_roll_left") || has("barrel_roll_right");
+/**
+ * Held steering, idled while a barrel-roll chord stays latched (until both
+ * arrows are released) so the roll's keys do not also bank the ship.
+ *
+ * @param pilot - Input memory from the previous frame.
+ * @param input - This frame's input.
+ * @param pressed - This frame's presses.
+ * @returns Steering memory and the roll latch after this frame.
+ */
+function applySteeringInput(
+  pilot: PilotControlState,
+  input: FlightInput,
+  pressed: FramePresses,
+): Pick<PilotControlState, "steering" | "rollLatched"> {
+  const rolled =
+    pressed.has("barrel_roll_left") || pressed.has("barrel_roll_right");
   const rollLatched =
     (pilot.rollLatched || rolled) && (input.left || input.right);
   const steering = rollLatched
     ? IDLE_STEERING
     : updateHeldSteering(pilot.steering, steerSide(input), input.deltaMs);
-  // Hold is a bank (SteeringIntent); only a deliberate Q/E press is a 90° turn.
-  const hard = edge("SHARP_TURN_LEFT")
-    ? "left"
-    : edge("SHARP_TURN_RIGHT")
-      ? "right"
-      : null;
-  applySteering(flown, flight, steering, hard);
+  return { steering, rollLatched };
+}
 
-  applySpecials(flown, flight, [
+/**
+ * Hold is a bank (SteeringIntent); only a deliberate Q/E press is a 90° turn.
+ *
+ * @param pressed - This frame's presses.
+ * @returns The hard-turn side requested, or null.
+ */
+function hardTurnOf(pressed: FramePresses): "left" | "right" | null {
+  if (pressed.edge("SHARP_TURN_LEFT")) return "left";
+  if (pressed.edge("SHARP_TURN_RIGHT")) return "right";
+  return null;
+}
+
+/**
+ * @param pressed - This frame's presses.
+ * @returns K-turn / Segnor / Tallon requests (key or gesture) for applySpecials.
+ */
+function specialRequestsOf(
+  pressed: FramePresses,
+): Parameters<typeof applySpecials>[2] {
+  const { edge, has } = pressed;
+  return [
     [edge("KTURN") || has("kturn_gesture"), "kturn", "kturn"],
     [edge("SEGNOR_LEFT") || has("segnor_loop_left"), "segnor_left", "segnor"],
     [
@@ -145,27 +219,7 @@ export function applyPilotFlightInput(
       "tallon_right",
       "tallon",
     ],
-  ]);
-  applyDashes(
-    flown,
-    flight,
-    edge("BOOST") || has("boost"),
-    [...gestures.actions, ...rollButtonsOf(input.edges)],
-    worldSize,
-  );
-
-  return {
-    pilot: {
-      gesture: gestures.state,
-      steering,
-      throttle: throttled.memory,
-      rollLatched,
-    },
-    motion: flight.motion,
-    stress: flight.stress,
-    events: flight.events,
-    refusals: flight.refusals,
-  };
+  ];
 }
 
 /**

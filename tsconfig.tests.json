@@ -1,0 +1,28 @@
+{
+  // Type-checks what tsconfig.json leaves out: tests (unit, balance,
+  // simulation, e2e) and the tsx scripts. `npx tsc -p tsconfig.tests.json`
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "vite/client"],
+    // e2e specs import game modules inside page.evaluate by their Vite URL.
+    "paths": { "/src/*": ["./src/*"] },
+    "allowImportingTsExtensions": true
+  },
+  "include": [
+    "src/**/*",
+    "server/src/**/*",
+    "tests/**/*",
+    "scripts/**/*.ts",
+    "*.config.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "stryker-tmp",
+    "coverage",
+    "test-results",
+    // Optional QA tool: needs @anthropic-ai/sdk, which is not a dependency.
+    "scripts/analyze_qa_screenshots.ts"
+  ]
+}

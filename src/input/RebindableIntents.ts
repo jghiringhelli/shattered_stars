@@ -3,13 +3,18 @@
  * how they are labelled in Settings, and the input contexts each is live in.
  *
  * Contexts decide conflicts: two intents may share a key only when no scene
- * listens to both (e.g. ↑ is both tactical PAN_UP and flight THRUST_UP).
+ * listens to both (e.g. ↑ is both tactical PAN_UP and flight THRUST_UP; a
+ * gamepad trigger is both a Tallon Roll and a commander order, because no
+ * capital ship can Tallon).
  */
 
 import type { ActionIntent } from "./InputTypes";
 
-/** Where an intent is listened to. */
-export type BindingContext = "flight" | "tactical" | "menu";
+/**
+ * Where an intent is listened to. "commander" is flight while the player
+ * commands a capital ship (crew role commander, Skirmish/Epic).
+ */
+export type BindingContext = "flight" | "commander" | "tactical" | "menu";
 
 /** Settings section an intent is listed under. */
 export type RebindGroup = "flight" | "combat" | "system";
@@ -63,12 +68,24 @@ export function isRebindableIntent(intent: string): intent is ActionIntent {
   return REBINDABLE_SET.has(intent);
 }
 
-const FLIGHT: readonly BindingContext[] = ["flight"];
+/** Live in every flight scene, including while commanding a capital ship. */
+const FLIGHT: readonly BindingContext[] = ["flight", "commander"];
+/**
+ * Maneuvers no capital ship can fly (FlightCapabilities refuses boost,
+ * barrel roll and every special to all of them), so they are inert while
+ * commanding one and may share inputs with the commander orders.
+ */
+const PILOT_ONLY: readonly BindingContext[] = ["flight"];
+const COMMANDER: readonly BindingContext[] = ["commander"];
 const TACTICAL: readonly BindingContext[] = ["tactical"];
-const BOTH: readonly BindingContext[] = ["flight", "tactical"];
+const EVERY_BATTLE: readonly BindingContext[] = [
+  "flight",
+  "commander",
+  "tactical",
+];
 const MENU: readonly BindingContext[] = ["menu"];
 
-/** Intents that are not flight-only. Everything unlisted is flight-only. */
+/** Intents that are not live in all flight. Everything unlisted is FLIGHT. */
 const NON_FLIGHT_CONTEXTS: Partial<
   Record<ActionIntent, readonly BindingContext[]>
 > = {
@@ -76,8 +93,8 @@ const NON_FLIGHT_CONTEXTS: Partial<
   PAN_DOWN: TACTICAL,
   PAN_LEFT: TACTICAL,
   PAN_RIGHT: TACTICAL,
-  ZOOM_IN: BOTH,
-  ZOOM_OUT: BOTH,
+  ZOOM_IN: EVERY_BATTLE,
+  ZOOM_OUT: EVERY_BATTLE,
   SELECT: MENU,
   CONFIRM: MENU,
   CANCEL: MENU,
@@ -91,8 +108,21 @@ const NON_FLIGHT_CONTEXTS: Partial<
   EXECUTE_ACTION: TACTICAL,
   FOCUS_SELECTED: TACTICAL,
   RESET_CAMERA: TACTICAL,
-  MARK_TARGET: BOTH,
-  PAUSE: BOTH,
+  MARK_TARGET: EVERY_BATTLE,
+  PAUSE: EVERY_BATTLE,
+  BOOST: PILOT_ONLY,
+  KTURN: PILOT_ONLY,
+  SEGNOR_LEFT: PILOT_ONLY,
+  SEGNOR_RIGHT: PILOT_ONLY,
+  TALLON_LEFT: PILOT_ONLY,
+  TALLON_RIGHT: PILOT_ONLY,
+  BARREL_ROLL: PILOT_ONLY,
+  BARREL_ROLL_LEFT: PILOT_ONLY,
+  BARREL_ROLL_RIGHT: PILOT_ONLY,
+  COMMANDER_ORDER_1: COMMANDER,
+  COMMANDER_ORDER_2: COMMANDER,
+  COMMANDER_ORDER_3: COMMANDER,
+  COMMANDER_ORDER_4: COMMANDER,
 };
 
 /**

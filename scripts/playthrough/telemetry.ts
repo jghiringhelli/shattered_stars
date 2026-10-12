@@ -136,7 +136,7 @@ export function rankRoleDifferentiation(scores: readonly RoleFidelityScore[]): {
       `role_bleed: nimble roles (${NIMBLE_ROLES.join("/")}) stressed ${nimbleAvg.toFixed(2)} vs rigid roles (${RIGID_ROLES.join("/")}) at ${rigidAvg.toFixed(2)} under the identical drill — expected nimble < rigid`,
     );
   }
-  const verdict =
+  const verdict: RoleFidelityScore["verdict"] =
     differentiates == null
       ? "inconclusive"
       : differentiates

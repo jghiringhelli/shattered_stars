@@ -40,6 +40,7 @@ import { applyAllyAuraRepairs } from "../systems/aura/AllyAuraRepair";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
+import { hullFractionOf } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
 import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import {
@@ -592,6 +593,7 @@ export class EpicBattleScene extends Phaser.Scene {
   private refreshHud(): void {
     if (!this.raidHud) return;
     const flagship = this.livingFlagship();
+    audioManager.reportPlayerHull(hullFractionOf(flagship));
     const boss = this.boss;
     const contacts = raidContacts({
       flagshipId: flagship?.id ?? null,
@@ -1557,6 +1559,7 @@ export class EpicBattleScene extends Phaser.Scene {
 
     if (targetPhase === 3 && this.boss.phase < 3) {
       this.boss.phase = 3;
+      audioManager.setBossFinalPhase(true);
       this.showMessage("BOSS ENTERING CRITICAL PHASE!");
     } else if (targetPhase === 2 && this.boss.phase < 2) {
       this.boss.phase = 2;

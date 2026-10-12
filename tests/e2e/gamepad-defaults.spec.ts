@@ -3,8 +3,10 @@
  * special (the alpha audit found K-turn, Segnor, Tallon, boost and barrel
  * roll unbound on gamepad), and right-stick flicks fire once per flick.
  *
- * Layout: A boost · LB K-turn · LT/RT Tallon · D-pad ←/→ Segnor ·
- * right stick ←/→ barrel roll · X secondary · RB cycle weapon.
+ * Layout: A boost · LB/RB hard turns · LT/RT Tallon · D-pad ←/→ Segnor ·
+ * right stick ←/→ barrel roll · right stick ↓ K-turn · X secondary ·
+ * D-pad ↓ cycle weapon · commander orders on LT / RT / D-pad ← / → (a
+ * capital ship can fly neither Tallon nor Segnor).
  */
 
 import { test, expect, type Page } from "@playwright/test";
@@ -22,6 +24,7 @@ const BUTTON = {
   RB: 5,
   LT: 6,
   RT: 7,
+  D_DOWN: 13,
   D_LEFT: 14,
   D_RIGHT: 15,
 };
@@ -60,17 +63,27 @@ test("every flight special has a default gamepad input", async ({ page }) => {
   await recordIntents(page);
   for (const button of Object.values(BUTTON))
     await tapFakeGamepadButton(page, button);
+  await setFakeGamepadAxes(page, [0, 0, 0, 1]);
+  await page.waitForTimeout(FLICK_HOLD_MS);
+  await setFakeGamepadAxes(page, [0, 0, 0, 0]);
+  await page.waitForTimeout(FLICK_HOLD_MS);
   const intents = await recorded(page);
   expect(intents).toEqual(
     expect.arrayContaining([
       "BOOST",
       "FIRE_SECONDARY",
       "KTURN",
+      "SHARP_TURN_LEFT",
+      "SHARP_TURN_RIGHT",
       "WEAPON_CYCLE",
       "TALLON_LEFT",
       "TALLON_RIGHT",
       "SEGNOR_LEFT",
       "SEGNOR_RIGHT",
+      "COMMANDER_ORDER_1",
+      "COMMANDER_ORDER_2",
+      "COMMANDER_ORDER_3",
+      "COMMANDER_ORDER_4",
     ]),
   );
 });

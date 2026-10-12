@@ -137,8 +137,8 @@ function checkLiveSamples(rows: Row[], path: string): void {
   for (const list of byShip.values()) {
     for (let i = 1; i < list.length; i++) {
       const step = Math.hypot(
-        list[i].x - list[i - 1].x,
-        list[i].y - list[i - 1].y,
+        list[i]!.x - list[i - 1]!.x,
+        list[i]!.y - list[i - 1]!.y,
       );
       if (!Number.isFinite(step)) nan++;
       maxStep = Math.max(maxStep, step);
@@ -175,8 +175,8 @@ function main(): void {
   checkTurnChord(rows);
   checkBankChord(rows);
   checkBaseScale(rows);
-  if (samplesIdx >= 0 && argv[samplesIdx + 1])
-    checkLiveSamples(rows, argv[samplesIdx + 1]);
+  const samplesPath = samplesIdx >= 0 ? argv[samplesIdx + 1] : undefined;
+  if (samplesPath) checkLiveSamples(rows, samplesPath);
 
   console.log(
     "X-Wing 2.0 telemetry fidelity — docs/specs/telemetry-xwing-reference.md\n",

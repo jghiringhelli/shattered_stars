@@ -51,6 +51,7 @@ import { EffectsManager } from "../rendering/EffectsManager";
 import { renderBattleStarfield } from "../rendering/Starfield";
 import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
+import { hullFractionOf } from "../audio/musicContexts";
 import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import { createPerformanceState } from "../systems/PerformanceSystem";
 import { findClosestEnemy as battleFindClosestEnemy } from "../systems/BattleHelpers";
@@ -1084,6 +1085,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   private refreshHud(): void {
     if (!this.hud) return;
     const ship = this.selectedShip();
+    audioManager.reportPlayerHull(hullFractionOf(ship));
     this.hud.update({
       battle: {
         player: ship ? playerHudState(ship, ship.order) : null,

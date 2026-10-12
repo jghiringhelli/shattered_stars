@@ -4,37 +4,51 @@
  * Tests for boundary conditions, null handling, and mathematical edge cases
  */
 
-import { describe, it, expect } from 'vitest';
-import { getShipDefinition, getShipsByFaction } from '../../src/data/ShipDefinitions';
-import { getTargetInfo, isTargetInArc } from '../../src/systems/TargetingSystem';
-import { getModeCombatStats, calculateHitChance } from '../../src/data/ModeBalancing';
-import { createSeededRng } from '../../src/utils/random';
-import type { FactionId } from '../../src/config';
+import { describe, it, expect } from "vitest";
+import {
+  getShipDefinition,
+  getShipsByFaction,
+} from "../../src/data/ShipDefinitions";
+import {
+  getTargetInfo,
+  isTargetInArc,
+} from "../../src/systems/TargetingSystem";
+import {
+  getModeCombatStats,
+  calculateHitChance,
+} from "../../src/data/ModeBalancing";
+import { createSeededRng } from "../../src/utils/random";
+import type { FactionId } from "../../src/config";
 
 // Helper to calculate distance (mirrors common pattern)
-function calculateDistance(x1: number, y1: number, x2: number, y2: number): number {
+function calculateDistance(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): number {
   return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
 }
 
-describe('Edge Cases', () => {
-  describe('ShipDefinitions', () => {
-    it('should return undefined for non-existent ship', () => {
-      const def = getShipDefinition('nonexistent_ship_xyz');
+describe("Edge Cases", () => {
+  describe("ShipDefinitions", () => {
+    it("should return undefined for non-existent ship", () => {
+      const def = getShipDefinition("nonexistent_ship_xyz");
       expect(def).toBeUndefined();
     });
 
-    it('should return undefined for empty string', () => {
-      const def = getShipDefinition('');
+    it("should return undefined for empty string", () => {
+      const def = getShipDefinition("");
       expect(def).toBeUndefined();
     });
 
-    it('should handle all valid ship IDs', () => {
+    it("should handle all valid ship IDs", () => {
       const factions: FactionId[] = [
-        'terran_hegemony',
-        'free_confederation',
-        'synthetic_collective',
-        'void_corsairs',
-        'ascendant_empire',
+        "terran_hegemony",
+        "free_confederation",
+        "synthetic_collective",
+        "void_corsairs",
+        "ascendant_empire",
       ];
 
       for (const faction of factions) {
@@ -49,13 +63,13 @@ describe('Edge Cases', () => {
       }
     });
 
-    it('should have positive stats for all ships', () => {
+    it("should have positive stats for all ships", () => {
       const factions: FactionId[] = [
-        'terran_hegemony',
-        'free_confederation',
-        'synthetic_collective',
-        'void_corsairs',
-        'ascendant_empire',
+        "terran_hegemony",
+        "free_confederation",
+        "synthetic_collective",
+        "void_corsairs",
+        "ascendant_empire",
       ];
 
       for (const faction of factions) {
@@ -67,102 +81,101 @@ describe('Edge Cases', () => {
           // Capital ships can have 0 agility (like in X-Wing TMG)
           expect(ship.baseStats.agility).toBeGreaterThanOrEqual(0);
           expect(ship.baseStats.speed.max).toBeGreaterThan(0);
-          expect(ship.baseStats.speed.max).toBeGreaterThanOrEqual(ship.baseStats.speed.min);
+          expect(ship.baseStats.speed.max).toBeGreaterThanOrEqual(
+            ship.baseStats.speed.min,
+          );
           expect(ship.baseStats.pointCost).toBeGreaterThan(0);
         }
       }
     });
   });
 
-  describe('Distance Calculations', () => {
-    it('should calculate distance correctly for same point', () => {
+  describe("Distance Calculations", () => {
+    it("should calculate distance correctly for same point", () => {
       const dist = calculateDistance(100, 100, 100, 100);
       expect(dist).toBe(0);
     });
 
-    it('should calculate distance correctly for horizontal line', () => {
+    it("should calculate distance correctly for horizontal line", () => {
       const dist = calculateDistance(0, 0, 100, 0);
       expect(dist).toBe(100);
     });
 
-    it('should calculate distance correctly for vertical line', () => {
+    it("should calculate distance correctly for vertical line", () => {
       const dist = calculateDistance(0, 0, 0, 100);
       expect(dist).toBe(100);
     });
 
-    it('should calculate distance correctly for diagonal', () => {
+    it("should calculate distance correctly for diagonal", () => {
       const dist = calculateDistance(0, 0, 3, 4);
       expect(dist).toBe(5); // 3-4-5 triangle
     });
 
-    it('should handle negative coordinates', () => {
+    it("should handle negative coordinates", () => {
       const dist = calculateDistance(-50, -50, 50, 50);
       expect(dist).toBeCloseTo(Math.sqrt(100 * 100 + 100 * 100));
     });
 
-    it('should handle very large coordinates', () => {
+    it("should handle very large coordinates", () => {
       const dist = calculateDistance(0, 0, 1000000, 0);
       expect(dist).toBe(1000000);
     });
 
-    it('should be symmetric', () => {
+    it("should be symmetric", () => {
       const dist1 = calculateDistance(10, 20, 30, 40);
       const dist2 = calculateDistance(30, 40, 10, 20);
       expect(dist1).toBeCloseTo(dist2);
     });
 
-    it('should handle NaN coordinates gracefully', () => {
+    it("should handle NaN coordinates gracefully", () => {
       const dist = calculateDistance(NaN, 0, 0, 0);
       expect(Number.isNaN(dist)).toBe(true);
     });
 
-    it('should handle Infinity coordinates', () => {
+    it("should handle Infinity coordinates", () => {
       const dist = calculateDistance(Infinity, 0, 0, 0);
       expect(dist).toBe(Infinity);
     });
   });
 
-  describe('ModeBalancing', () => {
-    it('should return valid stats for known ship', () => {
-      const stats = getModeCombatStats('terran_viper', 'continuous');
+  describe("ModeBalancing", () => {
+    it("should return valid stats for known ship", () => {
+      const stats = getModeCombatStats("terran_viper", "continuous");
       expect(stats).toBeDefined();
       expect(stats.hull).toBeGreaterThan(0);
       expect(stats.attackDice).toBeGreaterThan(0);
     });
 
-    it('should not produce NaN for hit chance', () => {
-      const hitChance = calculateHitChance(3, 2, 100);
+    it("should not produce NaN for hit chance", () => {
+      const hitChance = calculateHitChance(3, 2);
       expect(Number.isNaN(hitChance)).toBe(false);
       expect(hitChance).toBeGreaterThanOrEqual(0);
       expect(hitChance).toBeLessThanOrEqual(1);
     });
 
-    it('should handle zero attack stat', () => {
-      const hitChance = calculateHitChance(0, 2, 100);
+    it("should handle zero attack stat", () => {
+      const hitChance = calculateHitChance(0, 2);
       expect(Number.isNaN(hitChance)).toBe(false);
       expect(hitChance).toBeGreaterThanOrEqual(0);
     });
 
-    it('should handle zero defense stat', () => {
-      const hitChance = calculateHitChance(3, 0, 100);
+    it("should handle zero defense stat", () => {
+      const hitChance = calculateHitChance(3, 0);
       expect(Number.isNaN(hitChance)).toBe(false);
       expect(hitChance).toBeGreaterThanOrEqual(0);
     });
 
-    it('should handle zero range', () => {
-      const hitChance = calculateHitChance(3, 2, 0);
-      expect(Number.isNaN(hitChance)).toBe(false);
+    it("should floor hit chance for an overwhelming defense", () => {
+      expect(calculateHitChance(0, 100)).toBe(0.2);
     });
 
-    it('should handle very large range', () => {
-      const hitChance = calculateHitChance(3, 2, 10000);
-      expect(Number.isNaN(hitChance)).toBe(false);
-      expect(hitChance).toBeGreaterThanOrEqual(0);
+    it("should cap hit chance for an overwhelming attack", () => {
+      expect(calculateHitChance(100, 0)).toBe(0.95);
     });
   });
 
-  describe('Random Number Generator', () => {
-    it('should produce deterministic results with same seed', () => {
+  describe("Random Number Generator", () => {
+    it("should produce deterministic results with same seed", () => {
       const rng1 = createSeededRng(12345);
       const rng2 = createSeededRng(12345);
 
@@ -171,7 +184,7 @@ describe('Edge Cases', () => {
       }
     });
 
-    it('should produce different results with different seeds', () => {
+    it("should produce different results with different seeds", () => {
       const rng1 = createSeededRng(12345);
       const rng2 = createSeededRng(54321);
 
@@ -184,7 +197,7 @@ describe('Edge Cases', () => {
       expect(same).toBeLessThan(50);
     });
 
-    it('should produce values between 0 and 1', () => {
+    it("should produce values between 0 and 1", () => {
       const rng = createSeededRng(99999);
 
       for (let i = 0; i < 1000; i++) {
@@ -194,13 +207,13 @@ describe('Edge Cases', () => {
       }
     });
 
-    it('should handle seed of 0', () => {
+    it("should handle seed of 0", () => {
       const rng = createSeededRng(0);
       const value = rng.next();
       expect(Number.isNaN(value)).toBe(false);
     });
 
-    it('should handle negative seed', () => {
+    it("should handle negative seed", () => {
       const rng = createSeededRng(-12345);
       const value = rng.next();
       expect(Number.isNaN(value)).toBe(false);
@@ -208,13 +221,13 @@ describe('Edge Cases', () => {
       expect(value).toBeLessThan(1);
     });
 
-    it('should handle very large seed', () => {
+    it("should handle very large seed", () => {
       const rng = createSeededRng(Number.MAX_SAFE_INTEGER);
       const value = rng.next();
       expect(Number.isNaN(value)).toBe(false);
     });
 
-    it('should produce integers in range', () => {
+    it("should produce integers in range", () => {
       const rng = createSeededRng(42);
 
       for (let i = 0; i < 100; i++) {
@@ -226,14 +239,14 @@ describe('Edge Cases', () => {
     });
   });
 
-  describe('Array Bounds', () => {
-    it('should handle empty ship array for faction', () => {
+  describe("Array Bounds", () => {
+    it("should handle empty ship array for faction", () => {
       const factions: FactionId[] = [
-        'terran_hegemony',
-        'free_confederation',
-        'synthetic_collective',
-        'void_corsairs',
-        'ascendant_empire',
+        "terran_hegemony",
+        "free_confederation",
+        "synthetic_collective",
+        "void_corsairs",
+        "ascendant_empire",
       ];
 
       for (const faction of factions) {
@@ -243,15 +256,15 @@ describe('Edge Cases', () => {
       }
     });
 
-    it('should return undefined when picking from empty array', () => {
+    it("should return undefined when picking from empty array", () => {
       const rng = createSeededRng(123);
       const result = rng.pick([]);
       expect(result).toBeUndefined();
     });
   });
 
-  describe('Division Safety', () => {
-    it('should not throw on percentage calculations with zero max', () => {
+  describe("Division Safety", () => {
+    it("should not throw on percentage calculations with zero max", () => {
       const calculatePercentage = (current: number, max: number): number => {
         if (max === 0) return 0;
         return current / max;

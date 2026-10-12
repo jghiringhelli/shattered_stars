@@ -39,6 +39,9 @@ function createMockShip(overrides: Partial<ShipState> = {}): ShipState {
     isCloaked: false,
     currentManeuver: null,
     maneuverProgress: 0,
+    mobileArcDirection: "front",
+    charges: 0,
+    maxCharges: 0,
     ...overrides,
   };
 }

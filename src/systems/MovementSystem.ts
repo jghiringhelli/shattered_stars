@@ -7,7 +7,6 @@
 import type {
   ManeuverDefinition,
   ManeuverDirection,
-  ManeuverDifficulty,
   ManeuverResult,
 } from "../core/types";
 import {

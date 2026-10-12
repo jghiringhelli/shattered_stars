@@ -270,7 +270,7 @@ test.describe("Survival roguelite — nodes", () => {
       const { choiceAvailability } =
         await import("/src/systems/survival/EventResolver.ts");
       const event = getEvent(map.run.activeEventId);
-      (window as any).__openChoice = event.choices.findIndex(
+      (window as any).__openChoice = event!.choices.findIndex(
         (c: any) =>
           choiceAvailability(map.run, c).enabled &&
           !(c.outcomes ?? []).some((o: any) => o.kind === "combat"),

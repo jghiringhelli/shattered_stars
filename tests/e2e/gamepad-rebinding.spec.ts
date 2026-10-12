@@ -89,9 +89,10 @@ test.describe("Settings › Gamepad", () => {
     await openGamepadTab(page);
     await armRow(page, "Mark Target");
     await tapFakeGamepadButton(page, BACK_VIEW);
+    // Back was Crew Cycle's: the taken button swaps, Crew Cycle moves to R3.
     await expect
       .poll(() => storedGamepad(page))
-      .toEqual({ MARK_TARGET: BACK_VIEW });
+      .toEqual({ MARK_TARGET: BACK_VIEW, CREW_CYCLE: R3 });
 
     await DOGFIGHT.enter(page, { peaceful: true });
     await injectFakeGamepad(page);

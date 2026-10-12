@@ -107,11 +107,9 @@ def finish(track: dict, defaults: dict, masters: Path, raw: Path) -> dict[str, o
         tuned, looped, track["duration_seconds"], defaults["loop_crossfade_seconds"],
         None, defaults["loop_start_search_seconds"])
     master = masters / f"{track['id']}.wav"
-    loudnorm = post.normalise_loudness(looped, master)
-    sizes = post.encode_web(master, GAME_MUSIC_DIR, track["id"])
-    encoded = post.measure_encoded(GAME_MUSIC_DIR / f"{track['id']}.ogg")
+    mastered = post.master_and_encode(looped, master, GAME_MUSIC_DIR, track["id"])
     return {"loop_seconds": round(loop_seconds, 2), "seam_similarity": seam_similarity,
-            "sizes": sizes, "encoded": encoded, "normalisation": loudnorm}
+            **mastered}
 
 
 def _existing_raw(masters: Path, track_id: str, seed: int) -> Path:

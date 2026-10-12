@@ -96,13 +96,13 @@ describe("PRG-3 role unlocks are cumulative by XP", () => {
 describe("PRG-4 every faction is flyable at its tier-0", () => {
   it("each faction ladder has a minXp=0 tier with at least one role", () => {
     for (const f of ALL_FACTIONS) {
-      const tier0 = FACTION_ROLE_TIERS[f][0];
+      const tier0 = FACTION_ROLE_TIERS[f][0]!;
       expect(tier0.minXp).toBe(0);
       expect(tier0.roles.length).toBeGreaterThan(0);
     }
   });
   it("a starting faction has at least one unlocked ship at 0 XP", () => {
-    const f = STARTING_FACTIONS[0];
+    const f = STARTING_FACTIONS[0]!;
     const unlocked = getShipsByFaction(f).filter((s) =>
       isShipUnlocked(s, state({ totalXp: 0 })),
     );
@@ -138,7 +138,7 @@ describe("PRG-7 lock reasons explain the requirement", () => {
       expect(isShipUnlocked(capital, s)).toBe(false);
       expect(lockReason(capital, s)).toMatch(/XP/);
     }
-    const starter = shipByRole(STARTING_FACTIONS[0], "heavy_fighter");
+    const starter = shipByRole(STARTING_FACTIONS[0]!, "heavy_fighter");
     if (starter) expect(lockReason(starter, s)).toBe("");
   });
   it("nextRoleTier returns null only when fully unlocked", () => {

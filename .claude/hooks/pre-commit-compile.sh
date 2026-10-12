@@ -21,4 +21,12 @@ if [ -f "tsconfig.json" ]; then
   fi
   echo "  ✅ TypeScript compilation OK"
 fi
+if [ -f "tsconfig.tests.json" ]; then
+  npx tsc -p tsconfig.tests.json --noEmit 2>&1
+  if [ $? -ne 0 ]; then
+    echo "❌ TypeScript compilation of tests/scripts failed."
+    exit 1
+  fi
+  echo "  ✅ Tests/scripts compilation OK"
+fi
 echo "🔨 Build check passed"

@@ -39,7 +39,7 @@ Built from four evidence-based audits (core gameplay, content, balance, release)
 
 | Item | Status |
 |---|---|
-| Gamepad defaults for specials; consistent ESC in pause menus | Done: boost, K-turn, Segnor, Tallon, barrel roll, cloak and crew are on the pad; ESC toggles every pause menu |
+| Gamepad defaults for specials; consistent ESC in pause menus | Done: boost, K-turn, hard turns (LB/RB), Segnor, Tallon, barrel roll, cloak, crew and commander orders (LT/RT/D-pad ←/→, conflict-free via the commander context) are on the pad; ESC toggles every pause menu |
 | Version + build id in game and in bug reports | Done: version, SHA and date are shown in the menu and included in bug reports and telemetry exports |
 | `npm run lint` (ESLint 9 config), README/playtest docs, ignore e2e output folders | Done: lint passes with 0 errors and runs in CI |
 | 47 pilots and 12 upgrade cards unreachable (no quick build / no slot); `force_power` slot without cards | Planned (content pass) |

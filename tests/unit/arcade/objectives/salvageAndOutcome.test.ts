@@ -84,7 +84,16 @@ describe("salvage objective", () => {
       state,
       frame({
         ships: [],
-        events: [{ ...destroyed("w", "player"), x: 222, y: 5 } as const],
+        events: [
+          {
+            kind: "destroyed",
+            shipId: "w",
+            side: "player",
+            tags: [],
+            x: 222,
+            y: 5,
+          },
+        ],
       }),
     );
     expect(crate(state)).toMatchObject({ x: 222, y: 5 });

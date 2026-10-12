@@ -1,11 +1,11 @@
 /**
  * arcadeShipFactory — the Skirmish scene's ship record and how one is made:
- * real-time durability, the mode's combat stats (dice, range, arc — the
- * same ModeBalancing every battle mode fires by), the cycle-engine control
- * state, crew/capital state, the equipped loadout (stats, modifier sheet;
- * its secondary weapons are armed by the shared runtime, BattleWeapons)
- * and the arcade durability floors of the player's ship and its wingmen. Shared by the opening deployment and
- * reinforcements so both make identical ships.
+ * the mode's combat stats (hull, shields, dice, range, arc — the same
+ * ModeBalancing path at DURABILITY_SCALE every battle mode spawns by, with
+ * no Skirmish-only floors), the cycle-engine control state, crew/capital
+ * state and the equipped loadout (stats, modifier sheet; its secondary
+ * weapons are armed by the shared runtime, BattleWeapons). Shared by the
+ * opening deployment and reinforcements so both make identical ships.
  *
  * Pure: no Phaser.
  */
@@ -40,12 +40,6 @@ import {
   type CommanderOrders,
   type CrewRole,
 } from "../../systems/ShipCrew";
-import {
-  PLAYER_HULL_FLOOR,
-  PLAYER_SHIELD_FLOOR,
-  WINGMAN_HULL_FLOOR,
-  realTimeDurability,
-} from "./arcadeDurability";
 
 /** A Skirmish ship record. */
 export interface ArcadeShip extends ShipState {
@@ -90,7 +84,7 @@ export interface ArcadeShipSpec {
   readonly angle: number;
 }
 
-/** Who flies a spawned ship (sets its durability floors). */
+/** Who flies a spawned ship (the player's own ship, an AI wingman or an enemy). */
 export type ArcadePilot = "player" | "wingman" | "ai";
 
 /** A ship to spawn with its loadout and pilot. */
@@ -101,11 +95,12 @@ export interface ArcadeSpawnSpec extends Omit<ArcadeShipSpec, "owner"> {
 
 /**
  * @param spec - Id, ship, faction, owner and pose.
- * @returns A bare ship record (no loadout) at real-time durability.
+ * @returns A bare ship record (no loadout) at the mode-balanced durability
+ *   every battle mode spawns with.
  */
 export function createArcadeShip(spec: ArcadeShipSpec): ArcadeShip {
   const def = getShipDefinition(spec.definitionId);
-  const durability = realTimeDurability(def?.baseStats);
+  const combatStats = getModeCombatStats(spec.definitionId, "continuous");
   const baseShip: ShipState = {
     id: spec.id,
     definitionId: spec.definitionId,
@@ -114,10 +109,10 @@ export function createArcadeShip(spec: ArcadeShipSpec): ArcadeShip {
     x: spec.x,
     y: spec.y,
     angle: spec.angle,
-    hull: durability.hull,
-    maxHull: durability.hull,
-    shields: durability.shields,
-    maxShields: durability.shields,
+    hull: combatStats.hull,
+    maxHull: combatStats.maxHull,
+    shields: combatStats.shields,
+    maxShields: combatStats.maxShields,
     isStressed: false,
     hasFocus: false,
     hasEvade: false,
@@ -133,7 +128,7 @@ export function createArcadeShip(spec: ArcadeShipSpec): ArcadeShip {
   return {
     ...baseShip,
     control: createShipControl(spec.definitionId, baseShip),
-    combatStats: getModeCombatStats(spec.definitionId, "continuous"),
+    combatStats,
     weaponCooldown: 0,
     crewMode: "pilot",
     role: def?.role ?? "heavy_fighter",
@@ -173,9 +168,8 @@ export function equipLoadout(
 }
 
 /**
- * A ship ready to fly: created, its arcade floors applied (the player's
- * hull and shields before the loadout; a wingman's hull after it, so
- * glass-cannon light fighters survive a hit) and its loadout equipped.
+ * A ship ready to fly: created and its loadout equipped — the same hull and
+ * shields whoever flies it and in whichever mode it spawns.
  *
  * @param spec - Id, ship, loadout, faction, pilot and pose.
  * @returns The ship record.
@@ -185,15 +179,6 @@ export function spawnArcadeShip(spec: ArcadeSpawnSpec): ArcadeShip {
     ...spec,
     owner: spec.pilot === "player" ? "player" : "ai",
   });
-  if (spec.pilot === "player") {
-    ship.hull = ship.maxHull = Math.max(PLAYER_HULL_FLOOR, ship.maxHull);
-    ship.shields = ship.maxShields = Math.max(
-      PLAYER_SHIELD_FLOOR,
-      ship.maxShields,
-    );
-  }
   equipLoadout(ship, spec.loadoutId ?? undefined);
-  if (spec.pilot === "wingman")
-    ship.hull = ship.maxHull = Math.max(WINGMAN_HULL_FLOOR, ship.maxHull);
   return ship;
 }

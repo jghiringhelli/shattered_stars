@@ -19,6 +19,8 @@ import {
   validateButton,
 } from "../../../src/input/GamepadBindings";
 import { gamepadLabelFor } from "../../../src/ui/ControlsReference";
+import { contextsOf } from "../../../src/input/RebindableIntents";
+import type { ActionIntent } from "../../../src/input/InputTypes";
 
 const defaults = DEFAULT_GAMEPAD_BINDINGS;
 const A = 0;
@@ -26,6 +28,7 @@ const B = 1;
 const X = 2;
 const Y = 3;
 const LB = 4;
+const RB = 5;
 const START = 9;
 const L3 = 10;
 const R3 = 11;
@@ -81,6 +84,8 @@ describe("conflict detection", () => {
     const specials = [
       "BOOST",
       "KTURN",
+      "SHARP_TURN_LEFT",
+      "SHARP_TURN_RIGHT",
       "SEGNOR_LEFT",
       "SEGNOR_RIGHT",
       "TALLON_LEFT",
@@ -89,8 +94,46 @@ describe("conflict detection", () => {
       "BARREL_ROLL_RIGHT",
       "FIRE_SECONDARY",
       "WEAPON_CYCLE",
+      "COMMANDER_ORDER_1",
+      "COMMANDER_ORDER_2",
+      "COMMANDER_ORDER_3",
+      "COMMANDER_ORDER_4",
     ] as const;
     expect(specials.filter((intent) => !bound.has(intent))).toEqual([]);
+  });
+
+  it("puts the hard turns on the bumpers", () => {
+    expect(primaryButton(defaults, "SHARP_TURN_LEFT")).toBe(LB);
+    expect(primaryButton(defaults, "SHARP_TURN_RIGHT")).toBe(RB);
+  });
+
+  it("gives each commander order its own button", () => {
+    const orders = [1, 2, 3, 4].map((n) =>
+      primaryButton(defaults, `COMMANDER_ORDER_${n}` as ActionIntent),
+    );
+    expect(orders.every((button) => button !== null)).toBe(true);
+    expect(new Set(orders).size).toBe(4);
+  });
+
+  it("commander orders only share buttons with maneuvers every capital ship refuses", () => {
+    const orders = new Set<ActionIntent>([
+      "COMMANDER_ORDER_1",
+      "COMMANDER_ORDER_2",
+      "COMMANDER_ORDER_3",
+      "COMMANDER_ORDER_4",
+    ]);
+    const orderButtons = new Set(
+      defaults.filter((b) => orders.has(b.intent)).map((b) => b.button),
+    );
+    const sharing = defaults.filter(
+      (b) =>
+        orderButtons.has(b.button) &&
+        !orders.has(b.intent) &&
+        contextsOf(b.intent).includes("flight"),
+    );
+    expect(sharing.length).toBeGreaterThan(0);
+    for (const binding of sharing)
+      expect(contextsOf(binding.intent)).not.toContain("commander");
   });
 
   it("a flight intent may share a button with a tactical-only intent", () => {
@@ -124,7 +167,9 @@ describe("rebindGamepadIntent", () => {
   });
 
   it("unbinds the displaced intent when the rebound one had no button", () => {
-    const result = rebindGamepadIntent(defaults, {}, "SHARP_TURN_LEFT", X);
+    // K-turn's default is a right-stick flick, not a button.
+    expect(primaryButton(defaults, "KTURN")).toBeNull();
+    const result = rebindGamepadIntent(defaults, {}, "KTURN", X);
     expect(result.displaced).toEqual(["FIRE_SECONDARY"]);
     const bindings = applyGamepadOverrides(defaults, result.overrides);
     expect(primaryButton(bindings, "FIRE_SECONDARY")).toBeNull();

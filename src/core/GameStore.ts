@@ -2,9 +2,9 @@
  * Immer-based immutable game state store
  */
 
-import { produce, enableMapSet, type Draft } from 'immer';
-import type { ShipState } from './types';
-import type { FactionId } from '../config';
+import { produce, enableMapSet } from "immer";
+import type { ShipState } from "./types";
+import type { FactionId } from "../config";
 
 // Enable Map/Set support in Immer
 enableMapSet();
@@ -14,7 +14,7 @@ enableMapSet();
 // ============================================
 
 export interface BattleState {
-  phase: 'setup' | 'planning' | 'activation' | 'combat' | 'end';
+  phase: "setup" | "planning" | "activation" | "combat" | "end";
   turn: number;
   ships: Map<string, ShipState>;
   activeShipId: string | null;
@@ -33,7 +33,7 @@ export interface GameState {
 
 const initialState: GameState = {
   battle: null,
-  playerFaction: 'free_confederation',
+  playerFaction: "free_confederation",
   isPaused: false,
 };
 
@@ -85,7 +85,7 @@ class GameStoreClass {
       try {
         listener(this.state);
       } catch (error) {
-        console.error('GameStore: Error in listener:', error);
+        console.error("GameStore: Error in listener:", error);
       }
     }
   }
@@ -100,7 +100,7 @@ class GameStoreClass {
   startBattle(): void {
     this.update((draft) => {
       draft.battle = {
-        phase: 'setup',
+        phase: "setup",
         turn: 1,
         ships: new Map(),
         activeShipId: null,
@@ -158,17 +158,17 @@ class GameStoreClass {
   getShipsByFaction(faction: FactionId): ShipState[] {
     if (!this.state.battle) return [];
     return Array.from(this.state.battle.ships.values()).filter(
-      (ship) => ship.faction === faction
+      (ship) => ship.faction === faction,
     );
   }
 
   /**
    * Get all ships owned by player or AI
    */
-  getShipsByOwner(owner: 'player' | 'ai'): ShipState[] {
+  getShipsByOwner(owner: "player" | "ai"): ShipState[] {
     if (!this.state.battle) return [];
     return Array.from(this.state.battle.ships.values()).filter(
-      (ship) => ship.owner === owner
+      (ship) => ship.owner === owner,
     );
   }
 }

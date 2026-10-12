@@ -14,8 +14,8 @@ Shattered Stars is a free-to-play **alpha**. These are the problems we already k
 
 ## Controls
 
-- Gamepad: hard turns (Q/E on the keyboard) and commander orders (1–4) have no default button. You can bind them in **Settings › Gamepad**.
-- Gamepad barrel roll is a right-stick flick. Barrel roll, boost and the other specials work only if the ship has them on its dial or action bar, and only while the pilot isn't stressed.
+- Gamepad commander orders (capital ships) share LT / RT / D-pad ← / → with Tallon and Segnor. Capital ships can't fly those, so pressing an order may also flash a "NOT ON DIAL" note. Rebind them in **Settings › Gamepad** if you prefer.
+- Gamepad barrel roll is a right-stick flick ← / →, and K-turn is a right-stick flick ↓. Barrel roll, boost and the other specials work only if the ship has them on its dial or action bar, and only while the pilot isn't stressed.
 - The Boss Raid setup screen ("Capital Assault") ignores ESC; use its BACK button.
 
 ## Gameplay and balance

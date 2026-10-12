@@ -44,7 +44,7 @@ describe("InputManager", () => {
     InputManager.update();
 
     expect(callback).toHaveBeenCalledTimes(1);
-    expect(callback.mock.calls[0][0].intent).toBe("PAUSE");
+    expect(callback.mock.calls[0]![0].intent).toBe("PAUSE");
   });
 
   it("does not call subscribers registered for a different intent", () => {
