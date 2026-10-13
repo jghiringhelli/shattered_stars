@@ -16,6 +16,10 @@
  * | brutal, mythic   | expert  | 0.85           | 102 ms / 43 ms              |
  * | anything else    | average | 1              | 250 ms / 150 ms             |
  *
+ * One mapping cannot fit both duels, so each mode may override a label
+ * (`difficultyToTier(label, mode)`): Dogfight Brutal flies the expert at
+ * ×1.15, Ace Duel Hard at ×1.5.
+ *
  * Squad modes (Skirmish, Scenario, Continuous, Epic escorts) crew a side
  * slot by slot — {@link squadSkillPlan}.
  *
@@ -70,13 +74,47 @@ export const DEFAULT_BOT_SKILL: BotSkill = {
   reactionScale: 1,
 };
 
+/** The duel modes with their own measured mapping. */
+export type DuelMode = "dogfight" | "ace";
+
+/**
+ * Dogfight Brutal: the shared ×0.85 expert left the average player bot 6 %
+ * of the default pairing; ×0.95–1.3 all measure 11–12 % (2026-10-12).
+ */
+export const DOGFIGHT_BRUTAL_REACTION_SCALE = 1.15;
+
+/**
+ * Ace Duel Hard: the shared ×1.55 expert left the average player bot 36 %
+ * of the presets; ×1.25 18 %, ×1.35 20 %, ×1.45 25 %, ×1.5 29 % (2026-10-12).
+ */
+export const ACE_HARD_REACTION_SCALE = 1.5;
+
+/** Per-mode overrides of {@link SKILL_BY_LABEL} (unlisted labels share it). */
+const DUEL_MODE_SKILLS: Readonly<
+  Record<DuelMode, Readonly<Record<string, BotSkill>>>
+> = {
+  dogfight: {
+    brutal: { tier: "expert", reactionScale: DOGFIGHT_BRUTAL_REACTION_SCALE },
+  },
+  ace: {
+    hard: { tier: "expert", reactionScale: ACE_HARD_REACTION_SCALE },
+  },
+};
+
 /**
  * @param difficulty - A mode's difficulty label ("easy" | "normal" | "hard" |
  *   "brutal", Epic's "medium" / "mythic", or anything else).
+ * @param mode - The duel mode, for its own measured mapping (omitted = the
+ *   shared one: Epic raids, any other caller).
  * @returns The bot tier and reaction scale for that label.
  */
-export function difficultyToTier(difficulty: string): BotSkill {
-  return SKILL_BY_LABEL[difficulty.toLowerCase()] ?? DEFAULT_BOT_SKILL;
+export function difficultyToTier(
+  difficulty: string,
+  mode?: DuelMode,
+): BotSkill {
+  const label = difficulty.toLowerCase();
+  const own = mode ? DUEL_MODE_SKILLS[mode][label] : undefined;
+  return own ?? SKILL_BY_LABEL[label] ?? DEFAULT_BOT_SKILL;
 }
 
 /**

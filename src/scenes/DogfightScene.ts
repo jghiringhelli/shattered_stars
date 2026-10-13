@@ -699,7 +699,7 @@ export class DogfightScene extends Phaser.Scene {
    * @returns The crew for the ships just spawned.
    */
   private createCrew(): DuelBotCrew {
-    const aiSkill = difficultyToTier(this.difficulty);
+    const aiSkill = difficultyToTier(this.difficulty, "dogfight");
     return new DuelBotCrew({
       roster: [...this.ships.values()].map((ship) => ({
         shipId: ship.id,

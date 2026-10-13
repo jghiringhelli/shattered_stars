@@ -5,8 +5,11 @@
  * average tier (WINGMAN_SKILL / ESCORT_SKILL, as the scenes fly them):
  * - Dogfight: the default pairing, both seatings;
  * - Ace Duel: every preset, the player on each side in turn;
- * - Skirmish classic / reinforced and Scenario: each faction's auto-fill
- *   list against its simple-flow opponent (pickOpponentFaction).
+ * - Skirmish classic / reinforced: each faction's auto-fill list against its
+ *   simple-flow opponent (pickOpponentFaction);
+ * - Scenario: the same pairings, each also with the lists swapped (one
+ *   scenario per pairing, so a pairing's faction edge would otherwise read
+ *   as difficulty).
  *
  * Pure: no Phaser.
  */
@@ -65,7 +68,7 @@ export function playerVersusDifficulty(
     case "scenario":
       return playerVersusCrew(mode, squadSkillPlan(label, "reinforced"), seeds);
     default:
-      return playerVersusSkill(mode, difficultyToTier(label), seeds);
+      return playerVersusSkill(mode, difficultyToTier(label, mode), seeds);
   }
 }
 
@@ -88,7 +91,7 @@ export function playerVersusCrew(
     case "reinforced":
       return eachFaction((f) => reinforced(f, ai, seeds));
     case "scenario":
-      return eachFaction((f, i) => reinforced(f, ai, seeds, scenarioFor(i)));
+      return eachFaction((f, i) => mirroredScenario(f, ai, seeds, i));
   }
 }
 
@@ -114,7 +117,7 @@ export function playerVersusSkill(
     case "reinforced":
       return eachFaction((f) => reinforced(f, ai, seeds));
     case "scenario":
-      return eachFaction((f, i) => reinforced(f, ai, seeds, scenarioFor(i)));
+      return eachFaction((f, i) => mirroredScenario(f, ai, seeds, i));
   }
 }
 
@@ -180,6 +183,7 @@ function reinforced(
   ai: CrewSkill,
   seeds: readonly number[],
   scenario?: ScenarioId,
+  opponent: FactionId = pickOpponentFaction(faction),
 ): WinTally {
   const player = {
     opening: skirmishAutoFillList(faction),
@@ -187,7 +191,7 @@ function reinforced(
     skill: PLAYER_SKILL,
   };
   const enemy = {
-    opening: skirmishAutoFillList(pickOpponentFaction(faction)),
+    opening: skirmishAutoFillList(opponent),
     strategy: "balanced" as const,
     skill: ai,
   };
@@ -200,6 +204,29 @@ function reinforced(
     });
     return addTallies(sum, tallyOf(result.winner, "player"));
   }, EMPTY_TALLY);
+}
+
+/**
+ * A faction's scenario games: its pairing played both ways round (the
+ * player on each list) on the faction's scenario.
+ * @param faction - The faction.
+ * @param ai - The AI side's crew.
+ * @param seeds - Seeds.
+ * @param index - The faction's roster index (picks the scenario).
+ * @returns The player's tally.
+ */
+function mirroredScenario(
+  faction: FactionId,
+  ai: CrewSkill,
+  seeds: readonly number[],
+  index: number,
+): WinTally {
+  const opponent = pickOpponentFaction(faction);
+  const scenario = scenarioFor(index);
+  return addTallies(
+    reinforced(faction, ai, seeds, scenario, opponent),
+    reinforced(opponent, ai, seeds, scenario, faction),
+  );
 }
 
 /** Factions rotate through the scenarios so each is played. */

@@ -13,6 +13,7 @@ import type { ShipDefinition } from "../../../src/core/types";
 import { combatStatsFor } from "../../../src/data/ModeBalancing";
 import { SHIP_DIALS } from "../../../src/data/ShipDefinitions";
 import { SHIP_SLOTS } from "../../../src/data/ShipSlots";
+import { SIZE_POINTS } from "../../../src/data/shipPricing";
 import {
   STRESS_DIRECTIONS,
   stressDifficulty,
@@ -20,8 +21,6 @@ import {
 
 /** Fastest speed any dial uses. */
 const TOP_DIAL_SPEED = 5;
-/** Size classes in the order the pricing heuristic values them. */
-const SIZE_RANK = { tiny: 0, small: 1, medium: 2, large: 3, huge: 4 } as const;
 /** Score of a dial cell: unavailable < red < white < green. */
 const CELL_SCORE = { red: 0, white: 1, green: 2 } as const;
 const UNAVAILABLE = -1;
@@ -69,7 +68,8 @@ export function leversOf(ship: ShipDefinition): VariantLevers {
       s.armor ?? 0,
       s.speed.max,
       -s.speed.min,
-      SIZE_RANK[s.size],
+      // Size as the pricing heuristic values it (large below medium).
+      SIZE_POINTS[s.size],
       slotConfig?.charges ?? 0,
     ],
     dialCells,

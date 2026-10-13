@@ -801,15 +801,6 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
   ],
   confed_thunderbird: [
     {
-      id: "thunderbird_fortress",
-      name: "Thunderbird Fortress",
-      shipId: "confed_thunderbird",
-      pilotId: "stormlord_kai",
-      upgrades: ["twin_laser_turret", "quad_laser_turret", "veteran_gunner"],
-      description: "Heavy gunship",
-      role: "offense",
-    },
-    {
       id: "thunderbird_defender",
       name: "Thunderbird Defender",
       shipId: "confed_thunderbird",
@@ -818,17 +809,17 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       description: "Defensive gunship",
       role: "defense",
     },
-  ],
-  confed_harrier: [
     {
-      id: "harrier_strike",
-      name: "Harrier Strike",
-      shipId: "confed_harrier",
-      pilotId: "swooping_death_jin",
-      upgrades: ["twin_laser_turret", "heavy_laser_cannon", "seeker_missile"],
-      description: "Strike gunship",
+      id: "thunderbird_fortress",
+      name: "Thunderbird Fortress",
+      shipId: "confed_thunderbird",
+      pilotId: "stormlord_kai",
+      upgrades: ["twin_laser_turret", "quad_laser_turret", "veteran_gunner"],
+      description: "Heavy gunship",
       role: "offense",
     },
+  ],
+  confed_harrier: [
     {
       id: "harrier_escort",
       name: "Harrier Escort",
@@ -837,6 +828,15 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       upgrades: ["ion_turret", "hull_upgrade"],
       description: "Escort gunship",
       role: "balanced",
+    },
+    {
+      id: "harrier_strike",
+      name: "Harrier Strike",
+      shipId: "confed_harrier",
+      pilotId: "swooping_death_jin",
+      upgrades: ["twin_laser_turret", "heavy_laser_cannon", "seeker_missile"],
+      description: "Strike gunship",
+      role: "offense",
     },
   ],
   confed_crane: [
@@ -861,21 +861,21 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
   ],
   confed_heron: [
     {
-      id: "heron_command",
-      name: "Heron Command",
-      shipId: "confed_heron",
-      pilotId: "heron_crew",
-      upgrades: ["hull_upgrade", "tactical_officer", "advanced_sensors"],
-      description: "Fleet command ship",
-      role: "support",
-    },
-    {
       id: "heron_relay",
       name: "Heron Relay",
       shipId: "confed_heron",
       pilotId: "heron_crew",
       upgrades: ["advanced_sensors", "pattern_analyzer"],
       description: "Sensor relay",
+      role: "support",
+    },
+    {
+      id: "heron_command",
+      name: "Heron Command",
+      shipId: "confed_heron",
+      pilotId: "heron_crew",
+      upgrades: ["hull_upgrade", "tactical_officer", "advanced_sensors"],
+      description: "Fleet command ship",
       role: "support",
     },
   ],

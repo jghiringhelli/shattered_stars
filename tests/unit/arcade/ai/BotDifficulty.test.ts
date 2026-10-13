@@ -8,7 +8,9 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  ACE_HARD_REACTION_SCALE,
   BRUTAL_REACTION_SCALE,
+  DOGFIGHT_BRUTAL_REACTION_SCALE,
   EASY_REACTION_SCALE,
   HARD_REACTION_SCALE,
   TRAINING_SKILL,
@@ -64,6 +66,43 @@ describe("difficultyToTier", () => {
       tier: "average",
       reactionScale: 1,
     });
+  });
+});
+
+describe("difficultyToTier — per duel mode", () => {
+  it("eases Dogfight's Brutal expert (one shared scale left it at 6 %)", () => {
+    expect(difficultyToTier("brutal", "dogfight")).toEqual({
+      tier: "expert",
+      reactionScale: DOGFIGHT_BRUTAL_REACTION_SCALE,
+    });
+    expect(DOGFIGHT_BRUTAL_REACTION_SCALE).toBeGreaterThan(
+      BRUTAL_REACTION_SCALE,
+    );
+    expect(DOGFIGHT_BRUTAL_REACTION_SCALE).toBeLessThan(HARD_REACTION_SCALE);
+  });
+
+  it("quickens Ace Duel's Hard expert (one shared scale left it at 36 %)", () => {
+    expect(difficultyToTier("hard", "ace")).toEqual({
+      tier: "expert",
+      reactionScale: ACE_HARD_REACTION_SCALE,
+    });
+    expect(ACE_HARD_REACTION_SCALE).toBeLessThan(HARD_REACTION_SCALE);
+    expect(ACE_HARD_REACTION_SCALE).toBeGreaterThan(BRUTAL_REACTION_SCALE);
+  });
+
+  it("keeps every other label on the shared mapping", () => {
+    for (const mode of ["dogfight", "ace"] as const) {
+      expect(difficultyToTier("easy", mode)).toEqual(difficultyToTier("easy"));
+      expect(difficultyToTier("normal", mode)).toEqual(
+        difficultyToTier("normal"),
+      );
+    }
+    expect(difficultyToTier("hard", "dogfight")).toEqual(
+      difficultyToTier("hard"),
+    );
+    expect(difficultyToTier("BRUTAL", "ace")).toEqual(
+      difficultyToTier("brutal"),
+    );
   });
 });
 

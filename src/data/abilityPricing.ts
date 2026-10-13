@@ -39,9 +39,15 @@ const ADDITIVE_POINTS: Partial<Record<keyof CombatModifiers, number>> = {
   killFrenzyLaserBonus: 2,
   // Real-time HP: per HP restored on a kill, per HP/s of regen / repair.
   shieldsPerKill: 0.25,
-  shieldRegenPerSecond: 34,
+  // Shield regen re-measured in 4-ship squads (2026-10-12, every faction's
+  // auto-fill list in a mirror, 400 battles per rate, calibrated on +1
+  // shield token = 4): 0.12 HP/s = 0.9 pts, 0.24 = 1.6, 0.48 = 2.4 per
+  // ship. The old 34 came from pre-fix 1v1 duels, where a duelist's slow
+  // fire let regen out-heal it.
+  shieldRegenPerSecond: 7,
   hullRepairPerSecond: 5.5,
-  auraShieldRegenPerSecond: 34,
+  // Ally regen from one projector (same mirror): 0.24 HP/s = 0.9 squad pts.
+  auraShieldRegenPerSecond: 4,
   stressReliefTiers: 1.5,
   ordnanceBonusCharges: 2,
   homingTurnBonus: 0.005,

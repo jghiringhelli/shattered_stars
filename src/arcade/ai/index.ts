@@ -28,6 +28,7 @@ export {
   HARD_REACTION_SCALE,
   DEFAULT_BOT_SKILL,
   type BotSkill,
+  type DuelMode,
   type SquadFormat,
   type SquadSkillPlan,
 } from "./BotDifficulty";

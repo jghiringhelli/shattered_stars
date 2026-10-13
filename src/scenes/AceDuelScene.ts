@@ -428,7 +428,7 @@ export class AceDuelScene extends Phaser.Scene {
    * @returns The crew for the ships just spawned.
    */
   private createCrew(): DuelBotCrew {
-    const enemySkill = difficultyToTier(this.difficulty);
+    const enemySkill = difficultyToTier(this.difficulty, "ace");
     const member = (shipId: string, side: 1 | 2) => ({
       shipId,
       side: `side${side}`,

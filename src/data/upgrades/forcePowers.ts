@@ -27,7 +27,7 @@ export const FORCE_POWER_UPGRADES: Readonly<Record<string, UpgradeDefinition>> =
       slotType: "force_power",
       description:
         "Projects the faction aura; allies inside it regenerate 1 shield every ~200 seconds.",
-      pointCost: 4,
+      pointCost: 2,
       creditCost: 300,
       requiredFaction: "ascendant_empire",
       realtime: { projectsAura: true, auraShieldRegenPerSecond: 0.06 },

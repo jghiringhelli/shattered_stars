@@ -58,7 +58,8 @@ above their price and interceptors −29 %; after it every role sits within
 | +1 top speed | 4 | `maxSpeedBonus` (abilityPricing) |
 | −1 minimum speed | 2 | half a top-speed step |
 | +1 dial step | 4 / 11 ≈ 0.36 | a stress-relief tier (4 pts) eases ≈ 11 cells |
-| +1 size class | 4 | roster fit (best fit 4–5) |
+| +1 size class (tiny → small → medium) | 4 | roster fit (best fit 4–5) |
+| large (vs medium) | −4 | measured: large hulls played 13 % under price (huge capitals keep large + 4) |
 | Capital hull / shield | × 1/3 | capital pools are ~6× a fighter's |
 
 A **dial step** is one stress cell one difficulty greener: each cell scores

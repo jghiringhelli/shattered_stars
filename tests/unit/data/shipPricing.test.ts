@@ -87,8 +87,12 @@ describe("priceBreakdown", () => {
     expect(deltaFor("gunship", { minSpeed: 0 })).toBe(2);
   });
 
-  it("charges 4 points per size class", () => {
-    expect(deltaFor("support", { size: "large" })).toBe(4);
+  it("charges 4 points per size class up to medium", () => {
+    expect(deltaFor("heavy_fighter", { size: "medium" })).toBe(4);
+  });
+
+  it("prices a large hull 4 points below a medium one (big hitbox, one attack a cycle)", () => {
+    expect(deltaFor("support", { size: "large" })).toBe(-4);
   });
 
   it("values eleven dial steps like one 4-point stress-relief tier", () => {

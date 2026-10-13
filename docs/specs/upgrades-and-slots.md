@@ -81,10 +81,14 @@ per kill) and applied as is — nothing in the repair pipeline multiplies by
 card that "restores 1 shield every ~100 s" carries 12 / 100 = 0.12 HP/s. Repairs
 never exceed max values and never revive a destroyed ship.
 
-Shield regen never pauses: shields refill fully between passes, so against
-the game's AI it is worth ~34 points per HP/s (0.06 HP/s ≈ 2.5 pts, 0.24 ≈
-7.4, ≥ 0.72 HP/s wins ~100% of mirror duels — unkillable). Card and pilot
-regen therefore stays at 0.06–0.24 HP/s (tested).
+Shield regen never pauses. In 1v1 duels it measured ~34 points per HP/s
+(≥ 0.72 HP/s wins ~100% of mirror duels — unkillable), so card and pilot
+regen stays at 0.06–0.24 HP/s (tested). In 4-ship squads — where every
+mode actually fights — focus fire outpaces it: re-measured 2026-10-12 on
+every faction's auto-fill mirror (400 battles per rate, calibrated on +1
+shield token = 4), 0.12 HP/s = 0.9 pts, 0.24 = 1.6, 0.48 = 2.4 per ship,
+and one projector's 0.24 HP/s ally regen = 0.9 squad pts. Prices use the
+squad values: 7 per HP/s own, 4 per HP/s allies'.
 
 | Source | Knob / rule | Cards |
 |---|---|---|
@@ -135,7 +139,7 @@ damage = 5). Ally effects were measured in 3v3. Per unit:
 | +1 laser dmg at range 1 / behind / bullseye / stressed / damaged | 1.2 / 1.3 / 0.8 / 1.6 / 2.7 | as listed |
 | +1 laser dmg with a wingman / in a kill frenzy | 2 / 2 | squad-only (1v1 reads 0) |
 | damage taken (per 1.0 of reduction) / with a wingman | 16 / 10 | Stealth Device 15% = 2.4 |
-| shield regen / allies' shield regen (per HP/s) | 34 / 34 | 0.12 HP/s = 4.1 |
+| shield regen / allies' shield regen (per HP/s) | 7 / 4 | Repair Astromech 0.12 HP/s = 0.8 → 1 |
 | hull repair (per HP/s, paused after hits) | 5.5 | Mechanic 0.96 = 5.1 |
 | stress on hit (per 1.0) / stress relief tier / stress rate | 13 / 1.5 / 2 | Ion Cannon 0.12 = 1.5 |
 | boost / barrel roll / K-turn recharge (per 1.0) | 5 | bots barely use them (~0) |

@@ -122,7 +122,7 @@ export const ASTROMECH_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
     name: "Repair Astromech",
     slotType: "astromech",
     description: "Regenerates 1 shield every ~100 seconds.",
-    pointCost: 4,
+    pointCost: 1,
     creditCost: 200,
     realtime: { shieldRegenPerSecond: 0.12 },
   },

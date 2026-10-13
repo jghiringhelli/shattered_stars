@@ -48,9 +48,9 @@ export const TOP_SPEED_POINTS = 4;
 /** −1 minimum speed (slower turning circle, speed-0 hover) — half a top-speed step. */
 export const LOW_SPEED_POINTS = 2;
 /**
- * One size class larger (tiny → small → medium → large → huge): a longer
- * base flies longer templates every cycle, outweighing the bigger hitbox.
- * Fitted on the shipped roster (best fit 4–5 pts per class).
+ * One size class larger (tiny → small → medium): a longer base flies longer
+ * templates every cycle, outweighing the bigger hitbox. Fitted on the
+ * shipped roster (best fit 4–5 pts per class).
  */
 export const SIZE_STEP_POINTS = 4;
 
@@ -80,13 +80,21 @@ export const PRICE_TOLERANCE_RATIO = 0.05;
 // Size classes
 // ============================================
 
-/** Size classes, smallest first. */
-const SIZE_ORDER: Readonly<Record<ShipSize, number>> = {
+/**
+ * Price of each size class, in points above tiny. Steps of
+ * {@link SIZE_STEP_POINTS} up to medium; large is measured 8 points under
+ * that line (2026-10-12, value per point of every hull in squads: the 12
+ * large hulls played 13 % below their price, medium −5 %, small +6 %): the
+ * big hitbox draws every gun and the ship still fires once a cycle. Huge
+ * hulls are capital ships, priced against their own (huge) anchor; huge
+ * stays one step above large so large capital ships keep their price.
+ */
+export const SIZE_POINTS: Readonly<Record<ShipSize, number>> = {
   tiny: 0,
-  small: 1,
-  medium: 2,
-  large: 3,
-  huge: 4,
+  small: SIZE_STEP_POINTS,
+  medium: 2 * SIZE_STEP_POINTS,
+  large: SIZE_STEP_POINTS,
+  huge: 2 * SIZE_STEP_POINTS,
 };
 
 // ============================================
@@ -251,7 +259,7 @@ export function priceBreakdown(
       (profile.maxSpeed - ref.maxSpeed) * TOP_SPEED_POINTS +
       (ref.minSpeed - profile.minSpeed) * LOW_SPEED_POINTS,
     dial: (profile.dialSteps - ref.dialSteps) * DIAL_STEP_POINTS,
-    size: (SIZE_ORDER[profile.size] - SIZE_ORDER[ref.size]) * SIZE_STEP_POINTS,
+    size: SIZE_POINTS[profile.size] - SIZE_POINTS[ref.size],
   };
   const total = Object.values(parts).reduce((sum, value) => sum + value, 0);
   return { ...parts, total };

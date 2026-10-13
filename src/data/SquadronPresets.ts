@@ -91,7 +91,7 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     factionId: "terran_hegemony",
     pointLimit: 150,
     name: "Patrol Alpha",
-    style: "balanced",
+    style: "aggressive",
     ships: [
       { loadoutId: "viper_pursuit" },
       { loadoutId: "raptor_pursuit" },
@@ -115,7 +115,7 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     factionId: "terran_hegemony",
     pointLimit: 300,
     name: "Battle Squadron",
-    style: "balanced",
+    style: "aggressive",
     ships: [
       { loadoutId: "bastion_defender" },
       { loadoutId: "viper_ace" },
@@ -157,6 +157,21 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     factionId: "free_confederation",
     pointLimit: 200,
     name: "Confederacy Strike",
+    // Not "balanced": in reinforced battles its cheap escorts pack the
+    // field cap too well; the AI's Balanced rotation flies Confederacy Line.
+    style: "aggressive",
+    ships: [
+      { loadoutId: "falcon_defender" },
+      { loadoutId: "eagle_striker" },
+      { loadoutId: "finch_patrol" },
+      { loadoutId: "wasp_ace" },
+    ],
+  },
+  {
+    id: "fc_190_confederacy_line",
+    factionId: "free_confederation",
+    pointLimit: 190,
+    name: "Confederacy Line",
     style: "balanced",
     ships: [
       { loadoutId: "falcon_defender" },
@@ -213,9 +228,9 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     name: "Precision Strike",
     style: "balanced",
     ships: [
-      { loadoutId: "ravager_ion" },
+      { loadoutId: "hunter_evasion_protocol" },
       { loadoutId: "heavy_patrol" },
-      { loadoutId: "scout_recon" },
+      { loadoutId: "scout_basic" },
       { loadoutId: "relay_coordinator" },
     ],
   },
@@ -224,7 +239,7 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     factionId: "synthetic_collective",
     pointLimit: 300,
     name: "Hive Fleet",
-    style: "balanced",
+    style: "aggressive",
     ships: [
       { loadoutId: "interceptor_hunter" },
       { loadoutId: "bomber_basic" },
@@ -265,7 +280,7 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     factionId: "void_corsairs",
     pointLimit: 200,
     name: "Terror Squadron",
-    style: "aggressive",
+    style: "balanced",
     ships: [
       { loadoutId: "scimitar_assault" },
       { loadoutId: "scimitar_assault" },
@@ -301,7 +316,7 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     factionId: "ascendant_empire",
     pointLimit: 150,
     name: "Sacred Guard",
-    style: "balanced",
+    style: "aggressive",
     ships: [
       { loadoutId: "seraph_champion" },
       { loadoutId: "virtue_pursuit" },
