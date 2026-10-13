@@ -653,6 +653,16 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 - `support` - Buffs, coordination, command
 - `capital` - Huge ships (epic format only)
 
+Hulls per faction and role (spread <= 1 per role, at least one of every role; gate: `tests/unit/data/ShipRoleDistribution.test.ts`, spec: docs/specs/ship-variants.md §5):
+
+| Faction | light | heavy | intercept. | bomber | gunship | support | capital | total |
+|---|---|---|---|---|---|---|---|---|
+| Hegemony | 3 | 3 | 2 | 2 | 3 | 3 | 4 | 20 |
+| Confederation | 3 | 4 | 3 | 2 | 3 | 2 | 3 | 20 |
+| Synthetic | 3 | 3 | 2 | 3 | 3 | 3 | 4 | 21 |
+| Corsairs | 3 | 4 | 3 | 2 | 3 | 2 | 3 | 20 |
+| Ascendant | 2 | 3 | 3 | 2 | 3 | 3 | 4 | 20 |
+
 
 ## Testing
 

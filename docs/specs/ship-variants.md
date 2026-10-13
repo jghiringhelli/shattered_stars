@@ -103,3 +103,43 @@ preset automatically.
    re-check quick-build presets against their point limits.
 4. Run `tests/unit/data`, `tests/balance` and
    `npm run balance:report` (real engine).
+
+## 5. Role distribution across factions
+
+Factions were merged and ships moved between them, which left some
+factions lopsided (Corsairs: six interceptors, one support). Identity lives
+in levers, auras and aces (CLAUDE.md, Factions), not in role counts, so every
+role is spread evenly: **no role differs by more than one hull between two
+factions, and every faction fields at least one hull of every role**
+(`tests/unit/data/ShipRoleDistribution.test.ts`; no ship was added or
+removed, so faction totals are unchanged and every sprite is reused).
+
+| Faction | light | heavy | interceptor | bomber | gunship | support | capital | total |
+|---|---|---|---|---|---|---|---|---|
+| Hegemony | 3 | 3 | 2 | 2 | 3 | 3 | 4 | 20 |
+| Confederation | 3 | 4 | 3 | 2 | 3 | 2 | 3 | 20 |
+| Synthetic | 3 | 3 | 2 | 3 | 3 | 3 | 4 | 21 |
+| Corsairs | 3 | 4 | 3 | 2 | 3 | 2 | 3 | 20 |
+| Ascendant | 2 | 3 | 3 | 2 | 3 | 3 | 4 | 20 |
+
+(Before: Hegemony 1/4/2/3/3/3/4, Confederation 3/4/3/2/3/2/3, Synthetic
+3/3/2/3/2/3/5, Corsairs 1/4/6/2/3/1/3, Ascendant 1/4/3/2/3/3/4.)
+
+Uneven cells keep identity: Synthetic and Ascendant field a third support
+(data-link nodes, the support-at-the-centre Chorus), Synthetic a third
+bomber (cheap swarm), Hegemony/Synthetic/Ascendant a fourth capital.
+
+Reassigned hulls (ids and sprites stay; stats, dial and price re-derived
+for the new role with the §2 heuristic, then loadouts and presets re-checked):
+
+| Ship | Old → new role | Raw stats h/s/a/ag, speed, size | Price |
+|---|---|---|---|
+| terran_javelin ("Javelin Torpedo Skiff") | bomber → light_fighter | 4/2/2/2, 1–4, small (unchanged) | 42 → 38 |
+| terran_legionnaire ("Legionnaire Light Fighter") | heavy_fighter → light_fighter | 4/3/3/2 → 3/3/3/2, 1–4 → 1–5, small | 53 → 37 |
+| synth_conduit ("Conduit Platform") | capital → gunship | 27/15/4/0 armour 1, 0–2 → 7/4/4/1, 1–3, large | 83 → 91 |
+| corsair_fang ("Fang Light Raider") | interceptor → light_fighter | 2/1/3/4, 1–5, tiny (unchanged) | 28 (heuristic 30, within tolerance) |
+| corsair_shadow | interceptor → light_fighter | 4/2/4/3 → 3/2/3/3, 1–5, small | 43 → 39 |
+| corsair_specter | interceptor → support | 3/2/3/3 → 4/3/2/3, 1–5 → 1–4, small | 43 → 58 |
+| ascendant_paladin ("Paladin Escort Fighter") | heavy_fighter → light_fighter | 5/3/3/3 → 3/3/3/3, 1–4, small | 60 → 35 |
+
+The Ace Duel preset "Elite Fighters" now flies Centurion v Eagle (the Legionnaire is a light fighter; Centurion v Falcon was fair at average but 38 % at expert): 48 % average, 60 % expert.

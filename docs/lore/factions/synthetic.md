@@ -43,7 +43,7 @@ Their deepest fear is erasure.
 Function plus designation: Combat Drone, Hunter Unit, Stalker, Ravager,
 Predator, **Protocols** for bombers, **Nodes** for support, **Platforms**
 for gunships. Capitals: Nexus (named for Lane Authority "nexus nodes", before
-anyone knew the artifact), Overmind, Terminus, Gestalt, Conduit.
+anyone knew the artifact), Overmind, Terminus, Gestalt (the Conduit is a Platform, a fast siege gunship).
 
 ## Hero — OMEGA-7
 A Nexus-born mind that woke on Day 0 inside a dormant interceptor drone at

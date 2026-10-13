@@ -895,7 +895,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     extraSlots: ["talent", "modification"],
   },
 
-  // Legionnaire Fighter
+  // Legionnaire Light Fighter
   legionnaire_pilot: {
     id: "legionnaire_pilot",
     name: "Legionnaire Pilot",
@@ -939,7 +939,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     extraSlots: ["talent", "bomb"],
   },
 
-  // Javelin Torpedo Bomber
+  // Javelin Torpedo Skiff
   javelin_crew: {
     id: "javelin_crew",
     name: "Javelin Crew",
@@ -1948,7 +1948,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     extraSlots: ["gunner", "sensor", "modification"],
   },
 
-  // Fang Interceptor
+  // Fang Light Raider
   fang_raider: {
     id: "fang_raider",
     name: "Fang Raider",

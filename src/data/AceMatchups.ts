@@ -40,13 +40,13 @@ export const ACE_MATCHUPS: readonly AceMatchup[] = [
     side1: {
       name: "Admiral Kronos",
       faction: "terran_hegemony",
-      ships: ["terran_legionnaire"],
+      ships: ["terran_centurion"],
       abilities: ["marksmanship", "lone_wolf"],
     },
     side2: {
       name: "Phoenix Commander",
       faction: "free_confederation",
-      ships: ["confed_falcon"],
+      ships: ["confed_eagle"],
       abilities: ["predator", "fearless"],
     },
   },

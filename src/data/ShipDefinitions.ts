@@ -461,11 +461,12 @@ const GLORY_DIAL = tuneDial(CAPITAL_DIAL, [
 ]);
 
 /**
- * Terran Javelin — the fast bomber (top speed 4): the bomber dial plus a
- * white speed-4 straight, so its top speed is a real (unstressed) option
- * instead of a missing — red — cell.
+ * Corsair Specter — infiltrator support ship (top speed 4): the support
+ * dial with white banks at speed 3 and a white speed-4 straight, so its
+ * top speed is a real (unstressed) option instead of a missing — red — cell.
  */
-const JAVELIN_DIAL = tuneDial(BOMBER_DIAL, [
+const SPECTER_DIAL = tuneDial(SUPPORT_DIAL, [
+  { maneuver: "bank", speed: 3, difficulty: "white" },
   { maneuver: "straight", speed: 4, difficulty: "white" },
 ]);
 
@@ -610,21 +611,21 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
   },
   terran_legionnaire: {
     id: "terran_legionnaire",
-    name: "Legionnaire Fighter",
+    name: "Legionnaire Light Fighter",
     faction: "terran_hegemony",
-    role: "heavy_fighter",
+    role: "light_fighter",
     baseStats: {
-      hull: 4,
+      hull: 3,
       shields: 3,
       attack: 3,
       agility: 2,
-      speed: { min: 1, max: 4 },
+      speed: { min: 1, max: 5 },
       size: "small",
       actions: ["focus", "target_lock", "barrel_roll"],
-      pointCost: 53,
+      pointCost: 37,
     },
     spriteKey: "ship_terran_legionnaire",
-    description: "Standard line fighter for fleet engagements.",
+    description: "Rank-and-file line fighter of the Legion wings.",
   },
 
   // Bombers (3)
@@ -666,9 +667,9 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
   },
   terran_javelin: {
     id: "terran_javelin",
-    name: "Javelin Torpedo Bomber",
+    name: "Javelin Torpedo Skiff",
     faction: "terran_hegemony",
-    role: "bomber",
+    role: "light_fighter",
     baseStats: {
       hull: 4,
       shields: 2,
@@ -677,10 +678,10 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       speed: { min: 1, max: 4 },
       size: "small",
       actions: ["focus", "target_lock", "barrel_roll"],
-      pointCost: 42,
+      pointCost: 38,
     },
     spriteKey: "ship_terran_javelin",
-    description: "Fast torpedo bomber for hit-and-run strikes.",
+    description: "Light torpedo skiff for hit-and-run strikes.",
   },
 
   // Support Ships (3)
@@ -1651,22 +1652,21 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
   },
   synth_conduit: {
     id: "synth_conduit",
-    name: "Conduit Cruiser",
+    name: "Conduit Platform",
     faction: "synthetic_collective",
-    role: "capital",
+    role: "gunship",
     baseStats: {
-      hull: 27,
-      shields: 15,
-      armor: 1,
+      hull: 7,
+      shields: 4,
       attack: 4,
-      agility: 0,
-      speed: { min: 0, max: 2 },
+      agility: 1,
+      speed: { min: 1, max: 3 },
       size: "large",
-      actions: ["calculate", "target_lock", "coordinate"],
-      pointCost: 83,
+      actions: ["calculate", "target_lock", "rotate_arc"],
+      pointCost: 91,
     },
     spriteKey: "ship_synth_conduit",
-    description: "Fast cruiser for network expansion.",
+    description: "Fast siege platform that extends the network's reach.",
   },
 
   // ==========================================
@@ -1695,9 +1695,9 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
   },
   corsair_fang: {
     id: "corsair_fang",
-    name: "Fang Interceptor",
+    name: "Fang Light Raider",
     faction: "void_corsairs",
-    role: "interceptor",
+    role: "light_fighter",
     baseStats: {
       hull: 2,
       shields: 1,
@@ -1829,19 +1829,19 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     id: "corsair_specter",
     name: "Specter Infiltrator",
     faction: "void_corsairs",
-    role: "interceptor",
+    role: "support",
     baseStats: {
-      hull: 3,
-      shields: 2,
-      attack: 3,
+      hull: 4,
+      shields: 3,
+      attack: 2,
       agility: 3,
-      speed: { min: 1, max: 5 },
+      speed: { min: 1, max: 4 },
       size: "small",
       actions: ["focus", "evade", "barrel_roll", "cloak", "coordinate"],
-      pointCost: 43,
+      pointCost: 58,
     },
     spriteKey: "ship_corsair_specter",
-    description: "Stealth raider used for ambush and sabotage.",
+    description: "Stealth infiltrator that jams and coordinates the raid wing.",
   },
   corsair_phantom: {
     id: "corsair_phantom",
@@ -1865,19 +1865,19 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     id: "corsair_shadow",
     name: "Shadow Strike Ship",
     faction: "void_corsairs",
-    role: "interceptor",
+    role: "light_fighter",
     baseStats: {
-      hull: 4,
+      hull: 3,
       shields: 2,
-      attack: 4,
+      attack: 3,
       agility: 3,
       speed: { min: 1, max: 5 },
       size: "small",
       actions: ["focus", "evade", "barrel_roll", "cloak", "target_lock"],
-      pointCost: 43,
+      pointCost: 39,
     },
     spriteKey: "ship_corsair_shadow",
-    description: "Heavy stealth attack craft.",
+    description: "Stealth skirmisher: light plating, hard banks at speed.",
   },
 
   // Gunships (3)
@@ -2174,18 +2174,18 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
   },
   ascendant_paladin: {
     id: "ascendant_paladin",
-    name: "Paladin Fighter",
+    name: "Paladin Escort Fighter",
     faction: "ascendant_empire",
-    role: "heavy_fighter",
+    role: "light_fighter",
     baseStats: {
-      hull: 5,
+      hull: 3,
       shields: 3,
       attack: 3,
       agility: 3,
       speed: { min: 1, max: 4 },
       size: "small",
       actions: ["focus", "target_lock", "coordinate"],
-      pointCost: 60,
+      pointCost: 35,
     },
     spriteKey: "ship_ascendant_paladin",
     description: "Knight-class escort fighter.",
@@ -2452,10 +2452,10 @@ const AUTHORED_DIALS: Record<string, readonly ManeuverDefinition[]> = {
   terran_gladius: FIGHTER_DIAL,
   terran_centurion: CENTURION_DIAL,
   terran_praetorian: FIGHTER_DIAL,
-  terran_legionnaire: FIGHTER_DIAL,
+  terran_legionnaire: LIGHT_FIGHTER_DIAL, // light_fighter — line wings
   terran_hammer: BOMBER_DIAL,
   terran_thunderbolt: BOMBER_DIAL,
-  terran_javelin: JAVELIN_DIAL, // fast bomber: white straight at top speed 4
+  terran_javelin: LIGHT_FIGHTER_DIAL, // light torpedo skiff — white straight at top speed 4
   terran_sentinel: SUPPORT_DIAL, // fix: support vessels
   terran_guardian: SUPPORT_DIAL,
   terran_harbinger: HARBINGER_DIAL, // ODD DUCK: white K-turn @ speed 2
@@ -2510,7 +2510,7 @@ const AUTHORED_DIALS: Record<string, readonly ManeuverDefinition[]> = {
   synth_overmind: CAPITAL_DIAL,
   synth_terminus: CAPITAL_DIAL,
   synth_gestalt: CAPITAL_DIAL,
-  synth_conduit: CAPITAL_DIAL,
+  synth_conduit: VINDICATOR_DIAL, // large gunship — white banks @ speed 3
 
   // ── VOID CORSAIRS ────────────────────────────────────────────────────────
   corsair_blade: INTERCEPTOR_DIAL,
@@ -2521,9 +2521,9 @@ const AUTHORED_DIALS: Record<string, readonly ManeuverDefinition[]> = {
   corsair_cutlass: CUTLASS_DIAL, // white banks @ speed 3
   corsair_scimitar: FIGHTER_DIAL,
   corsair_saber: FIGHTER_DIAL,
-  corsair_specter: INTERCEPTOR_DIAL,
+  corsair_specter: SPECTER_DIAL, // support — white banks @ 3, white straight @ 4
   corsair_phantom: RAIDER_DIAL, // white banks @ speed 4
-  corsair_shadow: INTERCEPTOR_DIAL,
+  corsair_shadow: VENOM_DIAL, // light_fighter — white banks @ speed 3
   corsair_reaver: GUNSHIP_DIAL, // fix: gunship (was BOMBER)
   corsair_pillager: GUNSHIP_DIAL,
   corsair_ravager: GUNSHIP_DIAL,
@@ -2541,7 +2541,7 @@ const AUTHORED_DIALS: Record<string, readonly ManeuverDefinition[]> = {
   ascendant_virtue: VIRTUE_DIAL, // green banks @ speed 3
   ascendant_templar: TEMPLAR_DIAL, // green banks @ speed 1
   ascendant_crusader: FIGHTER_DIAL,
-  ascendant_paladin: FIGHTER_DIAL,
+  ascendant_paladin: LIGHT_FIGHTER_DIAL, // light_fighter — escort wings
   ascendant_inquisitor: FIGHTER_DIAL,
   ascendant_oracle: ORACLE_DIAL, // support, green banks @ speed 1
   ascendant_prophet: SUPPORT_DIAL,

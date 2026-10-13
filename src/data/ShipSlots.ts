@@ -336,9 +336,8 @@ export const SHIP_SLOTS: Readonly<Record<string, ShipSlotConfig>> = {
       "tech",
       "modification",
       "modification",
-      "title",
     ],
-    charges: 3,
+    charges: 2,
   },
   synth_gestalt: {
     slots: [
