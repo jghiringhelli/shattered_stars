@@ -17,6 +17,7 @@ import { createBootLoadingView } from "../ui/menu/BootLoadingView";
 import { BOOT_ASSETS } from "../assets/assetManifest";
 import { queueAssets } from "../assets/textureLoading";
 import { installScenePreloadGates } from "../assets/scenePreloadGate";
+import { installIdempotentImageCache } from "../assets/idempotentImageCache";
 import { browserStore } from "../systems/keyValueStore";
 import { installStorageWarning } from "../ui/StorageWarningToast";
 
@@ -46,6 +47,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    installIdempotentImageCache(Phaser.Loader.FileTypes.ImageFile);
     installScenePreloadGates(this.game.scene.getScenes(false));
     installStorageWarning(browserStore());
     this.applyProfileFromUrl();

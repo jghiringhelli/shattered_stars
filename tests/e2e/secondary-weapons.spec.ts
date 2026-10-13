@@ -96,6 +96,10 @@ async function arm(
       const enemy = scene.ships.get(w.__enemyId);
       enemy.maxHull = Math.max(enemy.maxHull, 400);
       enemy.hull = enemy.maxHull;
+      // Warheads and turrets roll attack vs agility on impact (X-Wing): a
+      // Stiletto dodges a missile ~half the time. Pin the roll to a hit so a
+      // single shot proves lock → launch → flight → impact → damage.
+      weapons.runtime.config = { ...weapons.runtime.config, random: () => 0 };
       w.__hits = [];
     },
     { key: sceneKey, ids: upgradeIds },

@@ -20,6 +20,22 @@ import { REBINDABLE_INTENTS } from "../../../src/input/RebindableIntents";
 
 const defaults = DEFAULT_KEYBOARD_BINDINGS;
 
+describe("default keyboard bindings", () => {
+  it("does not pause a battle on plain Space (primaries autofire; Shift+Space fires secondaries)", () => {
+    const plainSpace = defaults.filter(
+      (b) => b.key === "SPACE" && !b.modifiers?.shift,
+    );
+    expect(plainSpace.map((b) => b.intent)).not.toContain("PAUSE");
+  });
+
+  it("pauses on P and ESC", () => {
+    const pause = defaults
+      .filter((b) => b.intent === "PAUSE")
+      .map((b) => b.key);
+    expect(pause.sort()).toEqual(["ESC", "P"]);
+  });
+});
+
 describe("applyKeyOverrides", () => {
   it("returns the defaults unchanged when there are no overrides", () => {
     expect(applyKeyOverrides(defaults, {})).toEqual([...defaults]);

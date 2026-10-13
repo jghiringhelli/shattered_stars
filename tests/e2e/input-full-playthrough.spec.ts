@@ -324,8 +324,19 @@ test.describe("ArcadeBattleScene — touch controls", () => {
     await page.mouse.move(STICK.x, STICK.y);
     await page.mouse.down();
     await page.mouse.move(STICK.x + 70, STICK.y);
-    await page.waitForTimeout(150);
-    expect((await getPlayerShip(page)).control.nextManeuver).toBe("bank_right");
+    // A hold past BANK_HOLD_MS queues one bank; it may already be flying when
+    // read (the 500 ms cycle commits it), so accept it queued or in flight.
+    await expect
+      .poll(
+        async () => {
+          const { control } = await getPlayerShip(page);
+          return [control.nextManeuver, control.currentManeuver].includes(
+            "bank_right",
+          );
+        },
+        { timeout: 1_500 },
+      )
+      .toBe(true);
     await page.mouse.up();
   });
 

@@ -385,27 +385,23 @@ test.describe("ArcadeBattleScene Gameplay", () => {
   });
 
   test("holding ArrowLeft turns the player ship angle", async ({ page }) => {
-    const angleBefore = await page.evaluate(() => {
-      const scene = (window as any).game.scene.getScene(
-        "ArcadeBattleScene",
-      ) as any;
-      const ship = scene.ships.get(scene.playerShipId);
-      return ship?.angle ?? 0;
-    });
+    const readAngle = (): Promise<number> =>
+      page.evaluate(() => {
+        const scene = (window as any).game.scene.getScene(
+          "ArcadeBattleScene",
+        ) as any;
+        const ship = scene.ships.get(scene.playerShipId);
+        return ship?.angle ?? 0;
+      });
+    const angleBefore = await readAngle();
 
     await page.keyboard.down("ArrowLeft");
     await page.waitForTimeout(400);
     await page.keyboard.up("ArrowLeft");
 
-    const angleAfter = await page.evaluate(() => {
-      const scene = (window as any).game.scene.getScene(
-        "ArcadeBattleScene",
-      ) as any;
-      const ship = scene.ships.get(scene.playerShipId);
-      return ship?.angle ?? 0;
-    });
-
-    expect(angleAfter).not.toBe(angleBefore);
+    // X-Wing cycle: the bank is queued and flown from the next 500 ms cycle
+    // boundary, which may fall after the key is released.
+    await expect.poll(readAngle, { timeout: 1_500 }).not.toBe(angleBefore);
   });
 
   // ─── combat ──────────────────────────────────────────────────────────────

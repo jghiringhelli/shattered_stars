@@ -3,7 +3,8 @@
  * with the player's controls:
  *
  *  - Dogfight: the AI opponent is a BotPilot of the difficulty's tier
- *    (normal = average, brutal = expert with faster reactions); it moves and
+ *    (normal = average, brutal = expert at Dogfight's own measured reaction
+ *    scale); it moves and
  *    turns toward the player. Online the opponent is a human — no bot.
  *  - Dogfight: R marks the HUD's target — stored for the player's side and
  *    shown on the HUD contact (isMarked).
@@ -22,14 +23,22 @@ import { DOGFIGHT } from "./helpers/battleEntry";
 
 const DOGFIGHT_KEY = "DogfightScene";
 const ACE_KEY = "AceDuelScene";
-/** Brutal halves the expert's 120 ms reaction delay. */
-const BRUTAL_REACTION_MS = 60;
+/**
+ * Dogfight Brutal: the expert's 120 ms reaction × 1.15
+ * (DOGFIGHT_BRUTAL_REACTION_SCALE — Dogfight's own measured mapping, not the
+ * shared Brutal ×0.85 = 102 ms).
+ */
+const DOGFIGHT_BRUTAL_REACTION_MS = 138;
 /** How close (°) the AI's nose must come to the player once it turned around. */
 const ON_TARGET_DEG = 30;
 const TURN_WINDOW_MS = 5_000;
 const SAMPLE_MS = 100;
 /** The player re-marks this often (a mark lapses after 8 s). */
 const REMARK_EVERY_MS = 2_000;
+/** How often the escort is set up behind the mark (a few 500 ms cycles). */
+const ESCORT_SETUP_EVERY_MS = 3_000;
+/** Escort set-up distance astern of the mark (X-Wing range 2: 100–200 px). */
+const ESCORT_SETUP_ASTERN_PX = 150;
 
 async function openDogfightSetup(page: Page): Promise<void> {
   suppressWebGLNoise(page);
@@ -69,6 +78,56 @@ async function escortTarget(page: Page): Promise<string | null> {
   );
 }
 
+/**
+ * Once the escort has chosen the mark, give it the shot: every
+ * {@link ESCORT_SETUP_EVERY_MS} it is set (alive) {@link ESCORT_SETUP_ASTERN_PX}
+ * astern of the marked ship on its heading. With an idle player the ships
+ * otherwise fall into an equal-speed tail chase (or the Hard experts kill the
+ * escort) and nobody comes into range — the AI's firing and the mark's bonus
+ * are what is under test here, not the chase.
+ */
+async function keepEscortOnTheMark(
+  page: Page,
+  markedId: string,
+): Promise<void> {
+  await page.evaluate(
+    async ({ key, id, every, astern }) => {
+      const { createCycleFlight } =
+        await import("/src/arcade/systems/CycleFlight.ts");
+      const { equipFlight } =
+        await import("/src/arcade/systems/QuickBuildEquip.ts");
+      const s = (window as any).game.scene.getScene(key);
+      const setUp = (): void => {
+        const escort = s.ships.get("side1_1");
+        const target = s.ships.get(id);
+        if (!escort || !target || target.hull <= 0) return;
+        escort.hull = escort.maxHull;
+        const rad = (target.angle * Math.PI) / 180;
+        const pose = {
+          x: target.x - Math.sin(rad) * astern,
+          y: target.y + Math.cos(rad) * astern,
+          angle: target.angle,
+        };
+        s.setFlight(
+          escort,
+          equipFlight(
+            createCycleFlight(escort.definitionId, pose),
+            escort.modifiers,
+          ),
+        );
+      };
+      setUp();
+      s.time.addEvent({ delay: every, loop: true, callback: setUp });
+    },
+    {
+      key: ACE_KEY,
+      id: markedId,
+      every: ESCORT_SETUP_EVERY_MS,
+      astern: ESCORT_SETUP_ASTERN_PX,
+    },
+  );
+}
+
 /** The AI's nose off the bearing to the player (°, 0–180). */
 async function aiOffNose(page: Page): Promise<number> {
   return page.evaluate((key) => {
@@ -93,7 +152,9 @@ test.describe("Dogfight — the AI opponent is a bot", () => {
     expect(tier).toBe("average");
   });
 
-  test("brutal difficulty flies a faster-reacting expert", async ({ page }) => {
+  test("brutal difficulty flies the expert at Dogfight's measured reaction", async ({
+    page,
+  }) => {
     await startDogfight(page, "brutal");
     const profile = await page.evaluate(
       (key) =>
@@ -102,7 +163,7 @@ test.describe("Dogfight — the AI opponent is a bot", () => {
       DOGFIGHT_KEY,
     );
     expect(profile.tier).toBe("expert");
-    expect(profile.reactionMs).toBe(BRUTAL_REACTION_MS);
+    expect(profile.reactionMs).toBeCloseTo(DOGFIGHT_BRUTAL_REACTION_MS, 6);
   });
 
   test("the bot turns around onto a player behind it", async ({ page }) => {
@@ -244,6 +305,7 @@ test.describe("Ace Duel 2v2 — the escort shoots the player's mark", () => {
     await expect
       .poll(() => escortTarget(page), { timeout: 5_000 })
       .toBe(markedId);
+    await keepEscortOnTheMark(page, markedId);
     await page.waitForFunction(
       ({ key, id }) =>
         (window as any).game.scene
@@ -252,7 +314,7 @@ test.describe("Ace Duel 2v2 — the escort shoots the player's mark", () => {
             (s: any) => s.attacker === "side1_1" && s.target === id && s.marked,
           ),
       { key: ACE_KEY, id: markedId },
-      { polling: 100, timeout: 45_000 },
+      { polling: 100, timeout: 15_000 },
     );
   });
 });

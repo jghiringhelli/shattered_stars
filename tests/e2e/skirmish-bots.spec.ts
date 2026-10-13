@@ -73,21 +73,31 @@ test.describe("Skirmish AI flies the skill-gate bots", () => {
     });
   });
 
-  test("Easy enemies fly the novice; no difficulty flies the average", async ({
+  test("Easy enemies: an average leader and novice wingmen; no difficulty flies the average", async ({
     page,
   }) => {
+    // squadSkillPlan("easy", "classic"): average, novice, novice (a squad
+    // that never marks loses outright, so Easy keeps a marking leader).
     await startSkirmish(page, "easy");
     const easy = await page.evaluate(
-      (key) => (window as any).game.scene.getScene(key).aiPilotTiers.enemy_0,
+      (key) => (window as any).game.scene.getScene(key).aiPilotTiers,
       SCENE,
     );
-    expect(easy).toBe("novice");
+    expect(easy).toMatchObject({
+      enemy_0: "average",
+      enemy_1: "novice",
+      enemy_2: "novice",
+    });
     await startSkirmish(page, null);
     const fallback = await page.evaluate(
-      (key) => (window as any).game.scene.getScene(key).aiPilotTiers.enemy_0,
+      (key) => (window as any).game.scene.getScene(key).aiPilotTiers,
       SCENE,
     );
-    expect(fallback).toBe("average");
+    expect(fallback).toMatchObject({
+      enemy_0: "average",
+      enemy_1: "average",
+      enemy_2: "average",
+    });
   });
 
   test("AI ships fly and pick targets on their own", async ({ page }) => {

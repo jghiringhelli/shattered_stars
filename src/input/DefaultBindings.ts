@@ -63,10 +63,10 @@ export const DEFAULT_KEYBOARD_BINDINGS: readonly KeyboardBinding[] = [
   // Hero pilot active powers (Campaign)
   { key: "V", intent: "HERO_POWER_1" },
   { key: "B", intent: "HERO_POWER_2" },
-  // Other
+  // Other — plain Space is unbound in flight: it was the old fire key, and
+  // pausing on it froze battles for players (and on an early Shift release).
   { key: "P", intent: "PAUSE" },
   { key: "ESC", intent: "PAUSE" },
-  { key: "SPACE", intent: "PAUSE" },
   { key: "F", intent: "FOCUS_SELECTED" },
   { key: "HOME", intent: "RESET_CAMERA" },
 ];
