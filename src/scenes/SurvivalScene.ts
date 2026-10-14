@@ -136,9 +136,20 @@ import {
   type RoguelikeRunService,
 } from "../systems/survival/RoguelikeRunService";
 import {
+  phaseCallsReinforcements,
   planCombat,
   shouldStartNextBossPhase,
 } from "../systems/survival/CombatNodePlan";
+import type { CreatureEncounter } from "../arcade/creatures/CreatureEncounter";
+import {
+  createBattleEncounter,
+  creatureShipStats,
+} from "../arcade/creatures/creatureSpawn";
+import { getCreature } from "../data/creatures/creatureCatalog";
+import {
+  SceneCreatures,
+  type SceneCreatureBridge,
+} from "./creatures/SceneCreatures";
 import { nodeWaveRoster } from "../systems/survival/NodeWaveRoster";
 import {
   trackDeath,
@@ -243,6 +254,12 @@ interface SurvivalShip {
   frenzyUntilMs: number;
   /** Present only for boss-tier ships — Survival's closest analog to a capital. */
   capitalSystems?: CapitalSystemsState | null;
+  /** The encounter driving it when it is a creature (no bot, no dial). */
+  creature?: CreatureEncounter | null;
+  /** Hull radius of a creature (px). */
+  radiusPx?: number;
+  /** True for a boss creature (its adds are counted against it). */
+  isBossCreature?: boolean;
   /** Its AI pilot (wave enemies, escorts), or null when the player flies it. */
   bot: BotPilot | null;
 }
@@ -359,6 +376,8 @@ export class SurvivalScene extends Phaser.Scene {
   private readonly hitLedger = new HitImmunityLedger();
   /** Secondary weapons (missiles, torpedoes, turrets, bombs, mines, cloak). */
   private weapons: BattleWeapons | null = null;
+  /** Creature bosses and spawns: bodies, telegraphs, boss bar, cues. */
+  private creatures: SceneCreatures<SurvivalShip> | null = null;
   /** Faction auras resolved this frame (buffs every shot and stress tick). */
   private auras: ReadonlyMap<string, ActiveAura> = new Map();
 
@@ -447,6 +466,7 @@ export class SurvivalScene extends Phaser.Scene {
 
     this.beltGraphics = this.add.graphics().setDepth(1);
     this.weapons = createSceneWeapons(this, this.weaponsLink(), this.hitLedger);
+    this.creatures = new SceneCreatures(this, this.creatureBridge());
     this.resetState();
     this.createHUD();
     this.setupInput();
@@ -488,6 +508,8 @@ export class SurvivalScene extends Phaser.Scene {
     this.beltWarning = null;
     this.weapons?.destroy();
     this.weapons = null;
+    this.creatures?.destroy();
+    this.creatures = null;
   }
 
   private resetState(): void {
@@ -510,6 +532,7 @@ export class SurvivalScene extends Phaser.Scene {
     this.squadAi.reset();
     this.hitLedger.clear();
 
+    this.creatures?.destroy();
     this.ships.clear();
     this.shipSprites.forEach((s) => s.destroy());
     this.shipSprites.clear();
@@ -630,6 +653,7 @@ export class SurvivalScene extends Phaser.Scene {
 
     this.updateAI(time, delta);
     this.flyShips(delta);
+    this.creatures?.update(time, delta);
     // Secondaries first: a held or chosen launch is this cycle's attack.
     this.weapons?.update(delta, this.time.now);
     this.processCombat(delta);
@@ -852,7 +876,7 @@ export class SurvivalScene extends Phaser.Scene {
     const cx = BATTLEFIELD_SIZE / 2;
     const cy = BATTLEFIELD_SIZE / 2;
     for (const ship of [...this.ships.values()]) {
-      if (ship.hull <= 0) continue;
+      if (ship.hull <= 0 || ship.creature) continue;
       const dist = Math.hypot(ship.x - cx, ship.y - cy);
       const damage = realTimeBeltDamage(
         beltDamageForFrame(dist, this.beltConfig, deltaMs),
@@ -996,6 +1020,17 @@ export class SurvivalScene extends Phaser.Scene {
    * @param spawn - The wave ship and where it enters.
    */
   private spawnBossShip(spawn: EnemySpawn): void {
+    const creatureBoss = this.rules.plan.creatureBoss;
+    if (creatureBoss) {
+      const boss = this.spawnCreatureShip(
+        creatureBoss.id,
+        { ...spawn.at },
+        "boss",
+        creatureBoss.phases,
+      );
+      this.bossPhases.set(boss.id, 1);
+      return;
+    }
     const bossWave = this.rules.plan.bossWave;
     const multiplier = bossMultiplier(bossWave);
     const ship = this.createEnemy(spawn, "boss", []);
@@ -1010,6 +1045,104 @@ export class SurvivalScene extends Phaser.Scene {
     ship.capitalSystems = createCapitalSystems(ship.maxHull);
     this.bossPhases.set(ship.id, 1);
     this.addEnemy(ship, false, true);
+  }
+
+  /**
+   * Puts a creature on the field: a ship record carrying its encounter, hit
+   * points through the shared durability path, no primary weapon and no bot.
+   *
+   * @param creatureId - The creature.
+   * @param at - Where it enters.
+   * @param rank - Boss (the node's boss) or regular (an add it called).
+   * @param phases - Phases of its fight.
+   * @returns Its ship.
+   */
+  private spawnCreatureShip(
+    creatureId: string,
+    at: Pose,
+    rank: "boss" | "elite" | "regular",
+    phases: number,
+  ): SurvivalShip {
+    const definition = getCreature(creatureId);
+    const stats = creatureShipStats(definition);
+    const standIn = this.ships.get(this.playerShipIds[0] ?? "");
+    const base = this.createShip({
+      id: `${rank}_creature_${this.wave}_${this.enemySerial++}`,
+      definitionId: standIn?.definitionId ?? definition.id,
+      faction: this.rules.plan.enemyFaction,
+      owner: "ai",
+      pose: at,
+      loadoutId: null,
+    });
+    this.weapons?.forget(base.id);
+    const ship: SurvivalShip = {
+      ...base,
+      definitionId: definition.id,
+      hull: stats.hull,
+      maxHull: stats.maxHull,
+      shields: stats.shields,
+      maxShields: stats.maxShields,
+      combatStats: {
+        ...base.combatStats,
+        attackDice: 0,
+        agilityDice: stats.agilityDice,
+      },
+      creature: createBattleEncounter({
+        definition,
+        battleSeed: this.rules.plan.combatSeed,
+        serial: this.enemySerial,
+        worldSize: BATTLEFIELD_SIZE,
+        belt: { ...ARENA_CENTER, safeRadius: this.beltConfig.safeRadius },
+        phases,
+        start: at,
+      }),
+      radiusPx: stats.radiusPx,
+      isBossCreature: rank === "boss",
+    };
+    this.rules.registerEnemy(ship.id, rank);
+    this.rules.equipEnemy(ship, []);
+    this.ships.set(ship.id, ship);
+    matchStats.record({ kind: "deploy", friendly: false, shipId: ship.id });
+    this.enemyShipIds.push(ship.id);
+    this.shipSprites.set(ship.id, this.creatures!.register(ship));
+    this.createHealthBar(ship);
+    return ship;
+  }
+
+  /** @returns What the creature layer asks of this scene (damage, stress, spawns). */
+  private creatureBridge(): SceneCreatureBridge<SurvivalShip> {
+    return {
+      ships: () => this.ships.values(),
+      isFlagship: (ship) => ship.id === this.playerShipIds[0],
+      damage: (victim, amount, attacker) =>
+        this.landHit(attacker, victim, { damage: amount, stress: 0 }),
+      stress: (victim, amount) =>
+        this.setFlight(victim, {
+          ...victim.flight,
+          stress: applyInstantStress(victim.flight.stress, amount),
+        }),
+      nudge: (victim, dx, dy) => {
+        const motion = victim.flight.motion;
+        this.setFlight(victim, {
+          ...victim.flight,
+          motion: { ...motion, x: motion.x + dx, y: motion.y + dy },
+        });
+      },
+      setPose: (ship, x, y, angle) => {
+        ship.x = x;
+        ship.y = y;
+        ship.angle = angle;
+        this.shipSprites.get(ship.id)?.setPosition(x, y).setAngle(angle);
+      },
+      spawnAdd: (creatureId, x, y, angle) => {
+        this.spawnCreatureShip(creatureId, { x, y, angle }, "regular", 1);
+      },
+      healed: (ship, hull) => {
+        ship.hull = Math.min(ship.maxHull, ship.hull + hull);
+        this.healthBars.get(ship.id)?.update(ship.hull, ship.shields);
+      },
+      effects: () => this.effectsManager,
+    };
   }
 
   /**
@@ -1034,6 +1167,18 @@ export class SurvivalScene extends Phaser.Scene {
       elites: slots.filter((s) => s.tier === "elite").length,
       boss: slots.some((s) => s.tier === "boss"),
     });
+    const eventCreature = this.rules.plan.eventCreature;
+    if (eventCreature && spec.index >= spec.total) {
+      const [point] = layoutWave({
+        center: ARENA_CENTER,
+        safeRadius: this.beltConfig.safeRadius,
+        regulars: 0,
+        elites: 1,
+        boss: false,
+      }).elites;
+      if (point)
+        this.spawnCreatureShip(eventCreature, { ...point }, "elite", 1);
+    }
     let regular = 0;
     let elite = 0;
     for (const slot of slots) {
@@ -1066,17 +1211,24 @@ export class SurvivalScene extends Phaser.Scene {
   private checkBossPhase(boss: SurvivalShip): void {
     const started = this.bossPhases.get(boss.id);
     if (started === undefined || boss.hull <= 0) return;
+    const { plan } = this.rules;
+    const totalPhases = boss.creature
+      ? (plan.creatureBoss?.phases ?? plan.bossPhases)
+      : plan.bossPhases;
     if (
-      !shouldStartNextBossPhase(
-        this.rules.plan.bossPhases,
-        started,
-        boss.hull / boss.maxHull,
-      )
+      !shouldStartNextBossPhase(totalPhases, started, boss.hull / boss.maxHull)
     )
       return;
     this.bossPhases.set(boss.id, started + 1);
-    if (started + 1 >= this.rules.plan.bossPhases) {
+    if (started + 1 >= totalPhases) {
       audioManager.setBossFinalPhase(true);
+    }
+    if (boss.creature && !phaseCallsReinforcements(plan.bossPhases, started)) {
+      this.showMessage(
+        `${boss.creature.definition.name.toUpperCase()}: ${boss.creature.phase.name}`,
+        "It is enraged!",
+      );
+      return;
     }
     boss.shields = boss.maxShields;
     this.showMessage(
@@ -1280,7 +1432,7 @@ export class SurvivalScene extends Phaser.Scene {
    */
   private flyShips(deltaMs: number): void {
     for (const ship of this.ships.values()) {
-      if (ship.hull <= 0) continue;
+      if (ship.hull <= 0 || ship.creature) continue;
       if (ship.capitalSystems && isEnginesOffline(ship.capitalSystems)) {
         continue;
       }
@@ -1464,7 +1616,7 @@ export class SurvivalScene extends Phaser.Scene {
     const regen = realTimeRunBonuses(this.run.bonuses).shieldRegenPerSecond;
     let sides: LivingBySide | null = null;
     for (const ship of this.ships.values()) {
-      if (ship.hull <= 0) continue;
+      if (ship.hull <= 0 || ship.creature) continue;
 
       if (
         ship.owner === "player" &&
@@ -1682,7 +1834,7 @@ export class SurvivalScene extends Phaser.Scene {
         stress: applyInstantStress(target.flight.stress, hit.stress),
       });
     }
-    this.dealDamage(target, hit.damage);
+    this.dealDamage(target, hit.damage, attacker);
     if (hit.damage > 0) {
       this.hitLedger.recordHit(attacker.id, target.id, this.time.now);
     }
@@ -1798,9 +1950,14 @@ export class SurvivalScene extends Phaser.Scene {
    *
    * @param target - The ship hit.
    * @param incoming - Damage to take.
+   * @param attacker - Who hit it (a hit on a creature lands on the part facing them).
    */
-  private dealDamage(target: SurvivalShip, incoming: number): void {
-    const damage =
+  private dealDamage(
+    target: SurvivalShip,
+    incoming: number,
+    attacker?: SurvivalShip,
+  ): void {
+    const mitigated =
       target.owner === "player"
         ? incoming *
           this.rules.engine.incomingMultiplier(
@@ -1810,6 +1967,15 @@ export class SurvivalScene extends Phaser.Scene {
             this.time.now,
           )
         : incoming;
+    const damage = target.creature
+      ? target.creature.absorbHit({
+          fromX: attacker?.x ?? target.x,
+          fromY: attacker?.y ?? target.y,
+          damage: mitigated,
+          nowMs: this.time.now,
+          shieldsUp: target.shields > 0 || attacker === undefined,
+        }).damage
+      : mitigated;
     const after = absorbDamage(target, damage);
     const hullDamage = damage - (target.shields - after.shields);
     matchStats.record({
@@ -1829,6 +1995,7 @@ export class SurvivalScene extends Phaser.Scene {
         this.checkBossPhase(target);
       } else {
         target.hull = after.hull;
+        if (target.creature) this.checkBossPhase(target);
       }
     }
     this.healthBars.get(target.id)?.update(target.hull, target.shields);
@@ -1907,6 +2074,8 @@ export class SurvivalScene extends Phaser.Scene {
     this.hitLedger.forget(shipId);
     this.squadAi.forget(shipId);
     this.weapons?.forget(shipId);
+    this.creatures?.noteWreck(ship);
+    this.creatures?.remove(shipId);
     this.affixLabels.get(shipId)?.destroy();
     this.affixLabels.delete(shipId);
 

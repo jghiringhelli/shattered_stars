@@ -21,6 +21,7 @@ import { conditionsHold } from "../scripting/ScriptInterpreter";
 import type { ScriptBeat } from "../scripting/scriptTypes";
 import { normalizeObjective } from "./normalizeObjective";
 import { resolveBeat, resolveHazard, resolveObjective } from "./resolveOffsets";
+import { tideBreachBeats } from "./tideBreach";
 
 /** A mission ready to run. */
 export interface MissionPlan {
@@ -81,16 +82,15 @@ export function compileMission(
     script.push(...(v.script ?? []));
   }
   const resolvedMission = { ...mission, enemies };
+  const compiled = objectives.map((o) =>
+    resolveObjective(normalizeObjective(o, resolvedMission, factionId), origin),
+  );
+  script.push(...tideBreachBeats(mission, compiled));
   return {
     missionId: mission.id,
     title,
     briefing,
-    objectives: objectives.map((o) =>
-      resolveObjective(
-        normalizeObjective(o, resolvedMission, factionId),
-        origin,
-      ),
-    ),
+    objectives: compiled,
     script: script.map((b) => resolveBeat(b, origin)),
     hazards: (mission.hazards ?? []).map((h) => resolveHazard(h, origin)),
     enemies,

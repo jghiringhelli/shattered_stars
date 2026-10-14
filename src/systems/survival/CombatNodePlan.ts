@@ -7,6 +7,11 @@
  */
 
 import type { FactionId } from "../../config";
+import { BOSS_PHASE_THRESHOLDS } from "../../arcade/creatures/phaseThresholds";
+import {
+  CREATURE_EXTRA_PHASES,
+  survivalBossFor,
+} from "../../data/creatures/creatureCatalog";
 import { ascensionRules } from "../../data/survival/ascension";
 import { pickEnemyFaction } from "../../data/survival/enemyFactions";
 import { SECTOR_COUNT } from "../../data/survival/sectors";
@@ -102,6 +107,16 @@ export interface CombatPlan {
   /** Belt tightening steps at the node's first wave. */
   readonly beltSteps: number;
   readonly bossPhases: number;
+  /**
+   * The creature that is the boss of a boss node (its enrage adds
+   * {@link CREATURE_EXTRA_PHASES} to the plan's phases), or null.
+   */
+  readonly creatureBoss: {
+    readonly id: string;
+    readonly phases: number;
+  } | null;
+  /** A creature an event battle adds to its last wave, or null. */
+  readonly eventCreature: string | null;
   /** Wave number fed to bossMultiplier/bossDurability. */
   readonly bossWave: number;
   readonly isFinalBoss: boolean;
@@ -121,6 +136,10 @@ export function planCombat(run: RunState): CombatPlan | null {
   const row = node?.row ?? 0;
   const rules = ascensionRules(run.ascension);
   const isFinalBoss = kind === "boss" && run.sector >= SECTOR_COUNT;
+  const bossPhases =
+    kind === "boss"
+      ? BASE_BOSS_PHASES + (isFinalBoss ? 1 : 0) + rules.extraBossPhases
+      : 0;
   const effectiveWave =
     (run.sector - 1) * EFFECTIVE_WAVES_PER_SECTOR +
     Math.floor(row / ROWS_PER_TIER_STEP) +
@@ -153,10 +172,15 @@ export function planCombat(run: RunState): CombatPlan | null {
         Math.floor(row / ROWS_PER_BELT_STEP) +
         rules.extraBeltSqueezes,
     ),
-    bossPhases:
+    bossPhases,
+    eventCreature: run.eventCombat?.creature ?? null,
+    creatureBoss:
       kind === "boss"
-        ? BASE_BOSS_PHASES + (isFinalBoss ? 1 : 0) + rules.extraBossPhases
-        : 0,
+        ? {
+            id: survivalBossFor(run.sector).id,
+            phases: bossPhases + CREATURE_EXTRA_PHASES,
+          }
+        : null,
     bossWave: run.sector * BOSS_WAVE_PER_SECTOR,
     isFinalBoss,
     combatSeed: deriveSeed(run.seed, "combat", nodeId),
@@ -173,15 +197,22 @@ export function combatKindOf(run: RunState): CombatKind | null {
   return kind === "combat" || kind === "elite" || kind === "boss" ? kind : null;
 }
 
-/** Boss hull fractions at which each extra phase triggers, by phase count. */
-export const BOSS_PHASE_THRESHOLDS: Readonly<
-  Record<number, readonly number[]>
-> = {
-  1: [],
-  2: [0.5],
-  3: [0.66, 0.33],
-  4: [0.75, 0.5, 0.25],
-};
+export { BOSS_PHASE_THRESHOLDS };
+
+/**
+ * Only the plan's own boss phases call reinforcements and restore shields;
+ * a creature boss's extra enrage phase just makes it angrier.
+ *
+ * @param planPhases - Phases of the plan (ascension and the final boss add some).
+ * @param phasesStarted - Phases already started when the next one begins.
+ * @returns True when entering the next phase calls the wing in.
+ */
+export function phaseCallsReinforcements(
+  planPhases: number,
+  phasesStarted: number,
+): boolean {
+  return phasesStarted < planPhases;
+}
 
 /**
  * @param totalPhases - The boss's phase count.

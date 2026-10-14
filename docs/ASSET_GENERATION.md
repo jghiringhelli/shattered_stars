@@ -107,3 +107,19 @@ Music uses **Harmonia** (port 8002) + **ACE-Step** (port 8001), not Forge. See t
 - Checkpoint: `dreamshaper_8.safetensors` (loaded by default).
 - Concept-art LoRA: `concept_art` @ 0.60 (baked into the ship-art prompts).
 - Models live under `StableDiffusion\forge\webui\models\Stable-diffusion` and `...\models\Lora`.
+
+## Creature sprites
+
+Boss / monster sprites (`public/assets/creatures/creature_<stem>_{body,segment,pod}.png`, 512² RGBA, top-down,
+front up) — ids and prompts live in `scripts/generate_creature_art.py`:
+
+```powershell
+python scripts/generate_creature_art.py --dry-run                 # prompts only
+python scripts/generate_creature_art.py                           # all 10 sprites
+python scripts/generate_creature_art.py --only creature_deepmaw_body --seed 7
+```
+
+It submits to the shared queue server (:8010; start it with `python scripts/queue_server.py` from the
+`tides_of_fortune` repo — set `PYTHONUTF8=1`, a `→` in a log line crashes the worker on cp1252), keys the
+near-black backdrop to alpha like `key_ship_alpha.py`, and mirrors the symmetric sprites. The game loads them on
+demand (placeholder first); `tests/unit/creatures/creatureCodexAndAssets.test.ts` checks every key exists.

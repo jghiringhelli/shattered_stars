@@ -337,7 +337,19 @@ test.describe("EncyclopediaScene — codex sections", () => {
     expect((await codexState(page)).section).toBe("pilots");
     await page.keyboard.press("ArrowLeft");
     await page.keyboard.press("ArrowLeft");
-    expect((await codexState(page)).section).toBe("factions");
+    expect((await codexState(page)).section).toBe("bestiary");
+  });
+
+  test("the BESTIARY lists the creatures with their lore", async ({ page }) => {
+    await setSection(page, "bestiary");
+    const { ids } = await codexState(page);
+    expect(ids).toContain("cinder_wyrm");
+    expect(ids).toContain("warden_avatar");
+    await page.keyboard.press("ArrowDown");
+    const selected = await page.evaluate(
+      () => (window as any).game.scene.getScene("EncyclopediaScene").selectedId,
+    );
+    expect(ids).toContain(selected);
   });
 
   test("DOWN steps through pilots without errors", async ({ page }) => {

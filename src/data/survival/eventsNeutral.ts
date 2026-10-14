@@ -163,6 +163,56 @@ export const NEUTRAL_EVENTS: readonly SurvivalEvent[] = [
     ],
   },
   {
+    id: "gnawer_nest",
+    title: "Gnawer Nest",
+    icon: "🪱",
+    text: "A debris ring is chewed hollow. Hulk Gnawers are feeding on a dead freighter — and they have noticed your engines.",
+    choices: [
+      {
+        label: "Burn the nest",
+        description: "Fight the nest; its hoard pays 35 salvage",
+        outcomes: [
+          { kind: "combat", elite: false, creature: "hulk_gnawer" },
+          { kind: "salvage", amount: 35 },
+        ],
+      },
+      {
+        label: "Skirt the ring",
+        description: "Lose 10% hull to the chase, +1 reroll",
+        outcomes: [
+          { kind: "hull", fraction: -0.1 },
+          { kind: "rerolls", amount: 1 },
+        ],
+      },
+    ],
+  },
+  {
+    id: "tidecell_silence",
+    title: "The Quiet Tide",
+    icon: "🌑",
+    text: "Every comm channel falls silent at once. A teardrop of void-black hangs at the edge of your sensors: a Tidecell, hunting the loudest mind in the wing.",
+    choices: [
+      {
+        label: "Face it",
+        description: "Fight the Tidecell; a salvaged lane-shard pays a relic",
+        outcomes: [
+          { kind: "combat", elite: true, creature: "tidecell" },
+          { kind: "relic" },
+        ],
+      },
+      {
+        label: "Run silent",
+        description:
+          "50%: slip away with +20 salvage, 50%: it finds you (-15% hull)",
+        gamble: {
+          chance: 0.5,
+          success: [{ kind: "salvage", amount: 20 }],
+          failure: [{ kind: "hull", fraction: -0.15 }],
+        },
+      },
+    ],
+  },
+  {
     id: "nexus_whisper",
     title: "Nexus Whisper",
     icon: "🌌",

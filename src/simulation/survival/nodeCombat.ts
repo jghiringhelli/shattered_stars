@@ -95,6 +95,7 @@ export function resolveNodeCombat(
         ship.maxShields,
         ship.shields + (regen * deltaMs) / MS_PER_S,
       );
+    if (ship.creature) continue;
     ship.weaponCooldown = Math.max(0, ship.weaponCooldown - deltaMs);
     if (ship.weaponCooldown > 0) continue;
     const target = findTarget(combat, ship, nowMs);
@@ -207,7 +208,7 @@ function fireBolt(combat: NodeCombat, bolt: Bolt): void {
   const cloak = combat.weapons?.incomingDamageFactor(target.id) ?? 1;
   const damage =
     cloak < 1 ? Math.max(1, Math.round(result.damage * cloak)) : result.damage;
-  dealDamage(combat, target, damage, nowMs);
+  dealDamage(combat, target, damage, nowMs, attacker);
   if (result.damage > 0) combat.ledger.recordHit(attacker.id, target.id, nowMs);
   if (target.hull > 0) return;
   resolveKill(combat, attacker, target, nowMs);
@@ -227,13 +228,24 @@ function baseDamageOf(
   return crit ? base * CRIT_DAMAGE_MULTIPLIER : base;
 }
 
+/**
+ * Damage a ship takes: relic mitigation for the player fleet, the body of a
+ * creature (parts, phase-shift), then shields and hull.
+ *
+ * @param combat - The battle.
+ * @param target - The ship hit.
+ * @param incoming - Damage before mitigation.
+ * @param nowMs - Battle time (ms).
+ * @param attacker - Who hit it (a hit on a creature lands on the part facing them).
+ */
 export function dealDamage(
   combat: NodeCombat,
   target: NodeShip,
   incoming: number,
   nowMs: number,
+  attacker?: NodeShip,
 ): void {
-  const damage =
+  const mitigated =
     target.owner === "player"
       ? incoming *
         combat.rules.engine.incomingMultiplier(
@@ -243,6 +255,15 @@ export function dealDamage(
           nowMs,
         )
       : incoming;
+  const damage = target.creature
+    ? target.creature.absorbHit({
+        fromX: attacker?.x ?? target.x,
+        fromY: attacker?.y ?? target.y,
+        damage: mitigated,
+        nowMs,
+        shieldsUp: target.shields > 0 || attacker === undefined,
+      }).damage
+    : mitigated;
   Object.assign(target, absorbDamage(target, damage));
   if (target.rank === "boss") combat.onBossHit(target);
 }

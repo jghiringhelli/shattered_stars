@@ -21,7 +21,12 @@ export type EventOutcome =
   | { readonly kind: "rerolls"; readonly amount: number }
   | { readonly kind: "power" }
   | { readonly kind: "upgrade" }
-  | { readonly kind: "combat"; readonly elite: boolean }
+  /** A battle; `creature` adds that creature (an elite spawn) to its last wave. */
+  | {
+      readonly kind: "combat";
+      readonly elite: boolean;
+      readonly creature?: string | undefined;
+    }
   | { readonly kind: "meta"; readonly amount: number };
 
 /** Something a choice needs to be selectable. */

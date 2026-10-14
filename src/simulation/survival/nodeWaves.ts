@@ -11,7 +11,10 @@
  */
 
 import { planWaveRoster } from "../../arcade/systems/SurvivalLoadouts";
-import { shouldStartNextBossPhase } from "../../systems/survival/CombatNodePlan";
+import {
+  phaseCallsReinforcements,
+  shouldStartNextBossPhase,
+} from "../../systems/survival/CombatNodePlan";
 import { nodeWaveRoster } from "../../systems/survival/NodeWaveRoster";
 import { survivalBelt } from "../../systems/survival/SurvivalBelt";
 import {
@@ -19,6 +22,7 @@ import {
   reinforcementPoints,
 } from "../../systems/survival/SurvivalSpawnArc";
 import { livingPlayers } from "./nodeCombat";
+import { spawnCreatureShip } from "./nodeCreatures";
 import { ARENA_CENTER, createEnemy, type NodeShip } from "./nodeShips";
 import type { NodeBattle } from "./nodeBattle";
 
@@ -50,6 +54,23 @@ export function spawnWave(battle: NodeBattle): void {
     elites: slots.filter((s) => s.tier === "elite").length,
     boss: slots.some((s) => s.tier === "boss"),
   });
+  if (rules.plan.eventCreature && spec.index >= spec.total) {
+    const [point] = layoutWave({
+      center: ARENA_CENTER,
+      safeRadius: battle.belt.safeRadius,
+      regulars: 0,
+      elites: 1,
+      boss: false,
+    }).elites;
+    if (point)
+      spawnCreatureShip(battle, {
+        creatureId: rules.plan.eventCreature,
+        at: point,
+        rank: "elite",
+        phases: 1,
+        serial: battle.enemiesSpawned,
+      });
+  }
   const next = { regular: 0, elite: 0 };
   for (const slot of slots) {
     const at =
@@ -59,6 +80,18 @@ export function spawnWave(battle: NodeBattle): void {
           ? layout.elites[next.elite++]
           : layout.regulars[next.regular++];
     if (!at) continue;
+    const creatureBoss = slot.tier === "boss" ? rules.plan.creatureBoss : null;
+    if (creatureBoss) {
+      const ship = spawnCreatureShip(battle, {
+        creatureId: creatureBoss.id,
+        at,
+        rank: "boss",
+        phases: creatureBoss.phases,
+        serial: battle.enemiesSpawned,
+      });
+      battle.bossPhases.set(ship.id, 1);
+      continue;
+    }
     const ship = createEnemy(
       { slot, spec, faction: spec.faction, at, serial: battle.enemiesSpawned },
       rules,
@@ -89,13 +122,14 @@ export function spawnBossReinforcements(
   const { rules, combat } = battle;
   if (
     !shouldStartNextBossPhase(
-      rules.plan.bossPhases,
+      rules.plan.creatureBoss?.phases ?? rules.plan.bossPhases,
       started,
       boss.hull / boss.maxHull,
     )
   )
     return;
   battle.bossPhases.set(boss.id, started + 1);
+  if (!phaseCallsReinforcements(rules.plan.bossPhases, started)) return;
   boss.shields = boss.maxShields;
   const spec = { ...rules.currentWave(), isBossWave: false };
   const [slot] = planWaveRoster(rules.roster(spec.faction), {

@@ -12,6 +12,7 @@
 import type { FactionId } from "../../config";
 import { BATTLEFIELD_SIZE } from "../../config";
 import type { BotPilot } from "../../arcade/ai/BotPilot";
+import type { CreatureEncounter } from "../../arcade/creatures/CreatureEncounter";
 import {
   createCycleFlight,
   type CycleFlightState,
@@ -85,6 +86,12 @@ export interface NodeShip {
   bot: BotPilot | null;
   /** Its ship record (player ships only). */
   readonly record: ShipRecord | null;
+  /** The encounter driving it when it is a creature (no bot, no dial). */
+  readonly creature: CreatureEncounter | null;
+  /** Hull radius of a creature (px); undefined for ships. */
+  radiusPx?: number;
+  /** True for a boss creature (its adds are counted against it). */
+  isBossCreature?: boolean;
 }
 
 interface ShipSpawn {
@@ -128,6 +135,7 @@ function createShip(spawn: ShipSpawn): NodeShip {
     frenzyUntilMs: 0,
     bot: null,
     record: spawn.record,
+    creature: null,
   };
   ship.modifiers = equipQuickBuild(ship, spawn.loadoutId);
   ship.flight = equipFlight(ship.flight, ship.modifiers);

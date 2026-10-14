@@ -11,6 +11,14 @@ import type { SurvivalRunController } from "../../systems/survival/SurvivalRunCo
 import type { NodeCombat } from "./nodeCombat";
 import type { NodeWeapons } from "./nodeWeapons";
 
+/** Counts of what creatures did in a battle (tests, reports). */
+export interface CreatureStats {
+  telegraphs: number;
+  powersLanded: number;
+  partsDestroyed: number;
+  hitsOnPlayers: number;
+}
+
 /** The battle in progress (mutable simulation state). */
 export interface NodeBattle {
   readonly rules: SurvivalBattleRules;
@@ -34,4 +42,8 @@ export interface NodeBattle {
   readonly bossPhases: Map<string, number>;
   /** Every ship's secondaries (set right after the battle opens). */
   weapons: NodeWeapons | null;
+  /** What the creatures did (tests, reports). */
+  readonly creatureStats: CreatureStats;
+  /** Battle time (ms) the boss arrived, or null while it has not. */
+  bossAtMs: number | null;
 }

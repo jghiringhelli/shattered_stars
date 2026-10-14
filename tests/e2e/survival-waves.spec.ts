@@ -175,8 +175,8 @@ test.describe("SurvivalScene — sector boss", () => {
       { timeout: 15_000 },
     );
     const result = await page.evaluate(async () => {
-      const { bossMultiplier } =
-        await import("/src/arcade/systems/SurvivalDurability.ts");
+      const { creatureDurability, getCreature } =
+        await import("/src/data/creatures/creatureCatalog.ts");
       const s = (window as any).game.scene.getScene("SurvivalScene") as any;
       const boss = [...s.ships.values()].find((sh: any) =>
         String(sh.id).startsWith("boss_"),
@@ -189,8 +189,7 @@ test.describe("SurvivalScene — sector boss", () => {
         enemies: s.enemyShipIds.length,
         bossHull: boss?.maxHull ?? 0,
         expectedHull: Math.round(
-          (boss?.combatStats.maxHull ?? 0) *
-            bossMultiplier(plan.bossWave) *
+          creatureDurability(getCreature(plan.creatureBoss.id)).maxHull *
             plan.enemyHullMultiplier,
         ),
         tracked: boss ? s.bossPhases.get(boss.id) : undefined,
@@ -202,7 +201,7 @@ test.describe("SurvivalScene — sector boss", () => {
     expect(result.tracked).toBe(1);
     // The boss flies alone (no bonus elite, no regulars to squad-mark with).
     expect(result.enemies).toBe(1);
-    // Its equipped (already scaled) hull × the sector's boss multiplier × the
+    // The sector creature's hull (miniature points × DURABILITY_SCALE) × the
     // run's enemy hull scale — scaled once, never twice.
     expect(result.bossHull).toBeGreaterThan(0);
     expect(result.bossHull).toBe(result.expectedHull);

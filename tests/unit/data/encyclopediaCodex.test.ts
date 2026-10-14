@@ -17,12 +17,13 @@ import { SHIP_DEFINITIONS } from "../../../src/data/ShipDefinitions";
 import { FACTION_AURAS } from "../../../src/systems/SupportAura";
 
 describe("codex sections", () => {
-  it("offers ships, pilots, upgrades and factions", () => {
+  it("offers ships, pilots, upgrades, factions and the bestiary", () => {
     expect(CODEX_SECTIONS.map((s) => s.id)).toEqual([
       "ships",
       "pilots",
       "upgrades",
       "factions",
+      "bestiary",
     ]);
   });
 

@@ -29,6 +29,8 @@ export interface ArcCandidate {
   readonly x: number;
   readonly y: number;
   readonly hull: number;
+  /** Hull radius (px) of a big body (creatures); omitted = a point. */
+  readonly radiusPx?: number;
 }
 
 /** Weapon envelope and target filter. */
@@ -77,12 +79,14 @@ export function isInFiringArc(
   shooter: ArcShooter,
   point: { readonly x: number; readonly y: number },
   weapon: Pick<ArcWeapon<unknown>, "rangePx" | "arcDeg" | "worldSize">,
+  targetRadiusPx = 0,
 ): boolean {
   return inArcEnvelope(
     shooter,
     point,
     { maxRangePx: weapon.rangePx, arcDeg: weapon.arcDeg },
     weapon.worldSize,
+    targetRadiusPx,
   );
 }
 
@@ -141,9 +145,10 @@ export function nearestTargetInArc<T extends ArcCandidate>(
       continue;
     }
     const preferred = other.id === weapon.preferredId;
-    const distance = torusRangePx(shooter, other, weapon.worldSize);
+    const distance =
+      torusRangePx(shooter, other, weapon.worldSize) - (other.radiusPx ?? 0);
     if (!preferred && distance >= bestDistance) continue;
-    if (!isInFiringArc(shooter, other, weapon)) continue;
+    if (!isInFiringArc(shooter, other, weapon, other.radiusPx ?? 0)) continue;
     if (weapon.isEligible && !weapon.isEligible(other)) continue;
     if (preferred) return other;
     best = other;

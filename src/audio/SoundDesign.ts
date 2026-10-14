@@ -26,6 +26,8 @@ export type SoundEffectType =
   | "powerup"
   | "alert"
   | "belt_warning"
+  | "creature_telegraph"
+  | "creature_roar"
   | "victory"
   | "defeat";
 
@@ -293,6 +295,35 @@ export const VOICE_DESIGNS: Readonly<Record<SoundEffectType, VoiceSpec>> = {
     attackSeconds: 0.01,
     holdSeconds: 0.18,
     releaseSeconds: 0.2,
+  },
+  // Creatures ─ a rising two-step warble announces a wind-up; a low growl lands the power.
+  creature_telegraph: {
+    startFrequency: 330,
+    endFrequency: 640,
+    oscillator: "triangle",
+    detuneCents: 18,
+    noiseMix: 0.1,
+    filterType: "bandpass",
+    filterStartHz: 700,
+    filterEndHz: 1500,
+    resonance: 4,
+    attackSeconds: 0.01,
+    holdSeconds: 0.14,
+    releaseSeconds: 0.22,
+  },
+  creature_roar: {
+    startFrequency: 110,
+    endFrequency: 42,
+    oscillator: "sawtooth",
+    detuneCents: 30,
+    noiseMix: 0.4,
+    filterType: "lowpass",
+    filterStartHz: 1100,
+    filterEndHz: 160,
+    resonance: 2,
+    attackSeconds: 0.03,
+    holdSeconds: 0.2,
+    releaseSeconds: 0.7,
   },
   victory: {
     startFrequency: 523.25,

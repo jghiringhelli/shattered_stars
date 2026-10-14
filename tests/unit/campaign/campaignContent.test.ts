@@ -12,6 +12,7 @@ import type {
   CampaignMission,
   FactionCampaign,
 } from "../../../src/data/campaign/campaignTypes";
+import { findCreature } from "../../../src/data/creatures/creatureCatalog";
 import { getShipDefinition } from "../../../src/data/ShipDefinitions";
 import { compileMission } from "../../../src/campaign/mission/compileMission";
 import {
@@ -82,7 +83,7 @@ describe.each(CAMPAIGNS.map((c) => [c.factionId, c] as const))(
         expect(mission.style).toBeDefined();
         expect(mission.tagline?.length ?? 0).toBeGreaterThan(0);
         for (const id of shipIdsOf(mission))
-          expect(getShipDefinition(id), id).toBeDefined();
+          expect(getShipDefinition(id) ?? findCreature(id), id).toBeDefined();
         const plan = compileMission(mission, {}, ORIGIN);
         const goals = plan.objectives.filter(
           (o) => !o.optional && !isConstraintObjective(o),

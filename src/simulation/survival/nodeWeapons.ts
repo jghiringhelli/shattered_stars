@@ -77,7 +77,7 @@ export function fireNodeSecondaries(
 ): void {
   for (const ship of combat.ships) {
     if (ship.hull <= 0) weapons.driver.forget(ship.id);
-    else if (!weapons.armed.has(ship.id)) arm(weapons, ship);
+    else if (!ship.creature && !weapons.armed.has(ship.id)) arm(weapons, ship);
   }
   weapons.driver.update(deltaMs, nowMs);
 }
@@ -105,8 +105,8 @@ function wantedTargetOf(
 
 function livingBodies(combat: NodeCombat): WeaponBody[] {
   const living = combat.ships.filter((s) => s.hull > 0);
-  return living.map((ship) =>
-    weaponBodyOf(
+  return living.map((ship) => {
+    const body = weaponBodyOf(
       ship,
       ship.owner,
       damageMitigationOf(
@@ -116,8 +116,9 @@ function livingBodies(combat: NodeCombat): WeaponBody[] {
           living.filter((s) => s.owner === ship.owner),
         ),
       ),
-    ),
-  );
+    );
+    return ship.radiusPx ? { ...body, hitRadiusPx: ship.radiusPx } : body;
+  });
 }
 
 /** @returns True when the hit landed on a living ship. */
@@ -134,7 +135,7 @@ function landOrdnance(
       ...target.flight,
       stress: applyInstantStress(target.flight.stress, hit.stress),
     };
-  dealDamage(combat, target, hit.damage, nowMs);
+  dealDamage(combat, target, hit.damage, nowMs, attacker);
   if (hit.damage > 0) combat.ledger.recordHit(attacker.id, target.id, nowMs);
   if (target.hull <= 0) resolveKill(combat, attacker, target, nowMs);
   return true;

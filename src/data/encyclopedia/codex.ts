@@ -13,6 +13,7 @@ import {
   type CodexFilter,
   type CodexSection,
 } from "./codexTypes";
+import { creatureCodexEntries } from "./creatureCodex";
 import { factionCodexEntries } from "./factionCodex";
 import { pilotCodexEntries } from "./pilotCodex";
 import { upgradeCodexEntries } from "./upgradeCodex";
@@ -37,6 +38,7 @@ export const CODEX_SECTIONS: readonly CodexSectionSpec[] = [
   { id: "pilots", label: "PILOTS" },
   { id: "upgrades", label: "UPGRADES" },
   { id: "factions", label: "FACTIONS" },
+  { id: "bestiary", label: "BESTIARY" },
 ];
 
 /**
@@ -64,6 +66,7 @@ const BUILDERS: Readonly<Record<CodexSection, () => CodexEntry[]>> = {
   pilots: pilotCodexEntries,
   upgrades: upgradeCodexEntries,
   factions: factionCodexEntries,
+  bestiary: creatureCodexEntries,
 };
 
 /** Entries per section, built on first use (the catalogues are static). */

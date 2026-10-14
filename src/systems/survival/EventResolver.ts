@@ -118,7 +118,14 @@ export function resolveEventChoice(
   const combat = outcomes.find((o) => o.kind === "combat");
   if (combat && combat.kind === "combat") {
     const bonus = outcomes.filter((o) => o.kind !== "combat");
-    next = { ...next, eventCombat: { elite: combat.elite, bonus } };
+    next = {
+      ...next,
+      eventCombat: {
+        elite: combat.elite,
+        bonus,
+        ...(combat.creature ? { creature: combat.creature } : {}),
+      },
+    };
     return {
       run: withLog(next, `${event.title}: battle!`),
       message: "Battle stations!",

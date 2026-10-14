@@ -167,6 +167,17 @@ import {
   SYSTEM_LABELS,
   type CapitalSystemsState,
 } from "../systems/CapitalSystems";
+import type { CreatureEncounter } from "../arcade/creatures/CreatureEncounter";
+import {
+  createBattleEncounter,
+  creatureShipStats,
+  seedFromText,
+} from "../arcade/creatures/creatureSpawn";
+import { findCreature, getCreature } from "../data/creatures/creatureCatalog";
+import {
+  SceneCreatures,
+  type SceneCreatureBridge,
+} from "./creatures/SceneCreatures";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { InputManager } from "../input/InputManager";
 import { openSettingsOverBattle } from "./battleUi/openSettingsOverBattle";
@@ -200,6 +211,12 @@ interface CampaignShip {
   frenzyUntilMs: number;
   /** Present only for boss-tier ships. */
   capitalSystems?: CapitalSystemsState | null;
+  /** The encounter driving it when it is a creature (no bot, no dial). */
+  creature?: CreatureEncounter | null;
+  /** Hull radius of a creature (px). */
+  radiusPx?: number;
+  /** True for a boss creature (its adds are counted against it). */
+  isBossCreature?: boolean;
   /** Its AI pilot (enemies, escorts), or null when the player flies it. */
   bot: BotPilot | null;
   /** Mission tags (squad, wingman, transport, boss, ally squadron…). */
@@ -287,6 +304,10 @@ export class CampaignBattleScene extends Phaser.Scene {
   private readonly hitLedger = new HitImmunityLedger();
   /** Secondary weapons (missiles, torpedoes, turrets, bombs, mines, cloak). */
   private weapons: BattleWeapons | null = null;
+  /** Creature bosses and spawns: bodies, telegraphs, boss bar, cues. */
+  private creatures: SceneCreatures<CampaignShip> | null = null;
+  /** Creature sim clock (ms): the scene clock slowed by a hero's time-slow. */
+  private creatureClockMs = 0;
   /** Faction auras resolved this frame (buffs every shot and stress tick). */
   private auras: ReadonlyMap<string, ActiveAura> = new Map();
 
@@ -372,6 +393,8 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.resultOverlay = null;
     this.weapons?.destroy();
     this.weapons = null;
+    this.creatures?.destroy();
+    this.creatures = null;
   }
 
   create(): void {
@@ -419,6 +442,8 @@ export class CampaignBattleScene extends Phaser.Scene {
     });
     matchStats.start("campaign", { mission: this.mission.id }, this.events);
     this.weapons = createSceneWeapons(this, this.weaponsLink(), this.hitLedger);
+    this.creatures = new SceneCreatures(this, this.creatureBridge());
+    this.creatureClockMs = 0;
     this.spawnInitialShips();
 
     if (ShipTelemetry.isEnabled()) {
@@ -458,6 +483,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.director.update(time, delta);
     this.updateAI(time, delta);
     this.flyShips(delta);
+    this.stepCreatures(delta);
     // Secondaries first: a held or chosen launch is this cycle's attack.
     this.weapons?.update(delta, this.time.now);
     this.processCombat(delta);
@@ -814,6 +840,10 @@ export class CampaignBattleScene extends Phaser.Scene {
    * @param req - What to spawn.
    */
   private spawnFromRequest(req: BattleSpawnRequest): void {
+    if (findCreature(req.definitionId) && !this.ships.has(req.id)) {
+      this.spawnCreatureShip(req);
+      return;
+    }
     if (!getShipDefinition(req.definitionId) || this.ships.has(req.id)) return;
     const [loadoutId] = assignQuickBuilds([req.definitionId]);
     const ship = this.createShip({ ...req, loadoutId: loadoutId ?? null });
@@ -868,6 +898,135 @@ export class CampaignBattleScene extends Phaser.Scene {
       ship.capitalSystems = createCapitalSystems(ship.maxHull);
     }
   }
+  /**
+   * Puts a creature (a mission boss or a Void Tide spawn) on the field: a
+   * ship record carrying its encounter, hit points through the shared
+   * durability path (scaled by the request's hull scale), no primary weapon
+   * and no bot. It wraps across the map seam like every ship.
+   *
+   * @param req - The spawn request (its definition id names the creature).
+   */
+  private spawnCreatureShip(req: BattleSpawnRequest): void {
+    const definition = getCreature(req.definitionId);
+    const stats = creatureShipStats(definition);
+    const standIn = this.ships.get(this.playerShipIds[0] ?? "");
+    const base = this.createShip({
+      ...req,
+      definitionId: standIn?.definitionId ?? definition.id,
+      loadoutId: null,
+    });
+    this.weapons?.forget(base.id);
+    const scale = req.hullScale;
+    const ship: CampaignShip = {
+      ...base,
+      definitionId: definition.id,
+      hull: Math.round(stats.maxHull * scale),
+      maxHull: Math.round(stats.maxHull * scale),
+      shields: Math.round(stats.maxShields * scale),
+      maxShields: Math.round(stats.maxShields * scale),
+      combatStats: {
+        ...base.combatStats,
+        attackDice: 0,
+        agilityDice: stats.agilityDice,
+      },
+      creature: createBattleEncounter({
+        definition,
+        battleSeed: seedFromText(this.mission.id),
+        serial: this.ships.size,
+        worldSize: BATTLEFIELD_SIZE,
+        belt: null,
+        phases: definition.phases.length,
+        start: req.pose,
+      }),
+      radiusPx: stats.radiusPx,
+      isBossCreature: req.isBoss || definition.isBoss,
+      tags: [...req.tags],
+      scripted: false,
+    };
+    this.ships.set(ship.id, ship);
+    matchStats.record({ kind: "deploy", friendly: false, shipId: ship.id });
+    if (req.owner === "ai") this.enemyShipIds.push(ship.id);
+    this.shipSprites.set(ship.id, this.creatures!.register(ship) as ShipSprite);
+    this.createHealthBar(ship);
+  }
+
+  /**
+   * One frame of every creature on the creature clock (a hero's time-slow
+   * slows it); an EMP-silenced creature does nothing.
+   *
+   * @param deltaMs - Frame length (ms).
+   */
+  private stepCreatures(deltaMs: number): void {
+    const scale = this.director.powers.timeScaleFor("enemy", this.time.now);
+    this.creatureClockMs += deltaMs * scale;
+    this.creatures?.update(this.creatureClockMs, deltaMs * scale);
+  }
+
+  /** @returns What the creature layer asks of this scene (damage, stress, spawns). */
+  private creatureBridge(): SceneCreatureBridge<CampaignShip> {
+    return {
+      ships: () => this.ships.values(),
+      isFlagship: (ship) => ship.id === this.playerShipIds[0],
+      isSuppressed: (ship) =>
+        this.director.powers.weaponsDisabled(ship.id, this.time.now),
+      damage: (victim, amount, attacker) =>
+        this.landHit(attacker, victim, { damage: amount, stress: 0 }),
+      stress: (victim, amount) =>
+        this.setFlight(victim, {
+          ...victim.flight,
+          stress: applyInstantStress(victim.flight.stress, amount),
+        }),
+      nudge: (victim, dx, dy) => {
+        const motion = shiftMotion(
+          victim.flight.motion,
+          dx,
+          dy,
+          BATTLEFIELD_SIZE,
+        );
+        this.setFlight(victim, { ...victim.flight, motion });
+        this.syncShipVisuals(victim);
+      },
+      setPose: (ship, x, y, angle) => {
+        ship.x = x;
+        ship.y = y;
+        ship.angle = angle;
+        this.syncShipVisuals(ship);
+      },
+      spawnAdd: (creatureId, x, y, angle) =>
+        this.spawnFromRequest(this.creatureAddRequest(creatureId, x, y, angle)),
+      healed: (ship, hull) => {
+        ship.hull = Math.min(ship.maxHull, ship.hull + hull);
+        this.healthBars.get(ship.id)?.update(ship.hull, ship.shields);
+      },
+      effects: () => this.effectsManager,
+    };
+  }
+
+  /** @returns The spawn request of a creature a boss called. */
+  private creatureAddRequest(
+    creatureId: string,
+    x: number,
+    y: number,
+    angle: number,
+  ): BattleSpawnRequest {
+    return {
+      id: `add_${creatureId}_${this.ships.size}_${Math.round(this.creatureClockMs)}`,
+      definitionId: creatureId,
+      faction:
+        this.plan.enemies[0]?.faction ??
+        factionOfShip(this.mission.enemies[0]?.shipId ?? ""),
+      owner: "ai",
+      pose: { x, y, angle },
+      tags: ["creature_add"],
+      hullScale: 1,
+      scripted: false,
+      piloted: false,
+      isAce: false,
+      isBoss: false,
+      lifetimeMs: null,
+    };
+  }
+
   /**
    * Applies the protagonist pilot's evolution bonuses to the flagship. The
    * old turn-based scene only ever applied hull/shields — attack/agility were
@@ -945,6 +1104,11 @@ export class CampaignBattleScene extends Phaser.Scene {
         ),
       setPose: (id, x, y, angle) =>
         this.adjustShip(id, (s) => {
+          if (s.creature) {
+            s.creature.body.x = x;
+            s.creature.body.y = y;
+            return;
+          }
           const dx = torusAxisDelta(s.x, x, BATTLEFIELD_SIZE);
           const dy = torusAxisDelta(s.y, y, BATTLEFIELD_SIZE);
           // Carry the cycle in progress so the next tick does not snap back.
@@ -987,6 +1151,7 @@ export class CampaignBattleScene extends Phaser.Scene {
   private damageById(id: string, amount: number, ignoreShields: boolean): void {
     const ship = this.ships.get(id);
     if (!ship || ship.hull <= 0) return;
+    if (ship.creature?.phased) return;
     if (!ignoreShields) this.applyDamage(ship, amount);
     else if (ship.capitalSystems) this.damageCapitalSystems(ship, amount);
     else ship.hull = Math.max(0, ship.hull - amount);
@@ -1139,7 +1304,9 @@ export class CampaignBattleScene extends Phaser.Scene {
    * @returns True if the ship's flight should advance.
    */
   private canFly(ship: CampaignShip): boolean {
-    if (ship.hull <= 0 || this.director.isScripted(ship)) return false;
+    if (ship.hull <= 0 || ship.creature || this.director.isScripted(ship)) {
+      return false;
+    }
     return !(ship.capitalSystems && isEnginesOffline(ship.capitalSystems));
   }
 
@@ -1286,7 +1453,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     const now = this.time.now;
     const enemyScale = this.director.powers.timeScaleFor("enemy", now);
     for (const ship of this.ships.values()) {
-      if (ship.hull <= 0) continue;
+      if (ship.hull <= 0 || ship.creature) continue;
       const shipDelta = ship.owner === "ai" ? delta * enemyScale : delta;
       ship.weaponCooldown = Math.max(0, ship.weaponCooldown - shipDelta);
       if (this.director.powers.weaponsDisabled(ship.id, now)) continue;
@@ -1397,7 +1564,7 @@ export class CampaignBattleScene extends Phaser.Scene {
       ...target.flight,
       stress: applyInstantStress(target.flight.stress, hit.stress),
     });
-    this.applyDamage(target, hit.damage);
+    this.applyDamage(target, hit.damage, attacker);
     if (hit.damage > 0) {
       this.hitLedger.recordHit(attacker.id, target.id, this.time.now);
     }
@@ -1464,10 +1631,23 @@ export class CampaignBattleScene extends Phaser.Scene {
    * @param target - The ship taking damage.
    * @param rawDamage - Damage to take.
    */
-  private applyDamage(target: CampaignShip, rawDamage: number): void {
-    const damage =
+  private applyDamage(
+    target: CampaignShip,
+    rawDamage: number,
+    attacker?: CampaignShip,
+  ): void {
+    const mitigated =
       rawDamage *
       this.director.powers.damageTakenMultiplier(target.id, this.time.now);
+    const damage = target.creature
+      ? target.creature.absorbHit({
+          fromX: attacker?.x ?? target.x,
+          fromY: attacker?.y ?? target.y,
+          damage: mitigated,
+          nowMs: this.creatureClockMs,
+          shieldsUp: target.shields > 0 || attacker === undefined,
+        }).damage
+      : mitigated;
     const after = absorbDamage(target, damage);
     const hullDamage = damage - (target.shields - after.shields);
     matchStats.record({
@@ -1575,6 +1755,8 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.hitLedger.forget(shipId);
     this.squadAi.forget(shipId);
     this.weapons?.forget(shipId);
+    if (!expired) this.creatures?.noteWreck(ship);
+    this.creatures?.remove(shipId);
 
     const sprite = this.shipSprites.get(shipId);
     if (sprite) {

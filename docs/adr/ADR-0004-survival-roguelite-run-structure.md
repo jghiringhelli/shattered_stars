@@ -352,3 +352,33 @@ S3 ≥ 50 %, A0 run win 25–40 %, gradual ascension).
 Node length p10 / median / p90 (adopted): combat 38 / 50 / 71 s, elite 53 / 75 / 99 s, boss
 57 / 72 / 104 s ✔. Ascension (seeds 1–200): A1 23 %, A2 16.5 %, A3 9.5 %, A4 9 %, A5 4 %, A7 4 % —
 a gradual curve (before: A3 fell to 1 %).
+
+## Creature bosses (2026-10-13)
+
+The three capital-ship sector bosses are replaced by **creatures** (spec:
+[docs/specs/creatures.md](../specs/creatures.md)): sector 1 the **Cinder Wyrm** (serpentine, cone / lunge /
+ring), sector 2 the **Deepmaw** (drift, tentacle sweep / tractor pull / spore bloom, heals only by eating
+wrecks), sector 3 (final) the **Choir-Hive** (hive: brood pods, gnawer adds, thorn volley, spore bloom,
+choir scream). The structure of this ADR is unchanged — a boss node is `WAVES_PER_NODE.boss` waves
+(+1 per sector), patrols first, the boss **alone** on the last wave; elites / regulars are not added.
+
+* **Phases**: the plan's boss phases (1; the final boss +1; ascension 8 +1) stay the ones that **restore
+  shields and call the 2 reinforcements** (`phaseCallsReinforcements`). A creature adds **one enrage phase**
+  (`CREATURE_EXTRA_PHASES`) — faster, shorter cooldowns, more damage — at the same hull thresholds table
+  (`BOSS_PHASE_THRESHOLDS`, now in `src/arcade/creatures/phaseThresholds.ts`); the boss bar shows one pip per phase.
+* **Hit points** are miniature points × `DURABILITY_SCALE` (Wyrm 56 + 12 shield pts, Deepmaw 105 + 24,
+  Choir-Hive 56 + 14), × the ascension enemy hull multiplier (`equipEnemy`) — `bossMultiplier` no longer applies.
+  A boss creature has no primary weapon: every point of damage it deals is a telegraphed power
+  (wind-up 1–2 cycles); damage to the fleet goes through the same relic mitigation as any enemy hit (×0.62).
+* **Events** may add a creature to a battle's last wave (`{ kind: "combat", creature }`): *Gnawer Nest*
+  (Hulk Gnawer) and *The Quiet Tide* (Tidecell, elite).
+* **Headless sim**: `simulateNodeBattle` fights the same creatures (`nodeCreatures.ts`, `CreatureHost`);
+  `creatureBosses: false` replays the legacy capital boss (A/B); `NodeSimOptions.onBattle` hands tooling the run
+  at battle start; the result reports `bossAtMs` and the creatures' telegraph / power / part counts.
+* **Balance** (A0, bots do not dodge telegraphs, 200 runs, seeds 1000–1199): boss node clears
+  **S1 86 % / S2 89 % / S3 83 %** (targets ≥ 85 / 80 / 70 ✔; legacy capital bosses on the same boss states:
+  84 / 97 / 82 %); boss node length p10 / median / p90 **S1 64 / 85 / 128 s, S2 68 / 84 / 122 s,
+  S3 64 / 82 / 138 s** (legacy: 60 / 79 / 128, 53 / 65 / 80, 56 / 70 / 119 — the boss fight itself is now
+  24–28 s instead of 9–17 s); combat / elite unchanged (S1 100 / 99 %, S2 87 / 66 %, S3 85 / 77 %). Run win
+  17 % on this sample (n = 200, ±5 %; the ADR's 30.5 % was measured on seeds 1–200 before the creature events).
+  Human pilots dodge the telegraphs, so the live clear rate is higher than the bots'.

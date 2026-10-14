@@ -9,6 +9,10 @@
  */
 
 import type { FactionId } from "../config";
+import {
+  ALL_CREATURES,
+  creatureTextureKeys,
+} from "../data/creatures/creatureCatalog";
 import { SHIP_DEFINITIONS } from "../data/ShipDefinitions";
 
 /** One loadable texture. */
@@ -171,6 +175,24 @@ const UI_ASSETS: readonly AssetEntry[] = [
   },
 ];
 
+/**
+ * @param key - A creature texture key (`creature_<stem>_body` / `_segment` / `_pod`).
+ * @returns Its sprite entry (loaded on demand by the battle scene that fights it).
+ */
+export function creatureSpriteAsset(key: string): AssetEntry {
+  return { kind: "image", key, url: `assets/creatures/${key}.png` };
+}
+
+/** @returns Every creature texture entry (body, segments, pods). */
+export function creatureAssets(): AssetEntry[] {
+  return ALL_CREATURES.flatMap((creature) => {
+    const keys = creatureTextureKeys(creature);
+    return [keys.body, keys.segment, keys.pod]
+      .filter((key): key is string => key !== null)
+      .map(creatureSpriteAsset);
+  });
+}
+
 /** What BootScene loads before the main menu — keep this small. */
 export const BOOT_ASSETS: readonly AssetEntry[] = [
   ...UI_ASSETS,
@@ -186,5 +208,6 @@ export function allManifestAssets(): AssetEntry[] {
     ...PORTRAIT_ASSETS,
     ...ships.map(shipSpriteAsset),
     ...ships.map(shipArtAsset),
+    ...creatureAssets(),
   ];
 }

@@ -39,6 +39,7 @@ import { createSeededRng } from "../../utils/random";
 import { livingPlayers, resolveNodeCombat, findTarget } from "./nodeCombat";
 import { ARENA_CENTER, spawnFleet, type NodeShip } from "./nodeShips";
 import { armNode, fireNodeSecondaries } from "./nodeWeapons";
+import { noteWreck, stepCreatures } from "./nodeCreatures";
 import { spawnBossReinforcements, spawnWave } from "./nodeWaves";
 import type { NodeBattle } from "./nodeBattle";
 
@@ -58,6 +59,10 @@ export interface NodeSimOptions {
    * no belt damage); default true (the scene's autopilot, belt and all).
    */
   readonly playerBeltDamage?: boolean;
+  /** Called with the run as each battle opens (balance tooling captures boss nodes). */
+  readonly onBattle?: (run: RunState) => void;
+  /** False fights boss nodes with the legacy capital-ship boss (A/B balance); default true. */
+  readonly creatureBosses?: boolean;
 }
 
 /** One simulated node battle. */
@@ -77,6 +82,12 @@ export interface NodeBattleResult {
   readonly enemyShips: number;
   /** Player ships the asteroid belt destroyed. */
   readonly beltLosses: number;
+  /** What the creatures did (telegraphs, powers landed, parts lost, hits taken by the fleet). */
+  readonly creatures: NodeBattle["creatureStats"];
+  /** Battle time (ms) the boss arrived, or null when the fleet fell first. */
+  readonly bossAtMs: number | null;
+  /** Boss creature id fought, or null. */
+  readonly bossCreatureId: string | null;
 }
 
 /**
@@ -88,7 +99,12 @@ export function simulateNodeBattle(
   run: RunState,
   options: NodeSimOptions = {},
 ): NodeBattleResult {
-  const battle = openBattle(run, options.playerBeltDamage ?? true);
+  options.onBattle?.(run);
+  const battle = openBattle(
+    run,
+    options.playerBeltDamage ?? true,
+    options.creatureBosses ?? true,
+  );
   let won: boolean | null = null;
   while (won === null && battle.nowMs < NODE_TIME_LIMIT_MS) {
     battle.nowMs += LOGIC_DELTA;
@@ -118,12 +134,20 @@ export function simulateNodeBattle(
     playerShips: battle.rules.fleet().length,
     enemyShips: battle.enemiesSpawned,
     beltLosses: battle.beltLosses,
+    creatures: battle.creatureStats,
+    bossAtMs: battle.bossAtMs,
+    bossCreatureId: battle.rules.plan.creatureBoss?.id ?? null,
   };
 }
 
-function openBattle(run: RunState, playerBeltDamage: boolean): NodeBattle {
-  const plan = planCombat(run);
-  if (!plan) throw new Error(`No battle node is active (run ${run.seed})`);
+function openBattle(
+  run: RunState,
+  playerBeltDamage: boolean,
+  creatureBosses: boolean,
+): NodeBattle {
+  const planned = planCombat(run);
+  if (!planned) throw new Error(`No battle node is active (run ${run.seed})`);
+  const plan = creatureBosses ? planned : { ...planned, creatureBoss: null };
   const rules = new SurvivalBattleRules(run, plan);
   const controller = SurvivalRunController.fromState(run.seed, run.progression);
   const rng = createSeededRng(plan.combatSeed ^ 0x5bd1e995);
@@ -162,6 +186,13 @@ function openBattle(run: RunState, playerBeltDamage: boolean): NodeBattle {
     playerBeltDamage,
     bossPhases: new Map(),
     weapons: null,
+    bossAtMs: null,
+    creatureStats: {
+      telegraphs: 0,
+      powersLanded: 0,
+      partsDestroyed: 0,
+      hitsOnPlayers: 0,
+    },
   };
   battle.weapons = armNode(battle.combat, () => battle.nowMs);
   return battle;
@@ -171,6 +202,7 @@ function onKill(battle: NodeBattle, victim: NodeShip, byPlayer: boolean): void {
   battle.firstKillMs ??= battle.nowMs;
   battle.combat.ledger.forget(victim.id);
   battle.combat.squadAi.forget(victim.id);
+  noteWreck(battle, victim);
   if (byPlayer && victim.owner === "ai") battle.rules.recordKill(victim.id);
 }
 
@@ -179,11 +211,15 @@ function stepBattle(battle: NodeBattle): void {
   if (battle.nextWaveAtMs !== null && nowMs >= battle.nextWaveAtMs) {
     battle.nextWaveAtMs = null;
     spawnWave(battle);
+    if (battle.bossPhases.size > 0) battle.bossAtMs ??= nowMs;
   }
   combat.squadAi.command(combat.ships, nowMs);
   markLikeAPlayer(battle);
-  for (const ship of combat.ships) if (ship.hull > 0) pilot(battle, ship);
-  for (const ship of combat.ships) if (ship.hull > 0) fly(battle, ship);
+  stepCreatures(battle);
+  for (const ship of combat.ships)
+    if (ship.hull > 0 && !ship.creature) pilot(battle, ship);
+  for (const ship of combat.ships)
+    if (ship.hull > 0 && !ship.creature) fly(battle, ship);
   applyBelt(battle);
   if (battle.weapons)
     fireNodeSecondaries(battle.weapons, combat, nowMs, LOGIC_DELTA);
@@ -252,7 +288,7 @@ function setFlight(ship: NodeShip, flight: NodeShip["flight"]): void {
 
 function applyBelt(battle: NodeBattle): void {
   for (const ship of battle.combat.ships) {
-    if (ship.hull <= 0) continue;
+    if (ship.hull <= 0 || ship.creature) continue;
     if (ship.owner === "player" && !battle.playerBeltDamage) continue;
     const distance = Math.hypot(
       ship.x - ARENA_CENTER.x,

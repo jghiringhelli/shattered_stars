@@ -60,6 +60,8 @@ export type PendingReward =
 /** A battle an event started (fight now, bonus outcomes after victory). */
 export interface EventCombat {
   readonly elite: boolean;
+  /** A creature the battle adds to its last wave (Survival events). */
+  readonly creature?: string | undefined;
   readonly bonus: readonly EventOutcome[];
 }
 

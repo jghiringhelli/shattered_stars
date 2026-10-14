@@ -6,7 +6,8 @@
 import type { FactionId } from "../../config";
 
 /** The encyclopedia's sections. */
-export type CodexSection = "ships" | "pilots" | "upgrades" | "factions";
+export type CodexSection =
+  "ships" | "pilots" | "upgrades" | "factions" | "bestiary";
 
 /** One labelled paragraph of an entry's detail. */
 export interface CodexParagraph {
