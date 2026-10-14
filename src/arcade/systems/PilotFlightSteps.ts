@@ -230,3 +230,37 @@ export function applyDashes(
     }
   }
 }
+
+/**
+ * A barrel roll from a double-tap of the steering arrows. Unlike a dedicated
+ * roll button it never complains: rapid ordinary steering is full of double
+ * taps, so while the roll is on its recharge, the card lacks it, the hull is
+ * huge or the pilot is stressed, the taps simply steer.
+ *
+ * @param flown - Ship being flown.
+ * @param flight - Motion/stress being built this frame (mutated).
+ * @param side - Roll side.
+ * @param worldSize - Battlefield edge length (px).
+ * @returns Whether the roll was flown (the arrows are then spent on it).
+ */
+export function applySoftRoll(
+  flown: FlownShip,
+  flight: Flight,
+  side: "left" | "right",
+  worldSize: number,
+): boolean {
+  const capabilities =
+    flight.motion.control.capabilities ?? UNRESTRICTED_CAPABILITIES;
+  if (dashRefusal(capabilities, "barrel_roll", flight.stress.isStressed))
+    return false;
+  const rolled = performAction(
+    flight.motion,
+    flown.ship,
+    `barrel_roll_${side}`,
+    worldSize,
+  );
+  if (!rolled.performed) return false;
+  flight.motion = rolled.state;
+  flight.events.push("barrel_roll");
+  return true;
+}

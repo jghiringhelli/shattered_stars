@@ -32,7 +32,7 @@ export const ACTION_TERMS: Readonly<Record<ActionTermId, TermEntry>> = {
     "Barrel Roll",
     "A sideways dash that keeps your facing — a short dodge out of an enemy's arc. Recharges in about 3 seconds.",
     "Barrel roll left as a fighter lines up your tail, and its shot passes behind you.",
-    "Only available if it is on the ship's action bar.",
+    "Double-tap ← or → to roll that way. Only available if it is on the ship's action bar.",
   ),
   "action.boost": term(
     "Boost",

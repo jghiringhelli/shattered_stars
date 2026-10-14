@@ -24,9 +24,17 @@ const HELD_INTENTS: ReadonlySet<ActionIntent> = new Set([
   "STEER_RIGHT",
   "THRUST_UP",
   "THRUST_DOWN",
+  "MANEUVER",
   "ZOOM_IN",
   "ZOOM_OUT",
 ]);
+
+/**
+ * Held intents a sub-frame tap must still register as held for one poll:
+ * the maneuver key's Snap Turn is a tap, and a press+release between two
+ * polls would otherwise never be seen.
+ */
+const TAP_VISIBLE_HELD: ReadonlySet<ActionIntent> = new Set(["MANEUVER"]);
 
 export class KeyboardAdapter implements InputAdapter {
   readonly source: InputSource = "keyboard";
@@ -93,11 +101,14 @@ export class KeyboardAdapter implements InputAdapter {
       if (!this.modifiersMatch(binding, shiftDown, ctrlDown, altDown)) continue;
 
       const isHeldIntent = HELD_INTENTS.has(binding.intent);
+      const tapSeen =
+        TAP_VISIBLE_HELD.has(binding.intent) &&
+        (this.pendingKeyDown.get(binding.key) ?? false);
       const triggered = isHeldIntent
-        ? key.isDown
+        ? key.isDown || tapSeen
         : (this.pendingKeyDown.get(binding.key) ?? false);
       if (!triggered) continue;
-      if (!isHeldIntent) consumedKeys.add(binding.key);
+      if (!isHeldIntent || tapSeen) consumedKeys.add(binding.key);
 
       events.push({
         intent: binding.intent,

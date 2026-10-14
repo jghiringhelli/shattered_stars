@@ -90,8 +90,14 @@ test.describe("SurvivalScene — cycle-engine flight", () => {
   test("Z queues a Snap turn and costs stress", async ({ page }) => {
     await SURVIVAL.enter(page, { peaceful: true });
     await holdGameKey(page, "Z", 150);
+    // The maneuver key waits out its double-tap window before it queues the Snap turn.
+    await expect
+      .poll(async () => {
+        const s = await flagship(page);
+        return [s.currentManeuver, s.nextManeuver].includes("kturn");
+      })
+      .toBe(true);
     const ship = await flagship(page);
-    expect([ship.currentManeuver, ship.nextManeuver]).toContain("kturn");
     expect(ship.stress).toBeGreaterThan(0);
   });
 });

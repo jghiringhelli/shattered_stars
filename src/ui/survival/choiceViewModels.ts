@@ -10,6 +10,17 @@ import type { Mutation } from "../../data/survival/mutations";
 import type { Relic } from "../../data/survival/relics";
 import { ARCHETYPE_SETS, ARCHETYPE_SET_SIZE } from "../../data/survival/relics";
 import { relicHint } from "../../data/roleHints";
+import { getRelic } from "../../data/survival/relicCatalog";
+import { contentFromTerm, type TooltipContent } from "../menu/tooltipContent";
+import {
+  cardTip,
+  powerNoteTip,
+  powerTip,
+  relicNoteTip,
+  relicTip,
+  shopItemTip,
+  tagChips,
+} from "./choiceTips";
 import {
   archetypeCounts,
   synergyMatches,
@@ -42,6 +53,8 @@ export function powerCards(
       name: p.name,
       description: p.description,
       note: p.tier === "atom" ? p.branch : p.tier,
+      tip: powerTip(p),
+      noteTip: powerNoteTip(p),
     })),
     {
       icon: "🎲",
@@ -49,12 +62,16 @@ export function powerCards(
       description: "Spend a reroll charge to redraw these powers",
       note: `${rerolls} left`,
       disabled: rerolls <= 0,
+      tip: contentFromTerm("survival.reroll"),
+      noteTip: contentFromTerm("survival.reroll"),
     },
     {
       icon: "⏭",
       name: "Skip",
       description: `Take ${SKIP_DRAFT_SALVAGE} salvage instead`,
       note: `+${SKIP_DRAFT_SALVAGE} ${SALVAGE_GLYPH}`,
+      tip: contentFromTerm("survival.skip_draft"),
+      noteTip: contentFromTerm("survival.salvage"),
     },
   ];
 }
@@ -72,9 +89,11 @@ export function relicCard(relic: Relic, owned: readonly string[]): ChoiceCard {
   return {
     icon: relic.icon,
     name: `${relic.name} (${relic.rarity})`,
-    description: `${relic.description}  [${relic.tags.join("] [")}]`,
+    description: relic.description,
     note: matches > 0 ? `${setNote} · synergy ×${matches}` : setNote,
-    hint: relicHint(relic),
+    chips: tagChips(relic.tags),
+    tip: relicTip(relic, relicHint(relic)),
+    noteTip: relicNoteTip(relic),
   };
 }
 
@@ -95,6 +114,8 @@ export function relicCards(
       description: "Spend a reroll charge to redraw",
       note: `${run.rerolls} left`,
       disabled: run.rerolls <= 0,
+      tip: contentFromTerm("survival.reroll"),
+      noteTip: contentFromTerm("survival.reroll"),
     },
   ];
 }
@@ -108,6 +129,7 @@ export function hangarCards(options: readonly HangarOption[]): ChoiceCard[] {
     icon: o.icon,
     name: o.name,
     description: o.description,
+    tip: cardTip("survival.hangar", o.name, o.description),
   }));
 }
 
@@ -121,6 +143,8 @@ export function mutationCards(mutations: readonly Mutation[]): ChoiceCard[] {
     name: m.name,
     description: m.description,
     note: `${m.slot} mutation`,
+    tip: cardTip("survival.mutation", m.name, m.description),
+    noteTip: contentFromTerm("survival.mutation"),
   }));
 }
 
@@ -144,9 +168,25 @@ export function eventCards(event: SurvivalEvent, run: RunState): ChoiceCard[] {
       name: choice.label,
       description: choice.description,
       disabled: !availability.enabled,
-      ...(note ? { note } : {}),
+      tip: cardTip("survival.event_choice", choice.label, choice.description),
+      ...(note ? { note, noteTip: eventNoteTip(availability.reason, choice) } : {}),
     };
   });
+}
+
+/**
+ * @param reason - Why the option is locked (null when open).
+ * @param choice - The event option.
+ * @returns The tooltip of the card note: the lock, the cost or the odds.
+ */
+function eventNoteTip(
+  reason: string | null,
+  choice: SurvivalEvent["choices"][number],
+): TooltipContent {
+  if (reason) return contentFromTerm("survival.event_locked");
+  return contentFromTerm(
+    choice.gamble ? "survival.event_gamble" : "survival.salvage",
+  );
 }
 
 /**
@@ -155,19 +195,34 @@ export function eventCards(event: SurvivalEvent, run: RunState): ChoiceCard[] {
  */
 export function shopCards(stock: readonly ShopItem[]): ChoiceCard[] {
   return [
-    ...stock.map((item) => ({
-      icon: item.icon,
-      name: item.name,
-      description: item.description,
-      note: item.reason ?? `${item.price} ${SALVAGE_GLYPH}`,
-      disabled: !item.available,
-    })),
+    ...stock.map(shopCard),
     {
       icon: "🚪",
       name: "Leave shop",
       description: "Undock and return to the map",
+      tip: contentFromTerm("survival.leave_shop"),
     },
   ];
+}
+
+/**
+ * @param item - One shelf item.
+ * @returns Its card: relics also show their tags and role.
+ */
+function shopCard(item: ShopItem): ChoiceCard {
+  const relic = item.relicId ? getRelic(item.relicId) : undefined;
+  return {
+    icon: item.icon,
+    name: item.name,
+    description: relic?.description ?? item.description,
+    note: item.reason ?? `${item.price} ${SALVAGE_GLYPH}`,
+    disabled: !item.available,
+    noteTip: contentFromTerm("survival.price"),
+    tip: relic
+      ? relicTip(relic, relicHint(relic))
+      : shopItemTip(item.kind, item.name, item.description),
+    ...(relic ? { chips: tagChips(relic.tags) } : {}),
+  };
 }
 
 /**
@@ -180,7 +235,14 @@ export function dockCards(options: readonly DockOption[]): ChoiceCard[] {
     name: o.name,
     description: o.description,
     disabled: !o.enabled,
-    ...(o.enabled ? {} : { note: "Max level" }),
+    tip: cardTip(
+      o.id.startsWith("upgrade") ? "survival.shop_upgrade" : "survival.dock_repair",
+      o.name,
+      o.description,
+    ),
+    ...(o.enabled
+      ? {}
+      : { note: "Max level", noteTip: contentFromTerm("survival.shop_upgrade") }),
   }));
 }
 
@@ -201,6 +263,10 @@ export function metaUnlockCards(meta: MetaProfile): ChoiceCard[] {
         description: u.description,
         note,
         disabled: owned || blocked || meta.charts < u.cost,
+        tip: cardTip("survival.star_charts", u.name, u.description),
+        noteTip: contentFromTerm(
+          owned || blocked ? "survival.unlock_state" : "survival.star_charts",
+        ),
       };
     }),
     {

@@ -1,7 +1,7 @@
 /**
  * HoloPauseOverlay — the holographic pause menu for battle scenes: a dimmed
  * battlefield, a HoloPanel and HoloButtons (resume, restart, settings, quit
- * with confirmation, bug report). The caller resets camera zoom to 1.0
+ * with confirmation, send feedback). The caller resets camera zoom to 1.0
  * before showing it (scrollFactor(0) hit-testing breaks under zoom).
  */
 
@@ -16,7 +16,7 @@ import { createHoloPanel } from "../../ui/hud/HoloPanel";
 import { HOLO_DEPTH, HOLO_SPACING } from "../../ui/theme/HoloTheme";
 import { showConfirmDialog } from "../../ui/ConfirmDialog";
 import { MenuFocus } from "../../ui/menu/MenuFocus";
-import { openBugReport } from "../../utils/BugReport";
+import { openFeedbackDialog } from "../../ui/feedback/feedbackDialog";
 
 /** Battlefield dimming behind the menu. */
 const DIM_ALPHA = 0.6;
@@ -160,9 +160,10 @@ export class HoloPauseOverlay {
           }),
       },
       {
-        label: "Report bug",
+        label: "Send feedback",
         variant: "secondary",
-        onClick: () => openBugReport({ sceneKey: scene.scene.key }),
+        onClick: () =>
+          openFeedbackDialog({ game: scene.game, sceneKey: scene.scene.key }),
       },
     ];
   }

@@ -74,8 +74,14 @@ test.describe("DogfightScene — cycle-engine flight", () => {
   test("Z queues a Snap turn and costs stress", async ({ page }) => {
     await DOGFIGHT.enter(page, { peaceful: true });
     await holdGameKey(page, "Z", 150);
+    // The maneuver key waits out its double-tap window before it queues the Snap turn.
+    await expect
+      .poll(async () => {
+        const s = player(await readShips(page, "DogfightScene"));
+        return [s.currentManeuver, s.nextManeuver].includes("kturn");
+      })
+      .toBe(true);
     const ship = player(await readShips(page, "DogfightScene"));
-    expect([ship.currentManeuver, ship.nextManeuver]).toContain("kturn");
     expect(ship.stress).toBeGreaterThan(0);
   });
 });

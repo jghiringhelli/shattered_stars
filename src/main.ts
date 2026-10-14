@@ -24,13 +24,14 @@ import { ControlsScene } from "./scenes/ControlsScene";
 import { HudPreviewScene } from "./scenes/HudPreviewScene";
 import { FlightSchoolScene } from "./scenes/FlightSchoolScene";
 import { bootstrapPlayerPreferences } from "./ui/settings/settingsRuntime";
+import { prepareBoot } from "./compat/bootCompat";
+import { guardWebGlStartup } from "./compat/webglFallback";
 
-const forceCanvas =
-  typeof window !== "undefined" &&
-  (window.location.search.includes("renderer=canvas") ||
-    (typeof navigator !== "undefined" && navigator.webdriver === true));
+// Probes WebGL/Canvas/APIs and shows the HTML notice if the browser can't play.
+// Canvas is chosen for ?renderer=canvas / webdriver (e2e) and as a no-WebGL fallback.
+const boot = prepareBoot(window);
 const config: Phaser.Types.Core.GameConfig = {
-  type: forceCanvas ? Phaser.CANVAS : Phaser.AUTO, // AUTO will try WebGL first, then Canvas
+  type: boot.renderer === "canvas" ? Phaser.CANVAS : Phaser.AUTO, // AUTO will try WebGL first, then Canvas
   width: 1280,
   height: 720,
   parent: "game-container",
@@ -86,20 +87,16 @@ const config: Phaser.Types.Core.GameConfig = {
   },
 };
 
-const game = new Phaser.Game(config);
-// Settings (audio buses, palettes, key profile, camera comfort) and the
-// local telemetry log apply from boot, before any scene reads them.
-bootstrapPlayerPreferences(game);
-
-// Expose for debugging and E2E testing in non-production builds
-declare global {
-  interface Window {
-    game: Phaser.Game;
-  }
-}
-if (import.meta.env.DEV) {
+/** Wires a freshly created game: player preferences, then the DEV-only debugging hooks. */
+function adoptGame(game: Phaser.Game): void {
+  // Settings (audio buses, palettes, key profile, camera comfort) and the
+  // local telemetry log apply from boot, before any scene reads them.
+  bootstrapPlayerPreferences(game);
+  // Expose for debugging and E2E testing in non-production builds
+  if (!import.meta.env.DEV) return;
   window.game = game;
   void import("./debug/verifyHooks").then((m) => m.installVerifyHooks(game));
+  void import("./debug/perfHooks").then((m) => m.installPerfHooks(game));
   void import("./debug/SessionLogger").then(({ SessionLogger }) => {
     if (!SessionLogger.isEnabled()) return;
     const logger = new SessionLogger();
@@ -110,4 +107,25 @@ if (import.meta.env.DEV) {
       }
     ).__sessionLogger = logger;
   });
+}
+
+declare global {
+  interface Window {
+    game: Phaser.Game;
+  }
+}
+
+const game = boot.start ? new Phaser.Game(config) : undefined;
+if (game) {
+  adoptGame(game);
+  // A WebGL context that fails while Phaser boots would leave a black page: restart on Canvas.
+  if (boot.renderer === "auto") {
+    guardWebGlStartup(window, game.events, () => {
+      // The failed game never finished booting, so destroy() leaves its canvas behind.
+      const staleCanvas = game.canvas;
+      game.destroy(true);
+      staleCanvas.remove();
+      adoptGame(new Phaser.Game({ ...config, type: Phaser.CANVAS }));
+    });
+  }
 }

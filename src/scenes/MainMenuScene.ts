@@ -16,7 +16,13 @@ import {
   MENU_BUTTON_HEIGHT,
 } from "../ui/MenuSelection";
 import { punch } from "../ui/UIJuice";
-import { openBugReport } from "../utils/BugReport";
+import { openFeedbackDialog } from "../ui/feedback/feedbackDialog";
+import { openWelcomeDialog } from "../ui/welcome/welcomeDialog";
+import {
+  pageWelcomeEnvironment,
+  shouldAutoOpenWelcome,
+} from "../ui/welcome/welcomeState";
+import { addFooterLinks } from "../ui/menu/MenuFooterLinks";
 import { BUILD_INFO, formatVersionTag } from "../buildInfo";
 import { addFooterHint, addMenuBackdrop } from "../ui/menu/MenuScaffold";
 import {
@@ -93,6 +99,7 @@ export class MainMenuScene extends Phaser.Scene {
     this.setupInput();
     this.playEntrance(flightSchool.container);
     fadeInMenu(this);
+    if (shouldAutoOpenWelcome(pageWelcomeEnvironment())) this.openWelcome();
   }
 
   /** Main menu → Flight School (card button or F). */
@@ -152,18 +159,31 @@ export class MainMenuScene extends Phaser.Scene {
 
     // Pointer-only, deliberately outside the keyboard-navigable menuItems array
     // so it doesn't shift MENU_POSITIONS/ArrowDown-count assumptions in e2e tests.
-    this.add
-      .text(MAIN_MENU_LAYOUT.margin, height - 16, "REPORT A BUG", muted)
-      .setLetterSpacing(1.5)
-      .setOrigin(0, 0.5)
-      .setInteractive({ useHandCursor: true })
-      .on("pointerover", function (this: Phaser.GameObjects.Text) {
-        this.setColor(MAIN_MENU_LAYOUT.linkHoverColor);
-      })
-      .on("pointerout", function (this: Phaser.GameObjects.Text) {
-        this.setColor(muted.color);
-      })
-      .on("pointerdown", () => openBugReport({ sceneKey: "MainMenuScene" }));
+    addFooterLinks(
+      this,
+      [
+        { label: "SEND FEEDBACK", onPress: () => this.openFeedback() },
+        { label: "TESTER INFO", onPress: () => this.openWelcome() },
+      ],
+      { x: MAIN_MENU_LAYOUT.margin, y: height - 16 },
+      {
+        style: muted,
+        hoverColor: MAIN_MENU_LAYOUT.linkHoverColor,
+        letterSpacing: 1.5,
+      },
+    );
+  }
+
+  private openFeedback(): void {
+    openFeedbackDialog({ game: this.game, sceneKey: this.scene.key });
+  }
+
+  /** Tester welcome: first launch (once) and from the TESTER INFO link. */
+  private openWelcome(): void {
+    openWelcomeDialog({
+      onFlightSchool: () => this.startFlightSchool(),
+      onFeedback: () => this.openFeedback(),
+    });
   }
 
   private createMenuItems(): void {

@@ -53,6 +53,8 @@ import { CodexSearchField } from "../ui/encyclopedia/CodexSearchField";
 const BACKDROP_TEXTURE = "starfield_deep";
 /** Scene returned to on BACK / ESC. */
 const MENU_SCENE = "MainMenuScene";
+/** Footer hint size (px) — nothing under 12 px at 1280x720. */
+const FOOTER_FONT_PX = 12;
 /** Characters that type into the search field. */
 const SEARCH_CHAR = /^[\p{L}\p{N} '-]$/u;
 /** Longest search query kept. */
@@ -92,10 +94,11 @@ export class EncyclopediaScene extends Phaser.Scene {
       footerKeys([
         ["← →", "section"],
         ["↑ ↓", "browse"],
+        ["Q E", "tab"],
         ["TYPE", "search"],
         ["ESC", "back"],
       ]),
-    );
+    ).setFontSize(FOOTER_FONT_PX);
     this.sectionTabs = new EncyclopediaChipRow(
       this,
       regions.tabs,
@@ -103,6 +106,7 @@ export class EncyclopediaScene extends Phaser.Scene {
         value: s.id,
         label: s.label,
         accent: HOLO_PALETTE.accent,
+        tip: "codex.section_tabs" as const,
       })),
       (section) => this.setSection(section),
     );
@@ -113,7 +117,9 @@ export class EncyclopediaScene extends Phaser.Scene {
     this.shipList = new EncyclopediaShipList(this, regions.list, (id) =>
       this.select(id),
     );
-    this.detailPanel = new EncyclopediaDetailPanel(this, regions.detail);
+    this.detailPanel = new EncyclopediaDetailPanel(this, regions.detail, () =>
+      this.tabKeysActive(),
+    );
     this.textPanel = new CodexTextPanel(this, regions.detail);
     this.section = "ships";
     this.activeFaction = null;
@@ -221,12 +227,18 @@ export class EncyclopediaScene extends Phaser.Scene {
     this.setSection(CODEX_SECTIONS[next]!.id);
   }
 
+  /** Q / E switch the ship detail tabs while no search is being typed. */
+  private tabKeysActive(): boolean {
+    return this.section === "ships" && this.query === "";
+  }
+
   /** @param event - A key press: typed characters edit the search. */
   private onTyped(event: KeyboardEvent): void {
     // Phaser can re-emit queued native events across scene steps.
     if (this.typedEvents.has(event)) return;
     this.typedEvents.add(event);
     if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (/^[qe]$/i.test(event.key) && this.tabKeysActive()) return;
     if (event.key === "Backspace") this.setQuery(this.query.slice(0, -1));
     else if (event.key === "Delete") this.setQuery("");
     else if (SEARCH_CHAR.test(event.key)) this.setQuery(this.query + event.key);

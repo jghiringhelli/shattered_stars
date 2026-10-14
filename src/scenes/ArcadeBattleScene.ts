@@ -130,6 +130,7 @@ import {
 } from "../systems/PerformanceSystem";
 import { installBattleSpace } from "../rendering/spaceMap/installBattleSpace";
 import { stepMotion } from "../arcade/systems/ShipMotion";
+import { planFixedSteps } from "../arcade/systems/FixedStepPlan";
 import {
   applyPilotFlightInput,
   onPilotCycleCommitted,
@@ -152,7 +153,10 @@ const FLIGHT_EDGES: readonly FlightEdge[] = [
   "TALLON_LEFT",
   "TALLON_RIGHT",
   "BOOST",
+  "BARREL_ROLL_LEFT",
+  "BARREL_ROLL_RIGHT",
 ];
+import { cooldownsOf } from "../input/flightCooldowns";
 import { audioManager } from "../audio/AudioManager";
 import { hullFractionOf } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
@@ -368,6 +372,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
     "SEGNOR_RIGHT",
     "TALLON_LEFT",
     "TALLON_RIGHT",
+    "BARREL_ROLL_LEFT",
+    "BARREL_ROLL_RIGHT",
     "CREW_CYCLE",
     "COMMANDER_ORDER_1",
     "COMMANDER_ORDER_2",
@@ -417,10 +423,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
   /** Flight-input memory (gestures, tap vs hold steering) of each human-flown ship. */
   private pilotControls = new Map<string, PilotControlState>();
   /**
-   * When true, pressing left+right simultaneously triggers a barrel roll.
-   * Read from settings on create(); exposed as a toggle for accessibility / mobile.
+   * Opt-in accessibility alternative: left+right pressed together also
+   * barrel-rolls. Off by default — ← ← / → → (a double-tap) is the roll.
    */
-  private allowChordBarrelRoll = true;
+  private allowChordBarrelRoll = false;
 
   /**
    * Virtual camera position in world-space.
@@ -873,12 +879,16 @@ export class ArcadeBattleScene extends Phaser.Scene {
       this.pendingEdgeIntents.add("THRUST_DOWN");
     this.prevThrustDownHeld = thrustDownHeld;
 
-    // Clamp to prevent spiral-of-death on tab-switch or long pause
-    this.accumulator += Math.min(deltaMs, 250) * this.debugTimeScale;
-
-    while (this.accumulator >= ArcadeBattleScene.FIXED_DT && !this.gameEnded) {
+    // Capped catch-up: an overloaded machine slows the sim down instead of spiralling (FixedStepPlan)
+    const plan = planFixedSteps(
+      this.accumulator,
+      deltaMs,
+      this.debugTimeScale,
+      ArcadeBattleScene.FIXED_DT,
+    );
+    this.accumulator = plan.remainderMs;
+    for (let tick = 0; tick < plan.ticks && !this.gameEnded; tick++) {
       this.tickLogic(ArcadeBattleScene.FIXED_DT);
-      this.accumulator -= ArcadeBattleScene.FIXED_DT;
     }
 
     // Render-only updates: every real frame (not fixed-step)
@@ -1244,6 +1254,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
         right: keys.held("STEER_RIGHT"),
         up: keys.held("THRUST_UP"),
         down: keys.held("THRUST_DOWN"),
+        maneuver: keys.held("MANEUVER"),
         edges,
         nowMs: this.battleClockMs,
         deltaMs,
@@ -1254,6 +1265,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.pilotControls.set(ship.id, result.pilot);
     this.applyFlightResult(ship, result);
     if (ship.id !== this.viewShipId()) return;
+    InputManager.reportFlightCooldowns(cooldownsOf(result.motion.control));
     this.weapons?.showRefusals(result.refusals, ship);
     matchStats.record({ kind: "flight", events: result.events });
     matchStats.record(stressEvent(result.stress, deltaMs));

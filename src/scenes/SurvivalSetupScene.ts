@@ -10,7 +10,6 @@
 
 import Phaser from "phaser";
 import { createHoverButton, createToggleButton } from "../ui/ButtonFactory";
-import { quickTipLine } from "../ui/ControlsReference";
 import { FACTION_COLORS, type FactionId } from "../config";
 import { getShipDefinition } from "../data/ShipDefinitions";
 import { starterChoices } from "../data/survival/metaUnlocks";
@@ -31,14 +30,19 @@ import {
   showUnlockShop,
 } from "../ui/survival/setupRunMenus";
 import {
-  cycleQuickBuild,
   selectionFor,
   type QuickBuildSelection,
 } from "../arcade/systems/QuickBuildChoice";
-import { renderQuickBuildChooser } from "../ui/QuickBuildChooser";
+import { factionTermId } from "../data/tooltips";
+import { attachTermTooltip } from "../ui/menu/HintTooltip";
+import { addTipZone, attachToggleTooltip } from "../ui/menu/tooltipTargets";
+import {
+  ShipDetailPanel,
+  type StagingSelection,
+} from "../ui/picker/ShipDetailPanel";
+import { buildSelection, starterCardRects } from "../ui/survival/starterModel";
 import {
   addBackButton,
-  addFooterHint,
   addMenuBackdrop,
   addMenuHeader,
   MENU_LAYOUT,
@@ -46,33 +50,24 @@ import {
 } from "../ui/menu/MenuScaffold";
 import { renderSurvivalShipCard } from "../ui/survival/survivalShipCard";
 import { drawAccentRule } from "../ui/menu/holoChrome";
-import { holoFont } from "../ui/theme/holoFont";
-import {
-  factionAccent,
-  HOLO_PALETTE,
-  HOLO_TYPE_SCALE,
-} from "../ui/theme/HoloTheme";
-import { toCssColor } from "../ui/theme/colorMath";
+import { factionAccent, HOLO_PALETTE } from "../ui/theme/HoloTheme";
 import { audioManager } from "../audio/AudioManager";
 
 /** Screen grid. */
 const SETUP_LAYOUT = {
-  factionCaptionY: 112,
-  factionRowY: 140,
+  factionRowY: 124,
   factionSpacing: 220,
   factionWidth: 200,
   factionHeight: 36,
-  cardsTop: 170,
-  cardWidth: 320,
-  cardHeight: 200,
-  cardGap: 32,
-  /** Widest the ship-card row may get (px). */
-  cardsMaxWidth: 1200,
-  chooserY: 388,
-  chooserWidth: 520,
+  cardsTop: 152,
+  cardHeight: 40,
+  /** The detail panel under the ship cards (OVERVIEW / LOADOUT / BUILDS). */
+  detailTop: 208,
+  detailHeight: 376,
+  detailWidth: 1024,
   launchInset: 60,
   launchWidth: 220,
-  launchHeight: 52,
+  launchHeight: 48,
   /** CONTINUE / ABANDON sit this far left / right of LAUNCH. */
   sideButtonOffset: 280,
   sideButtonWidth: 230,
@@ -96,7 +91,15 @@ export class SurvivalSetupScene extends Phaser.Scene {
   private factionButtons: Phaser.GameObjects.Container[] = [];
   /** The flagship's quick-build pick (default until the player cycles it). */
   private playerBuilds: QuickBuildSelection | null = null;
-  private quickBuildObjects: Phaser.GameObjects.GameObject[] = [];
+  private detailPanel!: ShipDetailPanel;
+  /** What the detail panel reads and writes: the flagship and its build. */
+  private readonly staging: StagingSelection = {
+    getSelectedShipId: () => this.selectedShipId,
+    getSelectedLoadoutId: () => this.playerBuilds?.loadoutIds[0] ?? null,
+    selectLoadout: (loadoutId) => {
+      this.playerBuilds = buildSelection(this.selectedShipId, loadoutId);
+    },
+  };
   private header!: MenuHeader;
   private service!: RoguelikeRunService;
   /** Seed, ascension, unlocks and history row. */
@@ -108,7 +111,6 @@ export class SurvivalSetupScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.quickBuildObjects = [];
     this.shipCardObjects = [];
     this.service = runServiceOf(this.registry);
     this.selectedShipId = this.starters()[0]!;
@@ -116,22 +118,25 @@ export class SurvivalSetupScene extends Phaser.Scene {
     audioManager.playSubmenuMusic();
     this.header = addMenuHeader(this, {
       title: "Survival",
-      subtitle:
-        "Three sectors, one fleet. Plot your route, collect relics, repair what you can — the Nexus flagship waits at the end.",
       accent: factionAccent(this.selectedFaction),
     });
+    addTipZone(
+      this,
+      null,
+      this.header.title.getBounds(),
+      "survival.mode",
+    );
     addBackButton(this, () => this.scene.start("MainMenuScene"));
     this.input.keyboard?.on("keydown-ESC", () => {
       if (!this.controls.isTyping && !this.panel.isOpen)
         this.scene.start("MainMenuScene");
     });
-    this.add
-      .text(this.scale.width / 2, SETUP_LAYOUT.factionCaptionY, "FACTION", {
-        ...holoFont(HOLO_TYPE_SCALE.caption.size, "600"),
-        color: toCssColor(HOLO_PALETTE.textSecondary),
-      })
-      .setLetterSpacing(HOLO_TYPE_SCALE.caption.letterSpacing * 2)
-      .setOrigin(0.5);
+    this.detailPanel = new ShipDetailPanel(
+      this,
+      () => {},
+      "survivalStarter",
+      () => !this.controls?.isTyping && !this.panel?.isOpen,
+    );
     this.createFactionRow();
     this.renderShipChoices();
     this.controls = new RunSetupControls(this, this.service.meta.maxAscension, {
@@ -194,8 +199,8 @@ export class SurvivalSetupScene extends Phaser.Scene {
     const centerX = this.scale.width / 2;
     const spacing = SETUP_LAYOUT.factionSpacing;
     const startX = centerX - ((FACTION_ORDER.length - 1) * spacing) / 2;
-    this.factionButtons = FACTION_ORDER.map((faction, i) =>
-      createToggleButton(
+    this.factionButtons = FACTION_ORDER.map((faction, i) => {
+      const button = createToggleButton(
         this,
         startX + i * spacing,
         SETUP_LAYOUT.factionRowY,
@@ -210,8 +215,10 @@ export class SurvivalSetupScene extends Phaser.Scene {
           selectedFont: "600 13px",
         },
         () => this.selectFaction(faction),
-      ),
-    );
+      );
+      attachToggleTooltip(this, button, factionTermId(faction));
+      return button;
+    });
   }
 
   private selectFaction(faction: FactionId): void {
@@ -242,24 +249,17 @@ export class SurvivalSetupScene extends Phaser.Scene {
   private renderShipChoices(): void {
     this.shipCardObjects.forEach((o) => o.destroy());
     this.shipCardObjects = [];
-    const { cardGap } = SETUP_LAYOUT;
     const choices = this.starters();
-    const cardWidth = Math.min(
-      SETUP_LAYOUT.cardWidth,
-      (SETUP_LAYOUT.cardsMaxWidth - (choices.length - 1) * cardGap) /
-        choices.length,
-    );
-    const totalWidth =
-      choices.length * cardWidth + (choices.length - 1) * cardGap;
-    const startX = this.scale.width / 2 - totalWidth / 2 + cardWidth / 2;
+    const rects = starterCardRects(choices.length, this.scale.width);
     choices.forEach((shipId, i) => {
       const def = getShipDefinition(shipId);
-      if (!def) return;
+      const rect = rects[i];
+      if (!def || !rect) return;
       this.shipCardObjects.push(
         ...renderSurvivalShipCard(this, {
-          x: startX + i * (cardWidth + cardGap),
+          x: rect.x,
           top: SETUP_LAYOUT.cardsTop,
-          width: cardWidth,
+          width: rect.width,
           height: SETUP_LAYOUT.cardHeight,
           def,
           selected: shipId === this.selectedShipId,
@@ -271,34 +271,25 @@ export class SurvivalSetupScene extends Phaser.Scene {
         }),
       );
     });
-    this.renderQuickBuildChoice();
+    this.renderDetailPanel(choices);
   }
 
   /**
-   * The flagship's quick-build chooser below the ship cards. Defaults to
-   * what the run would hand out, so launching untouched changes nothing.
+   * The detail panel under the cards (flagship + build). The build defaults
+   * to what the run would hand out, so launching untouched changes nothing.
    */
-  private renderQuickBuildChoice(): void {
-    const centerX = this.scale.width / 2;
-    this.quickBuildObjects.forEach((o) => o.destroy());
+  private renderDetailPanel(choices: readonly string[]): void {
     this.playerBuilds = selectionFor([this.selectedShipId], this.playerBuilds);
-    const chooser = renderQuickBuildChooser(this, {
-      x: centerX - SETUP_LAYOUT.chooserWidth / 2,
-      y: SETUP_LAYOUT.chooserY,
-      width: SETUP_LAYOUT.chooserWidth,
-      heading: "FLAGSHIP QUICK BUILD",
-      shipId: this.selectedShipId,
-      loadoutId: this.playerBuilds.loadoutIds[0] ?? null,
-      name: "survivalQuickBuild",
-      accentColor: factionAccent(this.selectedFaction),
-      compact: true,
-      onCycle: (step) => {
-        if (!this.playerBuilds) return;
-        this.playerBuilds = cycleQuickBuild(this.playerBuilds, 0, step);
-        this.renderQuickBuildChoice();
-      },
-    });
-    this.quickBuildObjects = chooser.objects;
+    const ships = choices.flatMap((id) => getShipDefinition(id) ?? []);
+    const { detailWidth, detailTop, detailHeight } = SETUP_LAYOUT;
+    this.detailPanel.render(
+      ships,
+      this.staging,
+      (this.scale.width - detailWidth) / 2,
+      detailTop,
+      detailWidth,
+      detailHeight,
+    );
   }
 
   private createLaunchButton(): void {
@@ -317,14 +308,6 @@ export class SurvivalSetupScene extends Phaser.Scene {
       () => this.launchRun(),
     );
     btn.setDepth(10);
-    addFooterHint(
-      this,
-      quickTipLine([
-        { label: "Steer", intents: ["STEER_LEFT", "STEER_RIGHT"] },
-        { label: "Throttle", intents: ["THRUST_UP", "THRUST_DOWN"] },
-        { label: "Weapon", intents: [] },
-        { label: "Pause", intents: ["PAUSE"] },
-      ]),
-    ).setDepth(10);
+    attachTermTooltip(this, btn, "survival.launch");
   }
 }

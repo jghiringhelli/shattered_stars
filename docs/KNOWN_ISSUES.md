@@ -1,12 +1,26 @@
-# Known issues (alpha)
+# Known issues (public beta)
 
-Shattered Stars is a free-to-play **alpha**. These are the problems we already know about. If you hit something not listed, use **REPORT A BUG** (main menu or pause menu). It opens a pre-filled GitHub issue that includes your build and recent events.
+Shattered Stars is a free-to-play **beta**. These are the problems we already know about, checked against build `v0.1.0 BETA` (re-verified 2026-10-14 by code, tests and a scripted tour of every menu scene and battle mode: no console errors, no texture warnings). If you hit something not listed, use **SEND FEEDBACK** (main-menu footer, pause menu or Settings › Advanced); see [TESTER_GUIDE.md](TESTER_GUIDE.md). What the game stores and sends is in [PRIVACY.md](PRIVACY.md).
+
+## Browsers and devices
+
+- **Phones and tablets are not supported.** Touch steering and fire work in menus and flight, but squad mark, target and weapon cycling have no touch control and the HUD text is tiny. Touch-only devices see a one-time notice.
+- Supported: Chrome and Edge 90+, Firefox 90+, Safari 15+ on desktop, 1280×720 or larger (smaller windows letterbox). Without WebGL the game switches to Canvas ("compatibility mode") and runs slower. Browsers older than those versions show a warning, or a blocking notice if they lack Canvas or required APIs.
+- Performance: 60 FPS on an integrated Intel GPU in the largest battles (Epic reinforcements dips to about 30 FPS in the worst 1 % of frames). Weak or old GPUs and software rendering are much slower; Epic is the heaviest mode.
+- Switching tabs or minimising the window does **not** pause a battle (the simulation does not race ahead when you return, but the fight goes on). Pause with Esc/P first.
+- Safari/WebKit builds without Web Audio play silently (the game logs one warning).
+
+## Controls
+
+- **Barrel roll is a double-tap of one arrow** (← ← or → →, each tap short, within about a fifth of a second). Alternating ← → is plain steering. If the roll is recharging, you are stressed or the ship lacks it, the double-tap just steers and nothing flashes; watch the ROLL row of the status panel.
+- **A lone tap of the Maneuver key (Z / LT) queues its Snap turn about a fifth of a second late**, because a second press would make it a Knife roll. Double-tap **↓↓** for a Snap turn without that wait.
+- On a touchscreen the left stick rolls with a double-tap on its left/right half; a slow double-tap (over about a fifth of a second apart) reads as two single taps.
 
 ## Saves and settings
 
 - Progress, settings and campaign saves live in your browser's local storage. Clearing site data, or using another browser or device, starts you fresh. There are no cloud saves.
-- The campaign Chronicle (shared story flags, crossover canon, act completion, your ending) is one more local-storage record. Resetting a faction campaign does not clear it; the Chronicle tab\u0027s FREE ORDER switch lifts the "complete Act N−1 in N factions" locks if you want to play out of order.
-- In private windows, or with storage blocked ("block all cookies"), the game still runs, but nothing is saved after you close the tab. A banner tells you when this happens.
+- The campaign Chronicle (shared story flags, crossover canon, act completion, your ending) is one more local record. Resetting a faction campaign does not clear it; the Chronicle tab's FREE ORDER switch lifts the "complete Act N−1 in N factions" locks if you want to play out of order.
+- In private windows, or with storage blocked ("block all cookies"), the game still runs, but nothing is saved after you close the tab. A banner tells you.
 
 ## Loading
 
@@ -15,32 +29,33 @@ Shattered Stars is a free-to-play **alpha**. These are the problems we already k
 
 ## Controls
 
-- Gamepad commander orders (capital ships) share LT / RT / D-pad ← / → with Knife and Hook. Capital ships can't fly those, so pressing an order may also flash a "NOT ON DIAL" note. Rebind them in **Settings › Gamepad** if you prefer.
+- Gamepad commander orders (capital ships) share LT / RT / D-pad ← / → with the Maneuver button (LT). Capital ships can't fly maneuvers, so pressing an order may also flash a "NOT ON DIAL" note. Rebind them in **Settings › Gamepad** if you prefer.
 - Gamepad barrel roll is a right-stick flick ← / →, and Snap turn is a right-stick flick ↓. Barrel roll, boost and the other specials work only if the ship has them on its dial or action bar, and only while the pilot isn't stressed.
 - The Boss Raid setup screen ("Capital Assault") ignores ESC; use its BACK button.
 
 ## Gameplay and balance
 
-- Balance is still being tuned: role pricing, difficulty steps (Normal → Hard is a cliff, Brutal is about the same as Hard) and some Ace Duel presets.
-- Some pilots and upgrade cards are not reachable yet, and a few card texts don't match their real-time effect.
+- Balance is still being tuned. Squad results put the five factions close together overall, but some matchups are still lopsided (Free Confederation and Synthetic Collective are the weakest in some classic and reinforced pairings; scenario Hard is much harder than Normal). Difficulty steps are Easy ≈ 80 %, Normal ≈ 50 %, Hard ≈ 30 %, Brutal ≈ 15 % win rate for an average bot player. Report anything that feels off with the numbers (SEND FEEDBACK › Balance).
 - There are no collisions, obstacles or critical hits in any mode. This is a design decision for now.
+- Combat is real time on a 500 ms maneuver cycle with one attack per cycle per ship; fights between equal pilots take about 30–60 s. Survival nodes can feel quick or slow depending on the enemy mix.
 
 ## Online
 
-- Online play is an alpha feature and needs the relay server to be up. See [MULTIPLAYER.md](../MULTIPLAYER.md).
+- Online play is a beta feature and needs the relay server to be up. When it isn't, the lobby says so and offers **PLAY OFFLINE INSTEAD**. A server that has been idle can take about 30 s to wake up. See [ONLINE.md](ONLINE.md).
+- Players are only matched with the same game build: reload the page if the lobby says your version is out of date.
+- Deploys and restarts of the server end running matches (rooms live in memory). Nobody can pause a shared battle: Pause offers to leave the match.
 
 ## Audio
 
-- If a music track isn't available yet, a short synthesized drone plays in its place.
+- 17 music tracks ship (Suno and ACE-Step). A track that fails to load is replaced by a short synthesized drone. Browsers start audio only after your first click or key press, so the menu is silent until then.
 
 ## Cosmetic
 
 - Long ship names are cut off with "…" on squad-builder cards.
-- Restarting a scene can log a harmless "Texture key already in use" console warning.
+- A few named characters (Kronos, Ilsandre, Blackmaw, Vosk) have no portrait art yet and borrow a generic one.
 
 ## Campaign
 
-- The Coalition (Acts IV-V) is led by one hero chosen when it opens; only that hero\u0027s two powers are on the bar. The other heroes fly as allied squads.
+- The Coalition (Acts IV-V) is led by one hero chosen when it opens; only that hero's two powers are on the bar. The other heroes fly as allied squads.
 - Briefing/dialogue beats cannot play after a mission is won, so a few "after the fight" lines (for example the Brannoc ceasefire call) fire at a late kill instead; the rest are in the debrief.
-- A few named characters (Ironwing Chen, Kronos, Ilsandre, Blackmaw, Vosk) borrow a generic portrait until their art exists.
 - Music cues for the Broadcast click-tone and the three-note Tide motif use the "tension" cue until dedicated cues exist.

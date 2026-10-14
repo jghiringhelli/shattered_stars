@@ -55,11 +55,12 @@ import {
   stressModifiersOf,
 } from "../arcade/systems/QuickBuildEquip";
 import {
-  cycleQuickBuild,
   selectionFor,
   type QuickBuildSelection,
 } from "../arcade/systems/QuickBuildChoice";
-import { renderQuickBuildChooser } from "../ui/QuickBuildChooser";
+import { pickQuickBuild } from "./duel/duelSetupModel";
+import { openDuelTabById, stepDuelTab } from "./duel/duelSetupChrome";
+import { bindTabKeys } from "../ui/menu/DetailTabs";
 import { SettingsDefaultPick } from "../ui/menu/setupDefaults";
 import { defaultDifficulty } from "../systems/SettingsStorage";
 import { dogfightBriefing, showSortieBriefing } from "../ui/briefing";
@@ -198,10 +199,6 @@ type MatchFormat = "best_of_3" | "best_of_5";
 /** The human's side key (SquadMark / DuelBotCrew); the AI flies as "ai". */
 const PLAYER_SIDE = "player";
 
-/** The player's quick-build chooser box on the setup screen (left of the "Your ship" panel). */
-const QUICK_BUILD_CHOOSER_X = 24;
-const QUICK_BUILD_CHOOSER_Y = 226;
-const QUICK_BUILD_CHOOSER_W = 290;
 /** Round time limit (s). */
 const ROUND_TIME_S = 180;
 const MS_PER_S = 1000;
@@ -258,6 +255,11 @@ export class DogfightScene extends Phaser.Scene {
    * made for another ship is ignored (see selectionFor).
    */
   private playerBuilds: QuickBuildSelection | null = null;
+  /** Ship page each side's list was paged to on the setup (null = follow the selected ship). */
+  private shipPages: Record<"player" | "enemy", number | null> = {
+    player: null,
+    enemy: null,
+  };
 
   // Game state
   private isPaused = false;
@@ -381,6 +383,13 @@ export class DogfightScene extends Phaser.Scene {
       this.showSetupScreen();
       // The one back affordance (ESC / gamepad B / right-click), setup only.
       bindMenuBack(this, () => this.scene.start("MainMenuScene"), {
+        isActive: () => this.isSetupPhase,
+      });
+      bindTabKeys(this, {
+        step: (direction) => {
+          stepDuelTab(direction);
+          this.showSetupScreen();
+        },
         isActive: () => this.isSetupPhase,
       });
     }
@@ -710,6 +719,7 @@ export class DogfightScene extends Phaser.Scene {
     // destroy them individually instead.
     this.setupObjects.forEach((o) => o.destroy());
     this.setupObjects = [];
+    this.playerBuilds = selectionFor([this.playerShipId], this.playerBuilds);
     renderDogfightSetup(
       this,
       {
@@ -719,11 +729,13 @@ export class DogfightScene extends Phaser.Scene {
         playerShipId: this.playerShipId,
         enemyShipId: this.enemyShipId,
         difficulty: this.difficulty,
+        playerLoadoutId: this.playerBuilds.loadoutIds[0] ?? null,
+        enemyLoadoutId: this.quickBuildFor(this.enemyShipId, "ai"),
+        shipPages: this.shipPages,
       },
       this.setupActions(),
       (obj) => this.track(obj),
     );
-    this.renderPlayerQuickBuild();
   }
 
   /**
@@ -740,11 +752,13 @@ export class DogfightScene extends Phaser.Scene {
       selectFormat: (format) => choose(() => (this.matchFormat = format)),
       selectShip: (owner, shipId) =>
         choose(() => {
+          this.shipPages = { ...this.shipPages, [owner]: null };
           if (owner === "player") this.playerShipId = shipId;
           else this.enemyShipId = shipId;
         }),
       selectFaction: (owner, faction) =>
         choose(() => {
+          this.shipPages = { ...this.shipPages, [owner]: null };
           const firstShip = getShipsByFaction(faction)[0]?.id ?? "";
           if (owner === "player") {
             this.playerFaction = faction;
@@ -756,6 +770,16 @@ export class DogfightScene extends Phaser.Scene {
         }),
       selectDifficulty: (difficulty) =>
         choose(() => (this.difficulty = difficulty)),
+      selectBuild: (loadoutId) =>
+        choose(() => {
+          if (this.playerBuilds)
+            this.playerBuilds = pickQuickBuild(this.playerBuilds, 0, loadoutId);
+        }),
+      selectTab: (tab) => choose(() => openDuelTabById(tab)),
+      pageShips: (owner, page) =>
+        choose(() => {
+          this.shipPages = { ...this.shipPages, [owner]: page };
+        }),
       start: () => this.briefSortie(),
       back: () => this.scene.start("MainMenuScene"),
     };
@@ -778,31 +802,6 @@ export class DogfightScene extends Phaser.Scene {
       accent: factionAccent(this.playerFaction),
       onLaunch: () => this.startMatch(),
     });
-  }
-
-  /**
-   * The player's quick-build chooser, left of the ship list: cycles the
-   * selected ship's quick builds (pilot, ability summary, price). Defaults
-   * to what assignQuickBuilds would give, so untouched it changes nothing.
-   */
-  private renderPlayerQuickBuild(): void {
-    this.playerBuilds = selectionFor([this.playerShipId], this.playerBuilds);
-    const chooser = renderQuickBuildChooser(this, {
-      x: QUICK_BUILD_CHOOSER_X,
-      y: QUICK_BUILD_CHOOSER_Y,
-      width: QUICK_BUILD_CHOOSER_W,
-      heading: "YOUR QUICK BUILD",
-      shipId: this.playerShipId,
-      loadoutId: this.playerBuilds.loadoutIds[0] ?? null,
-      name: "dogfightQuickBuild",
-      accentColor: 0x44ff44,
-      onCycle: (step) => {
-        if (!this.playerBuilds) return;
-        this.playerBuilds = cycleQuickBuild(this.playerBuilds, 0, step);
-        this.showSetupScreen();
-      },
-    });
-    chooser.objects.forEach((obj) => this.track(obj));
   }
 
   /**

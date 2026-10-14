@@ -16,14 +16,24 @@ import type { Playstyle } from "../roleHints/playstyleCatalog";
 import { ACTION_TERMS } from "./actionTerms";
 import { BATTLE_TERMS, DIFFICULTY_TERMS, FACTION_TERMS } from "./battleTerms";
 import { ROLE_TERMS, STYLE_TERMS } from "./roleTerms";
+import { DUEL_CODEX_TERMS } from "./duelCodexTerms";
+import { PICK_TERMS } from "./pickTerms";
 import { SLOT_TERMS } from "./slotTerms";
 import { STAT_TERMS } from "./statTerms";
+import { SURVIVAL_CAMPAIGN_TERMS } from "./survivalCampaignTerms";
 import type { Locale, TermEntry, TermText } from "./termTypes";
 import { UI_TERMS } from "./uiTerms";
 
 export type { Locale, TermEntry, TermGlyph, TermText } from "./termTypes";
 
-const STATIC_TERMS = { ...STAT_TERMS, ...UI_TERMS, ...BATTLE_TERMS };
+const STATIC_TERMS = {
+  ...STAT_TERMS,
+  ...UI_TERMS,
+  ...BATTLE_TERMS,
+  ...PICK_TERMS,
+  ...SURVIVAL_CAMPAIGN_TERMS,
+  ...DUEL_CODEX_TERMS,
+};
 type StaticTermId = keyof typeof STATIC_TERMS;
 
 /** Every valid term id. */

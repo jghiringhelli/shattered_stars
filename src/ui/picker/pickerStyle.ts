@@ -25,9 +25,9 @@ export const PICKER_TYPE = {
   /** Secondary copy (descriptions, lore). */
   small: { size: 12, weight: "400", letterSpacing: 0 },
   /** Uppercase section captions. */
-  caption: { size: 11, weight: "600", letterSpacing: 1.5 },
-  /** Chips, tags and fine print (never below 10 px). */
-  micro: { size: 10, weight: "600", letterSpacing: 1 },
+  caption: { size: 12, weight: "600", letterSpacing: 1 },
+  /** Chips, tags and fine print (never below 12 px at 1280x720). */
+  micro: { size: 12, weight: "600", letterSpacing: 0.5 },
   /** Numbers (points, stat values). */
   numeric: { size: 14, weight: "600", letterSpacing: 0.5 },
 } as const;
@@ -36,7 +36,7 @@ export const PICKER_TYPE = {
 export type PickerTextRole = keyof typeof PICKER_TYPE;
 
 /** Smallest font size any fitted text may shrink to. */
-export const MIN_FONT_SIZE = 10;
+export const MIN_FONT_SIZE = 12;
 /** Smallest size a ship name may shrink to before it is truncated. */
 export const MIN_NAME_SIZE = 12;
 /** Letter spacing HoloPressButton applies to its label. */

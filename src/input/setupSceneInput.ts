@@ -15,7 +15,9 @@ export function setupSceneInput(scene: Phaser.Scene): void {
   const profile = InputManager.getProfile();
   InputManager.registerAdapter(new KeyboardAdapter(scene, profile.keyboard));
   InputManager.registerAdapter(new GamepadAdapter(scene, profile.gamepad));
-  InputManager.registerAdapter(new TouchAdapter(scene, profile.touch));
+  InputManager.registerAdapter(new TouchAdapter(scene, profile.touch, () =>
+      InputManager.getFlightCooldowns(),
+    ));
 }
 
 export function teardownSceneInput(): void {

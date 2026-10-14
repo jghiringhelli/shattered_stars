@@ -13,7 +13,9 @@ import { HOLO_PALETTE, HOLO_SPACING, SIDE_COLORS } from "../theme/HoloTheme";
 /** Left column (filter chips + ship list) geometry. */
 export const ENCYCLOPEDIA_LAYOUT = {
   /** Width of the left column. */
-  listWidth: 344,
+  listWidth: 400,
+  /** Width of the search field sharing the filter row with the faction chips. */
+  searchWidth: 128,
   /** Gap between the left column and the detail panel. */
   columnGap: HOLO_SPACING.lg,
   /** Filter chip height. */
@@ -73,7 +75,7 @@ export function snakeToLabel(id: string): string {
 
 /** Screen regions of the encyclopedia. */
 export interface EncyclopediaRegions {
-  /** Section tabs (ships / pilots / upgrades / factions). */
+  /** Section tabs (ships / pilots / upgrades / factions / bestiary). */
   readonly tabs: HoloRect;
   readonly chips: HoloRect;
   /** Type-to-search field. */
@@ -103,14 +105,17 @@ export function encyclopediaRegions(
     width: L.listWidth,
     height: h,
   });
-  const chipsTop = top + L.chipHeight + L.chipGap;
-  const searchTop = chipsTop + L.chipHeight + L.chipGap;
-  const listTop = searchTop + L.chipHeight + L.chipToListGap;
+  const filterTop = top + L.chipHeight + L.chipGap;
+  const listTop = filterTop + L.chipHeight + L.chipToListGap;
   const detailX = left + L.listWidth + L.columnGap;
   return {
     tabs: row(top, L.chipHeight),
-    chips: row(chipsTop, L.chipHeight),
-    search: row(searchTop, L.chipHeight),
+    search: { ...row(filterTop, L.chipHeight), width: L.searchWidth },
+    chips: {
+      ...row(filterTop, L.chipHeight),
+      x: left + L.searchWidth + L.chipGap * 2,
+      width: L.listWidth - L.searchWidth - L.chipGap * 2,
+    },
     list: row(listTop, bottom - listTop),
     detail: {
       x: detailX,

@@ -134,7 +134,7 @@ export const HOLO_TYPE_SCALE: Readonly<Record<HoloTypeRole, HoloTypeStep>> = {
   title: { size: 28, weight: "300", letterSpacing: 4 },
   heading: { size: 18, weight: "600", letterSpacing: 2 },
   body: { size: 14, weight: "400", letterSpacing: 0.5 },
-  caption: { size: 11, weight: "600", letterSpacing: 1.5 },
+  caption: { size: 12, weight: "600", letterSpacing: 1.5 },
   numeric: { size: 16, weight: "600", letterSpacing: 0.5 },
 };
 

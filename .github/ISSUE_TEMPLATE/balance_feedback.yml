@@ -1,0 +1,62 @@
+name: Balance feedback
+description: A ship, upgrade, faction, difficulty level or mode feels too strong, too weak or unfair.
+title: "[Balance] "
+labels: ["balance"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Balance reports are most useful with numbers: what you flew, what you fought, how long it lasted. In the game, **SEND FEEDBACK** attaches your recent match summaries.
+  - type: input
+    id: version
+    attributes:
+      label: Build
+      description: The tag in the main-menu corner.
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - Skirmish
+        - Epic Format
+        - Survival
+        - Campaign
+        - Dogfight / Ace Duel
+        - Boss Raid
+        - Online
+    validations:
+      required: true
+  - type: input
+    id: subject
+    attributes:
+      label: Which ship, pilot, upgrade, faction or difficulty?
+    validations:
+      required: true
+  - type: dropdown
+    id: direction
+    attributes:
+      label: It feels
+      options:
+        - Too strong
+        - Too weak
+        - Too cheap (points)
+        - Too expensive (points)
+        - Too hard
+        - Too easy
+        - Boring / no counterplay
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: What happened?
+      description: Matchup, difficulty, how many tries, how long fights lasted.
+    validations:
+      required: true
+  - type: textarea
+    id: bundle
+    attributes:
+      label: Feedback bundle
+      description: Drag the downloaded `shattered-stars-feedback-*.json` here (optional).

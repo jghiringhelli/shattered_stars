@@ -6,10 +6,7 @@
  */
 
 import type { ShipDefinition, ShipRole } from "../../core/types";
-import {
-  ROLE_BLURBS,
-  ROLE_SECTION_ORDER,
-} from "../../data/roleHints/roleSections";
+import { ROLE_SECTION_ORDER } from "../../data/roleHints/roleSections";
 import { ROLE_PLURALS } from "../../data/roleHints/playstyleCatalog";
 
 /** How ships are ordered inside a section. */
@@ -27,7 +24,6 @@ export interface CatalogSection {
   readonly role: ShipRole;
   /** "INTERCEPTORS". */
   readonly title: string;
-  readonly blurb: string;
   readonly ships: readonly ShipDefinition[];
   /** Ships in the role (for a notice section: the hidden ones). */
   readonly shipCount: number;
@@ -35,12 +31,30 @@ export interface CatalogSection {
   readonly buildCount: number;
   /** A header-only notice: this role needs the Epic format. */
   readonly epicOnly: boolean;
+  /** The player folded the section: header only, no cards. */
+  readonly collapsed: boolean;
 }
 
 /** Extras for {@link buildSections}. */
 export interface SectionOptions {
   /** Capital ships hidden because the format excludes them. */
   readonly hiddenCapitals?: number;
+  /** Roles the player folded (a single filtered role is never folded). */
+  readonly collapsed?: ReadonlySet<ShipRole>;
+}
+
+/**
+ * @param collapsed - Folded roles.
+ * @param role - Role whose header was pressed.
+ * @returns A new set with the role folded or unfolded.
+ */
+export function toggleCollapsed(
+  collapsed: ReadonlySet<ShipRole>,
+  role: ShipRole,
+): Set<ShipRole> {
+  const next = new Set(collapsed);
+  if (!next.delete(role)) next.add(role);
+  return next;
 }
 
 const SORTS: readonly SortMode[] = ["default", "points_asc", "points_desc"];
@@ -111,11 +125,11 @@ export function buildSections(
     sections.push({
       role,
       title: ROLE_PLURALS[role].toUpperCase(),
-      blurb: ROLE_BLURBS[role],
       ships: inRole,
       shipCount: inRole.length,
       buildCount: inRole.reduce((sum, ship) => sum + buildsOf(ship.id), 0),
       epicOnly: false,
+      collapsed: !filters.role && (options.collapsed?.has(role) ?? false),
     });
   }
   const hidden = options.hiddenCapitals ?? 0;
@@ -124,11 +138,11 @@ export function buildSections(
     sections.push({
       role: "capital",
       title: ROLE_PLURALS.capital.toUpperCase(),
-      blurb: ROLE_BLURBS.capital,
       ships: [],
       shipCount: hidden,
       buildCount: 0,
       epicOnly: true,
+      collapsed: false,
     });
   }
   return sections;
@@ -168,7 +182,8 @@ export function layoutSections(
   for (const section of sections) {
     items.push({ kind: "header", section, y });
     y += metrics.headerH;
-    section.ships.forEach((ship, index) => {
+    const cards = section.collapsed ? [] : section.ships;
+    cards.forEach((ship, index) => {
       const row = Math.floor(index / metrics.columns);
       items.push({
         kind: "card",
@@ -177,7 +192,7 @@ export function layoutSections(
         y: y + row * metrics.rowPitch,
       });
     });
-    y += Math.ceil(section.ships.length / metrics.columns) * metrics.rowPitch;
+    y += Math.ceil(cards.length / metrics.columns) * metrics.rowPitch;
     y += metrics.sectionGap;
   }
   return { items, height: items.length === 0 ? 0 : y - metrics.sectionGap };

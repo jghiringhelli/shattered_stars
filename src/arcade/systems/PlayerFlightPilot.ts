@@ -8,6 +8,7 @@
  */
 
 import type { ActionIntent, InputEvent } from "../../input/InputTypes";
+import { cooldownsOf, type FlightCooldowns } from "../../input/flightCooldowns";
 import type { ShipPose } from "../../core/ArcadeControls";
 import type { ManeuverDefinition, ManeuverDirection } from "../../core/types";
 import {
@@ -27,6 +28,8 @@ export interface IntentSource {
   isHeld(intent: ActionIntent): boolean;
   onAny(callback: (event: InputEvent) => void): number;
   off(subscriptionId: number): boolean;
+  /** Optional: shows the recharges on the touch rings. */
+  reportFlightCooldowns?(cooldowns: FlightCooldowns): void;
 }
 
 /** Edge intents that drive flight, consumed once per frame. */
@@ -73,11 +76,12 @@ export class PlayerFlightPilot {
 
   /**
    * @param source - Where intents come from (InputManager in scenes).
-   * @param allowChordBarrelRoll - Whether left+right chords barrel roll.
+   * @param allowChordBarrelRoll - Opt-in: left+right chords also barrel roll
+   *   (accessibility; the ←← / →→ double-tap always rolls).
    */
   constructor(
     private readonly source: IntentSource,
-    private readonly allowChordBarrelRoll = true,
+    private readonly allowChordBarrelRoll = false,
   ) {}
 
   /** Start listening for edge-triggered flight intents (and MARK_TARGET). */
@@ -138,6 +142,7 @@ export class PlayerFlightPilot {
         right: this.source.isHeld("STEER_RIGHT"),
         up: this.source.isHeld("THRUST_UP"),
         down: this.source.isHeld("THRUST_DOWN"),
+        maneuver: this.source.isHeld("MANEUVER"),
         edges: this.drainEdges(),
         nowMs: frame.nowMs,
         deltaMs: frame.deltaMs,
@@ -146,6 +151,7 @@ export class PlayerFlightPilot {
       frame.worldSize,
     );
     this.memory = result.pilot;
+    this.source.reportFlightCooldowns?.(cooldownsOf(result.motion.control));
     return result;
   }
 

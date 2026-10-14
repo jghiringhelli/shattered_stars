@@ -35,7 +35,7 @@ const EDGE_INSETS = {
 const CONTROLS_LINES: readonly string[] = [
   "↑ / ↓  speed   ·   ↑↑  boost",
   "← / →  tap drift, hold bank",
-  "Q / E  hard turn   ·   Z  Snap turn",
+  "Q / E  hard turn   ·   ← ← / → →  roll   ·   Z  maneuver",
   "R  mark target  ·  lasers autofire  ·  ESC pause",
 ];
 

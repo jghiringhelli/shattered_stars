@@ -7,28 +7,29 @@
 
 import Phaser from "phaser";
 import { createHoverButton } from "../ButtonFactory";
+import { attachTermTooltip } from "../menu/HintTooltip";
+import { addTipZone } from "../menu/tooltipTargets";
 import { HOLO_PALETTE } from "../theme/HoloTheme";
 import { holoFont } from "../theme/holoFont";
 import { toCssColor } from "../theme/colorMath";
-import {
-  activeAscensionModifiers,
-  clampAscension,
-} from "../../data/survival/ascension";
+import { clampAscension } from "../../data/survival/ascension";
 import { codeToSeed, SEED_CODE_LENGTH } from "../../systems/survival/RunRng";
+import { ascensionTip } from "./starterModel";
 
-/** Layout of the row (px). */
+/** Layout of the row (px) — the DAILY button (dailyMenu) sits at its left end. */
 const ROW = {
-  y: 545,
-  modifiersY: 575,
-  height: 36,
-  seedX: 330,
-  seedWidth: 240,
-  ascX: 640,
-  stepGap: 140,
-  unlocksX: 920,
-  historyX: 1120,
-  buttonWidth: 170,
+  y: 608,
+  height: 32,
+  seedX: 406,
+  seedWidth: 200,
+  ascX: 660,
+  stepGap: 112,
+  unlocksX: 889,
+  historyX: 1063,
+  buttonWidth: 150,
 } as const;
+/** Width of the invisible hover zone over the ascension readout (px). */
+const ASCENSION_ZONE_WIDTH = 160;
 
 /** What the row reports to the scene. */
 export interface RunSetupHandlers {
@@ -42,7 +43,6 @@ export class RunSetupControls {
   private ascension = 0;
   private seedButton: Phaser.GameObjects.Container | null = null;
   private ascText!: Phaser.GameObjects.Text;
-  private modifiersText!: Phaser.GameObjects.Text;
 
   /**
    * @param scene - The setup scene.
@@ -63,19 +63,27 @@ export class RunSetupControls {
       variant: "secondary" as const,
       font: "600 14px",
     };
-    createHoverButton(
+    attachTermTooltip(
       scene,
-      ROW.unlocksX,
-      ROW.y,
-      { ...style, label: "UNLOCKS ★" },
-      handlers.onUnlocks,
+      createHoverButton(
+        scene,
+        ROW.unlocksX,
+        ROW.y,
+        { ...style, label: "UNLOCKS ★" },
+        handlers.onUnlocks,
+      ),
+      "survival.star_charts",
     );
-    createHoverButton(
+    attachTermTooltip(
       scene,
-      ROW.historyX,
-      ROW.y,
-      { ...style, label: "HISTORY" },
-      handlers.onHistory,
+      createHoverButton(
+        scene,
+        ROW.historyX,
+        ROW.y,
+        { ...style, label: "HISTORY" },
+        handlers.onHistory,
+      ),
+      "survival.history",
     );
     scene.input.keyboard?.on("keydown", (event: KeyboardEvent) =>
       this.onKey(event),
@@ -114,14 +122,6 @@ export class RunSetupControls {
   setAscension(level: number): void {
     this.ascension = Math.min(this.maxAscension, clampAscension(level));
     this.ascText.setText(`ASCENSION ${this.ascension}/${this.maxAscension}`);
-    const mods = activeAscensionModifiers(this.ascension).map(
-      (m) => `${m.name}: ${m.description}`,
-    );
-    this.modifiersText.setText(
-      mods.length > 0
-        ? mods.join("  ·  ")
-        : "Ascension 0 — win a run to unlock Ascension 1",
-    );
   }
 
   private label(): string {
@@ -149,6 +149,7 @@ export class RunSetupControls {
       },
     );
     this.seedButton.setName("seedButton");
+    attachTermTooltip(this.scene, this.seedButton, "survival.seed");
   }
 
   private onKey(event: KeyboardEvent): void {
@@ -173,34 +174,38 @@ export class RunSetupControls {
       variant: "secondary" as const,
       font: "600 16px",
     };
-    createHoverButton(
-      this.scene,
-      ROW.ascX - ROW.stepGap,
-      ROW.y,
-      { ...style, label: "◀" },
-      () => this.setAscension(this.ascension - 1),
-    );
-    createHoverButton(
-      this.scene,
-      ROW.ascX + ROW.stepGap,
-      ROW.y,
-      { ...style, label: "▶" },
-      () => this.setAscension(this.ascension + 1),
-    );
+    const step = (direction: -1 | 1, icon: "back" | "next"): void => {
+      attachTermTooltip(
+        this.scene,
+        createHoverButton(
+          this.scene,
+          ROW.ascX + direction * ROW.stepGap,
+          ROW.y,
+          { ...style, label: "", icon },
+          () => this.setAscension(this.ascension + direction),
+        ),
+        "survival.ascension",
+      );
+    };
+    step(-1, "back");
+    step(1, "next");
     this.ascText = this.scene.add
       .text(ROW.ascX, ROW.y, "", {
         ...holoFont(16, "600"),
         color: toCssColor(HOLO_PALETTE.textPrimary),
       })
       .setOrigin(0.5);
-    this.modifiersText = this.scene.add
-      .text(this.scene.scale.width / 2, ROW.modifiersY, "", {
-        ...holoFont(12, "400"),
-        color: toCssColor(HOLO_PALETTE.warning),
-        align: "center",
-        wordWrap: { width: this.scene.scale.width - 120 },
-      })
-      .setOrigin(0.5, 0);
+    addTipZone(
+      this.scene,
+      null,
+      {
+        x: ROW.ascX - ASCENSION_ZONE_WIDTH / 2,
+        y: ROW.y - ROW.height / 2,
+        width: ASCENSION_ZONE_WIDTH,
+        height: ROW.height,
+      },
+      () => ascensionTip(this.ascension, this.maxAscension),
+    );
     this.setAscension(0);
   }
 }

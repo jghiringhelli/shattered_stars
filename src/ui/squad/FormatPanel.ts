@@ -14,6 +14,7 @@ import { difficultyTermId, type TermId } from "../../data/tooltips";
 import { attachToggleTooltip } from "../menu/tooltipTargets";
 import { createHoloPanel } from "../hud/HoloPanel";
 import { HOLO_PALETTE, HOLO_RADIUS } from "../theme/HoloTheme";
+import { createMapThemeButton } from "./MapThemeButton";
 import { SQUAD_TYPE, addCaption, addSquadText } from "./squadBuilderStyle";
 
 /** Panel geometry (scene coordinates, top-left). */
@@ -28,7 +29,7 @@ const FORMAT_LAYOUT = {
   buttonH: 28,
   optionGap: 8,
   sectionGap: 20,
-  sections: 3,
+  sections: 4,
 } as const;
 
 const SECTION_H =
@@ -103,7 +104,18 @@ export class FormatPanel extends Phaser.Events.EventEmitter {
     let y: number = FORMAT_LAYOUT.y + FORMAT_LAYOUT.headerH + FORMAT_LAYOUT.pad;
     y = this.section(y, "GAME MODE", (rowY) => this.renderModeRow(rowY));
     y = this.section(y, "POINTS", (rowY) => this.renderPointsRow(rowY));
-    this.section(y, "AI DIFFICULTY", (rowY) => this.renderDifficultyRow(rowY));
+    y = this.section(y, "AI DIFFICULTY", (rowY) => this.renderDifficultyRow(rowY));
+    this.section(y, "MAP", (rowY) => this.renderMapRow(rowY));
+  }
+
+  /** The Map option: one button that cycles Random and every theme. */
+  private renderMapRow(centreY: number): void {
+    const button = createMapThemeButton(this.scene, {
+      x: ROW_X + INNER_W / 2,
+      y: centreY,
+      width: INNER_W,
+    });
+    this.container.add(button);
   }
 
   /**

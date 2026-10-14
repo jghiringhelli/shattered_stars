@@ -65,7 +65,9 @@ describe("tooltip catalog", () => {
       expect(TERM_CATALOG[factionTermId(faction as never)], faction).toBeDefined();
     for (const level of Object.keys(DIFFICULTY_NAMES))
       expect(TERM_CATALOG[difficultyTermId(level as never)], level).toBeDefined();
-    for (const size of ["small", "medium", "large", "huge"])
+    for (const size of new Set(
+      Object.values(SHIP_DEFINITIONS).map((s) => s.baseStats.size),
+    ))
       expect(TERM_CATALOG[sizeTermId(size)], size).toBeDefined();
   });
 

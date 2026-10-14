@@ -18,6 +18,7 @@ import {
   type QuickBuildDetails,
 } from "../../data/quickBuildDetails";
 import { ROOKIE_INITIATIVE } from "../../data/pilotPricing";
+import { ACE_INITIATIVE } from "../../data/roleHints/buildExplanation";
 import { pilotAbilityHint, upgradeHint } from "../../data/roleHints";
 import type { ShipLoadout } from "../../data/ShipLoadouts";
 import { UPGRADE_DEFINITIONS } from "../../systems/UpgradeSystem";
@@ -55,8 +56,13 @@ const HINT_BEST_STYLE = (w: number): TextStyle =>
     wordWrap: { width: w },
   });
 
+/** Which part of the build to draw: both columns, the pilot, or slots + cards. */
+export type QuickBuildPart = "all" | "pilot" | "loadout";
+
 /** Where to draw and what. */
 export interface QuickBuildDetailArgs {
+  /** Default "all" (pilot column beside the slots column). */
+  readonly part?: QuickBuildPart;
   readonly shipId: string;
   /** The selected quick build, or undefined for the bare ship. */
   readonly loadout: ShipLoadout | undefined;
@@ -79,6 +85,8 @@ export class QuickBuildDetailView {
    * @returns The y just below the block.
    */
   render(args: QuickBuildDetailArgs): number {
+    const part = args.part ?? "all";
+    if (part !== "all") return this.renderPart(part, args);
     const pilotW = (args.width - COLUMN_GAP) * PILOT_COLUMN_SHARE;
     const slotsW = args.width - COLUMN_GAP - pilotW;
     const details = args.loadout ? describeQuickBuild(args.loadout) : null;
@@ -93,6 +101,21 @@ export class QuickBuildDetailView {
       slotsW,
     );
     return Math.max(pilotBottom, upgradesBottom);
+  }
+
+  /**
+   * One part of the build at the full box width (a tab of its own).
+   *
+   * @param part - "pilot" or "loadout".
+   * @param args - Ship, selected build and the block box.
+   * @returns The y just below the block.
+   */
+  private renderPart(part: QuickBuildPart, args: QuickBuildDetailArgs): number {
+    const details = args.loadout ? describeQuickBuild(args.loadout) : null;
+    if (part === "pilot") return this.drawPilot(details, args.x, args.y, args.width);
+    const slots = details?.slots ?? fillSlotBar(pilotSlotBar(args.shipId), []);
+    const slotsBottom = this.drawSlots(slots, args.x, args.y, args.width);
+    return this.drawUpgrades(details, args.x, slotsBottom + SECTION_GAP, args.width);
   }
 
   /**
@@ -166,6 +189,7 @@ export class QuickBuildDetailView {
     );
     const tags = [`Initiative ${initiative}`];
     if (pilot?.isUnique) tags.push("Unique \u2014 one per squad");
+    if (pilot && pilot.initiative >= ACE_INITIATIVE) tags.push("Ace");
     cy = this.addText(
       x,
       cy,
@@ -307,11 +331,13 @@ export class QuickBuildDetailView {
     }
     for (const upgrade of upgrades) {
       const summary = upgrade.summary ? `: ${upgrade.summary}` : "";
+      const cost = UPGRADE_DEFINITIONS[upgrade.id]?.pointCost;
+      const price = cost === undefined ? "" : `  (${cost} pt)`;
       cy = this.addText(
         x,
         cy,
-        `\u25c6 ${upgrade.name}${summary}`,
-        pickerTextStyle("small", HOLO_PALETTE.textPrimary, {
+        `\u25c6 ${upgrade.name}${price}${summary}`,
+        pickerTextStyle("body", HOLO_PALETTE.textPrimary, {
           wordWrap: { width: w },
         }),
         0,

@@ -139,10 +139,10 @@ describe("hold-to-commit hard turn", () => {
   });
 });
 
-// ─── Double-tap UP: boost vs. Knife Roll ────────────────────────────────────
+// ─── Double-tap UP: boost ───────────────────────────────────────────────────
 
 describe("double-tap UP", () => {
-  it("emits boost when UP is double-tapped with no direction held", () => {
+  it("emits boost when UP is double-tapped", () => {
     let s = INITIAL_GESTURE_STATE;
     // First tap
     let r = frame(s, { up: true }, 1000, 16);
@@ -152,31 +152,16 @@ describe("double-tap UP", () => {
     // Second tap within window
     r = frame(s, { up: true }, 1100, 16);
     expect(r.actions).toContain("boost");
-    expect(r.actions).not.toContain("tallon_roll_left");
-    expect(r.actions).not.toContain("tallon_roll_right");
   });
 
-  it("emits tallon_roll_left when UP double-tapped while LEFT held", () => {
+  it("a side held while ↑↑ is still a plain boost (Knife Roll is the maneuver key's)", () => {
     let s = INITIAL_GESTURE_STATE;
-    // First tap
     let r = frame(s, { up: true }, 1000, 16);
     s = r.state;
     r = frame(s, {}, 1016, 16);
     s = r.state;
-    // Second tap + left held
     r = frame(s, { up: true, left: true }, 1100, 16);
-    expect(r.actions).toContain("tallon_roll_left");
-    expect(r.actions).not.toContain("boost");
-  });
-
-  it("emits tallon_roll_right when UP double-tapped while RIGHT held", () => {
-    let s = INITIAL_GESTURE_STATE;
-    let r = frame(s, { up: true }, 1000, 16);
-    s = r.state;
-    r = frame(s, {}, 1016, 16);
-    s = r.state;
-    r = frame(s, { up: true, right: true }, 1100, 16);
-    expect(r.actions).toContain("tallon_roll_right");
+    expect(r.actions).toEqual(["boost"]);
   });
 
   it("does NOT boost on single tap", () => {
@@ -196,10 +181,10 @@ describe("double-tap UP", () => {
   });
 });
 
-// ─── Double-tap DOWN: Snap turn vs. Hook Loop ────────────────────────────────
+// ─── Double-tap DOWN: Snap turn ─────────────────────────────────────────────
 
 describe("double-tap DOWN", () => {
-  it("emits kturn_gesture when DOWN double-tapped with no direction held", () => {
+  it("emits kturn_gesture when DOWN is double-tapped", () => {
     let s = INITIAL_GESTURE_STATE;
     let r = frame(s, { down: true }, 1000, 16);
     s = r.state;
@@ -207,34 +192,22 @@ describe("double-tap DOWN", () => {
     s = r.state;
     r = frame(s, { down: true }, 1100, 16);
     expect(r.actions).toContain("kturn_gesture");
-    expect(r.actions).not.toContain("segnor_loop_left");
   });
 
-  it("emits segnor_loop_left when DOWN double-tapped while LEFT held", () => {
-    let s = INITIAL_GESTURE_STATE;
-    let r = frame(s, { down: true }, 1000, 16);
-    s = r.state;
-    r = frame(s, {}, 1016, 16);
-    s = r.state;
-    r = frame(s, { down: true, left: true }, 1100, 16);
-    expect(r.actions).toContain("segnor_loop_left");
-    expect(r.actions).not.toContain("kturn_gesture");
-  });
-
-  it("emits segnor_loop_right when DOWN double-tapped while RIGHT held", () => {
+  it("a side held while ↓↓ is still a plain Snap turn (Hook Loop is the maneuver key's)", () => {
     let s = INITIAL_GESTURE_STATE;
     let r = frame(s, { down: true }, 1000, 16);
     s = r.state;
     r = frame(s, {}, 1016, 16);
     s = r.state;
     r = frame(s, { down: true, right: true }, 1100, 16);
-    expect(r.actions).toContain("segnor_loop_right");
+    expect(r.actions).toEqual(["kturn_gesture"]);
   });
 });
 
 // ─── Chord barrel roll ───────────────────────────────────────────────────────
 
-describe("chord barrel roll", () => {
+describe("chord barrel roll (opt-in accessibility)", () => {
   it("emits barrel_roll_left when right is pressed while left is held within window", () => {
     let s = INITIAL_GESTURE_STATE;
     // Press left first

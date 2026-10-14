@@ -68,6 +68,20 @@ import {
   toggleArmoryMod,
 } from "../campaign/hub/hubActions";
 import { briefedMission } from "../campaign/mission/briefingPreview";
+import {
+  resolveActivePanel,
+  screenOfPanel,
+  type CampaignPanelTabs,
+  type TabPanelId,
+} from "../ui/campaign/campaignTabsModel";
+import { bindTabKeys } from "../ui/menu/DetailTabs";
+import {
+  recallTab,
+  rememberTab,
+  stepTab,
+  tabsFor,
+  type DetailTabId,
+} from "../ui/menu/detailTabsModel";
 
 type CampaignPhase =
   "faction_select" | "coalition_lead" | "mission_map" | "briefing";
@@ -96,6 +110,10 @@ export class CampaignScene extends Phaser.Scene {
   private hubAct: number | null = null;
   /** Research option awaiting a confirming second click ("tierId:A"). */
   private pendingResearch: string | null = null;
+  /** Tabbed panel the Q / E keys drive (null: the hub tab's default). */
+  private activePanel: TabPanelId | null = null;
+  /** Squad pilot inspected on the squad panel (null: the first). */
+  private squadPilotId: string | null = null;
   private phaseContainer: Phaser.GameObjects.Container | null = null;
   private menuFocus: MenuFocus | null = null;
 
@@ -109,9 +127,15 @@ export class CampaignScene extends Phaser.Scene {
     this.hubTab = "missions";
     this.hubAct = null;
     this.pendingResearch = null;
+    this.activePanel = null;
+    this.squadPilotId = null;
     addMenuBackdrop(this, { textureId: BACKDROP_TEXTURE });
     audioManager.initialize();
     this.input.keyboard?.on("keydown-ESC", this.goBack, this);
+    bindTabKeys(this, {
+      step: (direction) => this.stepPanelTab(direction),
+      isActive: () => this.currentPhase === "mission_map",
+    });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input.keyboard?.off("keydown-ESC", this.goBack, this);
       this.menuFocus?.destroy();
@@ -270,6 +294,7 @@ export class CampaignScene extends Phaser.Scene {
       accent,
       tab: this.hubTab,
       pendingResearch: this.pendingResearch,
+      panelTabs: this.panelTabs(),
       view: hubViewOf(campaign, save, chronicle),
       chronicle,
       ...(this.hubAct !== null ? { act: this.hubAct } : {}),
@@ -286,14 +311,71 @@ export class CampaignScene extends Phaser.Scene {
           slot: save.slot,
         }),
     });
-    const sidebar = createCampaignSidebar(this, factionId, save, accent);
+    const sidebar = createCampaignSidebar(
+      this,
+      factionId,
+      save,
+      accent,
+      this.panelTabs(),
+    );
     container.add([
       ...this.headerObjects(header),
       back,
       ...hub.objects,
-      ...sidebar,
+      ...sidebar.panels,
     ]);
-    this.focusPhase("mission_map", [...hub.focusTargets, back]);
+    this.focusPhase("mission_map", [
+      ...hub.focusTargets,
+      ...sidebar.focusTargets,
+      back,
+    ]);
+  }
+
+  /** @returns Tab state the hub's tabbed panels read and change. */
+  private panelTabs(): CampaignPanelTabs {
+    return {
+      active: resolveActivePanel(this.activePanel, this.hubTab),
+      tabOf: (panel) => {
+        const screen = screenOfPanel(panel, this.hubTab);
+        return screen ? recallTab(screen) : "overview";
+      },
+      onSelect: (panel, tab) => this.openPanelTab(panel, tab),
+      pilotId: this.squadPilotId,
+      onSelectPilot: (pilotId) => {
+        this.squadPilotId = pilotId;
+        audioManager.playSound("ui_select", 0.5);
+        this.showMissionMap();
+      },
+    };
+  }
+
+  /**
+   * Opens a tab of a panel (remembered for the session) and makes the panel
+   * the one Q / E drive.
+   *
+   * @param panel - Tabbed panel.
+   * @param tab - Tab to open.
+   */
+  openPanelTab(panel: TabPanelId, tab: DetailTabId): void {
+    const screen = screenOfPanel(panel, this.hubTab);
+    if (!screen) return;
+    const same = this.activePanel === panel && recallTab(screen) === tab;
+    this.activePanel = panel;
+    if (same) return;
+    rememberTab(screen, tab);
+    audioManager.playSound("ui_select", 0.4);
+    this.showMissionMap();
+  }
+
+  /** @param direction - +1 (E / RB) or -1 (Q / LB): step the active panel's tab. */
+  private stepPanelTab(direction: 1 | -1): void {
+    const panel = resolveActivePanel(this.activePanel, this.hubTab);
+    const screen = screenOfPanel(panel, this.hubTab);
+    if (!screen) return;
+    this.openPanelTab(
+      panel,
+      stepTab(tabsFor(screen), recallTab(screen), direction),
+    );
   }
 
   /** @returns Ids of the missions the hub offers now (debug / tests). */
@@ -325,6 +407,7 @@ export class CampaignScene extends Phaser.Scene {
   selectHubTab(tab: HubTab): void {
     this.hubTab = tab;
     this.pendingResearch = null;
+    this.activePanel = null;
     audioManager.playSound("ui_select", 0.5);
     this.showMissionMap();
   }

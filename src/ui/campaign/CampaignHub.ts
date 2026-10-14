@@ -12,11 +12,13 @@ import type { ResearchPick, ResearchTier } from "../../data/campaign/research";
 import type { CampaignSaveData } from "../../systems/CampaignSaveManager";
 import { createHoverButton } from "../ButtonFactory";
 import type { FocusTarget } from "../menu";
+import type { DetailTabId } from "../menu/detailTabsModel";
 import type { HoloPressButton } from "../menu/HoloPressButton";
 import { createArmoryPanel } from "./ArmoryPanel";
 import { createMissionMapPanel } from "./CampaignMissionMap";
 import { createHeroCard, HERO_CARD_LAYOUT } from "./HeroCard";
 import { createResearchPanel } from "./ResearchPanel";
+import type { CampaignPanelTabs } from "./campaignTabsModel";
 import { createActChips } from "./ActChips";
 import { createChroniclePanel } from "./ChroniclePanel";
 import { shownAct } from "./CampaignMissionMap";
@@ -57,6 +59,8 @@ export interface HubConfig {
   readonly save: CampaignSaveData;
   readonly accent: number;
   readonly tab: HubTab;
+  /** Tab state of the hub's tabbed panels (main, hero card, squad). */
+  readonly panelTabs: CampaignPanelTabs;
   /** Research option awaiting confirmation ("tierId:A"). */
   readonly pendingResearch: string | null;
   /** Rule of N status of the playthrough\u0027s acts. */
@@ -107,12 +111,14 @@ export function createCampaignHub(
     ),
   );
   const content = createTabContent(scene, config);
-  const hero = createHeroCard(
-    scene,
-    config.save.factionId,
-    config.save.heroPowerRanks,
-    config.accent,
-  );
+  const hero = createHeroCard(scene, {
+    factionId: config.save.factionId,
+    ranks: config.save.heroPowerRanks,
+    accent: config.accent,
+    lore: config.campaign,
+    tab: config.panelTabs.tabOf("hero"),
+    onSelectTab: (tab) => config.panelTabs.onSelect("hero", tab),
+  });
   const extras: HoloPressButton[] = [];
   if (config.save.campaignComplete) {
     extras.push(
@@ -146,8 +152,13 @@ export function createCampaignHub(
       ),
     );
   return {
-    objects: [...tabs, ...content.objects, hero, ...extras],
-    focusTargets: [...content.focusTargets, ...extras, ...tabs],
+    objects: [...tabs, ...content.objects, hero.panel, ...extras],
+    focusTargets: [
+      ...content.focusTargets,
+      ...hero.focusTargets,
+      ...extras,
+      ...tabs,
+    ],
   };
 }
 
@@ -187,15 +198,30 @@ function actionButton(
   );
 }
 
+/** Tab state of the Armory / Research panel. */
+function mainPanelTabs(config: HubConfig): {
+  tab: DetailTabId;
+  showKeyHint: boolean;
+  onSelectTab: (tab: DetailTabId) => void;
+} {
+  const tabs = config.panelTabs;
+  return {
+    tab: tabs.tabOf("main"),
+    showKeyHint: tabs.active === "main",
+    onSelectTab: (tab) => tabs.onSelect("main", tab),
+  };
+}
+
 function createTabContent(scene: Phaser.Scene, config: HubConfig): HubView {
   if (config.tab === "armory") {
     const view = createArmoryPanel(scene, {
       credits: config.save.credits,
-      installed: Object.keys(config.save.armory.installed),
+      installed: config.save.armory.installed,
       accent: config.accent,
+      ...mainPanelTabs(config),
       onToggle: config.onToggleMod,
     });
-    return { objects: [view.panel], focusTargets: view.cards };
+    return { objects: [view.panel], focusTargets: view.focusTargets };
   }
   if (config.tab === "research") {
     const view = createResearchPanel(scene, {
@@ -203,9 +229,10 @@ function createTabContent(scene: Phaser.Scene, config: HubConfig): HubView {
       choices: config.save.research,
       pending: config.pendingResearch,
       accent: config.accent,
+      ...mainPanelTabs(config),
       onPick: config.onPickResearch,
     });
-    return { objects: [view.panel], focusTargets: view.cards };
+    return { objects: [view.panel], focusTargets: view.focusTargets };
   }
   if (config.tab === "chronicle") {
     const panel = createChroniclePanel(

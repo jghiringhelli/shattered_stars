@@ -15,6 +15,9 @@
 
 import Phaser from "phaser";
 import type { ActionIntent, TouchBinding } from "../../input/InputTypes";
+import type { FlightCooldowns } from "../../input/flightCooldowns";
+import { CooldownRing, ManeuverButton } from "./ManeuverButton";
+import { DoubleTapTracker, MinHoldLatch } from "./touchLatch";
 
 export interface TouchFlightControlsConfig {
   readonly scene: Phaser.Scene;
@@ -29,6 +32,7 @@ const HOLD_THRESHOLD_MS = 400;
 /** Stick push must be at least this dominant vertically (and not too much sideways) to count as an up/down tap for BOOST/KTURN. */
 const VERTICAL_TAP_THRESHOLD = 0.6;
 const VERTICAL_TAP_MAX_SIDEWAYS = 0.4;
+const MANEUVER_BUTTON_OFFSET = { x: 250, y: 95 };
 
 export class TouchFlightControls extends Phaser.GameObjects.Container {
   private readonly stickCenter = { x: 0, y: 0 };
@@ -41,8 +45,11 @@ export class TouchFlightControls extends Phaser.GameObjects.Container {
   private thrustValue = 0;
   private stickPeakThrust = 0;
   private stickPeakSteer = 0;
-  private lastUpTapTime = 0;
-  private lastDownTapTime = 0;
+  private readonly steerLatch = new MinHoldLatch();
+  private readonly upTaps = new DoubleTapTracker();
+  private readonly downTaps = new DoubleTapTracker();
+  private maneuverButton!: ManeuverButton;
+  private rollRing!: CooldownRing;
 
   private actionPointerId: number | null = null;
   private actionDownAt = 0;
@@ -64,6 +71,7 @@ export class TouchFlightControls extends Phaser.GameObjects.Container {
 
     this.buildStick();
     this.buildActionZone();
+    this.buildManeuverButton(width, height);
 
     touchConfig.scene.add.existing(this);
     touchConfig.scene.input.on("pointerdown", this.onPointerDown, this);
@@ -90,6 +98,35 @@ export class TouchFlightControls extends Phaser.GameObjects.Container {
     );
     this.stickKnob.setScrollFactor(0);
     this.add([base, this.stickKnob]);
+  }
+
+  private buildManeuverButton(width: number, height: number): void {
+    this.maneuverButton = new ManeuverButton(this.scene, {
+      x: width - MANEUVER_BUTTON_OFFSET.x,
+      y: height - MANEUVER_BUTTON_OFFSET.y,
+    });
+    this.rollRing = new CooldownRing(
+      this.scene,
+      this.stickCenter,
+      STICK_RADIUS + 6,
+    );
+    this.add([...this.maneuverButton.objects, this.rollRing.object]);
+  }
+
+  /** @param cooldowns - Roll (ring on the stick) and Snap turn (ring on MANEUVER) recharge. */
+  showCooldowns(cooldowns: FlightCooldowns): void {
+    this.rollRing.draw(cooldowns.roll);
+    this.maneuverButton.showCooldown(cooldowns.snap);
+  }
+
+  /** @returns Whether the MANEUVER button is down (a tap stays down briefly). */
+  isManeuverHeld(): boolean {
+    return this.maneuverButton.isHeld(this.scene.time.now);
+  }
+
+  /** @returns -1 / 0 / 1: the side the MANEUVER finger is dragged to. */
+  getManeuverSteer(): number {
+    return this.maneuverButton.steer();
   }
 
   private buildActionZone(): void {
@@ -123,8 +160,14 @@ export class TouchFlightControls extends Phaser.GameObjects.Container {
     }
   }
 
+  /**
+   * @returns The steer value. A tap on the left/right half of the stick is
+   *   already a steer to that side (the touch lands off-centre), held at
+   *   least a moment so a quick tap is never lost between polls — two of
+   *   them are the barrel-roll double-tap, like ← ← / → → on a keyboard.
+   */
   getSteerValue(): number {
-    return this.steerValue;
+    return this.steerLatch.read(this.scene.time.now);
   }
 
   getThrustValue(): number {
@@ -156,6 +199,8 @@ export class TouchFlightControls extends Phaser.GameObjects.Container {
       return;
     }
 
+    if (this.maneuverButton.tryPress(pointer, this.scene.time.now)) return;
+
     const distToAction = Phaser.Math.Distance.Between(
       pointer.x,
       pointer.y,
@@ -173,6 +218,7 @@ export class TouchFlightControls extends Phaser.GameObjects.Container {
     if (pointer.id === this.stickPointerId) {
       this.updateStickFromPointer(pointer);
     }
+    this.maneuverButton.move(pointer);
   }
 
   private onPointerUp(pointer: Phaser.Input.Pointer): void {
@@ -180,6 +226,7 @@ export class TouchFlightControls extends Phaser.GameObjects.Container {
       this.releaseStick();
       return;
     }
+    if (this.maneuverButton.release(pointer)) return;
     if (pointer.id === this.actionPointerId) {
       this.releaseActionZone();
     }
@@ -199,6 +246,7 @@ export class TouchFlightControls extends Phaser.GameObjects.Container {
     );
 
     this.steerValue = Phaser.Math.Clamp(dx / STICK_RADIUS, -1, 1);
+    this.steerLatch.press(this.steerValue, this.scene.time.now);
     this.thrustValue = Phaser.Math.Clamp(-dy / STICK_RADIUS, -1, 1);
     this.stickPeakThrust =
       Math.abs(this.thrustValue) > Math.abs(this.stickPeakThrust)
@@ -213,26 +261,17 @@ export class TouchFlightControls extends Phaser.GameObjects.Container {
   private releaseStick(): void {
     this.stickPointerId = null;
     this.stickKnob.setPosition(this.stickCenter.x, this.stickCenter.y);
+    this.steerLatch.release();
 
     const wasVerticalTap =
       Math.abs(this.stickPeakThrust) >= VERTICAL_TAP_THRESHOLD &&
       Math.abs(this.stickPeakSteer) <= VERTICAL_TAP_MAX_SIDEWAYS;
     if (wasVerticalTap) {
       const now = this.scene.time.now;
-      if (this.stickPeakThrust > 0) {
-        if (now - this.lastUpTapTime <= DOUBLE_TAP_WINDOW_MS) {
-          this.pendingIntents.push({ intent: "BOOST", value: 1 });
-          this.lastUpTapTime = 0;
-        } else {
-          this.lastUpTapTime = now;
-        }
-      } else {
-        if (now - this.lastDownTapTime <= DOUBLE_TAP_WINDOW_MS) {
-          this.pendingIntents.push({ intent: "KTURN", value: 1 });
-          this.lastDownTapTime = 0;
-        } else {
-          this.lastDownTapTime = now;
-        }
+      const taps = this.stickPeakThrust > 0 ? this.upTaps : this.downTaps;
+      if (taps.tap(now, DOUBLE_TAP_WINDOW_MS)) {
+        const intent = this.stickPeakThrust > 0 ? "BOOST" : "KTURN";
+        this.pendingIntents.push({ intent, value: 1 });
       }
     }
 

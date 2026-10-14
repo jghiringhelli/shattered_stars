@@ -9,6 +9,7 @@ import Phaser from "phaser";
 import type { ShipRole } from "../../core/types";
 import { ROLE_CHIP_LABELS } from "../../data/roleHints/roleSections";
 import { roleTermId, type TermId } from "../../data/tooltips";
+import { topLeftHitArea } from "../menu/hitArea";
 import { drawHoloFrame } from "../menu/holoChrome";
 import { attachTermTooltip } from "../menu/HintTooltip";
 import { focusTipTarget } from "../menu/tooltipTargets";
@@ -147,7 +148,7 @@ function createChip(
   chipC.add([bg, label]);
   if (chip.dim) label.setAlpha(DIM_ALPHA);
   chipC.setSize(box.width, FILTER_BAR_H).setInteractive(
-    new Phaser.Geom.Rectangle(0, 0, box.width, FILTER_BAR_H),
+    topLeftHitArea(box.width, FILTER_BAR_H),
     Phaser.Geom.Rectangle.Contains,
   );
   if (chipC.input) chipC.input.cursor = "pointer";

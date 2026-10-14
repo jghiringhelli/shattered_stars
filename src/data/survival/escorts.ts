@@ -3,7 +3,7 @@
  *
  * Escorts are a SECOND, parallel progression to the power draft. In the
  * roguelite run (ADR-0004) escorts are hired in shops, won in events, granted
- * by Wing Commander and meta escort packages; the per-wave escort-track
+ * by Squadron Marshal and meta escort packages; the per-wave escort-track
  * choice below remains the endless model the balance sim's draft policy
  * drives.
  *

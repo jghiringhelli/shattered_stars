@@ -90,14 +90,21 @@ test.describe("Flight School", () => {
       tap(page, "z").then(() => page.waitForTimeout(600)),
     );
     await pass(page, "segnor", async () => {
-      await page.keyboard.down("Shift");
-      await tap(page, "Q");
-      await page.keyboard.up("Shift");
+      await page.keyboard.down("z");
+      await page.waitForTimeout(60);
+      await tap(page, "ArrowLeft", 100);
+      await page.keyboard.up("z");
       await page.waitForTimeout(400);
     });
-    await pass(page, "tallon", () =>
-      tap(page, "t").then(() => page.waitForTimeout(400)),
-    );
+    await pass(page, "tallon", async () => {
+      await tap(page, "z", 50);
+      await page.waitForTimeout(40);
+      await page.keyboard.down("z");
+      await page.waitForTimeout(60);
+      await tap(page, "ArrowLeft", 100);
+      await page.keyboard.up("z");
+      await page.waitForTimeout(400);
+    });
     await pass(page, "boost", async () => {
       await tap(page, "ArrowUp", 60);
       await page.waitForTimeout(60);
@@ -105,13 +112,9 @@ test.describe("Flight School", () => {
       await page.waitForTimeout(500);
     });
     await pass(page, "barrel_roll", async () => {
-      await page.keyboard.down("ArrowLeft");
+      await tap(page, "ArrowLeft", 50);
       await page.waitForTimeout(40);
-      await page.keyboard.down("ArrowRight");
-      await page.waitForTimeout(80);
-      await page.keyboard.up("ArrowLeft");
-      await page.waitForTimeout(60);
-      await page.keyboard.up("ArrowRight");
+      await tap(page, "ArrowLeft", 50);
       await page.waitForTimeout(500);
     });
     // Guns autofire while the drone flies ahead inside the arc.

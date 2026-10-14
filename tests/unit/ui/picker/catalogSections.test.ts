@@ -12,7 +12,9 @@ import {
   nextSort,
   sectionCounts,
   sortLabel,
+  toggleCollapsed,
 } from "../../../../src/ui/picker/catalogSections";
+import type { ShipRole } from "../../../../src/core/types";
 import { getShipsByFaction } from "../../../../src/data/ShipDefinitions";
 import { getEquippableLoadouts } from "../../../../src/data/ShipLoadouts";
 
@@ -131,5 +133,53 @@ describe("layoutSections", () => {
 
   it("is empty for no sections", () => {
     expect(layoutSections([], metrics)).toEqual({ items: [], height: 0 });
+  });
+});
+
+describe("collapsible sections", () => {
+  const METRICS = { columns: 2, rowPitch: 56, headerH: 38, sectionGap: 8 } as const;
+
+  it("keeps a collapsed section's header and counts but hides its cards", () => {
+    const sections = buildSections(SHIPS, ALL, buildsOf, {
+      collapsed: new Set(["heavy_fighter"]),
+    });
+    const heavy = sections.find((s) => s.role === "heavy_fighter")!;
+    expect(heavy.collapsed).toBe(true);
+    expect(heavy.shipCount).toBeGreaterThan(0);
+    const layout = layoutSections(sections, METRICS);
+    const heavyCards = layout.items.filter(
+      (item) => item.kind === "card" && item.ship.role === "heavy_fighter",
+    );
+    expect(heavyCards).toHaveLength(0);
+    expect(
+      layout.items.some((i) => i.kind === "header" && i.section.role === "heavy_fighter"),
+    ).toBe(true);
+  });
+
+  it("makes the grid shorter when a section collapses", () => {
+    const open = layoutSections(buildSections(SHIPS, ALL, buildsOf), METRICS);
+    const closed = layoutSections(
+      buildSections(SHIPS, ALL, buildsOf, { collapsed: new Set(["heavy_fighter"]) }),
+      METRICS,
+    );
+    expect(closed.height).toBeLessThan(open.height);
+  });
+
+  it("never collapses the only section of a role filter", () => {
+    const sections = buildSections(
+      SHIPS,
+      { role: "heavy_fighter", sort: "default" },
+      buildsOf,
+      { collapsed: new Set(["heavy_fighter"]) },
+    );
+    expect(sections[0]!.collapsed).toBe(false);
+  });
+
+  it("toggles a role in and out of the collapsed set without mutating it", () => {
+    const start: ReadonlySet<ShipRole> = new Set<ShipRole>();
+    const once = toggleCollapsed(start, "bomber");
+    expect(once.has("bomber")).toBe(true);
+    expect(start.size).toBe(0);
+    expect(toggleCollapsed(once, "bomber").has("bomber")).toBe(false);
   });
 });

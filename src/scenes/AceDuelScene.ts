@@ -41,11 +41,12 @@ import {
   stressModifiersOf,
 } from "../arcade/systems/QuickBuildEquip";
 import {
-  cycleQuickBuild,
   selectionFor,
   type QuickBuildSelection,
 } from "../arcade/systems/QuickBuildChoice";
-import { renderQuickBuildChooser } from "../ui/QuickBuildChooser";
+import { pickQuickBuild } from "./duel/duelSetupModel";
+import { openDuelTabById, stepDuelTab } from "./duel/duelSetupChrome";
+import { bindTabKeys } from "../ui/menu/DetailTabs";
 import {
   absorbDamage,
   combatantOf,
@@ -182,12 +183,6 @@ const SPAWN_DISTANCE = 200;
 /** Gap (px) between ships of the same side at spawn. */
 const SPAWN_SPACING = 60;
 
-/** The player's quick-build choosers on the setup screen (right of the matchups). */
-const QUICK_BUILD_CHOOSER_X = 940;
-const QUICK_BUILD_CHOOSER_Y = 110;
-const QUICK_BUILD_CHOOSER_W = 316;
-const QUICK_BUILD_CHOOSER_GAP = 8;
-
 /** A ship to spawn at round start. */
 interface ShipSpawn {
   readonly id: string;
@@ -248,6 +243,8 @@ export class AceDuelScene extends Phaser.Scene {
    * for another matchup/side are ignored (see selectionFor).
    */
   private playerBuilds: QuickBuildSelection | null = null;
+  /** Which of the player's ships the setup BUILDS tab edits (sides with several ships). */
+  private buildShip = 0;
 
   // Game state
   private isPaused = false;
@@ -323,6 +320,13 @@ export class AceDuelScene extends Phaser.Scene {
     this.showSetupScreen();
     // The one back affordance (ESC / gamepad B / right-click), setup only.
     bindMenuBack(this, () => this.scene.start("MainMenuScene"), {
+      isActive: () => this.isSetupPhase,
+    });
+    bindTabKeys(this, {
+      step: (direction) => {
+        stepDuelTab(direction);
+        this.showSetupScreen();
+      },
       isActive: () => this.isSetupPhase,
     });
 
@@ -447,6 +451,8 @@ export class AceDuelScene extends Phaser.Scene {
     // fix as DogfightScene's setup screen).
     this.setupObjects.forEach((o) => o.destroy());
     this.setupObjects = [];
+    const ships = this.playerSideShips();
+    this.playerBuilds = selectionFor(ships, this.playerBuilds);
     renderAceDuelSetup(
       this,
       {
@@ -455,11 +461,13 @@ export class AceDuelScene extends Phaser.Scene {
         completed: this.completedMatchups,
         playerSide: this.playerSide,
         difficulty: this.difficulty,
+        playerLoadoutIds: this.playerBuilds.loadoutIds,
+        enemyLoadoutIds: assignQuickBuilds(this.enemySideShips(), []),
+        buildShip: this.buildShip,
       },
       this.setupActions(),
       (obj) => this.track(obj),
     );
-    this.renderPlayerQuickBuilds();
   }
 
   /**
@@ -472,10 +480,25 @@ export class AceDuelScene extends Phaser.Scene {
     return {
       selectMatchup: (matchup) => {
         this.selectedMatchup = matchup;
+        this.buildShip = 0;
         rerender();
       },
       selectSide: (side) => {
         this.playerSide = side;
+        this.buildShip = 0;
+        rerender();
+      },
+      selectBuild: (shipIndex, loadoutId) => {
+        if (this.playerBuilds)
+          this.playerBuilds = pickQuickBuild(this.playerBuilds, shipIndex, loadoutId);
+        rerender();
+      },
+      selectBuildShip: (shipIndex) => {
+        this.buildShip = shipIndex;
+        rerender();
+      },
+      selectTab: (tab) => {
+        openDuelTabById(tab);
         rerender();
       },
       selectDifficulty: (difficulty) => {
@@ -514,34 +537,11 @@ export class AceDuelScene extends Phaser.Scene {
       : this.selectedMatchup.side2.ships;
   }
 
-  /**
-   * One quick-build chooser per ship of the player's side, right of the
-   * matchup list. Defaults to what assignQuickBuilds would give.
-   */
-  private renderPlayerQuickBuilds(): void {
-    const ships = this.playerSideShips();
-    this.playerBuilds = selectionFor(ships, this.playerBuilds);
-    let y = QUICK_BUILD_CHOOSER_Y;
-    ships.forEach((shipId, index) => {
-      const shipName = getShipDefinition(shipId)?.name ?? shipId;
-      const chooser = renderQuickBuildChooser(this, {
-        x: QUICK_BUILD_CHOOSER_X,
-        y,
-        width: QUICK_BUILD_CHOOSER_W,
-        heading: `YOUR ${ships.length > 1 ? `SHIP ${index + 1}` : "SHIP"} \u2014 ${shipName}`,
-        shipId,
-        loadoutId: this.playerBuilds?.loadoutIds[index] ?? null,
-        name: `aceDuelQuickBuild${index}`,
-        accentColor: factionAccent(this.playerSideFaction()),
-        onCycle: (step) => {
-          if (!this.playerBuilds) return;
-          this.playerBuilds = cycleQuickBuild(this.playerBuilds, index, step);
-          this.showSetupScreen();
-        },
-      });
-      chooser.objects.forEach((obj) => this.track(obj));
-      y += chooser.height + QUICK_BUILD_CHOOSER_GAP;
-    });
+  /** The ships the AI flies in the selected matchup. */
+  private enemySideShips(): readonly string[] {
+    return this.playerSide === 1
+      ? this.selectedMatchup.side2.ships
+      : this.selectedMatchup.side1.ships;
   }
 
   /** The faction the player flies in the selected matchup. */

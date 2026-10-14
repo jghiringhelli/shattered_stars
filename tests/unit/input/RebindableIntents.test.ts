@@ -17,6 +17,7 @@ import { flightCapabilitiesOf } from "../../../src/arcade/systems/FlightCapabili
 /** Maneuvers FlightCapabilities refuses a ship with no specials or dashes. */
 const CAPITAL_INERT = [
   "BOOST",
+  "MANEUVER",
   "KTURN",
   "SEGNOR_LEFT",
   "SEGNOR_RIGHT",

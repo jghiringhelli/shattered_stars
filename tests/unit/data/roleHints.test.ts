@@ -144,7 +144,12 @@ describe("relicHint", () => {
 
   it("rides on the relic choice card as its hover tooltip", () => {
     const relic = ALL_RELICS[0]!;
-    expect(relicCard(relic, []).hint).toEqual(relicHint(relic));
+    const hint = relicHint(relic);
+    expect(relicCard(relic, []).tip).toMatchObject({
+      role: hint.role,
+      bestWith: hint.bestWith,
+      playstyle: hint.playstyle,
+    });
   });
 });
 

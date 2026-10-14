@@ -141,12 +141,14 @@ test.describe("Skirmish pick flow — role sections and explanations", () => {
     await expect
       .poll(() => tooltip(page, SIMPLE))
       .toContain("Very agile hunters");
-    expect(await tooltip(page, SIMPLE)).toContain("EXAMPLE");
+    // Hover is short; holding the pointer expands it to the full explanation.
+    expect(await tooltip(page, SIMPLE)).not.toContain("EXAMPLE");
+    await expect.poll(() => tooltip(page, SIMPLE)).toContain("EXAMPLE");
     await hoverText(page, SIMPLE, "PTS");
     await expect.poll(() => tooltip(page, SIMPLE)).toContain("Sort by points");
   });
 
-  test("selecting a ship and a build shows stats, tabs and guide text", async ({
+  test("selecting a ship and a build shows stats, tabs and the build guide", async ({
     page,
   }) => {
     await openSkirmish(page);
@@ -160,24 +162,17 @@ test.describe("Skirmish pick flow — role sections and explanations", () => {
       catalog.staging.selectLoadout(getEquippableLoadouts(ship.id)[0]!.id);
       catalog.render();
     });
+    await clickText(page, SIMPLE, "STATS");
     await hoverText(page, SIMPLE, "ATTACK");
     await expect.poll(() => tooltip(page, SIMPLE)).toContain("attack dice");
-    await hoverText(page, SIMPLE, "BUILD");
-    await expect
-      .poll(() => tooltip(page, SIMPLE))
-      .toContain("pilot, ability, slots");
-    await clickText(page, SIMPLE, "HOW TO FLY");
+    await clickText(page, SIMPLE, "BUILDS");
     await expect
       .poll(async () => (await sceneTexts(page, SIMPLE)).includes("WHEN TO PICK IT"))
       .toBe(true);
-    await clickText(page, SIMPLE, "COST");
-    await expect
-      .poll(async () => (await sceneTexts(page, SIMPLE)).includes("COST BREAKDOWN"))
-      .toBe(true);
-    await clickText(page, SIMPLE, "PROS & CONS");
-    await expect
-      .poll(async () => (await sceneTexts(page, SIMPLE)).includes("STRENGTHS"))
-      .toBe(true);
+    const texts = await sceneTexts(page, SIMPLE);
+    for (const heading of ["EXAMPLE", "HOW TO FLY", "STRENGTHS", "WEAKNESSES", "BEST WITH", "COUNTERED BY"])
+      expect(texts, heading).toContain(heading);
+    expect(texts.some((t) => /^Hull \d+ \+ .* = \d+ pt$/.test(t))).toBe(true);
   });
 
   for (const size of SIZES) {
@@ -199,9 +194,7 @@ test.describe("Skirmish pick flow — role sections and explanations", () => {
       await page.mouse.move(5, 5);
       await page.waitForTimeout(300);
       await shot(page, "sections");
-      await hoverText(page, SIMPLE, "HOW TO FLY");
-      await page.mouse.down();
-      await page.mouse.up();
+      await clickText(page, SIMPLE, "BUILDS");
       await page.waitForTimeout(300);
       await shot(page, "guide");
       await hoverText(page, SIMPLE, "INT");

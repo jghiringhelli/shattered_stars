@@ -6,11 +6,12 @@
  * user clicks a ship to stage it, picks a payload in the detail panel, then
  * clicks ADD (or LAUNCH) to add the config to the roster.
  *
- * Emits: 'addInstance' { shipId: string, loadoutId: string | null }
+ * Emits: 'addInstance' { shipId: string, loadoutId: string | null } and
+ * 'selectionChanged' (CatalogSelection) after every render.
  */
 
 import Phaser from "phaser";
-import type { ShipDefinition } from "../../core/types";
+import type { ShipDefinition, ShipRole } from "../../core/types";
 import type { FactionId } from "../../config";
 import { getEquippableLoadouts } from "../../data/ShipLoadouts";
 import { sortRolesForSections } from "../../data/roleHints/roleSections";
@@ -27,6 +28,7 @@ import {
   buildSections,
   layoutSections,
   nextSort,
+  toggleCollapsed,
   type CatalogFilters,
   type GridItem,
 } from "./catalogSections";
@@ -42,10 +44,19 @@ export interface CatalogGating {
   reasonFor(shipId: string): string;
 }
 
+/** Role sections the player folded; remembered for the session. */
+let collapsedRoles: ReadonlySet<ShipRole> = new Set();
+
 const NO_GATING: CatalogGating = {
   lockedShipIds: new Set<string>(),
   reasonFor: () => "",
 };
+
+/** What the catalog currently has staged (the "selectionChanged" payload). */
+export interface CatalogSelection {
+  readonly shipId: string | null;
+  readonly loadoutId: string | null;
+}
 
 /** What the format hides from the catalog. */
 export interface CatalogOptions {
@@ -113,7 +124,9 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
   private scrollWired = false;
   private showOnlyUnlocked = false;
   private filters: CatalogFilters = { role: null, sort: "default" };
-  /** Filter-chip focus targets; mutated in place so a MenuFocus keeps them. */
+  private chipTargets: FocusTarget[] = [];
+  private tabTargets: FocusTarget[] = [];
+  /** Filter-chip then tab focus targets; mutated in place so a MenuFocus keeps them. */
   readonly focusTargets: FocusTarget[] = [];
 
   constructor(
@@ -129,7 +142,10 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
     super();
     this.accent = factionAccent(this.factionId);
     this.gridTop = this.topY + GRID.pad * 2 + FILTER_BAR_H;
-    this.detailPanel = new ShipDetailPanel(scene);
+    this.detailPanel = new ShipDetailPanel(scene, (targets) => {
+      this.tabTargets = targets;
+      this.syncFocusTargets();
+    });
     this.scroll = new CatalogScroll({
       clipX: CAT_X,
       clipY: this.gridTop,
@@ -170,6 +186,10 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
       this.accent,
     );
     this.renderDetail();
+    this.emit("selectionChanged", {
+      shipId: this.staging.getSelectedShipId(),
+      loadoutId: this.staging.getSelectedLoadoutId(),
+    } satisfies CatalogSelection);
   }
 
   destroy(): void {
@@ -238,8 +258,24 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
       onSort: () =>
         this.applyFilters({ ...this.filters, sort: nextSort(this.filters.sort) }),
     });
-    this.focusTargets.splice(0, this.focusTargets.length, ...targets);
+    this.chipTargets = targets;
+    this.syncFocusTargets();
+  }
+
+  private syncFocusTargets(): void {
+    this.focusTargets.splice(
+      0,
+      this.focusTargets.length,
+      ...this.chipTargets,
+      ...this.tabTargets,
+    );
     this.emit("focusTargetsChanged");
+  }
+
+  /** Folds / unfolds a role section (remembered for the session). */
+  private toggleSection(role: ShipRole): void {
+    collapsedRoles = toggleCollapsed(collapsedRoles, role);
+    this.render();
   }
 
   private applyFilters(filters: CatalogFilters): void {
@@ -256,7 +292,7 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
       visible,
       this.filters,
       (id) => getEquippableLoadouts(id).length,
-      { hiddenCapitals: this.options.hiddenCapitals ?? 0 },
+      { hiddenCapitals: this.options.hiddenCapitals ?? 0, collapsed: collapsedRoles },
     );
     const layout = layoutSections(sections, SECTION_METRICS);
     this.gridRows = [];
@@ -272,6 +308,9 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
         y: item.y,
         width: CAT_W - GRID.pad * 2 - GRID.gutter,
         accent: this.accent,
+        ...(item.section.epicOnly
+          ? {}
+          : { onToggle: () => this.toggleSection(item.section.role) }),
       });
       this.gridRows.push({ hits, top: item.y, height: SECTION_HEADER_H });
       return;

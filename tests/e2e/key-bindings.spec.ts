@@ -84,6 +84,11 @@ async function installProbe(page: Page, sceneKey: string): Promise<void> {
         setFlight(s, control, INITIAL_STRESS);
         weapons.feedback.reset();
       },
+      setRollCooldown: (ms: number) => {
+        const s = ship();
+        const control = { ...getControl(s), barrelRollCooldown: ms };
+        setFlight(s, control, s.flight ? s.flight.stress : s.stress);
+      },
       makeHuge: () => {
         const s = ship();
         const control = {
@@ -126,24 +131,38 @@ async function doubleTap(page: Page, key: string): Promise<void> {
   await pressKey(page, key);
 }
 
-async function holdAnd(
-  page: Page,
-  held: string,
-  action: () => Promise<void>,
-): Promise<void> {
-  await page.keyboard.down(held);
-  await action();
-  await page.keyboard.up(held);
+/** Two quick taps of one arrow (the barrel-roll gesture). */
+async function rollDoubleTap(page: Page, key: string): Promise<void> {
+  for (let i = 0; i < 2; i++) {
+    await page.keyboard.down(key);
+    await page.waitForTimeout(50);
+    await page.keyboard.up(key);
+    if (i === 0) await page.waitForTimeout(40);
+  }
 }
 
-async function barrelRollChord(page: Page): Promise<void> {
-  await page.keyboard.down("ArrowLeft");
-  await page.waitForTimeout(40);
-  await page.keyboard.down("ArrowRight");
-  await page.waitForTimeout(80);
-  await page.keyboard.up("ArrowLeft");
+/** Hold the maneuver key Z and press an arrow: a Hook Loop. */
+async function hookCombo(page: Page, arrow: string): Promise<void> {
+  await page.keyboard.down("z");
   await page.waitForTimeout(60);
-  await page.keyboard.up("ArrowRight");
+  await page.keyboard.down(arrow);
+  await page.waitForTimeout(120);
+  await page.keyboard.up(arrow);
+  await page.keyboard.up("z");
+}
+
+/** Double-tap Z, keep the second press down and add an arrow: a Knife Roll. */
+async function knifeCombo(page: Page, arrow: string): Promise<void> {
+  await page.keyboard.down("z");
+  await page.waitForTimeout(50);
+  await page.keyboard.up("z");
+  await page.waitForTimeout(40);
+  await page.keyboard.down("z");
+  await page.waitForTimeout(60);
+  await page.keyboard.down(arrow);
+  await page.waitForTimeout(120);
+  await page.keyboard.up(arrow);
+  await page.keyboard.up("z");
 }
 
 /** A special the keys ask for, its refusal label and the cards' key. */
@@ -171,49 +190,34 @@ const SPECIALS: readonly SpecialCombo[] = [
     label: "SNAP",
   },
   {
-    name: "Shift+Q",
-    press: (p) => pressKey(p, "Q", true),
+    name: "Z + ←",
+    press: (p) => hookCombo(p, "ArrowLeft"),
     maneuver: "segnor_left",
     cardKey: "segnor_left",
     label: "HOOK LOOP",
   },
   {
-    name: "Shift+E",
-    press: (p) => pressKey(p, "E", true),
+    name: "Z + →",
+    press: (p) => hookCombo(p, "ArrowRight"),
     maneuver: "segnor_right",
     cardKey: "segnor_right",
     label: "HOOK LOOP",
   },
   {
-    name: "→ + ↓↓",
-    press: (p) => holdAnd(p, "ArrowRight", () => doubleTap(p, "ArrowDown")),
-    maneuver: "segnor_right",
-    cardKey: "segnor_right",
-    label: "HOOK LOOP",
-  },
-  {
-    name: "T",
-    press: (p) => pressKey(p, "t"),
+    name: "Z Z + ←",
+    press: (p) => knifeCombo(p, "ArrowLeft"),
     maneuver: "tallon_left",
     cardKey: "tallon_left",
     label: "KNIFE ROLL",
   },
   {
-    name: "Shift+T",
-    press: (p) => pressKey(p, "T", true),
+    name: "Z Z + →",
+    press: (p) => knifeCombo(p, "ArrowRight"),
     maneuver: "tallon_right",
     cardKey: "tallon_right",
     label: "KNIFE ROLL",
   },
-  {
-    name: "← + ↑↑",
-    press: (p) => holdAnd(p, "ArrowLeft", () => doubleTap(p, "ArrowUp")),
-    maneuver: "tallon_left",
-    cardKey: "tallon_left",
-    label: "KNIFE ROLL",
-  },
 ];
-
 /** The maneuver queued/flown, or the refusal the card or stress demands. */
 async function expectSpecial(
   page: Page,
@@ -262,7 +266,7 @@ async function expectDash(
   const onBar = dash === "boost" ? before.caps?.boost : before.caps?.barrelRoll;
   const name = dash === "boost" ? "BOOST" : "BARREL ROLL";
   if (dash === "boost") await doubleTap(page, "ArrowUp");
-  else await barrelRollChord(page);
+  else await rollDoubleTap(page, "ArrowLeft");
   await page.waitForTimeout(80);
   const after = await probe(page);
   const cooldown =
@@ -273,12 +277,20 @@ async function expectDash(
     expect(cooldown, `${name} performed`).toBeGreaterThan(0);
   } else {
     expect(cooldown, `${name} refused`).toBe(0);
-    await expect
-      .poll(async () => (await probe(page)).label, { timeout: 2_000 })
-      .toBe(onBar ? `STRESSED: NO ${name}` : `NO ${name} ACTION`);
+    if (dash === "boost") {
+      await expect
+        .poll(async () => (await probe(page)).label, { timeout: 2_000 })
+        .toBe(onBar ? `STRESSED: NO ${name}` : `NO ${name} ACTION`);
+    } else {
+      // A double-tap of ← is ordinary steering when the roll is unavailable:
+      // no refusal chatter, the ship just banks.
+      expect((await probe(page)).label, `${name} stays silent`).toBeNull();
+    }
   }
   if (dash === "boost") expect(after.control.speed).toBe(before.control.speed);
-  if (dash === "barrel_roll") expect(after.control.nextManeuver).toBeNull();
+  // A performed roll cancels the drift its first tap queued; a refused one just steers.
+  if (dash === "barrel_roll" && onBar && !stressed)
+    expect(after.control.nextManeuver).toBeNull();
 }
 
 async function enter(page: Page, entry: BattleEntry): Promise<void> {
@@ -337,7 +349,7 @@ for (const entry of PILOTED_BATTLES) {
       );
     });
 
-    test("a stressed pilot is refused red specials and every action", async ({
+    test("a stressed pilot is refused red specials and boost (a roll double-tap just steers)", async ({
       page,
     }) => {
       test.setTimeout(120_000);
@@ -353,14 +365,46 @@ for (const entry of PILOTED_BATTLES) {
       await expectDash(page, "barrel_roll", true);
     });
 
-    test("a huge ship flies no Snap turn, Hook, Knife, boost or barrel roll", async ({
+    test("ordinary steering never rolls: alternating ← →, single taps, and double steering on the roll's recharge", async ({
       page,
     }) => {
       test.setTimeout(120_000);
       await enter(page, entry);
-      for (const combo of SPECIALS.slice(0, 1).concat(
-        SPECIALS[2]!,
-        SPECIALS[5]!,
+      const rollCooldown = async (): Promise<number> =>
+        (await probe(page)).control.barrelRollCooldown;
+      await reset(page);
+      for (let i = 0; i < 6; i++)
+        await pressKey(page, i % 2 === 0 ? "ArrowLeft" : "ArrowRight");
+      await page.waitForTimeout(80);
+      expect(await rollCooldown(), "alternating ← → rolls nothing").toBe(0);
+      await reset(page);
+      await pressKey(page, "ArrowLeft");
+      await page.waitForTimeout(80);
+      expect(await rollCooldown(), "a single tap rolls nothing").toBe(0);
+      await reset(page);
+      await page.evaluate(() => (window as any).__keys.setRollCooldown(2500));
+      await rollDoubleTap(page, "ArrowLeft");
+      await page.waitForTimeout(60);
+      const { control, label } = await probe(page);
+      expect(control.barrelRollCooldown, "no new roll started").toBeLessThan(
+        2600,
+      );
+      expect(label, "no refusal chatter").toBeNull();
+      expect(
+        [control.nextManeuver, control.currentManeuver].some(
+          (m: string | null) => m?.endsWith("left"),
+        ),
+        "the double steering steered left",
+      ).toBe(true);
+    });
+
+    test("a huge ship flies no Snap turn, Hook, Knife, boost or barrel roll (the roll double-tap steers)", async ({
+      page,
+    }) => {
+      test.setTimeout(120_000);
+      await enter(page, entry);
+      for (const combo of SPECIALS.filter((s) =>
+        ["Z", "Z + ←", "Z Z + →"].includes(s.name),
       )) {
         await reset(page);
         await page.evaluate(() => (window as any).__keys.makeHuge());

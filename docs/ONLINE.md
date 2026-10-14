@@ -20,7 +20,7 @@ type an address: the relay URL is baked into the build. Design and measurements:
   (pairs the two oldest players waiting on the same mode and build; 20 s ready check).
 - **Modes:** Dogfight 1v1 · Skirmish up to 2v2 · Scenario 1v1 · Reinforcements 1v1.
   A side is a **team**, never a faction: any seat may fly any faction, so mirror matches
-  (Hegemony vs Hegemony) and mixed-faction teams start like any other room (protocol 3).
+  (Hegemony vs Hegemony) and mixed-faction teams start like any other room.
   Seat → team is canonical (the room's team, `team_<n>` in the battle config).
 - **Ready check + countdown** (3 s) → `match_start` with one seed, canonical seats and the
   input delay sized from everyone's ping.
@@ -32,7 +32,7 @@ type an address: the relay URL is baked into the build. Design and measurements:
 - **Abuse limits:** origin allowlist, connection caps (server and per address), 600 KB
   frames, strict schema validation of every message, token-bucket rate limits per message
   type (inputs 160/s, chat 1/s, …), repeat offenders closed (4008).
-- **Health:** `GET /healthz` → `{"status":"ok","protocol":1,"rooms":…,"matches":…,"desyncs":…}`.
+- **Health:** `GET /healthz` → `{"status":"ok","protocol":4,"uptimeS":…,"sessions":…,"connected":…,"rooms":…,"matches":…,"queued":…,"desyncs":…}`.
 
 ## Online battles (how a match plays)
 
@@ -42,7 +42,11 @@ type an address: the relay URL is baked into the build. Design and measurements:
   camera, HUD, colours (ally/enemy by team) and end screen show each client its own seat.
 - Every client simulates every seat at 60 Hz from the same inputs (`OnlineBattleLink` →
   `LockstepSession`). Each seat's pilot (flight, weapon keys, squad mark, crew stations)
-  flies from its input stream. Reinforcements: pools and field caps are per team; every
+  flies from its input stream. The input word (`src/net/input/PilotInputCodec.ts`) carries
+  five held actions — steer left/right, throttle up/down and the **MANEUVER** key — then the
+  one-shot presses; the double-tap barrel roll (←← / →→) and the maneuver key's Snap Turn /
+  Hook Loop / Knife Roll are recognised from the held bits on the simulation clock, so every
+  client reads the same gesture (protocol 4 added the MANEUVER bit). Reinforcements: pools and field caps are per team; every
   seat's squad keeps its own sub-reserve and **every human seat has its own picker**,
   driven by its own input stream (a pick travels as that seat's input command; the 5 s
   auto-accept runs on the simulation clock). A seat whose ship is lost flies the
@@ -167,7 +171,9 @@ docker run --rm -p 8080:8080 -e ALLOWED_ORIGINS=http://localhost:3000 ss-relay
 | Symptom (lobby status line) | Cause / fix |
 |---|---|
 | "No online server configured" | `VITE_ONLINE_URL` was empty at build time; set the variable and rebuild, or use SERVER |
-| "Server unreachable" | Relay down/asleep, wrong URL, or the origin is not in `ALLOWED_ORIGINS` (browser shows a 403 on the upgrade) |
+| "Server unreachable" | Relay down/asleep, wrong URL, or the origin is not in `ALLOWED_ORIGINS` (browser shows a 403 on the upgrade). The lobby explains this in plain words, offers RECONNECT and **PLAY OFFLINE INSTEAD** |
+| "The server is full — try again shortly" | `MAX_CONNECTIONS` reached (refusal `server_full`) |
+| "That room is full." / "That match already started." / "No room with code …" | Room errors shown in red under the lobby; join another room or create one |
 | "Game version out of date — reload the page" | Client and relay protocol differ; hard-reload |
 | "That room runs a different game version" | Friends on different builds (one has a cached page); both reload |
 | "Connection lost — reconnecting…" | Network blip; the seat is kept for 30 s |

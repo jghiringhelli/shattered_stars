@@ -1,0 +1,48 @@
+name: UI / UX feedback
+description: A screen, control, text or HUD element is confusing, hard to read or awkward.
+title: "[UI/UX] "
+labels: ["ui-ux"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Build
+      description: The tag in the main-menu corner.
+    validations:
+      required: true
+  - type: input
+    id: screen
+    attributes:
+      label: Which screen or HUD element?
+    validations:
+      required: true
+  - type: dropdown
+    id: input
+    attributes:
+      label: Input device
+      options:
+        - Keyboard and mouse
+        - Gamepad
+        - Touch
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What was confusing, hard to read or awkward?
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: What would be clearer?
+  - type: input
+    id: display
+    attributes:
+      label: Screen size / window size
+      description: For example 1366x768 or 2560x1080.
+  - type: textarea
+    id: bundle
+    attributes:
+      label: Screenshot or feedback bundle
+      description: Drag a screenshot or the downloaded `shattered-stars-feedback-*.json` here (optional).

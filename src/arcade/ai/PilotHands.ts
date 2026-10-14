@@ -1,12 +1,12 @@
 /**
  * PilotHands — a bot's hands on the keyboard. Turns a {@link PilotIntent}
  * into the exact key frames a human produces (arrow taps and holds, Q/E,
- * Snap turn/Hook/Knife keys, boost key, ↑/↓ throttle taps, the left+right
- * barrel-roll chord) and feeds them through the shared PilotFlightControls.
+ * Snap turn/Hook/Knife keys, boost key, ↑/↓ throttle taps, the barrel-roll
+ * button) and feeds them through the shared PilotFlightControls.
  *
  * The bot gets no shortcut a human lacks: a bank needs the arrow held long
  * enough before the boundary, a second bank needs a re-press, a throttle tap
- * steps one notch, a roll needs the chord. Pure: no Phaser.
+ * steps one notch, a roll waits for its recharge. Pure: no Phaser.
  */
 
 import { canBarrelRoll, canKTurn } from "../../core/ArcadeControls";
@@ -47,8 +47,11 @@ interface Keys {
 
 const NO_KEYS: Keys = { left: false, right: false };
 
-/** Barrel-roll chord, frame by frame: release, first key, both, release. */
-const ROLL_CHORD_FRAMES = 4;
+/** Direct roll buttons (the bot never needs the arrows' double-tap). */
+const ROLL_EDGE: Readonly<Record<"left" | "right", FlightEdge>> = {
+  left: "BARREL_ROLL_LEFT",
+  right: "BARREL_ROLL_RIGHT",
+};
 
 /** One frame of a ship under the hands' control. */
 export interface HandsFrame {
@@ -65,7 +68,6 @@ export class PilotHands {
   private pendingSpecial: SpecialManeuver | null = null;
   private pendingBoost = false;
   private pendingRoll: "left" | "right" | null = null;
-  private rollFrame = -1;
   private lastThrottleTapMs = Number.NEGATIVE_INFINITY;
   private sharpTurnSent = false;
   /**
@@ -84,8 +86,7 @@ export class PilotHands {
     this.steeringStale = false;
     if (intent.special) this.pendingSpecial = intent.special;
     if (intent.boost) this.pendingBoost = true;
-    if (intent.barrelRoll && this.rollFrame < 0)
-      this.pendingRoll = intent.barrelRoll;
+    if (intent.barrelRoll) this.pendingRoll = intent.barrelRoll;
   }
 
   /** @returns The intent being carried out. */
@@ -103,8 +104,10 @@ export class PilotHands {
     const control = frame.flown.motion.control;
     let up = false;
     let down = false;
-    if (this.rollFrame >= 0 || (this.pendingRoll && canBarrelRoll(control))) {
-      this.keys = this.rollChord();
+    if (this.pendingRoll && canBarrelRoll(control)) {
+      edges.add(ROLL_EDGE[this.pendingRoll]);
+      this.pendingRoll = null;
+      this.keys = NO_KEYS;
     } else {
       this.pressSpecials(edges, canKTurn(control));
       const throttle = this.throttleTap(control.speed, frame.nowMs);
@@ -124,7 +127,6 @@ export class PilotHands {
         edges,
         nowMs: frame.nowMs,
         deltaMs: frame.deltaMs,
-        allowChordBarrelRoll: true,
       },
       frame.worldSize,
     );
@@ -168,25 +170,6 @@ export class PilotHands {
     if (nowMs - this.lastThrottleTapMs < THROTTLE_TAP_GAP_MS) return null;
     this.lastThrottleTapMs = nowMs;
     return wanted > speed ? "up" : "down";
-  }
-
-  /**
-   * The barrel-roll chord: release, hold the first key, add the second
-   * (the roll fires), release both.
-   * @returns Arrow keys for this frame of the chord.
-   */
-  private rollChord(): Keys {
-    if (this.rollFrame < 0) this.rollFrame = 0;
-    const frame = this.rollFrame;
-    const side = this.pendingRoll ?? "left";
-    this.rollFrame = frame + 1 >= ROLL_CHORD_FRAMES ? -1 : frame + 1;
-    if (this.rollFrame < 0) this.pendingRoll = null;
-    if (frame === 1)
-      return side === "left"
-        ? { left: true, right: false }
-        : { left: false, right: true };
-    if (frame === 2) return { left: true, right: true };
-    return NO_KEYS;
   }
 
   /**

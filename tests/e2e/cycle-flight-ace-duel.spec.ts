@@ -77,8 +77,14 @@ test.describe("AceDuelScene — cycle-engine flight", () => {
   test("Z queues a Snap turn and costs stress", async ({ page }) => {
     await ACE_DUEL.enter(page, { peaceful: true });
     await holdGameKey(page, "Z", 150);
+    // The maneuver key waits out its double-tap window before it queues the Snap turn.
+    await expect
+      .poll(async () => {
+        const s = flagship(await readShips(page));
+        return [s.currentManeuver, s.nextManeuver].includes("kturn");
+      })
+      .toBe(true);
     const ship = flagship(await readShips(page));
-    expect([ship.currentManeuver, ship.nextManeuver]).toContain("kturn");
     expect(ship.stress).toBeGreaterThan(0);
   });
 });

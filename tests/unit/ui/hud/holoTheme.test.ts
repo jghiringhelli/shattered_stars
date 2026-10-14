@@ -102,7 +102,7 @@ describe("HoloTheme tokens", () => {
     const style = holoTextStyle("caption", 0x112233);
     expect(style.fontFamily).toBe(HOLO_FONT_FAMILY);
     expect(style.color).toBe("#112233");
-    expect(style.fontSize).toBe("11px");
+    expect(style.fontSize).toBe("12px");
   });
 
   it("falls back to the neutral accent without a faction", () => {

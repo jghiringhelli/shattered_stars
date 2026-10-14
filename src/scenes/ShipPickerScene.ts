@@ -14,6 +14,8 @@ import { bindMenuBack } from "../ui/menu/menuTransitions";
 import type { ShipDefinition } from "../core/types";
 import type { FactionId } from "../config";
 import { ShipCatalogPanel, CAT_X, CAT_W } from "../ui/picker/ShipCatalogPanel";
+import { PointsBar } from "../ui/picker/PointsBar";
+import { budgetOf, checkAddToBudget } from "../ui/picker/pointsBudget";
 import type { CatalogGating } from "../ui/picker/ShipCatalogPanel";
 import {
   SquadRosterPanel,
@@ -35,24 +37,20 @@ import {
   MENU_LAYOUT,
 } from "../ui/menu/MenuScaffold";
 import { footerKeys } from "../ui/menu/footerKeys";
-import { attachTermTooltip } from "../ui/menu/HintTooltip";
 import {
   factionAccent,
-  HOLO_PALETTE,
   HOLO_SPACING,
 } from "../ui/theme/HoloTheme";
-import { holoFont } from "../ui/theme/holoFont";
-import { toCssColor } from "../ui/theme/colorMath";
 
 /** How long a refused-action message replaces the points readout, in ms. */
-const RULE_MESSAGE_MS = 1500;
+/** Top of the footer points bar (under the panels, above DONE). */
+const BAR_Y = 656;
+/** The bar stops short of the centred DONE button (px). */
+const BAR_W = 512;
 /** Full-screen dim over the scene the picker is launched on top of. */
 const PICKER_DIM_ALPHA = 0.9;
 /** Gap between the three columns. */
 const COLUMN_GAP = HOLO_SPACING.lg;
-/** Points readout type (numbers step). */
-const POINTS_FONT = { size: 16, weight: "600", letterSpacing: 0.5 } as const;
-
 interface PickerConfig {
   slotIndex: number;
   factionId: FactionId;
@@ -69,7 +67,7 @@ export class ShipPickerScene extends Phaser.Scene {
   private instanceCounter = 0;
   private catalogPanel!: ShipCatalogPanel;
   private rosterPanel!: SquadRosterPanel;
-  private pointsText!: Phaser.GameObjects.Text;
+  private pointsBar!: PointsBar;
   private lockedShipIds = new Set<string>();
   private bannerOpen = false;
 
@@ -153,13 +151,15 @@ export class ShipPickerScene extends Phaser.Scene {
       subtitle: "Pick a ship, choose its payload, then add it to your squad",
       accent,
     });
-    this.pointsText = this.add
-      .text(w - MENU_LAYOUT.margin, MENU_LAYOUT.subtitleY, "", {
-        ...holoFont(POINTS_FONT.size, POINTS_FONT.weight),
-      })
-      .setLetterSpacing(POINTS_FONT.letterSpacing)
-      .setOrigin(1, 0.5);
-    attachTermTooltip(this, this.pointsText, "ui.points_total");
+    this.pointsBar = new PointsBar(
+      this,
+      {
+        x: MENU_LAYOUT.margin,
+        y: BAR_Y,
+        width: BAR_W,
+      },
+      accent,
+    );
     createUnlockedToggle(
       this,
       { x: MENU_LAYOUT.margin, y: MENU_LAYOUT.subtitleY },
@@ -228,7 +228,19 @@ export class ShipPickerScene extends Phaser.Scene {
         if (this.lockedShipIds.has(shipId)) return;
         const roster = this.squadInstances.map((inst) => inst.loadoutId);
         if (wouldDuplicateUniquePilot(roster, loadoutId)) {
-          this.flashPointsMessage("Unique pilot already in squad");
+          this.flashPointsMessage(
+            "Unique pilot already in squad \u2014 a named pilot flies once per squad",
+          );
+          return;
+        }
+        const verdict = checkAddToBudget(
+          this.totalPoints(),
+          this.flownCostOf(shipId, loadoutId),
+          this.config.pointLimit,
+          this.cheapestShipCost(),
+        );
+        if (!verdict.ok) {
+          this.flashPointsMessage(verdict.reason);
           return;
         }
         this.squadInstances.push({
@@ -262,11 +274,8 @@ export class ShipPickerScene extends Phaser.Scene {
   }
 
   private updatePointsText(): void {
-    const total = this.totalPoints();
-    const over = total > this.config.pointLimit;
-    this.pointsText.setText(`${total} / ${this.config.pointLimit} pts`);
-    this.pointsText.setColor(
-      toCssColor(over ? HOLO_PALETTE.danger : HOLO_PALETTE.success),
+    this.pointsBar.update(
+      budgetOf(this.totalPoints(), this.config.pointLimit),
     );
   }
 
@@ -276,19 +285,26 @@ export class ShipPickerScene extends Phaser.Scene {
    * @param message - Why the last action was refused.
    */
   private flashPointsMessage(message: string): void {
-    this.pointsText.setText(message);
-    this.pointsText.setColor(toCssColor(HOLO_PALETTE.warning));
-    this.time.delayedCall(RULE_MESSAGE_MS, () => this.updatePointsText());
+    this.pointsBar.flashRefusal(message);
   }
 
   private totalPoints(): number {
-    return this.squadInstances.reduce((sum, inst) => {
-      const def = this.ships.find((s) => s.id === inst.shipId);
-      const loadout = getShipLoadouts(inst.shipId).find(
-        (l) => l.id === inst.loadoutId,
-      );
-      return sum + (loadout?.pointCost ?? def?.baseStats.pointCost ?? 0);
-    }, 0);
+    return this.squadInstances.reduce(
+      (sum, inst) => sum + this.flownCostOf(inst.shipId, inst.loadoutId),
+      0,
+    );
+  }
+
+  /** What one ship costs as flown: its build, else the bare hull. */
+  private flownCostOf(shipId: string, loadoutId: string | null): number {
+    const loadout = getShipLoadouts(shipId).find((l) => l.id === loadoutId);
+    const def = this.ships.find((s) => s.id === shipId);
+    return loadout?.pointCost ?? def?.baseStats.pointCost ?? 0;
+  }
+
+  /** Cheapest bare hull the player could still pick (for refusal hints). */
+  private cheapestShipCost(): number {
+    return Math.min(...this.ships.map((s) => s.baseStats.pointCost));
   }
 
   private finish(): void {

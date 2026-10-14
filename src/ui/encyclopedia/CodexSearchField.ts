@@ -6,6 +6,7 @@
 
 import Phaser from "phaser";
 import { drawHoloFrame, type HoloRect } from "../menu/holoChrome";
+import { addTipZone } from "../menu/tooltipTargets";
 import { holoFont } from "../theme/holoFont";
 import { toCssColor } from "../theme/colorMath";
 import { HOLO_PALETTE, HOLO_RADIUS, HOLO_SPACING } from "../theme/HoloTheme";
@@ -13,9 +14,11 @@ import { HOLO_PALETTE, HOLO_RADIUS, HOLO_SPACING } from "../theme/HoloTheme";
 /** Field text size. */
 const FIELD_TEXT_SIZE = 12;
 /** Shown while the query is empty. */
-const EMPTY_HINT = "Type to search…";
+const EMPTY_HINT = "Search…";
 /** Search glyph before the text. */
-const SEARCH_PREFIX = "⌕  ";
+const SEARCH_PREFIX = "⌕ ";
+/** Longest tail of the query the narrow field shows (characters). */
+const SHOWN_TAIL = 10;
 /** Caret after a typed query. */
 const CARET = "▏";
 
@@ -39,6 +42,7 @@ export class CodexSearchField {
       })
       .setOrigin(0, 0.5);
     this.setQuery("");
+    addTipZone(scene, null, area, "codex.search");
   }
 
   /**
@@ -48,7 +52,7 @@ export class CodexSearchField {
   setQuery(query: string): void {
     const empty = query.length === 0;
     this.label
-      .setText(SEARCH_PREFIX + (empty ? EMPTY_HINT : query + CARET))
+      .setText(SEARCH_PREFIX + (empty ? EMPTY_HINT : visibleTail(query) + CARET))
       .setColor(
         toCssColor(empty ? HOLO_PALETTE.textMuted : HOLO_PALETTE.textPrimary),
       );
@@ -60,4 +64,12 @@ export class CodexSearchField {
       fill: HOLO_PALETTE.panelFill,
     });
   }
+}
+
+/**
+ * @param query - The typed text.
+ * @returns The part of it the narrow field shows (an ellipsis marks a cut).
+ */
+export function visibleTail(query: string): string {
+  return query.length > SHOWN_TAIL ? `…${query.slice(-(SHOWN_TAIL - 1))}` : query;
 }

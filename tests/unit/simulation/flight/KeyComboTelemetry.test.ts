@@ -4,9 +4,10 @@
  * exactly where the X-Wing rules put it.
  *
  * Bindings (src/input/DefaultBindings.ts): ←/→ steer (tap = drift, hold =
- * bank then drift), Q/E hard turn, Z Snap turn, Shift+Q/E Hook, T/Shift+T
- * Knife, ↑/↓ throttle; gestures: ↑↑ boost, ↓↓ Snap turn, ←/→ + ↑↑ Knife,
- * ←/→ + ↓↓ Hook, ← then → (or → then ←) quickly = barrel roll.
+ * bank then drift), Q/E hard turn, ↑/↓ throttle; the ONE maneuver key Z:
+ * tap = Snap turn, hold + ←/→ = Hook, double-tap + hold ←/→ = Knife;
+ * gestures: ↑↑ boost, ↓↓ Snap turn, ← ← / → → = barrel roll left / right.
+ * The direct SEGNOR/TALLON/KTURN intents stay (bots, optional extra keys).
  */
 
 import { describe, it, expect } from "vitest";
@@ -19,9 +20,9 @@ import {
 } from "./keyComboHarness";
 import {
   BOOST_DISTANCE_PX,
-  CHORD_WINDOW_MS,
   DOUBLE_TAP_WINDOW_MS,
 } from "../../../../src/arcade/ArcadeInputGestures";
+import { ROLL_DOUBLE_TAP_WINDOW_MS } from "../../../../src/arcade/RollDoubleTap";
 import { createShipControl } from "../../../../src/arcade/systems/CycleFlight";
 import { getShipDial } from "../../../../src/data/ShipDefinitions";
 import {
@@ -131,11 +132,11 @@ describe("key combos — action keys", () => {
   const cases: ReadonlyArray<[string, ScriptEvent[], ManeuverDirection]> = [
     ["Q", [press("SHARP_TURN_LEFT")], "turn_left"],
     ["E", [press("SHARP_TURN_RIGHT")], "turn_right"],
-    ["Z", [press("KTURN")], "kturn"],
-    ["Shift+Q", [press("SEGNOR_LEFT")], "segnor_left"],
-    ["Shift+E", [press("SEGNOR_RIGHT")], "segnor_right"],
-    ["T", [press("TALLON_LEFT")], "tallon_left"],
-    ["Shift+T", [press("TALLON_RIGHT")], "tallon_right"],
+    ["extra key KTURN", [press("KTURN")], "kturn"],
+    ["direct SEGNOR_LEFT", [press("SEGNOR_LEFT")], "segnor_left"],
+    ["direct SEGNOR_RIGHT", [press("SEGNOR_RIGHT")], "segnor_right"],
+    ["direct TALLON_LEFT", [press("TALLON_LEFT")], "tallon_left"],
+    ["direct TALLON_RIGHT", [press("TALLON_RIGHT")], "tallon_right"],
   ];
   for (const [keys, events, direction] of cases) {
     it(`${keys} flies ${direction} next cycle, ending where X-Wing puts it`, () => {
@@ -160,24 +161,56 @@ describe("key combos — gestures", () => {
     expectAtOracle(cycleFlying(fly(doubleTap("DOWN")), "kturn"));
   });
 
-  it("holding ← and ↑↑ flies a Knife Roll left", () => {
+  it("↑↑ with a side held is still only a boost (no arrow Knife)", () => {
     const trace = fly([
       { atMs: T0 - 50, down: "LEFT" },
-      ...doubleTap("UP"),
-      { atMs: 450, up: "LEFT" },
+      ...doubleTap("UP", 600),
+      { atMs: 1000, up: "LEFT" },
     ]);
-    expectAtOracle(cycleFlying(trace, "tallon_left"));
+    expect(trace.events.map((e) => e.event)).toContain("boost");
+    expect(trace.cycles.some((c) => c.direction.startsWith("tallon"))).toBe(
+      false,
+    );
   });
 
-  it("holding → and ↓↓ flies a Hook Loop right", () => {
+  it("Z (tap) flies a Snap turn", () => {
+    expectAtOracle(cycleFlying(fly(tap("MANEUVER", T0, 60)), "kturn"));
+  });
+
+  for (const [key, side] of [
+    ["LEFT", "left"],
+    ["RIGHT", "right"],
+  ] as const) {
+    it(`holding Z and pressing ${key === "LEFT" ? "←" : "→"} flies a Hook Loop ${side}`, () => {
+      const trace = fly([
+        { atMs: T0 - 50, down: "MANEUVER" },
+        { atMs: T0, down: key },
+        { atMs: 450, up: key },
+        { atMs: 450, up: "MANEUVER" },
+      ]);
+      expectAtOracle(cycleFlying(trace, `segnor_${side}`));
+    });
+
+    it(`double-tapping Z then holding Z + ${key === "LEFT" ? "←" : "→"} flies a Knife Roll ${side} (and no Snap turn)`, () => {
+      const trace = fly([
+        ...tap("MANEUVER", T0, 50),
+        { atMs: T0 + 130, down: "MANEUVER" },
+        { atMs: T0 + 190, down: key },
+        { atMs: 450, up: key },
+        { atMs: 450, up: "MANEUVER" },
+      ]);
+      expectAtOracle(cycleFlying(trace, `tallon_${side}`));
+      expect(trace.cycles.some((c) => c.direction === "kturn")).toBe(false);
+    });
+  }
+
+  it("holding Z with no side flies nothing", () => {
     const trace = fly([
-      { atMs: T0 - 50, down: "RIGHT" },
-      ...doubleTap("DOWN"),
-      { atMs: 450, up: "RIGHT" },
+      { atMs: T0, down: "MANEUVER" },
+      { atMs: T0 + 900, up: "MANEUVER" },
     ]);
-    expectAtOracle(cycleFlying(trace, "segnor_right"));
+    expect(trace.cycles.every((c) => c.direction === "straight")).toBe(true);
   });
-
   it("↑↑ boosts: the straight cycle ends one boost further forward", () => {
     const trace = fly(doubleTap("UP", 600));
     expect(trace.events.map((e) => e.event)).toContain("boost");
@@ -197,17 +230,15 @@ describe("key combos — gestures", () => {
     expect(trace.final.motion.control.speed).toBe(CRUISE);
   });
 
-  for (const [first, second, side] of [
-    ["LEFT", "RIGHT", "left"],
-    ["RIGHT", "LEFT", "right"],
+  for (const [key, side] of [
+    ["LEFT", "left"],
+    ["RIGHT", "right"],
   ] as const) {
-    it(`${first === "LEFT" ? "← then →" : "→ then ←"} quickly barrel-rolls ${side} and flies straight on`, () => {
+    it(`${key === "LEFT" ? "← ←" : "→ →"} (double-tap) barrel-rolls ${side} and flies straight on`, () => {
       const at = 600;
       const trace = fly([
-        { atMs: at, down: first },
-        { atMs: at + CHORD_WINDOW_MS / 3, down: second },
-        { atMs: at + 120, up: first },
-        { atMs: at + 120, up: second },
+        ...tap(key, at, 50),
+        ...tap(key, at + ROLL_DOUBLE_TAP_WINDOW_MS / 2, 50),
       ]);
       expect(trace.events.map((e) => e.event)).toContain("barrel_roll");
       const rolled = trace.cycles[1]!;
@@ -224,18 +255,13 @@ describe("key combos — gestures", () => {
         trace.cycles.slice(2).every((c) => c.direction === "straight"),
       ).toBe(true);
     });
-  }
-  for (const [first, second, side] of [
-    ["LEFT", "RIGHT", "left"],
-    ["RIGHT", "LEFT", "right"],
-  ] as const) {
-    it(`a barrel roll ${side} released one key at a time still flies straight on`, () => {
+
+    it(`a ${side} barrel roll whose second tap is held on still flies straight on (no bank)`, () => {
       const at = 600;
       const trace = fly([
-        { atMs: at, down: first },
-        { atMs: at + CHORD_WINDOW_MS / 3, down: second },
-        { atMs: at + 100, up: first },
-        { atMs: at + 220, up: second },
+        ...tap(key, at, 50),
+        { atMs: at + 110, down: key },
+        { atMs: at + 1100, up: key },
       ]);
       expect(trace.events.map((e) => e.event)).toContain("barrel_roll");
       expect(
@@ -243,8 +269,28 @@ describe("key combos — gestures", () => {
       ).toBe(true);
     });
   }
-});
 
+  for (const [first, second] of [
+    ["LEFT", "RIGHT"],
+    ["RIGHT", "LEFT"],
+  ] as const) {
+    it(`${first === "LEFT" ? "← then →" : "→ then ←"} in quick succession never rolls (ordinary steering)`, () => {
+      const at = 600;
+      const trace = fly([
+        ...tap(first, at, 50),
+        ...tap(second, at + 90, 50),
+        ...tap(first, at + 180, 50),
+      ]);
+      expect(trace.events.map((e) => e.event)).not.toContain("barrel_roll");
+    });
+  }
+
+  it("a single tap of ← never rolls", () => {
+    expect(fly(tap("LEFT", 600, 50)).events.map((e) => e.event)).not.toContain(
+      "barrel_roll",
+    );
+  });
+});
 describe("key combos — throttle", () => {
   it("one ↑ tap raises the next cycle's speed by one", () => {
     const trace = fly(tap("UP", T0));

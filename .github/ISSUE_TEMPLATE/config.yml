@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Known issues and tester guide
+    url: https://github.com/jghiringhelli/shattered_stars/blob/master/docs/KNOWN_ISSUES.md
+    about: Check whether the problem is already known before filing it.

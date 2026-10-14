@@ -6,7 +6,7 @@
  * change: the server refuses a `hello` whose protocol differs, so a stale
  * cached client can never join a match it would desync.
  */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** WebSocket close codes the relay uses (4000–4999 is the application range). */
 export const CLOSE_CODES = {

@@ -41,6 +41,8 @@ export interface HoloPanelConfig {
   readonly radius?: number;
   /** Fill opacity. Default: HOLO_PALETTE.panelAlpha. */
   readonly fillAlpha?: number;
+  /** Header title font size in px (default: the holo caption step). */
+  readonly titleSize?: number;
 }
 
 /** Translucent holographic panel container. */
@@ -80,6 +82,9 @@ export class HoloPanel extends Phaser.GameObjects.Container {
       "caption",
     );
     this.titleText.setOrigin(0, 0.5);
+    if (config.titleSize !== undefined) {
+      this.titleText.setFontSize(config.titleSize);
+    }
     this.add([this.chrome, this.titleText]);
     this.redraw();
   }

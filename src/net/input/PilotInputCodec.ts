@@ -1,7 +1,8 @@
 /**
  * PilotInputCodec — one tick of a human pilot's input as lockstep words.
  *
- * Word 0 (buttons): bits 0–3 held actions, bits 4–24 one-shot presses,
+ * Word 0 (buttons): bits 0–4 held actions (steering, throttle and the
+ * MANEUVER key), bits 5–25 one-shot presses,
  * bit 30 INPUT_AI_CONTROL (set only by the relay for absent seats).
  * Optional word 1: turret aim (gunner mode), a 16-bit fraction of a turn.
  * Optional words 2–3: a command opcode and its argument (e.g. which reserve
@@ -17,6 +18,7 @@ export const HELD_ACTIONS = [
   "STEER_RIGHT",
   "THRUST_UP",
   "THRUST_DOWN",
+  "MANEUVER",
 ] as const;
 
 /** Actions that fire once per press. */

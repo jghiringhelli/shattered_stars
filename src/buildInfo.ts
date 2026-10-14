@@ -16,7 +16,7 @@ export interface BuildInfo {
 }
 
 /** Release channel shown next to the version. */
-export const RELEASE_CHANNEL = "ALPHA";
+export const RELEASE_CHANNEL = "BETA";
 
 /** This build (dev fallbacks in node tests, where nothing is injected). */
 export const BUILD_INFO: BuildInfo = {
@@ -27,7 +27,7 @@ export const BUILD_INFO: BuildInfo = {
 
 /**
  * @param info - A build.
- * @returns e.g. "v0.1.0 ALPHA · 7548cff · 2026-10-11".
+ * @returns e.g. "v0.1.0 BETA · 7548cff · 2026-10-11".
  */
 export function formatVersionTag(info: BuildInfo): string {
   return [`v${info.version} ${RELEASE_CHANNEL}`, info.commit, info.builtAt]

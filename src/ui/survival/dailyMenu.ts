@@ -6,6 +6,7 @@
 
 import type Phaser from "phaser";
 import { createHoverButton } from "../ButtonFactory";
+import { attachTermTooltip } from "../menu/HintTooltip";
 import { HOLO_PALETTE } from "../theme/HoloTheme";
 import {
   dailyChallengeFor,
@@ -17,7 +18,7 @@ import type { SurvivalChoicePanel } from "./SurvivalChoicePanel";
 import { dailyCards } from "./dailyViewModels";
 
 /** DAILY sits left of SEED on the run-controls row (RunSetupControls). */
-const DAILY_BUTTON = { x: 110, y: 545, width: 170, height: 36 } as const;
+const DAILY_BUTTON = { x: 212, y: 608, width: 140, height: 32 } as const;
 /** Panel subtitle. */
 const DAILY_SUBTITLE =
   "Same seed, faction, flagship and ascension for everyone today. Local best and history.";
@@ -31,7 +32,7 @@ export function addDailyButton(
   scene: Phaser.Scene,
   onClick: () => void,
 ): Phaser.GameObjects.Container {
-  return createHoverButton(
+  const button = createHoverButton(
     scene,
     DAILY_BUTTON.x,
     DAILY_BUTTON.y,
@@ -45,6 +46,8 @@ export function addDailyButton(
     },
     onClick,
   ).setName("dailyButton");
+  attachTermTooltip(scene, button, "survival.daily");
+  return button;
 }
 
 /**

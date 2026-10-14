@@ -5,13 +5,21 @@
  *   - Short tap left/right  → bank (caps deflection to STRESSED_MAX_DEFLECTION)
  *   - Held  left/right      → turn (full deflection, subject to stress)
  *   - Double-tap UP         → boost dash
- *   - Double-tap DOWN       → Snap turn (in addition to Z key)
- *   - Chord left+right      → barrel roll (direction of second key, feature-flagged)
+ *   - Double-tap DOWN       → Snap turn (in addition to the maneuver key)
+ *   - Double-tap LEFT/RIGHT → barrel roll to that side (RollDoubleTap)
+ *   - Chord left+right      → barrel roll (opt-in accessibility fallback)
+ *
+ * Hook Loop and Knife Roll belong to the maneuver key (ManeuverKey).
  *
  * Pure functions only — no Phaser dependency. All state is immutable.
  */
 
 import { STRESSED_MAX_DEFLECTION } from "./ArcadeStress";
+import {
+  INITIAL_ROLL_TAP,
+  updateRollTap,
+  type RollTapState,
+} from "./RollDoubleTap";
 
 // ============================================
 // Timing constants
@@ -47,13 +55,7 @@ export type GestureAction =
   | "barrel_roll_right"
   /** Hold left/right past BANK_HOLD_THRESHOLD_MS — fires once, then consumed until key released. */
   | "hard_turn_left"
-  | "hard_turn_right"
-  /** Double-tap UP + direction held — Knife Roll (180° with lateral offset). Arc math TODO. */
-  | "tallon_roll_left"
-  | "tallon_roll_right"
-  /** Double-tap DOWN + direction held — Hook Loop (reverse loop with lateral offset). Arc math TODO. */
-  | "segnor_loop_left"
-  | "segnor_loop_right";
+  | "hard_turn_right";
 
 /** Immutable gesture tracking state; updated every frame via updateGestures(). */
 export interface GestureState {
@@ -80,6 +82,8 @@ export interface GestureState {
   readonly prevRightDown: boolean;
   readonly prevUpDown: boolean;
   readonly prevDownDown: boolean;
+  /** Double-tap tracking of the steering arrows (barrel roll). */
+  readonly rollTap: RollTapState;
 }
 
 export const INITIAL_GESTURE_STATE: GestureState = {
@@ -95,6 +99,7 @@ export const INITIAL_GESTURE_STATE: GestureState = {
   prevRightDown: false,
   prevUpDown: false,
   prevDownDown: false,
+  rollTap: INITIAL_ROLL_TAP,
 };
 
 // ============================================
@@ -110,8 +115,10 @@ export interface GestureUpdateParams {
   /** Current wall-clock time in ms (use Phaser's time.now). */
   readonly nowMs: number;
   readonly deltaMs: number;
-  /** Set false to disable the chord barrel roll (accessibility / mobile). */
+  /** Opt-in left+right chord barrel roll (accessibility alternative to the double-tap). */
   readonly allowChordBarrelRoll: boolean;
+  /** The maneuver key is down: the arrows belong to it, so no double-tap roll. */
+  readonly maneuverHeld?: boolean;
 }
 
 export interface GestureUpdateResult {
@@ -199,18 +206,21 @@ export function updateGestures(
     }
   }
 
-  // --- Double-tap UP: boost (plain) or Knife Roll (with direction held) ---
-  if (upJustDown && nowMs - state.lastUpTapMs <= DOUBLE_TAP_WINDOW_MS) {
-    if (leftDown) actions.push("tallon_roll_left");
-    else if (rightDown) actions.push("tallon_roll_right");
-    else actions.push("boost");
-  }
+  // --- Double-tap LEFT / RIGHT: barrel roll to that side ---
+  const tapped = updateRollTap(state.rollTap, {
+    left: leftDown,
+    right: rightDown,
+    nowMs,
+    enabled: !params.maneuverHeld,
+  });
+  if (tapped.roll) actions.push(`barrel_roll_${tapped.roll}`);
 
-  // --- Double-tap DOWN: Snap turn (plain) or Hook Loop (with direction held) ---
+  // --- Double-tap UP: boost; double-tap DOWN: Snap turn ---
+  if (upJustDown && nowMs - state.lastUpTapMs <= DOUBLE_TAP_WINDOW_MS) {
+    actions.push("boost");
+  }
   if (downJustDown && nowMs - state.lastDownTapMs <= DOUBLE_TAP_WINDOW_MS) {
-    if (leftDown) actions.push("segnor_loop_left");
-    else if (rightDown) actions.push("segnor_loop_right");
-    else actions.push("kturn_gesture");
+    actions.push("kturn_gesture");
   }
 
   // --- Hold-to-commit hard turn: fires once when hold crosses the bank threshold ---
@@ -255,6 +265,7 @@ export function updateGestures(
       prevRightDown: rightDown,
       prevUpDown: upDown,
       prevDownDown: downDown,
+      rollTap: tapped.state,
     },
     deflectionCap,
     actions,

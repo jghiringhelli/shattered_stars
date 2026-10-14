@@ -1,31 +1,60 @@
 /**
- * DogfightSetupView — the Dogfight setup screen in the holographic style:
- * match format, both ships (four per faction) with their factions, AI
- * difficulty and FIGHT!. Pure view: it reads a state snapshot and reports
- * choices through callbacks; the scene owns the state and re-renders.
+ * DogfightSetupView — the Dogfight setup screen: a flown-points strip for
+ * both sides, a tab bar (OVERVIEW ships and factions, STATS side by side,
+ * BUILDS your quick build, MATCH rounds and AI difficulty) and FIGHT!. Pure
+ * view: it reads a state snapshot and reports choices through callbacks; the
+ * scene owns the state and re-renders.
  */
 
 import Phaser from "phaser";
 import type { FactionId } from "../../config";
-import { getShipsByFaction } from "../../data/ShipDefinitions";
+import { shipHint } from "../../data/roleHints";
+import { getShipDefinition, getShipsByFaction } from "../../data/ShipDefinitions";
+import {
+  factionTermId,
+  roleTermId,
+  termEntry,
+} from "../../data/tooltips";
 import { createHoloButton } from "../../ui/hud/HoloButton";
-import { SIDE_COLORS } from "../../ui/theme/HoloTheme";
+import { addCycler, addSelectable } from "../../ui/menu/FlatControls";
+import { attachTermTooltip } from "../../ui/menu/HintTooltip";
+import type { DetailTabId } from "../../ui/menu/detailTabsModel";
+import { addPickerText, pickerTextStyle } from "../../ui/picker/pickerStyle";
+import {
+  HOLO_PALETTE,
+  HOLO_SPACING,
+  SIDE_COLORS,
+} from "../../ui/theme/HoloTheme";
+import {
+  drawBuildsBody,
+  drawStatsBody,
+  type StatSide,
+} from "./duelSetupBodies";
+import {
+  DUEL_LAYOUT,
+  bodyArea,
+  drawDuelFrame,
+  openDuelTab,
+  pinTree,
+  type BodyArea,
+} from "./duelSetupChrome";
+import type { DuelDifficulty, DuelFormat } from "./duelSetupModel";
+import { pointsStrip, sidePoints } from "./duelPointsModel";
+import { addShipArt, drawMatchBody } from "./duelSetupWidgets";
+import { SHIPS_PER_PAGE, shipPage } from "./shipPaging";
 import {
   addBackButton,
   addControlsFooter,
-  addHoloToggle,
-  addSectionCaption,
   addSetupBackdrop,
-  addSetupPanel,
   addSetupTitle,
   sizeHoloLabel,
   type TrackSetupObject,
 } from "./holoSetupKit";
 
 /** Best-of formats. */
-export type DogfightFormat = "best_of_3" | "best_of_5";
+export type DogfightFormat = DuelFormat;
 /** AI difficulty settings. */
-export type DogfightDifficulty = "easy" | "normal" | "hard" | "brutal";
+export type DogfightDifficulty = DuelDifficulty;
 
 /** What the setup screen shows. */
 export interface DogfightSetupState {
@@ -35,6 +64,12 @@ export interface DogfightSetupState {
   readonly playerShipId: string;
   readonly enemyShipId: string;
   readonly difficulty: DogfightDifficulty;
+  /** The quick build the player flies (null = bare hull). */
+  readonly playerLoadoutId: string | null;
+  /** The default quick build the AI flies (null = bare hull). */
+  readonly enemyLoadoutId: string | null;
+  /** Ship page each side was paged to (null = the page of the selected ship). */
+  readonly shipPages: Readonly<Record<"player" | "enemy", number | null>>;
 }
 
 /** What the player can do on it. */
@@ -46,14 +81,13 @@ export interface DogfightSetupActions {
     faction: FactionId,
   ) => void;
   readonly selectDifficulty: (difficulty: DogfightDifficulty) => void;
+  readonly selectBuild: (loadoutId: string | null) => void;
+  readonly pageShips: (owner: "player" | "enemy", page: number) => void;
+  readonly selectTab: (tab: DetailTabId) => void;
   readonly start: () => void;
   readonly back: () => void;
 }
 
-const FORMATS: ReadonlyArray<{ id: DogfightFormat; name: string }> = [
-  { id: "best_of_3", name: "Best of 3" },
-  { id: "best_of_5", name: "Best of 5" },
-];
 const FACTIONS: readonly FactionId[] = [
   "terran_hegemony",
   "free_confederation",
@@ -61,43 +95,21 @@ const FACTIONS: readonly FactionId[] = [
   "void_corsairs",
   "ascendant_empire",
 ];
-const FACTION_SHORT: Readonly<Record<FactionId, string>> = {
-  terran_hegemony: "Heg",
-  free_confederation: "Con",
-  synthetic_collective: "Col",
-  void_corsairs: "Cor",
-  ascendant_empire: "Emp",
-};
-const DIFFICULTIES: readonly DogfightDifficulty[] = [
-  "easy",
-  "normal",
-  "hard",
-  "brutal",
-];
-/** Ships listed per faction. */
-const SHIPS_LISTED = 4;
 
-/** Screen layout (px). */
-const LAYOUT = {
-  formatCaptionY: 118,
-  formatY: 146,
-  formatPitch: 160,
-  format: { width: 144, height: 32 },
-  panelOffsetX: 170,
-  panel: { top: 184, width: 290, height: 312 },
-  shipFirstY: 236,
-  shipPitch: 40,
-  ship: { width: 250, height: 32 },
-  factionCaptionY: 412,
-  factionY: 444,
-  factionPitch: 52,
-  faction: { width: 46, height: 28, fontPx: 11 },
-  difficultyCaptionY: 524,
-  difficultyY: 554,
-  difficultyPitch: 100,
-  difficulty: { width: 88, height: 28, fontPx: 11 },
-  start: { y: 626, width: 210, height: 50, fontPx: 24 },
+/** Overview geometry (px, 8 px grid). */
+const OVERVIEW = {
+  gap: 24,
+  headingGap: 24,
+  cyclerH: 32,
+  rowsTop: 88,
+  rowH: 40,
+  rowPitch: 48,
+  rowW: 376,
+  artSize: 192,
+  hintGap: 16,
 } as const;
+
+type Owner = "player" | "enemy";
 
 /**
  * Render the setup screen.
@@ -113,153 +125,137 @@ export function renderDogfightSetup(
   actions: DogfightSetupActions,
   track: TrackSetupObject,
 ): void {
-  const centerX = scene.scale.width / 2;
   addSetupBackdrop(scene, track);
-  addSetupTitle(scene, "Dogfight", "1v1 quick duels", track);
+  addSetupTitle(scene, "Dogfight", " ", track);
   addBackButton(scene, actions.back, track);
-  renderFormats(scene, state, actions, track);
-  renderSide(scene, "player", centerX - LAYOUT.panelOffsetX, {
-    state,
-    actions,
-    track,
+  const tab = openDuelTab();
+  const strip = pointsStrip(
+    sidePoints([state.playerShipId], [state.playerLoadoutId]),
+    sidePoints([state.enemyShipId], [state.enemyLoadoutId]),
+  );
+  const root = drawDuelFrame(scene, {
+    strip,
+    tab,
+    accent: HOLO_PALETTE.accent,
+    onTab: actions.selectTab,
   });
-  renderSide(scene, "enemy", centerX + LAYOUT.panelOffsetX, {
-    state,
-    actions,
-    track,
-  });
-  renderDifficulty(scene, state, actions, track);
+  drawTabBody(bodyArea(scene, root), tab, state, actions);
+  pinTree(root);
+  track(root);
   renderStart(scene, actions, track);
   addControlsFooter(scene, track);
 }
 
-function renderFormats(
-  scene: Phaser.Scene,
+function drawTabBody(
+  area: BodyArea,
+  tab: DetailTabId,
   state: DogfightSetupState,
   actions: DogfightSetupActions,
-  track: TrackSetupObject,
 ): void {
-  const centerX = scene.scale.width / 2;
-  addSectionCaption(
-    scene,
-    centerX,
-    LAYOUT.formatCaptionY,
-    "Match format",
-    track,
-  );
-  FORMATS.forEach((format, i) => {
-    const x = centerX + (i - (FORMATS.length - 1) / 2) * LAYOUT.formatPitch;
-    addHoloToggle(
-      scene,
-      { x, y: LAYOUT.formatY },
-      {
-        ...LAYOUT.format,
-        label: format.name,
-        selected: format.id === state.matchFormat,
-      },
-      () => actions.selectFormat(format.id),
-      track,
-    );
-  });
-}
-
-interface SideContext {
-  readonly state: DogfightSetupState;
-  readonly actions: DogfightSetupActions;
-  readonly track: TrackSetupObject;
-}
-
-function renderSide(
-  scene: Phaser.Scene,
-  owner: "player" | "enemy",
-  x: number,
-  { state, actions, track }: SideContext,
-): void {
-  const faction = owner === "player" ? state.playerFaction : state.enemyFaction;
-  const shipId = owner === "player" ? state.playerShipId : state.enemyShipId;
-  const { panel } = LAYOUT;
-  addSetupPanel(
-    scene,
-    {
-      x,
-      y: panel.top + panel.height / 2,
-      width: panel.width,
-      height: panel.height,
-    },
-    {
-      title: owner === "player" ? "Your ship" : "Enemy ship",
-      accent: owner === "player" ? SIDE_COLORS.player : SIDE_COLORS.enemy,
-    },
-    track,
-  );
-  getShipsByFaction(faction)
-    .slice(0, SHIPS_LISTED)
-    .forEach((ship, i) => {
-      addHoloToggle(
-        scene,
-        { x, y: LAYOUT.shipFirstY + i * LAYOUT.shipPitch },
-        { ...LAYOUT.ship, label: ship.name, selected: ship.id === shipId },
-        () => actions.selectShip(owner, ship.id),
-        track,
-      );
+  const accent = HOLO_PALETTE.accent;
+  if (tab === "stats") {
+    drawStatsBody(area, statSide("YOUR SHIP", state.playerShipId, state.playerLoadoutId), statSide("ENEMY", state.enemyShipId, state.enemyLoadoutId));
+  } else if (tab === "builds") {
+    drawBuildsBody(area, {
+      shipId: state.playerShipId,
+      loadoutId: state.playerLoadoutId,
+      accent,
+      onPick: actions.selectBuild,
+      enemy: { shipId: state.enemyShipId, loadoutId: state.enemyLoadoutId },
     });
-  renderFactions(scene, owner, x, { state, actions, track });
+  } else if (tab === "match") {
+    drawMatchBody(area, {
+      accent,
+      format: { selected: state.matchFormat, onSelect: actions.selectFormat },
+      difficulty: { selected: state.difficulty, onSelect: actions.selectDifficulty },
+    });
+  } else {
+    drawOverview(area, state, actions);
+  }
 }
 
-function renderFactions(
-  scene: Phaser.Scene,
-  owner: "player" | "enemy",
-  x: number,
-  { state, actions, track }: SideContext,
-): void {
-  const selected =
-    owner === "player" ? state.playerFaction : state.enemyFaction;
-  addSectionCaption(scene, x, LAYOUT.factionCaptionY, "Faction", track);
-  FACTIONS.forEach((faction, i) => {
-    const fx = x + (i - (FACTIONS.length - 1) / 2) * LAYOUT.factionPitch;
-    addHoloToggle(
-      scene,
-      { x: fx, y: LAYOUT.factionY },
-      {
-        ...LAYOUT.faction,
-        label: FACTION_SHORT[faction],
-        selected: faction === selected,
-      },
-      () => actions.selectFaction(owner, faction),
-      track,
-    );
-  });
+function statSide(name: string, shipId: string, loadoutId: string | null): StatSide {
+  const def = getShipDefinition(shipId)!;
+  return { name: `${name}  ${def.name}`, def, loadoutId };
 }
 
-function renderDifficulty(
-  scene: Phaser.Scene,
+function drawOverview(
+  area: BodyArea,
   state: DogfightSetupState,
   actions: DogfightSetupActions,
-  track: TrackSetupObject,
 ): void {
-  const centerX = scene.scale.width / 2;
-  addSectionCaption(
-    scene,
-    centerX,
-    LAYOUT.difficultyCaptionY,
-    "AI difficulty",
-    track,
-  );
-  DIFFICULTIES.forEach((difficulty, i) => {
-    const x =
-      centerX + (i - (DIFFICULTIES.length - 1) / 2) * LAYOUT.difficultyPitch;
-    addHoloToggle(
-      scene,
-      { x, y: LAYOUT.difficultyY },
-      {
-        ...LAYOUT.difficulty,
-        label: difficulty,
-        selected: difficulty === state.difficulty,
-      },
-      () => actions.selectDifficulty(difficulty),
-      track,
-    );
+  const colW = (area.width - OVERVIEW.gap) / 2;
+  (["player", "enemy"] as const).forEach((owner, i) => {
+    drawSide(area, owner, { x: area.x + i * (colW + OVERVIEW.gap), width: colW }, state, actions);
   });
+}
+
+function drawSide(
+  area: BodyArea,
+  owner: Owner,
+  col: { readonly x: number; readonly width: number },
+  state: DogfightSetupState,
+  actions: DogfightSetupActions,
+): void {
+  const { scene, root } = area;
+  const player = owner === "player";
+  const faction = player ? state.playerFaction : state.enemyFaction;
+  const shipId = player ? state.playerShipId : state.enemyShipId;
+  const color = player ? SIDE_COLORS.player : SIDE_COLORS.enemy;
+  root.add(addPickerText(scene, { x: col.x, y: area.y }, player ? "YOUR SHIP" : "ENEMY SHIP", "caption", color));
+  const rule = scene.add.graphics();
+  rule.lineStyle(1, color, 0.6).lineBetween(col.x, area.y + OVERVIEW.headingGap - 4, col.x + col.width, area.y + OVERVIEW.headingGap - 4);
+  root.add(rule);
+  const index = FACTIONS.indexOf(faction);
+  addCycler(scene, root, {
+    x: col.x,
+    y: area.y + OVERVIEW.headingGap + HOLO_SPACING.sm,
+    width: col.width,
+    height: OVERVIEW.cyclerH,
+    label: termEntry(factionTermId(faction)).title.toUpperCase(),
+    accent: color,
+    tip: "duel.faction_pick",
+    onStep: (step) => actions.selectFaction(owner, FACTIONS[(index + step + FACTIONS.length) % FACTIONS.length]!),
+  });
+  const top = area.y + OVERVIEW.rowsTop;
+  const listed = shipPage(getShipsByFaction(faction), shipId, state.shipPages[owner]);
+  listed.items.forEach((ship, row) => {
+    addSelectable(scene, root, {
+      x: col.x,
+      y: top + row * OVERVIEW.rowPitch,
+      width: OVERVIEW.rowW,
+      height: OVERVIEW.rowH,
+      label: ship.name,
+      detail: `${ship.baseStats.pointCost} pt`,
+      selected: ship.id === shipId,
+      accent: color,
+      tip: roleTermId(ship.role),
+      onPress: () => actions.selectShip(owner, ship.id),
+    });
+  });
+  const def = getShipDefinition(shipId);
+  if (def) {
+    addShipArt(area, def, {
+      cx: col.x + OVERVIEW.rowW + OVERVIEW.hintGap + (col.width - OVERVIEW.rowW - OVERVIEW.hintGap) / 2,
+      cy: top + OVERVIEW.artSize / 2,
+      size: Math.min(OVERVIEW.artSize, col.width - OVERVIEW.rowW - OVERVIEW.hintGap),
+    });
+  }
+  const pagerY = top + SHIPS_PER_PAGE * OVERVIEW.rowPitch;
+  addCycler(scene, root, {
+    x: col.x,
+    y: pagerY,
+    width: OVERVIEW.rowW,
+    height: OVERVIEW.cyclerH,
+    label: listed.caption,
+    accent: color,
+    tip: "duel.ship_row",
+    onStep: (step) => actions.pageShips(owner, (listed.page + step + listed.pages) % listed.pages),
+  });
+  const hint = shipHint(shipId);
+  root.add(
+    scene.add.text(col.x, pagerY + OVERVIEW.cyclerH + OVERVIEW.hintGap, `${hint.role}\n${hint.bestWith}`, pickerTextStyle("body", HOLO_PALETTE.textSecondary, { wordWrap: { width: col.width } })),
+  );
 }
 
 function renderStart(
@@ -267,18 +263,18 @@ function renderStart(
   actions: DogfightSetupActions,
   track: TrackSetupObject,
 ): void {
-  const { start } = LAYOUT;
   const button = createHoloButton(
     scene,
     scene.scale.width / 2,
-    start.y,
+    scene.scale.height - DUEL_LAYOUT.startCentreFromBottom,
     {
-      width: start.width,
-      height: start.height,
+      width: DUEL_LAYOUT.startWidth,
+      height: DUEL_LAYOUT.startHeight,
       label: "FIGHT!",
       variant: "primary",
     },
     actions.start,
   );
-  track(sizeHoloLabel(button, start.fontPx));
+  attachTermTooltip(scene, button, "duel.fight");
+  track(sizeHoloLabel(button, DUEL_LAYOUT.startFontPx));
 }

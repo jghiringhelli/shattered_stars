@@ -20,6 +20,21 @@ describe("credits", () => {
     expect(allText).toMatch(/Ascendant/);
   });
 
+  it("credits every checkpoint family the art scripts use (SDXL and DreamShaper)", () => {
+    expect(allText).toContain("SDXL 1.0");
+    expect(allText).toContain("DreamShaper 8");
+  });
+
+  it("names the bundled Phaser sub-libraries and the font policy", () => {
+    for (const lib of ["Matter.js", "poly-decomp", "earcut"])
+      expect(allText).toContain(lib);
+    expect(allText).toMatch(/System fonts only/);
+  });
+
+  it("names Wing Commander among the trademarks it disclaims", () => {
+    expect(allText).toMatch(/Star Wars, X-Wing, Wing Commander/);
+  });
+
   it("discloses AI-generated content", () => {
     expect(allText).toMatch(/AI-generated/i);
   });

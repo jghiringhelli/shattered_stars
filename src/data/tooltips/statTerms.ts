@@ -74,6 +74,11 @@ export const STAT_TERMS = {
     "Stat changes the build's cards add on top of the hull, such as +1 HUL, +1 SHD, +1 ATK or +1 AGI.",
     "'+2 HUL +1 ATK' means two more hull points and one more attack die than the bare ship.",
   ),
+  "size.tiny": term(
+    "Tiny ship",
+    "The smallest hull of all: a hard target that turns on the spot, but it has the least hull to lose.",
+    "Drones and swarm skiffs are tiny — they die fast but there are many.",
+  ),
   "size.small": term(
     "Small ship",
     "The smallest hull class: hardest to hit in a crowd and quickest to turn.",
@@ -126,21 +131,21 @@ export const STAT_TERMS = {
     "Snap Turn",
     "A red U-turn: the ship flies straight ahead and flips 180 degrees to face the enemy behind it.",
     "A bomber chased by an interceptor Snap Turns to bring its guns around — and takes stress for it.",
-    "Recharges in about 5 seconds. Use it to break a tail, not as a habit.",
+    "Tap the Maneuver key (Z), or double-tap ↓. Recharges in about 5 seconds — use it to break a tail, not as a habit.",
     "dial_red",
   ),
   "maneuver.hook_loop": term(
     "Hook Loop",
     "A red looping turn: bank, then flip around, ending behind where you started with a sideways offset.",
     "Hook Loop right to slide out of a pursuer's arc and reappear on its flank.",
-    "Needs the maneuver on the ship's dial — not every hull can do it.",
+    "Hold the Maneuver key (Z) and press ← or →. Needs the maneuver on the ship's dial — not every hull can do it.",
     "dial_red",
   ),
   "maneuver.knife_roll": term(
     "Knife Roll",
     "A red sideways flip: turn, then roll a further 90 degrees so the ship ends facing back the way it came, shifted sideways.",
     "Knife Roll left to dodge a joust and land with the enemy in your front arc.",
-    "Skilled pilots use it to reverse a duel in one move; only some dials have it.",
+    "Double-tap the Maneuver key (Z), then hold ← or →. Skilled pilots use it to reverse a duel in one move; only some dials have it.",
     "dial_red",
   ),
 } as const;

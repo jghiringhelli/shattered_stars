@@ -1,59 +1,57 @@
 /**
- * RaidSetupScreen — the Boss Raid briefing screen in the holographic look:
- * target (boss) and difficulty pickers in HoloPanels, a target-intel panel
- * with the boss's real-time hull/shields, BEGIN ASSAULT and BACK buttons.
- * Shown at camera zoom 1.0 so the buttons hit-test.
+ * RaidSetupScreen — the Boss Raid briefing: a tab bar (OVERVIEW pick the
+ * target and read its numbers, ABILITIES what the boss does, MATCH raid
+ * difficulty) and BEGIN ASSAULT. Built as one container over the battle
+ * scene at camera zoom 1; the owner rebuilds it after every choice.
  */
 
 import Phaser from "phaser";
-import type { FactionId } from "../../config";
-import type { EpicDifficulty } from "../../arcade/systems/EpicAiFlight";
 import { createHoloButton } from "../../ui/hud/HoloButton";
-import { createHoloPanel } from "../../ui/hud/HoloPanel";
-import { createHoloText } from "../../ui/hud/holoPrimitives";
+import { drawDetailTabs } from "../../ui/menu/DetailTabs";
+import {
+  recallTab,
+  rememberTab,
+  tabsFor,
+  type DetailTabId,
+} from "../../ui/menu/detailTabsModel";
+import { attachTermTooltip } from "../../ui/menu/HintTooltip";
+import {
+  MENU_LAYOUT,
+  addBackButton,
+  addMenuHeader,
+} from "../../ui/menu/MenuScaffold";
 import { HOLO_DEPTH, HOLO_PALETTE } from "../../ui/theme/HoloTheme";
 import {
-  BOSS_DEFINITIONS,
-  BOSS_FACTIONS,
-  RAID_DIFFICULTIES,
-  raidIntelLines,
-} from "./bossDefinitions";
+  drawAbilitiesTab,
+  drawMatchTab,
+  drawTargetTab,
+  type RaidSetupConfig,
+} from "./raidSetupTabs";
 
-/** Screen layout (px). The start button's spot is read by e2e specs. */
+export type { RaidSetupConfig } from "./raidSetupTabs";
+
+/** Screen layout (px, 8 px grid). */
 const LAYOUT = {
-  titleY: 34,
-  subtitleY: 74,
-  columnOffsetX: 200,
-  pickerTop: 108,
-  pickerWidth: 300,
-  optionWidth: 260,
-  optionHeight: 36,
-  optionPitch: 45,
-  pickerHeaderAllowance: 46,
-  intelY: 448,
-  intelWidth: 700,
-  intelHeight: 112,
-  intelLinePitch: 24,
-  startFromBottom: 100,
-  startWidth: 240,
-  startHeight: 60,
-  backX: 80,
-  backY: 40,
-  backWidth: 120,
-  backHeight: 40,
+  tabsY: MENU_LAYOUT.contentTop,
+  contentTop: 160,
+  startWidth: 208,
+  startHeight: 44,
 } as const;
-/** Size boost of the screen title over the "title" role. */
-const TITLE_SCALE = 1.5;
+/** Backdrop opacity over the battle scene. */
+const BACKDROP_ALPHA = 0.85;
+/** The screen the tab bar belongs to. */
+const SCREEN = "raidSetup";
 
-/** Current choices and what the screen's controls do. */
-export interface RaidSetupConfig {
-  readonly scene: Phaser.Scene;
-  readonly bossFaction: FactionId;
-  readonly difficulty: EpicDifficulty;
-  readonly onSelectBoss: (faction: FactionId) => void;
-  readonly onSelectDifficulty: (difficulty: EpicDifficulty) => void;
-  readonly onStart: () => void;
-  readonly onBack: () => void;
+/** @returns The tab the raid setup has open (remembered for the session). */
+export function openRaidTab(): DetailTabId {
+  return recallTab(SCREEN);
+}
+
+/** @param direction - +1 opens the next tab, -1 the previous one. */
+export function stepRaidTab(direction: 1 | -1): void {
+  const tabs = tabsFor(SCREEN);
+  const index = tabs.findIndex((tab) => tab.id === openRaidTab());
+  rememberTab(SCREEN, tabs[(index + direction + tabs.length) % tabs.length]!.id);
 }
 
 /**
@@ -68,150 +66,56 @@ export function buildRaidSetupScreen(
   const { scene } = config;
   const { width, height } = scene.scale;
   const backdrop = scene.add
-    .rectangle(0, 0, width, height, 0x000000, 0.85)
+    .rectangle(0, 0, width, height, 0x000000, BACKDROP_ALPHA)
     .setOrigin(0);
   const root = scene.add.container(0, 0, [backdrop]);
-  root.add(headerTexts(scene, width / 2));
-  root.add(bossPicker(config, width / 2 - LAYOUT.columnOffsetX));
-  root.add(difficultyPicker(config, width / 2 + LAYOUT.columnOffsetX));
-  root.add(intelPanel(config, width / 2));
-  root.add(navigationButtons(config, width / 2, height));
+  const header = addMenuHeader(scene, {
+    title: "Capital Assault",
+    subtitle: "Destroy the enemy capital ship",
+    accent: HOLO_PALETTE.danger,
+  });
+  root.add([
+    header.title,
+    ...(header.subtitle ? [header.subtitle] : []),
+    header.rule,
+    addBackButton(scene, config.onBack),
+  ]);
+  const tab = openRaidTab();
+  drawDetailTabs(scene, root, {
+    x: MENU_LAYOUT.margin,
+    y: LAYOUT.tabsY,
+    width: width - 2 * MENU_LAYOUT.margin,
+    accent: HOLO_PALETTE.danger,
+    tabs: tabsFor(SCREEN),
+    active: tab,
+    onSelect: (next) => {
+      rememberTab(SCREEN, next);
+      config.onSelectTab();
+    },
+  });
+  const area = {
+    scene,
+    root,
+    x: MENU_LAYOUT.margin,
+    y: LAYOUT.contentTop,
+    width: width - 2 * MENU_LAYOUT.margin,
+  };
+  if (tab === "abilities") drawAbilitiesTab(area, config);
+  else if (tab === "match") drawMatchTab(area, config);
+  else drawTargetTab(area, config);
+  root.add(startButton(config, width / 2, height - MENU_LAYOUT.primaryInset));
   return root.setDepth(HOLO_DEPTH.menuPanel).setScrollFactor(0, 0, true);
 }
 
-function headerTexts(
-  scene: Phaser.Scene,
-  centerX: number,
-): Phaser.GameObjects.Text[] {
-  const title = createHoloText(
-    scene,
-    centerX,
-    LAYOUT.titleY,
-    "CAPITAL ASSAULT",
-    "title",
-    HOLO_PALETTE.danger,
-  );
-  title.setScale(TITLE_SCALE);
-  const subtitle = createHoloText(
-    scene,
-    centerX,
-    LAYOUT.subtitleY,
-    "Destroy the enemy capital ship",
-    "body",
-    HOLO_PALETTE.textSecondary,
-  );
-  return [title, subtitle];
-}
-
-/** A picker column: a titled panel with one option button per choice. */
-function pickerColumn<T>(
-  scene: Phaser.Scene,
-  x: number,
-  title: string,
-  options: readonly { readonly id: T; readonly label: string }[],
-  selected: T,
-  onPick: (id: T) => void,
-): Phaser.GameObjects.GameObject[] {
-  const height =
-    LAYOUT.pickerHeaderAllowance + options.length * LAYOUT.optionPitch;
-  const panel = createHoloPanel(scene, x, LAYOUT.pickerTop + height / 2, {
-    width: LAYOUT.pickerWidth,
-    height,
-    title,
-  });
-  const firstY =
-    LAYOUT.pickerTop +
-    LAYOUT.pickerHeaderAllowance +
-    LAYOUT.optionPitch / 2 -
-    6;
-  const buttons = options.map((option, index) =>
-    createHoloButton(
-      scene,
-      x,
-      firstY + index * LAYOUT.optionPitch,
-      {
-        width: LAYOUT.optionWidth,
-        height: LAYOUT.optionHeight,
-        label: option.label,
-        variant: option.id === selected ? "primary" : "secondary",
-        font: '600 15px "Segoe UI", Roboto, Arial, sans-serif',
-      },
-      () => onPick(option.id),
-    ).setFocused(option.id === selected),
-  );
-  return [panel, ...buttons];
-}
-
-function bossPicker(
+function startButton(
   config: RaidSetupConfig,
   x: number,
-): Phaser.GameObjects.GameObject[] {
-  const options = BOSS_FACTIONS.map((faction) => ({
-    id: faction,
-    label: BOSS_DEFINITIONS[faction].name,
-  }));
-  return pickerColumn(
+  y: number,
+): Phaser.GameObjects.Container {
+  const button = createHoloButton(
     config.scene,
     x,
-    "Select target",
-    options,
-    config.bossFaction,
-    config.onSelectBoss,
-  );
-}
-
-function difficultyPicker(
-  config: RaidSetupConfig,
-  x: number,
-): Phaser.GameObjects.GameObject[] {
-  const options = RAID_DIFFICULTIES.map((d) => ({
-    id: d.id,
-    label: `${d.name} (${d.multiplier}x)`,
-  }));
-  return pickerColumn(
-    config.scene,
-    x,
-    "Difficulty",
-    options,
-    config.difficulty,
-    config.onSelectDifficulty,
-  );
-}
-
-function intelPanel(
-  config: RaidSetupConfig,
-  centerX: number,
-): Phaser.GameObjects.GameObject[] {
-  const { scene } = config;
-  const panel = createHoloPanel(scene, centerX, LAYOUT.intelY, {
-    width: LAYOUT.intelWidth,
-    height: LAYOUT.intelHeight,
-    title: `Target intel — ${BOSS_DEFINITIONS[config.bossFaction].name}`,
-    accentColor: HOLO_PALETTE.danger,
-  });
-  const top = LAYOUT.intelY + panel.contentTop + LAYOUT.intelLinePitch / 2;
-  const lines = raidIntelLines(config.bossFaction, config.difficulty).map(
-    (line, index) =>
-      createHoloText(
-        scene,
-        centerX,
-        top + index * LAYOUT.intelLinePitch,
-        line,
-        "body",
-      ),
-  );
-  return [panel, ...lines];
-}
-
-function navigationButtons(
-  config: RaidSetupConfig,
-  centerX: number,
-  height: number,
-): Phaser.GameObjects.GameObject[] {
-  const start = createHoloButton(
-    config.scene,
-    centerX,
-    height - LAYOUT.startFromBottom,
+    y,
     {
       width: LAYOUT.startWidth,
       height: LAYOUT.startHeight,
@@ -220,17 +124,6 @@ function navigationButtons(
     },
     config.onStart,
   );
-  const back = createHoloButton(
-    config.scene,
-    LAYOUT.backX,
-    LAYOUT.backY,
-    {
-      width: LAYOUT.backWidth,
-      height: LAYOUT.backHeight,
-      label: "< Back",
-      variant: "secondary",
-    },
-    config.onBack,
-  );
-  return [start, back];
+  attachTermTooltip(config.scene, button, "raid.begin");
+  return button;
 }

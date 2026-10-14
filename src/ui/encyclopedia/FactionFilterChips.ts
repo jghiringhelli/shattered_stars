@@ -29,7 +29,7 @@ export function createFactionFilterChips(
     value: chip.faction,
     label: chip.label,
     accent: factionAccent(chip.faction ?? undefined),
-    ...(chip.faction ? { tip: factionTermId(chip.faction) } : {}),
+    tip: chip.faction ? factionTermId(chip.faction) : ("codex.faction_filter" as const),
   }));
   return new EncyclopediaChipRow(scene, area, specs, onSelect);
 }

@@ -14,7 +14,8 @@ const defaults = DEFAULT_KEYBOARD_BINDINGS;
 describe("boundKeyLabel", () => {
   it("labels plain and modified keys", () => {
     expect(boundKeyLabel("MARK_TARGET", defaults)).toBe("R");
-    expect(boundKeyLabel("SEGNOR_LEFT", defaults)).toBe("Shift+Q");
+    expect(boundKeyLabel("FIRE_SECONDARY", defaults)).toBe("Shift+Space");
+    expect(boundKeyLabel("MANEUVER", defaults)).toBe("Z");
     expect(boundKeyLabel("CONFIRM", defaults)).toBe("Enter");
   });
 
@@ -25,7 +26,7 @@ describe("boundKeyLabel", () => {
 
   it("builds the boost and barrel-roll gestures from the (rebound) flight keys", () => {
     expect(boundKeyLabel("BOOST", defaults)).toBe("Double-tap ↑");
-    expect(boundKeyLabel("BARREL_ROLL", defaults)).toBe("← then →");
+    expect(boundKeyLabel("BARREL_ROLL", defaults)).toBe("← ← / → →");
     const wasd = applyKeyOverrides(defaults, {
       THRUST_UP: { key: "W" },
       STEER_LEFT: { key: "A" },
@@ -33,7 +34,7 @@ describe("boundKeyLabel", () => {
       BOOST: { key: "F" },
     });
     expect(boundKeyLabel("BOOST", wasd)).toBe("Double-tap W / F");
-    expect(boundKeyLabel("BARREL_ROLL", wasd)).toBe("A then D");
+    expect(boundKeyLabel("BARREL_ROLL", wasd)).toBe("A A / D D");
   });
 
   it("reports an unbound intent", () => {

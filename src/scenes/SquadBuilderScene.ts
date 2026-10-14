@@ -24,6 +24,7 @@ import { defaultDifficulty } from "../systems/SettingsStorage";
 import { FormatPanel } from "../ui/squad/FormatPanel";
 import type { FormatPanelState } from "../ui/squad/FormatPanel";
 import { SquadListPanel } from "../ui/squad/SquadListPanel";
+import { readMapChoice } from "../ui/squad/MapThemeButton";
 import { SimpleSquadFlow } from "../ui/squad/SimpleSquadFlow";
 import { flashText } from "../ui/textFlash";
 import { shake } from "../ui/UIJuice";
@@ -200,7 +201,10 @@ export class SquadBuilderScene extends Phaser.Scene {
   private buildSimpleFlow(): void {
     const playerSquad = this.squads[0];
     const startFaction = playerSquad?.factionId ?? "terran_hegemony";
-    this.simpleFlow = new SimpleSquadFlow(this, startFaction);
+    this.simpleFlow = new SimpleSquadFlow(this, startFaction, {
+      gameMode: this.gameMode,
+      pointLimit: this.pointLimit,
+    });
     this.simpleFlow.on(
       "start",
       (e: {
@@ -484,6 +488,7 @@ export class SquadBuilderScene extends Phaser.Scene {
       gameMode: this.gameMode,
       pointLimit: this.pointLimit,
       aiDifficulty: this.aiDifficulty,
+      mapTheme: readMapChoice(this.registry),
       ...(this.gameMode === "arcade" && this.scenarioPicker?.selected
         ? { scenario: this.scenarioPicker.selected }
         : {}),

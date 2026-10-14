@@ -1,31 +1,33 @@
 /**
- * EncyclopediaDetailPanel
- *
- * The right-side panel in EncyclopediaScene: a HoloPanel bordered in the
- * selected ship's faction accent (faction name in the header strip), framed
- * cinematic art, the ship name as a heading, a role chip, the signature
- * build's role / best-with hint, lore body text fitted to its column (never
- * overlapping the stats), and the combat stat gauges below.
+ * EncyclopediaDetailPanel — the right-side panel of EncyclopediaScene: a
+ * HoloPanel bordered in the selected ship's faction accent, the ship name and
+ * role chip, a tab bar (OVERVIEW / STATS / LOADOUT / LORE — one visible at a
+ * time, remembered for the session; Q / E, LB / RB or the mouse switch) and
+ * the open tab's body (shipDetailBodies). Everything under the frame lives in
+ * one body container that is rebuilt when the ship or the tab changes.
  */
 
 import Phaser from "phaser";
-import type { FactionId } from "../config";
-import type { EncyclopediaEntry } from "../data/ShipEncyclopedia";
 import { getShipDefinition } from "../data/ShipDefinitions";
-import { shipArtAssetById } from "../assets/assetManifest";
-import { requestTexture } from "../assets/textureLoading";
-import { shipHint } from "../data/roleHints";
-import { addContainedImage } from "./picker/catalogHelpers";
+import type { EncyclopediaEntry } from "../data/ShipEncyclopedia";
+import { getEquippableLoadouts } from "../data/ShipLoadouts";
+import { roleTermId } from "../data/tooltips";
 import { createHoloPanel, type HoloPanel } from "./hud/HoloPanel";
 import { drawHoloFrame, type HoloRect } from "./menu/holoChrome";
-import { holoFont } from "./theme/holoFont";
-import { toCssColor } from "./theme/colorMath";
+import { bindTabKeys, drawDetailTabs, DETAIL_TABS_H } from "./menu/DetailTabs";
+import {
+  recallTab,
+  rememberTab,
+  stepTab,
+  tabsFor,
+  type DetailTabId,
+} from "./menu/detailTabsModel";
+import { addTipZone } from "./menu/tooltipTargets";
+import { addPickerText, pickerTextStyle } from "./picker/pickerStyle";
 import {
   HOLO_BORDER,
   HOLO_PALETTE,
-  HOLO_RADIUS,
   HOLO_SPACING,
-  HOLO_TYPE_SCALE,
   factionAccent,
 } from "./theme/HoloTheme";
 import {
@@ -33,96 +35,70 @@ import {
   ROLE_COLORS,
   snakeToLabel,
 } from "./encyclopedia/encyclopediaLayout";
-import { EncyclopediaStatBlock } from "./encyclopedia/EncyclopediaStatBlock";
-import { fitLoreText, LORE_STYLE } from "./encyclopedia/loreFit";
+import {
+  drawLoadout,
+  drawLore,
+  drawOverview,
+  drawStats,
+  type ShipTabContext,
+} from "./encyclopedia/shipDetailBodies";
 
-/** Detail panel geometry. */
-const DETAIL_LAYOUT = {
-  /** Inner padding. */
-  padding: HOLO_SPACING.lg,
-  /** Art frame height. */
-  artHeight: 256,
-  /** Inset of the art image inside its frame. */
-  artInset: HOLO_SPACING.xs,
-  /** Gap between the art/text row and the stats block. */
-  statsGap: HOLO_SPACING.xl,
-  /** Ship name size. */
-  nameSize: 22,
-  /** Role chip height and horizontal padding. */
-  chipHeight: 22,
-  chipPaddingX: HOLO_SPACING.md,
-  /** Art frame fill opacity (darker than the panel). */
-  artFillAlpha: 0.85,
-  /** Art frame border opacity. */
-  artBorderAlpha: 0.6,
-  /** Role chip fill opacity. */
-  chipFillAlpha: 0.18,
-} as const;
+/** The screen whose tab set and remembered tab the panel uses. */
+const SCREEN = "encyclopediaShip";
+/** Role chip height (px). */
+const CHIP_H = 24;
+/** Panel header size (px) — nothing under 12 px at 1280x720. */
+const PANEL_TITLE_PX = 12;
+/** Gap between the name and the role chip (px). */
+const NAME_GAP = 16;
 
 /** Detail view of one encyclopedia entry. */
 export class EncyclopediaDetailPanel {
-  private readonly scene: Phaser.Scene;
   private readonly panel: HoloPanel;
-  private readonly artRect: HoloRect;
-  private readonly textColumn: HoloRect;
-  private readonly artFrame: Phaser.GameObjects.Graphics;
-  private readonly artPlaceholderLabel: Phaser.GameObjects.Text;
-  private artImage: Phaser.GameObjects.Image | null = null;
-  /** Art key of the entry on display (late downloads for others are ignored). */
-  private shownArtKey = "";
-  private readonly nameText: Phaser.GameObjects.Text;
-  private readonly roleBadge: Phaser.GameObjects.Graphics;
-  private readonly roleText: Phaser.GameObjects.Text;
-  /** Role / best-with hint of the ship's signature build (P2-1). */
-  private readonly hintText: Phaser.GameObjects.Text;
-  private readonly loreText: Phaser.GameObjects.Text;
-  private readonly stats: EncyclopediaStatBlock;
+  /** Role / best-with hint of the signature build (kept for e2e; shown on OVERVIEW). */
+  readonly hintText: Phaser.GameObjects.Text;
+  private body: Phaser.GameObjects.Container | null = null;
+  private entry: EncyclopediaEntry | null = null;
+  private tab: DetailTabId = recallTab(SCREEN);
+  private buildIndex = 0;
 
   /**
    * @param scene - Owning scene.
    * @param area - Panel bounds in world coordinates.
+   * @param tabKeysActive - Whether Q / E may switch tabs now (not while typing a search).
    */
-  constructor(scene: Phaser.Scene, area: HoloRect) {
-    this.scene = scene;
-    const pad = DETAIL_LAYOUT.padding;
+  constructor(
+    private readonly scene: Phaser.Scene,
+    private readonly area: HoloRect,
+    tabKeysActive: () => boolean = () => true,
+  ) {
     this.panel = createHoloPanel(
       scene,
       area.x + area.width / 2,
       area.y + area.height / 2,
-      { width: area.width, height: area.height, title: " " },
+      { width: area.width, height: area.height, title: " ", titleSize: PANEL_TITLE_PX },
     );
-    const top = area.y + PANEL_HEADER_HEIGHT + pad;
-    const columnWidth = (area.width - pad * 3) / 2;
-    this.artRect = {
-      x: area.x + pad,
-      y: top,
-      width: columnWidth,
-      height: DETAIL_LAYOUT.artHeight,
-    };
-    this.textColumn = {
-      x: this.artRect.x + columnWidth + pad,
-      y: top,
-      width: columnWidth,
-      height: DETAIL_LAYOUT.artHeight,
-    };
-    this.artFrame = scene.add.graphics();
-    this.artPlaceholderLabel = this.createPlaceholderLabel();
-    this.nameText = this.createNameText();
-    this.roleBadge = scene.add.graphics();
-    this.roleText = this.createRoleText();
-    this.hintText = this.createHintText();
-    this.loreText = this.createLoreText();
-    const statsTop = top + DETAIL_LAYOUT.artHeight + DETAIL_LAYOUT.statsGap;
-    this.stats = new EncyclopediaStatBlock(
-      scene,
-      {
-        x: area.x + pad,
-        y: statsTop,
-        width: area.width - pad * 2,
-        height: area.y + area.height - pad - statsTop,
-      },
-      HOLO_PALETTE.accent,
-    );
+    this.hintText = scene.add
+      .text(0, 0, "", pickerTextStyle("name", HOLO_PALETTE.accent))
+      .setVisible(false);
+    bindTabKeys(scene, {
+      step: (direction) =>
+        this.open(stepTab(tabsFor(SCREEN), this.tab, direction)),
+      isActive: () => this.entry !== null && tabKeysActive(),
+    });
+  }
+
+  /** The open tab (e2e). */
+  get openTab(): DetailTabId {
+    return this.tab;
+  }
+
+  /** @param tab - The tab to open. */
+  open(tab: DetailTabId): void {
+    if (tab === this.tab) return;
+    this.tab = tab;
+    rememberTab(SCREEN, tab);
+    this.render();
   }
 
   /**
@@ -130,170 +106,97 @@ export class EncyclopediaDetailPanel {
    * @param entry - The encyclopedia entry to display.
    */
   show(entry: EncyclopediaEntry): void {
-    const faction = getShipDefinition(entry.shipId)?.faction;
-    const accent = factionAccent(faction);
-    this.panel.setAccent(accent).setTitle(this.factionTitle(faction));
-    this.stats.setAccent(accent);
-    this.updateArt(entry, accent);
-    this.updateTextBlocks(entry);
-    this.stats.show(entry);
+    if (this.entry?.shipId !== entry.shipId) this.buildIndex = 0;
+    this.entry = entry;
+    this.render();
   }
 
-  private factionTitle(faction: FactionId | undefined): string {
-    return faction ? snakeToLabel(faction) : "UNKNOWN ORIGIN";
-  }
-
-  private createPlaceholderLabel(): Phaser.GameObjects.Text {
-    const { x, y, width, height } = this.artRect;
-    return this.scene.add
-      .text(x + width / 2, y + height / 2, "", {
-        ...holoFont(HOLO_TYPE_SCALE.body.size - 1, "400"),
-        color: toCssColor(HOLO_PALETTE.textMuted),
-        align: "center",
-        wordWrap: { width: width - DETAIL_LAYOUT.padding * 2 },
-      })
-      .setOrigin(0.5);
-  }
-
-  private createRoleText(): Phaser.GameObjects.Text {
-    const caption = HOLO_TYPE_SCALE.caption;
-    return this.scene.add
-      .text(0, 0, "", {
-        ...holoFont(caption.size, caption.weight),
-        color: toCssColor(HOLO_PALETTE.textPrimary),
-      })
-      .setLetterSpacing(caption.letterSpacing)
-      .setOrigin(0, 0.5);
-  }
-
-  private createHintText(): Phaser.GameObjects.Text {
-    return this.scene.add.text(this.textColumn.x, 0, "", {
-      ...holoFont(HOLO_TYPE_SCALE.caption.size + 1, "600"),
-      color: toCssColor(HOLO_PALETTE.accent),
-      wordWrap: { width: this.textColumn.width, useAdvancedWrap: true },
-    });
-  }
-
-  private createLoreText(): Phaser.GameObjects.Text {
-    return this.scene.add.text(this.textColumn.x, 0, "", {
-      ...holoFont(LORE_STYLE.sizes[0], "400"),
-      color: toCssColor(HOLO_PALETTE.textSecondary),
-      wordWrap: { width: this.textColumn.width, useAdvancedWrap: true },
-      lineSpacing: LORE_STYLE.lineSpacing,
-    });
-  }
-
-  private createNameText(): Phaser.GameObjects.Text {
-    const { x, y, width } = this.textColumn;
-    return this.scene.add.text(x, y, "", {
-      ...holoFont(DETAIL_LAYOUT.nameSize, HOLO_TYPE_SCALE.heading.weight),
-      color: toCssColor(HOLO_PALETTE.textPrimary),
-      wordWrap: { width },
-    });
-  }
-
-  private updateArt(entry: EncyclopediaEntry, accent: number): void {
-    const { scene, artRect } = this;
-    this.shownArtKey = entry.artKey;
-    this.artImage?.destroy();
-    this.artImage = null;
-    this.artFrame.clear();
-    drawHoloFrame(this.artFrame, artRect, {
+  private render(): void {
+    const entry = this.entry;
+    const def = entry ? getShipDefinition(entry.shipId) : undefined;
+    if (!entry || !def) return;
+    const accent = factionAccent(def.faction);
+    this.panel.setAccent(accent).setTitle(snakeToLabel(def.faction));
+    this.body?.destroy();
+    const body = this.scene.add.container(0, 0);
+    this.body = body;
+    this.hintText.setVisible(false);
+    const pad = HOLO_SPACING.lg;
+    const x = this.area.x + pad;
+    const width = this.area.width - pad * 2;
+    const top = this.area.y + PANEL_HEADER_HEIGHT + pad;
+    this.drawHeader(body, def, { x, y: top, width }, accent);
+    const tabsY = top + CHIP_H + HOLO_SPACING.md;
+    drawDetailTabs(this.scene, body, {
+      x,
+      y: tabsY,
+      width,
       accent,
-      fillAlpha: DETAIL_LAYOUT.artFillAlpha,
-      borderAlpha: DETAIL_LAYOUT.artBorderAlpha,
-      radius: HOLO_RADIUS.sm,
-      cornerTicks: true,
+      tabs: tabsFor(SCREEN),
+      active: this.tab,
+      onSelect: (tab) => this.open(tab),
     });
-    if (!scene.textures.exists(entry.artKey)) {
-      this.requestArt(entry, accent);
-      return;
+    const ctx: ShipTabContext = {
+      scene: this.scene,
+      container: body,
+      x,
+      y: tabsY + DETAIL_TABS_H + pad,
+      width,
+      bottom: this.area.y + this.area.height - pad,
+      entry,
+      def,
+      accent,
+      hintText: this.hintText,
+    };
+    this.drawBody(ctx);
+  }
+
+  private drawBody(ctx: ShipTabContext): void {
+    if (this.tab === "stats") drawStats(ctx);
+    else if (this.tab === "lore") drawLore(ctx);
+    else if (this.tab === "loadout") {
+      const loadouts = getEquippableLoadouts(ctx.def.id);
+      drawLoadout(ctx, {
+        loadouts,
+        index: this.buildIndex,
+        onStep: (direction) => {
+          const count = Math.max(1, loadouts.length);
+          this.buildIndex = (this.buildIndex + direction + count) % count;
+          this.render();
+        },
+      });
+    } else {
+      const entry = ctx.entry;
+      drawOverview(ctx, () => {
+        if (this.entry?.shipId === entry.shipId && this.tab === "overview") this.render();
+      });
     }
-    const inset = DETAIL_LAYOUT.artInset;
-    this.artImage = addContainedImage(
-      scene,
-      entry.artKey,
-      artRect.x + artRect.width / 2,
-      artRect.y + artRect.height / 2,
-      artRect.width - inset * 2,
-      artRect.height - inset * 2,
-    );
-    this.artPlaceholderLabel.setText("");
   }
 
-  /**
-   * Download the entry's art on demand (it is not loaded at boot) and draw
-   * it if the entry is still the one shown when it arrives.
-   */
-  private requestArt(entry: EncyclopediaEntry, accent: number): void {
-    const asset = shipArtAssetById(entry.shipId);
-    const missing = "[ Art not generated — run scripts/generate_ship_art.py ]";
-    if (!asset || asset.key !== entry.artKey) {
-      this.artPlaceholderLabel.setText(missing);
-      return;
-    }
-    this.artPlaceholderLabel.setText("LOADING ART…");
-    requestTexture(
-      this.scene,
-      asset,
-      () => {
-        if (this.shownArtKey === entry.artKey) this.updateArt(entry, accent);
-      },
-      () => {
-        if (this.shownArtKey === entry.artKey)
-          this.artPlaceholderLabel.setText(missing);
-      },
-    );
-  }
-
-  private updateTextBlocks(entry: EncyclopediaEntry): void {
-    const def = getShipDefinition(entry.shipId);
-    this.nameText.setText(def?.name ?? entry.shipId);
-    const chipTop = this.nameText.y + this.nameText.height + HOLO_SPACING.sm;
-    this.drawRoleChip(def?.role, chipTop);
-    const hint = shipHint(entry.shipId);
-    this.hintText
-      .setText(`${hint.role}\n${hint.bestWith}`)
-      .setY(chipTop + DETAIL_LAYOUT.chipHeight + HOLO_SPACING.sm);
-    const loreTop = this.hintText.y + this.hintText.height + HOLO_SPACING.md;
-    this.loreText.setY(loreTop);
-    fitLoreText(
-      this.loreText,
-      entry.lore,
-      this.textColumn.y + this.textColumn.height - loreTop,
-    );
-  }
-
-  private drawRoleChip(role: string | undefined, top: number): void {
-    const label = snakeToLabel(role ?? "");
-    const color =
-      role !== undefined && role in ROLE_COLORS
-        ? ROLE_COLORS[role as keyof typeof ROLE_COLORS]
-        : HOLO_PALETTE.textSecondary;
-    const padX = DETAIL_LAYOUT.chipPaddingX;
-    this.roleText.setText(label);
-    this.roleText.setPosition(
-      this.textColumn.x + padX,
-      top + DETAIL_LAYOUT.chipHeight / 2,
-    );
-    this.roleBadge.clear();
-    if (!label) return;
-    drawHoloFrame(
-      this.roleBadge,
-      {
-        x: this.textColumn.x,
-        y: top,
-        width: this.roleText.width + padX * 2,
-        height: DETAIL_LAYOUT.chipHeight,
-      },
-      {
-        accent: color,
-        fill: color,
-        fillAlpha: DETAIL_LAYOUT.chipFillAlpha,
-        borderWidth: HOLO_BORDER.regular,
-        borderAlpha: 1,
-        radius: DETAIL_LAYOUT.chipHeight / 2,
-      },
-    );
+  private drawHeader(
+    body: Phaser.GameObjects.Container,
+    def: NonNullable<ReturnType<typeof getShipDefinition>>,
+    box: { readonly x: number; readonly y: number; readonly width: number },
+    accent: number,
+  ): void {
+    const name = addPickerText(this.scene, { x: box.x, y: box.y }, def.name, "title", HOLO_PALETTE.textPrimary);
+    const label = addPickerText(this.scene, { x: 0, y: 0 }, snakeToLabel(def.role), "micro", HOLO_PALETTE.textPrimary).setOrigin(0, 0.5);
+    const chipX = box.x + name.width + NAME_GAP;
+    const chipW = label.width + HOLO_SPACING.md * 2;
+    const color = ROLE_COLORS[def.role] ?? HOLO_PALETTE.textSecondary;
+    const chip = this.scene.add.graphics();
+    drawHoloFrame(chip, { x: chipX, y: box.y, width: chipW, height: CHIP_H }, {
+      accent: color,
+      fill: color,
+      fillAlpha: 0.18,
+      borderWidth: HOLO_BORDER.regular,
+      borderAlpha: 1,
+      radius: CHIP_H / 2,
+    });
+    label.setPosition(chipX + HOLO_SPACING.md, box.y + CHIP_H / 2);
+    const cost = addPickerText(this.scene, { x: box.x + box.width, y: box.y }, `${def.baseStats.pointCost} pt`, "title", accent).setOrigin(1, 0);
+    body.add([name, chip, label, cost]);
+    addTipZone(this.scene, body, { x: chipX, y: box.y, width: chipW, height: CHIP_H }, roleTermId(def.role));
+    addTipZone(this.scene, body, { x: cost.x - cost.width, y: box.y, width: cost.width, height: cost.height }, "stat.points");
   }
 }

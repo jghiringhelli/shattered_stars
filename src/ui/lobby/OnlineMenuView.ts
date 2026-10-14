@@ -10,6 +10,7 @@ import {
   lobbyScreen,
   type LobbyState,
 } from "../../net/lobby/LobbyModel";
+import { connectionAdvice } from "../../net/lobby/connectionAdvice";
 import { MATCH_MODES, type MatchMode } from "../../net/protocol";
 import { createHoverButton, createToggleButton } from "../ButtonFactory";
 import { createHoloPanel } from "../hud/HoloPanel";
@@ -29,6 +30,8 @@ export interface OnlineMenuActions {
   readonly editName: () => void;
   readonly editServer: () => void;
   readonly reconnect: () => void;
+  /** Leave the lobby for the main menu (every other mode works offline). */
+  readonly playOffline: () => void;
 }
 
 /** Data the menu renders. */
@@ -50,6 +53,9 @@ const LAYOUT = {
   actionWidth: 300,
   actionHeight: 50,
   actionGap: 64,
+  adviceOffset: 32,
+  adviceWidth: 760,
+  buttonsOffset: 130,
   settingsY: 610,
   settingsWidth: 240,
   settingsHeight: 34,
@@ -183,28 +189,64 @@ function addOfflineCard(
       },
     ),
   );
-  if (
-    !model.state.server.url ||
-    ["connecting", "reconnecting"].includes(model.state.connection)
-  )
-    return [];
-  const retry = createHoverButton(
-    scene,
-    scene.scale.width / 2,
-    LAYOUT.actionY + LAYOUT.actionGap,
-    {
-      width: LAYOUT.actionWidth,
-      height: LAYOUT.actionHeight,
-      color: HOLO_PALETTE.panelFill,
-      variant: "primary",
-      label: "RECONNECT",
-      icon: "refresh",
-    },
-    actions.reconnect,
+  const advice = connectionAdvice(model.state);
+  if (advice !== "") {
+    const adviceText = addLobbyText(
+      scene,
+      { x: scene.scale.width / 2, y: LAYOUT.actionY + LAYOUT.adviceOffset },
+      advice,
+      { size: 14, color: HOLO_PALETTE.textSecondary, originX: 0.5, originY: 0 },
+    );
+    adviceText.setWordWrapWidth(LAYOUT.adviceWidth).setAlign("center");
+    container.add(adviceText);
+  }
+  const buttons: HoloPressButton[] = [];
+  const connecting = ["connecting", "reconnecting"].includes(
+    model.state.connection,
   );
-  retry.setName("online_reconnect");
-  container.add(retry);
-  return [retry];
+  let row = 0;
+  const addButton = (
+    label: string,
+    name: string,
+    variant: "primary" | "secondary",
+    icon: "refresh" | "back",
+    run: () => void,
+  ): void => {
+    const button = createHoverButton(
+      scene,
+      scene.scale.width / 2,
+      LAYOUT.actionY + LAYOUT.buttonsOffset + row++ * LAYOUT.actionGap,
+      {
+        width: LAYOUT.actionWidth,
+        height: LAYOUT.actionHeight,
+        color: HOLO_PALETTE.panelFill,
+        variant,
+        label,
+        icon,
+      },
+      run,
+    );
+    button.setName(name);
+    container.add(button);
+    buttons.push(button);
+  };
+  if (model.state.server.url && !connecting) {
+    addButton(
+      "RECONNECT",
+      "online_reconnect",
+      "primary",
+      "refresh",
+      actions.reconnect,
+    );
+  }
+  addButton(
+    "PLAY OFFLINE INSTEAD",
+    "online_play_offline",
+    "secondary",
+    "back",
+    actions.playOffline,
+  );
+  return buttons;
 }
 
 function addSettingsRow(

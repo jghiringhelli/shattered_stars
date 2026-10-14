@@ -1,7 +1,7 @@
 /**
  * CatalogSectionHeader — the banner above each role section of the ship
- * catalog: role glyph, role name, ship / build counts, a one-line role
- * description and a hairline. Capitals shown only as a notice read
+ * catalog: role glyph, role name, ship / build counts, a fold chevron and a
+ * hairline (the role description is in its tooltip). Capitals shown only as a notice read
  * "EPIC FORMAT ONLY". Hovering it explains the role.
  */
 
@@ -14,7 +14,7 @@ import { sectionCounts, type CatalogSection } from "./catalogSections";
 import { addPickerText } from "./pickerStyle";
 
 /** Header height (px) — the layout reserves this above a section's cards. */
-export const SECTION_HEADER_H = 38;
+export const SECTION_HEADER_H = 26;
 
 /** Header geometry. */
 const HEADER = {
@@ -22,9 +22,12 @@ const HEADER = {
   glyphX: 9,
   titleX: 24,
   titleY: 2,
-  blurbY: 19,
   ruleY: SECTION_HEADER_H - 3,
   noticeAlpha: 0.7,
+  /** Fold chevron: size and distance from the right edge (px). */
+  chevronSize: 5,
+  chevronInset: 6,
+  countsGap: 16,
 } as const;
 
 /** Where and how to draw a header. */
@@ -34,6 +37,8 @@ export interface SectionHeaderSpec {
   readonly y: number;
   readonly width: number;
   readonly accent: number;
+  /** Press handler that folds / unfolds the section (none for the epic-only notice). */
+  readonly onToggle?: () => void;
 }
 
 /**
@@ -69,30 +74,47 @@ export function drawSectionHeader(
   );
   const counts = addPickerText(
     scene,
-    { x: x + width, y: y + HEADER.titleY + 1 },
+    { x: x + width - (spec.onToggle ? HEADER.countsGap : 0), y: y + HEADER.titleY + 1 },
     muted
       ? `EPIC FORMAT ONLY · ${section.shipCount} ${section.shipCount === 1 ? "SHIP" : "SHIPS"}`
       : sectionCounts(section.shipCount, section.buildCount),
     "micro",
     muted ? HOLO_PALETTE.warning : HOLO_PALETTE.textSecondary,
   ).setOrigin(1, 0);
-  const blurb = addPickerText(
-    scene,
-    { x: x + HEADER.titleX, y: y + HEADER.blurbY },
-    section.blurb,
-    "micro",
-    HOLO_PALETTE.textMuted,
-  );
   const rule = scene.add.graphics();
   rule.lineStyle(HOLO_BORDER.hairline, tint, HOLO_ALPHA.structure);
   rule.lineBetween(x, y + HEADER.ruleY, x + width, y + HEADER.ruleY);
-  if (muted) [glyph, title, blurb].forEach((o) => o.setAlpha(HEADER.noticeAlpha));
-  container.add([glyph, title, counts, blurb, rule]);
+  if (muted) [glyph, title].forEach((o) => o.setAlpha(HEADER.noticeAlpha));
+  container.add([glyph, title, counts, rule]);
+  if (spec.onToggle) container.add(drawChevron(scene, spec, y + HEADER.titleY + 8));
   const zone = addTipZone(
     scene,
     container,
     { x, y, width, height: SECTION_HEADER_H - 2 },
     muted ? "ui.epic_only" : roleTermId(section.role),
+    spec.onToggle,
   );
   return [zone];
+}
+
+/**
+ * Fold chevron: points down when the section is open, right when folded.
+ *
+ * @param scene - Owning scene.
+ * @param spec - Header spec.
+ * @param centreY - Vertical centre of the chevron.
+ * @returns The graphics object.
+ */
+function drawChevron(
+  scene: Phaser.Scene,
+  spec: SectionHeaderSpec,
+  centreY: number,
+): Phaser.GameObjects.Graphics {
+  const g = scene.add.graphics();
+  const s = HEADER.chevronSize;
+  const cx = spec.x + spec.width - HEADER.chevronInset;
+  g.fillStyle(HOLO_PALETTE.textSecondary, 1);
+  if (spec.section.collapsed) g.fillTriangle(cx - s / 2, centreY - s, cx - s / 2, centreY + s, cx + s, centreY);
+  else g.fillTriangle(cx - s, centreY - s / 2, cx + s, centreY - s / 2, cx, centreY + s);
+  return g;
 }

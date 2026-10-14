@@ -85,6 +85,17 @@ async function tooltip(page: Page, key: string): Promise<string> {
   );
 }
 
+/** Opens a tab of the picker overlay's (narrow, so only the open tab is labelled) detail panel. */
+async function openPickerTab(page: Page, tab: string): Promise<void> {
+  await page.evaluate(
+    (t) =>
+      (window as any).game.scene
+        .getScene("ShipPickerScene")
+        .catalogPanel.detailPanel.open(t),
+    tab,
+  );
+}
+
 test.describe("Role / synergy hints", () => {
   test("ship picker: ability + upgrade roles, build tooltip on hover", async ({
     page,
@@ -113,17 +124,21 @@ test.describe("Role / synergy hints", () => {
     });
     const label = await page.evaluate(async () => {
       const { getLoadoutById } = await import("/src/data/ShipLoadouts.ts");
-      return getLoadoutById("fang_raider")!.name.toUpperCase();
+      const loadout = getLoadoutById("fang_raider")!;
+      return `${loadout.name.toUpperCase()} \u00b7 ${loadout.pointCost}`;
     });
+    // The pilot tab carries the ability's role and best-with lines.
+    await openPickerTab(page, "pilot");
     const texts = await sceneTexts(page, "ShipPickerScene");
     expect(texts).toContain("Flanker — strikes from behind");
     expect(texts.some((t) => t.startsWith("Best with "))).toBe(true);
 
+    await openPickerTab(page, "builds");
     await hoverText(page, "ShipPickerScene", label, true);
     await expect.poll(() => tooltip(page, "ShipPickerScene")).toContain(" — ");
   });
 
-  test("Dogfight setup chooser shows the build's role line", async ({
+  test("Dogfight setup overview shows the ship's role and best-with lines", async ({
     page,
   }) => {
     suppressWebGLNoise(page);
@@ -134,7 +149,7 @@ test.describe("Role / synergy hints", () => {
     await expect
       .poll(async () =>
         (await sceneTexts(page, "DogfightScene")).some((t) =>
-          t.startsWith("Best with "),
+          t.includes("\nBest with "),
         ),
       )
       .toBe(true);

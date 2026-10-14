@@ -72,34 +72,40 @@ async function clickObject(
   return true;
 }
 
-/** The first ship's current quick-build pick (setup scenes keep it in `playerBuilds`). */
-async function currentPick(page: Page, scene: string): Promise<string | null> {
-  return page.evaluate(
-    (key) =>
-      (window as any).game.scene.getScene(key).playerBuilds?.loadoutIds[0] ??
-      null,
-    scene,
-  );
-}
-
-/** Real-click a chooser's ▶ arrow; returns the new pick (asserting it changed). */
-async function cycleChooser(
+/**
+ * Real-click the BUILDS-tab chip of another quick build of ship `index`
+ * (setup scenes keep the pick in `playerBuilds`); returns the new pick.
+ */
+async function pickOtherBuild(
   page: Page,
   scene: string,
-  arrowName: string,
+  index: number,
 ): Promise<string> {
-  const before = await currentPick(page, scene);
-  expect(await clickObject(page, scene, { name: arrowName })).toBe(true);
-  await page.waitForFunction(
-    ({ key, prev }) =>
-      (window as any).game.scene.getScene(key).playerBuilds.loadoutIds[0] !==
-      prev,
-    { key: scene, prev: before },
+  const target = await page.evaluate(
+    async ({ key, i }) => {
+      const { getLoadoutById } = await import("/src/data/ShipLoadouts.ts");
+      const { quickBuildOptions } =
+        await import("/src/arcade/systems/QuickBuildChoice.ts");
+      const s = (window as any).game.scene.getScene(key);
+      const current = s.playerBuilds.loadoutIds[i];
+      const other = quickBuildOptions(s.playerBuilds.shipIds[i]).find(
+        (id: string) => id !== current,
+      )!;
+      const loadout = getLoadoutById(other)!;
+      return {
+        id: other,
+        label: `${loadout.name.toUpperCase()} \u00b7 ${loadout.pointCost}`,
+      };
+    },
+    { key: scene, i: index },
   );
-  const after = await currentPick(page, scene);
-  expect(after).not.toBeNull();
-  expect(after).not.toBe(before);
-  return after!;
+  expect(await clickObject(page, scene, { text: target.label })).toBe(true);
+  await page.waitForFunction(
+    ({ key, i, id }) =>
+      (window as any).game.scene.getScene(key).playerBuilds.loadoutIds[i] === id,
+    { key: scene, i: index, id: target.id },
+  );
+  return target.id;
 }
 
 test.describe("Ship picker — what a quick build really is", () => {
@@ -131,8 +137,15 @@ test.describe("Ship picker — what a quick build really is", () => {
 
     const buttonLabel = await page.evaluate(async (loadoutId) => {
       const { getLoadoutById } = await import("/src/data/ShipLoadouts.ts");
-      return getLoadoutById(loadoutId)!.name.toUpperCase();
+      const loadout = getLoadoutById(loadoutId)!;
+      return `${loadout.name.toUpperCase()} \u00b7 ${loadout.pointCost}`;
     }, FANG_ACE_LOADOUT);
+    // The overlay's detail panel is narrow (only the open tab is labelled): open tabs directly.
+    await page.evaluate(() =>
+      (window as any).game.scene
+        .getScene("ShipPickerScene")
+        .catalogPanel.detailPanel.open("builds"),
+    );
     expect(
       await clickObject(page, "ShipPickerScene", { text: buttonLabel }),
     ).toBe(true);
@@ -144,6 +157,11 @@ test.describe("Ship picker — what a quick build really is", () => {
       FANG_ACE_LOADOUT,
     );
 
+    await page.evaluate(() =>
+      (window as any).game.scene
+        .getScene("ShipPickerScene")
+        .catalogPanel.detailPanel.open("pilot"),
+    );
     const initiative = await page.evaluate(async (pilotId) => {
       const { PILOT_CARDS } = await import("/src/systems/SquadBuilder.ts");
       return PILOT_CARDS[pilotId]!.initiative;
@@ -168,38 +186,9 @@ test.describe("Dogfight setup — quick-build chooser", () => {
     await clickMenuItem(page, "DOGFIGHT");
     await waitForScene(page, "DogfightScene", 30_000);
 
-    // Real-click a listed player ship that offers at least two quick builds.
-    const ship = await page.evaluate(async () => {
-      const { quickBuildOptions } =
-        await import("/src/arcade/systems/QuickBuildChoice.ts");
-      const { getShipsByFaction } =
-        await import("/src/data/ShipDefinitions.ts");
-      const scene = (window as any).game.scene.getScene("DogfightScene");
-      const listed = getShipsByFaction(scene.playerFaction).slice(0, 4);
-      const choice = listed.find(
-        (s: any) => quickBuildOptions(s.id).length >= 2,
-      );
-      return choice ? { id: choice.id, name: choice.name } : null;
-    });
-    expect(ship).not.toBeNull();
-    // Holo toggles show their label in capitals.
-    expect(
-      await clickObject(page, "DogfightScene", {
-        text: ship!.name.toUpperCase(),
-      }),
-    ).toBe(true);
-    await page.waitForFunction(
-      (id) =>
-        (window as any).game.scene.getScene("DogfightScene").playerShipId ===
-        id,
-      ship!.id,
-    );
-
-    const chosenId = await cycleChooser(
-      page,
-      "DogfightScene",
-      "dogfightQuickBuild:next",
-    );
+    // The default Raven offers two quick builds: open BUILDS and pick the other chip.
+    expect(await clickObject(page, "DogfightScene", { text: "BUILDS" })).toBe(true);
+    const chosenId = await pickOtherBuild(page, "DogfightScene", 0);
 
     expect(await clickObject(page, "DogfightScene", { text: "FIGHT!" })).toBe(
       true,
@@ -234,11 +223,10 @@ test.describe("Survival / Ace Duel setup — quick-build chooser", () => {
       game.scene.start("SurvivalSetupScene");
     });
     await waitForScene(page, "SurvivalSetupScene");
-    const chosen = await cycleChooser(
-      page,
-      "SurvivalSetupScene",
-      "survivalQuickBuild:next",
-    );
+    expect(
+      await clickObject(page, "SurvivalSetupScene", { text: "BUILDS" }),
+    ).toBe(true);
+    const chosen = await pickOtherBuild(page, "SurvivalSetupScene", 0);
     expect(
       await clickObject(page, "SurvivalSetupScene", { text: "LAUNCH" }),
     ).toBe(true);
@@ -277,11 +265,8 @@ test.describe("Survival / Ace Duel setup — quick-build chooser", () => {
       return false;
     });
     expect(found).toBe(true);
-    const chosen = await cycleChooser(
-      page,
-      "AceDuelScene",
-      "aceDuelQuickBuild0:next",
-    );
+    expect(await clickObject(page, "AceDuelScene", { text: "BUILDS" })).toBe(true);
+    const chosen = await pickOtherBuild(page, "AceDuelScene", 0);
     expect(await clickObject(page, "AceDuelScene", { text: "DUEL!" })).toBe(
       true,
     );

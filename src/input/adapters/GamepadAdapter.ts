@@ -23,6 +23,7 @@ const HELD_INTENTS: ReadonlySet<ActionIntent> = new Set([
   "STEER_RIGHT",
   "THRUST_UP",
   "THRUST_DOWN",
+  "MANEUVER",
   "ZOOM_IN",
   "ZOOM_OUT",
 ]);

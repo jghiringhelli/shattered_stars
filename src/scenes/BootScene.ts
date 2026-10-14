@@ -9,10 +9,6 @@
 import Phaser from "phaser";
 import { FACTION_COLORS, SHIP_SIZES } from "../config";
 import { PlayerProfileManager } from "../systems/PlayerProfile";
-import {
-  initTutorialOverlay,
-  hideTutorialOverlay,
-} from "../ui/TutorialOverlay";
 import { createBootLoadingView } from "../ui/menu/BootLoadingView";
 import { BOOT_ASSETS } from "../assets/assetManifest";
 import { queueAssets } from "../assets/textureLoading";
@@ -27,18 +23,12 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Show the first-launch quick-controls overlay while assets load, so it
-    // never blocks or overlaps the main menu — it's dismissed automatically
-    // once loading completes (or by the player, whichever comes first).
-    initTutorialOverlay();
-
     const loadingView = createBootLoadingView(this);
     this.load.on("progress", (value: number) => {
       loadingView.setProgress(value);
     });
     this.load.once("complete", () => {
       loadingView.destroy();
-      hideTutorialOverlay();
     });
 
     // Faction+size placeholder ships (shown until a ship's art has loaded).

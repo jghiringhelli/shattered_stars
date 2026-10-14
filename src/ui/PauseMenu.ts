@@ -10,7 +10,7 @@
 import Phaser from "phaser";
 import { createHoverButton } from "./ButtonFactory";
 import { showConfirmDialog } from "./ConfirmDialog";
-import { openBugReport } from "../utils/BugReport";
+import { openFeedbackDialog } from "./feedback/feedbackDialog";
 import { HoloPanel } from "./hud/HoloPanel";
 import type { HoloPressButton } from "./menu/HoloPressButton";
 import type { MenuIconName } from "./menu/MenuIcons";
@@ -160,9 +160,10 @@ export class PauseMenu extends Phaser.GameObjects.Container {
           }),
       },
       {
-        label: "REPORT BUG",
+        label: "SEND FEEDBACK",
         variant: "secondary",
-        run: () => openBugReport({ sceneKey: scene.scene.key }),
+        run: () =>
+          openFeedbackDialog({ game: scene.game, sceneKey: scene.scene.key }),
       },
     ];
   }

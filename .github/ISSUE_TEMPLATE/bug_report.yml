@@ -1,0 +1,58 @@
+name: Bug report
+description: Something is broken, crashes, looks wrong or does not work as described.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing! In the game use **SEND FEEDBACK** (main menu footer, pause menu or Settings > Advanced): it downloads a small bundle file and opens this form. Drag that file into the last box. Nothing is sent automatically.
+  - type: input
+    id: version
+    attributes:
+      label: Build
+      description: "The tag in the main-menu corner, e.g. \"v0.1.0 BETA · abc1234 · 2026-10-14\"."
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Where did it happen?
+      options:
+        - Main menu / settings
+        - Flight School
+        - Skirmish
+        - Epic Format
+        - Survival
+        - Campaign
+        - Dogfight / Ace Duel
+        - Boss Raid
+        - Online lobby / online match
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. ...\n2. ...\n3. ..."
+  - type: input
+    id: browser
+    attributes:
+      label: Browser, OS and graphics card
+      description: Included in the bundle file; fill in if you have no bundle.
+  - type: textarea
+    id: bundle
+    attributes:
+      label: Feedback bundle
+      description: Drag the downloaded `shattered-stars-feedback-*.json` here (optional, very helpful).

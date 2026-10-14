@@ -5,9 +5,10 @@
  * (speed, stress thresholds, actions) should produce the ship's role, not
  * just its flavor text.
  *
- * Timing constants below mirror src/arcade/ArcadeInputGestures.ts exactly:
- * BANK_HOLD_THRESHOLD_MS=250 (hold longer = hard turn), DOUBLE_TAP_WINDOW_MS=300,
- * CHORD_WINDOW_MS=150 (simultaneous L+R = barrel roll).
+ * Timing constants below mirror src/arcade/ArcadeInputGestures.ts and
+ * RollDoubleTap.ts: BANK_HOLD_THRESHOLD_MS=250 (hold longer = hard turn),
+ * DOUBLE_TAP_WINDOW_MS=300 (↑↑ boost), ROLL_DOUBLE_TAP_WINDOW_MS=220 and
+ * ROLL_TAP_MAX_MS=140 (a barrel roll is two short taps of the same arrow).
  */
 
 import type { Page } from "playwright";
@@ -32,7 +33,8 @@ const AGGRESSIVE_REP: readonly DrillStep[] = [
   step("Z", 60, 700),
   step("ArrowUp", 60, 80),
   step("ArrowUp", 60, 500),
-  step("ArrowLeft", 60, 60),
+  step("ArrowLeft", 50, 40),
+  step("ArrowLeft", 50, 500),
 ];
 
 const REPEAT_COUNT = 4;

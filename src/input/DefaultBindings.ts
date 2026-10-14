@@ -51,13 +51,12 @@ export const DEFAULT_KEYBOARD_BINDINGS: readonly KeyboardBinding[] = [
   // Flight advanced (large/capital ships)
   { key: "G", intent: "CREW_CYCLE" },
   { key: "C", intent: "CLOAK" },
-  { key: "Z", intent: "KTURN" },
+  // THE maneuver key (held): tap = Snap Turn, hold + ←/→ = Hook Loop,
+  // double-tap then hold + ←/→ = Knife Roll. Barrel roll = ← ← / → → (gesture),
+  // boost = ↑↑, Snap Turn also ↓↓ — none of those has a key of its own.
+  { key: "Z", intent: "MANEUVER" },
   { key: "Q", intent: "SHARP_TURN_LEFT" },
   { key: "E", intent: "SHARP_TURN_RIGHT" },
-  { key: "Q", intent: "SEGNOR_LEFT", modifiers: { shift: true } },
-  { key: "E", intent: "SEGNOR_RIGHT", modifiers: { shift: true } },
-  { key: "T", intent: "TALLON_LEFT" },
-  { key: "T", intent: "TALLON_RIGHT", modifiers: { shift: true } },
   // Squad: mark the HUD target as the squad's focus (SquadMark)
   { key: "R", intent: "MARK_TARGET" },
   // Hero pilot active powers (Campaign)
@@ -80,13 +79,13 @@ export const DEFAULT_MOUSE_BINDINGS: readonly MouseBinding[] = [
 
 /**
  * Touch gesture-zone bindings. The movement stick is handled separately
- * (analog STEER/THRUST plus double-tap up/down for BOOST/KTURN, mirroring
- * the keyboard's existing hold-duration gesture system); these are the
- * small button/gesture-zone actions on the opposite side of the screen.
+ * (analog STEER/THRUST; a double-tap or double-flick to one side is the
+ * barrel roll, double-tap up/down BOOST/KTURN — the same gesture machine as
+ * the keyboard); the MANEUVER button beside the action zone is the held
+ * maneuver key. These are the small gesture-zone actions of the FIRE zone.
  */
 export const DEFAULT_TOUCH_BINDINGS: readonly TouchBinding[] = [
   { gesture: "tap", intent: "FIRE_SECONDARY" },
-  { gesture: "doubleTap", intent: "BARREL_ROLL" },
   { gesture: "hold", intent: "CLOAK" },
 ];
 
@@ -111,12 +110,14 @@ export const DEFAULT_GAMEPAD_BINDINGS: readonly GamepadBinding[] = [
   { axis: 0, axisDirection: "positive", intent: "STEER_RIGHT", deadzone: 0.2 },
   { axis: 1, axisDirection: "negative", intent: "THRUST_UP", deadzone: 0.2 },
   { axis: 1, axisDirection: "positive", intent: "THRUST_DOWN", deadzone: 0.2 },
-  // Triggers: Knife rolls (camera zoom is wheel/auto in every scene; no
-  // scene reads the ZOOM intents, so the triggers are free for flight)
-  { button: 6, intent: "TALLON_LEFT" }, // LT
-  { button: 7, intent: "TALLON_RIGHT" }, // RT
-  // Commander orders (capital ship, crew role commander) share the Knife
-  // triggers and the Hook d-pad: no capital ship can fly either.
+  // THE maneuver button (held): tap = Snap Turn, hold + left stick ←/→ = Hook
+  // Loop, double-tap then hold + stick ←/→ = Knife Roll. Barrel roll = a
+  // double-flick of the left stick to one side (the steering gesture) or a
+  // right-stick flick. (Camera zoom is wheel/auto in every scene; no scene
+  // reads the ZOOM intents, so the triggers are free for flight.)
+  { button: 6, intent: "MANEUVER" }, // LT
+  // Commander orders (capital ship, crew role commander) share LT, RT and
+  // the d-pad sides: no capital ship can fly a maneuver (FlightCapabilities).
   { button: 6, intent: "COMMANDER_ORDER_1" }, // LT
   { button: 7, intent: "COMMANDER_ORDER_2" }, // RT
   { button: 14, intent: "COMMANDER_ORDER_3" }, // D-pad left
@@ -134,8 +135,6 @@ export const DEFAULT_GAMEPAD_BINDINGS: readonly GamepadBinding[] = [
   { button: 5, intent: "CYCLE_NEXT" }, // RB
   { button: 5, intent: "SHARP_TURN_RIGHT" }, // RB (flight)
   // D-pad in flight (it pans the camera in tactical scenes)
-  { button: 14, intent: "SEGNOR_LEFT" }, // D-pad left
-  { button: 15, intent: "SEGNOR_RIGHT" }, // D-pad right
   { button: 12, intent: "CLOAK" }, // D-pad up
   { button: 13, intent: "WEAPON_CYCLE" }, // D-pad down
   { button: 8, intent: "CREW_CYCLE" }, // Back / View

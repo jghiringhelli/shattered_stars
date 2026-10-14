@@ -130,7 +130,8 @@ import {
   BOSS_SHIELD_REGEN_POINTS,
   raidDifficultyMultiplier,
 } from "./epicRaid/bossDefinitions";
-import { buildRaidSetupScreen } from "./epicRaid/RaidSetupScreen";
+import { buildRaidSetupScreen, stepRaidTab } from "./epicRaid/RaidSetupScreen";
+import { bindTabKeys } from "../ui/menu/DetailTabs";
 import {
   SettingsDefaultPick,
   raidDifficultyFor,
@@ -439,6 +440,13 @@ export class EpicBattleScene extends Phaser.Scene {
     this.difficulty =
       this.difficultyDefault.next(defaultDifficulty()) ?? this.difficulty;
     this.showSetupScreen();
+    bindTabKeys(this, {
+      step: (direction) => {
+        stepRaidTab(direction);
+        this.showSetupScreen();
+      },
+      isActive: () => this.isSetupPhase,
+    });
 
     if (ShipTelemetry.isEnabled()) {
       this.telemetry = new ShipTelemetry();
@@ -502,6 +510,7 @@ export class EpicBattleScene extends Phaser.Scene {
         this.difficulty = difficulty;
         this.showSetupScreen();
       },
+      onSelectTab: () => this.showSetupScreen(),
       onStart: () => this.briefSortie(),
       onBack: () => this.scene.start("MainMenuScene"),
     });

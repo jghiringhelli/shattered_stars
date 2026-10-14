@@ -129,7 +129,7 @@ export const FLIGHT_SCHOOL_STEPS: readonly FlightSchoolStep[] = [
     title: "Snap turn",
     scenario: "open_space",
     prompt: (k) =>
-      `Press [${k("KTURN")}] (or double-tap [${k("THRUST_DOWN")}]) to flip 180°. Red maneuvers build stress — watch the bottom of your ring.`,
+      `TAP the maneuver key [${k("MANEUVER")}] (or double-tap [${k("THRUST_DOWN")}]) to flip 180°. Red maneuvers build stress — watch the bottom of your ring.`,
     isDone: flying("kturn"),
   },
   {
@@ -137,7 +137,7 @@ export const FLIGHT_SCHOOL_STEPS: readonly FlightSchoolStep[] = [
     title: "Hook loop",
     scenario: "open_space",
     prompt: (k) =>
-      `Press ${either(k, "SEGNOR_LEFT", "SEGNOR_RIGHT")} for a Hook loop: a reversing bank.`,
+      `HOLD the maneuver key [${k("MANEUVER")}] and press ${either(k, "STEER_LEFT", "STEER_RIGHT")} for a Hook loop: a reversing bank.`,
     isDone: flying("segnor_left", "segnor_right"),
   },
   {
@@ -145,7 +145,7 @@ export const FLIGHT_SCHOOL_STEPS: readonly FlightSchoolStep[] = [
     title: "Knife roll",
     scenario: "open_space",
     prompt: (k) =>
-      `Press ${either(k, "TALLON_LEFT", "TALLON_RIGHT")} for a Knife roll: a 90° turn that ends facing sideways.`,
+      `Double-tap the maneuver key [${k("MANEUVER")}], keep the second press down and add ${either(k, "STEER_LEFT", "STEER_RIGHT")} for a Knife roll: a 90° turn that ends facing sideways.`,
     isDone: flying("tallon_left", "tallon_right"),
   },
   {
@@ -160,7 +160,7 @@ export const FLIGHT_SCHOOL_STEPS: readonly FlightSchoolStep[] = [
     title: "Barrel roll",
     scenario: "open_space",
     prompt: (k) =>
-      `Press [${k("STEER_LEFT")}] then [${k("STEER_RIGHT")}] almost together to BARREL ROLL sideways.`,
+      `Double-tap [${k("STEER_LEFT")}] or [${k("STEER_RIGHT")}] — two quick taps of the SAME arrow — to BARREL ROLL that way. (Alternating the arrows is just steering.)`,
     isDone: cooldownStarted("barrelRollCooldownMs"),
   },
   {
@@ -209,7 +209,7 @@ export const FLIGHT_SCHOOL_STEPS: readonly FlightSchoolStep[] = [
     title: "Final exam",
     scenario: "bot",
     prompt: (k) =>
-      `Destroy the novice pilot. Mark it [${k("MARK_TARGET")}], keep it in your arc, and [${k("KTURN")}] if it gets behind you.`,
+      `Destroy the novice pilot. Mark it [${k("MARK_TARGET")}], keep it in your arc, and tap [${k("MANEUVER")}] to Snap turn if it gets behind you.`,
     isDone: (obs, memo) => memo.sawEnemy && obs.enemiesAlive === 0,
   },
 ];

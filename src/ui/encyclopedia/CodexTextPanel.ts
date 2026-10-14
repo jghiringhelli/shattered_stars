@@ -54,7 +54,7 @@ export class CodexTextPanel {
       scene,
       area.x + area.width / 2,
       area.y + area.height / 2,
-      { width: area.width, height: area.height, title: " " },
+      { width: area.width, height: area.height, title: " ", titleSize: 12 },
     );
     const pad = HOLO_SPACING.lg;
     const top = area.y + PANEL_HEADER_HEIGHT + pad;

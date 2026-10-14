@@ -17,6 +17,8 @@ import { EncyclopediaShipRow } from "./EncyclopediaShipRow";
 const SCROLLBAR = { width: 3, gap: HOLO_SPACING.xs, minThumb: 24 } as const;
 /** Scroll indicator track opacity. */
 const SCROLL_TRACK_ALPHA = 0.12;
+/** Panel header size (px) — nothing under 12 px at 1280x720. */
+const PANEL_TITLE_PX = 12;
 
 /** Scrollable, selectable ship list. */
 export class EncyclopediaShipList {
@@ -41,7 +43,7 @@ export class EncyclopediaShipList {
       scene,
       area.x + area.width / 2,
       area.y + area.height / 2,
-      { width: area.width, height: area.height, title: "SHIPS" },
+      { width: area.width, height: area.height, title: "SHIPS", titleSize: PANEL_TITLE_PX },
     );
     const inset = HOLO_SPACING.sm;
     const top = area.y + PANEL_HEADER_HEIGHT + inset;

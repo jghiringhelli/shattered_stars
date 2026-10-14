@@ -294,7 +294,7 @@ describe("PilotFlightControls — dashes", () => {
       BATTLEFIELD_SIZE,
     );
     expect(r.events).toEqual(["barrel_roll"]);
-    expect(r.pilot.rollLatched).toBe(false);
+    expect(r.pilot.steerLatched).toBe(false);
   });
 });
 

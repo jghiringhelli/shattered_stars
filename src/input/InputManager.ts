@@ -11,6 +11,7 @@ import type {
   InputSource,
 } from "./InputTypes";
 import { DEFAULT_INPUT_PROFILE } from "./DefaultBindings";
+import { READY_COOLDOWNS, type FlightCooldowns } from "./flightCooldowns";
 
 type IntentCallback = (event: InputEvent) => void;
 
@@ -28,6 +29,9 @@ class InputManagerClass {
 
   // Held state for continuous inputs (movement, etc.)
   private heldIntents: Map<ActionIntent, InputEvent> = new Map();
+
+  /** How far the flown ship's roll / Snap turn have recharged (touch rings). */
+  private flightCooldowns: FlightCooldowns = READY_COOLDOWNS;
 
   /** Intents not dispatched while a modal owns them (count per intent). */
   private suppressed: Map<ActionIntent, number> = new Map();
@@ -137,6 +141,18 @@ class InputManagerClass {
         this.heldIntents.delete(intent);
       }
     }
+  }
+
+  /**
+   * @param cooldowns - The flown ship's recharge fractions this frame.
+   */
+  reportFlightCooldowns(cooldowns: FlightCooldowns): void {
+    this.flightCooldowns = cooldowns;
+  }
+
+  /** @returns The latest flight cooldowns reported by the flying scene. */
+  getFlightCooldowns(): FlightCooldowns {
+    return this.flightCooldowns;
   }
 
   /**

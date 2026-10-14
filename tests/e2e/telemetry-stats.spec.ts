@@ -120,7 +120,9 @@ test.describe("Telemetry Stats panel", () => {
     await page.evaluate(() => {
       const settings = (window as any).game.scene.getScene("SettingsScene");
       const targets = settings.focusTargets;
-      targets[targets.length - 1].activate();
+      targets
+        .find((target: any) => target.labelText?.text === "VIEW STATS")
+        .activate();
     });
     await page.waitForFunction(() =>
       (window as any).game.scene.isActive("TelemetryStatsScene"),

@@ -12,6 +12,7 @@ import {
   type DailyResult,
 } from "../../systems/survival/DailyChallenge";
 import type { RunOutcome } from "../../systems/survival/RunHistory";
+import { contentFromTerm } from "../menu/tooltipContent";
 import type { ChoiceCard } from "./SurvivalChoicePanel";
 
 /** Past results listed under the launch card. */
@@ -60,6 +61,8 @@ export function dailyCards(
     description: `Sector ${r.sectorReached} · ${r.kills} kills · seed ${r.seedCode}`,
     note: `${points(r.score)} pts`,
     disabled: true,
+    tip: contentFromTerm("survival.history"),
+    noteTip: contentFromTerm("survival.history"),
   }));
   return [
     {
@@ -67,6 +70,8 @@ export function dailyCards(
       name: LAUNCH_DAILY_LABEL,
       description: dailySetupLine(daily),
       note: best ? `Best ${points(best.score)}` : "No score yet",
+      tip: contentFromTerm("survival.daily"),
+      noteTip: contentFromTerm("survival.daily"),
     },
     ...history,
     { icon: "✖", name: "Close", description: "Back to the run setup" },

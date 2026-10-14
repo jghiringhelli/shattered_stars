@@ -41,14 +41,17 @@ export type ActionIntent =
   // (no intent needed); FIRE_SECONDARY triggers ordnance/special weapons.
   | "FIRE_SECONDARY"
   | "WEAPON_CYCLE"
-  // Continuous flight — special maneuvers (double-tap on touch/keyboard)
+  // Continuous flight — special maneuvers. Barrel roll is a double-tap of the
+  // steering arrows/stick (← ← / → →); BOOST is ↑↑.
   | "BOOST"
   | "KTURN"
   | "BARREL_ROLL"
-  // Direct barrel-roll buttons (gamepad right-stick flicks): the keyboard's
-  // left+right chord is impossible on one analog stick.
+  // Direct roll buttons (optional extra keys, gamepad right-stick flicks).
   | "BARREL_ROLL_LEFT"
   | "BARREL_ROLL_RIGHT"
+  // THE maneuver key (HELD): tap = Snap Turn, hold + ←/→ = Hook Loop,
+  // double-tap then hold + ←/→ = Knife Roll (ManeuverKey).
+  | "MANEUVER"
   // Continuous flight — discrete precision maneuvers (ArcadeBattleScene's
   // richer gesture/stress model; unbound in the simpler dial-based scenes)
   | "SHARP_TURN_LEFT"

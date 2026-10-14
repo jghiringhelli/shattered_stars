@@ -15,7 +15,7 @@ import type {
   KeyboardBinding,
 } from "../input/InputTypes";
 import { DEFAULT_TOUCH_BINDINGS } from "../input/DefaultBindings";
-import { gamepadButtonLabel } from "../input/GamepadBindings";
+import { gamepadButtonLabel, primaryButton } from "../input/GamepadBindings";
 import {
   activeGamepadBindings,
   activeKeyboardBindings,
@@ -39,6 +39,7 @@ export const CONTROL_GROUPS: readonly ControlGroup[] = [
       { label: "Steer", intents: ["STEER_LEFT", "STEER_RIGHT"] },
       { label: "Throttle Up / Down", intents: ["THRUST_UP", "THRUST_DOWN"] },
       { label: "Primary Weapon", intents: [] }, // always autofires, no input
+      { label: "Maneuver Key (Snap / Hook / Knife)", intents: ["MANEUVER"] },
       { label: "Snap Turn (180°)", intents: ["KTURN"] },
       { label: "Boost Dash", intents: ["BOOST"] },
       {
@@ -141,6 +142,18 @@ function gamepadAxisLabel(binding: GamepadBinding): string {
   return GAMEPAD_AXIS_NAMES[key] ?? `Axis ${binding.axis}`;
 }
 
+/** Gamepad labels of the gesture intents, built from the (rebindable) maneuver button. */
+const GAMEPAD_GESTURE_LABELS: Partial<
+  Record<ActionIntent, (maneuver: string) => string>
+> = {
+  BARREL_ROLL: () => "Left Stick double-flick ← / →",
+  KTURN: (maneuver) => `Tap ${maneuver}`,
+  SEGNOR_LEFT: (maneuver) => `Hold ${maneuver} + Left Stick ← / →`,
+  SEGNOR_RIGHT: (maneuver) => `Hold ${maneuver} + Left Stick ← / →`,
+  TALLON_LEFT: (maneuver) => `Double-tap ${maneuver}, hold Left Stick ← / →`,
+  TALLON_RIGHT: (maneuver) => `Double-tap ${maneuver}, hold Left Stick ← / →`,
+};
+
 const TOUCH_STICK_INTENTS: ReadonlySet<ActionIntent> = new Set([
   "STEER_LEFT",
   "STEER_RIGHT",
@@ -148,20 +161,31 @@ const TOUCH_STICK_INTENTS: ReadonlySet<ActionIntent> = new Set([
   "THRUST_DOWN",
 ]);
 
-/** BOOST/KTURN reach the player via a double-tap on the stick itself, not
- * the gesture-zone binding table — see TouchFlightControls.ts. */
+/** Boost, roll and the maneuver reach the player via the stick itself and the
+ * MANEUVER button, not the gesture-zone binding table — see TouchFlightControls.ts. */
 const TOUCH_SPECIAL_LABELS: Partial<Record<ActionIntent, string>> = {
   BOOST: "Double-tap stick up",
-  KTURN: "Double-tap stick down",
+  KTURN: "Tap MANEUVER / double-tap stick down",
+  MANEUVER: "MANEUVER button",
+  BARREL_ROLL: "Double-tap stick ← / →",
+  SEGNOR_LEFT: "Hold MANEUVER + drag ← / →",
+  SEGNOR_RIGHT: "Hold MANEUVER + drag ← / →",
+  TALLON_LEFT: "Double-tap MANEUVER, drag ← / →",
+  TALLON_RIGHT: "Double-tap MANEUVER, drag ← / →",
 };
 
-/** BOOST/BARREL_ROLL have no direct KeyboardBinding entry — they're produced
- * by ArcadeInputGestures.ts's hold/double-tap/chord state machine on the
- * same steer/thrust keys, not a dedicated key — so their label is built
- * from those (possibly rebound) keys by boundKeyLabel(). */
+/** These have no (single) KeyboardBinding entry — they're produced by the
+ * double-tap state machine on the steer/thrust keys (ArcadeInputGestures) or
+ * by the maneuver key (ManeuverKey) — so their label is built from those
+ * (possibly rebound) keys by boundKeyLabel(). */
 const KEYBOARD_GESTURE_INTENTS: ReadonlySet<ActionIntent> = new Set([
   "BOOST",
   "BARREL_ROLL",
+  "KTURN",
+  "SEGNOR_LEFT",
+  "SEGNOR_RIGHT",
+  "TALLON_LEFT",
+  "TALLON_RIGHT",
 ]);
 
 const TOUCH_GESTURE_NAMES: Record<string, string> = {
@@ -219,6 +243,7 @@ export function gamepadLabelFor(
   bindings: readonly GamepadBinding[] = activeGamepadBindings(),
 ): string {
   if (intents.length === 0) return "Automatic";
+  const maneuver = gamepadButtonLabel(primaryButton(bindings, "MANEUVER"));
   const labels = bindings
     .filter((b) => intents.includes(b.intent))
     .map((b) => {
@@ -226,6 +251,10 @@ export function gamepadLabelFor(
       if (b.axis !== undefined) return gamepadAxisLabel(b);
       return "";
     });
+  for (const intent of intents) {
+    const gesture = GAMEPAD_GESTURE_LABELS[intent];
+    if (gesture) labels.unshift(gesture(maneuver));
+  }
   return uniqueJoin(labels);
 }
 

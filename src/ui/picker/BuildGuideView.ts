@@ -27,7 +27,7 @@ const TONE_COLOR: Readonly<Record<SectionTone, number>> = {
 const LINE_GAP = 2;
 const SECTION_GAP = 6;
 const BULLET = "\u25c6 ";
-const MORE_NOTE = "\u2026 more cards on the BUILD tab";
+const MORE_NOTE = "\u2026 more in the LOADOUT tab";
 
 /** Term shown when hovering a section heading. */
 const HEADING_TERMS: Readonly<Partial<Record<string, TermId>>> = {
@@ -61,8 +61,17 @@ export class BuildGuideView {
    * @returns y just below the content.
    */
   render(tab: GuideTab, guide: BuildExplanation, box: GuideBox): number {
+    return this.renderSections(guideSections(tab, guide), box);
+  }
+
+  /**
+   * @param sections - Sections to draw, top to bottom.
+   * @param box - Content box.
+   * @returns y just below the content.
+   */
+  renderSections(sections: readonly GuideSection[], box: GuideBox): number {
     let y = box.y;
-    for (const section of guideSections(tab, guide)) {
+    for (const section of sections) {
       y = this.drawSection(section, box, y) + SECTION_GAP;
     }
     return y - SECTION_GAP;
@@ -79,6 +88,10 @@ export class BuildGuideView {
       addTipZone(this.scene, this.container, zone, term);
     }
     let y = top + heading.height + LINE_GAP;
+    if (y + PICKER_TYPE.small.size > box.bottom) {
+      heading.destroy();
+      return top;
+    }
     if (section.rows) return this.drawRows(section, box, y);
     for (const [index, line] of section.lines.entries()) {
       const text = this.scene.add.text(

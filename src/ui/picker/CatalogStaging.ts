@@ -8,7 +8,7 @@
 
 import Phaser from "phaser";
 import type { ShipDefinition } from "../../core/types";
-import { getShipLoadouts } from "../../data/ShipLoadouts";
+import { getEquippableLoadouts, getShipLoadouts } from "../../data/ShipLoadouts";
 import { CAT_X, CAT_W } from "./catalogHelpers";
 import type { StagingSelection } from "./ShipDetailPanel";
 import { createHoverButton } from "../ButtonFactory";
@@ -50,10 +50,14 @@ export class CatalogStaging
     super();
   }
 
-  /** Called by the parent when a ship is clicked in the grid. */
+  /**
+   * Called by the parent when a ship is clicked in the grid. The ship's
+   * first quick build is staged — it is what flies when none is chosen, so
+   * the price on screen is the price of the ship that launches.
+   */
   selectShip(shipId: string): void {
     this.selectedShipId = shipId;
-    this.selectedLoadoutId = null;
+    this.selectedLoadoutId = getEquippableLoadouts(shipId)[0]?.id ?? null;
   }
 
   getSelectedShipId(): string | null {

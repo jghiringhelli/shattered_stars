@@ -13,7 +13,7 @@ import { swapWhenLoaded } from "../../assets/textureLoading";
 import { attachHintTooltip } from "../menu/HintTooltip";
 import { HOLO_PALETTE } from "../theme/HoloTheme";
 import { secondaryTags } from "./catalogHelpers";
-import { roleTermId, type TermId } from "../../data/tooltips";
+import type { TermId } from "../../data/tooltips";
 import { addTipZone, type TipSubject } from "../menu/tooltipTargets";
 import { shipTooltipContent } from "./shipTooltips";
 import { drawLockGlyph, drawTagChip, TAG_CHIP_HEIGHT } from "./pickerGlyphs";
@@ -276,6 +276,9 @@ interface SublineItem {
   readonly term: TermId;
 }
 
+/** Most tags a row shows before the rest fold into a "+N" chip. */
+const MAX_TAGS = 3;
+
 /** Tooltip term of a capability chip. */
 const TAG_TERMS: Readonly<Record<string, TermId>> = {
   TURRET: "tag.turret",
@@ -284,8 +287,9 @@ const TAG_TERMS: Readonly<Record<string, TermId>> = {
 };
 
 /**
- * ★ STARTER chip (first, so new players always see it), role, then
- * capability chips; layout stops at the first item that would overflow.
+ * ★ STARTER chip (first, so new players always see it), then capability
+ * chips — at most three, the rest fold into "+N". The role is not repeated:
+ * the section header above the row already names it.
  *
  * @param scene - Owning scene.
  * @param spec - Card spec.
@@ -310,12 +314,6 @@ function buildTags(
           },
         ]
       : []),
-    {
-      text: spec.def.role.replace(/_/g, " "),
-      color: HOLO_PALETTE.textSecondary,
-      chip: false,
-      term: roleTermId(spec.def.role),
-    },
     ...secondaryTags(spec.def).map((text) => ({
       text,
       color: HOLO_PALETTE.textSecondary,
@@ -327,7 +325,7 @@ function buildTags(
   const zones: CardZone[] = [];
   const centreY = spec.y + CARD.subY + 1 + TAG_CHIP_HEIGHT / 2;
   let itemX = startX;
-  for (const item of items) {
+  for (const item of items.slice(0, MAX_TAGS)) {
     const pad = item.chip ? CARD.tagPadX : 0;
     const label = addPickerText(
       scene,
@@ -355,5 +353,46 @@ function buildTags(
     });
     itemX += itemW + CARD.tagGap * 2;
   }
+  const hidden = items.slice(MAX_TAGS);
+  if (hidden.length > 0) addMoreChip(scene, spec, { x: itemX, maxRight }, hidden, { objects, zones });
   return { objects, zones };
+}
+
+/**
+ * "+N" chip for tags beyond the visible three; hovering lists them.
+ *
+ * @param scene - Owning scene.
+ * @param spec - Card spec.
+ * @param at - Left edge and rightmost x of the chip.
+ * @param hidden - The tags left out.
+ * @param into - Subline parts to add the chip to.
+ */
+function addMoreChip(
+  scene: Phaser.Scene,
+  spec: CatalogCardSpec,
+  at: { readonly x: number; readonly maxRight: number },
+  hidden: readonly SublineItem[],
+  into: { objects: Phaser.GameObjects.GameObject[]; zones: CardZone[] },
+): void {
+  const centreY = spec.y + CARD.subY + 1 + TAG_CHIP_HEIGHT / 2;
+  const label = addPickerText(
+    scene,
+    { x: at.x + CARD.tagPadX, y: centreY },
+    `+${hidden.length}`,
+    "micro",
+    HOLO_PALETTE.textSecondary,
+  ).setOrigin(0, 0.5);
+  const width = label.width + CARD.tagPadX * 2;
+  if (at.x + width > at.maxRight) {
+    label.destroy();
+    return;
+  }
+  into.objects.push(label, drawTagChip(scene, { x: at.x, centreY, width }, HOLO_PALETTE.textSecondary));
+  into.zones.push({
+    x: at.x,
+    y: centreY - TAG_CHIP_HEIGHT / 2,
+    width,
+    height: TAG_CHIP_HEIGHT,
+    subject: { title: "More tags", body: hidden.map((item) => item.text.toUpperCase()).join(" \u00b7 ") },
+  });
 }

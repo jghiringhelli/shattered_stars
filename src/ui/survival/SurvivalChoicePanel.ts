@@ -29,7 +29,10 @@ import {
 import { createHoloText } from "../hud/holoPrimitives";
 import { HoloPanel } from "../hud/HoloPanel";
 import { pinTree } from "../modeHud/screenSpace";
-import { attachHintTooltip, type HintContent } from "../menu/HintTooltip";
+import { attachHintTooltip } from "../menu/HintTooltip";
+import type { TooltipContent } from "../menu/tooltipContent";
+import type { ChoiceChip } from "./choiceTips";
+import { addElementZone, chipTexts } from "./choiceCardZones";
 
 /** A single selectable option as seen by the player. */
 export interface ChoiceCard {
@@ -40,8 +43,12 @@ export interface ChoiceCard {
   disabled?: boolean;
   /** Right-aligned note: a price, a requirement, a synergy hint. */
   note?: string;
-  /** Hover tooltip: role + "best with" (relics). */
-  hint?: HintContent;
+  /** Hover tooltip of the card: what it does, with an example. */
+  tip?: TooltipContent;
+  /** Hover tooltip of the right-hand note (price, set progress, odds). */
+  noteTip?: TooltipContent;
+  /** Tags beside the name, each explained on hover. */
+  chips?: readonly ChoiceChip[];
 }
 
 /** Optional extras of one overlay. */
@@ -71,7 +78,7 @@ const ICON_COLUMN = 56;
 /** Width reserved for the right-hand note (px). */
 const NOTE_COLUMN = 150;
 /** Backdrop opacity. */
-const BACKDROP_ALPHA = 0.85;
+const BACKDROP_ALPHA = 0.94;
 /** Card fill opacity (idle). */
 const CARD_FILL_ALPHA = 0.88;
 /** Opacity of a disabled card. */
@@ -206,15 +213,34 @@ export class SurvivalChoicePanel {
       accentColor: this.accent,
       fillAlpha: CARD_FILL_ALPHA,
     });
+    const name = this.cardName(card.name, height);
     group.add(this.cardIcon(card.icon));
-    group.add(this.cardName(card.name, height));
+    group.add(name);
     group.add(this.cardDescription(card.description, height));
-    if (card.note) group.add(this.cardNote(card.note, card.disabled === true));
+    const note = card.note
+      ? this.cardNote(card.note, card.disabled === true)
+      : null;
+    if (note) group.add(note);
+    const chips = chipTexts(this.scene, card.chips ?? [], name);
+    group.add(chips.map((chip) => chip.text));
     if (card.disabled) group.setAlpha(DISABLED_ALPHA);
     const hit = this.cardHitArea(group, height, card.disabled === true, onPick);
     group.add(hit);
-    if (card.hint) attachHintTooltip(this.scene, hit, card.hint);
+    if (card.tip) attachHintTooltip(this.scene, hit, card.tip);
     this.container.add(group);
+    const press = (): void => {
+      hit.emit("pointerdown");
+    };
+    const zone = (text: Phaser.GameObjects.Text, tip: TooltipContent): void =>
+      addElementZone(
+        { scene: this.scene, container: this.container, accent: this.accent },
+        group,
+        text,
+        tip,
+        press,
+      );
+    if (note && card.noteTip) zone(note, card.noteTip);
+    chips.forEach((chip) => zone(chip.text, chip.tip));
   }
 
   private cardIcon(icon: string): Phaser.GameObjects.Text {

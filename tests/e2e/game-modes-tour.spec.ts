@@ -19,6 +19,7 @@ import {
   readSceneState,
   suppressWebGLNoise,
 } from "./helpers/game";
+import { clickText } from "./helpers/pickScreens";
 
 interface ModeSpec {
   label:
@@ -114,15 +115,7 @@ async function launchEpicRaidWithDefaults(page: Page): Promise<void> {
     },
     { timeout: 10_000 },
   );
-  const box = (await page.locator("canvas").boundingBox())!;
-  const { gw, gh } = await page.evaluate(() => {
-    const g = (window as unknown as { game: any }).game;
-    return { gw: g.scale.gameSize.width, gh: g.scale.gameSize.height };
-  });
-  await page.mouse.click(
-    box.x + 640 * (box.width / gw),
-    box.y + (gh - 100) * (box.height / gh),
-  );
+  await clickText(page, "EpicBattleScene", "BEGIN ASSAULT");
 }
 
 async function autoFillAndStartBattle(page: Page): Promise<void> {

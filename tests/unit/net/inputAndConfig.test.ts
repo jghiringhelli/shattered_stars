@@ -7,7 +7,7 @@ import {
   HELD_ACTIONS,
   PILOT_COMMANDS,
 } from "../../../src/net/input/PilotInputCodec";
-import { INPUT_AI_CONTROL } from "../../../src/net/protocol";
+import { INPUT_AI_CONTROL, PROTOCOL_VERSION } from "../../../src/net/protocol";
 import {
   normalizeServerUrl,
   resolveServerUrl,
@@ -52,6 +52,19 @@ describe("PilotInputCodec", () => {
     expect(pressOnly & ~EDGE_MASK).toBe(0);
     expect(heldOnly & EDGE_MASK).toBe(0);
     expect(EDGE_MASK & INPUT_AI_CONTROL).toBe(0);
+  });
+
+  it("carries the maneuver key as a held bit (never a one-shot press)", () => {
+    expect(HELD_ACTIONS).toContain("MANEUVER");
+    expect(EDGE_ACTIONS as readonly string[]).not.toContain("MANEUVER");
+    const decoded = decodePilotInput(
+      encodePilotInput({ held: new Set(["MANEUVER"]), edges: new Set() }),
+    );
+    expect([...decoded.held]).toEqual(["MANEUVER"]);
+  });
+
+  it("is protocol 4 or later: the input word gained the MANEUVER held bit", () => {
+    expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(4);
   });
 
   it("carries the gamepad roll buttons and the commander orders", () => {

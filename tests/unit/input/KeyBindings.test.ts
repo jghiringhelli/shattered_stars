@@ -62,9 +62,9 @@ describe("applyKeyOverrides", () => {
 
   it("keeps the overridden shift modifier", () => {
     const bindings = applyKeyOverrides(defaults, {
-      SEGNOR_LEFT: { key: "A", shift: true },
+      SHARP_TURN_LEFT: { key: "A", shift: true },
     });
-    expect(primaryChord(bindings, "SEGNOR_LEFT")).toEqual({
+    expect(primaryChord(bindings, "SHARP_TURN_LEFT")).toEqual({
       key: "A",
       shift: true,
     });
@@ -76,9 +76,9 @@ describe("conflict detection", () => {
     expect(findAllConflicts(defaults)).toEqual([]);
   });
 
-  it("reports a flight intent already on the key (Z is the Snap turn)", () => {
+  it("reports a flight intent already on the key (Z is the maneuver key)", () => {
     expect(findConflicts(defaults, "MARK_TARGET", { key: "Z" })).toEqual([
-      "KTURN",
+      "MANEUVER",
     ]);
   });
 
@@ -87,12 +87,15 @@ describe("conflict detection", () => {
   });
 
   it("allows a key shared across contexts (W pans the tactical camera)", () => {
-    expect(findConflicts(defaults, "KTURN", { key: "W" })).toEqual([]);
+    expect(findConflicts(defaults, "MANEUVER", { key: "W" })).toEqual([]);
   });
 
   it("treats a different modifier as a different chord", () => {
+    expect(findConflicts(defaults, "CLOAK", { key: "Q" })).toEqual([
+      "SHARP_TURN_LEFT",
+    ]);
     expect(findConflicts(defaults, "CLOAK", { key: "Q", shift: true })).toEqual(
-      ["SEGNOR_LEFT"],
+      [],
     );
     expect(findConflicts(defaults, "CLOAK", { key: "Q", ctrl: true })).toEqual(
       [],
@@ -109,10 +112,10 @@ describe("rebindIntent", () => {
 
   it("swaps on conflict: the displaced intent takes the old key", () => {
     const result = rebindIntent(defaults, {}, "MARK_TARGET", { key: "Z" });
-    expect(result.displaced).toEqual(["KTURN"]);
+    expect(result.displaced).toEqual(["MANEUVER"]);
     const bindings = applyKeyOverrides(defaults, result.overrides);
     expect(primaryChord(bindings, "MARK_TARGET")).toEqual({ key: "Z" });
-    expect(primaryChord(bindings, "KTURN")).toEqual({ key: "R" });
+    expect(primaryChord(bindings, "MANEUVER")).toEqual({ key: "R" });
     expect(findAllConflicts(bindings)).toEqual([]);
   });
 
@@ -172,9 +175,9 @@ describe("REBINDABLE_INTENTS", () => {
       "MARK_TARGET",
       "HERO_POWER_1",
       "HERO_POWER_2",
+      "MANEUVER",
       "KTURN",
-      "SEGNOR_LEFT",
-      "TALLON_RIGHT",
+      "BARREL_ROLL_LEFT",
       "FIRE_SECONDARY",
     ] as const) {
       expect(intents).toContain(intent);

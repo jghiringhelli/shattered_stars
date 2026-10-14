@@ -60,7 +60,7 @@ describe("power draft and rerolls", () => {
     expect(run.progression.branch.gunnery).toBe(0);
   });
 
-  it("turns Wing Commander's extra escort into a real escort, never past the cap", () => {
+  it("turns Squadron Marshal's extra escort into a real escort, never past the cap", () => {
     const base = RunBuilder.aRun()
       .with({ pendingRewards: [POWER] })
       .build();

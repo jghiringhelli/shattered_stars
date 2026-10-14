@@ -6,7 +6,6 @@
 
 import Phaser from "phaser";
 import type { ShipDefinition } from "../../core/types";
-import { getEncyclopediaEntry } from "../../data/ShipEncyclopedia";
 import { ACTION_DEFINITIONS } from "../../systems/ActionsSystem";
 import { drawHoloFrame, drawHoloGauge } from "../menu/holoChrome";
 import { HOLO_PALETTE, HOLO_RADIUS, HOLO_SPACING } from "../theme/HoloTheme";
@@ -48,8 +47,6 @@ const LAYOUT = {
   chipH: 18,
   chipPadX: 6,
   chipGap: HOLO_SPACING.xs,
-  /** Longest lore excerpt shown (characters) before an ellipsis. */
-  loreMaxChars: 120,
 } as const;
 
 /**
@@ -223,29 +220,4 @@ function drawActionChips(
     chipX += chipW + LAYOUT.chipGap;
   }
   return chipY + LAYOUT.chipH;
-}
-
-/**
- * Lore excerpt (encyclopedia entry or ship description).
- *
- * @param area - Target and box.
- * @param def - The ship.
- * @returns y below the text.
- */
-export function drawLore(area: SectionArea, def: ShipDefinition): number {
-  const full = getEncyclopediaEntry(def.id)?.lore ?? def.description;
-  const desc =
-    full.length > LAYOUT.loreMaxChars
-      ? `${full.slice(0, LAYOUT.loreMaxChars - 3)}\u2026`
-      : full;
-  const text = area.scene.add.text(
-    area.x,
-    area.y,
-    desc,
-    pickerTextStyle("small", HOLO_PALETTE.textSecondary, {
-      wordWrap: { width: area.width },
-    }),
-  );
-  area.container.add(text);
-  return area.y + text.height;
 }

@@ -114,7 +114,7 @@ describe("survival/powers draw", () => {
   });
 });
 
-describe("Wing Commander escort cap", () => {
+describe("Squadron Marshal escort cap", () => {
   it("never raises escorts past MAX_ESCORTS", () => {
     const state = createRunState();
     state.escorts = 5;

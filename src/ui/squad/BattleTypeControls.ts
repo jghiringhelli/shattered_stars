@@ -17,14 +17,15 @@ import { contentFromTerm } from "../menu/tooltipContent";
 import type { HoloPressButton } from "../menu/HoloPressButton";
 import { MENU_LAYOUT } from "../menu/MenuScaffold";
 import { createHoloText } from "../hud/holoPrimitives";
+import { poolCapTooltip } from "./reserveExplain";
 import { HOLO_PALETTE, HOLO_SPACING } from "../theme/HoloTheme";
 
 /** Geometry: right of BACK, clear of the centred title. */
 const CONTROLS = {
-  battleWidth: 176,
-  reserveWidth: 112,
-  height: 30,
-  font: 11,
+  battleWidth: 184,
+  reserveWidth: 120,
+  height: 32,
+  font: 12,
 } as const;
 
 /** What the controls read and change. */
@@ -114,13 +115,17 @@ export class BattleTypeControls {
       "",
       "caption",
       HOLO_PALETTE.textSecondary,
-    ).setOrigin(0, 0.5);
+    )
+      .setFontSize(CONTROLS.font)
+      .setOrigin(0, 0.5);
     this.caption.setInteractive();
-    attachHintTooltip(scene, this.caption, () =>
-      contentFromTerm(
-        this.host.prefs().battle === "classic" ? "battle.classic" : "battle.pool",
-      ),
-    );
+    attachHintTooltip(scene, this.caption, () => {
+      const format = this.host.format();
+      if (this.host.prefs().battle === "classic" || !format)
+        return contentFromTerm("battle.classic");
+      const rules = rulesFor(format);
+      return poolCapTooltip(rules.poolPoints, rules.fieldCapPoints);
+    });
     this.refresh();
   }
 

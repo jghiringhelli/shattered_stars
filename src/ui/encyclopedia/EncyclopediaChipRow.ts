@@ -27,6 +27,9 @@ const HOVER_BORDER_ALPHA = 0.9;
 const UNDERLINE_ALPHA = 0.8;
 /** Idle underline thickness. */
 const UNDERLINE_HEIGHT = 2;
+/** Chip label size (px) and letter spacing — nothing under 12 px at 1280x720. */
+const CHIP_FONT_PX = 12;
+const CHIP_LETTER_SPACING = 0.5;
 
 /** One chip: the value it selects, its label and its accent. */
 export interface ChipSpec<T> {
@@ -93,9 +96,9 @@ export class EncyclopediaChipRow<T> {
     const face = scene.add.graphics();
     const label = scene.add
       .text(rect.x + rect.width / 2, rect.y + rect.height / 2, spec.label, {
-        ...holoFont(caption.size, caption.weight),
+        ...holoFont(CHIP_FONT_PX, caption.weight),
       })
-      .setLetterSpacing(caption.letterSpacing)
+      .setLetterSpacing(CHIP_LETTER_SPACING)
       .setOrigin(0.5);
     return { spec, face, label, rect, hovered: false };
   }

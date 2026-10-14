@@ -143,6 +143,15 @@ async function countSceneCalls(
     page.evaluate((m: string) => (window as any).__calls[m] as number, method);
 }
 
+/** Hold the maneuver key Z and press ← (a Hook Loop left). */
+async function hookLeft(page: Page): Promise<void> {
+  await page.keyboard.down("z");
+  await page.waitForTimeout(60);
+  await page.keyboard.down("ArrowLeft");
+  await page.waitForTimeout(120);
+  await page.keyboard.up("ArrowLeft");
+  await page.keyboard.up("z");
+}
 test.describe("ArcadeBattleScene — keyboard playthrough", () => {
   test("primary weapon autofires with zero player input", async ({ page }) => {
     suppressWebGLNoise(page);
@@ -208,7 +217,7 @@ test.describe("ArcadeBattleScene — keyboard playthrough", () => {
     await waitForPlayerManeuver(page, "turn_left");
   });
 
-  test("Shift+Q queues a hook loop (distinct from plain Q) on a ship whose dial has it", async ({
+  test("holding Z and pressing ← queues a hook loop on a ship whose dial has it", async ({
     page,
   }) => {
     suppressWebGLNoise(page);
@@ -217,28 +226,66 @@ test.describe("ArcadeBattleScene — keyboard playthrough", () => {
       controller: "player",
       ships: ["synth_stalker"],
     });
-    await holdGameKey(page, "Q", 100, { shift: true });
+    await hookLeft(page);
     await waitForPlayerManeuver(page, "segnor_left");
   });
 
-  test("Shift+Q is refused, with HUD feedback, on a ship without Hook", async ({
+  test("Z + ← is refused, with HUD feedback, on a ship without Hook", async ({
     page,
   }) => {
     suppressWebGLNoise(page);
     await openArcade(page, CONFED_KESTREL);
-    await holdGameKey(page, "Q", 100, { shift: true });
+    await hookLeft(page);
     await expect
       .poll(() => feedbackLabel(page))
       .toBe("HOOK LOOP NOT ON DIAL");
   });
 
-  test("T queues a knife roll", async ({ page }) => {
+  test("Z, then Z held with ← queues a knife roll (and not a Snap turn)", async ({
+    page,
+  }) => {
     suppressWebGLNoise(page);
     await openArcade(page, CONFED_KESTREL);
-    await holdGameKey(page, "T", 100);
+    await page.keyboard.down("z");
+    await page.waitForTimeout(50);
+    await page.keyboard.up("z");
+    await page.waitForTimeout(40);
+    await page.keyboard.down("z");
+    await page.waitForTimeout(60);
+    await page.keyboard.down("ArrowLeft");
+    await page.waitForTimeout(120);
+    await page.keyboard.up("ArrowLeft");
+    await page.keyboard.up("z");
     await waitForPlayerManeuver(page, "tallon_left");
   });
 
+  test("tapping Z queues a Snap turn", async ({ page }) => {
+    suppressWebGLNoise(page);
+    await openArcade(page, CONFED_KESTREL);
+    await holdGameKey(page, "Z", 80);
+    await waitForPlayerManeuver(page, "kturn");
+  });
+
+  test("double-tapping ← barrel-rolls; alternating ← → does not", async ({
+    page,
+  }) => {
+    suppressWebGLNoise(page);
+    await openArcade(page, CONFED_KESTREL);
+    for (let i = 0; i < 6; i++)
+      await holdGameKey(page, i % 2 === 0 ? "ArrowLeft" : "ArrowRight", 50);
+    await page.waitForTimeout(100);
+    expect((await getPlayerShip(page)).control.barrelRollCooldown).toBe(0);
+    await page.waitForTimeout(500);
+    for (let i = 0; i < 2; i++) {
+      await page.keyboard.down("ArrowLeft");
+      await page.waitForTimeout(50);
+      await page.keyboard.up("ArrowLeft");
+      if (i === 0) await page.waitForTimeout(40);
+    }
+    await expect
+      .poll(async () => (await getPlayerShip(page)).control.barrelRollCooldown)
+      .toBeGreaterThan(0);
+  });
   test("C cloaks a ship with a cloaking device", async ({ page }) => {
     suppressWebGLNoise(page);
     await openArcade(page, {
@@ -310,6 +357,18 @@ test.describe("ArcadeBattleScene — keyboard playthrough", () => {
 test.describe("ArcadeBattleScene — touch controls", () => {
   test.use({ hasTouch: true, viewport: { width: 1280, height: 720 } });
 
+  // A touch-capable browser without a fine pointer gets the one-time
+  // "phones are not supported" notice; these specs test the touch controls
+  // themselves, so they start as a player who already dismissed it.
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() =>
+      window.localStorage.setItem(
+        "shattered_stars_device_notice_dismissed",
+        "1",
+      ),
+    );
+  });
+
   // Stick center (140, height-150) and action-zone center (width-120, height-150)
   // per src/ui/input/TouchFlightControls.ts — kept in sync manually since the
   // constants are private to that class.
@@ -377,6 +436,60 @@ test.describe("ArcadeBattleScene — touch controls", () => {
     expect((await getPlayerShip(page)).control.kturnCooldown).toBeGreaterThan(
       0,
     );
+  });
+
+  // MANEUVER button center (width-250, height-95).
+  const MANEUVER = { x: 1030, y: 625 };
+
+  test("double-tapping the left half of the stick barrel-rolls (a single tap does not)", async ({
+    page,
+  }) => {
+    suppressWebGLNoise(page);
+    await openArcade(page, CONFED_KESTREL);
+    const tapLeft = async (): Promise<void> => {
+      await page.mouse.move(STICK.x - 40, STICK.y);
+      await page.mouse.down();
+      await page.waitForTimeout(40);
+      await page.mouse.up();
+    };
+    await tapLeft();
+    await page.waitForTimeout(150);
+    expect((await getPlayerShip(page)).control.barrelRollCooldown).toBe(0);
+    await page.waitForTimeout(500);
+    await tapLeft();
+    await page.waitForTimeout(20);
+    await tapLeft();
+    await expect
+      .poll(async () => (await getPlayerShip(page)).control.barrelRollCooldown)
+      .toBeGreaterThan(0);
+  });
+
+  test("tapping the MANEUVER button queues a Snap turn", async ({ page }) => {
+    suppressWebGLNoise(page);
+    await openArcade(page, CONFED_KESTREL);
+    await page.mouse.move(MANEUVER.x, MANEUVER.y);
+    await page.mouse.down();
+    await page.waitForTimeout(60);
+    await page.mouse.up();
+    await waitForPlayerManeuver(page, "kturn");
+  });
+
+  test("pressing MANEUVER and dragging left queues a Hook Loop (Synthetic Stalker)", async ({
+    page,
+  }) => {
+    suppressWebGLNoise(page);
+    await openArcade(page, {
+      factionId: "synthetic_collective",
+      controller: "player",
+      ships: ["synth_stalker"],
+    });
+    await page.mouse.move(MANEUVER.x, MANEUVER.y);
+    await page.mouse.down();
+    await page.waitForTimeout(80);
+    await page.mouse.move(MANEUVER.x - 36, MANEUVER.y);
+    await page.waitForTimeout(150);
+    await page.mouse.up();
+    await waitForPlayerManeuver(page, "segnor_left");
   });
 
   test("a single tap on the action zone reaches the secondary weapons (FIRE_SECONDARY)", async ({

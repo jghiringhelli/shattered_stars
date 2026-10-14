@@ -12,6 +12,7 @@ import type {
   TouchBinding,
 } from "../InputTypes";
 import { TouchFlightControls } from "../../ui/input/TouchFlightControls";
+import { READY_COOLDOWNS, type FlightCooldowns } from "../flightCooldowns";
 
 const STICK_DEADZONE = 0.15;
 
@@ -22,6 +23,8 @@ export class TouchAdapter implements InputAdapter {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly touchBindings: readonly TouchBinding[],
+    private readonly readCooldowns: () => FlightCooldowns = () =>
+      READY_COOLDOWNS,
   ) {}
 
   init(): void {
@@ -50,6 +53,17 @@ export class TouchAdapter implements InputAdapter {
     return window.matchMedia("(hover: none) and (pointer: coarse)").matches;
   }
 
+  /**
+   * The stick, or — while the MANEUVER finger is dragged to a side and the
+   * stick rests — that drag (Hook Loop / Knife Roll are "hold MANEUVER + a side").
+   * @returns Steer value, -1…1.
+   */
+  private steerValue(): number {
+    const stick = this.controls?.getSteerValue() ?? 0;
+    if (Math.abs(stick) > STICK_DEADZONE) return stick;
+    return this.controls?.getManeuverSteer() ?? stick;
+  }
+
   destroy(): void {
     this.controls?.destroy();
     this.controls = null;
@@ -65,8 +79,9 @@ export class TouchAdapter implements InputAdapter {
 
     const events: InputEvent[] = [];
     const timestamp = Date.now();
-    const steer = this.controls.getSteerValue();
+    this.controls.showCooldowns(this.readCooldowns());
     const thrust = this.controls.getThrustValue();
+    const steer = this.steerValue();
 
     if (steer < -STICK_DEADZONE) {
       events.push({
@@ -97,6 +112,15 @@ export class TouchAdapter implements InputAdapter {
         timestamp,
         source: this.source,
         value: Math.min(1, -thrust),
+      });
+    }
+
+    if (this.controls.isManeuverHeld()) {
+      events.push({
+        intent: "MANEUVER",
+        timestamp,
+        source: this.source,
+        value: 1,
       });
     }
 

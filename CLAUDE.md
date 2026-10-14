@@ -501,6 +501,7 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 - **systems/CycleFlight.ts** - The X-Wing cycle engine for every battle scene: spawn control from the
   definition, tick motion + cycle stress (AI ships fly BotPilots through the same controls)
 - **systems/PlayerFlightPilot.ts** / **PilotFlightControls.ts** - Player flight input shared by all scenes
+- **RollDoubleTap.ts** / **ManeuverKey.ts** - THE special-maneuver gestures (pure): barrel roll = double-tap of the SAME arrow / left-stick side (alternating ← → is steering; an unavailable roll just steers, silently); one MANEUVER key (Z / LT / MNVR button, held intent): tap = Snap Turn, hold + side = Hook Loop, double-tap + side = Knife Roll. Spec: docs/specs/flight-controls.md; bots press the direct BARREL_ROLL_*/SEGNOR_*/TALLON_*/KTURN intents (PilotHands)
 - **systems/QuickBuildEquip.ts** / **DiceAttack.ts** - Equip quick builds (upgrades + pilot ability) and
   resolve dice-mode shots with them; **ShotConditions.ts** / **PilotAbilityCombat.ts** - conditional ability knobs
 - **ShotLevers.ts** - Position levers on every dice shot (rear arc +hit/+dmg, head-on joust −hit) and the squad-mark

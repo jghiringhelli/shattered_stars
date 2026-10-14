@@ -20,14 +20,21 @@ import {
   type StrategyId,
 } from "../../arcade/reinforcements";
 import type { FactionId } from "../../config";
-import { attachHintTooltip, attachTermTooltip } from "../menu/HintTooltip";
-import { contentFromTerm } from "../menu/tooltipContent";
+import { attachTermTooltip } from "../menu/HintTooltip";
+import { addTipZone } from "../menu/tooltipTargets";
+import type { TermId } from "../../data/tooltips";
+import { fieldCapNote, poolNote } from "../picker/pointsBudget";
 import { createHoverButton } from "../ButtonFactory";
 import type { HoloPressButton } from "../menu/HoloPressButton";
 import { HoloPanel } from "../hud/HoloPanel";
 import { createHoloText } from "../hud/holoPrimitives";
 import { HOLO_DEPTH, HOLO_PALETTE } from "../theme/HoloTheme";
 import { ReserveListView } from "./ReserveListView";
+import {
+  RESERVE_STRATEGY_TERMS,
+  quotaSentence,
+  reserveSummaryLine,
+} from "./reserveExplain";
 import {
   addEntry,
   moveEntry,
@@ -37,8 +44,13 @@ import {
 } from "./reserveEditorModel";
 
 const PANEL = { width: 760, height: 540 } as const;
-const STRATEGY = { y: -190, width: 168, height: 32, gap: 8 } as const;
-const SUMMARY_Y = -224;
+/** Panel header size (px) — nothing under 12 px at 1280x720. */
+const PANEL_TITLE_PX = 12;
+const STRATEGY = { y: -178, width: 168, height: 32, gap: 8 } as const;
+/** Plain-language lines (pool, cap) under the title, then summary and quotas under the list. */
+const NOTE_Y = { pool: -228, cap: -210, summary: 168, quota: 190 } as const;
+/** Width the notes wrap at (px) and their font size — nothing under 12 px. */
+const NOTE = { width: 700, height: 18, fontPx: 12 } as const;
 const FOOTER = { y: 236, width: 200, height: 36, gap: 130 } as const;
 const DIM_ALPHA = 0.7;
 /** Opaque backing under the translucent panel so the builder does not show through. */
@@ -58,7 +70,10 @@ export class ReserveEditor {
   private readonly root: Phaser.GameObjects.Container;
   private readonly panel: HoloPanel;
   private readonly list: ReserveListView;
+  private readonly poolLine: Phaser.GameObjects.Text;
+  private readonly capLine: Phaser.GameObjects.Text;
   private readonly summary: Phaser.GameObjects.Text;
+  private readonly quotaLine: Phaser.GameObjects.Text;
   private readonly strategyButtons = new Map<StrategyId, HoloPressButton>();
   private prefs: ReinforcementPrefs;
   private readonly onEsc = (): void => {
@@ -107,18 +122,14 @@ export class ReserveEditor {
       {
         ...PANEL,
         title: `Reserve — ${options.factionName}`,
+        titleSize: PANEL_TITLE_PX,
       },
     );
     this.root.add(this.panel);
-    this.summary = createHoloText(
-      scene,
-      0,
-      SUMMARY_Y,
-      "",
-      "caption",
-      HOLO_PALETTE.textSecondary,
-    );
-    this.panel.add(this.summary);
+    this.poolLine = this.note(NOTE_Y.pool, "reserve.pool");
+    this.capLine = this.note(NOTE_Y.cap, "reserve.field_cap");
+    this.summary = this.note(NOTE_Y.summary, "reserve.summary");
+    this.quotaLine = this.note(NOTE_Y.quota, "reserve.quota");
     this.createStrategyRow();
     this.createFooter();
     this.list = new ReserveListView(
@@ -192,14 +203,32 @@ export class ReserveEditor {
     this.prefs = prefs;
     this.options.onChange(prefs);
     const rules = rulesFor(this.options.format);
+    this.poolLine.setText(`${poolNote(rules.poolPoints)}.`);
+    this.capLine.setText(`${fieldCapNote(rules.fieldCapPoints)}.`);
     this.summary.setText(
-      `${prefs.reserve.length} SHIPS · ${reserveTotal(prefs.reserve)} PTS IN RESERVE  ·  POOL ${rules.poolPoints} (OPENING SQUAD INCLUDED)  ·  MAX ${rules.fieldCapPoints} ON FIELD`,
+      reserveSummaryLine(prefs.reserve.length, reserveTotal(prefs.reserve)),
     );
+    this.quotaLine.setText(quotaSentence(rules));
     for (const [id, button] of this.strategyButtons)
       button.setVariant(
         id === prefs.strategy && !prefs.edited ? "primary" : "secondary",
       );
     this.list.render(prefs.reserve);
+  }
+
+  /** A plain-language line of the panel with a hover explanation. */
+  private note(y: number, term: TermId): Phaser.GameObjects.Text {
+    const text = createHoloText(this.scene, 0, y, "", "caption", HOLO_PALETTE.textSecondary)
+      .setFontSize(NOTE.fontPx)
+      .setWordWrapWidth(NOTE.width);
+    this.panel.add(text);
+    addTipZone(
+      this.scene,
+      this.panel,
+      { x: -NOTE.width / 2, y: y - NOTE.height / 2, width: NOTE.width, height: NOTE.height },
+      term,
+    );
+    return text;
   }
 
   private createStrategyRow(): void {
@@ -223,11 +252,7 @@ export class ReserveEditor {
         },
         () => this.applyStrategy(id),
       );
-      attachHintTooltip(this.scene, button, {
-        ...contentFromTerm("battle.strategy"),
-        title: `${STRATEGY_LABELS[id].name} strategy`,
-        body: `${STRATEGY_LABELS[id].summary}. A preset that fills your reserve with this mix.`,
-      });
+      attachTermTooltip(this.scene, button, RESERVE_STRATEGY_TERMS[id]);
       this.panel.add(button);
       this.strategyButtons.set(id, button);
     });
@@ -263,7 +288,7 @@ export class ReserveEditor {
       () => this.close(),
     );
     attachTermTooltip(this.scene, reset, "battle.reset_reserve");
-    attachTermTooltip(this.scene, done, "ui.done");
+    attachTermTooltip(this.scene, done, "reserve.edit_close");
     this.panel.add([reset, done]);
   }
 }

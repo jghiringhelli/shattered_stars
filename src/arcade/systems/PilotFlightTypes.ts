@@ -6,6 +6,7 @@
 import type { ShipPose } from "../../core/ArcadeControls";
 import type { ManeuverDefinition } from "../../core/types";
 import type { GestureState } from "../ArcadeInputGestures";
+import type { ManeuverKeyState } from "../ManeuverKey";
 import type { StressState } from "../ArcadeStress";
 import type { HeldSteering } from "../SteeringIntent";
 import type { MotionState } from "./ShipMotion";
@@ -24,7 +25,7 @@ export type FlightEdge =
   | "TALLON_LEFT"
   | "TALLON_RIGHT"
   | "BOOST"
-  /** Gamepad roll buttons (keyboard rolls with the left+right chord). */
+  /** Direct roll buttons (extra keys, gamepad right-stick flicks, bots); the arrows roll with a double-tap. */
   | "BARREL_ROLL_LEFT"
   | "BARREL_ROLL_RIGHT";
 
@@ -37,8 +38,10 @@ export interface FlightInput {
   readonly edges: ReadonlySet<FlightEdge>;
   readonly nowMs: number;
   readonly deltaMs: number;
-  /** Whether left+right chords trigger a barrel roll (scene setting). */
-  readonly allowChordBarrelRoll: boolean;
+  /** The maneuver key (Snap Turn / Hook / Knife) is held. */
+  readonly maneuver?: boolean;
+  /** Opt-in left+right chord roll (accessibility); the double-tap is always on. */
+  readonly allowChordBarrelRoll?: boolean;
 }
 
 /** Per-pilot input memory between frames. */
@@ -47,8 +50,10 @@ export interface PilotControlState {
   readonly steering: HeldSteering;
   /** Speeds before the latest ↑/↓ taps, to undo them if a ↑↑/↓↓ gesture fires. */
   readonly throttle: ThrottleMemory;
-  /** A barrel roll fired: arrows steer nothing until both are released. */
-  readonly rollLatched: boolean;
+  /** The maneuver key (tap / hold + side / double-tap) memory. */
+  readonly maneuver: ManeuverKeyState;
+  /** A roll or a Hook/Knife fired from the arrows: they steer nothing until both are released. */
+  readonly steerLatched: boolean;
 }
 
 /** The ship being flown, as far as flight controls care. */

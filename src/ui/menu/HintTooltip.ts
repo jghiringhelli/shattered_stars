@@ -22,6 +22,7 @@ import {
   type BlockStyle,
   type HintContent,
   type TooltipContent,
+  type TooltipLevel,
 } from "./tooltipContent";
 import { drawTermGlyph, TOOLTIP_GLYPH_SIZE } from "./tooltipGlyphs";
 import { holoFont } from "../theme/holoFont";
@@ -43,6 +44,12 @@ const TIP = { padding: 10, blockGap: 4, wrap: 340, glyphGap: 8 } as const;
 const TIP_FILL_ALPHA = 0.96;
 /** Pause before a tooltip appears when none is open (ms). */
 export const HINT_DELAY_MS = 220;
+/** Hover time after which the short tooltip becomes the full explanation (ms). */
+export const HINT_HOLD_MS = 800;
+/** Footer of a short tooltip. */
+const MORE_HINT = "Hold Shift / Y for details";
+/** Standard-layout gamepad button (Y) that expands the tooltip. */
+const GAMEPAD_EXPAND_BUTTON = 3;
 /** Above modal dialogs and their controls. */
 const TOOLTIP_DEPTH = HOLO_DEPTH.modal + 20;
 /** scene.data key of the shared tooltip. */
@@ -60,7 +67,8 @@ const BLOCK_LOOK: Readonly<
   body: { size: 12, weight: "400", color: HOLO_PALETTE.textPrimary },
   role: { size: 13, weight: "600", color: HOLO_PALETTE.accent },
   best: { size: 12, weight: "400", color: HOLO_PALETTE.textSecondary },
-  label: { size: 10, weight: "600", color: HOLO_PALETTE.warning },
+  label: { size: 12, weight: "600", color: HOLO_PALETTE.warning },
+  more: { size: 12, weight: "400", color: HOLO_PALETTE.textMuted },
   howItPlays: { size: 12, weight: "400", color: HOLO_PALETTE.textSecondary },
   example: {
     size: 12,
@@ -75,7 +83,13 @@ class HintTooltipView {
   private readonly root: Phaser.GameObjects.Container;
   private owner: Phaser.GameObjects.GameObject | null = null;
   private pending: Phaser.Time.TimerEvent | null = null;
+  private holdTimer: Phaser.Time.TimerEvent | null = null;
   private text = "";
+  private level: TooltipLevel = "short";
+  private shown: {
+    content: TooltipContent;
+    pointer: PointerLike | undefined;
+  } | null = null;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.root = scene.add
@@ -88,6 +102,18 @@ class HintTooltipView {
   /** The text on show ("" when hidden; e2e / debugging). */
   get shownText(): string {
     return this.root.visible ? this.text : "";
+  }
+
+  /** True while the full explanation (not the short hover line) is on show. */
+  get expanded(): boolean {
+    return this.root.visible && this.level === "full";
+  }
+
+  /** Swap the short hover tooltip for the full explanation (Shift / Y / hold). */
+  expand(): void {
+    if (!this.root.visible || !this.owner || !this.shown) return;
+    if (this.level === "full") return;
+    this.show(this.owner, this.shown.content, this.shown.pointer, "full");
   }
 
   /**
@@ -107,14 +133,16 @@ class HintTooltipView {
   ): void {
     this.cancelPending();
     this.owner = owner;
+    // Keyboard / gamepad focus has no pointer to hold: it reads in full.
+    const level: TooltipLevel = pointer ? "short" : "full";
     if (immediate || this.root.visible) {
-      this.show(owner, content, pointer);
+      this.show(owner, content, pointer, level);
       return;
     }
     this.pending = this.scene.time.delayedCall(HINT_DELAY_MS, () => {
       this.pending = null;
       if (owner.active && this.owner === owner)
-        this.show(owner, content, pointer);
+        this.show(owner, content, pointer, level);
     });
   }
 
@@ -122,9 +150,20 @@ class HintTooltipView {
     owner: Phaser.GameObjects.GameObject,
     content: TooltipContent,
     pointer: PointerLike | undefined,
+    level: TooltipLevel,
   ): void {
-    this.text = tooltipText(content);
-    const size = this.build(content);
+    this.holdTimer?.remove(false);
+    this.holdTimer = null;
+    this.level = level;
+    this.shown = { content, pointer };
+    this.text = tooltipText(content, level);
+    if (level === "short") {
+      this.holdTimer = this.scene.time.delayedCall(HINT_HOLD_MS, () => {
+        this.holdTimer = null;
+        if (owner.active && this.owner === owner) this.expand();
+      });
+    }
+    const size = this.build(content, level);
     this.root.setSize(size.width, size.height).setVisible(true);
     const bounds = (
       owner as Phaser.GameObjects.GameObject &
@@ -140,12 +179,18 @@ class HintTooltipView {
   }
 
   /** Lays the content out and returns the box size. */
-  private build(content: TooltipContent): { width: number; height: number } {
+  private build(
+    content: TooltipContent,
+    level: TooltipLevel,
+  ): { width: number; height: number } {
     this.root.removeAll(true);
     const indent = content.glyph ? TOOLTIP_GLYPH_SIZE + TIP.glyphGap : 0;
     const texts: Phaser.GameObjects.Text[] = [];
     let y: number = TIP.padding;
-    for (const block of tooltipBlocks(content)) {
+    const blocks = tooltipBlocks(content, level);
+    if (level === "short" && blocks.length > 0)
+      blocks.push({ style: "more", text: MORE_HINT });
+    for (const block of blocks) {
       const look = BLOCK_LOOK[block.style];
       const shift = block.style === "title" ? indent : 0;
       const text = this.scene.add.text(TIP.padding + shift, y, block.text, {
@@ -184,6 +229,8 @@ class HintTooltipView {
   private cancelPending(): void {
     this.pending?.remove(false);
     this.pending = null;
+    this.holdTimer?.remove(false);
+    this.holdTimer = null;
   }
 
   /**
@@ -195,6 +242,7 @@ class HintTooltipView {
     if (owner && owner !== this.owner) return;
     this.cancelPending();
     this.owner = null;
+    this.shown = null;
     this.root.setVisible(false);
   }
 }
@@ -204,7 +252,17 @@ function tooltipOf(scene: Phaser.Scene): HintTooltipView {
   if (existing) return existing;
   const view = new HintTooltipView(scene);
   scene.data.set(DATA_KEY, view);
-  scene.events.once("shutdown", () => scene.data.remove(DATA_KEY));
+  const expand = (): void => view.expand();
+  const onPad = (_pad: unknown, button: { index: number }): void => {
+    if (button.index === GAMEPAD_EXPAND_BUTTON) expand();
+  };
+  scene.input.keyboard?.on("keydown-SHIFT", expand);
+  scene.input.gamepad?.on("down", onPad);
+  scene.events.once("shutdown", () => {
+    scene.input.keyboard?.off("keydown-SHIFT", expand);
+    scene.input.gamepad?.off("down", onPad);
+    scene.data.remove(DATA_KEY);
+  });
   return view;
 }
 

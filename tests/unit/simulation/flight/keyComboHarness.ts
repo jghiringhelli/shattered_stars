@@ -29,7 +29,7 @@ import type { Pose } from "../../../../src/simulation/flight/XWingFlightOracle";
 export const TICK_MS = 1000 / 60;
 
 /** A held key (arrows) or a press of a bound action key. */
-export type ScriptKey = "LEFT" | "RIGHT" | "UP" | "DOWN";
+export type ScriptKey = "LEFT" | "RIGHT" | "UP" | "DOWN" | "MANEUVER";
 
 /** One step of a keyboard timeline. */
 export type ScriptEvent =
@@ -58,6 +58,7 @@ const HELD_INTENT: Record<ScriptKey, ActionIntent> = {
   RIGHT: "STEER_RIGHT",
   UP: "THRUST_UP",
   DOWN: "THRUST_DOWN",
+  MANEUVER: "MANEUVER",
 };
 
 /** Keyboard stand-in: held intents plus press events, like InputManager. */

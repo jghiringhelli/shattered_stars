@@ -71,8 +71,8 @@ export function crewTitle(role: CrewRole): string {
  */
 export function actionRows(control: ShipControlState): StatusRow[] {
   return [
-    cooldownRow("Z", "SNAP", control.kturnCooldown),
-    cooldownRow("←+→", "ROLL", control.barrelRollCooldown),
+    cooldownRow("Z", "MANEUVER", control.kturnCooldown),
+    cooldownRow("←← →→", "ROLL", control.barrelRollCooldown),
     cooldownRow("↑↑", "BOOST", control.boostCooldown),
   ];
 }

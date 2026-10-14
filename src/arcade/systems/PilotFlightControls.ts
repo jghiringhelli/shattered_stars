@@ -8,10 +8,11 @@
  * - Steering: tap = 30° drift, hold = one 45° bank then drift
  *   (SteeringIntent), hard-turn gesture or Q/E = 90° turn at the nearest
  *   legal speed on the ship's dial.
- * - Snap turn, Hook Loop, Knife Roll: queued for the next cycle, with an
- *   instant stress spike (refused while stressed for the Snap turn).
- * - Boost and barrel roll: instant dashes that carry the cycle along
- *   (ShipMotion.performAction).
+ * - Maneuver key (ManeuverKey): tap = Snap turn, hold + ←/→ = Hook Loop,
+ *   double-tap then hold + ←/→ = Knife Roll — queued for the next cycle,
+ *   with an instant stress spike (refused while stressed for the red ones).
+ * - Boost (↑↑) and barrel roll (←← / →→): instant dashes that carry the
+ *   cycle along (ShipMotion.performAction).
  *
  * Pure: no Phaser. The scene reads the returned events to play effects.
  */
@@ -23,6 +24,11 @@ import {
   type GestureAction,
 } from "../ArcadeInputGestures";
 import {
+  INITIAL_MANEUVER_KEY,
+  updateManeuverKey,
+  type ManeuverKeyResult,
+} from "../ManeuverKey";
+import {
   IDLE_STEERING,
   onSteeringCycleCommitted,
   updateHeldSteering,
@@ -31,6 +37,7 @@ import {
 import { applyThrottle, IDLE_THROTTLE } from "./PilotThrottle";
 import {
   applyDashes,
+  applySoftRoll,
   applySpecials,
   applySteering,
   type Flight,
@@ -55,9 +62,10 @@ export type {
 /** A pilot with no input history. */
 export const INITIAL_PILOT_CONTROL: PilotControlState = {
   gesture: INITIAL_GESTURE_STATE,
+  maneuver: INITIAL_MANEUVER_KEY,
   steering: IDLE_STEERING,
   throttle: IDLE_THROTTLE,
-  rollLatched: false,
+  steerLatched: false,
 };
 
 /**
@@ -100,25 +108,38 @@ export function applyPilotFlightInput(
     downDown: input.down,
     nowMs: input.nowMs,
     deltaMs: input.deltaMs,
-    allowChordBarrelRoll: input.allowChordBarrelRoll,
+    allowChordBarrelRoll: input.allowChordBarrelRoll ?? false,
+    maneuverHeld: input.maneuver ?? false,
+  });
+  const key = updateManeuverKey(pilot.maneuver, {
+    held: input.maneuver ?? false,
+    left: input.left,
+    right: input.right,
+    nowMs: input.nowMs,
   });
   const pressed: FramePresses = {
     edge: (e) => input.edges.has(e),
     has: (a) => gestures.actions.includes(a),
   };
   const throttle = applyThrottleInput(flight, pilot, pressed);
-  const steered = applySteeringInput(pilot, input, pressed);
+  const rolled = flySoftRoll(flown, flight, pressed, worldSize);
+  const steered = applySteeringInput(pilot, input, key, rolled);
   applySteering(flown, flight, steered.steering, hardTurnOf(pressed));
-  applySpecials(flown, flight, specialRequestsOf(pressed));
+  applySpecials(flown, flight, specialRequestsOf(pressed, key));
   applyDashes(
     flown,
     flight,
     pressed.edge("BOOST") || pressed.has("boost"),
-    [...gestures.actions, ...rollButtonsOf(input.edges)],
+    rollButtonsOf(input.edges),
     worldSize,
   );
   return {
-    pilot: { gesture: gestures.state, ...steered, throttle },
+    pilot: {
+      gesture: gestures.state,
+      maneuver: key.state,
+      ...steered,
+      throttle,
+    },
     motion: flight.motion,
     stress: flight.stress,
     events: flight.events,
@@ -133,8 +154,8 @@ interface FramePresses {
 }
 
 /**
- * Throttle keys and the throttle half of gestures (↑ for boost/Knife,
- * ↓ for Snap turn/Hook) change the speed by one step.
+ * Throttle keys and the throttle half of gestures (↑↑ boost, ↓↓ Snap turn)
+ * change the speed by one step.
  *
  * @param flight - Motion being built this frame (mutated).
  * @param pilot - Input memory from the previous frame.
@@ -150,39 +171,60 @@ function applyThrottleInput(
   const throttled = applyThrottle(flight.motion.control, pilot.throttle, {
     upPressed: edge("THRUST_UP"),
     downPressed: edge("THRUST_DOWN"),
-    upGesture:
-      has("boost") || has("tallon_roll_left") || has("tallon_roll_right"),
-    downGesture:
-      has("kturn_gesture") ||
-      has("segnor_loop_left") ||
-      has("segnor_loop_right"),
+    upGesture: has("boost"),
+    downGesture: has("kturn_gesture"),
   });
   flight.motion = { ...flight.motion, control: throttled.control };
   return throttled.memory;
 }
 
 /**
- * Held steering, idled while a barrel-roll chord stays latched (until both
- * arrows are released) so the roll's keys do not also bank the ship.
+ * A double-tapped arrow rolls the ship when it can (silently otherwise).
+ *
+ * @param flown - Ship being flown.
+ * @param flight - Motion/stress being built this frame (mutated).
+ * @param pressed - This frame's presses.
+ * @param worldSize - Battlefield edge length (px).
+ * @returns Whether a roll was flown.
+ */
+function flySoftRoll(
+  flown: FlownShip,
+  flight: Flight,
+  pressed: FramePresses,
+  worldSize: number,
+): boolean {
+  const side = pressed.has("barrel_roll_left")
+    ? "left"
+    : pressed.has("barrel_roll_right")
+      ? "right"
+      : null;
+  return side !== null && applySoftRoll(flown, flight, side, worldSize);
+}
+
+/**
+ * Held steering, idled while a roll or a Hook/Knife chord stays latched
+ * (until both arrows are released) so the gesture's own keys do not also
+ * bank the ship. A roll's double-tap cancels the drift its first tap queued.
  *
  * @param pilot - Input memory from the previous frame.
  * @param input - This frame's input.
- * @param pressed - This frame's presses.
- * @returns Steering memory and the roll latch after this frame.
+ * @param key - What the maneuver key did this frame.
+ * @param rolled - Whether a double-tap roll was flown this frame.
+ * @returns Steering memory and the latch after this frame.
  */
 function applySteeringInput(
   pilot: PilotControlState,
   input: FlightInput,
-  pressed: FramePresses,
-): Pick<PilotControlState, "steering" | "rollLatched"> {
-  const rolled =
-    pressed.has("barrel_roll_left") || pressed.has("barrel_roll_right");
-  const rollLatched =
-    (pilot.rollLatched || rolled) && (input.left || input.right);
-  const steering = rollLatched
+  key: ManeuverKeyResult,
+  rolled: boolean,
+): Pick<PilotControlState, "steering" | "steerLatched"> {
+  const chorded = key.special !== null && key.special !== "kturn";
+  const steerLatched =
+    (pilot.steerLatched || rolled || chorded) && (input.left || input.right);
+  const steering = steerLatched
     ? IDLE_STEERING
     : updateHeldSteering(pilot.steering, steerSide(input), input.deltaMs);
-  return { steering, rollLatched };
+  return { steering, steerLatched };
 }
 
 /**
@@ -198,33 +240,32 @@ function hardTurnOf(pressed: FramePresses): "left" | "right" | null {
 }
 
 /**
+ * Snap turn, Hook and Knife — from the maneuver key, a direct key/button
+ * edge or the ↓↓ gesture — as requests for applySpecials.
+ *
  * @param pressed - This frame's presses.
- * @returns Snap turn / Hook / Knife requests (key or gesture) for applySpecials.
+ * @param key - What the maneuver key did this frame.
+ * @returns The specials requested (key, direct edge or gesture), with their effect events.
  */
 function specialRequestsOf(
   pressed: FramePresses,
+  key: ManeuverKeyResult,
 ): Parameters<typeof applySpecials>[2] {
   const { edge, has } = pressed;
+  const is = (name: string): boolean => key.special === name;
   return [
-    [edge("KTURN") || has("kturn_gesture"), "kturn", "kturn"],
-    [edge("SEGNOR_LEFT") || has("segnor_loop_left"), "segnor_left", "segnor"],
-    [
-      edge("SEGNOR_RIGHT") || has("segnor_loop_right"),
-      "segnor_right",
-      "segnor",
-    ],
-    [edge("TALLON_LEFT") || has("tallon_roll_left"), "tallon_left", "tallon"],
-    [
-      edge("TALLON_RIGHT") || has("tallon_roll_right"),
-      "tallon_right",
-      "tallon",
-    ],
+    [edge("KTURN") || has("kturn_gesture") || is("kturn"), "kturn", "kturn"],
+    [edge("SEGNOR_LEFT") || is("segnor_left"), "segnor_left", "segnor"],
+    [edge("SEGNOR_RIGHT") || is("segnor_right"), "segnor_right", "segnor"],
+    [edge("TALLON_LEFT") || is("tallon_left"), "tallon_left", "tallon"],
+    [edge("TALLON_RIGHT") || is("tallon_right"), "tallon_right", "tallon"],
   ];
 }
 
 /**
- * Gamepad roll buttons as the gesture actions the chord would produce. A
- * button is a press, not a held chord, so it never latches steering.
+ * Gamepad/extra-key roll buttons as the gesture actions a roll produces. A
+ * button is a deliberate press: unlike a double-tap it reports refusals, and
+ * it never latches steering.
  *
  * @param edges - This frame's flight edges.
  * @returns The barrel-roll actions pressed this frame.

@@ -24,7 +24,7 @@ describe("ControlsReference", () => {
   });
 
   it("formats a shift-modified binding with the Shift+ prefix", () => {
-    expect(keyboardLabelFor(["SEGNOR_LEFT"])).toBe("Shift+Q");
+    expect(keyboardLabelFor(["FIRE_SECONDARY"])).toBe("Shift+SPACE");
   });
 
   it("formats gamepad axis and button bindings", () => {
@@ -47,7 +47,7 @@ describe("ControlsReference", () => {
     expect(gamepadLabelFor(["SHARP_TURN_LEFT", "SHARP_TURN_RIGHT"])).toBe(
       "LB / RB",
     );
-    expect(gamepadLabelFor(["KTURN"])).toBe("Right Stick ↓ flick");
+    expect(gamepadLabelFor(["KTURN"])).toBe("Tap LT / Right Stick ↓ flick");
     expect(
       gamepadLabelFor([
         "COMMANDER_ORDER_1",
@@ -61,7 +61,28 @@ describe("ControlsReference", () => {
   it("names the right-stick flick direction of a barrel roll", () => {
     expect(
       gamepadLabelFor(["BARREL_ROLL", "BARREL_ROLL_LEFT", "BARREL_ROLL_RIGHT"]),
-    ).toBe("Right Stick ←/→ flick");
+    ).toBe("Left Stick double-flick ← / → / Right Stick ←/→ flick");
+  });
+
+  it("names the one maneuver key for Snap Turn, Hook Loop and Knife Roll on every device", () => {
+    expect(keyboardLabelFor(["KTURN"])).toBe("Tap Z / ↓↓");
+    expect(keyboardLabelFor(["SEGNOR_LEFT", "SEGNOR_RIGHT"])).toBe(
+      "Hold Z + ← / →",
+    );
+    expect(keyboardLabelFor(["TALLON_LEFT", "TALLON_RIGHT"])).toBe(
+      "Double-tap Z, hold ← / →",
+    );
+    expect(keyboardLabelFor(["BARREL_ROLL"])).toBe("← ← / → →");
+    expect(gamepadLabelFor(["SEGNOR_LEFT", "SEGNOR_RIGHT"])).toBe(
+      "Hold LT + Left Stick ← / →",
+    );
+    expect(gamepadLabelFor(["TALLON_LEFT", "TALLON_RIGHT"])).toBe(
+      "Double-tap LT, hold Left Stick ← / →",
+    );
+    expect(touchLabelFor(["SEGNOR_LEFT", "SEGNOR_RIGHT"])).toBe(
+      "Hold MANEUVER + drag ← / →",
+    );
+    expect(touchLabelFor(["BARREL_ROLL"])).toBe("Double-tap stick ← / →");
   });
 
   it("lists the squad mark on R and right-stick click (no touch gesture is free)", () => {

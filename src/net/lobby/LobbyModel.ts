@@ -227,8 +227,13 @@ export function connectionStatus(
     case "expired":
       return { text: "Session expired — reconnect to play", tone: "warning" };
     case "refused":
-      return state.refusal === "version_mismatch"
-        ? { text: "Game version out of date — reload the page", tone: "danger" }
+      if (state.refusal === "version_mismatch")
+        return {
+          text: "Game version out of date — reload the page",
+          tone: "danger",
+        };
+      return state.refusal === "server_full"
+        ? { text: "The server is full — try again shortly", tone: "danger" }
         : { text: "Connection refused", tone: "danger" };
     default:
       return { text: "Offline", tone: "neutral" };

@@ -16,9 +16,11 @@ import {
   waitForMenuReady,
   waitForScene,
 } from "./helpers/game";
+import { clickText } from "./helpers/pickScreens";
 
 const AUTO_LAUNCH_LIMIT_MS = 3000;
 const GAMEPAD_A = 0;
+const BEGIN_ASSAULT_LABEL = "BEGIN ASSAULT";
 
 async function openMode(page: Page, label: string, key: string): Promise<void> {
   await page.goto("/?debug=1");
@@ -96,15 +98,7 @@ test.describe("Sortie briefing", () => {
   test("Boss Raid: BEGIN ASSAULT briefs, gamepad A skips", async ({ page }) => {
     await openMode(page, "BOSS RAID", "EpicBattleScene");
     await injectFakeGamepad(page);
-    const box = (await page.locator("canvas").boundingBox())!;
-    const { gw, gh } = await page.evaluate(() => {
-      const g = (window as any).game;
-      return { gw: g.scale.gameSize.width, gh: g.scale.gameSize.height };
-    });
-    await page.mouse.click(
-      box.x + 640 * (box.width / gw),
-      box.y + (gh - 100) * (box.height / gh),
-    );
+    await clickText(page, "EpicBattleScene", BEGIN_ASSAULT_LABEL);
     await expect
       .poll(async () => (await card(page, "EpicBattleScene"))?.briefing.mode)
       .toBe("BOSS RAID");

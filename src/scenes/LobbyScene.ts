@@ -233,6 +233,7 @@ export class LobbyScene extends Phaser.Scene {
           true,
         ),
       reconnect: () => s.connect(),
+      playOffline: () => goToScene(this, "MainMenuScene"),
     };
   }
 

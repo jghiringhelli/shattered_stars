@@ -6,6 +6,7 @@
 
 import Phaser from "phaser";
 import { createHoverButton } from "../ButtonFactory";
+import { attachTermTooltip } from "../menu/HintTooltip";
 import { HOLO_PALETTE } from "../theme/HoloTheme";
 import { FACTION_NAMES_SHORT } from "../../data/survival/factionNames";
 import { META_UNLOCKS } from "../../data/survival/metaUnlocks";
@@ -49,14 +50,15 @@ export function addSavedRunButtons(
     font: "600 16px",
   };
   const label = `CONTINUE (S${saved.sector} · ${FACTION_NAMES_SHORT[saved.faction].split(" ").pop()})`;
-  createHoverButton(
+  const resume = createHoverButton(
     scene,
     centerX - config.offset,
     config.y,
     { ...style, color: HOLO_PALETTE.success, variant: "primary", label },
     config.onContinue,
   ).setDepth(BUTTON_DEPTH);
-  createHoverButton(
+  attachTermTooltip(scene, resume, "survival.continue_run");
+  const abandon = createHoverButton(
     scene,
     centerX + config.offset,
     config.y,
@@ -71,6 +73,7 @@ export function addSavedRunButtons(
       config.onAbandoned();
     },
   ).setDepth(BUTTON_DEPTH);
+  attachTermTooltip(scene, abandon, "survival.abandon_run");
   return true;
 }
 

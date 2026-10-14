@@ -25,6 +25,8 @@ import { holoFont } from "../theme/holoFont";
 import { HOLO_PALETTE } from "../theme/HoloTheme";
 import { toCssColor } from "../theme/colorMath";
 import { downloadTextFile } from "./downloadFile";
+import { openFeedbackDialog } from "../feedback/feedbackDialog";
+import { openWelcomeDialog } from "../welcome/welcomeDialog";
 import { openTelemetryStats } from "../telemetry/TelemetryStatsScene";
 import { PalettePreview } from "./PalettePreview";
 import { SettingsChoiceRow } from "./settingsChoiceRows";
@@ -275,4 +277,28 @@ export function buildAdvancedTab(ctx: SettingsTabContext): void {
     ctx.rebuild();
   });
   button(buttonY + 156, "VIEW STATS", () => openTelemetryStats(ctx.scene));
+  const feedbackY = buttonY + 220;
+  const half = BUTTON.width / 2 + 8;
+  const feedbackButton = (x: number, label: string, onPress: () => void) =>
+    ctx.addFocus(
+      createHoverButton(
+        ctx.scene,
+        x,
+        feedbackY,
+        { ...BUTTON, label, color: HOLO_PALETTE.panelFill, variant: "primary" },
+        onPress,
+      ),
+    );
+  feedbackButton(cx - half, "SEND FEEDBACK", () =>
+    openFeedbackDialog({ game: ctx.scene.game, sceneKey: ctx.scene.scene.key }),
+  );
+  feedbackButton(cx + half, "TESTER WELCOME", () =>
+    openWelcomeDialog({
+      onFeedback: () =>
+        openFeedbackDialog({
+          game: ctx.scene.game,
+          sceneKey: ctx.scene.scene.key,
+        }),
+    }),
+  );
 }

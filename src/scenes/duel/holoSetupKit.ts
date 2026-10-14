@@ -30,6 +30,8 @@ const BACKGROUND_DEPTH = 1999;
 const BACKDROP_ALPHA = 0.62;
 /** Footer distance from the bottom edge. */
 const FOOTER_BOTTOM = 18;
+/** Footer font size (px) — nothing under 12 px at 1280x720. */
+const FOOTER_FONT_PX = 12;
 /** Default toggle label size (px). */
 const TOGGLE_FONT_PX = 13;
 
@@ -224,7 +226,9 @@ export function addControlsFooter(
       duelControlsLine(),
       "caption",
       HOLO_PALETTE.textMuted,
-    ).setLetterSpacing(HOLO_SPACING.xxs / 2),
+    )
+      .setFontSize(FOOTER_FONT_PX)
+      .setLetterSpacing(HOLO_SPACING.xxs / 2),
   );
 }
 

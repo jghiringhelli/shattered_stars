@@ -387,7 +387,7 @@ export const CROSS_POWERS: readonly Power[] = [
     "x_wingcmd",
     "fleet",
     "gunnery",
-    "Wing Commander",
+    "Squadron Marshal",
     "Fleet + guns: +1 escort (wing cap 5), +2 dmg",
     "🌟",
     (b, s) => {

@@ -1,47 +1,50 @@
 /**
- * ShipDetailPanel — big persistent panel to the right of the ship list.
- * Shows the selected ship's full art (aspect-ratio preserved), stats,
- * actions, description, and the loadout submenu (Base + up to a few
- * quick builds). For the selected quick build it shows what the build
- * really is — pilot (name, initiative, unique), pilot ability (card text +
- * real-time summary), the slot bar filled vs empty, and each upgrade's
- * real-time effect (see QuickBuildDetailView).
+ * ShipDetailPanel — the big panel right of the ship list (and in the ship
+ * picker overlay). A compact header (name, role · size · points, the
+ * selected build's price) sits over a tab bar; ONE tab is open at a time
+ * (progressive disclosure):
  *
- * Narrow or short panels use denser layouts: action chips instead of
- * described actions, then no lore excerpt (the picker roster's hover detail
- * shows it) and tighter section gaps.
+ *   OVERVIEW  art, description, build line, aura tag, four key numbers
+ *   STATS     numbers grid, maneuver dial, action bar
+ *   LOADOUT   slots, cards with their price, flown cost
+ *   PILOT     pilot, initiative, ability
+ *   BUILDS    pick a quick build + what it is for / how to fly it
+ *
+ * The open tab is remembered for the session (detailTabsModel); Q / E,
+ * LB / RB and left / right (tabs are focus targets) switch tabs.
  */
 
 import Phaser from "phaser";
 import type { ShipDefinition } from "../../core/types";
 import type { FactionId } from "../../config";
 import { getShipLoadouts, type ShipLoadout } from "../../data/ShipLoadouts";
-import { getLoadoutPlaystyle } from "../../data/ShipRoleProfiles";
+import { bindTabKeys, drawDetailTabs } from "../menu/DetailTabs";
+import {
+  recallTab,
+  rememberTab,
+  stepTab,
+  tabsFor,
+  type DetailScreen,
+  type DetailTabId,
+} from "../menu/detailTabsModel";
 import { drawHoloFrame } from "../menu/holoChrome";
-import { factionAccent, HOLO_PALETTE, HOLO_RADIUS } from "../theme/HoloTheme";
-import { computeLoadoutBonuses, buildStatLine } from "./catalogHelpers";
+import type { FocusTarget } from "../menu/MenuFocus";
+import {
+  factionAccent,
+  HOLO_RADIUS,
+  HOLO_SPACING,
+} from "../theme/HoloTheme";
+import { computeLoadoutBonuses } from "./catalogHelpers";
+import { drawBuildsTab } from "./BuildsTabView";
+import {
+  drawOverviewBody,
+  drawStatsBody,
+  type TabBodyArgs,
+} from "./detailTabBodies";
+import type { SectionArea } from "./detailSections";
+import { DETAIL_PAD, drawDetailEmptyState } from "./detailHeader";
+import { drawFlownCostLine, drawPanelHeader } from "./detailPanelParts";
 import { QuickBuildDetailView } from "./QuickBuildDetailView";
-import { BuildGuideView } from "./BuildGuideView";
-import { addTipZone } from "../menu/tooltipTargets";
-import { drawBuildTabs, type BuildTab } from "./BuildTabs";
-import { explainBaseShip, explainQuickBuild } from "../../data/roleHints";
-import {
-  drawActions,
-  drawLore,
-  drawStatGauges,
-  type SectionArea,
-} from "./detailSections";
-import {
-  artHeight,
-  DENSITIES,
-  DETAIL_PAD,
-  drawDetailEmptyState,
-  drawDetailHeader,
-  startDensity,
-  type Density,
-} from "./detailHeader";
-import { drawLoadoutRow } from "./LoadoutRow";
-import { addPickerText, pickerTextStyle } from "./pickerStyle";
 
 /** Panel bounds (top-left origin). */
 interface PanelRect {
@@ -51,13 +54,6 @@ interface PanelRect {
   readonly height: number;
 }
 
-/** Content column: left edge, top and width. */
-interface ContentBox {
-  readonly x: number;
-  readonly y: number;
-  readonly w: number;
-}
-
 /** Read-only view of the ship/loadout currently staged, owned by CatalogStaging. */
 export interface StagingSelection {
   getSelectedShipId(): string | null;
@@ -65,23 +61,55 @@ export interface StagingSelection {
   selectLoadout(loadoutId: string | null): void;
 }
 
+/** Panels narrower than this show only the open tab's label and no key hint (px). */
+const NARROW_PANEL_W = 560;
+/** Header height above the tab bar (px). */
+const HEADER_H = 44;
+
 export class ShipDetailPanel {
   private container: Phaser.GameObjects.Container | null = null;
-  private loadoutPage = 0;
-  private tab: BuildTab = "build";
-  private sectionGap: number = DENSITIES[0]!.gap;
-  /** Lowest y the content may reach in the current layout. */
-  private bottomLimit = 0;
+  private buildsPage = 0;
+  private tab: DetailTabId;
   private lastArgs: {
     ships: readonly ShipDefinition[];
     staging: StagingSelection;
-    x: number;
-    y: number;
-    w: number;
-    h: number;
+    rect: PanelRect;
   } | null = null;
 
-  constructor(private readonly scene: Phaser.Scene) {}
+  /**
+   * @param scene - Owning scene.
+   * @param onFocusTargets - Receives the tab bar's focus targets after each render.
+   * @param screen - Which screen's tab set and remembered tab to use.
+   * @param keysEnabled - Q / E are ignored while this returns false (a text
+   *   field or an overlay owns the keyboard).
+   */
+  constructor(
+    private readonly scene: Phaser.Scene,
+    private readonly onFocusTargets: (targets: FocusTarget[]) => void = () => {},
+    private readonly screen: DetailScreen = "shipPicker",
+    keysEnabled: () => boolean = () => true,
+  ) {
+    this.tab = recallTab(screen);
+    bindTabKeys(scene, {
+      step: (direction) =>
+        this.open(stepTab(tabsFor(this.screen), this.tab, direction)),
+      isActive: () =>
+        this.container !== null && this.lastArgs !== null && keysEnabled(),
+    });
+  }
+
+  /** The open tab (e2e / debugging). */
+  get openTab(): DetailTabId {
+    return this.tab;
+  }
+
+  /** Opens a tab and redraws. */
+  open(tab: DetailTabId): void {
+    if (tab === this.tab) return;
+    this.tab = tab;
+    rememberTab(this.screen, tab);
+    this.rerender();
+  }
 
   /** Renders the panel for the ship currently selected in `staging`, or an empty prompt. */
   render(
@@ -92,23 +120,17 @@ export class ShipDetailPanel {
     w: number,
     h: number,
   ): void {
-    this.lastArgs = { ships, staging, x, y, w, h };
     const rect = { x, y, width: w, height: h };
+    this.lastArgs = { ships, staging, rect };
     const def = ships.find((s) => s.id === staging.getSelectedShipId());
     if (!def) {
       const bg = this.resetContainer();
       drawHoloFrame(bg, rect, { radius: HOLO_RADIUS.lg });
       drawDetailEmptyState(this.scene, this.container!, rect);
+      this.onFocusTargets([]);
       return;
     }
-    // Start from the density the panel size calls for; fall back to denser
-    // layouts only when a long build would spill past the panel.
-    const guideTab = this.tab !== "build";
-    const last = guideTab ? DENSITIES.length : DENSITIES.length - 1;
-    for (let level = startDensity(w, h, guideTab); level < last; level++) {
-      const bottom = this.build(def, staging, rect, DENSITIES[level]!);
-      if (bottom <= y + h - DETAIL_PAD) return;
-    }
+    this.build(def, staging, rect);
   }
 
   destroy(): void {
@@ -117,11 +139,6 @@ export class ShipDetailPanel {
     this.lastArgs = null;
   }
 
-  /**
-   * Replace the container with an empty one holding a background graphics.
-   *
-   * @returns The background graphics.
-   */
   private resetContainer(): Phaser.GameObjects.Graphics {
     this.container?.destroy();
     this.container = this.scene.add.container(0, 0);
@@ -130,90 +147,13 @@ export class ShipDetailPanel {
     return bg;
   }
 
-  /** Re-renders using the args from the last render() call — used after a loadout click. */
   private rerender(): void {
     if (!this.lastArgs) return;
-    const { ships, staging, x, y, w, h } = this.lastArgs;
-    this.render(ships, staging, x, y, w, h);
+    const { ships, staging, rect } = this.lastArgs;
+    this.render(ships, staging, rect.x, rect.y, rect.width, rect.height);
   }
 
-  /**
-   * Build the panel for a ship at one density.
-   *
-   * @param def - The selected ship.
-   * @param staging - Current selection.
-   * @param rect - Panel bounds.
-   * @param density - Layout density.
-   * @returns y just below the content.
-   */
-  private build(
-    def: ShipDefinition,
-    staging: StagingSelection,
-    rect: PanelRect,
-    density: Density,
-  ): number {
-    const accent = factionAccent(def.faction as FactionId);
-    drawHoloFrame(this.resetContainer(), rect, {
-      radius: HOLO_RADIUS.lg,
-      accent,
-    });
-    this.sectionGap = density.gap;
-    this.bottomLimit = rect.y + rect.height - DETAIL_PAD;
-    const box = { x: rect.x + DETAIL_PAD, w: rect.width - DETAIL_PAD * 2 };
-    const area = (top: number): SectionArea => ({
-      scene: this.scene,
-      container: this.container!,
-      x: box.x,
-      y: top,
-      width: box.w,
-    });
-    const artH = artHeight(rect.height, density);
-    const gap = density.gap;
-    let cy =
-      drawDetailHeader(this.scene, this.container!, {
-        def,
-        rect,
-        artH,
-        accent,
-      }) + gap;
-    const bonuses = computeLoadoutBonuses(
-      this.selectedLoadout(def, staging)?.upgrades ?? [],
-    );
-    cy = drawStatGauges(area(cy), def, bonuses) + gap;
-    if (density.actions)
-      cy = drawActions(area(cy), def, density.chipActions) + gap;
-    if (density.lore) cy = drawLore(area(cy), def) + gap;
-    const rowBottom = drawLoadoutRow(this.scene, this.container!, {
-      def,
-      selectedLoadoutId: staging.getSelectedLoadoutId(),
-      page: this.loadoutPage,
-      x: box.x,
-      y: cy,
-      width: box.w,
-      accent,
-      onSelect: (loadoutId) => {
-        staging.selectLoadout(loadoutId);
-        this.rerender();
-      },
-      onPage: (page) => {
-        this.loadoutPage = page;
-        this.rerender();
-      },
-    });
-    return this.drawLoadoutDetails(def, staging, {
-      ...box,
-      y: rowBottom + gap,
-    });
-  }
-
-  /**
-   * The staged build, resolved against the full catalogue: a squadron
-   * preset may have selected a loadout the button row does not offer.
-   *
-   * @param def - The selected ship.
-   * @param staging - Current selection.
-   * @returns The staged build, or undefined for the bare ship.
-   */
+  /** The staged build resolved against the full catalogue (a preset may stage one the row lacks). */
   private selectedLoadout(
     def: ShipDefinition,
     staging: StagingSelection,
@@ -223,77 +163,103 @@ export class ShipDetailPanel {
     );
   }
 
-  /**
-   * The selected build's price/stat line and description, then what the
-   * quick build really is: pilot, ability, slot bar and upgrade effects.
-   *
-   * @param def - The selected ship.
-   * @param staging - Current ship/loadout selection.
-   * @param box - Content left, top and width.
-   * @returns y just below the block.
-   */
-  private drawLoadoutDetails(
+  private build(
     def: ShipDefinition,
     staging: StagingSelection,
-    box: ContentBox,
-  ): number {
-    const c = this.container!;
-    const selLd = this.selectedLoadout(def, staging);
-    const bonuses = computeLoadoutBonuses(selLd?.upgrades ?? []);
-    const statT = addPickerText(
-      this.scene,
-      { x: box.x, y: box.y },
-      buildStatLine(bonuses, selLd?.pointCost ?? def.baseStats.pointCost),
-      "name",
-      selLd ? HOLO_PALETTE.success : HOLO_PALETTE.textSecondary,
-    );
-    const description = selLd
-      ? `${selLd.description} \u2014 ${getLoadoutPlaystyle(selLd.role)}`
-      : "Stock ship flown by a rookie \u2014 no pilot ability, no upgrades.";
-    const descX = statT.x + statT.width + this.sectionGap;
-    const descT = this.scene.add.text(
-      descX,
-      box.y,
-      description,
-      pickerTextStyle("small", HOLO_PALETTE.textSecondary, {
-        wordWrap: { width: box.x + box.w - descX },
-      }),
-    );
-    c.add([statT, descT]);
-    addTipZone(
-      this.scene,
-      c,
-      { x: statT.x, y: statT.y, width: statT.width, height: statT.height },
-      selLd ? "stat.build_stats" : "stat.points",
-    );
-    const tabsY = box.y + Math.max(statT.height, descT.height) + this.sectionGap;
-    const bodyY =
-      drawBuildTabs(this.scene, c, {
-        x: box.x,
-        y: tabsY,
-        width: box.w,
-        accent: factionAccent(def.faction as FactionId),
-        active: this.tab,
-        onSelect: (tab) => {
-          this.tab = tab;
-          this.rerender();
-        },
-      }) + this.sectionGap;
-    if (this.tab === "build") {
-      return new QuickBuildDetailView(this.scene, c).render({
-        shipId: def.id,
-        loadout: selLd,
-        x: box.x,
-        y: bodyY,
-        width: box.w,
-      });
-    }
-    const guide = selLd ? explainQuickBuild(selLd) : explainBaseShip(def.id);
-    return new BuildGuideView(this.scene, c).render(this.tab, guide, {
-      x: box.x,
-      y: bodyY,
-      width: box.w,
-      bottom: this.bottomLimit,
+    rect: PanelRect,
+  ): void {
+    const accent = factionAccent(def.faction as FactionId);
+    drawHoloFrame(this.resetContainer(), rect, {
+      radius: HOLO_RADIUS.lg,
+      accent,
     });
+    const c = this.container!;
+    const loadout = this.selectedLoadout(def, staging);
+    const x = rect.x + DETAIL_PAD;
+    const width = rect.width - DETAIL_PAD * 2;
+    const top = rect.y + DETAIL_PAD;
+    drawPanelHeader(this.scene, c, def, loadout, { x, y: top, width }, accent);
+    const tabs = drawDetailTabs(this.scene, c, {
+      x,
+      y: top + HEADER_H,
+      width,
+      accent,
+      tabs: tabsFor(this.screen),
+      active: this.tab,
+      onSelect: (tab) => this.open(tab),
+      ...(width < NARROW_PANEL_W ? { compact: true, showKeyHint: false } : {}),
+    });
+    this.onFocusTargets(tabs.focusTargets);
+    const area: SectionArea = {
+      scene: this.scene,
+      container: c,
+      x,
+      y: tabs.bottom + HOLO_SPACING.lg,
+      width,
+    };
+    this.drawBody(
+      {
+        area,
+        def,
+        loadout,
+        bonuses: computeLoadoutBonuses(loadout?.upgrades ?? []),
+        bottom: rect.y + rect.height - DETAIL_PAD,
+      },
+      staging,
+      accent,
+    );
+  }
+
+  private drawBody(
+    body: TabBodyArgs,
+    staging: StagingSelection,
+    accent: number,
+  ): void {
+    const { area, def, loadout } = body;
+    const view = new QuickBuildDetailView(this.scene, area.container);
+    const box = {
+      shipId: def.id,
+      loadout,
+      x: area.x,
+      y: area.y,
+      width: area.width,
+    };
+    switch (this.tab) {
+      case "overview":
+        drawOverviewBody(body);
+        return;
+      case "stats":
+        drawStatsBody(body);
+        return;
+      case "pilot":
+        view.render({ ...box, part: "pilot" });
+        return;
+      case "loadout":
+        view.render({ ...box, part: "loadout" });
+        drawFlownCostLine(this.scene, area.container, def, loadout, {
+          x: area.x,
+          bottom: body.bottom,
+        });
+        return;
+      default:
+        drawBuildsTab(this.scene, area.container, {
+          def,
+          selectedLoadoutId: staging.getSelectedLoadoutId(),
+          page: this.buildsPage,
+          x: area.x,
+          y: area.y,
+          width: area.width,
+          bottom: body.bottom,
+          accent,
+          onSelect: (id) => {
+            staging.selectLoadout(id);
+            this.rerender();
+          },
+          onPage: (page) => {
+            this.buildsPage = page;
+            this.rerender();
+          },
+        });
+    }
   }
 }

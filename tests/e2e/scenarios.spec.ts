@@ -167,13 +167,10 @@ test.describe("Scenario mode", () => {
     );
     expect((await readout(page)).board.alert).toContain("CARRYING SALVAGE");
     await park(page, ENEMIES_AWAY);
-    await page.keyboard.down("ArrowLeft");
+    // Barrel roll = double-tap of the same arrow (docs/specs/flight-controls.md).
+    await page.keyboard.press("ArrowLeft", { delay: 50 });
     await page.waitForTimeout(40);
-    await page.keyboard.down("ArrowRight");
-    await page.waitForTimeout(80);
-    await page.keyboard.up("ArrowLeft");
-    await page.waitForTimeout(60);
-    await page.keyboard.up("ArrowRight");
+    await page.keyboard.press("ArrowLeft", { delay: 50 });
     await page.waitForFunction(
       (key) =>
         (window as any).game.scene.getScene(key).scenarioReadout.objectives[1]

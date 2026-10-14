@@ -14,11 +14,17 @@ import Phaser from "phaser";
 import { FACTION_COLORS, type FactionId } from "../../config";
 import { createToggleButton } from "../ButtonFactory";
 import { getShipsByFaction } from "../../data/ShipDefinitions";
-import { ShipCatalogPanel } from "../picker/ShipCatalogPanel";
+import type { GameMode } from "../../core/squadTypes";
+import { ShipCatalogPanel, type CatalogSelection } from "../picker/ShipCatalogPanel";
+import { PointsBar, POINTS_BAR_H } from "../picker/PointsBar";
+import type { HoloPressButton } from "../menu/HoloPressButton";
+import { budgetOf, wingmenCaption } from "../picker/pointsBudget";
+import { createMapThemeButton } from "./MapThemeButton";
+import { previewSimpleSquad } from "./simpleBudget";
 import { factionTermId } from "../../data/tooltips";
 import type { FocusTarget } from "../menu/MenuFocus";
 import { attachToggleTooltip, focusTipTarget } from "../menu/tooltipTargets";
-import { HOLO_RADIUS, factionAccent } from "../theme/HoloTheme";
+import { HOLO_RADIUS, HOLO_SPACING, factionAccent } from "../theme/HoloTheme";
 import { SQUAD_TYPE } from "./squadBuilderStyle";
 
 const FACTION_ORDER: readonly FactionId[] = [
@@ -48,15 +54,27 @@ const FLOW_LAYOUT = {
   /** Faction colour pip inside each toggle. */
   pipRadius: 4,
   pipInset: 16,
-  /** Catalog panel top and height (bottom edge at 680, above the footer). */
+  /** Catalog panel top and height (the points bar sits under it, above the footer). */
   catalogTopY: 148,
-  catalogPanelH: 532,
+  catalogPanelH: 516,
+  /** Gap between the catalog and the points bar. */
+  barGap: 8,
+  /** Map button beside the bar. */
+  mapButtonW: 200,
 } as const;
+
+/** What the flow needs to price the squad. */
+export interface SimpleFlowOptions {
+  readonly gameMode: GameMode;
+  readonly pointLimit: number;
+}
 
 /** Faction → ship → payload → launch wrapper around ShipCatalogPanel. */
 export class SimpleSquadFlow extends Phaser.Events.EventEmitter {
   private selectedFaction: FactionId;
   private catalog: ShipCatalogPanel | null = null;
+  private pointsBar: PointsBar | null = null;
+  private mapButton: HoloPressButton | null = null;
   private factionButtons: Phaser.GameObjects.Container[] = [];
   private factionTargets: FocusTarget[] = [];
   /** Faction chips then filter chips — one array so a MenuFocus can keep it. */
@@ -69,6 +87,7 @@ export class SimpleSquadFlow extends Phaser.Events.EventEmitter {
   constructor(
     private readonly scene: Phaser.Scene,
     initialFaction: FactionId,
+    private readonly options: SimpleFlowOptions,
   ) {
     super();
     this.selectedFaction = initialFaction;
@@ -92,6 +111,8 @@ export class SimpleSquadFlow extends Phaser.Events.EventEmitter {
   destroy(): void {
     this.factionButtons.forEach((b) => b.destroy());
     this.catalog?.destroy();
+    this.pointsBar?.destroy();
+    this.mapButton?.destroy();
     this.allTargets.length = 0;
   }
 
@@ -168,6 +189,7 @@ export class SimpleSquadFlow extends Phaser.Events.EventEmitter {
       this.allTargets.length,
       ...this.factionTargets,
       ...(this.catalog?.focusTargets ?? []),
+      ...(this.mapButton ? [this.mapButton] : []),
     );
     this.emit("focusTargetsChanged");
   }
@@ -198,6 +220,59 @@ export class SimpleSquadFlow extends Phaser.Events.EventEmitter {
       },
     );
     this.catalog.on("focusTargetsChanged", () => this.syncFocusTargets());
+    this.catalog.on("selectionChanged", (s: CatalogSelection) =>
+      this.refreshBudget(s),
+    );
+    this.drawBottomRow();
     this.catalog.render();
+  }
+
+  /** The points bar with the Map button at its right end. */
+  private drawBottomRow(): void {
+    const { margin, catalogTopY, catalogPanelH, barGap, mapButtonW } = FLOW_LAYOUT;
+    const y = catalogTopY + catalogPanelH + barGap;
+    const full = this.scene.scale.width - margin * 2;
+    this.pointsBar?.destroy();
+    this.mapButton?.destroy();
+    this.pointsBar = new PointsBar(
+      this.scene,
+      { x: margin, y, width: full - mapButtonW - HOLO_SPACING.sm },
+      factionAccent(this.selectedFaction),
+    );
+    this.mapButton = createMapThemeButton(this.scene, {
+      x: margin + full - mapButtonW / 2,
+      y: y + POINTS_BAR_H / 2,
+      width: mapButtonW,
+    });
+  }
+
+  /**
+   * Prices the squad the launch would field and shows it in the bar.
+   *
+   * @param selection - The ship and build staged in the catalog.
+   */
+  private refreshBudget(selection: CatalogSelection): void {
+    const { pointLimit, gameMode } = this.options;
+    const note = `Enemy squad matched to ${pointLimit} pts`;
+    if (!selection.shipId) {
+      this.pointsBar?.update(
+        budgetOf(0, pointLimit),
+        note,
+        `Pick a ship \u2014 your ${pointLimit} points also buy AI wingmen`,
+      );
+      return;
+    }
+    const preview = previewSimpleSquad(
+      this.selectedFaction,
+      selection.shipId,
+      selection.loadoutId,
+      gameMode,
+      pointLimit,
+    );
+    this.pointsBar?.update(
+      budgetOf(preview.squadTotal, pointLimit),
+      note,
+      wingmenCaption(preview.ownCost, preview.squadTotal, pointLimit),
+    );
   }
 }

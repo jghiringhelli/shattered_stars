@@ -117,6 +117,28 @@ async function holdKey(
   );
 }
 
+/**
+ * Tap the MANEUVER key (Z = Snap Turn). The turn is only requested once the
+ * 220 ms double-tap window closes and then flies on the next 500 ms cycle, so
+ * wait for the stress spike instead of a fixed delay.
+ */
+async function tapSnapTurnAndAwaitSpike(page: Page): Promise<void> {
+  await page.keyboard.press("z", { delay: 90 });
+  await page.waitForFunction(
+    () => {
+      const scene = (window as any).game?.scene.getScene(
+        "ArcadeBattleScene",
+      ) as any;
+      const ship = scene?.playerShipId
+        ? scene.ships.get(scene.playerShipId)
+        : null;
+      return (ship?.stress?.level ?? 0) > 0.3;
+    },
+    undefined,
+    { timeout: 3_000 },
+  );
+}
+
 // ─────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────
@@ -209,8 +231,7 @@ test.describe("ArcadeBattleScene — stress HUD", () => {
     // Sustained ArrowRight at default speed 3 on INTERCEPTOR_DIAL is bank=white
     // and cannot build stress, so we trigger a Snap turn instead — same intent
     // (a hard maneuver taxes the pilot), reliably observable.
-    await holdKey(page, "Z", 90);
-    await page.waitForTimeout(300);
+    await tapSnapTurnAndAwaitSpike(page);
 
     const stressLevel = await page.evaluate(() => {
       const scene = (window as any).game?.scene.getScene(
@@ -230,8 +251,7 @@ test.describe("ArcadeBattleScene — stress HUD", () => {
     await openArcadeScene(page);
 
     // Trigger Snap turn for reliable stress spike (see prior test comment)
-    await holdKey(page, "Z", 90);
-    await page.waitForTimeout(300);
+    await tapSnapTurnAndAwaitSpike(page);
 
     const state = await page.evaluate(() => {
       const scene = (window as any).game?.scene.getScene(

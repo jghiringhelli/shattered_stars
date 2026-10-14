@@ -46,7 +46,8 @@ export type BlockStyle =
   | "best"
   | "label"
   | "howItPlays"
-  | "example";
+  | "example"
+  | "more";
 
 /** One styled paragraph. */
 export interface TooltipBlock {
@@ -91,12 +92,43 @@ export function withStyleDetail(content: TooltipContent): TooltipContent {
 }
 
 /**
+ * How much a tooltip says: "short" on hover (name + one line), "full" once
+ * held (Shift / gamepad Y / long hover) or focused.
+ */
+export type TooltipLevel = "short" | "full";
+
+/**
+ * @param text - A paragraph.
+ * @returns Its first sentence.
+ */
+export function firstSentence(text: string): string {
+  const end = text.search(/[.!?](\s|$)/);
+  return end < 0 ? text : text.slice(0, end + 1);
+}
+
+function shortBlocks(content: TooltipContent): TooltipBlock[] {
+  const blocks: TooltipBlock[] = [];
+  if (content.title) blocks.push({ style: "title", text: content.title });
+  if (content.body) {
+    blocks.push({ style: "body", text: firstSentence(content.body) });
+  } else if (content.role) {
+    blocks.push({ style: "role", text: content.role });
+  }
+  return blocks;
+}
+
+/**
  * Splits content into styled paragraphs, top to bottom.
  *
  * @param content - Tooltip content.
+ * @param level - "short" (title + one line) or "full" (default).
  * @returns The blocks (empty when the content says nothing).
  */
-export function tooltipBlocks(content: TooltipContent): TooltipBlock[] {
+export function tooltipBlocks(
+  content: TooltipContent,
+  level: TooltipLevel = "full",
+): TooltipBlock[] {
+  if (level === "short") return shortBlocks(content);
   const shown = withStyleDetail(content);
   const blocks: TooltipBlock[] = [];
   const add = (style: BlockStyle, text: string | undefined): void => {
@@ -119,10 +151,14 @@ export function tooltipBlocks(content: TooltipContent): TooltipBlock[] {
 
 /**
  * @param content - Tooltip content.
+ * @param level - "short" or "full" (default).
  * @returns All the text, one paragraph per line (what e2e reads back).
  */
-export function tooltipText(content: TooltipContent): string {
-  return tooltipBlocks(content)
+export function tooltipText(
+  content: TooltipContent,
+  level: TooltipLevel = "full",
+): string {
+  return tooltipBlocks(content, level)
     .map((block) => block.text)
     .join("\n");
 }

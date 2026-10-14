@@ -36,7 +36,8 @@ const ORDNANCE_SLOTS: ReadonlySet<string> = new Set([
   "bomb",
 ]);
 /** Initiative from which a pilot reads as an ace. */
-const ACE_INITIATIVE = 4;
+/** Initiative at which a pilot counts as an ace. */
+export const ACE_INITIATIVE = 4;
 
 /** One line of a build's price. */
 export interface CostLine {
@@ -216,8 +217,17 @@ function pickParagraph(
 ): string {
   const info = PLAYSTYLES[style];
   const role = ROLE_TITLES[ship.role].toLowerCase();
+  const label = info.label.toLowerCase();
   const quoted = strengths.slice(0, 2).join(" and ");
-  return `Pick it for a ${role} that plays as a ${info.label.toLowerCase()} — ${info.tagline}. ${quoted ? `It brings ${quoted}. ` : ""}Total ${total} pts.`;
+  return `Pick it for ${withArticle(role)} that plays as ${withArticle(label)} — ${info.tagline}. ${quoted ? `It brings ${quoted}. ` : ""}Total ${total} pts.`;
+}
+
+/**
+ * @param noun - A lower-case noun phrase.
+ * @returns The phrase with "a" or "an" in front.
+ */
+function withArticle(noun: string): string {
+  return `${/^[aeiou]/.test(noun) ? "an" : "a"} ${noun}`;
 }
 
 /**

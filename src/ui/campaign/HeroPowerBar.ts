@@ -16,6 +16,9 @@ import {
   factionAccent,
 } from "../theme/HoloTheme";
 import { createHoloText } from "../hud/holoPrimitives";
+import { attachHintTooltip, type TooltipContent } from "../menu/HintTooltip";
+import { contentFromTerm } from "../menu/tooltipContent";
+import { slotTooltip } from "./heroCardModel";
 import {
   cancelCameraZoom,
   pinTree,
@@ -36,6 +39,8 @@ const NAME_WRAP = SLOT_SIZE + SLOT_GAP - 6;
 const KEY_HINTS = ["V", "B"] as const;
 /** Flash length after a cast (ms). */
 const FLASH_MS = 350;
+/** Extra width of a slot's hover zone, so the name under it is covered too (px). */
+const ZONE_MARGIN = 24;
 /** Alpha of a locked slot. */
 const LOCKED_ALPHA = 0.45;
 /** Milliseconds per second. */
@@ -63,6 +68,7 @@ export class HeroPowerBar {
   private readonly views: SlotView[] = [];
   private readonly accent: number;
   private states: PowerSlotReadout[] = [];
+  private slots: readonly HeroPowerSlot[] = [];
 
   /**
    * @param scene - Battle scene.
@@ -86,6 +92,7 @@ export class HeroPowerBar {
 
   /** @param slots - Power slots this frame. */
   update(slots: readonly HeroPowerSlot[]): void {
+    this.slots = slots;
     this.states = slots.map((slot, i) => {
       const view = this.views[i];
       const locked = slot.rank <= 0;
@@ -176,7 +183,31 @@ export class HeroPowerBar {
       view.name,
       view.timer,
     ]);
+    this.addTooltipZone(index, x, y);
     return view;
+  }
+
+  /** Hover zone over a slot and its name: explains the power and its live state. */
+  private addTooltipZone(index: number, x: number, y: number): void {
+    const zone = this.scene.add
+      .rectangle(
+        x + SLOT_SIZE / 2,
+        y + (SLOT_SIZE + NAME_HEIGHT) / 2,
+        SLOT_SIZE + ZONE_MARGIN,
+        SLOT_SIZE + NAME_HEIGHT,
+        0,
+        0,
+      )
+      .setInteractive();
+    attachHintTooltip(this.scene, zone, () => this.slotContent(index));
+    this.root.add(zone);
+  }
+
+  private slotContent(index: number): TooltipContent {
+    const slot = this.slots[index];
+    if (!slot) return contentFromTerm("campaign.hero_key");
+    const seconds = Math.ceil(slot.cooldownRemainingMs / MS_PER_SECOND);
+    return slotTooltip(slot.power, index as 0 | 1, slot.rank, seconds);
   }
 
   private drawSlot(

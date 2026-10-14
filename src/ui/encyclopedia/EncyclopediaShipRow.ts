@@ -40,7 +40,7 @@ export interface ShipRowHandlers {
 /** Row typography and decoration. */
 const ROW_STYLE = {
   nameSize: 13,
-  roleSize: 10,
+  roleSize: 12,
   barWidth: 3,
   barInsetY: 8,
   hoverFillAlpha: 0.6,
@@ -55,6 +55,8 @@ export class EncyclopediaShipRow {
   readonly container: Phaser.GameObjects.Container;
   private readonly background: Phaser.GameObjects.Graphics;
   private readonly nameText: Phaser.GameObjects.Text;
+  /** The entry's role / slot caption: shown on the selected or hovered row only. */
+  private readonly roleText: Phaser.GameObjects.Text;
   private hovered = false;
   private selected = false;
 
@@ -81,6 +83,7 @@ export class EncyclopediaShipRow {
       size.height - ROW_STYLE.barInsetY * 2,
     );
     const role = this.createRoleText(scene);
+    this.roleText = role;
     this.nameText = scene.add
       .text(HOLO_SPACING.lg + HOLO_SPACING.xs, size.height / 2, model.name, {
         ...holoFont(ROW_STYLE.nameSize, "400"),
@@ -154,6 +157,7 @@ export class EncyclopediaShipRow {
   private redraw(): void {
     const g = this.background;
     const rect = { x: 0, y: 0, ...this.size };
+    this.roleText.setVisible(this.selected || this.hovered);
     g.clear();
     if (this.selected) {
       drawHoloFrame(g, rect, {

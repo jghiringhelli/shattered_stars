@@ -51,13 +51,14 @@ jobs:
       - name: Build
         run: npm run build
         env:
+          BASE_PATH: ${{ steps.pages.outputs.base_path }}/
           # Relay address players connect to (Settings → Variables → Actions → VITE_ONLINE_URL,
           # e.g. wss://shattered-stars-relay.fly.dev). Empty = online play shows "no server configured".
           VITE_ONLINE_URL: ${{ vars.VITE_ONLINE_URL }}
+          # Optional feedback form (Variables → VITE_FEEDBACK_URL). Empty = GitHub new-issue page.
+          VITE_FEEDBACK_URL: ${{ vars.VITE_FEEDBACK_URL }}
           # Players are only matched with identical builds (lockstep needs identical game data).
           VITE_GAME_BUILD: ${{ github.sha }}
-        env:
-          BASE_PATH: ${{ steps.pages.outputs.base_path }}/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

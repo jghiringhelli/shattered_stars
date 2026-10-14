@@ -4,6 +4,7 @@ import {
   metaUnlockCards,
   powerCards,
   relicCard,
+  relicCards,
   shopCards,
 } from "../../../../src/ui/survival/choiceViewModels";
 import {
@@ -39,8 +40,48 @@ describe("choice view models", () => {
 
   it("shows a relic's tags, archetype progress and synergies", () => {
     const card = relicCard(getRelic("predator_optics")!, ["target_painter"]);
-    expect(card.description).toContain("[mark]");
+    expect(card.description).not.toContain("[");
+    expect(card.chips?.map((chip) => chip.label)).toEqual(["mark", "crit"]);
     expect(card.note).toBe("Hunter 2/3 · synergy ×1");
+  });
+
+  it("explains each relic tag with a definition and an example", () => {
+    const card = relicCard(getRelic("predator_optics")!, []);
+    for (const chip of card.chips ?? []) {
+      expect(chip.tip.title).toContain(chip.label);
+      expect(chip.tip.body!.length).toBeGreaterThan(20);
+      expect(chip.tip.example!.length).toBeGreaterThan(10);
+    }
+  });
+
+  it("explains the relic card with its role, set bonus and rarity", () => {
+    const card = relicCard(getRelic("predator_optics")!, []);
+    expect(card.tip).toMatchObject({ title: "Predator Optics" });
+    expect(card.tip?.role).toBeTruthy();
+    expect(card.tip?.howItPlays).toContain("marked targets");
+    expect(card.noteTip?.title).toContain("Hunter");
+  });
+
+  it("explains a shop price and its item kind", () => {
+    const cards = shopCards(shopStock(RunBuilder.aRun().build(), "s1-r2-c0"));
+    expect(cards[0]!.noteTip?.title).toBe("Price");
+    expect(cards[0]!.tip?.example).toBeTruthy();
+  });
+
+  it("gives every card of every choice overlay a tooltip, and every note one too", () => {
+    const run = RunBuilder.aRun().build();
+    const all = [
+      ...powerCards(ATOMS.slice(0, 3), 1),
+      ...relicCards([getRelic("predator_optics")!], run),
+      ...shopCards(shopStock(run, "s1-r2-c0")),
+      ...eventCards(getEvent("corsair_toll")!, run),
+      ...metaUnlockCards({ ...emptyMeta(), charts: 100 }),
+    ];
+    for (const card of all) {
+      if (card.name === "Close") continue;
+      expect(card.tip, card.name).toBeDefined();
+      if (card.note) expect(card.noteTip, `${card.name} note`).toBeDefined();
+    }
   });
 
   it("locks faction options and shows costs on event cards", () => {
