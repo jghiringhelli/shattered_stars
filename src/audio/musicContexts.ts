@@ -28,6 +28,8 @@ export interface SurvivalMusicPlan {
 
 /** The parts of a campaign mission that matter to music. */
 export interface CampaignMusicMission {
+  /** Mission archetype; a "boss" mission always plays boss music. */
+  readonly style?: string;
   readonly enemies: ReadonlyArray<{ readonly isBoss?: boolean }>;
   readonly hazards?: ReadonlyArray<{ readonly kind: string }>;
 }
@@ -48,6 +50,7 @@ export function survivalBattleMode(plan: SurvivalMusicPlan): BattleMusicMode {
 export function campaignBattleMode(
   mission: CampaignMusicMission,
 ): BattleMusicMode {
+  if (mission.style === "boss") return "boss";
   if (mission.enemies.some((enemy) => enemy.isBoss === true)) return "boss";
   return (mission.hazards?.length ?? 0) > 0 ? "hazard" : "skirmish";
 }

@@ -189,7 +189,7 @@ describe("arcade flight — mixed plans and closed loops", () => {
     );
   });
 
-  it("two K-turns bring a ship back to where it started", () => {
+  it("two Snap turns bring a ship back to where it started", () => {
     const plan = Array.from({ length: 2 }, () => ({
       direction: "kturn" as const,
       speed: 3,
@@ -202,7 +202,7 @@ describe("arcade flight — mixed plans and closed loops", () => {
     );
   });
 
-  it("a Segnor's Loop leaves the ship facing back toward where it came from", () => {
+  it("a Hook Loop leaves the ship facing back toward where it came from", () => {
     const end = flyArcadeShip(
       "confed_raven",
       [{ direction: "segnor_left", speed: 3 }],

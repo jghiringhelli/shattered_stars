@@ -5,6 +5,7 @@
 
 import type Phaser from "phaser";
 import type { FactionId } from "../../config";
+import { factionTermId } from "../../data/tooltips";
 import type { HoloRect } from "../menu/holoChrome";
 import { factionAccent } from "../theme/HoloTheme";
 import { EncyclopediaChipRow } from "./EncyclopediaChipRow";
@@ -28,6 +29,7 @@ export function createFactionFilterChips(
     value: chip.faction,
     label: chip.label,
     accent: factionAccent(chip.faction ?? undefined),
+    ...(chip.faction ? { tip: factionTermId(chip.faction) } : {}),
   }));
   return new EncyclopediaChipRow(scene, area, specs, onSelect);
 }

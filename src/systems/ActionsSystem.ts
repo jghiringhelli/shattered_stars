@@ -605,7 +605,7 @@ export function canReload(ship: ShipState): boolean {
 // ============================================
 
 /**
- * Execute calculate action (for droid ships)
+ * Execute calculate action (for rigger ships)
  * Similar to focus but weaker - only converts 1 focus result
  */
 export function executeCalculate(ship: ShipState): ActionResult {

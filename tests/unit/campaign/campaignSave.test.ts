@@ -49,9 +49,9 @@ const V2_SAVE = {
 };
 
 describe("migrateCampaignSave", () => {
-  it("migrates v2 to v3 keeping every v2 field", () => {
+  it("migrates v2 to v4 keeping every v2 field", () => {
     const save = migrateCampaignSave(V2_SAVE, "terran_hegemony")!;
-    expect(save.version).toBe(3);
+    expect(save.version).toBe(4);
     const { version: _v, ...v2Fields } = V2_SAVE;
     expect(save).toMatchObject(v2Fields);
   });
@@ -190,7 +190,7 @@ describe("CampaignSaveManager persistence", () => {
       JSON.stringify(V2_SAVE),
     );
     const save = CampaignSaveManager.load("terran_hegemony")!;
-    expect(save.version).toBe(3);
+    expect(save.version).toBe(4);
     expect(save.credits).toBe(325);
   });
 

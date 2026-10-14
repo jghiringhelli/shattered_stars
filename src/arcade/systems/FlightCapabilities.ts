@@ -1,7 +1,7 @@
 /**
  * FlightCapabilities — what a ship may fly beyond the basic moves of its
  * dial, read from its card: the special maneuvers printed on its dial
- * (K-turn, Segnor's Loop, Tallon Roll) and the dashes on its action bar
+ * (Snap turn, Hook Loop, Knife Roll) and the dashes on its action bar
  * (boost, barrel roll). Huge ships fly neither, whatever the data says.
  *
  * X-Wing stress rule: a stressed pilot cannot execute a red maneuver and

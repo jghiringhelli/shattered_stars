@@ -1,5 +1,5 @@
 /**
- * Free Confederation — "The Rebel's Path", Acts I-III (missions 1-15).
+ * Free Confederation — "Libre", Acts I-III (missions 1-15).
  * Story, squad, enemies, rewards and debriefs; scripted beats, objective
  * geometry, hazards and bonus objectives live in ../designs/.
  */
@@ -56,7 +56,7 @@ export const FREE_CONFEDERATION_MISSIONS: CampaignMission[] = [
     missionNumber: 3,
     title: "Guerrilla Tactics",
     briefing:
-      "Join your rebel cell in a hit-and-run attack. Strike fast, then disappear.",
+      "Join your cell in a hit-and-run attack. Strike fast, then disappear.",
     objectives: [
       {
         id: "kill",

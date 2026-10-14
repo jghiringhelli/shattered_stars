@@ -66,7 +66,7 @@ export interface OwnShipView extends ShipSnapshot {
   readonly msToCommit: number;
   /** Where the maneuver in flight ends (the pose the next one starts from). */
   readonly endPose: Pose;
-  /** The K-turn is recharged, on the dial and allowed under stress. */
+  /** The Snap turn is recharged, on the dial and allowed under stress. */
   readonly kturnReady: boolean;
   /** Specials it may queue now: recharged, on its dial, allowed under stress. */
   readonly availableSpecials: readonly SpecialManeuver[];

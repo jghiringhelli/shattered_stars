@@ -5,7 +5,7 @@
  *   - Short tap left/right  → bank (caps deflection to STRESSED_MAX_DEFLECTION)
  *   - Held  left/right      → turn (full deflection, subject to stress)
  *   - Double-tap UP         → boost dash
- *   - Double-tap DOWN       → K-turn (in addition to Z key)
+ *   - Double-tap DOWN       → Snap turn (in addition to Z key)
  *   - Chord left+right      → barrel roll (direction of second key, feature-flagged)
  *
  * Pure functions only — no Phaser dependency. All state is immutable.
@@ -48,10 +48,10 @@ export type GestureAction =
   /** Hold left/right past BANK_HOLD_THRESHOLD_MS — fires once, then consumed until key released. */
   | "hard_turn_left"
   | "hard_turn_right"
-  /** Double-tap UP + direction held — Tallon Roll (180° with lateral offset). Arc math TODO. */
+  /** Double-tap UP + direction held — Knife Roll (180° with lateral offset). Arc math TODO. */
   | "tallon_roll_left"
   | "tallon_roll_right"
-  /** Double-tap DOWN + direction held — Segnor Loop (reverse loop with lateral offset). Arc math TODO. */
+  /** Double-tap DOWN + direction held — Hook Loop (reverse loop with lateral offset). Arc math TODO. */
   | "segnor_loop_left"
   | "segnor_loop_right";
 
@@ -199,14 +199,14 @@ export function updateGestures(
     }
   }
 
-  // --- Double-tap UP: boost (plain) or Tallon Roll (with direction held) ---
+  // --- Double-tap UP: boost (plain) or Knife Roll (with direction held) ---
   if (upJustDown && nowMs - state.lastUpTapMs <= DOUBLE_TAP_WINDOW_MS) {
     if (leftDown) actions.push("tallon_roll_left");
     else if (rightDown) actions.push("tallon_roll_right");
     else actions.push("boost");
   }
 
-  // --- Double-tap DOWN: K-turn (plain) or Segnor Loop (with direction held) ---
+  // --- Double-tap DOWN: Snap turn (plain) or Hook Loop (with direction held) ---
   if (downJustDown && nowMs - state.lastDownTapMs <= DOUBLE_TAP_WINDOW_MS) {
     if (leftDown) actions.push("segnor_loop_left");
     else if (rightDown) actions.push("segnor_loop_right");

@@ -26,6 +26,11 @@ import { toCssColor } from "../theme/colorMath";
 import { holoFont } from "../theme/holoFont";
 import { PICKER_TYPE, pickerTextStyle } from "./pickerStyle";
 import { drawSlotChip, SLOT_CHIP } from "./SlotChip";
+import { addTipZone, type TipSubject } from "../menu/tooltipTargets";
+import { abilityTooltip, slotChipTooltip, upgradeTooltip } from "./buildTooltips";
+
+/** Hover zone of one slot chip. */
+const CHIP_SIZE = { width: SLOT_CHIP.width, height: SLOT_CHIP.height } as const;
 
 const COLUMN_GAP = 16;
 type TextStyle = Phaser.Types.GameObjects.Text.TextStyle;
@@ -97,6 +102,7 @@ export class QuickBuildDetailView {
    * @param text - Content.
    * @param style - Phaser text style.
    * @param letterSpacing - Extra tracking (captions).
+   * @param tip - Tooltip over the text (term id or content).
    * @returns y below the text plus a small gap.
    */
   private addText(
@@ -105,11 +111,16 @@ export class QuickBuildDetailView {
     text: string,
     style: TextStyle,
     letterSpacing = 0,
+    tip?: TipSubject,
   ): number {
     const t = this.scene.add
       .text(x, y, text, style)
       .setLetterSpacing(letterSpacing);
     this.container.add(t);
+    if (tip) {
+      const box = { x, y, width: t.width, height: t.height };
+      addTipZone(this.scene, this.container, box, tip);
+    }
     return y + t.height + LINE_GAP;
   }
 
@@ -127,18 +138,32 @@ export class QuickBuildDetailView {
     y: number,
     w: number,
   ): number {
-    let cy = this.addText(x, y, "PILOT", HEADER_STYLE, CAPTION_SPACING);
+    let cy = this.addText(
+      x,
+      y,
+      "PILOT",
+      HEADER_STYLE,
+      CAPTION_SPACING,
+      "ui.pilot",
+    );
     const pilot = details?.pilot;
     const name = pilot
       ? `${pilot.isUnique ? "\u2605 " : ""}${pilot.name}`
       : "Rookie pilot";
     const initiative = pilot?.initiative ?? ROOKIE_INITIATIVE;
-    cy = this.addText(x, cy, name, {
-      ...holoFont(PILOT_NAME_FONT.size, PILOT_NAME_FONT.weight),
-      color: toCssColor(
-        pilot?.isUnique ? HOLO_PALETTE.warning : HOLO_PALETTE.textPrimary,
-      ),
-    });
+    cy = this.addText(
+      x,
+      cy,
+      name,
+      {
+        ...holoFont(PILOT_NAME_FONT.size, PILOT_NAME_FONT.weight),
+        color: toCssColor(
+          pilot?.isUnique ? HOLO_PALETTE.warning : HOLO_PALETTE.textPrimary,
+        ),
+      },
+      0,
+      pilot?.isUnique ? "tag.unique" : "ui.pilot",
+    );
     const tags = [`Initiative ${initiative}`];
     if (pilot?.isUnique) tags.push("Unique \u2014 one per squad");
     cy = this.addText(
@@ -148,6 +173,8 @@ export class QuickBuildDetailView {
       pickerTextStyle("small", HOLO_PALETTE.textSecondary, {
         wordWrap: { width: w },
       }),
+      0,
+      "stat.initiative",
     );
     return this.drawAbility(details, x, cy + LINE_GAP, w);
   }
@@ -175,6 +202,8 @@ export class QuickBuildDetailView {
       y,
       `ABILITY \u2014 ${ability.name}`,
       pickerTextStyle("name", HOLO_PALETTE.accent),
+      0,
+      abilityTooltip(ability),
     );
     if (ability.cardText) {
       cy = this.addText(
@@ -223,6 +252,7 @@ export class QuickBuildDetailView {
       `SLOTS  ${filled}/${slots.length} FILLED`,
       HEADER_STYLE,
       CAPTION_SPACING,
+      "ui.slot_bar",
     );
     const perRow = Math.max(
       1,
@@ -233,6 +263,8 @@ export class QuickBuildDetailView {
       const chipY =
         cy + Math.floor(i / perRow) * (SLOT_CHIP.height + SLOT_CHIP.gap);
       drawSlotChip(this.scene, this.container, slot, { x: chipX, y: chipY });
+      const zone = { x: chipX, y: chipY, ...CHIP_SIZE };
+      addTipZone(this.scene, this.container, zone, slotChipTooltip(slot));
     });
     const rows = Math.ceil(slots.length / perRow);
     const below = cy + rows * (SLOT_CHIP.height + SLOT_CHIP.gap);
@@ -242,6 +274,8 @@ export class QuickBuildDetailView {
       below + LINE_GAP,
       "Gold edge = added by the pilot",
       pickerTextStyle("micro", HOLO_PALETTE.textMuted, { fontStyle: "400" }),
+      0,
+      "ui.slot_pilot_edge",
     );
   }
 
@@ -259,7 +293,14 @@ export class QuickBuildDetailView {
     y: number,
     w: number,
   ): number {
-    let cy = this.addText(x, y, "UPGRADES", HEADER_STYLE, CAPTION_SPACING);
+    let cy = this.addText(
+      x,
+      y,
+      "UPGRADES",
+      HEADER_STYLE,
+      CAPTION_SPACING,
+      "ui.upgrade_card",
+    );
     const upgrades = details?.upgrades ?? [];
     if (upgrades.length === 0) {
       return this.addText(x, cy, "None equipped", MUTED_ITALIC);
@@ -273,6 +314,8 @@ export class QuickBuildDetailView {
         pickerTextStyle("small", HOLO_PALETTE.textPrimary, {
           wordWrap: { width: w },
         }),
+        0,
+        upgradeTooltip(upgrade),
       );
       const card = UPGRADE_DEFINITIONS[upgrade.id];
       if (card) {

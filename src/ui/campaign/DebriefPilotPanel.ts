@@ -12,6 +12,7 @@ import {
 } from "../../systems/CampaignPilotManager";
 import { xpProgress } from "./campaignProgress";
 import { createHoloPanel, type HoloPanel } from "../hud/HoloPanel";
+import { abilityDisplayName } from "../idLabels";
 import { drawHoloFrame, drawHoloGauge } from "../menu/holoChrome";
 import { drawMenuIcon } from "../menu/MenuIcons";
 import { HOLO_PALETTE, HOLO_RADIUS } from "../theme/HoloTheme";
@@ -216,7 +217,7 @@ function showLevelUp(
   const events = levelUpEvents.filter((e) => e.pilotId === pilot.pilotId);
   if (events.length === 0 || !row.scene) return;
   const abilities = events
-    .map((e) => e.newAbilityId.replace(/_/g, " ").toUpperCase())
+    .map((e) => abilityDisplayName(e.newAbilityId).toUpperCase())
     .join(", ");
   const text = addHoloText(
     scene,

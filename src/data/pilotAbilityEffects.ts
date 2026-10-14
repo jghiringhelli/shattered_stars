@@ -11,7 +11,7 @@
  *   aura knobs on the pilot's sheet shape it (wider radius, stronger
  *   magnitude, stress relief or hit chance for allies inside) — read by the
  *   aura resolver through AuraShip (src/systems/aura/AuraShipFacts.ts).
- * - Force "Action:" abilities fire on their own on a recharge, read as a
+ * - Psi "Action:" abilities fire on their own on a recharge, read as a
  *   steady rate (shield regeneration, stress inflicted per hit).
  * - Regen / repair rates and shields-per-kill are REAL-TIME hit points
  *   (HP/s, HP per kill), never rescaled: one shield token is
@@ -134,7 +134,7 @@ export const PILOT_ABILITY_REALTIME: Readonly<Record<string, RealtimeEffect>> =
     shield_transfer: { projectsAura: true, auraShieldRegenPerSecond: 0.06 },
     swarm_tactics: { wingmanLaserBonus: 1, auraRadiusBonus: 0.05 },
 
-    // --- Force (automatic on a recharge) -------------------------------------
+    // --- Psi (automatic on a recharge) -------------------------------------
     force_barrier: { projectsAura: true, wingmanDamageTakenMultiplier: 0.85 },
     // Card: an attacker at range 0-3 rerolls up to 2 dice -> a 15% wider,
     // 20% stronger aura.
@@ -152,7 +152,7 @@ export const PILOT_ABILITY_REALTIME: Readonly<Record<string, RealtimeEffect>> =
       auraStressReliefTiers: 1,
     },
     force_push: { stressOnHit: 0.1 },
-    // Card: "When a friendly ship at range 0-1 defends, spend 1 Force: the
+    // Card: "When a friendly ship at range 0-1 defends, spend 1 psi: the
     // defender adds 1 evade" — protection for ships flying together, not
     // self-healing. The old self-regen reading (0.3 shield tokens/s = 3.6 HP/s)
     // out-healed most fighters' fire at x12 HP: expert pilots could not

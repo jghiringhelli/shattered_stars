@@ -67,11 +67,11 @@ export function crewTitle(role: CrewRole): string {
  * Flight actions with their readiness.
  *
  * @param control - The player's flight control state.
- * @returns K-turn, barrel roll and boost rows.
+ * @returns Snap turn, barrel roll and boost rows.
  */
 export function actionRows(control: ShipControlState): StatusRow[] {
   return [
-    cooldownRow("Z", "K-TURN", control.kturnCooldown),
+    cooldownRow("Z", "SNAP", control.kturnCooldown),
     cooldownRow("←+→", "ROLL", control.barrelRollCooldown),
     cooldownRow("↑↑", "BOOST", control.boostCooldown),
   ];

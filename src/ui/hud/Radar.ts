@@ -23,6 +23,8 @@ import { drawDiamond, fillBlip } from "./HudIcons";
 import { projectToRadar, type RadarProjectionOptions } from "./hudMath";
 import { drawMarkReticle } from "./markGlyphs";
 import { radarBoundaryPaths } from "./radarBoundary";
+import { drawRadarSeams } from "./radarSeamDraw";
+import { radarSeamLines } from "./radarSeams";
 import { drawSideFrame } from "./sideGlyphs";
 import type { ScreenRect } from "./screenRect";
 import type {
@@ -57,6 +59,8 @@ const MARK_LINE_WIDTH = 1.5;
 const RIM_TICKS_DEG = [270, 0, 90, 180] as const;
 /** Stroke of the arena-boundary ring (px). */
 const BOUNDARY_LINE_WIDTH = 2;
+/** Opacity of the dashed torus-edge hint (kept subtle). */
+const SEAM_HINT_ALPHA = 0.35;
 
 /** Radar options. */
 export interface RadarConfig {
@@ -165,6 +169,12 @@ export class Radar {
       radiusPx: this.radius,
       worldSize: this.worldSize,
     };
+    drawRadarSeams(
+      this.blips,
+      radarSeamLines(player, options),
+      HOLO_PALETTE.accent,
+      SEAM_HINT_ALPHA,
+    );
     if (boundary) this.drawBoundary(player, boundary, options);
     for (const contact of contacts) {
       if (!contact.alive) continue;

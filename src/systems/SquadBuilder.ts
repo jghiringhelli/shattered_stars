@@ -56,7 +56,7 @@ export interface PilotCard {
   readonly extraSlots?: UpgradeSlotType[]; // Additional slots this pilot adds
   readonly removedSlots?: UpgradeSlotType[]; // Slots this pilot removes
   readonly charges?: number;
-  readonly force?: number; // For Force-sensitive pilots
+  readonly force?: number; // For Psi-sensitive pilots
   readonly limitedCount?: number; // How many can be in a squad (default 1 for unique)
 }
 
@@ -663,7 +663,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     initiative: 5,
     isUnique: true,
     abilityText:
-      "When you spend a Force charge, you may perform a boost or barrel roll action.",
+      "When you spend a psi charge, you may perform a boost or barrel roll action.",
     abilityId: "supernatural_reflexes",
     force: 2,
     extraSlots: ["talent", "force_power"],
@@ -676,7 +676,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     initiative: 6,
     isUnique: true,
     abilityText:
-      "When attacking or defending, you may spend 1 Force charge to change 1 blank result to a focus result.",
+      "When attacking or defending, you may spend 1 psi charge to change 1 blank result to a focus result.",
     abilityId: "prescience",
     force: 3,
     extraSlots: ["talent", "force_power"],
@@ -729,7 +729,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     initiative: 5,
     isUnique: true,
     abilityText:
-      "At the start of the Engagement Phase, you may spend 1 Force charge. If you do, each friendly ship at range 0-2 may remove 1 red token.",
+      "At the start of the Engagement Phase, you may spend 1 psi charge. If you do, each friendly ship at range 0-2 may remove 1 red token.",
     abilityId: "force_heal",
     force: 2,
     extraSlots: ["crew", "force_power", "sensor"],
@@ -752,7 +752,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     initiative: 5,
     isUnique: true,
     abilityText:
-      "When a friendly ship at range 0-2 attacks, you may spend 1 Force charge. If you do, the attacker may reroll up to 2 attack dice.",
+      "When a friendly ship at range 0-2 attacks, you may spend 1 psi charge. If you do, the attacker may reroll up to 2 attack dice.",
     abilityId: "force_guidance",
     force: 2,
     extraSlots: ["talent", "crew", "gunner", "force_power"],
@@ -958,7 +958,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
   },
   torpedo_ace_zara: {
     id: "torpedo_ace_zara",
-    name: "Torpedo Ace Zara",
+    name: "Torpedo Ace Zhao",
     shipId: "terran_javelin",
     faction: "terran_hegemony",
     initiative: 5,
@@ -1079,10 +1079,10 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     extraSlots: ["talent", "gunner", "gunner", "crew"],
   },
 
-  // Imperator Capital Ship
+  // Aquila Capital Ship
   imperator_crew: {
     id: "imperator_crew",
-    name: "Imperator Crew",
+    name: "Aquila Crew",
     shipId: "terran_imperator",
     faction: "terran_hegemony",
     initiative: 1,
@@ -1123,10 +1123,10 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     extraSlots: ["crew", "crew", "gunner", "gunner"],
   },
 
-  // Executor Dreadnought
+  // Lictor Dreadnought
   executor_crew: {
     id: "executor_crew",
-    name: "Executor Crew",
+    name: "Lictor Crew",
     shipId: "terran_executor",
     faction: "terran_hegemony",
     initiative: 1,
@@ -1514,7 +1514,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
   },
   rebel_commander_blake: {
     id: "rebel_commander_blake",
-    name: "Rebel Commander Blake",
+    name: "Cell Commander Blake",
     shipId: "confed_independence",
     faction: "free_confederation",
     initiative: 4,
@@ -2343,7 +2343,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     initiative: 4,
     isUnique: true,
     abilityText:
-      "When defending, you may spend 1 Force charge to add 1 evade result.",
+      "When defending, you may spend 1 psi charge to add 1 evade result.",
     abilityId: "prescience",
     force: 1,
     extraSlots: ["force_power"],
@@ -2366,7 +2366,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     initiative: 4,
     isUnique: true,
     abilityText:
-      "Action: spend 1 Force charge; an enemy ship at range 1-2 cannot perform actions next round.",
+      "Action: spend 1 psi charge; an enemy ship at range 1-2 cannot perform actions next round.",
     abilityId: "force_suppression",
     force: 1,
     extraSlots: ["sensor", "force_power"],
@@ -2389,7 +2389,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     initiative: 5,
     isUnique: true,
     abilityText:
-      "When attacking, you may spend 1 Force charge to reroll up to 2 attack dice.",
+      "When attacking, you may spend 1 psi charge to reroll up to 2 attack dice.",
     abilityId: "prescience",
     force: 2,
     extraSlots: ["talent", "force_power"],
@@ -2420,7 +2420,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     initiative: 5,
     isUnique: true,
     abilityText:
-      "When a friendly ship at range 0-2 is destroyed, gain 2 Force charges (up to your maximum).",
+      "When a friendly ship at range 0-2 is destroyed, gain 2 psi charges (up to your maximum).",
     abilityId: "righteous_anger",
     force: 2,
     extraSlots: ["talent", "force_power", "modification"],
@@ -2443,7 +2443,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     initiative: 5,
     isUnique: true,
     abilityText:
-      "When a friendly ship at range 0-1 defends, you may spend 1 Force charge. If you do, the defender adds 1 evade result.",
+      "When a friendly ship at range 0-1 defends, you may spend 1 psi charge. If you do, the defender adds 1 evade result.",
     abilityId: "force_shield",
     force: 2,
     extraSlots: ["talent", "force_power", "modification"],
@@ -2460,13 +2460,13 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
   },
   grand_inquisitor: {
     id: "grand_inquisitor",
-    name: "Grand Inquisitor",
+    name: "First Censor",
     shipId: "ascendant_inquisitor",
     faction: "ascendant_empire",
     initiative: 6,
     isUnique: true,
     abilityText:
-      "When attacking, you may spend 1 Force charge to add 1 hit result.",
+      "When attacking, you may spend 1 psi charge to add 1 hit result.",
     abilityId: "force_fury",
     force: 3,
     extraSlots: ["talent", "force_power", "force_power"],
@@ -2489,7 +2489,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     initiative: 5,
     isUnique: true,
     abilityText:
-      "At the start of the Engagement Phase, you may spend 2 Force charges. If you do, choose 1 enemy ship at range 0-3. That ship cannot spend focus or evade tokens this round.",
+      "At the start of the Engagement Phase, you may spend 2 psi charges. If you do, choose 1 enemy ship at range 0-3. That ship cannot spend focus or evade tokens this round.",
     abilityId: "force_suppression",
     force: 3,
     extraSlots: ["crew", "force_power", "sensor"],
@@ -2512,7 +2512,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     initiative: 4,
     isUnique: true,
     abilityText:
-      "At the start of the End Phase, you may spend 1 Force charge. If you do, each friendly ship at range 0-2 may recover 1 shield.",
+      "At the start of the End Phase, you may spend 1 psi charge. If you do, each friendly ship at range 0-2 may recover 1 shield.",
     abilityId: "force_heal",
     force: 2,
     extraSlots: ["crew", "force_power"],
@@ -2535,7 +2535,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     initiative: 5,
     isUnique: true,
     abilityText:
-      "When attacking, you may spend any number of Force charges. For each charge spent, change 1 focus result to a hit result.",
+      "When attacking, you may spend any number of psi charges. For each charge spent, change 1 focus result to a hit result.",
     abilityId: "force_fury",
     force: 3,
     extraSlots: ["talent", "gunner", "force_power"],
@@ -2558,7 +2558,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     initiative: 5,
     isUnique: true,
     abilityText:
-      "When attacking, after rolling dice, you may spend 2 Force charges to add 1 critical hit result.",
+      "When attacking, after rolling dice, you may spend 2 psi charges to add 1 critical hit result.",
     abilityId: "force_fury",
     force: 3,
     extraSlots: ["talent", "gunner", "gunner", "force_power"],
@@ -2627,7 +2627,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     initiative: 5,
     isUnique: true,
     abilityText:
-      "At the start of each round, all friendly ships at range 0-4 may recover 1 Force charge.",
+      "At the start of each round, all friendly ships at range 0-4 may recover 1 psi charge.",
     abilityId: "force_guidance",
     force: 4,
     extraSlots: ["crew", "crew", "gunner", "force_power", "force_power"],
@@ -2650,7 +2650,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     initiative: 5,
     isUnique: true,
     abilityText:
-      "When a friendly ship at range 0-3 attacks, you may spend 1 Force charge. If you do, the attacker may reroll up to 2 attack dice.",
+      "When a friendly ship at range 0-3 attacks, you may spend 1 psi charge. If you do, the attacker may reroll up to 2 attack dice.",
     abilityId: "force_guidance",
     force: 4,
     extraSlots: ["crew", "crew", "gunner", "gunner", "force_power"],
@@ -2696,7 +2696,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     initiative: 4,
     isUnique: true,
     abilityText:
-      "Action: spend 1 Force charge to raise a barrier, giving a friendly ship at range 1-2 an evade token.",
+      "Action: spend 1 psi charge to raise a barrier, giving a friendly ship at range 1-2 an evade token.",
     abilityId: "force_barrier",
     force: 2,
     extraSlots: ["crew", "crew", "gunner", "force_power"],

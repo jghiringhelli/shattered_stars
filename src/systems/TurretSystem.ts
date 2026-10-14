@@ -127,7 +127,7 @@ export const TURRET_DEFINITIONS: Record<string, TurretDefinition> = {
   // Special turrets
   blaster_turret: {
     id: "blaster_turret",
-    name: "Blaster Turret",
+    name: "Pulse Turret",
     arcType: "single",
     arcSize: 90,
     attackDice: 3,

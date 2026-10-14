@@ -10,6 +10,8 @@ import type { AIDifficultyLevel } from "../../ai/AIDifficulty";
 import { DIFFICULTY_NAMES } from "../../ai/AIDifficulty";
 import type { GameMode } from "../../core/squadTypes";
 import { createToggleButton } from "../ButtonFactory";
+import { difficultyTermId, type TermId } from "../../data/tooltips";
+import { attachToggleTooltip } from "../menu/tooltipTargets";
 import { createHoloPanel } from "../hud/HoloPanel";
 import { HOLO_PALETTE, HOLO_RADIUS } from "../theme/HoloTheme";
 import { SQUAD_TYPE, addCaption, addSquadText } from "./squadBuilderStyle";
@@ -60,6 +62,8 @@ export interface FormatPanelState {
 /** One selectable option in a toggle row. */
 interface ToggleOption {
   readonly label: string;
+  /** Tooltip term of the option. */
+  readonly term: TermId;
   readonly selected: boolean;
   readonly onPick: () => void;
 }
@@ -144,6 +148,7 @@ export class FormatPanel extends Phaser.Events.EventEmitter {
       centreY,
       MODES.map((m) => ({
         label: m.label,
+        term: `mode.${m.id}` as TermId,
         selected: this.state.gameMode === m.id,
         onPick: () => {
           this.state.gameMode = m.id;
@@ -163,6 +168,7 @@ export class FormatPanel extends Phaser.Events.EventEmitter {
       centreY,
       POINT_LIMITS.map((pts) => ({
         label: `${pts}`,
+        term: "ui.point_limit",
         selected: this.state.pointLimit === pts,
         onPick: () => {
           this.state.pointLimit = pts;
@@ -178,6 +184,7 @@ export class FormatPanel extends Phaser.Events.EventEmitter {
       centreY,
       DIFFICULTIES.map((d) => ({
         label: DIFFICULTY_NAMES[d],
+        term: difficultyTermId(d),
         selected: this.state.aiDifficulty === d,
         onPick: () => {
           this.state.aiDifficulty = d;
@@ -207,8 +214,7 @@ export class FormatPanel extends Phaser.Events.EventEmitter {
     const gap = FORMAT_LAYOUT.optionGap;
     const width = (INNER_W - gap * (options.length - 1)) / options.length;
     options.forEach((option, i) => {
-      this.container.add(
-        createToggleButton(
+      const toggle = createToggleButton(
           this.scene,
           ROW_X + width / 2 + i * (width + gap),
           centreY,
@@ -224,8 +230,9 @@ export class FormatPanel extends Phaser.Events.EventEmitter {
             selectedFont: `600 ${SQUAD_TYPE.label}px`,
           },
           option.onPick,
-        ),
       );
+      attachToggleTooltip(this.scene, toggle, option.term);
+      this.container.add(toggle);
     });
   }
 }

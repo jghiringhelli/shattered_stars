@@ -19,14 +19,14 @@ export type UpgradeSlotType =
   | "bomb" // Bombs and mines
   | "crew" // Crew members
   | "gunner" // Dedicated gunners
-  | "astromech" // Astromech droids
+  | "astromech" // Riggers
   | "sensor" // Sensor suites
   | "tech" // Advanced technology
   | "modification" // Ship modifications
   | "illicit" // Black-market gear: strong effects with a drawback
   | "title" // Unique ship titles
   | "configuration" // Ship configurations (trade-offs)
-  | "force_power"; // Force abilities (Ascendant Empire pilots)
+  | "force_power"; // psionic abilities (Ascendant Empire pilots)
 
 /**
  * Stat bonuses every game mode applies (hull, shields, attack/agility dice),

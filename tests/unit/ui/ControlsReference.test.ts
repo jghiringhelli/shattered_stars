@@ -43,7 +43,7 @@ describe("ControlsReference", () => {
     expect(touchLabelFor(["COMMANDER_ORDER_1"])).toBe("—");
   });
 
-  it("lists the gamepad hard turns, K-turn flick and commander orders", () => {
+  it("lists the gamepad hard turns, Snap turn flick and commander orders", () => {
     expect(gamepadLabelFor(["SHARP_TURN_LEFT", "SHARP_TURN_RIGHT"])).toBe(
       "LB / RB",
     );

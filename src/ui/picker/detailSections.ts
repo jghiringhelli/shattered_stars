@@ -18,6 +18,8 @@ import {
   STAT_GAUGE_MAX,
 } from "./pickerStyle";
 import type { LoadoutBonuses } from "./types";
+import { actionTermId } from "../../data/tooltips";
+import { addTipZone } from "../menu/tooltipTargets";
 
 /** Where a block goes. */
 export interface SectionArea {
@@ -29,10 +31,10 @@ export interface SectionArea {
 }
 
 const STAT_DEFS = [
-  { key: "attack", label: "ATTACK", bonus: "atk" },
-  { key: "agility", label: "AGILITY", bonus: "agi" },
-  { key: "hull", label: "HULL", bonus: "hull" },
-  { key: "shields", label: "SHIELDS", bonus: "shld" },
+  { key: "attack", label: "ATTACK", bonus: "atk", term: "stat.attack" },
+  { key: "agility", label: "AGILITY", bonus: "agi", term: "stat.agility" },
+  { key: "hull", label: "HULL", bonus: "hull", term: "stat.hull" },
+  { key: "shields", label: "SHIELDS", bonus: "shld", term: "stat.shields" },
 ] as const;
 
 /** Section layout. */
@@ -96,6 +98,8 @@ export function drawStatGauges(
       ).setOrigin(1, 0),
       gauge,
     ]);
+    const zone = { x: sx, y, width: colW, height: LAYOUT.gaugeTop + LAYOUT.gaugeH };
+    addTipZone(scene, container, zone, stat.term);
   });
   return y + LAYOUT.gaugeTop + LAYOUT.gaugeH;
 }
@@ -124,6 +128,12 @@ export function drawActions(
     HOLO_PALETTE.textSecondary,
   );
   area.container.add(caption);
+  addTipZone(
+    area.scene,
+    area.container,
+    { x: area.x, y: area.y, width: caption.width, height: caption.height },
+    "ui.action_bar",
+  );
   if (compact) return drawActionChips(area, actions, caption.width);
   const top = area.y + LAYOUT.captionH;
   const colW = area.width / 2;
@@ -150,8 +160,25 @@ export function drawActions(
         }),
       ),
     ]);
+    addActionZone(area, actionKey, { x: cx, y: ry, width: colW - HOLO_SPACING.lg, height: LAYOUT.actionRowH });
   });
   return top + Math.ceil(actions.length / 2) * LAYOUT.actionRowH;
+}
+
+/**
+ * Hover zone that explains one action of the bar.
+ *
+ * @param area - Target and box.
+ * @param actionKey - Action key.
+ * @param rect - Zone bounds.
+ */
+function addActionZone(
+  area: SectionArea,
+  actionKey: string,
+  rect: { x: number; y: number; width: number; height: number },
+): void {
+  const id = actionTermId(actionKey);
+  if (id) addTipZone(area.scene, area.container, rect, id);
 }
 
 /**
@@ -192,6 +219,7 @@ function drawActionChips(
     );
     label.setPosition(chipX + LAYOUT.chipPadX, chipY + LAYOUT.chipH / 2);
     area.container.add([chip, label]);
+    addActionZone(area, actionKey, { x: chipX, y: chipY, width: chipW, height: LAYOUT.chipH });
     chipX += chipW + LAYOUT.chipGap;
   }
   return chipY + LAYOUT.chipH;

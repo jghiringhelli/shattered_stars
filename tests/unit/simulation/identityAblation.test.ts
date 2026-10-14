@@ -48,7 +48,7 @@ describe("faction identity cards", () => {
 });
 
 describe("strippedEquipment", () => {
-  it("leaves the Confederation's astromech in the hangar", () => {
+  it("leaves the Confederation's rigger in the hangar", () => {
     const { upgradeIds } = strippedEquipment(
       "confed_falcon",
       "falcon_defender",

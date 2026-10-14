@@ -15,6 +15,9 @@ import { FACTION_COLORS, type FactionId } from "../../config";
 import { createToggleButton } from "../ButtonFactory";
 import { getShipsByFaction } from "../../data/ShipDefinitions";
 import { ShipCatalogPanel } from "../picker/ShipCatalogPanel";
+import { factionTermId } from "../../data/tooltips";
+import type { FocusTarget } from "../menu/MenuFocus";
+import { attachToggleTooltip, focusTipTarget } from "../menu/tooltipTargets";
 import { HOLO_RADIUS, factionAccent } from "../theme/HoloTheme";
 import { SQUAD_TYPE } from "./squadBuilderStyle";
 
@@ -55,6 +58,9 @@ export class SimpleSquadFlow extends Phaser.Events.EventEmitter {
   private selectedFaction: FactionId;
   private catalog: ShipCatalogPanel | null = null;
   private factionButtons: Phaser.GameObjects.Container[] = [];
+  private factionTargets: FocusTarget[] = [];
+  /** Faction chips then filter chips — one array so a MenuFocus can keep it. */
+  private readonly allTargets: FocusTarget[] = [];
 
   /**
    * @param scene - Owning scene.
@@ -77,6 +83,7 @@ export class SimpleSquadFlow extends Phaser.Events.EventEmitter {
   render(): void {
     this.factionButtons.forEach((b) => b.destroy());
     this.factionButtons = [];
+    this.factionTargets = [];
     this.renderFactionRow();
     this.renderCatalog();
   }
@@ -85,6 +92,7 @@ export class SimpleSquadFlow extends Phaser.Events.EventEmitter {
   destroy(): void {
     this.factionButtons.forEach((b) => b.destroy());
     this.catalog?.destroy();
+    this.allTargets.length = 0;
   }
 
   private renderFactionRow(): void {
@@ -113,7 +121,18 @@ export class SimpleSquadFlow extends Phaser.Events.EventEmitter {
           this.render();
         },
       );
+      const hit = attachToggleTooltip(
+        this.scene,
+        button,
+        factionTermId(faction),
+      );
       button.add(this.createFactionPip(faction, width));
+      this.factionTargets.push(
+        focusTipTarget(hit, () => {
+          this.selectedFaction = faction;
+          this.render();
+        }),
+      );
       return button;
     });
   }
@@ -131,6 +150,28 @@ export class SimpleSquadFlow extends Phaser.Events.EventEmitter {
     );
   }
 
+  /** Capital ships Skirmish leaves out (listed as an epic-only notice). */
+  private hiddenCapitalCount(): number {
+    return getShipsByFaction(this.selectedFaction).filter(
+      (s) => s.role === "capital" || s.baseStats.size === "huge",
+    ).length;
+  }
+
+  /** Faction chips then the catalog's filter chips (same array across re-renders). */
+  get focusTargets(): FocusTarget[] {
+    return this.allTargets;
+  }
+
+  private syncFocusTargets(): void {
+    this.allTargets.splice(
+      0,
+      this.allTargets.length,
+      ...this.factionTargets,
+      ...(this.catalog?.focusTargets ?? []),
+    );
+    this.emit("focusTargetsChanged");
+  }
+
   private renderCatalog(): void {
     this.catalog?.destroy();
     const ships = getShipsByFaction(this.selectedFaction).filter(
@@ -144,6 +185,7 @@ export class SimpleSquadFlow extends Phaser.Events.EventEmitter {
       "LAUNCH",
       FLOW_LAYOUT.catalogTopY,
       FLOW_LAYOUT.catalogPanelH,
+      { hiddenCapitals: this.hiddenCapitalCount() },
     );
     this.catalog.on(
       "addInstance",
@@ -155,6 +197,7 @@ export class SimpleSquadFlow extends Phaser.Events.EventEmitter {
         });
       },
     );
+    this.catalog.on("focusTargetsChanged", () => this.syncFocusTargets());
     this.catalog.render();
   }
 }

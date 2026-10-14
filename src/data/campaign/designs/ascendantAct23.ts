@@ -3,7 +3,9 @@
  * - asc_2_4: keeping the Temple Guardians alive sets `asc_temple_intact` →
  *   the Guardians shield the faithful (asc_3_3) and fly the Ascension (asc_3_5).
  * - asc_2_5: if Halo Wing is wiped out, `asc_halo_lost` is saved → Halo
- *   never flies again (asc_3_1, asc_3_4, asc_3_5).
+ *   never flies again (asc_3_1, asc_3_4, asc_3_5). Severing the choir saves
+ *   `asc_choir_silenced` (read by the Collective's campaign); the drone waves
+ *   read the mission-local `choir_cut` so a replay is never pre-won.
  */
 
 import type { MissionDesign, MissionVariant } from "../campaignTypes";
@@ -60,6 +62,12 @@ const HALO_LOST = {
     ),
   ],
 } as const;
+const ZAELTHAR = {
+  shipId: "ascendant_templar",
+  count: 1,
+  tag: "zaelthar",
+  name: "Archon Zaelthar",
+} as const;
 const GUARDIANS = {
   shipId: "ascendant_templar",
   count: 2,
@@ -87,7 +95,7 @@ function waveIfChoirSings(atSeconds: number): ReturnType<typeof atTime> {
   return beat(
     { on: "time", atSeconds },
     [wave("synth_drone", 2, "synthetic_collective")],
-    { if: [{ flag: "asc_choir_silenced", is: false }] },
+    { if: [{ flag: "choir_cut", is: false }] },
   );
 }
 
@@ -389,7 +397,8 @@ export const ASCENDANT_ACT23_DESIGNS: Readonly<Record<string, MissionDesign>> =
         onObjective(
           "choir",
           "completed",
-          setFlag("asc_choir_silenced"),
+          setFlag("choir_cut"),
+          setFlag("asc_choir_silenced", true),
           say(DREAMER, "The choir is quiet. Now it is alone.", "grim"),
         ),
         onDestroyed(
@@ -677,7 +686,7 @@ export const ASCENDANT_ACT23_DESIGNS: Readonly<Record<string, MissionDesign>> =
       style: "boss",
       tagline: "The prophecy is fulfilled. Ascend.",
       mood: "proud",
-      allies: [HALO],
+      allies: [HALO, ZAELTHAR],
       victoryFlags: { asc_ascension: true },
       variants: [
         HALO_LOST,

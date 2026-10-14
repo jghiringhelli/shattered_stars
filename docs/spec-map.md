@@ -13,6 +13,7 @@ artifacts and code to load. Run `npm run sentinel` for a live status + next acti
 | Creature bosses / spawns (Survival, Campaign) | [docs/specs/creatures.md](specs/creatures.md), ADR-0004 (creature bosses addendum) | [src/arcade/creatures/](../src/arcade/creatures/), [src/data/creatures/](../src/data/creatures/), [src/scenes/creatures/](../src/scenes/creatures/) |
 | Telemetry fidelity gate | telemetry-xwing-reference.md §3 | [scripts/analyze_telemetry.ts](../scripts/analyze_telemetry.ts), test `XWingTelemetryReference.test.ts` |
 | Arcade control cycle | CLAUDE.md → ArcadeControls | [src/core/ArcadeControls.ts](../src/core/ArcadeControls.ts) |
+| Map themes / seamless torus view / parallax space / radar seam hint | [docs/specs/map-themes.md](specs/map-themes.md) | [src/rendering/torus/](../src/rendering/torus/), [src/rendering/spaceMap/](../src/rendering/spaceMap/), src/ui/hud/radarSeams.ts |
 | Combat / dice / actions | specs/advanced_mechanics.md | src/systems/CombatSystem.ts, ActionsSystem.ts, TargetingSystem.ts |
 | Squad building | — | src/systems/SquadBuilder.ts, src/scenes/SquadBuilderScene.ts, ShipPickerScene.ts |
 | Upgrade catalog / slots / loadout pricing | [docs/specs/upgrades-and-slots.md](specs/upgrades-and-slots.md) | src/data/upgrades/, src/core/CombatModifiers.ts, src/arcade/ArcadeUpgradeEffects.ts, src/data/ShipSlots.ts, src/data/ShipLoadouts.ts, src/data/loadoutRules.ts |

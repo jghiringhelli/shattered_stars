@@ -109,6 +109,7 @@ export class HoloPressButton extends Phaser.GameObjects.Container {
   setFocused(focused: boolean): this {
     this.isFocused = focused;
     this.redraw();
+    this.emit("focuschanged", focused);
     return this;
   }
 

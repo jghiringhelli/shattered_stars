@@ -51,7 +51,7 @@ export const FACTION_STYLES: Record<FactionId, FactionStyle> = {
   },
 
   free_confederation: {
-    basePrompt: 'rebel spacecraft, modified freighter, asymmetrical design, salvaged parts, guerrilla fighter, exposed machinery, green and orange accents, agile craft',
+    basePrompt: 'cell spacecraft, modified freighter, asymmetrical design, salvaged parts, guerrilla fighter, exposed machinery, green and orange accents, agile craft',
     negativePrompt: 'uniform, pristine, luxury, symmetrical, military parade',
     loras: [
       { name: 'scifi_style', weight: 0.5 },

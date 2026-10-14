@@ -73,25 +73,33 @@ export async function launchCampaignMission(
  *
  * @param page - Playwright page.
  * @param factionId - Faction.
+
  * @param save - Fields merged into a fresh save.
+ * @param freeOrder - Chronicle "Free Order" (default on: the act locks of the
+ *   Rule of N are lifted so one faction\u0027s hub can be exercised alone).
  */
 export async function openCampaignHub(
   page: Page,
   factionId: string,
   save: Record<string, unknown> = {},
+  freeOrder = true,
 ): Promise<void> {
   await page.goto("/");
   await waitForMenuReady(page);
   await page.evaluate(
-    async ({ f, s }) => {
+    async ({ f, s, free }) => {
       const { CampaignSaveManager } =
         await import("/src/systems/CampaignSaveManager.ts");
+      const { ChronicleManager } =
+        await import("/src/systems/ChronicleManager.ts");
       CampaignSaveManager.save({
         ...CampaignSaveManager.createNew(f as any),
         ...s,
       } as any);
+      ChronicleManager.reset();
+      ChronicleManager.setFreeOrder(free);
     },
-    { f: factionId, s: save },
+    { f: factionId, s: save, free: freeOrder },
   );
   await clickMenuItem(page, "CAMPAIGN");
   await waitForScene(page, "CampaignScene");

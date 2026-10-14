@@ -3,7 +3,7 @@
  * events. Pure (no Phaser): the view only reads the slots and draws them.
  *
  * - A repair from an allied ship (support/capital repair field) sends drones
- *   from that ship to the repaired one; self-repair (astromech, mechanic
+ *   from that ship to the repaired one; self-repair (rigger, mechanic
  *   crew, damage-control order) launches drones from the ship itself; plain
  *   shield regeneration sends none (it only shimmers on the overlay).
  * - Each (source, target) pair waits {@link SORTIE_COOLDOWN_MS} between

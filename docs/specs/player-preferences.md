@@ -51,7 +51,7 @@ Getters for gameplay code: `isMarkAssistEnabled()` (wired into `SquadBattleAi` a
 
 Main menu card (F / START, SKIP on first launch — non-blocking). Sixteen lessons on the shared
 engine (PlayerFlightPilot + CycleFlight + BattleHud + DuelPrimaryFire/DiceAttack/DuelBotCrew):
-throttle up/down, drift (500 ms cycle), bank, hard turn, K-turn, Segnor, Tallon, boost, barrel roll,
+throttle up/down, drift (500 ms cycle), bank, hard turn, Snap turn, Hook, Knife, boost, barrel roll,
 primary arc (towed drone), secondary, mark, radar/edge arrows (beacon behind), status ring,
 final fight vs one novice bot. `FlightSchoolSteps` completes a lesson only when the observed flight
 state proves the input. Deaths respawn. N skips a lesson, ESC leaves. Progress:

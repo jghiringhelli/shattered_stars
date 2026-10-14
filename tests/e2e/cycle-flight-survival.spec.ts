@@ -1,7 +1,7 @@
 /**
  * cycle-flight-survival.spec.ts — Survival flies the X-Wing cycle engine:
  * every ship (flagship, wave enemies) rides template arcs on its own,
- * holding a steering key banks the flagship, and Z queues a K-turn (and
+ * holding a steering key banks the flagship, and Z queues a Snap turn (and
  * costs stress). Weapons and belt damage are neutralised so no ship dies
  * mid-test (dead ships don't fly).
  *
@@ -87,7 +87,7 @@ test.describe("SurvivalScene — cycle-engine flight", () => {
     expect(headingChange(start.angle, end.angle)).toBeLessThanOrEqual(-40);
   });
 
-  test("Z queues a K-turn and costs stress", async ({ page }) => {
+  test("Z queues a Snap turn and costs stress", async ({ page }) => {
     await SURVIVAL.enter(page, { peaceful: true });
     await holdGameKey(page, "Z", 150);
     const ship = await flagship(page);

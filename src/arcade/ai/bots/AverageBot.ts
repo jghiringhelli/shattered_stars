@@ -5,7 +5,7 @@
  * a weaker sense of danger, no barrel-roll / boost reflexes). Getting to the
  * fight it flies by rule: leads its target a little, picks the dial maneuver
  * nearest the heading error, opens the throttle to close distance and
- * occasionally K-turns onto a target that slipped behind.
+ * occasionally Snap turns onto a target that slipped behind.
  *
  * Follows squad orders when it has them: attacks the focus target (from its
  * flank slot), forms up with the squad before engaging, regroups when
@@ -61,13 +61,13 @@ export const AVERAGE_ENGAGE_RANGES = 2;
 /** "Dead ahead" for the full-throttle chase (°). */
 export const AVERAGE_CHASE_BEARING_DEG = 30;
 
-/** A target this far off the nose counts as behind: K-turn candidate (°). */
+/** A target this far off the nose counts as behind: Snap turn candidate (°). */
 export const AVERAGE_KTURN_ERROR_DEG = 150;
 
-/** Only K-turn onto a target this close (px). */
+/** Only Snap turn onto a target this close (px). */
 export const AVERAGE_KTURN_RANGE_PX = 450;
 
-/** Chance per decision that the pilot thinks of the K-turn. */
+/** Chance per decision that the pilot thinks of the Snap turn. */
 export const AVERAGE_KTURN_CHANCE = 0.35;
 
 /** Lead the target by this much (ms). */
@@ -193,7 +193,7 @@ export class AverageBot implements PilotBot {
   }
 
   /**
-   * @returns Whether to K-turn onto a target that slipped behind.
+   * @returns Whether to Snap turn onto a target that slipped behind.
    */
   private wantsKTurn(
     view: PilotView,

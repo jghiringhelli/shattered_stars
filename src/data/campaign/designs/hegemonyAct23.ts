@@ -92,12 +92,16 @@ export const HEGEMONY_ACT23_DESIGNS: Readonly<Record<string, MissionDesign>> = {
           "grim",
         ),
       ),
-      onObjective(
-        "intact",
-        "completed",
-        setFlag("heg_convoy_intact", true),
-        say(CHEN, "Every hull delivered. Omega will remember this.", "proud"),
-      ),
+      {
+        ...onObjective(
+          "intact",
+          "completed",
+          setFlag("heg_convoy_intact", true),
+          say(CHEN, "Every hull delivered. Omega will remember this.", "proud"),
+        ),
+        // The Corsairs gutted the straggler first: that canon excludes ours.
+        if: [{ flag: "x4_convoy_gutted", is: false }],
+      },
     ],
   },
   heg_2_2: {
@@ -296,7 +300,8 @@ export const HEGEMONY_ACT23_DESIGNS: Readonly<Record<string, MissionDesign>> = {
       onObjective(
         "relay",
         "completed",
-        setFlag("relay_down"),
+        setFlag("relay_cut"),
+        setFlag("relay_down", true),
         say(WHISPER, "Relay down. No more drones.", "proud"),
       ),
     ],
@@ -516,7 +521,7 @@ export const HEGEMONY_ACT23_DESIGNS: Readonly<Record<string, MissionDesign>> = {
     mood: "proud",
     allies: [LANCE],
     objectives: [
-      hold("gate", "Seize the hyperspace gate for 30 seconds", {
+      hold("gate", "Seize the jump gate for 30 seconds", {
         at: [0, -900],
         radius: 300,
         seconds: 30,
@@ -560,5 +565,5 @@ export const HEGEMONY_ACT23_DESIGNS: Readonly<Record<string, MissionDesign>> = {
  */
 function beatIfRelayUp(atSeconds: number): ReturnType<typeof atTime> {
   const b = atTime(atSeconds, wave("synth_drone", 3, "synthetic_collective"));
-  return { ...b, if: [{ flag: "relay_down", is: false }] };
+  return { ...b, if: [{ flag: "relay_cut", is: false }] };
 }

@@ -204,12 +204,12 @@ describe("maneuverLabel", () => {
     expect(maneuverLabel(null, 2)).toBe("STRAIGHT 2");
   });
 
-  it("spells out the K-turn", () => {
-    expect(maneuverLabel("kturn", 4)).toBe("K-TURN 4");
+  it("spells out the Snap turn", () => {
+    expect(maneuverLabel("kturn", 4)).toBe("SNAP 4");
   });
 
-  it("names Segnor's loops and drifts", () => {
-    expect(maneuverLabel("segnor_right", 2)).toBe("SEGNOR R 2");
+  it("names Hook loops and drifts", () => {
+    expect(maneuverLabel("segnor_right", 2)).toBe("HOOK R 2");
     expect(maneuverLabel("drift_left", 3)).toBe("DRIFT L 3");
   });
 });

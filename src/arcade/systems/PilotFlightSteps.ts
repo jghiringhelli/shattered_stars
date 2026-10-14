@@ -1,7 +1,7 @@
 /**
  * PilotFlightSteps — the per-frame building blocks of the pilot flight
  * controls: steering (drift/bank/hard turn, committed maneuvers latch),
- * specials (K-turn, Segnor, Tallon) and dashes (boost, barrel roll).
+ * specials (Snap turn, Hook, Knife) and dashes (boost, barrel roll).
  *
  * Pure: no Phaser. Orchestrated by PilotFlightControls.
  */
@@ -100,7 +100,7 @@ function refused(
 
 /**
  * Maneuvers the pilot committed to with a deliberate press (hard turn,
- * K-turn, Segnor, Tallon). They stay queued until their cycle flies them;
+ * Snap turn, Hook, Knife). They stay queued until their cycle flies them;
  * steering keys never overwrite them.
  */
 const COMMITTED_MANEUVER = /^(turn_|kturn|segnor_|tallon_)/;
@@ -138,7 +138,7 @@ export function applySteering(
 }
 
 /**
- * K-turn, Segnor and Tallon: queued specials. Refused when not on the
+ * Snap turn, Hook and Knife: queued specials. Refused when not on the
  * ship's dial, or when red and the pilot is stressed (X-Wing).
  * @param flown - Ship being flown.
  * @param flight - Motion/stress being built this frame (mutated).

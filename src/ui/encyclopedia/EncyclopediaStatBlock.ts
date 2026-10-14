@@ -7,7 +7,9 @@
 
 import Phaser from "phaser";
 import type { EncyclopediaEntry } from "../../data/ShipEncyclopedia";
+import type { TermId } from "../../data/tooltips";
 import { drawHoloGauge, type HoloRect } from "../menu/holoChrome";
+import { addTipZone } from "../menu/tooltipTargets";
 import { holoFont } from "../theme/holoFont";
 import { toCssColor } from "../theme/colorMath";
 import {
@@ -27,12 +29,19 @@ const STAT_META: ReadonlyArray<{
   readonly key: StatKey;
   readonly label: string;
   readonly color: number;
+  /** Tooltip term of the stat. */
+  readonly term: TermId;
 }> = [
-  { key: "speed", label: "SPEED", color: HOLO_PALETTE.accent },
-  { key: "maneuverability", label: "MANEUVER", color: HOLO_PALETTE.success },
-  { key: "attack", label: "ATTACK", color: HOLO_PALETTE.danger },
-  { key: "defense", label: "DEFENSE", color: SIDE_COLORS.ally },
-  { key: "payload", label: "PAYLOAD", color: HOLO_PALETTE.warning },
+  { key: "speed", label: "SPEED", color: HOLO_PALETTE.accent, term: "stat.speed" },
+  {
+    key: "maneuverability",
+    label: "MANEUVER",
+    color: HOLO_PALETTE.success,
+    term: "stat.maneuver",
+  },
+  { key: "attack", label: "ATTACK", color: HOLO_PALETTE.danger, term: "stat.attack" },
+  { key: "defense", label: "DEFENSE", color: SIDE_COLORS.ally, term: "stat.defense" },
+  { key: "payload", label: "PAYLOAD", color: HOLO_PALETTE.warning, term: "stat.payload" },
 ];
 
 /** Block geometry. */
@@ -148,6 +157,17 @@ export class EncyclopediaStatBlock {
   ): void {
     const caption = HOLO_TYPE_SCALE.caption;
     const y = this.rowCenterY(index);
+    addTipZone(
+      scene,
+      null,
+      {
+        x: this.area.x,
+        y: y - STAT_LAYOUT.rowHeight / 2,
+        width: STAT_LAYOUT.labelWidth,
+        height: STAT_LAYOUT.rowHeight,
+      },
+      STAT_META[index]!.term,
+    );
     scene.add
       .text(this.area.x, y, label, {
         ...holoFont(caption.size, caption.weight),

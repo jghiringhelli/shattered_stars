@@ -51,8 +51,8 @@ export const STRESS_LOW = 0.15;
 export const STRESSED_MAX_DEFLECTION = 0.64;
 
 /**
- * Instant stress applied to the pilot when executing a K-turn.
- * K-turns are always red; this ensures even a relaxed pilot feels the cost.
+ * Instant stress applied to the pilot when executing a Snap turn.
+ * Snap turns are always red; this ensures even a relaxed pilot feels the cost.
  */
 export const KTURN_STRESS_INSTANT = 0.5;
 
@@ -140,7 +140,7 @@ export function updateStress(
 }
 
 /**
- * Applies an instant stress spike of any size (K-turns, boosts, ion hits).
+ * Applies an instant stress spike of any size (Snap turns, boosts, ion hits).
  *
  * @param state - current stress state
  * @param amount - stress to add on the 0–1 scale
@@ -182,8 +182,8 @@ export function scaleStressGain(
 }
 
 /**
- * Applies the instant stress spike from a K-turn.
- * Called once when the player triggers the K-turn action.
+ * Applies the instant stress spike from a Snap turn.
+ * Called once when the player triggers the Snap turn action.
  *
  * @param state - current stress state
  * @returns new state with stress elevated by KTURN_STRESS_INSTANT

@@ -423,7 +423,7 @@ describe("ArcadeControls", () => {
     });
   });
 
-  describe("tallon roll commands", () => {
+  describe("knife roll commands", () => {
     it("queues tallon_left for next cycle when cooldown is ready", () => {
       const ship = createMockShip();
       const control = createControlState(ship);
@@ -469,13 +469,13 @@ describe("ArcadeControls", () => {
         turn.maneuverTarget?.y ?? 0,
         1,
       );
-      // Tallon = 180° from start, turn_left = 270° (−90° from 0°)
+      // Knife = 180° from start, turn_left = 270° (−90° from 0°)
       expect(tallon.maneuverTarget?.angle).toBeCloseTo(180, 1);
       expect(turn.maneuverTarget?.angle).toBeCloseTo(270, 1);
     });
   });
 
-  describe("segnor loop commands", () => {
+  describe("hook loop commands", () => {
     it("queues segnor_left for next cycle when cooldown is ready", () => {
       const ship = createMockShip();
       const control = createControlState(ship);
@@ -572,7 +572,7 @@ describe("ArcadeControls", () => {
 describe("special maneuver recharge (tempo experiment)", () => {
   const pose = { x: 0, y: 0, angle: 0 };
 
-  it("keeps K-turn / Segnor / Tallon at 5 s (the expert's tool: slower costs skill gate 1)", () => {
+  it("keeps Snap turn / Hook / Knife at 5 s (the expert's tool: slower costs skill gate 1)", () => {
     expect(createControlState(pose).kturnCooldownMax).toBe(5000);
   });
 

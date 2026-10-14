@@ -111,12 +111,12 @@ export const DEFAULT_GAMEPAD_BINDINGS: readonly GamepadBinding[] = [
   { axis: 0, axisDirection: "positive", intent: "STEER_RIGHT", deadzone: 0.2 },
   { axis: 1, axisDirection: "negative", intent: "THRUST_UP", deadzone: 0.2 },
   { axis: 1, axisDirection: "positive", intent: "THRUST_DOWN", deadzone: 0.2 },
-  // Triggers: Tallon rolls (camera zoom is wheel/auto in every scene; no
+  // Triggers: Knife rolls (camera zoom is wheel/auto in every scene; no
   // scene reads the ZOOM intents, so the triggers are free for flight)
   { button: 6, intent: "TALLON_LEFT" }, // LT
   { button: 7, intent: "TALLON_RIGHT" }, // RT
-  // Commander orders (capital ship, crew role commander) share the Tallon
-  // triggers and the Segnor d-pad: no capital ship can fly either.
+  // Commander orders (capital ship, crew role commander) share the Knife
+  // triggers and the Hook d-pad: no capital ship can fly either.
   { button: 6, intent: "COMMANDER_ORDER_1" }, // LT
   { button: 7, intent: "COMMANDER_ORDER_2" }, // RT
   { button: 14, intent: "COMMANDER_ORDER_3" }, // D-pad left
@@ -140,7 +140,7 @@ export const DEFAULT_GAMEPAD_BINDINGS: readonly GamepadBinding[] = [
   { button: 13, intent: "WEAPON_CYCLE" }, // D-pad down
   { button: 8, intent: "CREW_CYCLE" }, // Back / View
   // Right-stick flicks (edge-triggered, firm flick): ←/→ barrel roll,
-  // ↓ K-turn (turn about)
+  // ↓ Snap turn (turn about)
   {
     axis: 2,
     axisDirection: "negative",

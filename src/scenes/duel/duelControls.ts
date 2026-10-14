@@ -17,7 +17,7 @@ interface DuelControlTip {
 export const DUEL_CONTROL_TIPS: readonly DuelControlTip[] = [
   { label: "Steer", intents: ["STEER_LEFT", "STEER_RIGHT"] },
   { label: "Hard turn", intents: ["SHARP_TURN_LEFT", "SHARP_TURN_RIGHT"] },
-  { label: "K-turn", intents: ["KTURN"] },
+  { label: "Snap turn", intents: ["KTURN"] },
   { label: "Boost", intents: ["BOOST"] },
   { label: "Throttle", intents: ["THRUST_UP", "THRUST_DOWN"] },
   { label: "Weapon", intents: [] },

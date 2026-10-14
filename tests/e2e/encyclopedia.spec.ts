@@ -285,7 +285,7 @@ test.describe("EncyclopediaScene — codex sections", () => {
     expect(state.textPanelVisible).toBe(true);
   });
 
-  test("lists every upgrade card, including the Force powers", async ({
+  test("lists every upgrade card, including the psionic disciplines", async ({
     page,
   }) => {
     await setSection(page, "upgrades");

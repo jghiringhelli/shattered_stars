@@ -1,7 +1,7 @@
 /**
- * Upgrade catalog — Force powers (the `force_power` slot that Ascendant
+ * Upgrade catalog — psionic disciplines (the `force_power` slot that Ascendant
  * pilot cards add). Each power is a steady real-time effect: X-Wing's
- * "spend 1 Force" cards fire on their own on a recharge, read as a rate
+ * "spend 1 psi" cards fire on their own on a recharge, read as a rate
  * or a permanent edge (docs/specs/upgrades-and-slots.md §4). Two act on
  * allies inside the pilot's aura, two on the pilot.
  */
@@ -12,7 +12,7 @@ export const FORCE_POWER_UPGRADES: Readonly<Record<string, UpgradeDefinition>> =
   {
     battle_meditation: {
       id: "battle_meditation",
-      name: "Battle Meditation",
+      name: "War Chorus",
       slotType: "force_power",
       description:
         "Projects the faction aura; allies inside it shoot 5% more accurately.",

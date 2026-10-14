@@ -28,7 +28,7 @@ function source(
 }
 
 describe("isEvasiveFlightEvent", () => {
-  it("boost and barrel roll are evasive; turns and K-turns are not", () => {
+  it("boost and barrel roll are evasive; turns and Snap turns are not", () => {
     expect(isEvasiveFlightEvent("boost")).toBe(true);
     expect(isEvasiveFlightEvent("barrel_roll")).toBe(true);
     expect(isEvasiveFlightEvent("kturn")).toBe(false);

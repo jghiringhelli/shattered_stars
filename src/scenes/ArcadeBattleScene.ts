@@ -128,7 +128,7 @@ import {
   evaluateQuality,
   type PerformanceState,
 } from "../systems/PerformanceSystem";
-import { renderBattleStarfield } from "../rendering/Starfield";
+import { installBattleSpace } from "../rendering/spaceMap/installBattleSpace";
 import { stepMotion } from "../arcade/systems/ShipMotion";
 import {
   applyPilotFlightInput,
@@ -156,7 +156,6 @@ const FLIGHT_EDGES: readonly FlightEdge[] = [
 import { audioManager } from "../audio/AudioManager";
 import { hullFractionOf } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
-import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { type AuraShip, type ActiveAura } from "../systems/SupportAura";
 import { auraFactsOf } from "../systems/aura/AuraShipFacts";
@@ -711,7 +710,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
     // No setBounds — we manage the camera manually for seamless toroid wrapping.
     this.cameras.main.setBackgroundColor(0x050510);
     this.cameras.main.setZoom(1.0);
-    addPaintedSpaceBackground(this, "galaxy_spiral", 0);
 
     this.createStarfield();
     this.setupInput();
@@ -1061,7 +1059,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   private createStarfield(): void {
-    renderBattleStarfield(this, BATTLEFIELD_SIZE);
+    installBattleSpace(this);
   }
 
   private setupInput(): void {

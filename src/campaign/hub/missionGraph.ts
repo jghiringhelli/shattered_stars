@@ -6,7 +6,8 @@
  * step at a time first: 1 → 2 → {3, 4}); the finale needs every middle
  * slot. A slot is done when any mission in it is done, so a branch pair's
  * other option becomes "not taken". Missions may override with explicit
- * prerequisite slots. Pure.
+ * prerequisite slots. Acts closed by the Rule of N lock every mission in
+ * them. Pure.
  */
 
 import type {
@@ -27,6 +28,8 @@ export type HubMissionStatus =
 export interface HubProgress {
   readonly completedMissions: readonly string[];
   readonly storyFlags: Readonly<Record<string, boolean>>;
+  /** Acts the Rule of N keeps closed (see chronicle/actUnlocks). */
+  readonly lockedActs?: readonly number[];
 }
 
 /**
@@ -79,6 +82,7 @@ export function hubMissionStatus(
   if (progress.completedMissions.includes(mission.id)) return "completed";
   const done = doneSlots(campaign, progress.completedMissions);
   if (done.has(mission.missionNumber)) return "not_taken";
+  if (progress.lockedActs?.includes(mission.act)) return "locked";
   const required =
     mission.prerequisites ?? defaultPrerequisites(mission.missionNumber);
   return required.every((slot) => done.has(slot)) ? "available" : "locked";

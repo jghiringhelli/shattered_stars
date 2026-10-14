@@ -52,7 +52,7 @@ describe("CampaignSaveManager", () => {
     it("should create new save data with defaults", () => {
       const save = CampaignSaveManager.createNew("terran_hegemony");
 
-      expect(save.version).toBe(3);
+      expect(save.version).toBe(4);
       expect(save.factionId).toBe("terran_hegemony");
       expect(save.currentMission).toBe(1);
       expect(save.completedMissions).toEqual([]);
@@ -400,7 +400,7 @@ describe("CampaignSaveManager", () => {
       };
 
       const migrated = CampaignSaveManager.migrate(oldSave);
-      expect(migrated.version).toBe(3);
+      expect(migrated.version).toBe(4);
     });
 
     it("should preserve all other data during migration", () => {

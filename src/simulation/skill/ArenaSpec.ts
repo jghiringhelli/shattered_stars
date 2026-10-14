@@ -76,6 +76,6 @@ export interface BattleResult {
   readonly survivors: Readonly<Record<SideId, number>>;
   /** Real time of the first kill (ms), or null when nobody died. */
   readonly firstKillMs: number | null;
-  /** Special actions (K-turn, Segnor, Tallon, boost, barrel roll) flown, all ships. */
+  /** Special actions (Snap turn, Hook, Knife, boost, barrel roll) flown, all ships. */
   readonly specialsUsed: number;
 }

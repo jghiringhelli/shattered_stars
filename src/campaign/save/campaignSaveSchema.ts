@@ -2,7 +2,8 @@
  * campaignSaveSchema — validates and migrates a raw campaign save (any
  * version ≤ current) into the current schema without losing data: every
  * known field is type-checked and kept; missing or malformed fields fall back
- * to safe defaults (v2 → v3 derives hero power ranks from completed missions).
+ * to safe defaults (v2 → v3 derives hero power ranks from completed missions;
+ * v3 → v4 adds the slot).
  * Only input that is not an object at all is rejected. Pure.
  */
 
@@ -12,6 +13,7 @@ import {
   CAMPAIGN_SAVE_VERSION,
   type CampaignPilotState,
   type CampaignSaveData,
+  type CampaignSlot,
 } from "./campaignSaveTypes";
 
 /** Valid research picks. */
@@ -81,16 +83,19 @@ function pilotOf(value: unknown): CampaignPilotState | null {
 /**
  * @param raw - Raw save object.
  * @param factionId - Faction the save belongs to (its storage key).
+ * @param slot - Storage slot.
  * @returns The v1/v2 fields, validated.
  */
 function legacyFields(
   raw: Raw,
   factionId: FactionId,
+  slot: CampaignSlot,
 ): Omit<CampaignSaveData, keyof V3Fields> {
   const completedMissions = [...new Set(strings(raw["completedMissions"]))];
   return {
     version: CAMPAIGN_SAVE_VERSION,
     factionId,
+    slot,
     currentMission: Math.max(
       1,
       num(raw["currentMission"], completedMissions.length + 1),
@@ -160,15 +165,19 @@ function v3Fields(
  * Validates and migrates a raw save to the current schema.
  *
  * @param raw - Parsed JSON.
- * @param factionId - Faction whose key it was stored under.
+
+ * @param factionId - Faction whose key it was stored under (the lead hero for
+ *   a Coalition save: the stored faction wins when valid).
+ * @param slot - Storage slot (defaults to the faction).
  * @returns The save, or null if it is not an object.
  */
 export function migrateCampaignSave(
   raw: unknown,
   factionId: FactionId,
+  slot: CampaignSlot = factionId,
 ): CampaignSaveData | null {
   if (!isRecord(raw)) return null;
-  const legacy = legacyFields(raw, factionId);
+  const legacy = legacyFields(raw, factionId, slot);
   return {
     ...legacy,
     ...v3Fields(raw, factionId, legacy.completedMissions.length),

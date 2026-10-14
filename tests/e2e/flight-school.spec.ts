@@ -122,7 +122,7 @@ test.describe("Flight School", () => {
       await page.keyboard.up("Shift");
     });
     await pass(page, "mark", () => tap(page, "r"));
-    // Turn around (K-turn) toward the beacon behind, then fly to it.
+    // Turn around (Snap turn) toward the beacon behind, then fly to it.
     await pass(
       page,
       "radar",

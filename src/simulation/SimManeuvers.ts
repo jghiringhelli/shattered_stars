@@ -72,7 +72,7 @@ export function getManeuverTemplate(
       };
 
     case "kturn":
-      // Koiogran turn - move forward then flip 180
+      // Snap turn - move forward then flip 180
       return {
         deltaX: 0,
         deltaY: -distance,
@@ -80,7 +80,7 @@ export function getManeuverTemplate(
       };
 
     case "segnor_left":
-      // Segnor's Loop left - bank then flip
+      // Hook Loop left - bank then flip
       return {
         deltaX: -distance * 0.38,
         deltaY: -distance * 0.92,
@@ -88,7 +88,7 @@ export function getManeuverTemplate(
       };
 
     case "segnor_right":
-      // Segnor's Loop right
+      // Hook Loop right
       return {
         deltaX: distance * 0.38,
         deltaY: -distance * 0.92,
@@ -96,7 +96,7 @@ export function getManeuverTemplate(
       };
 
     case "tallon_left":
-      // Tallon Roll left - turn then flip
+      // Knife Roll left - turn then flip
       return {
         deltaX: -distance * 0.7,
         deltaY: -distance * 0.7,
@@ -104,7 +104,7 @@ export function getManeuverTemplate(
       };
 
     case "tallon_right":
-      // Tallon Roll right
+      // Knife Roll right
       return {
         deltaX: distance * 0.7,
         deltaY: -distance * 0.7,
@@ -159,7 +159,7 @@ export function applyManeuver(
 
 /**
  * Return the local-frame displacement at t (0..1) along the maneuver.
- * Curved maneuvers use a true circular arc; straight/k-turn use linear lerp.
+ * Curved maneuvers use a true circular arc; straight/snap turn use linear lerp.
  * Arc radius is derived from the template endpoint for exact path fidelity.
  */
 function arcInterpolateLocal(
@@ -222,8 +222,8 @@ function arcInterpolateLocal(
 
 /**
  * Generate waypoints for animating a maneuver.
- * Curved maneuvers (bank, turn, segnor, tallon) follow true circular arcs;
- * straight and k-turns follow linear paths.
+ * Curved maneuvers (bank, turn, hook, knife) follow true circular arcs;
+ * straight and snap turns follow linear paths.
  */
 export function generateManeuverPath(
   startX: number,

@@ -1,7 +1,7 @@
 /**
  * ManeuverPlanner — how an expert reads the dial: for every maneuver it
  * could queue at the coming boundary (drift/bank/turn/straight at each
- * reachable throttle notch, K-turn, Segnor, Tallon) it resolves where the
+ * reachable throttle notch, Snap turn, Hook, Knife) it resolves where the
  * template puts the ship, predicts where the target and every threat will
  * be, scores the result (target in my arc and range, me outside their arcs,
  * in the target's rear arc, good range, stress budget) and looks one more

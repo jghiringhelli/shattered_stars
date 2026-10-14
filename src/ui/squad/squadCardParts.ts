@@ -12,6 +12,8 @@ import { getShipLoadouts } from "../../data/ShipLoadouts";
 import { shipSpriteAssetById } from "../../assets/assetManifest";
 import { swapWhenLoaded } from "../../assets/textureLoading";
 import { createHoverButton, createToggleButton } from "../ButtonFactory";
+import { contentFromTerm } from "../menu/tooltipContent";
+import { attachToggleTooltip } from "../menu/tooltipTargets";
 import type { HoloPressButton } from "../menu/HoloPressButton";
 import type { HoloButtonVariant } from "../hud/holoButtonStyle";
 import { drawCornerTicks, drawHoloFrame } from "../menu/holoChrome";
@@ -95,7 +97,7 @@ export function createTeamChips(
   const { pad, chipW, chipH, chipGap, chipRowY } = CARD_LAYOUT;
   return TEAM_LABELS.map((label, i) => {
     const teamId = i + 1;
-    return createToggleButton(
+    const chip = createToggleButton(
       scene,
       pad + chipW / 2 + i * (chipW + chipGap),
       chipRowY + chipH / 2,
@@ -112,6 +114,11 @@ export function createTeamChips(
       },
       () => onPick(teamId),
     );
+    attachToggleTooltip(scene, chip, {
+      ...contentFromTerm("team.chip"),
+      title: `Team ${label} (T1–T4)`,
+    });
+    return chip;
   });
 }
 

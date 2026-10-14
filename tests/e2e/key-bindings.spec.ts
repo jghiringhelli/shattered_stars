@@ -161,56 +161,56 @@ const SPECIALS: readonly SpecialCombo[] = [
     press: (p) => pressKey(p, "z"),
     maneuver: "kturn",
     cardKey: "kturn",
-    label: "K-TURN",
+    label: "SNAP",
   },
   {
     name: "↓↓",
     press: (p) => doubleTap(p, "ArrowDown"),
     maneuver: "kturn",
     cardKey: "kturn",
-    label: "K-TURN",
+    label: "SNAP",
   },
   {
     name: "Shift+Q",
     press: (p) => pressKey(p, "Q", true),
     maneuver: "segnor_left",
     cardKey: "segnor_left",
-    label: "SEGNOR'S LOOP",
+    label: "HOOK LOOP",
   },
   {
     name: "Shift+E",
     press: (p) => pressKey(p, "E", true),
     maneuver: "segnor_right",
     cardKey: "segnor_right",
-    label: "SEGNOR'S LOOP",
+    label: "HOOK LOOP",
   },
   {
     name: "→ + ↓↓",
     press: (p) => holdAnd(p, "ArrowRight", () => doubleTap(p, "ArrowDown")),
     maneuver: "segnor_right",
     cardKey: "segnor_right",
-    label: "SEGNOR'S LOOP",
+    label: "HOOK LOOP",
   },
   {
     name: "T",
     press: (p) => pressKey(p, "t"),
     maneuver: "tallon_left",
     cardKey: "tallon_left",
-    label: "TALLON ROLL",
+    label: "KNIFE ROLL",
   },
   {
     name: "Shift+T",
     press: (p) => pressKey(p, "T", true),
     maneuver: "tallon_right",
     cardKey: "tallon_right",
-    label: "TALLON ROLL",
+    label: "KNIFE ROLL",
   },
   {
     name: "← + ↑↑",
     press: (p) => holdAnd(p, "ArrowLeft", () => doubleTap(p, "ArrowUp")),
     maneuver: "tallon_left",
     cardKey: "tallon_left",
-    label: "TALLON ROLL",
+    label: "KNIFE ROLL",
   },
 ];
 
@@ -353,7 +353,7 @@ for (const entry of PILOTED_BATTLES) {
       await expectDash(page, "barrel_roll", true);
     });
 
-    test("a huge ship flies no K-turn, Segnor, Tallon, boost or barrel roll", async ({
+    test("a huge ship flies no Snap turn, Hook, Knife, boost or barrel roll", async ({
       page,
     }) => {
       test.setTimeout(120_000);

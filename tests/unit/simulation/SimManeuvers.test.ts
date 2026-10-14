@@ -297,7 +297,7 @@ describe("ManeuverTemplates", () => {
       expect(visual.arcAngle).toBe(90);
     });
 
-    it("should return arc type for tallon maneuvers", () => {
+    it("should return arc type for knife maneuvers", () => {
       const visual = getTemplateVisual("tallon_left", 2, "white");
 
       expect(visual.type).toBe("arc");

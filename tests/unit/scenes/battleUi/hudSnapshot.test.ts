@@ -52,7 +52,7 @@ function owned(id: string, owner: "player" | "ai", hull = 4): OwnedShipSource {
 describe("maneuverLabel", () => {
   it("abbreviates the direction and appends the speed", () => {
     expect(maneuverLabel("bank_right", 3)).toBe("BANK R 3");
-    expect(maneuverLabel("kturn", 4)).toBe("K-TURN 4");
+    expect(maneuverLabel("kturn", 4)).toBe("SNAP 4");
   });
 
   it("is null without a maneuver", () => {

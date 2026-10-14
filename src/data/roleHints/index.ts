@@ -24,3 +24,16 @@ export {
   type Playstyle,
   type PlaystyleInfo,
 } from "./playstyles";
+export {
+  explainBaseShip,
+  explainQuickBuild,
+  type BuildExplanation,
+  type CostLine,
+} from "./buildExplanation";
+export { hullTraits, type HullTraits } from "./hullTraits";
+export {
+  ROLE_BLURBS,
+  ROLE_CHIP_LABELS,
+  ROLE_SECTION_ORDER,
+  sortRolesForSections,
+} from "./roleSections";

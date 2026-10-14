@@ -42,7 +42,7 @@ export const TALENT_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
     id: "daredevil",
     name: "Daredevil",
     slotType: "talent",
-    description: "K-turn, Segnor loop and Tallon roll recharge 40% faster.",
+    description: "Snap turn, Hook loop and Knife roll recharge 40% faster.",
     pointCost: 2,
     creditCost: 200,
     requiredShipSize: ["tiny", "small"],
@@ -70,7 +70,7 @@ export const TALENT_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
   },
   force_sensitive: {
     id: "force_sensitive",
-    name: "Force Sensitive",
+    name: "Psi-Sensitive",
     slotType: "talent",
     description: "Takes 15% less damage from every hit.",
     pointCost: 2,

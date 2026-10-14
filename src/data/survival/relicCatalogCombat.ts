@@ -6,7 +6,7 @@
 
 import type { Relic } from "./relics";
 
-/** Ace archetype — rewards red maneuvers, barrel rolls, boosts, K-turns, stress. */
+/** Ace archetype — rewards red maneuvers, barrel rolls, boosts, Snap turns, stress. */
 export const ACE_RELICS: readonly Relic[] = [
   {
     id: "adrenal_injector",
@@ -78,14 +78,14 @@ export const ACE_RELICS: readonly Relic[] = [
   },
   {
     id: "koiogran_gyro",
-    name: "Koiogran Gyro",
+    name: "Snap Gyro",
     icon: "↩",
     rarity: "uncommon",
     archetype: "ace",
     tags: ["k-turn", "red-maneuver"],
     pool: "ace_pack",
     description:
-      "K-turns recharge 35% faster; after a K-turn, +2 damage for 2s",
+      "Snap turns recharge 35% faster; after a Snap turn, +2 damage for 2s",
     effects: [
       {
         kind: "static",

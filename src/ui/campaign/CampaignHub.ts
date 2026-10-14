@@ -17,23 +17,30 @@ import { createArmoryPanel } from "./ArmoryPanel";
 import { createMissionMapPanel } from "./CampaignMissionMap";
 import { createHeroCard, HERO_CARD_LAYOUT } from "./HeroCard";
 import { createResearchPanel } from "./ResearchPanel";
+import { createActChips } from "./ActChips";
+import { createChroniclePanel } from "./ChroniclePanel";
+import { shownAct } from "./CampaignMissionMap";
+import type { HubView as ActHubView } from "../../campaign/hub/hubProgress";
+import type { ChronicleData } from "../../campaign/chronicle/chronicleTypes";
+import { summarizeChronicle } from "../../campaign/chronicle/chronicleTimeline";
 
 /** Hub tabs. */
-export type HubTab = "missions" | "armory" | "research";
+export type HubTab = "missions" | "armory" | "research" | "chronicle";
 
 /** Tab strip and action buttons (screen px). */
 const TABS: readonly { readonly tab: HubTab; readonly label: string }[] = [
   { tab: "missions", label: "MISSIONS" },
   { tab: "armory", label: "ARMORY" },
   { tab: "research", label: "RESEARCH" },
+  { tab: "chronicle", label: "CHRONICLE" },
 ];
 const TAB_BUTTON = {
-  width: 112,
+  width: 100,
   height: 32,
-  gap: 8,
+  gap: 6,
   right: 1248,
   y: 50,
-  font: "600 13px",
+  font: "600 12px",
 } as const;
 const ACTION_BUTTON = {
   width: 200,
@@ -52,6 +59,14 @@ export interface HubConfig {
   readonly tab: HubTab;
   /** Research option awaiting confirmation ("tierId:A"). */
   readonly pendingResearch: string | null;
+  /** Rule of N status of the playthrough\u0027s acts. */
+  readonly view: ActHubView;
+  /** The global Chronicle. */
+  readonly chronicle: ChronicleData;
+  /** Act the mission board shows (default: the earliest unfinished). */
+  readonly act?: number;
+  readonly onSelectAct: (act: number) => void;
+  readonly onToggleFreeOrder: () => void;
   readonly onSelectTab: (tab: HubTab) => void;
   readonly onSelectMission: (mission: CampaignMission) => void;
   readonly onToggleMod: (mod: ArmoryMod) => void;
@@ -110,6 +125,16 @@ export function createCampaignHub(
       ),
     );
   }
+  if (config.tab === "chronicle")
+    extras.push(
+      actionButton(
+        scene,
+        CONTENT_CENTRE_X,
+        `FREE ORDER: ${config.chronicle.freeOrder ? "ON" : "OFF"}`,
+        config,
+        config.onToggleFreeOrder,
+      ),
+    );
   if (config.tab === "armory")
     extras.push(
       actionButton(
@@ -182,11 +207,31 @@ function createTabContent(scene: Phaser.Scene, config: HubConfig): HubView {
     });
     return { objects: [view.panel], focusTargets: view.cards };
   }
+  if (config.tab === "chronicle") {
+    const panel = createChroniclePanel(
+      scene,
+      summarizeChronicle(config.chronicle),
+      config.accent,
+    );
+    return { objects: [panel], focusTargets: [] };
+  }
+  const act = config.act ?? shownAct(config.campaign, config.view);
   const map = createMissionMapPanel(scene, {
     campaign: config.campaign,
     save: config.save,
+    view: config.view,
+    act,
     accent: config.accent,
     onSelectMission: config.onSelectMission,
   });
-  return { objects: [map.panel], focusTargets: [...map.focusTargets] };
+  const chips = createActChips(scene, {
+    statuses: config.view.statuses,
+    viewedAct: act,
+    accent: config.accent,
+    onSelectAct: config.onSelectAct,
+  });
+  return {
+    objects: [map.panel, ...chips],
+    focusTargets: [...map.focusTargets],
+  };
 }

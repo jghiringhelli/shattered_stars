@@ -12,6 +12,8 @@ import {
   type ReinforcementPrefs,
 } from "../../arcade/reinforcements";
 import { createHoverButton } from "../ButtonFactory";
+import { attachHintTooltip, attachTermTooltip } from "../menu/HintTooltip";
+import { contentFromTerm } from "../menu/tooltipContent";
 import type { HoloPressButton } from "../menu/HoloPressButton";
 import { MENU_LAYOUT } from "../menu/MenuScaffold";
 import { createHoloText } from "../hud/holoPrimitives";
@@ -97,6 +99,14 @@ export class BattleTypeControls {
       CONTROLS.reserveWidth,
       () => this.host.openEditor(),
     );
+    attachHintTooltip(scene, this.battleButton, () =>
+      contentFromTerm(
+        this.host.prefs().battle === "classic"
+          ? "battle.classic"
+          : "battle.reinforcements",
+      ),
+    );
+    attachTermTooltip(scene, this.reserveButton, "battle.reserve");
     this.caption = createHoloText(
       scene,
       left,
@@ -105,6 +115,12 @@ export class BattleTypeControls {
       "caption",
       HOLO_PALETTE.textSecondary,
     ).setOrigin(0, 0.5);
+    this.caption.setInteractive();
+    attachHintTooltip(scene, this.caption, () =>
+      contentFromTerm(
+        this.host.prefs().battle === "classic" ? "battle.classic" : "battle.pool",
+      ),
+    );
     this.refresh();
   }
 

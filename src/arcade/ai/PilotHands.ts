@@ -1,7 +1,7 @@
 /**
  * PilotHands — a bot's hands on the keyboard. Turns a {@link PilotIntent}
  * into the exact key frames a human produces (arrow taps and holds, Q/E,
- * K-turn/Segnor/Tallon keys, boost key, ↑/↓ throttle taps, the left+right
+ * Snap turn/Hook/Knife keys, boost key, ↑/↓ throttle taps, the left+right
  * barrel-roll chord) and feeds them through the shared PilotFlightControls.
  *
  * The bot gets no shortcut a human lacks: a bank needs the arrow held long

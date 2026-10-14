@@ -1,6 +1,6 @@
 /**
  * PilotFeedback — short holo labels flashed above the player's ship when
- * the game refuses something (FIRE_SECONDARY without a lock, a Tallon
+ * the game refuses something (FIRE_SECONDARY without a lock, a Knife
  * Roll while stressed, a boost the ship has no action for…), so a refused
  * key never feels like a dropped input. The latest label is kept for e2e.
  */

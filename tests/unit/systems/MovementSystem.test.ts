@@ -205,7 +205,7 @@ describe("MovementSystem", () => {
       });
     });
 
-    describe("k-turn maneuvers", () => {
+    describe("snap turn maneuvers", () => {
       it("should flip 180 degrees", () => {
         const maneuver: ManeuverDefinition = {
           direction: "kturn",
@@ -274,7 +274,7 @@ describe("MovementSystem", () => {
       expect(lastPoint?.y).toBeCloseTo(result.targetY);
     });
 
-    it("should keep translating while a k-turn rotates, never freezing in place", () => {
+    it("should keep translating while a snap turn rotates, never freezing in place", () => {
       const maneuver: ManeuverDefinition = {
         direction: "kturn",
         speed: 2,

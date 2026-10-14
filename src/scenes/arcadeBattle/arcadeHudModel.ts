@@ -46,11 +46,11 @@ const MANEUVER_LABELS: Readonly<Record<ManeuverDirection, string>> = {
   bank_right: "BANK R",
   turn_left: "TURN L",
   turn_right: "TURN R",
-  kturn: "K-TURN",
-  segnor_left: "SEGNOR L",
-  segnor_right: "SEGNOR R",
-  tallon_left: "TALLON L",
-  tallon_right: "TALLON R",
+  kturn: "SNAP",
+  segnor_left: "HOOK L",
+  segnor_right: "HOOK R",
+  tallon_left: "KNIFE L",
+  tallon_right: "KNIFE R",
 };
 
 /**

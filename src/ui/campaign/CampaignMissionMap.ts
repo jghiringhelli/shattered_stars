@@ -17,17 +17,18 @@ import {
   availableMissions,
   hubMissionStatus,
   slotCount,
-  ACT_LENGTH,
 } from "../../campaign/hub/missionGraph";
+import type { HubView } from "../../campaign/hub/hubProgress";
 import type { SelectableCard } from "./SelectableCard";
 
 /** Act headings, indexed by act number. */
 const ACT_NAMES = [
   "",
-  "Act I: The Convergence",
-  "Act II: Rising Tensions",
-  "Act III: Galactic War",
-  "Act IV: Ascendancy",
+  "Act I: The Fracture",
+  "Act II: Escalation",
+  "Act III: Revelation",
+  "Act IV: The Coalition",
+  "Act V: Shattered Stars",
 ];
 
 /** Mission panel layout (screen coordinates for x/top/width). */
@@ -51,6 +52,10 @@ export const MISSION_MAP_LAYOUT = {
 export interface MissionMapConfig {
   readonly campaign: FactionCampaign;
   readonly save: CampaignSaveData;
+  /** Act statuses and locks (Rule of N) of the playthrough. */
+  readonly view: HubView;
+  /** Act the board shows (default: see {@link shownAct}). */
+  readonly act?: number;
   /** Faction accent colour. */
   readonly accent: number;
   readonly onSelectMission: (mission: CampaignMission) => void;
@@ -83,8 +88,8 @@ export function createMissionMapPanel(
 ): MissionMapPanel {
   const L = MISSION_MAP_LAYOUT;
   const { campaign, save } = config;
-  const groups = currentActGroups(campaign, hubActStart(campaign, save));
-  const act = groups[0]?.[0]?.act ?? 1;
+  const act = config.act ?? shownAct(campaign, config.view);
+  const groups = currentActGroups(campaign, firstSlotOfAct(campaign, act));
   const rowsHeight =
     groups.reduce((sum, g) => sum + groupHeight(g), 0) +
     Math.max(0, groups.length - 1) * L.rowGap;
@@ -110,23 +115,30 @@ export function createMissionMapPanel(
 }
 
 /**
- * First mission slot of the act the hub shows: the earliest act with a
- * mission available now (the last act once the campaign is complete).
+ * The act the board shows by default: the earliest act with a mission
+ * available now; else the first act not yet complete (a locked act shows
+ * its reason); the last act once the campaign is complete.
  *
- * @param campaign - Faction campaign.
- * @param save - Campaign save.
- * @returns A mission number inside that act.
+ * @param campaign - Campaign.
+ * @param view - The playthrough\u0027s hub view.
+ * @returns An act number.
  */
-function hubActStart(
-  campaign: FactionCampaign,
-  save: CampaignSaveData,
-): number {
-  const open = availableMissions(campaign, save);
-  const act =
-    open.length > 0
-      ? Math.min(...open.map((m) => m.act))
-      : Math.max(...campaign.missions.map((m) => m.act));
-  return (act - 1) * ACT_LENGTH + 1;
+export function shownAct(campaign: FactionCampaign, view: HubView): number {
+  const open = availableMissions(campaign, view);
+  if (open.length > 0) return Math.min(...open.map((m) => m.act));
+  const pending = view.statuses.find((s) => s.state !== "complete");
+  return pending?.act ?? Math.max(...campaign.missions.map((m) => m.act));
+}
+
+/**
+ * @param campaign - Campaign.
+ * @param act - An act.
+ * @returns The first mission number of the act.
+ */
+function firstSlotOfAct(campaign: FactionCampaign, act: number): number {
+  return Math.min(
+    ...campaign.missions.filter((m) => m.act === act).map((m) => m.missionNumber),
+  );
 }
 
 function addProgress(
@@ -210,13 +222,12 @@ function buildRow(
   mission: CampaignMission,
   place: { x: number; y: number; width: number; branch: boolean },
 ): SelectableCard {
-  const { save } = config;
   return createMissionRow(
     scene,
     {
       ...place,
       mission,
-      status: hubMissionStatus(mission, config.campaign, save),
+      status: hubMissionStatus(mission, config.campaign, config.view),
       accent: config.accent,
     },
     () => config.onSelectMission(mission),

@@ -6,12 +6,13 @@
 
 import type Phaser from "phaser";
 import type { ShipDefinition } from "../../core/types";
-import { quickBuildHint } from "../../data/roleHints";
 import {
   getEquippableLoadouts,
   type ShipLoadout,
 } from "../../data/ShipLoadouts";
-import { attachHintTooltip } from "../menu/HintTooltip";
+import { attachHintTooltip, attachTermTooltip } from "../menu/HintTooltip";
+import { addTipZone } from "../menu/tooltipTargets";
+import { buildToggleTooltip } from "./buildTooltips";
 import { HOLO_PALETTE, HOLO_SPACING } from "../theme/HoloTheme";
 import { createLoadoutToggle, createPageArrow } from "./LoadoutToggle";
 import { addPickerText } from "./pickerStyle";
@@ -92,15 +93,16 @@ export function drawLoadoutRow(
   container: Phaser.GameObjects.Container,
   args: LoadoutRowArgs,
 ): number {
-  container.add(
-    addPickerText(
-      scene,
-      { x: args.x, y: args.y },
-      "PAYLOAD",
-      "caption",
-      HOLO_PALETTE.textSecondary,
-    ),
+  const caption = addPickerText(
+    scene,
+    { x: args.x, y: args.y },
+    "PAYLOAD",
+    "caption",
+    HOLO_PALETTE.textSecondary,
   );
+  container.add(caption);
+  const captionBox = { x: args.x, y: args.y, width: caption.width, height: caption.height };
+  addTipZone(scene, container, captionBox, "ui.build");
   const btnY = args.y + LOADOUT.captionH;
   const { options, page, pages } = loadoutPage(args.def, args.page);
   const slots = 1 + LOADOUT.perPage;
@@ -124,7 +126,8 @@ export function drawLoadoutRow(
       args.onSelect(option.id),
     );
     if (option.loadout)
-      attachHintTooltip(scene, toggle, quickBuildHint(option.loadout));
+      attachHintTooltip(scene, toggle, buildToggleTooltip(option.loadout));
+    else attachTermTooltip(scene, toggle, "ui.build_base");
     container.add(toggle);
   });
   if (pages > 1) {
@@ -134,9 +137,11 @@ export function drawLoadoutRow(
       width: LOADOUT.arrowW,
       height: LOADOUT.height,
     };
-    container.add(
-      createPageArrow(scene, arrowRect, () => args.onPage((page + 1) % pages)),
+    const arrow = createPageArrow(scene, arrowRect, () =>
+      args.onPage((page + 1) % pages),
     );
+    attachTermTooltip(scene, arrow, "ui.build_pager");
+    container.add(arrow);
   }
   return btnY + LOADOUT.height;
 }

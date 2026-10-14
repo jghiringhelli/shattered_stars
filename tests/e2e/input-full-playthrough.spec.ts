@@ -208,7 +208,7 @@ test.describe("ArcadeBattleScene — keyboard playthrough", () => {
     await waitForPlayerManeuver(page, "turn_left");
   });
 
-  test("Shift+Q queues a segnor loop (distinct from plain Q) on a ship whose dial has it", async ({
+  test("Shift+Q queues a hook loop (distinct from plain Q) on a ship whose dial has it", async ({
     page,
   }) => {
     suppressWebGLNoise(page);
@@ -221,7 +221,7 @@ test.describe("ArcadeBattleScene — keyboard playthrough", () => {
     await waitForPlayerManeuver(page, "segnor_left");
   });
 
-  test("Shift+Q is refused, with HUD feedback, on a ship without Segnor", async ({
+  test("Shift+Q is refused, with HUD feedback, on a ship without Hook", async ({
     page,
   }) => {
     suppressWebGLNoise(page);
@@ -229,10 +229,10 @@ test.describe("ArcadeBattleScene — keyboard playthrough", () => {
     await holdGameKey(page, "Q", 100, { shift: true });
     await expect
       .poll(() => feedbackLabel(page))
-      .toBe("SEGNOR'S LOOP NOT ON DIAL");
+      .toBe("HOOK LOOP NOT ON DIAL");
   });
 
-  test("T queues a tallon roll", async ({ page }) => {
+  test("T queues a knife roll", async ({ page }) => {
     suppressWebGLNoise(page);
     await openArcade(page, CONFED_KESTREL);
     await holdGameKey(page, "T", 100);
@@ -372,7 +372,7 @@ test.describe("ArcadeBattleScene — touch controls", () => {
       await page.mouse.up();
       await page.waitForTimeout(60);
     }
-    // Queued K-turns commit on the next cycle boundary — accept queued or flying.
+    // Queued Snap turns commit on the next cycle boundary — accept queued or flying.
     await waitForPlayerManeuver(page, "kturn");
     expect((await getPlayerShip(page)).control.kturnCooldown).toBeGreaterThan(
       0,

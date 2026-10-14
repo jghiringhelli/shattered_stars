@@ -97,7 +97,7 @@ export const MODIFICATION_UPGRADES: Readonly<
     id: "ace_pilot_title",
     name: "Ace Pilot",
     slotType: "title",
-    description: "K-turns and barrel rolls recharge 20% faster.",
+    description: "Snap turns and barrel rolls recharge 20% faster.",
     pointCost: 2,
     creditCost: 200,
     isUnique: true,

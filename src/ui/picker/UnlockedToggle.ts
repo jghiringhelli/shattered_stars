@@ -3,6 +3,7 @@
  * small holo box (accent check when on) plus a label, one hit zone.
  */
 
+import { attachTermTooltip } from "../menu/HintTooltip";
 import type Phaser from "phaser";
 import { drawHoloFrame } from "../menu/holoChrome";
 import { HOLO_BORDER, HOLO_PALETTE, HOLO_RADIUS } from "../theme/HoloTheme";
@@ -98,5 +99,6 @@ export function createUnlockedToggle(
     paint(true);
     onChange(checked);
   });
+  attachTermTooltip(scene, hit, "ui.unlocked_only");
   return [box, label, hit];
 }

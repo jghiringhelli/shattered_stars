@@ -70,32 +70,33 @@ display text, not the keys, so saves, tests and balance data keep working.
 
 ### High priority — Star Wars-specific, player-facing
 
-| Term in game | All | Display | Where it shows | In-universe replacement |
-|---|---|---|---|---|
-| **Force** (Force powers / talents / "Force-touched") | 83 / 19 | 36 / 6 | `PilotAbilities.ts` (Force Heal/Guidance/Push/Barrier/Shield/Fury/Suppression), `talents.ts` (Force Sensitive), `factionIdentity.ts`, `factionCodex.ts`, `ShipLoadouts.ts` | **Psionic / psi.** Force Sensitive → **Psi-Sensitive**; Force Heal → **Mend**; Force Guidance → **Guiding Sight**; Force Push → **Kinetic Shove**; Force Barrier → **Psi Barrier**; Force Shield → **Aegis Weave**; Force Fury → **Wrath Surge**; Force Suppression → **Mind Static**; "Force powers" → **psionic disciplines**; "Force-touched pilots" → **psions** |
-| `force_*` ids | 74 / 12 | 0 | ids only | keep ids; slot `force_power` displays as **Psionic** (codex title-cases slot ids, so add a display map) |
-| Battle Meditation (`forcePowers.ts`) | — | 1 / 1 | upgrade name | **War Chorus** |
-| Supernatural Reflexes | 7 / 5 | 1 / 1 | `PilotAbilities.ts` | **Precog Reflexes** |
-| **Astromech** | 49 / 16 | 7 / 3 (+ slot label, title-cased from id `astromech` in codex and squad builder) | `systems.ts` (Repair/Patch/Targeting/Flight Astromech), `factionIdentity.ts`, `factionCodex.ts` | **Rigger**: Repair Rigger, Patch Rigger, Targeting Rigger, Flight Rigger; "astromech-crewed" → "rigger-crewed" |
-| droid | 7 / 7 | 1 / 1 | `ShipLoadouts.ts` ("whose droid welds the hull") | **rigger** |
-| **Segnor's Loop** | 151 / 51 | 34 / 18 | HUD (`FlagshipHudSnapshot`), key bindings, Flight School, upgrade text ("K-turn, Segnor loop and Tallon roll…") | **Hook Loop** (HUD `HOOK`) |
-| **Tallon Roll** | 139 / 52 | 34 / 18 | same | **Knife Roll** (HUD `KNIFE`) |
-| **K-turn / Koiogran** | 238 / 71 | 20 / 19 | HUD `K-TURN`, relics, upgrades, Flight School; relic **Koiogran Gyro** | **Snap Turn** (HUD `SNAP`); Koiogran Gyro → **Snap Gyro** |
-| hyperspace | 2 / 2 | 1 / 1 | `hegemonyAct23.ts` "hyperspace gate" | **jump gate** |
-| Imperator (Battlecruiser) | 7 / 4 | 4 / 3 | `ShipDefinitions`, `ShipEncyclopedia`, `ShipLoadouts`, `SquadBuilder` | **Aquila Battlecruiser** (id `terran_imperator` stays) |
-| Executor (Destroyer) | 5 / 3 | 4 / 3 | same files | **Lictor Destroyer** (id `terran_executor` stays) |
-| Grand Inquisitor (pilot) | 4 / 2 | 1 / 1 | pilot card | **First Censor** |
-| Proton Torpedoes / Proton Bombs | 48 / 6 | 2 / 1 | `weapons.ts` | **Fusion Torpedoes / Fusion Bombs** |
-| Concussion Missiles | 21 / 8 | 1 / 1 | `weapons.ts` | **Burst Missiles** |
-| Seismic Charges | 16 / 5 | 1 / 1 | `weapons.ts` | **Quake Charges** |
-| Blaster (Turret) | 4 / 2 | 3 / 2 | `TurretSystem.ts`, Survival event | **Pulse Turret**, "pulse gun" |
-| Rebel ("The Rebel's Path", "Rebel Commander Blake", "rebel patrol") | 18 / 10 | 11 / 8 | `CampaignData.ts`, rosters, mission text | Campaign → **"Libre"**; card → **Cell Commander Blake**; text → **cell / insurgent** (Hegemony propaganda may say "insurgents") |
+| Term in game | All | Display | Where it shows | In-universe replacement | DONE |
+|---|---|---|---|---|---|
+| **Force** (Force powers / talents / "Force-touched") | 83 / 19 | 36 / 6 | `PilotAbilities.ts` (Force Heal/Guidance/Push/Barrier/Shield/Fury/Suppression), `talents.ts` (Force Sensitive), `factionIdentity.ts`, `factionCodex.ts`, `ShipLoadouts.ts` | **Psionic / psi.** Force Sensitive → **Psi-Sensitive**; Force Heal → **Mend**; Force Guidance → **Guiding Sight**; Force Push → **Kinetic Shove**; Force Barrier → **Psi Barrier**; Force Shield → **Aegis Weave**; Force Fury → **Wrath Surge**; Force Suppression → **Mind Static**; "Force powers" → **psionic disciplines**; "Force-touched pilots" → **psions** | DONE 2026-10-13: names, descriptions, "Force charge" → "psi charge" |
+| `force_*` ids | 74 / 12 | 0 | ids only | keep ids; slot `force_power` displays as **Psionic** (codex title-cases slot ids, so add a display map) | DONE: ids kept; slot shows Psionic (`slotDisplayName`, chip "PSI") |
+| Battle Meditation (`forcePowers.ts`) | — | 1 / 1 | upgrade name | **War Chorus** | DONE |
+| Supernatural Reflexes | 7 / 5 | 1 / 1 | `PilotAbilities.ts` | **Precog Reflexes** | DONE |
+| **Astromech** | 49 / 16 | 7 / 3 (+ slot label, title-cased from id `astromech` in codex and squad builder) | `systems.ts` (Repair/Patch/Targeting/Flight Astromech), `factionIdentity.ts`, `factionCodex.ts` | **Rigger**: Repair Rigger, Patch Rigger, Targeting Rigger, Flight Rigger; "astromech-crewed" → "rigger-crewed" | DONE: slot shows Rigger (`slotDisplayName`, chip "RIG") |
+| droid | 7 / 7 | 1 / 1 | `ShipLoadouts.ts` ("whose droid welds the hull") | **rigger** | DONE |
+| **Segnor's Loop** | 151 / 51 | 34 / 18 | HUD (`FlagshipHudSnapshot`), key bindings, Flight School, upgrade text ("K-turn, Segnor loop and Tallon roll…") | **Hook Loop** (HUD `HOOK`) | DONE: HUD HOOK, maneuver readouts via `core/maneuverLabels.ts` |
+| **Tallon Roll** | 139 / 52 | 34 / 18 | same | **Knife Roll** (HUD `KNIFE`) | DONE: HUD KNIFE |
+| **K-turn / Koiogran** | 238 / 71 | 20 / 19 | HUD `K-TURN`, relics, upgrades, Flight School; relic **Koiogran Gyro** | **Snap Turn** (HUD `SNAP`); Koiogran Gyro → **Snap Gyro** | DONE: HUD SNAP; relic Snap Gyro |
+| hyperspace | 2 / 2 | 1 / 1 | `hegemonyAct23.ts` "hyperspace gate" | **jump gate** | DONE |
+| Imperator (Battlecruiser) | 7 / 4 | 4 / 3 | `ShipDefinitions`, `ShipEncyclopedia`, `ShipLoadouts`, `SquadBuilder` | **Aquila Battlecruiser** (id `terran_imperator` stays) | DONE |
+| Executor (Destroyer) | 5 / 3 | 4 / 3 | same files | **Lictor Destroyer** (id `terran_executor` stays) | DONE |
+| Grand Inquisitor (pilot) | 4 / 2 | 1 / 1 | pilot card | **First Censor** | DONE (other "Inquisitor" hulls/loadouts keep the generic word) |
+| Proton Torpedoes / Proton Bombs | 48 / 6 | 2 / 1 | `weapons.ts` | **Fusion Torpedoes / Fusion Bombs** | DONE |
+| Concussion Missiles | 21 / 8 | 1 / 1 | `weapons.ts` | **Burst Missiles** | DONE |
+| Seismic Charges | 16 / 5 | 1 / 1 | `weapons.ts` | **Quake Charges** | DONE |
+| Blaster (Turret) | 4 / 2 | 3 / 2 | `TurretSystem.ts`, Survival event | **Pulse Turret**, "pulse gun" | DONE (Survival event: "pulse gun") |
+| Rebel ("The Rebel's Path", "Rebel Commander Blake", "rebel patrol") | 18 / 10 | 11 / 8 | `CampaignData.ts`, rosters, mission text | Campaign → **"Libre"**; card → **Cell Commander Blake**; text → **cell / insurgent** (Hegemony propaganda may say "insurgents") | DONE: campaign "Libre", Cell Commander Blake, insurgent / cell text |
 
-**Test impact:** e2e and unit tests assert some display labels: `K-TURN|K-turn`
+**Test impact (applied 2026-10-13; gate: `tests/unit/lore/distancing.test.ts`):** e2e and unit tests assert some display labels: `K-TURN|K-turn`
 53 lines in 29 test files, `SEGNOR|Segnor` 37/15, `TALLON|Tallon` 27/11,
 `Force` 12/8. Rename labels together with their assertions.
 
 ### Medium — X-Wing card-name echoes (generic words; optional)
+**Status:** not applied. The glossary only suggests them "where it's cheap" and they are generic English words.
 Expert Handling, Squadron Leader, Predator, Marksman, Daredevil, Elusive,
 Outmaneuver, Fearless, Heavy Laser Cannon, Quad Laser Cannon, Twin Laser
 Turret, Jamming Beam, Collision Detector, Fire-Control System, Advanced

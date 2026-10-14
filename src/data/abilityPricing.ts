@@ -7,7 +7,7 @@
  * effect and one without, 600 battles per effect on fixed seeds, both
  * seatings. Win odds convert to points at 0.285 logit per point — the slope
  * the two anchors share (+1 shield token = 4, +1 laser damage = 5).
- * Bots barely use boost / barrel roll / K-turn recharges (they measure ~0),
+ * Bots barely use boost / barrel roll / Snap turn recharges (they measure ~0),
  * so those are priced low for human play. Conditional bonuses are worth less
  * than unconditional ones, by how often they hold. Repair is real-time HP/s.
  *

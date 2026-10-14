@@ -525,7 +525,7 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 - **objectives/** - Pure objective models (escort, defend, capture/hold, assassinate, route/race,
   sabotage, salvage, survive, stealth) shared by Campaign and Scenarios
 - **ArcadeStress.ts** - Pilot stress driven by ship dial difficulty (green/white/red rates,
-  K-turn + boost instant spikes, hysteresis thresholds, HUD color helpers)
+  Snap turn + boost instant spikes, hysteresis thresholds, HUD color helpers)
 - **weapons/** - THE secondary-weapons model of every battle mode: `weaponSpecs` (cards → rules:
   lock, front arc, X-Wing range bands, ×10 ordnance), `Arsenal` (slots, turret, cloak), `TargetLock`,
   `OrdnanceFlight` (homing, torus), `Devices` (bombs/mines: drop astern, fuse/arm/trigger, friendly
@@ -577,6 +577,10 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
   src/ui/theme/signalPalettes.ts (colorblind), src/systems/settingsSchema.ts; local telemetry src/telemetry/
   (spec: docs/specs/player-preferences.md). Plan: docs/PROFESSIONALIZATION_PLAN.md
 
+
+### Battle space (src/rendering/torus/, src/rendering/spaceMap/) — spec: docs/specs/map-themes.md
+- **installBattleSpace(scene)** (from create(), camera without bounds) = TorusViewRig (backdrop camera + 	orus_copy_n cameras draw the far side of every seam, per-frame cameraFilter culling) + SpaceMapView (tiling parallax layers, drifting decor, planet limb; quality governor). Render only: never touches the sim or lockstep hashes.
+- **TorusFollow** replaces startFollow (short-way-round camera). 9 themes in mapThemes.ts; attleConfig.mapTheme (id|random) picks one offline, online derives it from the shared seed; Survival per sector, Campaign per mission.
 
 ### Menu UI (src/ui/menu/, src/ui/theme/)
 - **HoloTheme.ts** tokens + **holoFont.ts** (`holoFont(size, weight)` — never use the `font: "bold 18px Arial"`
@@ -641,6 +645,13 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
   mirror 1v1, mixed-faction 2v2); offline teams: `tests/e2e/teams.spec.ts`.
 
 
+## Lore terminology (player-facing text)
+
+Display text follows the lore bible (docs/lore/glossary.md): psionics / psionic disciplines (never "the Force"), riggers (not
+astromechs/droids), Snap Turn / Hook Loop / Knife Roll (HUD SNAP / HOOK / KNIFE), Aquila / Lictor hulls, Fusion / Burst / Quake ordnance,
+Libre / cells / insurgents. Internal ids keep their old names (`force_power`, `astromech`, `kturn`, `segnor_left`, `tallon_left`,
+`terran_imperator`…): change the label, never the id. `tests/unit/lore/distancing.test.ts` fails on any banned term in src/ strings and comments.
+
 ## Factions
 
 Rosters are near-equal per role (every hull is inspired by an X-Wing TMG ship); each faction's
@@ -653,7 +664,7 @@ solo value per point is informational only (duel modes keep their own gates).
 | ID | Name | Playstyle (identity) | Levers |
 |----|------|-----------|--------|
 | `terran_hegemony` | Terran Hegemony | Squad discipline and elite aces | Coordinated Fire (+0.35 dmg), Squadron Leader / Coordinated Assault, Hold the Line aces |
-| `free_confederation` | Free Confederation | Crew / rigger-tech (astromech equivalents) and versatile ordnance | Rallying Banner (−30 % dmg), astromech slots, crew, torpedoes / missiles |
+| `free_confederation` | Free Confederation | Crew, riggers and versatile ordnance | Rallying Banner (−30 % dmg), rigger slots, crew, torpedoes / missiles |
 | `synthetic_collective` | Synthetic Collective | Cheap swarm and data-link coordination | Hive Resilience (−8 %/drone, 400 px), Swarm Uplink, Pattern Analyzer, cheapest hulls |
 | `void_corsairs` | Void Corsairs | Tricks (boost / barrel roll, illicit upgrades) and hit-and-run aces | Raider's Cadence (stress −1 tier, +10 % hit, 700 px), illicit slots, trick talents, raider aces |
 | `ascendant_empire` | Ascendant Empire | Shields, support and psychic powers | Aegis Field (0.25 shield HP/s), psychic powers / talents, support projectors |

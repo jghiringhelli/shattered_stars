@@ -38,11 +38,11 @@ import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
 import { applyAllyAuraRepairs } from "../systems/aura/AllyAuraRepair";
 import { EffectsManager } from "../rendering/EffectsManager";
-import { ParallaxBackground } from "../rendering/ParallaxBackground";
+import { installBattleSpace } from "../rendering/spaceMap/installBattleSpace";
+import { TorusFollow } from "../rendering/torus/TorusFollow";
 import { audioManager } from "../audio/AudioManager";
 import { hullFractionOf } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
-import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import {
   createPerformanceState,
   updateFPS,
@@ -167,7 +167,6 @@ import {
 import type { BossStatusView } from "./epicRaid/bossStatus";
 import { HoloPauseOverlay } from "./battleUi/HoloPauseOverlay";
 import { showHoloResultScreen } from "./battleUi/HoloResultScreen";
-import { fitBackdropToZoom } from "./battleUi/fitBackdropToZoom";
 import {
   markContacts,
   playerHudState,
@@ -250,8 +249,9 @@ const BANNER_DURATION_MS = 1500;
 const VICTORY_SCREEN_DELAY_MS = 1000;
 /** Camera zoom in battle and the mouse-wheel limits. */
 const RAID_ZOOM = { battle: 0.7, min: 0.4, max: 1.5 } as const;
+/** Fraction of the gap to the flagship the camera closes per frame. */
+const RAID_FOLLOW_LERP = 0.09;
 /** Painted backdrop texture id. */
-const RAID_BACKDROP = "galaxy_spiral";
 /**
  * Where the boss lies: a quarter world from the top seam, so the fight
  * around it never straddles the wrap.
@@ -362,7 +362,7 @@ export class EpicBattleScene extends Phaser.Scene {
 
   // Effects
   private effectsManager!: EffectsManager;
-  private background!: ParallaxBackground;
+  private torusFollow!: TorusFollow;
   private performanceState: PerformanceState = createPerformanceState();
   private cameraShakeEnabled = true;
   private telemetry: ShipTelemetry | null = null;
@@ -410,11 +410,8 @@ export class EpicBattleScene extends Phaser.Scene {
     // Phaser never calls shutdown() on its own; without this, every restart
     // stacks another set of input subscriptions.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
-    this.cameras.main.setBounds(0, 0, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
     this.cameras.main.setBackgroundColor(0x050510);
     this.cameras.main.setZoom(1);
-    addPaintedSpaceBackground(this, RAID_BACKDROP, 0);
-    fitBackdropToZoom(this, RAID_BACKDROP, RAID_ZOOM.min);
 
     audioManager.initialize();
 
@@ -434,12 +431,8 @@ export class EpicBattleScene extends Phaser.Scene {
         showDamageNumbers: savedSettings.showDamageNumbers,
       });
     }
-    this.background = new ParallaxBackground(
-      this,
-      BATTLEFIELD_SIZE,
-      BATTLEFIELD_SIZE,
-    );
-    this.background.startShootingStars();
+    installBattleSpace(this);
+    this.torusFollow = new TorusFollow(this, BATTLEFIELD_SIZE);
 
     this.weapons = createSceneWeapons(this, this.weaponsLink(), this.hitLedger);
     this.resetState();
@@ -561,7 +554,7 @@ export class EpicBattleScene extends Phaser.Scene {
     // so the camera's create()-time centre shows neither.
     const flagship = this.shipSprites.get(this.playerShipIds[0] ?? "");
     if (flagship) {
-      this.cameras.main.startFollow(flagship, true, 0.09, 0.09);
+      this.torusFollow.follow(flagship, RAID_FOLLOW_LERP);
     }
   }
   update(time: number, delta: number): void {
@@ -576,8 +569,6 @@ export class EpicBattleScene extends Phaser.Scene {
     this.effectsManager.setQualitySettings(
       this.performanceState.effectSettings,
     );
-
-    this.background.update();
 
     if (this.updateRaidTimer(delta)) return;
 
@@ -1854,8 +1845,8 @@ export class EpicBattleScene extends Phaser.Scene {
 
   /**
    * Runs one frame of the player's input on the flagship through the shared
-   * pilot controls (tap = drift, hold = bank, Q/E = hard turn, K-turn,
-   * Segnor, Tallon, boost, barrel roll). A new flagship (the old one fell)
+   * pilot controls (tap = drift, hold = bank, Q/E = hard turn, Snap turn,
+   * Hook, Knife, boost, barrel roll). A new flagship (the old one fell)
    * starts with fresh input memory.
    *
    * @param ship - The flagship.

@@ -39,7 +39,7 @@ export const CONTROL_GROUPS: readonly ControlGroup[] = [
       { label: "Steer", intents: ["STEER_LEFT", "STEER_RIGHT"] },
       { label: "Throttle Up / Down", intents: ["THRUST_UP", "THRUST_DOWN"] },
       { label: "Primary Weapon", intents: [] }, // always autofires, no input
-      { label: "K-Turn (180°)", intents: ["KTURN"] },
+      { label: "Snap Turn (180°)", intents: ["KTURN"] },
       { label: "Boost Dash", intents: ["BOOST"] },
       {
         label: "Barrel Roll",
@@ -49,8 +49,8 @@ export const CONTROL_GROUPS: readonly ControlGroup[] = [
         label: "Sharp Turn",
         intents: ["SHARP_TURN_LEFT", "SHARP_TURN_RIGHT"],
       },
-      { label: "Segnor Loop", intents: ["SEGNOR_LEFT", "SEGNOR_RIGHT"] },
-      { label: "Tallon Roll", intents: ["TALLON_LEFT", "TALLON_RIGHT"] },
+      { label: "Hook Loop", intents: ["SEGNOR_LEFT", "SEGNOR_RIGHT"] },
+      { label: "Knife Roll", intents: ["TALLON_LEFT", "TALLON_RIGHT"] },
       { label: "Mark Target (squad focus)", intents: ["MARK_TARGET"] },
       {
         label: "Hero Powers (Campaign)",

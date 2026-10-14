@@ -15,7 +15,7 @@ closes the story. Mission-level detail: [campaigns/](./campaigns/).
 | **V · Shattered Stars** | Coalition finale | 261–300 | 3 new (`coal_5_1..3`) |
 
 The data's `act` 1–3 maps 1:1 to story Acts I–III. Acts IV–V are new content
-(**TO BUILD**). They reuse the same objective models, scripting, hazards and
+(built). They reuse the same objective models, scripting, hazards and
 hero powers, with a mixed squad of the five heroes.
 
 ### Act I — The Fracture (Days 1–40)
@@ -52,7 +52,7 @@ hero powers, with a mixed squad of the five heroes.
 - **Crossovers:** X10 Halden Orbit · X11 The Broken Alliance · X12 The Rendezvous · X13 The Catalyst · X14 Brannoc Gate · X15 The Breach (all five finales).
 - **Act-end reveal:** the Tide is real, and the Hollowed invited it.
 
-### Act IV — The Coalition (Days 201–260) · TO BUILD
+### Act IV — The Coalition (Days 201–260) · BUILT
 | Id | Title | Type | Gist |
 |---|---|---|---|
 | `coal_4_1` | Truce at Brannoc | defend | Hold the ceasefire talks against Kronos's remnant fleet and the first tidecells. Squad: Chen + Santos. |
@@ -61,7 +61,7 @@ hero powers, with a mixed squad of the five heroes.
 | `coal_4_4` | Signal Fire | sabotage | OMEGA-7 cuts Prime out of the lattice at Node Kel-9 while the Coalition holds the node. |
 | `coal_4_5` | The Breach of Sol | survive | The Tide reaches the Sol Mouth. First Resonance prototype. Hold until the Mouth is collapsed or saved. |
 
-### Act V — Shattered Stars (Days 261–300) · TO BUILD
+### Act V — Shattered Stars (Days 261–300) · BUILT
 | Id | Title | Type | Gist |
 |---|---|---|---|
 | `coal_5_1` | Resonance | capture | Hold three Resonance nodes at the Resonance Point. Every hero power available. |
@@ -100,8 +100,7 @@ condition. Crossovers then use their default variants.
 
 Today each faction save keeps its own `storyFlags`. Crossovers need a
 **Chronicle**: one cross-faction flag record that every campaign can read and
-that the crossover missions write (**TO BUILD**: a new store next to the
-per-faction saves).
+that the crossover missions write (built: `src/systems/ChronicleManager.ts`).
 
 **Rules**
 1. **Compatible primaries.** Both sides of a crossover can win their primary

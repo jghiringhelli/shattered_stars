@@ -889,7 +889,7 @@ describe("OrdnanceSystem", () => {
       const rng = makeSeededRng([0.3]);
       const result = fireOrdnance(attacker, target, concussionMissile, rng);
       if (result.success) {
-        expect(result.message).toContain("Concussion");
+        expect(result.message).toContain("Burst");
       }
     });
 

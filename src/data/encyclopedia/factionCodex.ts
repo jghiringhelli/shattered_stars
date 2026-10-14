@@ -30,7 +30,7 @@ export const FACTION_PROFILES: Readonly<Record<FactionId, FactionProfile>> = {
     name: "Free Confederation",
     playstyle: "Balanced, versatile",
     identity:
-      "A coalition of free worlds fielding adaptable fighters and astromech-crewed strike craft that cover each other.",
+      "A coalition of free worlds fielding adaptable fighters and rigger-crewed strike craft that cover each other.",
   },
   synthetic_collective: {
     name: "Synthetic Collective",
@@ -48,7 +48,7 @@ export const FACTION_PROFILES: Readonly<Record<FactionId, FactionProfile>> = {
     name: "Ascendant Empire",
     playstyle: "Heavy shields, support",
     identity:
-      "A theocratic empire of shielded, Force-touched pilots whose powers mend and guide the ships around them.",
+      "A theocratic empire of shielded psions whose powers mend and guide the ships around them.",
   },
 };
 

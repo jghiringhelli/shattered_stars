@@ -1,7 +1,7 @@
 /**
  * PilotThrottle — ↑/↓ step the throttle one notch per press, except when
- * the press is the second tap of a gesture (↑↑ boost / Tallon, ↓↓ K-turn /
- * Segnor): then both taps were the gesture, not throttle, and the speed goes
+ * the press is the second tap of a gesture (↑↑ boost / Knife, ↓↓ Snap turn /
+ * Hook): then both taps were the gesture, not throttle, and the speed goes
  * back to what it was before the first tap.
  *
  * Pure: no Phaser.
@@ -22,9 +22,9 @@ export const IDLE_THROTTLE: ThrottleMemory = { up: null, down: null };
 export interface ThrottleInput {
   readonly upPressed: boolean;
   readonly downPressed: boolean;
-  /** The ↑ press completed a ↑↑ gesture (boost / Tallon). */
+  /** The ↑ press completed a ↑↑ gesture (boost / Knife). */
   readonly upGesture: boolean;
-  /** The ↓ press completed a ↓↓ gesture (K-turn / Segnor). */
+  /** The ↓ press completed a ↓↓ gesture (Snap turn / Hook). */
   readonly downGesture: boolean;
 }
 

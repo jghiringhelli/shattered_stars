@@ -1,5 +1,5 @@
 /**
- * Free Confederation designs, Act I (slots 1-5) — "The Rebel's Path":
+ * Free Confederation designs, Act I (slots 1-5) — "Libre":
  * objectives, comms beats, hazards and bonus objectives. Offsets in px from
  * the battlefield centre (player squad starts at 0,+220; enemies at 0,-220).
  * Story consequence: conf_1_4 holding the crash site sets `conf_crash_data`
@@ -88,7 +88,7 @@ export const CONFEDERATION_ACT1_DESIGNS: Readonly<
         20,
         say(
           SANTOS,
-          "Controls are sluggish. Hegemony scrap with a rebel paint job.",
+          "Controls are sluggish. Hegemony scrap with a Libre paint job.",
         ),
       ),
       atTime(
@@ -197,7 +197,7 @@ export const CONFEDERATION_ACT1_DESIGNS: Readonly<
         "quiet",
         "failed",
         say(COMMAND, "Buoys tripped! Reaction force inbound!", "urgent"),
-        wave("terran_viper", 2, "terran_hegemony", { at: "ahead" }),
+        wave("terran_raptor", 2, "terran_hegemony", { at: "ahead" }),
       ),
       onObjective(
         "convoy",

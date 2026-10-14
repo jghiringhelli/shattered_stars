@@ -201,13 +201,13 @@ test.describe("ArcadeBattleScene — stress HUD", () => {
     expect(stressLevel).toBeLessThanOrEqual(0.05);
   });
 
-  test("stress spikes after K-turn (hard maneuver)", async ({ page }) => {
+  test("stress spikes after Snap turn (hard maneuver)", async ({ page }) => {
     suppressWebGLNoise(page);
     await openArcadeScene(page);
 
-    // K-turn = red maneuver with an instant 0.5 stress spike (applyKturnStress).
+    // Snap turn = red maneuver with an instant 0.5 stress spike (applyKturnStress).
     // Sustained ArrowRight at default speed 3 on INTERCEPTOR_DIAL is bank=white
-    // and cannot build stress, so we trigger a K-turn instead — same intent
+    // and cannot build stress, so we trigger a Snap turn instead — same intent
     // (a hard maneuver taxes the pilot), reliably observable.
     await holdKey(page, "Z", 90);
     await page.waitForTimeout(300);
@@ -221,7 +221,7 @@ test.describe("ArcadeBattleScene — stress HUD", () => {
         : null;
       return ship?.stress?.level ?? -1;
     });
-    // K-turn adds 0.5 instantly; some cycle decay possible → assert > 0.3
+    // Snap turn adds 0.5 instantly; some cycle decay possible → assert > 0.3
     expect(stressLevel).toBeGreaterThan(0.3);
   });
 
@@ -229,7 +229,7 @@ test.describe("ArcadeBattleScene — stress HUD", () => {
     suppressWebGLNoise(page);
     await openArcadeScene(page);
 
-    // Trigger K-turn for reliable stress spike (see prior test comment)
+    // Trigger Snap turn for reliable stress spike (see prior test comment)
     await holdKey(page, "Z", 90);
     await page.waitForTimeout(300);
 
@@ -249,7 +249,7 @@ test.describe("ArcadeBattleScene — stress HUD", () => {
 
     // Pixel-sampling the Phaser Graphics HUD is fragile (canvas layering,
     // Phaser world→screen scaling). Assert the observable state instead:
-    // stress rose past the K-turn spike threshold, and the visible HUD's
+    // stress rose past the Snap turn spike threshold, and the visible HUD's
     // status ring is drawing that same level.
     expect(state.level).toBeGreaterThan(0.3);
     expect(state.hudVisible).toBe(true);

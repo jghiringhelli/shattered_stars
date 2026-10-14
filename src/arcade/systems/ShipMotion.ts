@@ -214,7 +214,7 @@ export interface ActionResult {
  *
  * - Boost: dash forward BOOST_DISTANCE_PX, heading unchanged.
  * - Barrel roll: slide sideways one speed-1 template + base, heading unchanged.
- * - K-turn / Segnor / Tallon: queue the special maneuver for the next cycle.
+ * - Snap turn / Hook / Knife: queue the special maneuver for the next cycle.
  *
  * @param state - Motion state when the action fires.
  * @param ship - The ship (identity fields).

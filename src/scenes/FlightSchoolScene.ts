@@ -3,8 +3,8 @@
  *
  * Sixteen short lessons on the REAL flight engine (PlayerFlightPilot +
  * CycleFlight, the BattleHud, the shared primary-fire / dice / squad-mark
- * modules): throttle, drift on the 500 ms cycle, bank, hard turn, K-turn,
- * Segnor, Tallon, boost, barrel roll, primary arc, secondary, mark, radar &
+ * modules): throttle, drift on the 500 ms cycle, bank, hard turn, Snap turn,
+ * Hook, Knife, boost, barrel roll, primary arc, secondary, mark, radar &
  * edge arrows, the status ring, then a fight against one novice bot. Each
  * lesson advances only when the player's actual flight state proves the
  * input (FlightSchoolSteps); prompts name the player's bound keys. Deaths
@@ -50,7 +50,7 @@ import {
   goToScene,
   playUiPress,
 } from "../ui/menu/menuTransitions";
-import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
+import { installBattleSpace } from "../rendering/spaceMap/installBattleSpace";
 import { buildDuelHudSnapshot, playerTargetId } from "./duel/duelHudSnapshot";
 import { LessonPanel } from "./flightSchool/LessonPanel";
 import { SchoolCombat, type SchoolShot } from "./flightSchool/SchoolCombat";
@@ -94,7 +94,7 @@ export class FlightSchoolScene extends Phaser.Scene {
   create(): void {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.cameras.main.setBackgroundColor(0x050510);
-    addPaintedSpaceBackground(this, "nebula_blue", 0);
+    installBattleSpace(this, { mapTheme: "prometheus_shadow" });
     audioManager.initialize();
     this.effects = new EffectsManager(this);
     this.field = new SchoolField(this);

@@ -2,17 +2,34 @@
  * CampaignCompleteScene — shown after a faction's final mission is won: the
  * epilogue this playthrough earned (lines change with the story flags the
  * player's choices set) beside a service record, then back to the campaign
- * hub (the playthrough stays saved as complete) or the main menu.
+ * hub (the playthrough stays saved as complete) or the main menu. Finishing
+ * the Coalition (Act V) first asks for the final choice (Answer / Sever /
+ * Seal — The Quiet when unity is too low), then shows that ending's epilogue.
  */
 
 import Phaser from "phaser";
 import type { FactionId } from "../config";
-import { FACTION_CAMPAIGNS } from "../data/CampaignData";
+import { COALITION_CAMPAIGN, FACTION_CAMPAIGNS } from "../data/CampaignData";
 import { CampaignSaveManager } from "../systems/CampaignSaveManager";
+import { ChronicleManager } from "../systems/ChronicleManager";
+import { effectiveFlags } from "../campaign/chronicle/chronicleRules";
 import {
+  endingOptions,
+  type EndingOptions,
+} from "../campaign/chronicle/endings";
+import {
+  endingEpilogueLines,
   epilogueLines,
   serviceRecord,
 } from "../campaign/hub/campaignCompletion";
+import {
+  COALITION_SLOT,
+  type CampaignSlot,
+} from "../campaign/save/campaignSaveTypes";
+import { ENDING_TEXT } from "../data/campaign/coalitionEpilogues";
+import type { EndingId } from "../data/campaign/crossovers";
+import { createEndingChoice } from "../ui/campaign/EndingChoicePanel";
+import type { SelectableCard } from "../ui/campaign/SelectableCard";
 import type { EpilogueLine } from "../data/campaign/epilogues";
 import {
   MenuFocus,
@@ -46,11 +63,19 @@ const BACKDROP_TEXTURE = "starfield_deep";
 /** Scene input. */
 interface CompleteData {
   readonly factionId: FactionId;
+  /** The Coalition slot when the Coalition was finished. */
+  readonly slot?: CampaignSlot;
 }
 
 export class CampaignCompleteScene extends Phaser.Scene {
   private factionId: FactionId = "terran_hegemony";
+  private slot: CampaignSlot = "terran_hegemony";
   private menuFocus: MenuFocus | null = null;
+  /** Act V ending chosen (null while the choice is open; debug / tests). */
+  ending: EndingId | null = null;
+  /** What the Chronicle allows at the end of Act V (Coalition only). */
+  endingChoices: EndingOptions | null = null;
+  private choiceCards: SelectableCard[] = [];
   /** Epilogue lines shown (debug / tests). */
   epilogue: EpilogueLine[] = [];
 
@@ -59,20 +84,36 @@ export class CampaignCompleteScene extends Phaser.Scene {
   }
 
   create(data: CompleteData): void {
+    this.choiceCards = [];
     this.factionId = data?.factionId ?? "terran_hegemony";
+    this.slot = data?.slot ?? this.factionId;
+    const coalition = this.slot === COALITION_SLOT;
     const save =
-      CampaignSaveManager.load(this.factionId) ??
-      CampaignSaveManager.createNew(this.factionId);
+      CampaignSaveManager.load(this.slot) ??
+      CampaignSaveManager.createNew(this.factionId, [], this.slot);
     const accent = factionAccent(this.factionId);
-    this.epilogue = epilogueLines(this.factionId, save.storyFlags);
+    const chronicle = ChronicleManager.load();
+    const flags = effectiveFlags(save.storyFlags, chronicle);
+    this.ending = coalition ? this.resolveEnding(chronicle.ending, flags) : null;
+    this.epilogue = coalition
+      ? this.ending
+        ? endingEpilogueLines(this.ending, flags)
+        : []
+      : epilogueLines(this.factionId, flags);
     addMenuBackdrop(this, { textureId: BACKDROP_TEXTURE });
+    const campaignName = coalition
+      ? COALITION_CAMPAIGN.name
+      : FACTION_CAMPAIGNS[this.factionId].name;
     addMenuHeader(this, {
-      title: "CAMPAIGN COMPLETE",
-      subtitle: `${FACTION_CAMPAIGNS[this.factionId].name}  ·  Epilogue`,
+      title: this.ending
+        ? ENDING_TEXT[this.ending].title.toUpperCase()
+        : "CAMPAIGN COMPLETE",
+      subtitle: `${campaignName}  ·  ${coalition && !this.ending ? "The final choice" : "Epilogue"}`,
       accent,
     });
     audioManager.playFactionStinger(this.factionId, "victory");
-    this.buildEpilogue(accent);
+    if (coalition && !this.ending) this.buildChoice(accent);
+    else this.buildEpilogue(accent);
     this.buildRecord(accent, serviceRecord(save));
     this.buildButtons(accent);
     addFooterHint(this, "ENTER to select  ·  ESC for the campaign hub");
@@ -80,7 +121,40 @@ export class CampaignCompleteScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.menuFocus?.destroy();
       this.menuFocus = null;
+      this.choiceCards = [];
     });
+  }
+
+  /**
+   * @param stored - The ending already recorded in the Chronicle.
+   * @param flags - Chronicle flags.
+   * @returns The ending to show; a forced Quiet is recorded at once. Null
+   *   while the player still has to choose.
+   */
+  private resolveEnding(
+    stored: EndingId | null,
+    flags: Readonly<Record<string, boolean>>,
+  ): EndingId | null {
+    this.endingChoices = endingOptions(flags);
+    if (stored) return stored;
+    if (!this.endingChoices.forced) return null;
+    ChronicleManager.chooseEnding("quiet");
+    return "quiet";
+  }
+
+  private buildChoice(accent: number): void {
+    const view = createEndingChoice(this, {
+      options: this.endingChoices!,
+      accent,
+      onChoose: (ending) => this.chooseEnding(ending),
+    });
+    this.choiceCards = [...view.cards];
+  }
+
+  /** @param ending - The ending the player picks (refused when not allowed). */
+  chooseEnding(ending: EndingId): void {
+    ChronicleManager.chooseEnding(ending);
+    this.scene.restart({ factionId: this.factionId, slot: this.slot });
   }
 
   private buildEpilogue(accent: number): void {
@@ -176,7 +250,7 @@ export class CampaignCompleteScene extends Phaser.Scene {
       },
       () => this.scene.start("MainMenuScene"),
     );
-    this.menuFocus = new MenuFocus(this, [hub, menu]);
+    this.menuFocus = new MenuFocus(this, [...this.choiceCards, hub, menu]);
   }
 
   private toHub(): void {

@@ -311,7 +311,7 @@ export const HEGEMONY_ACT1_MISSIONS: CampaignMission[] = [
       {
         id: "kill",
         type: "eliminate",
-        description: "Destroy rebel patrol",
+        description: "Destroy insurgent patrol",
         count: 4,
       },
     ],

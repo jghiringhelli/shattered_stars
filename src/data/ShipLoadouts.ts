@@ -409,7 +409,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
   terran_imperator: [
     {
       id: "imperator_flagship",
-      name: "Imperator Flagship",
+      name: "Aquila Flagship",
       shipId: "terran_imperator",
       pilotId: "grand_admiral_nero",
       upgrades: [
@@ -423,7 +423,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
     },
     {
       id: "imperator_command",
-      name: "Imperator Command",
+      name: "Aquila Command",
       shipId: "terran_imperator",
       pilotId: "imperator_crew",
       upgrades: ["twin_laser_turret", "tactical_officer"],
@@ -454,7 +454,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
   terran_executor: [
     {
       id: "executor_hunter",
-      name: "Executor Hunter",
+      name: "Lictor Hunter",
       shipId: "terran_executor",
       pilotId: "supreme_commander_ash",
       upgrades: ["quad_laser_turret", "heavy_laser_cannon", "veteran_gunner"],
@@ -463,7 +463,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
     },
     {
       id: "executor_screen",
-      name: "Executor Screen",
+      name: "Lictor Screen",
       shipId: "terran_executor",
       pilotId: "executor_crew",
       upgrades: ["twin_laser_turret", "shield_upgrade"],
@@ -542,7 +542,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
       shipId: "confed_falcon",
       pilotId: "falcon_pilot",
       upgrades: ["patch_astromech", "shield_upgrade"],
-      description: "Steady fighter whose droid welds the hull between passes",
+      description: "Steady fighter whose rigger welds the hull between passes",
       role: "defense",
     },
   ],
@@ -1916,7 +1916,7 @@ const LOADOUT_BLUEPRINTS: Record<string, LoadoutBlueprint[]> = {
         "advanced_sensors",
         "stealth_device",
       ],
-      description: "Force-enhanced elite with precognition",
+      description: "Psi-enhanced elite with precognition",
       role: "defense",
     },
     {

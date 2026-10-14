@@ -1,8 +1,10 @@
 /**
- * ShipCatalogPanel — left panel of ShipPickerScene.
- * Shows faction ship catalog as holo cards; user clicks a ship to stage it,
- * picks a loadout in the detail panel, then clicks ADD to add the config to
- * the roster.
+ * ShipCatalogPanel — left panel of ShipPickerScene and the simple Skirmish
+ * flow. Ships are grouped into role sections (light fighters, heavy
+ * fighters, interceptors, bombers, gunships, support, capitals), each with a
+ * header, under a row of filter chips (role filter + sort by points). The
+ * user clicks a ship to stage it, picks a payload in the detail panel, then
+ * clicks ADD (or LAUNCH) to add the config to the roster.
  *
  * Emits: 'addInstance' { shipId: string, loadoutId: string | null }
  */
@@ -10,12 +12,24 @@
 import Phaser from "phaser";
 import type { ShipDefinition } from "../../core/types";
 import type { FactionId } from "../../config";
+import { getEquippableLoadouts } from "../../data/ShipLoadouts";
+import { sortRolesForSections } from "../../data/roleHints/roleSections";
 import { drawHoloFrame } from "../menu/holoChrome";
+import type { FocusTarget } from "../menu/MenuFocus";
 import { factionAccent, HOLO_RADIUS, HOLO_SPACING } from "../theme/HoloTheme";
 import { ShipDetailPanel } from "./ShipDetailPanel";
 import { CatalogScroll } from "./CatalogScroll";
 import { CatalogStaging } from "./CatalogStaging";
 import { buildCatalogCard } from "./CatalogCard";
+import { drawFilterBar, FILTER_BAR_H } from "./CatalogFilterBar";
+import { drawSectionHeader, SECTION_HEADER_H } from "./CatalogSectionHeader";
+import {
+  buildSections,
+  layoutSections,
+  nextSort,
+  type CatalogFilters,
+  type GridItem,
+} from "./catalogSections";
 import { CAT_X, CAT_W } from "./catalogHelpers";
 import type { LoadoutBonuses } from "./types";
 
@@ -33,20 +47,18 @@ const NO_GATING: CatalogGating = {
   reasonFor: () => "",
 };
 
-const ROLE_SORT: Record<string, number> = {
-  interceptor: 0,
-  light_fighter: 1,
-  heavy_fighter: 2,
-  bomber: 3,
-  gunship: 4,
-  support: 5,
-  capital: 6,
-};
+/** What the format hides from the catalog. */
+export interface CatalogOptions {
+  /** Capital ships left out because the format is not Epic (shown as a notice). */
+  readonly hiddenCapitals?: number;
+}
 
 /** Default panel top — the menu grid's first content row. */
 const DEFAULT_TOP_Y = 104;
 /** Default panel height — content band down to the primary-action row. */
 const DEFAULT_PANEL_H = 528;
+/** Height of the staging strip (selection line + confirm button). */
+const STAGE_H = 104;
 
 /** Card grid layout inside the catalog panel. */
 const GRID = {
@@ -58,13 +70,19 @@ const GRID = {
   columnGap: HOLO_SPACING.sm,
   rowH: 48,
   rowGap: HOLO_SPACING.sm,
-  /** Rows visible before scrolling. */
-  rows: 7,
+  /** Gap between one section's cards and the next header. */
+  sectionGap: HOLO_SPACING.sm,
   columns: 2,
 } as const;
 const CARD_W =
   (CAT_W - GRID.pad * 2 - GRID.gutter - GRID.columnGap) / GRID.columns;
 const ROW_PITCH = GRID.rowH + GRID.rowGap;
+const SECTION_METRICS = {
+  columns: GRID.columns,
+  rowPitch: ROW_PITCH,
+  headerH: SECTION_HEADER_H,
+  sectionGap: GRID.sectionGap,
+} as const;
 /** Gap between the catalog and the detail panel / screen edge. */
 const DETAIL_GAP = HOLO_SPACING.lg;
 const SCREEN_MARGIN = HOLO_SPACING.xxl;
@@ -75,6 +93,13 @@ interface DetailArea {
   readonly width: number;
 }
 
+/** A placed row of the scrolling grid and the zones that must follow the clip. */
+interface GridRow {
+  readonly hits: Phaser.GameObjects.Rectangle[];
+  readonly top: number;
+  readonly height: number;
+}
+
 export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
   private container!: Phaser.GameObjects.Container;
   private gridContainer!: Phaser.GameObjects.Container;
@@ -82,11 +107,14 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
   private readonly scroll: CatalogScroll;
   private readonly staging: CatalogStaging;
   private readonly accent: number;
-  private rowHits: Array<{ hit: Phaser.GameObjects.Rectangle; top: number }> =
-    [];
+  private readonly gridTop: number;
+  private gridRows: GridRow[] = [];
   private detailArea: DetailArea | null = null;
   private scrollWired = false;
   private showOnlyUnlocked = false;
+  private filters: CatalogFilters = { role: null, sort: "default" };
+  /** Filter-chip focus targets; mutated in place so a MenuFocus keeps them. */
+  readonly focusTargets: FocusTarget[] = [];
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -96,31 +124,33 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
     confirmLabel = "ADD",
     private readonly topY = DEFAULT_TOP_Y,
     private readonly panelH = DEFAULT_PANEL_H,
+    private readonly options: CatalogOptions = {},
   ) {
     super();
     this.accent = factionAccent(this.factionId);
+    this.gridTop = this.topY + GRID.pad * 2 + FILTER_BAR_H;
     this.detailPanel = new ShipDetailPanel(scene);
     this.scroll = new CatalogScroll({
       clipX: CAT_X,
-      clipY: this.topY + GRID.pad,
+      clipY: this.gridTop,
       clipW: CAT_W,
-      clipH: GRID.rows * ROW_PITCH,
+      clipH: this.panelH - (this.gridTop - this.topY) - STAGE_H,
     });
     this.staging = new CatalogStaging(scene, ships, confirmLabel);
     this.staging.on("addInstance", (e: unknown) => this.emit("addInstance", e));
     this.staging.on("requestRender", () => this.render());
   }
 
-  /** Rebuilds the grid, the staging strip and the detail panel. */
+  /** Rebuilds the chips, the sectioned grid, the staging strip and the detail panel. */
   render(): void {
     this.container?.destroy();
     this.gridContainer?.destroy();
     this.container = this.scene.add.container(0, 0);
-    const gridTop = this.topY + GRID.pad;
-    this.gridContainer = this.scene.add.container(0, gridTop);
+    this.gridContainer = this.scene.add.container(0, this.gridTop);
     this.drawBackground();
+    this.drawChips();
     this.drawGrid();
-    this.gridContainer.setY(gridTop - this.scroll.offset);
+    this.gridContainer.setY(this.gridTop - this.scroll.offset);
     this.scroll.applyMask(this.scene, this.gridContainer);
     this.scroll.drawScrollbar(this.scene);
     if (!this.scrollWired) {
@@ -132,9 +162,13 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
       this.scrollWired = true;
     }
     this.syncRowHits();
-    const stageTop = gridTop + GRID.rows * ROW_PITCH;
-    const stageH = this.panelH - (stageTop - this.topY) - GRID.pad;
-    this.staging.render(this.container, stageTop, stageH, this.accent);
+    const stageTop = this.topY + this.panelH - STAGE_H;
+    this.staging.render(
+      this.container,
+      stageTop,
+      STAGE_H - GRID.pad,
+      this.accent,
+    );
     this.renderDetail();
   }
 
@@ -144,6 +178,7 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
     this.staging.destroy();
     this.container?.destroy();
     this.gridContainer?.destroy();
+    this.focusTargets.length = 0;
     super.destroy();
   }
 
@@ -188,22 +223,61 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
     this.container.add(g);
   }
 
+  /** Role filter + sort chips above the grid. */
+  private drawChips(): void {
+    const roles = sortRolesForSections(this.ships.map((ship) => ship.role));
+    const targets = drawFilterBar(this.scene, this.container, {
+      x: CAT_X + GRID.pad,
+      y: this.topY + GRID.pad,
+      width: CAT_W - GRID.pad * 2,
+      accent: this.accent,
+      roles,
+      epicOnlyCapitals: (this.options.hiddenCapitals ?? 0) > 0,
+      filters: this.filters,
+      onRole: (role) => this.applyFilters({ ...this.filters, role }),
+      onSort: () =>
+        this.applyFilters({ ...this.filters, sort: nextSort(this.filters.sort) }),
+    });
+    this.focusTargets.splice(0, this.focusTargets.length, ...targets);
+    this.emit("focusTargetsChanged");
+  }
+
+  private applyFilters(filters: CatalogFilters): void {
+    this.filters = filters;
+    this.scroll.reset();
+    this.render();
+  }
+
   private drawGrid(): void {
     const visible = this.showOnlyUnlocked
       ? this.ships.filter((s) => !this.gating.lockedShipIds.has(s.id))
       : this.ships;
-    const sorted = [...visible].sort(
-      (a, b) => (ROLE_SORT[a.role] ?? 9) - (ROLE_SORT[b.role] ?? 9),
+    const sections = buildSections(
+      visible,
+      this.filters,
+      (id) => getEquippableLoadouts(id).length,
+      { hiddenCapitals: this.options.hiddenCapitals ?? 0 },
     );
-    this.rowHits = [];
-    sorted.forEach((def, i) => {
-      const col = i % GRID.columns;
-      const row = Math.floor(i / GRID.columns);
-      const x = CAT_X + GRID.pad + col * (CARD_W + GRID.columnGap);
-      this.drawShipRow(def, x, row * ROW_PITCH);
-    });
-    const totalRows = Math.ceil(sorted.length / GRID.columns);
-    this.scroll.setContentHeight(totalRows * ROW_PITCH);
+    const layout = layoutSections(sections, SECTION_METRICS);
+    this.gridRows = [];
+    for (const item of layout.items) this.drawItem(item);
+    this.scroll.setContentHeight(layout.height);
+  }
+
+  private drawItem(item: GridItem): void {
+    if (item.kind === "header") {
+      const hits = drawSectionHeader(this.scene, this.gridContainer, {
+        section: item.section,
+        x: CAT_X + GRID.pad,
+        y: item.y,
+        width: CAT_W - GRID.pad * 2 - GRID.gutter,
+        accent: this.accent,
+      });
+      this.gridRows.push({ hits, top: item.y, height: SECTION_HEADER_H });
+      return;
+    }
+    const x = CAT_X + GRID.pad + item.column * (CARD_W + GRID.columnGap);
+    this.drawShipRow(item.ship, x, item.y);
   }
 
   private drawShipRow(def: ShipDefinition, x: number, y: number): void {
@@ -226,15 +300,16 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
         this.render();
       },
     );
-    this.rowHits.push({ hit: card.hit, top: y });
+    this.gridRows.push({ hits: card.hits, top: y, height: GRID.rowH });
     this.gridContainer.add(card.objects);
   }
 
-  /** Rows scrolled out of the clip must not swallow clicks meant for the staging strip. */
+  /** Rows scrolled out of the clip must not swallow clicks or hovers meant for the staging strip. */
   private syncRowHits(): void {
-    for (const { hit, top } of this.rowHits) {
-      if (hit.input) {
-        hit.input.enabled = this.scroll.isSpanVisible(top, GRID.rowH);
+    for (const { hits, top, height } of this.gridRows) {
+      const visible = this.scroll.isSpanVisible(top, height);
+      for (const hit of hits) {
+        if (hit.input) hit.input.enabled = visible;
       }
     }
   }

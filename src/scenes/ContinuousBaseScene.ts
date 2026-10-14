@@ -57,7 +57,6 @@ import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback } from "../ui/hud/overlay";
 import { applyAllyAuraRepairs } from "../systems/aura/AllyAuraRepair";
 import { EffectsManager } from "../rendering/EffectsManager";
-import { ParallaxBackground } from "../rendering/ParallaxBackground";
 import { audioManager } from "../audio/AudioManager";
 import { syncListenerToCamera } from "../audio/CameraListener";
 import {
@@ -158,7 +157,6 @@ export abstract class ContinuousBaseScene<
   protected isActive = false;
 
   protected effectsManager!: EffectsManager;
-  protected background!: ParallaxBackground;
   protected performanceState: PerformanceState = createPerformanceState();
   /** Debug pose recorder (?debug=1); sampled every frame by {@link flyShips}. */
   protected telemetry: ShipTelemetry | null = null;
@@ -685,7 +683,6 @@ export abstract class ContinuousBaseScene<
       this.performanceState.effectSettings,
     );
 
-    this.background.update();
 
     this.updateAI(time, delta);
     this.flyShips(delta);

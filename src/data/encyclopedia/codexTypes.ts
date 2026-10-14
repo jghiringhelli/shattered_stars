@@ -68,3 +68,18 @@ export function titleCase(id: string): string {
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 }
+
+/** Player-facing slot names that differ from the title-cased slot id (internal ids never change). */
+const SLOT_DISPLAY_NAMES: Readonly<Record<string, string>> = {
+  astromech: "Rigger",
+  force_power: "Psionic",
+};
+
+/**
+ * Slot id → player-facing slot name ("force_power" → "Psionic").
+ * @param slotId - Upgrade slot id.
+ * @returns The display name, or the title-cased id when none is overridden.
+ */
+export function slotDisplayName(slotId: string): string {
+  return SLOT_DISPLAY_NAMES[slotId] ?? titleCase(slotId);
+}

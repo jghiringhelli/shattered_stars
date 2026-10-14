@@ -37,12 +37,12 @@ These are the defaults. Rebind keys and gamepad buttons in **Settings › Contro
 | Steer | ← / → | Left stick |
 | Throttle up / down | ↑ / ↓ | Left stick |
 | Primary weapon | Automatic | Automatic |
-| K-turn (180°) | Z | Right stick flick ↓ |
+| Snap turn (180°) | Z | Right stick flick ↓ |
 | Boost | Double-tap ↑ | A |
 | Barrel roll | ← and → together (direction of the second key) | Right stick flick ← / → |
 | Hard turn | Q / E | LB / RB |
-| Segnor loop | Shift+Q / Shift+E | D-pad ← / → |
-| Tallon roll | T / Shift+T | LT / RT |
+| Hook loop | Shift+Q / Shift+E | D-pad ← / → |
+| Knife roll | T / Shift+T | LT / RT |
 | Fire secondary / drop bomb | Shift+Space | X |
 | Cycle secondary weapon | Tab | D-pad ↓ |
 | Mark target for your squad | R | R3 |
@@ -53,7 +53,7 @@ These are the defaults. Rebind keys and gamepad buttons in **Settings › Contro
 | Pause | Esc / P / Space | Start |
 | Menus | ↑ ↓ ← → / Tab, Enter, Esc | D-pad, A, B |
 
-Specials (K-turn, Segnor, Tallon) and actions (boost, barrel roll) work only if they are on your ship's dial / action bar; a stressed pilot cannot fly red maneuvers or perform actions (X-Wing rules) — the HUD says why a key was refused. Capital ships fly none of them, which is why the gamepad commander orders share the Tallon triggers and the Segnor D-pad buttons.
+Specials (Snap turn, Hook, Knife) and actions (boost, barrel roll) work only if they are on your ship's dial / action bar; a stressed pilot cannot fly red maneuvers or perform actions (X-Wing rules) — the HUD says why a key was refused. Capital ships fly none of them, which is why the gamepad commander orders share the Knife triggers and the Hook D-pad buttons.
 
 **Gunner Mode** (large/huge ships with a turret upgrade): ← / → aim the turret by hand; it fires at whatever lies along its aim. The ship keeps flying its current maneuver.
 

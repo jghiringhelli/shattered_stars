@@ -11,8 +11,8 @@ consequences that carry from scenario to scenario.
 |---|---|
 | Factions | 5 (Hegemony, Confederation, Synthetic, Corsairs, Ascendant) |
 | Mission slots per faction | **15**, in **3 acts** of 5 (`act` 1–3) |
-| Mission definitions | **78** — Hegemony offers branch pairs at slots 3, 8 and 13 (18 definitions); every other faction has 15 |
-| Data | `src/data/campaign/missions/*` (story, squad, enemies, rewards, debriefs) + `src/data/campaign/designs/*` (objectives, script, hazards, allies, variants) merged in `src/data/CampaignData.ts` |
+| Mission definitions | **78** — Hegemony offers branch pairs at slots 3, 8 and 13 (18 definitions); every other faction has 15 — plus the shared **Coalition** campaign: **8** (Acts IV–V, `coal_4_1..5`, `coal_5_1..3`) |
+| Data | `src/data/campaign/missions/*` (story, squad, enemies, rewards, debriefs) + `src/data/campaign/designs/*` (objectives, script, hazards, allies, variants) + `src/data/campaign/lore/*` (the lore bible\u0027s edits per faction: day, location, crossover id, retext, rework, flags) merged in `src/data/CampaignData.ts` |
 
 (An older header claimed "25 missions across 4 acts"; that was never true.)
 
@@ -24,6 +24,10 @@ three **middle** slots open *together* after the opener (act I teaches first:
 any of its missions is done, so the other branch of a pair becomes
 "not taken". Missions can override with `prerequisites: number[]`.
 Result: from slot 3 on, the hub almost always offers ≥ 2 missions.
+
+On top of that, the **Rule of N** (§9) can keep a whole act closed: its missions show
+as locked and the act chip under the board says why ("complete Act I in 1 more
+faction"). Acts that already hold progress are never closed.
 
 ## 2. Objectives (`src/arcade/objectives/` — pure, reusable)
 
@@ -132,8 +136,7 @@ Debug: `scene.director.debugWin()` completes every required objective.
 
 ## 8. Persistence (`src/campaign/save/`, `src/systems/CampaignSaveManager.ts`)
 
-One save per faction (`shattered_stars_campaign_<faction>`), schema **v3**:
-v2 fields + `storyFlags`, `branchChoices` (`slot_<n>` → mission id),
+One save per slot (`shattered_stars_campaign_<slot>`: a faction, or `coalition`), schema **v4** = v3 + `slot` (v3 saves migrate by adding it; nothing else changes). Cross-faction state lives in the **Chronicle** (§9), not in the saves. v3 fields: v2 fields + `storyFlags`, `branchChoices` (`slot_<n>` → mission id),
 `researchPoints`, `research`, `armory.installed` (price paid),
 `heroPowerRanks`, `bonusObjectivesCompleted` (`mission:objective`, rewarded
 once), `campaignComplete`.
@@ -150,11 +153,40 @@ once), `campaignComplete`.
   leads to `CampaignCompleteScene` (flag-aware epilogue + service record);
   the hub then offers an EPILOGUE shortcut.
 
-## 9. Tests
+## 9. Chronicle, Rule of N, crossovers, Coalition, endings
 
-- Unit: `tests/unit/arcade/objectives/*`, `tests/unit/campaign/*`
+Design: `docs/lore/campaign_arc.md`. Code: `src/campaign/chronicle/` (pure), `src/systems/ChronicleManager.ts`
+(storage `shattered_stars_chronicle`, seeded from existing saves on first load, corrupt backup `_corrupt`),
+`src/systems/campaignChronicle.ts` (battle glue), data in `src/data/campaign/crossovers.ts`.
+
+- **Chronicle** (`ChronicleData`): shared `flags` (only names in `CHRONICLE_FLAGS`), `crossovers` (X1–X15 → canon faction,
+  mission, witnesses), `actsComplete` per campaign, `freeOrder`, `ending`. Derived flags (`key_*`, `x5_joint_breakout`) are computed.
+- **Flags at play time**: a mission runs with `effectiveFlags` = the save\u0027s story flags + the Chronicle\u0027s (+ `lead_<faction>`
+  in the Coalition), so ordinary variants / `allies.unlessFlag` / beat `if` read flags other campaigns wrote. No interpreter
+  change was needed. On victory the persisted flags are canon-filtered, saved, and folded into the Chronicle.
+- **Canon**: the first side to finish a crossover writes canon. Exclusive groups (`EXCLUSIVE_FLAG_GROUPS`: relay held / junction,
+  convoy intact / gutted, Hale down / escaped, catalyst destroyed / door opened) drop the second witness\u0027s flag (`canonFilter`) and read false
+  once the first is canon; the second side\u0027s mission has a variant (briefing, swapped bonus) per the bible. Nobody kills another campaign\u0027s named characters.
+- **Rule of N** (`actUnlocks.ts`): faction Act N opens when Act N−1 is complete in ≥ N factions, its own included (Act I always open).
+  Coalition Act IV needs Act III in 4 factions; Act V needs Act IV and Act III in all 5. **Free Order** (CHRONICLE tab, auto-on after the first ending)
+  lifts the cross-faction part: Act II/III need only the faction\u0027s own previous act, Act IV needs one finished campaign, Act V needs Act IV.
+  Act completion = every slot of the act has a completed mission.
+- **Hub**: act chips (DONE / OPEN / LOCKED, click to browse) with the lock reason, mission cards show the story day, a CHRONICLE tab
+  (day reached, crossovers resolved from which POV, unity / key tallies, Free Order switch), faction cards carry act chips, and the 6th card opens the **Coalition**.
+- **Coalition** (`COALITION_CAMPAIGN`, 8 missions, explicit prerequisites: 4_1 → {4_2, 4_3, 4_4} → 4_5 → 5_1 → 5_2 → 5_3): own save slot
+  `coalition` whose player faction is the **lead hero** chosen on first entry (ships and the two hero powers of that faction at veteran ranks,
+  the lead\u0027s credits / research / armory carried over). Other heroes fly as allied squads (`MissionAlly.unlessLead`). Bosses are the Pruning Herald and the Warden Avatar.
+- **Endings** (`endings.ts`, chosen on `CampaignCompleteScene` after `coal_5_3`): unity = unity flags set (12); keys = 5 faction keys.
+  Answer: 5 keys and unity ≥ 7 · Sever: unity ≥ 4 · Seal: always · The Quiet: forced Seal when unity < 4. The ending is stored in the Chronicle;
+  its epilogue (`coalitionEpilogues.ts`) is flag-conditioned. Faction epilogues apply the lore patch (`applyEpiloguePatch`).
+- **Lore overlay** (`loreTypes.ts`, `loreOverlay.ts`): per-mission edits applied after the design merge; `staleLore` rejects swaps that match nothing.
+
+## 10. Tests
+
+- Unit: `chronicle`, `actUnlocks` (Rule of N matrix incl. Free Order, endings), `saveV4` (v3 → v4, Coalition slot, Chronicle schema),
+  `loreConsistency` (every flag read is written, crossover / echo missions exist and set / read the right flags, day + place on all 86 missions),
+  `coalitionContent`, `tests/unit/lore/<faction>Lore.test.ts`; `tests/unit/arcade/objectives/*`, `tests/unit/campaign/*`
   (interpreter, hazards, powers, armory/research, save v3, compiler, hub
   graph, hub actions, spawns, content integrity),
   `tests/unit/arcade/systems/Campaign{MissionRuntime,HeroPowers,Victory}.test.ts`.
-- E2E: `tests/e2e/campaign-hub.spec.ts`, `campaign-objectives.spec.ts`,
-  `campaign-powers.spec.ts`, `campaign-progress.spec.ts`.
+- E2E: `tests/e2e/campaign-hub.spec.ts`, `campaign-objectives.spec.ts`, `campaign-powers.spec.ts`, `campaign-progress.spec.ts`, `campaign-chronicle.spec.ts` (locks + reasons, two factions unlock Act II, canon from both sides, Coalition + lead hero, endings, reload), `campaign-missions-smoke.spec.ts` (all 86 missions boot).

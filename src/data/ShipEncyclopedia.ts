@@ -80,7 +80,7 @@ export const FACTION_ART_CTX: Record<FactionId, string> = {
   terran_hegemony:
     'military space hangar, gray reinforced steel walls, uniformed ground crew, harsh overhead lighting, sci-fi military doctrine',
   free_confederation:
-    'rebel base hangar carved into an asteroid, diverse crew in patchwork gear, warm amber lighting, improvised technology',
+    'cell base hangar carved into an asteroid, diverse crew in patchwork gear, warm amber lighting, improvised technology',
   synthetic_collective:
     'deep space formation, maintenance drones swarming the hull, blue neon geometric structures, no organic crew visible',
   void_corsairs:
@@ -167,7 +167,7 @@ export function generateLore(def: ShipDefinition): string {
 /** Hand-authored lore for unique capital ships. Overrides the template-generated lore. */
 const CUSTOM_LORE: Partial<Record<string, string>> = {
   terran_imperator:
-    'The Imperator is the undisputed crown of Terran Hegemony naval doctrine — a ship so massive it requires its own support fleet to sustain. Glacially slow and fortress-hulled, it projects overwhelming firepower across an entire engagement zone.',
+    'The Aquila is the undisputed crown of Terran Hegemony naval doctrine — a ship so massive it requires its own support fleet to sustain. Glacially slow and fortress-hulled, it projects overwhelming firepower across an entire engagement zone.',
   confed_liberty:
     'She began her life as the grain freighter Constance before the Free Confederation stripped her hull to the frame. Now bristling with salvaged cannons and jury-rigged shield emitters, the Liberty anchors every desperate last-stand the Confederation has ever won.',
   corsair_galleon:
@@ -183,9 +183,9 @@ const CUSTOM_LORE: Partial<Record<string, string>> = {
 /** Hand-authored SD art prompt hints for unique capital ships. */
 const CUSTOM_ART_PROMPT: Partial<Record<string, string>> = {
   terran_imperator:
-    'Terran Imperator massive battlecruiser, enormous grey warship with rows of gun batteries, military escort fighters flanking, harsh vacuum of space, Terran Hegemony insignia, cinematic sci-fi military epic scale',
+    'Terran Aquila massive battlecruiser, enormous grey warship with rows of gun batteries, military escort fighters flanking, harsh vacuum of space, Terran Hegemony insignia, cinematic sci-fi military epic scale',
   confed_liberty:
-    'Confed Liberty converted freighter warship, patchwork hull plating with welded gun turrets, rebel colors, warm amber engine glow, ragtag escort, contrast of civilian origins and deadly armament, cinematic space rebel epic',
+    'Confed Liberty converted freighter warship, patchwork hull plating with welded gun turrets, Libre colors, warm amber engine glow, ragtag escort, contrast of civilian origins and deadly armament, cinematic space insurgent epic',
   corsair_galleon:
     'Void Corsairs Galleon capital ship, sweeping void-sail wings of dark metalite, skull-and-comet insignia, ramshackle hull glowing with pirate sigils, sickly-green running lights, deep space cinematic epic scale',
   ascendant_divine:

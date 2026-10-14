@@ -1,7 +1,7 @@
 /**
  * cycle-flight-epic.spec.ts — Boss Raid (EpicBattleScene) flies the X-Wing
  * cycle engine: every ship rides template arcs on its own, holding LEFT banks
- * the player's flagship, and Z queues a K-turn that costs stress. Its AI is
+ * the player's flagship, and Z queues a Snap turn that costs stress. Its AI is
  * the skill-gate bots: escorts at the raid difficulty's tier, average
  * wingmen who clear the escorts until the player marks the boss (R).
  */
@@ -81,7 +81,7 @@ test.describe("EpicBattleScene — cycle-engine flight", () => {
     expect(headingChange(start.angle, end.angle)).toBeLessThanOrEqual(-40);
   });
 
-  test("Z queues a K-turn and costs stress", async ({ page }) => {
+  test("Z queues a Snap turn and costs stress", async ({ page }) => {
     await BOSS_RAID.enter(page, { peaceful: true });
     expect(flagship(await readShips(page)).profile).toBe("fighter");
     await holdGameKey(page, "Z", 150);

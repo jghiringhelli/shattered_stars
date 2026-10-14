@@ -8,8 +8,8 @@
  * - Steering: tap = 30° drift, hold = one 45° bank then drift
  *   (SteeringIntent), hard-turn gesture or Q/E = 90° turn at the nearest
  *   legal speed on the ship's dial.
- * - K-turn, Segnor's Loop, Tallon Roll: queued for the next cycle, with an
- *   instant stress spike (refused while stressed for the K-turn).
+ * - Snap turn, Hook Loop, Knife Roll: queued for the next cycle, with an
+ *   instant stress spike (refused while stressed for the Snap turn).
  * - Boost and barrel roll: instant dashes that carry the cycle along
  *   (ShipMotion.performAction).
  *
@@ -133,8 +133,8 @@ interface FramePresses {
 }
 
 /**
- * Throttle keys and the throttle half of gestures (↑ for boost/Tallon,
- * ↓ for K-turn/Segnor) change the speed by one step.
+ * Throttle keys and the throttle half of gestures (↑ for boost/Knife,
+ * ↓ for Snap turn/Hook) change the speed by one step.
  *
  * @param flight - Motion being built this frame (mutated).
  * @param pilot - Input memory from the previous frame.
@@ -199,7 +199,7 @@ function hardTurnOf(pressed: FramePresses): "left" | "right" | null {
 
 /**
  * @param pressed - This frame's presses.
- * @returns K-turn / Segnor / Tallon requests (key or gesture) for applySpecials.
+ * @returns Snap turn / Hook / Knife requests (key or gesture) for applySpecials.
  */
 function specialRequestsOf(
   pressed: FramePresses,

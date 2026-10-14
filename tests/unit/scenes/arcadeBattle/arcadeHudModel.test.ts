@@ -60,11 +60,11 @@ describe("maneuverHudLabel", () => {
     expect(maneuverHudLabel(ship.control)).toBe("▸ TURN L 2");
   });
 
-  it("names K-turns without a direction", () => {
+  it("names Snap turns without a direction", () => {
     const ship = HudShipBuilder.aPlayer()
       .withControl({ currentManeuver: "kturn", nextManeuver: null, speed: 4 })
       .build();
-    expect(maneuverHudLabel(ship.control)).toBe("K-TURN 4");
+    expect(maneuverHudLabel(ship.control)).toBe("SNAP 4");
   });
 });
 

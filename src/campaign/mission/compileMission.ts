@@ -95,7 +95,9 @@ export function compileMission(
     hazards: (mission.hazards ?? []).map((h) => resolveHazard(h, origin)),
     enemies,
     allies: allies.filter(
-      (a) => !a.unlessFlag || storyFlags[a.unlessFlag] !== true,
+      (a) =>
+        (!a.unlessFlag || storyFlags[a.unlessFlag] !== true) &&
+        a.unlessLead !== factionId,
     ),
   };
 }

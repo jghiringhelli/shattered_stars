@@ -167,7 +167,7 @@ describe("rebindGamepadIntent", () => {
   });
 
   it("unbinds the displaced intent when the rebound one had no button", () => {
-    // K-turn's default is a right-stick flick, not a button.
+    // Snap turn's default is a right-stick flick, not a button.
     expect(primaryButton(defaults, "KTURN")).toBeNull();
     const result = rebindGamepadIntent(defaults, {}, "KTURN", X);
     expect(result.displaced).toEqual(["FIRE_SECONDARY"]);

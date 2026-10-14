@@ -102,6 +102,8 @@ export interface MissionAlly {
   readonly name: string;
   /** Not deployed while this story flag is set (a lost squadron stays gone). */
   readonly unlessFlag?: string;
+  /** Coalition only: not deployed when the player leads this faction. */
+  readonly unlessLead?: FactionId;
 }
 
 /** A story-flag-driven variant of a mission. */
@@ -134,11 +136,17 @@ export interface MissionDesign {
   readonly prerequisites?: readonly number[];
   /** Story flags set when the mission is won. */
   readonly victoryFlags?: Readonly<Record<string, boolean>>;
+  /** Story day of the crisis the mission takes place on (0 = the Broadcast). */
+  readonly day?: number;
+  /** Where it takes place (shown on the briefing). */
+  readonly location?: string;
+  /** Crossover battle id ("X1".."X15") this mission is one witness of. */
+  readonly crossover?: string;
 }
 
 export interface CampaignMission extends MissionDesign {
   id: string;
-  act: 1 | 2 | 3 | 4;
+  act: 1 | 2 | 3 | 4 | 5;
   missionNumber: number;
   title: string;
   briefing: string;

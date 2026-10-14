@@ -58,7 +58,7 @@ export const NEUTRAL_EVENTS: readonly SurvivalEvent[] = [
     id: "mercenary_wing",
     title: "Mercenary Wing",
     icon: "🤝",
-    text: "A freelance pilot offers her blaster for hire — or for barter.",
+    text: "A freelance pilot offers her pulse gun for hire — or for barter.",
     choices: [
       {
         label: "Hire her",

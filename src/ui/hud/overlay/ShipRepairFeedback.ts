@@ -2,11 +2,11 @@
  * ShipRepairFeedback — the one object a battle scene creates to get the
  * repair mechanic and its feedback:
  *
- * - applies each ship's own shield regen + hull repair (astromech, mechanic
+ * - applies each ship's own shield regen + hull repair (rigger, mechanic
  *   crew, talents) and allied repair fields, with the hull damage pause;
  * - turns the restored amounts into RepairEvents on a pulse-folding channel;
  * - feeds those events to the ship overlays (shimmer + "+") and to the
- *   pooled repair drones (allied sorties / self-repair droids).
+ *   pooled repair drones (allied sorties / self-repair riggers).
  *
  * Scene wiring is 1–3 lines: construct it in create(), call
  * `selfRepair(ship, deltaMs)` where the scene used to regenerate shields,

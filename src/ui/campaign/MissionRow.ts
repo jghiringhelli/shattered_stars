@@ -96,6 +96,16 @@ export function createMissionRow(
   return card;
 }
 
+/**
+ * @param mission - A mission.
+ * @returns Its card tag: style and story day ("ESCORT · DAY 52").
+ */
+function missionTag(mission: CampaignMission): string | undefined {
+  const style = mission.style?.toUpperCase();
+  if (mission.day === undefined) return style;
+  return style ? `${style} · DAY ${mission.day}` : `DAY ${mission.day}`;
+}
+
 function rowIdleLook(
   status: MissionStatus,
   accent: number,
@@ -157,7 +167,7 @@ function createRowTitle(
   const tag =
     config.branch === true
       ? config.mission.branchTag
-      : config.mission.style?.toUpperCase();
+      : missionTag(config.mission);
   const titleY = tag !== undefined ? L.titleOffsetY : 0;
   const title = addHoloText(scene, x, titleY, config.mission.title, {
     size: L.titleSize,

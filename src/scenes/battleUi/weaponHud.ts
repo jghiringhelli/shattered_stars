@@ -113,9 +113,9 @@ export function cloakRefusalLabel(cloak: CloakState | null): string {
 }
 
 const ACTION_NAMES: Readonly<Record<FlightRefusal["action"], string>> = {
-  kturn: "K-TURN",
-  segnor: "SEGNOR'S LOOP",
-  tallon: "TALLON ROLL",
+  kturn: "SNAP",
+  segnor: "HOOK LOOP",
+  tallon: "KNIFE ROLL",
   boost: "BOOST",
   barrel_roll: "BARREL ROLL",
 };

@@ -124,7 +124,12 @@ import {
 import { matchStats } from "../telemetry/matchTelemetry";
 import { addShipVisual } from "../rendering/ShipVisual";
 import type { CampaignMission, MissionEnemy } from "../data/CampaignData";
-import { FACTION_CAMPAIGNS } from "../data/CampaignData";
+import { campaignOfMission } from "../data/CampaignData";
+import {
+  campaignPlayFlags,
+  canonRecord,
+  recordCampaignVictory,
+} from "../systems/campaignChronicle";
 import type { CampaignSaveData } from "../systems/CampaignSaveManager";
 import { CampaignSaveManager } from "../systems/CampaignSaveManager";
 import { CampaignMissionDirector } from "../campaign/battle/CampaignMissionDirector";
@@ -145,9 +150,7 @@ import { CAMPAIGN_PILOTS } from "../data/PilotData";
 import { audioManager } from "../audio/AudioManager";
 import { bossFinalPhase, campaignBattleMode } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
-import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
-import { renderBattleStarfield } from "../rendering/Starfield";
-import { ParallaxBackground } from "../rendering/ParallaxBackground";
+import { installBattleSpace } from "../rendering/spaceMap/installBattleSpace";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
@@ -280,6 +283,8 @@ export class CampaignBattleScene extends Phaser.Scene {
   private saveData!: CampaignSaveData;
   private selectedShips: string[] = [];
   private selectedLoadouts: (string | null)[] = [];
+  /** Flags the mission is played with: the save\u0027s plus the Chronicle\u0027s canon. */
+  private playFlags: Readonly<Record<string, boolean>> = {};
   /** The mission compiled for this launch (variants, flags, geometry). */
   private plan!: MissionPlan;
   /** Objectives, script, hazards, hero powers and campaign HUD extras. */
@@ -316,7 +321,6 @@ export class CampaignBattleScene extends Phaser.Scene {
   private cameraVirtualY = BATTLEFIELD_SIZE / 2;
 
   private effectsManager!: EffectsManager;
-  private background!: ParallaxBackground;
   private performanceState: PerformanceState = createPerformanceState();
   private telemetry: ShipTelemetry | null = null;
   private cameraShakeEnabled = true;
@@ -344,9 +348,10 @@ export class CampaignBattleScene extends Phaser.Scene {
       this.mission.playerShips.slice(0, this.mission.maxSquadSize);
     this.selectedLoadouts = data.selectedLoadouts ?? [];
     const centre = { x: BATTLEFIELD_SIZE / 2, y: BATTLEFIELD_SIZE / 2 };
+    this.playFlags = campaignPlayFlags(this.saveData);
     this.plan = compileMission(
       this.mission,
-      this.saveData.storyFlags ?? {},
+      this.playFlags,
       centre,
       this.factionId,
     );
@@ -357,7 +362,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.director = new CampaignMissionDirector({
       bridge: this.createBridge(),
       plan: this.plan,
-      save: this.saveData,
+      save: { ...this.saveData, storyFlags: this.playFlags },
       bonuses: this.bonuses,
       playerStart: { x: centre.x, y: centre.y + PLAYER_START_OFFSET_Y },
       enemyFaction:
@@ -402,7 +407,6 @@ export class CampaignBattleScene extends Phaser.Scene {
     // stacks another set of input subscriptions.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.cameras.main.setBackgroundColor(0x0a0a1a);
-    addPaintedSpaceBackground(this, "planet_gas_giant", 0);
 
     audioManager.playBattleMusic(
       campaignBattleMode(this.mission),
@@ -425,14 +429,10 @@ export class CampaignBattleScene extends Phaser.Scene {
         showDamageNumbers: savedSettings.showDamageNumbers,
       });
     }
-    this.background = new ParallaxBackground(
-      this,
-      BATTLEFIELD_SIZE,
-      BATTLEFIELD_SIZE,
-    );
-    this.background.startShootingStars();
+    installBattleSpace(this, { seed: seedFromText(this.mission.id) });
 
-    this.createStarfield();
+    this.creatures = new SceneCreatures(this, this.creatureBridge());
+    this.creatureClockMs = 0;
     this.createHUD();
     this.setupInput();
 
@@ -442,8 +442,6 @@ export class CampaignBattleScene extends Phaser.Scene {
     });
     matchStats.start("campaign", { mission: this.mission.id }, this.events);
     this.weapons = createSceneWeapons(this, this.weaponsLink(), this.hitLedger);
-    this.creatures = new SceneCreatures(this, this.creatureBridge());
-    this.creatureClockMs = 0;
     this.spawnInitialShips();
 
     if (ShipTelemetry.isEnabled()) {
@@ -478,8 +476,6 @@ export class CampaignBattleScene extends Phaser.Scene {
       this.performanceState.effectSettings,
     );
 
-    this.background.update();
-
     this.director.update(time, delta);
     this.updateAI(time, delta);
     this.flyShips(delta);
@@ -496,13 +492,6 @@ export class CampaignBattleScene extends Phaser.Scene {
   // ==========================================
   // SETUP
   // ==========================================
-
-  private createStarfield(): void {
-    renderBattleStarfield(this, BATTLEFIELD_SIZE, {
-      starCount: 300,
-      includeNebula: false,
-    });
-  }
 
   /** Holographic battle HUD (flagship ring, radar, weapons) + mission readouts. */
   private createHUD(): void {
@@ -1855,8 +1844,8 @@ export class CampaignBattleScene extends Phaser.Scene {
 
   /**
    * Runs one frame of the player's flight input through the shared pilot
-   * controls (tap = drift, hold = bank, Q/E = hard turn, K-turn, Segnor,
-   * Tallon, boost, barrel roll).
+   * controls (tap = drift, hold = bank, Q/E = hard turn, Snap turn, Hook,
+   * Knife, boost, barrel roll).
    *
    * @param ship - The flagship.
    * @param time - Scene time (ms).
@@ -1928,7 +1917,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     const { bonuses, storyFlags } = this.director.finalizeVictory();
     const victory = missionVictoryRecord({
       mission: this.mission,
-      campaign: FACTION_CAMPAIGNS[this.factionId],
+      campaign: campaignOfMission(this.mission, this.factionId),
       save: this.saveData,
       bonuses,
       storyFlags,
@@ -1937,10 +1926,9 @@ export class CampaignBattleScene extends Phaser.Scene {
       bonusesActive: this.bonuses,
     });
     const preMissionSave = this.saveData;
-    const result = CampaignSaveManager.recordVictory(
-      this.saveData,
-      victory.record,
-    );
+    const record = canonRecord(victory.record);
+    const result = CampaignSaveManager.recordVictory(this.saveData, record);
+    recordCampaignVictory(this.mission, record, result.save);
     this.showMissionCompleteFlash(() => {
       this.scene.start("DebriefScene", {
         factionId: this.factionId,

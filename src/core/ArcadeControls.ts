@@ -78,10 +78,10 @@ export interface ShipControlState {
  * Recharge times of the red specials and actions (ms). From the tempo
  * experiment (docs/telemetry/tempo-experiment.md): boost and barrel roll
  * recharge x1.5 (3 -> 4.5 s, 2 -> 3 s) lengthen matches without the DPS
- * and skill loss of a longer maneuver cycle. The K-turn family stays at 5 s:
+ * and skill loss of a longer maneuver cycle. The Snap turn family stays at 5 s:
  * slowing it dropped expert-vs-novice pairs below skill gate 1 (85%).
  */
-/** K-turn, Segnor loop and Tallon roll share this recharge (ms). */
+/** Snap turn, Hook loop and Knife roll share this recharge (ms). */
 export const KTURN_RECHARGE_MS = 5000;
 /** Boost recharge (ms). */
 export const BOOST_RECHARGE_MS = 4500;
@@ -328,7 +328,7 @@ export function fireWeapon(control: ShipControlState): ShipControlState {
   return { ...control, firedLaserThisCycle: true };
 }
 
-/** @returns true when a K-turn (or Tallon/Segnor) can be queued. */
+/** @returns true when a Snap turn (or Knife/Hook) can be queued. */
 export function canKTurn(control: ShipControlState): boolean {
   return control.kturnCooldown <= 0;
 }

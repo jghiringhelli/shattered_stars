@@ -5,6 +5,8 @@
  */
 
 import Phaser from "phaser";
+import type { TermId } from "../../data/tooltips";
+import { attachTermTooltip } from "../menu/HintTooltip";
 import { drawHoloFrame, type HoloRect } from "../menu/holoChrome";
 import { holoFont } from "../theme/holoFont";
 import { toCssColor } from "../theme/colorMath";
@@ -31,6 +33,8 @@ export interface ChipSpec<T> {
   readonly value: T;
   readonly label: string;
   readonly accent: number;
+  /** Tooltip term explaining the chip. */
+  readonly tip?: TermId;
 }
 
 /** One chip's display objects and state. */
@@ -121,6 +125,7 @@ export class EncyclopediaChipRow<T> {
     hit.on(Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN, () =>
       onSelect(chip.spec.value),
     );
+    if (chip.spec.tip) attachTermTooltip(scene, hit, chip.spec.tip);
   }
 
   private redrawAll(): void {

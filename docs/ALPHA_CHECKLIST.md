@@ -39,7 +39,7 @@ Built from four evidence-based audits (core gameplay, content, balance, release)
 
 | Item | Status |
 |---|---|
-| Gamepad defaults for specials; consistent ESC in pause menus | Done: boost, K-turn, hard turns (LB/RB), Segnor, Tallon, barrel roll, cloak, crew and commander orders (LT/RT/D-pad ←/→, conflict-free via the commander context) are on the pad; ESC toggles every pause menu |
+| Gamepad defaults for specials; consistent ESC in pause menus | Done: boost, Snap turn, hard turns (LB/RB), Hook, Knife, barrel roll, cloak, crew and commander orders (LT/RT/D-pad ←/→, conflict-free via the commander context) are on the pad; ESC toggles every pause menu |
 | Version + build id in game and in bug reports | Done: version, SHA and date are shown in the menu and included in bug reports and telemetry exports |
 | `npm run lint` (ESLint 9 config), README/playtest docs, ignore e2e output folders | Done: lint passes with 0 errors and runs in CI |
 | 47 pilots and 12 upgrade cards unreachable (no quick build / no slot); `force_power` slot without cards | Planned (content pass) |
@@ -50,10 +50,11 @@ Built from four evidence-based audits (core gameplay, content, balance, release)
 
 ## Verified working
 
-- Flight in every mode: throttle, drift/bank/turn, K-turn, Segnor, Tallon, boost, barrel roll, torus wrap.
+- Flight in every mode: throttle, drift/bank/turn, Snap turn, Hook, Knife, boost, barrel roll, torus wrap.
 - One attack per 500 ms cycle with per-attacker hit immunity; ×12 durability.
 - Piloting gates: expert beats novice ≥ 85% in every pair; coordinated average squad beats solo experts ≥ 70%.
 - 5 factions × 7 roles, 101 ships with art, dials, slots and valid pricing; 217 valid quick builds.
 - Campaign hero powers, armory, research; Survival relics, mutations, events, affixes wired.
+- Interlocked campaigns: Rule of N act unlocks, shared Chronicle (15 crossovers, canon by first witness), Coalition Acts IV-V and four endings (spec: docs/specs/campaign.md §10).
 - 0 console errors in a scripted tour of every mode; flat memory over restarts; 60 FPS in the largest battles (integrated GPU).
 - Corrupt/old saves never block boot; Flight School offered on first launch.

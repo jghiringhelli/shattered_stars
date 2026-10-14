@@ -4,8 +4,8 @@
  *
  * Contexts decide conflicts: two intents may share a key only when no scene
  * listens to both (e.g. ↑ is both tactical PAN_UP and flight THRUST_UP; a
- * gamepad trigger is both a Tallon Roll and a commander order, because no
- * capital ship can Tallon).
+ * gamepad trigger is both a Knife Roll and a commander order, because no
+ * capital ship can Knife).
  */
 
 import type { ActionIntent } from "./InputTypes";
@@ -32,13 +32,13 @@ export const REBINDABLE_INTENTS: readonly RebindableIntent[] = [
   { intent: "STEER_RIGHT", label: "Steer Right", group: "flight" },
   { intent: "THRUST_UP", label: "Throttle Up", group: "flight" },
   { intent: "THRUST_DOWN", label: "Throttle Down", group: "flight" },
-  { intent: "KTURN", label: "K-Turn", group: "flight" },
+  { intent: "KTURN", label: "Snap Turn", group: "flight" },
   { intent: "SHARP_TURN_LEFT", label: "Hard Turn Left", group: "flight" },
   { intent: "SHARP_TURN_RIGHT", label: "Hard Turn Right", group: "flight" },
-  { intent: "SEGNOR_LEFT", label: "Segnor Loop Left", group: "flight" },
-  { intent: "SEGNOR_RIGHT", label: "Segnor Loop Right", group: "flight" },
-  { intent: "TALLON_LEFT", label: "Tallon Roll Left", group: "flight" },
-  { intent: "TALLON_RIGHT", label: "Tallon Roll Right", group: "flight" },
+  { intent: "SEGNOR_LEFT", label: "Hook Loop Left", group: "flight" },
+  { intent: "SEGNOR_RIGHT", label: "Hook Loop Right", group: "flight" },
+  { intent: "TALLON_LEFT", label: "Knife Roll Left", group: "flight" },
+  { intent: "TALLON_RIGHT", label: "Knife Roll Right", group: "flight" },
   { intent: "BARREL_ROLL_LEFT", label: "Barrel Roll Left", group: "flight" },
   { intent: "BARREL_ROLL_RIGHT", label: "Barrel Roll Right", group: "flight" },
   { intent: "BOOST", label: "Boost (extra key)", group: "flight" },

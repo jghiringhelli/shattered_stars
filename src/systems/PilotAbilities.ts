@@ -292,7 +292,7 @@ export const PILOT_ABILITIES: Record<string, PilotAbility> = {
 
   supernatural_reflexes: {
     id: "supernatural_reflexes",
-    name: "Supernatural Reflexes",
+    name: "Precog Reflexes",
     category: "movement",
     trigger: "start_of_round",
     description:
@@ -629,11 +629,11 @@ export const PILOT_ABILITIES: Record<string, PilotAbility> = {
 
   force_heal: {
     id: "force_heal",
-    name: "Force Heal",
+    name: "Mend",
     category: "support",
     trigger: "activated",
     description:
-      "Action: Spend 1 Force charge to restore 2 shields on yourself or a friendly at range 1",
+      "Action: Spend 1 psi charge to restore 2 shields on yourself or a friendly at range 1",
     minPilotSkill: 3,
     pointCost: 5,
     xpCost: 200,
@@ -645,11 +645,11 @@ export const PILOT_ABILITIES: Record<string, PilotAbility> = {
 
   force_guidance: {
     id: "force_guidance",
-    name: "Force Guidance",
+    name: "Guiding Sight",
     category: "support",
     trigger: "activated",
     description:
-      "Spend 1 Force charge to give a friendly ship at range 1-3 a free Focus action",
+      "Spend 1 psi charge to give a friendly ship at range 1-3 a free Focus action",
     minPilotSkill: 3,
     pointCost: 5,
     xpCost: 200,
@@ -708,11 +708,11 @@ export const PILOT_ABILITIES: Record<string, PilotAbility> = {
 
   force_push: {
     id: "force_push",
-    name: "Force Push",
+    name: "Kinetic Shove",
     category: "special",
     trigger: "activated",
     description:
-      "Action: Spend 1 Force charge. An enemy ship at range 1-2 gains 1 stress token",
+      "Action: Spend 1 psi charge. An enemy ship at range 1-2 gains 1 stress token",
     minPilotSkill: 4,
     pointCost: 5,
     xpCost: 200,
@@ -1164,16 +1164,16 @@ export const PILOT_ABILITIES: Record<string, PilotAbility> = {
 
   // ============================================
   // FACTION-SIGNATURE ABILITIES — ASCENDANT EMPIRE
-  // The Force: faith, protection, divine retribution.
+  // Psionics: faith, protection, divine retribution.
   // ============================================
 
   force_barrier: {
     id: "force_barrier",
-    name: "Force Barrier",
+    name: "Psi Barrier",
     category: "support",
     trigger: "activated",
     description:
-      "Action: Spend 1 Force charge to give a friendly ship at range 1-2 an evade token",
+      "Action: Spend 1 psi charge to give a friendly ship at range 1-2 an evade token",
     minPilotSkill: 3,
     pointCost: 5,
     xpCost: 200,
@@ -1247,11 +1247,11 @@ export const PILOT_ABILITIES: Record<string, PilotAbility> = {
 
   force_shield: {
     id: "force_shield",
-    name: "Force Shield",
+    name: "Aegis Weave",
     category: "defensive",
     trigger: "activated",
     description:
-      "Action: Spend 1 Force charge to gain 2 shields until the end of the round",
+      "Action: Spend 1 psi charge to gain 2 shields until the end of the round",
     minPilotSkill: 3,
     pointCost: 5,
     xpCost: 200,
@@ -1263,10 +1263,10 @@ export const PILOT_ABILITIES: Record<string, PilotAbility> = {
 
   force_fury: {
     id: "force_fury",
-    name: "Force Fury",
+    name: "Wrath Surge",
     category: "offensive",
     trigger: "on_attack",
-    description: "Spend 1 Force charge when attacking to add 1 hit result",
+    description: "Spend 1 psi charge when attacking to add 1 hit result",
     minPilotSkill: 4,
     pointCost: 5,
     xpCost: 200,
@@ -1276,11 +1276,11 @@ export const PILOT_ABILITIES: Record<string, PilotAbility> = {
 
   force_suppression: {
     id: "force_suppression",
-    name: "Force Suppression",
+    name: "Mind Static",
     category: "special",
     trigger: "activated",
     description:
-      "Action: Spend 1 Force charge. An enemy at range 1-2 cannot perform actions next round",
+      "Action: Spend 1 psi charge. An enemy at range 1-2 cannot perform actions next round",
     minPilotSkill: 4,
     pointCost: 5,
     xpCost: 200,

@@ -9,6 +9,7 @@ import type { FactionId } from "../../config";
 import type { CampaignMission } from "../../data/CampaignData";
 import { CAMPAIGN_PILOTS } from "../../data/PilotData";
 import { createHoloPanel, type HoloPanel } from "../hud/HoloPanel";
+import { shipDisplayName } from "../idLabels";
 import { drawHoloFrame } from "../menu/holoChrome";
 import { HOLO_PALETTE, HOLO_RADIUS } from "../theme/HoloTheme";
 import { CAMPAIGN_TEXT, addCaptionChip, addHoloText } from "./campaignUi";
@@ -89,6 +90,18 @@ function halfWidth(): number {
   return (L.width - L.columnGap) / 2;
 }
 
+/**
+ * @param mission - The briefed mission.
+ * @returns The panel title: style, story day and place.
+ */
+function briefingTitle(mission: CampaignMission): string {
+  const parts = ["BRIEFING"];
+  if (mission.style) parts.push(mission.style.toUpperCase());
+  if (mission.day !== undefined) parts.push(`DAY ${mission.day}`);
+  if (mission.location) parts.push(mission.location.toUpperCase());
+  return parts.join(" · ");
+}
+
 function createBriefingPanel(
   scene: Phaser.Scene,
   config: BriefingConfig,
@@ -98,9 +111,7 @@ function createBriefingPanel(
     scene,
     { x: L.left, y: L.briefingTop, width: L.width, height: L.briefingHeight },
     config.accent,
-    config.mission.style
-      ? `BRIEFING · ${config.mission.style.toUpperCase()}`
-      : "BRIEFING",
+    briefingTitle(config.mission),
   );
   const left = -L.width / 2 + L.padding;
   const top = panel.contentTop + HOLO_RADIUS.sm;
@@ -287,7 +298,7 @@ function createShipsPanel(
       scene,
       x,
       rowY,
-      shipId.replace(/_/g, " "),
+      shipDisplayName(shipId),
       config.accent,
       "left",
     );

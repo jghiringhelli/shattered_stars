@@ -22,14 +22,14 @@ const SLOT_STYLE: Readonly<
   bomb: { label: "BMB", color: 0xdd6644 },
   crew: { label: "CRW", color: 0x66ccff },
   gunner: { label: "GUN", color: 0xff8866 },
-  astromech: { label: "AST", color: 0x88ddff },
+  astromech: { label: "RIG", color: 0x88ddff },
   sensor: { label: "SEN", color: 0x55ddcc },
   tech: { label: "TEC", color: 0x88aaff },
   modification: { label: "MOD", color: 0x99cc66 },
   illicit: { label: "ILL", color: 0xcc66cc },
   title: { label: "TTL", color: 0xddddaa },
   configuration: { label: "CFG", color: 0xaabbcc },
-  force_power: { label: "FRC", color: 0xbb88ff },
+  force_power: { label: "PSI", color: 0xbb88ff },
 };
 
 /** Chip geometry and tints. */

@@ -15,6 +15,10 @@ import type { FactionId } from "../../config";
 import { SHIP_DEFINITIONS } from "../../data/ShipDefinitions";
 import { HOLO_BORDER, HOLO_PALETTE, HOLO_TYPE_SCALE } from "../theme/HoloTheme";
 import { toCssColor } from "../theme/colorMath";
+import { factionTermId } from "../../data/tooltips";
+import { attachHintTooltip, attachTermTooltip } from "../menu/HintTooltip";
+import { contentFromTerm } from "../menu/tooltipContent";
+import { addTipZone } from "../menu/tooltipTargets";
 import {
   CARD_LAYOUT,
   CARD_W,
@@ -170,6 +174,17 @@ export class SquadCard extends Phaser.Events.EventEmitter {
       ? FACTION_SHORT[this.squad.factionId]
       : "Select Faction";
     const over = this.squad.pointsUsed > this.pointLimit;
+    const pointsText = addSquadText(
+      this.scene,
+      CARD_W - closeBox,
+      titleY,
+      `${this.squad.pointsUsed}/${this.pointLimit}pt`,
+      {
+        size: SQUAD_TYPE.label,
+        weight: "600",
+        color: over ? HOLO_PALETTE.danger : HOLO_PALETTE.success,
+      },
+    ).setOrigin(1, 0);
     this.container.add([
       addSquadText(this.scene, pad, titleY, name.toUpperCase(), {
         size: SQUAD_TYPE.body,
@@ -177,17 +192,7 @@ export class SquadCard extends Phaser.Events.EventEmitter {
         color: this.accent,
         letterSpacing: HOLO_TYPE_SCALE.caption.letterSpacing,
       }),
-      addSquadText(
-        this.scene,
-        CARD_W - closeBox,
-        titleY,
-        `${this.squad.pointsUsed}/${this.pointLimit}pt`,
-        {
-          size: SQUAD_TYPE.label,
-          weight: "600",
-          color: over ? HOLO_PALETTE.danger : HOLO_PALETTE.success,
-        },
-      ).setOrigin(1, 0),
+      pointsText,
       addSquadText(
         this.scene,
         pad,
@@ -197,6 +202,13 @@ export class SquadCard extends Phaser.Events.EventEmitter {
       ),
       ...createRemoveControl(this.scene, () => this.emit("remove")),
     ]);
+    addTipZone(
+      this.scene,
+      this.container,
+      { x: pointsText.x - pointsText.width, y: pointsText.y, width: pointsText.width, height: pointsText.height },
+      "ui.points_total",
+      () => this.emit("editShips"),
+    );
   }
 
   private buildShipSummary(): string {
@@ -213,7 +225,7 @@ export class SquadCard extends Phaser.Events.EventEmitter {
     const factionLabel = this.squad.factionId
       ? FACTION_SHORT[this.squad.factionId]
       : "Faction";
-    this.container.add([
+    const [faction, controller, autoFill] = [
       createCardAction(this.scene, 0, factionLabel, "secondary", () =>
         this.cycleFaction(),
       ),
@@ -227,7 +239,16 @@ export class SquadCard extends Phaser.Events.EventEmitter {
       createCardAction(this.scene, 2, "Auto-Fill", "secondary", () =>
         this.emit("autoFill"),
       ),
-    ]);
+    ] as const;
+    const { factionId } = this.squad;
+    attachHintTooltip(this.scene, faction, () =>
+      contentFromTerm(
+        factionId ? factionTermId(factionId) : "faction.terran_hegemony",
+      ),
+    );
+    attachTermTooltip(this.scene, controller, "ui.controller");
+    attachTermTooltip(this.scene, autoFill, "ui.auto_fill");
+    this.container.add([faction, controller, autoFill]);
   }
 
   private drawShipList(): void {

@@ -1,7 +1,7 @@
 /**
  * Roster quick builds — Ascendant Empire: one build for every Ascendant
- * pilot the original catalogue left grounded, each Force pilot flying one
- * of the Force powers (src/data/upgrades/forcePowers.ts).
+ * pilot the original catalogue left grounded, each psion pilot flying one
+ * of the psionic disciplines (src/data/upgrades/forcePowers.ts).
  */
 
 import type { BlueprintsByShip } from "./loadoutTypes";
@@ -53,11 +53,11 @@ export const ASCENDANT_ROSTER: BlueprintsByShip = {
     },
     {
       id: "templar_force",
-      name: "Templar Force Guardian",
+      name: "Templar Psi Guardian",
       shipId: "ascendant_templar",
       pilotId: "templar_champion",
       upgrades: ["force_sensitive", "advanced_sensors", "hull_upgrade"],
-      description: "Force-sensitive champion shrugging off the hits",
+      description: "Psi-sensitive champion shrugging off the hits",
       role: "defense",
     },
   ],
@@ -68,7 +68,7 @@ export const ASCENDANT_ROSTER: BlueprintsByShip = {
       shipId: "ascendant_inquisitor",
       pilotId: "grand_inquisitor",
       upgrades: ["heavy_laser_cannon", "pattern_analyzer", "foresight"],
-      description: "The Grand Inquisitor reads every shot before it lands",
+      description: "The First Censor reads every shot before it lands",
       role: "offense",
     },
   ],

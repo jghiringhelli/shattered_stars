@@ -96,7 +96,7 @@ export const FLIGHT_SCHOOL_STEPS: readonly FlightSchoolStep[] = [
     title: "Throttle down",
     scenario: "open_space",
     prompt: (k) =>
-      `Tap [${k("THRUST_DOWN")}] two times, slowly, to bleed off speed. (A quick double-tap is a K-TURN.)`,
+      `Tap [${k("THRUST_DOWN")}] two times, slowly, to bleed off speed. (A quick double-tap is a SNAP TURN.)`,
     isDone: (obs, memo) =>
       obs.speed <= Math.max(memo.highSpeed - THROTTLE_NOTCHES, obs.minSpeed),
   },
@@ -126,7 +126,7 @@ export const FLIGHT_SCHOOL_STEPS: readonly FlightSchoolStep[] = [
   },
   {
     id: "kturn",
-    title: "K-turn",
+    title: "Snap turn",
     scenario: "open_space",
     prompt: (k) =>
       `Press [${k("KTURN")}] (or double-tap [${k("THRUST_DOWN")}]) to flip 180°. Red maneuvers build stress — watch the bottom of your ring.`,
@@ -134,18 +134,18 @@ export const FLIGHT_SCHOOL_STEPS: readonly FlightSchoolStep[] = [
   },
   {
     id: "segnor",
-    title: "Segnor's loop",
+    title: "Hook loop",
     scenario: "open_space",
     prompt: (k) =>
-      `Press ${either(k, "SEGNOR_LEFT", "SEGNOR_RIGHT")} for a Segnor's loop: a reversing bank.`,
+      `Press ${either(k, "SEGNOR_LEFT", "SEGNOR_RIGHT")} for a Hook loop: a reversing bank.`,
     isDone: flying("segnor_left", "segnor_right"),
   },
   {
     id: "tallon",
-    title: "Tallon roll",
+    title: "Knife roll",
     scenario: "open_space",
     prompt: (k) =>
-      `Press ${either(k, "TALLON_LEFT", "TALLON_RIGHT")} for a Tallon roll: a 90° turn that ends facing sideways.`,
+      `Press ${either(k, "TALLON_LEFT", "TALLON_RIGHT")} for a Knife roll: a 90° turn that ends facing sideways.`,
     isDone: flying("tallon_left", "tallon_right"),
   },
   {

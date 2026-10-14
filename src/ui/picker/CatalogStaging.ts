@@ -12,6 +12,9 @@ import { getShipLoadouts } from "../../data/ShipLoadouts";
 import { CAT_X, CAT_W } from "./catalogHelpers";
 import type { StagingSelection } from "./ShipDetailPanel";
 import { createHoverButton } from "../ButtonFactory";
+import { attachTermTooltip } from "../menu/HintTooltip";
+import { addTipZone } from "../menu/tooltipTargets";
+import { sizeTermId } from "../../data/tooltips";
 import {
   HOLO_ALPHA,
   HOLO_BORDER,
@@ -132,6 +135,8 @@ export class CatalogStaging
     ).setLetterSpacing(0);
     fitOrEllipsize(name, size.x - size.width - STAGE.pad - name.x);
     container.add([name, size]);
+    const sizeBox = { x: size.x - size.width, y: size.y, width: size.width, height: size.height };
+    addTipZone(this.scene, container, sizeBox, sizeTermId(def.baseStats.size));
   }
 
   private drawAddButton(
@@ -171,6 +176,11 @@ export class CatalogStaging
           this.emit("addInstance", { shipId: def.id, loadoutId }),
         );
       },
+    );
+    attachTermTooltip(
+      this.scene,
+      button,
+      this.confirmLabel === "ADD" ? "ui.add" : "ui.launch",
     );
     container.add(button);
   }

@@ -1,7 +1,7 @@
 /**
  * ExpertBot — an ace: reacts fast, reads the dial a cycle ahead
  * (ManeuverPlanner: lead pursuit onto the target's rear arc, out of every
- * enemy's firing arc, throttle to stay behind, K-turn/Segnor/Tallon when
+ * enemy's firing arc, throttle to stay behind, Snap turn/Hook/Knife when
  * overshooting, stress budget so it can break off), and uses its reflexes:
  * barrel roll to slip out of an arc, boost to close or to escape.
  *
@@ -37,7 +37,7 @@ import {
 /** Plan this long before the boundary: room to hold a bank (ms). */
 export const PLAN_LEAD_MS = 250;
 
-/** No boost above this stress level (keeps K-turns available). */
+/** No boost above this stress level (keeps Snap turns available). */
 export const BOOST_MAX_STRESS = 0.4;
 
 /** Boost to close only on a target within this off-nose bearing (°). */

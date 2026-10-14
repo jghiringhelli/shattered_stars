@@ -7,7 +7,8 @@
 import Phaser from "phaser";
 import { createHoverButton } from "../ButtonFactory";
 import { MENU_LAYOUT } from "../menu/MenuScaffold";
-import { MenuFocus } from "../menu/MenuFocus";
+import { MenuFocus, type FocusTarget } from "../menu/MenuFocus";
+import { attachTermTooltip } from "../menu/HintTooltip";
 import { HOLO_PALETTE } from "../theme/HoloTheme";
 
 /** Button sizes. */
@@ -25,6 +26,12 @@ export interface PickerActionsConfig {
   readonly onClear: () => void;
   /** Keyboard focus only works while this is true (e.g. no modal open). */
   readonly isActive: () => boolean;
+  /** Extra focus targets (the catalog's filter chips) ahead of DONE / CLEAR ALL. */
+  readonly extraTargets?: {
+    readonly targets: readonly FocusTarget[];
+    /** Called again whenever `targets` is rebuilt. */
+    readonly onChange: (listener: () => void) => void;
+  };
 }
 
 /**
@@ -68,8 +75,22 @@ export function addPickerActions(
     },
     config.onClear,
   );
-  const focus = new MenuFocus(scene, [done, clear], {
-    columns: 2,
+  attachTermTooltip(scene, done, "ui.done");
+  attachTermTooltip(scene, clear, "ui.clear");
+  const targets: FocusTarget[] = [];
+  const syncTargets = (): void => {
+    targets.splice(
+      0,
+      targets.length,
+      ...(config.extraTargets?.targets ?? []),
+      done,
+      clear,
+    );
+  };
+  syncTargets();
+  config.extraTargets?.onChange(syncTargets);
+  const focus = new MenuFocus(scene, targets, {
+    columns: targets.length,
     isActive: config.isActive,
   });
   scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => focus.destroy());

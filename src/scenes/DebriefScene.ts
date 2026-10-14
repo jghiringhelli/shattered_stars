@@ -12,7 +12,7 @@
 
 import Phaser from "phaser";
 import {
-  FACTION_CAMPAIGNS,
+  campaignOfMission,
   type DebriefLine,
   type EvolutionOption,
 } from "../data/CampaignData";
@@ -144,7 +144,7 @@ export class DebriefScene extends Phaser.Scene {
 
   private createHeader(accent: number): void {
     const { mission, factionId } = this.data_;
-    const campaignName = FACTION_CAMPAIGNS[factionId]?.name;
+    const campaignName = campaignOfMission(mission, factionId).name;
     addMenuHeader(this, {
       title: `MISSION ${mission.missionNumber}: ${mission.title.toUpperCase()}`,
       ...(campaignName !== undefined && {
@@ -327,9 +327,10 @@ export class DebriefScene extends Phaser.Scene {
         const { factionId, updatedSave, mission } = this.data_;
         const finale =
           updatedSave.campaignComplete &&
-          isFinaleMission(mission, FACTION_CAMPAIGNS[factionId]);
+          isFinaleMission(mission, campaignOfMission(mission, factionId));
         this.scene.start(finale ? "CampaignCompleteScene" : "CampaignScene", {
           factionId,
+          slot: updatedSave.slot,
         });
       },
     );

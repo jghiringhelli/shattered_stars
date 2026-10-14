@@ -64,7 +64,7 @@ export interface FlightOptions {
   readonly start?: Pose;
   /** Tick length; a function receives the tick index (default 60 Hz fixed). */
   readonly tickMs?: number | ((tick: number) => number);
-  /** Flight actions (boost, barrel roll, K-turn…) triggered at given times. */
+  /** Flight actions (boost, barrel roll, Snap turn…) triggered at given times. */
   readonly actions?: ReadonlyArray<TimedAction>;
   /** Battlefield edge length (default BATTLEFIELD_SIZE). */
   readonly worldSize?: number;

@@ -12,9 +12,9 @@
  * - Turns and banks are true circular arcs: the chord sits at half the
  *   heading change (turn 45°, bank 22.5°) and mid-cycle the nose stays
  *   tangent to the arc.
- * - K-turn: straight template, then rotate 180°.
- * - Segnor's Loop: bank template, then rotate 180° the same way → ±225° (≡ ∓135°).
- * - Tallon Roll: turn template, then rotate 90° toward the turn → net ±180°.
+ * - Snap turn: straight template, then rotate 180°.
+ * - Hook Loop: bank template, then rotate 180° the same way → ±225° (≡ ∓135°).
+ * - Knife Roll: turn template, then rotate 90° toward the turn → net ±180°.
  * - Barrel roll: slide sideways one speed-1 template + base, facing unchanged.
  *
  * Pure: no Phaser, no game-template imports.
@@ -155,7 +155,7 @@ export function predictManeuver(
 
 /**
  * Pose part-way through a maneuver: on the template's circular arc, nose
- * tangent to it, plus the share of any extra flip (K-turn/Segnor/Tallon).
+ * tangent to it, plus the share of any extra flip (Snap turn/Hook/Knife).
  *
  * @param pose - Pose at the start of the maneuver.
  * @param step - The maneuver flown.

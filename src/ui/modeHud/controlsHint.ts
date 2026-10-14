@@ -10,7 +10,7 @@ import { createHoloText } from "../hud/holoPrimitives";
 /** Flight controls reminder (two centred lines). */
 export const FLIGHT_CONTROLS_HINT =
   "UP/DOWN SPEED · 2×UP BOOST · LEFT/RIGHT TAP DRIFT, HOLD BANK\n" +
-  "Q/E HARD TURN · Z K-TURN · WEAPONS AUTOFIRE · ESC PAUSE";
+  "Q/E HARD TURN · Z SNAP · WEAPONS AUTOFIRE · ESC PAUSE";
 
 /** Hint opacity — present but quiet. */
 const HINT_ALPHA = 0.7;

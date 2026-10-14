@@ -54,7 +54,7 @@ export const LOW_SPEED_POINTS = 2;
  */
 export const SIZE_STEP_POINTS = 4;
 
-/** Price of one stress-relief tier (Flight Astromech / Squadron Leader). */
+/** Price of one stress-relief tier (Flight Rigger / Squadron Leader). */
 const STRESS_RELIEF_TIER_POINTS = 4;
 /**
  * Dial steps a relief tier is worth on a reference fighter dial: the

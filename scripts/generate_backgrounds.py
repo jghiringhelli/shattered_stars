@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """generate_backgrounds.py — Generate painted space backgrounds (nebulae,
 planets, a galaxy vista, a deep starfield) to replace/supplement the
-procedural Phaser-graphics backgrounds in ParallaxBackground.ts / Starfield.ts.
+procedural parallax layers in src/rendering/spaceMap/ (these paintings become seamless parallax backdrops).
 
 Submits 1024x576 landscape jobs (matches the game's 1280x720 aspect ratio
 exactly, so scaling up introduces no distortion) to the local SD queue.

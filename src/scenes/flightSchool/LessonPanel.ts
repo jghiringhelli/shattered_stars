@@ -6,6 +6,7 @@
  */
 
 import Phaser from "phaser";
+import { SPECIAL_MANEUVER_WORDS } from "../../core/maneuverLabels";
 import { createHoloPanel, type HoloPanel } from "../../ui/hud/HoloPanel";
 import { holoFont } from "../../ui/theme/holoFont";
 import { HOLO_PALETTE, HOLO_SPACING } from "../../ui/theme/HoloTheme";
@@ -143,7 +144,10 @@ export class LessonPanel {
       BEAT.height,
     );
     const label = (m: string | null): string =>
-      (m ?? "straight").replace("_", " ").toUpperCase();
+      (m ?? "straight")
+        .split("_")
+        .map((part) => SPECIAL_MANEUVER_WORDS[part] ?? part.toUpperCase())
+        .join(" ");
     this.beatLabel.setText(
       `500 ms CYCLE   NOW: ${label(now)}   ▸   NEXT: ${label(next)}`,
     );

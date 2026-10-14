@@ -15,6 +15,7 @@ import {
   primaryCooldownFraction,
   type PrimaryGunner,
 } from "../../arcade/systems/DuelPrimaryFire";
+import { SPECIAL_MANEUVER_WORDS } from "../../core/maneuverLabels";
 import type { ManeuverDirection } from "../../core/types";
 import { getShipDefinition } from "../../data/ShipDefinitions";
 import { shortestDelta } from "../../ui/hud/hudMath";
@@ -160,7 +161,7 @@ export function maneuverLabel(
   speed: number,
 ): string {
   const [kind = "straight", side] = (maneuver ?? "straight").split("_");
-  const name = kind === "kturn" ? "K-TURN" : kind.toUpperCase();
+  const name = SPECIAL_MANEUVER_WORDS[kind] ?? kind.toUpperCase();
   const sideLetter = side === undefined ? "" : ` ${side[0]!.toUpperCase()}`;
   return `${name}${sideLetter} ${speed}`;
 }

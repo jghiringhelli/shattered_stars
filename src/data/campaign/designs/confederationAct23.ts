@@ -190,7 +190,7 @@ export const CONFEDERATION_ACT23_DESIGNS: Readonly<
         shipId: "corsair_marauder",
         count: 1,
         tag: "captain",
-        name: "Corsair Captain",
+        name: "Captain Kira",
       },
     ],
     objectives: [

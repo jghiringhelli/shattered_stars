@@ -108,7 +108,7 @@ describe("aceDuelBriefing", () => {
 
 describe("raidBriefing", () => {
   const briefing = raidBriefing({
-    bossName: "Dreadnought Imperator",
+    bossName: "Dreadnought Aquila",
     bossFaction: "Terran Hegemony",
     difficulty: "mythic",
     clockMs: 720_000,

@@ -9,11 +9,11 @@ describe("selfRepairProfile", () => {
     });
   });
 
-  it("credits the astromech for its shield regeneration", () => {
+  it("credits the rigger for its shield regeneration", () => {
     expect(selfRepairProfile(["repair_astromech"]).shield).toBe("astromech");
   });
 
-  it("credits a hull-patching astromech for hull repair", () => {
+  it("credits a hull-patching rigger for hull repair", () => {
     expect(selfRepairProfile(["patch_astromech"]).hull).toBe("astromech");
   });
 

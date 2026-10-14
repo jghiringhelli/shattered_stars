@@ -72,11 +72,11 @@ import {
   realTimeRunBonuses,
 } from "../arcade/systems/SurvivalDurability";
 import { EffectsManager } from "../rendering/EffectsManager";
-import { ParallaxBackground } from "../rendering/ParallaxBackground";
+import { installBattleSpace } from "../rendering/spaceMap/installBattleSpace";
+import { themeIdForSector } from "../rendering/spaceMap/mapThemes";
 import { audioManager } from "../audio/AudioManager";
 import { survivalBattleMode } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
-import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import {
   createPerformanceState,
   updateFPS,
@@ -408,7 +408,6 @@ export class SurvivalScene extends Phaser.Scene {
 
   // Effects
   private effectsManager!: EffectsManager;
-  private background!: ParallaxBackground;
   private performanceState: PerformanceState = createPerformanceState();
   private telemetry: ShipTelemetry | null = null;
   /** Flagship override from the setup screen; falls back to the faction default. */
@@ -438,7 +437,6 @@ export class SurvivalScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     // No setBounds — camera is driven manually for seamless toroid wrapping (see updateCameraFollow).
     this.cameras.main.setBackgroundColor(0x050510);
-    addPaintedSpaceBackground(this, "starfield_deep", 0);
 
     audioManager.initialize();
 
@@ -458,17 +456,15 @@ export class SurvivalScene extends Phaser.Scene {
         showDamageNumbers: savedSettings.showDamageNumbers,
       });
     }
-    this.background = new ParallaxBackground(
-      this,
-      BATTLEFIELD_SIZE,
-      BATTLEFIELD_SIZE,
-    );
-    this.background.startShootingStars();
 
     this.beltGraphics = this.add.graphics().setDepth(1);
     this.weapons = createSceneWeapons(this, this.weaponsLink(), this.hitLedger);
     this.creatures = new SceneCreatures(this, this.creatureBridge());
     this.resetState();
+    installBattleSpace(this, {
+      seed: this.rules.plan.combatSeed,
+      mapTheme: themeIdForSector(this.rules.plan.sector),
+    });
     this.createHUD();
     this.setupInput();
 
@@ -649,8 +645,6 @@ export class SurvivalScene extends Phaser.Scene {
     this.effectsManager.setQualitySettings(
       this.performanceState.effectSettings,
     );
-
-    this.background.update();
 
     this.updateAI(time, delta);
     this.flyShips(delta);
@@ -2155,8 +2149,8 @@ export class SurvivalScene extends Phaser.Scene {
 
   /**
    * Runs one frame of the player's flight input on the flagship through the
-   * shared pilot controls (tap = drift, hold = bank, Q/E = hard turn, K-turn,
-   * Segnor, Tallon, boost, barrel roll). When the flagship is lost the next
+   * shared pilot controls (tap = drift, hold = bank, Q/E = hard turn, Snap turn,
+   * Hook, Knife, boost, barrel roll). When the flagship is lost the next
    * fleet ship takes over with fresh input memory.
    *
    * @param shipId - The flagship's id, if the fleet has one.

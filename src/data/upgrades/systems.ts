@@ -1,6 +1,6 @@
 /**
- * Upgrade catalog — ship systems and the people/droids who run them:
- * sensors, tech, crew, gunners and astromechs.
+ * Upgrade catalog — ship systems and the people/riggers who run them:
+ * sensors, tech, crew, gunners and riggers.
  */
 
 import type { UpgradeDefinition } from "../../core/upgradeTypes";
@@ -21,7 +21,7 @@ export const SENSOR_AND_TECH_UPGRADES: Readonly<
     id: "advanced_sensors",
     name: "Advanced Sensors",
     slotType: "sensor",
-    description: "K-turn, Segnor loop and Tallon roll recharge 30% faster.",
+    description: "Snap turn, Hook loop and Knife roll recharge 30% faster.",
     pointCost: 2,
     creditCost: 150,
     realtime: { kturnCooldownMultiplier: 0.7 },
@@ -119,7 +119,7 @@ export const CREW_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
 export const ASTROMECH_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
   repair_astromech: {
     id: "repair_astromech",
-    name: "Repair Astromech",
+    name: "Repair Rigger",
     slotType: "astromech",
     description: "Regenerates 1 shield every ~100 seconds.",
     pointCost: 1,
@@ -128,7 +128,7 @@ export const ASTROMECH_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
   },
   patch_astromech: {
     id: "patch_astromech",
-    name: "Patch Astromech",
+    name: "Patch Rigger",
     slotType: "astromech",
     description:
       "Welds 1 hull back every ~20 seconds once the ship is out of fire.",
@@ -138,7 +138,7 @@ export const ASTROMECH_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
   },
   targeting_astromech: {
     id: "targeting_astromech",
-    name: "Targeting Astromech",
+    name: "Targeting Rigger",
     slotType: "astromech",
     description: "Ordnance reloads 10% faster and tracks 60° longer.",
     pointCost: 1,
@@ -148,7 +148,7 @@ export const ASTROMECH_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
   },
   flight_astromech: {
     id: "flight_astromech",
-    name: "Flight Astromech",
+    name: "Flight Rigger",
     slotType: "astromech",
     description: "Every maneuver counts one difficulty easier for stress.",
     pointCost: 2,

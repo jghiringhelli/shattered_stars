@@ -33,7 +33,7 @@ import {
   addMenuBackdrop,
   addMenuHeader,
 } from "../ui/menu/MenuScaffold";
-import { MenuFocus } from "../ui/menu/MenuFocus";
+import { MenuFocus, type FocusTarget } from "../ui/menu/MenuFocus";
 import {
   bindMenuBack,
   fadeInMenu,
@@ -171,15 +171,23 @@ export class SquadBuilderScene extends Phaser.Scene {
     this.wireMenuFocus();
   }
 
-  /** Keyboard focus over BACK, the mode toggle and the action bar. */
+  /** Keyboard focus over BACK, the mode toggle, the catalog chips and the action bar. */
   private wireMenuFocus(): void {
-    const targets = [
-      this.backButton,
-      ...(this.reinforcementSetup?.focusTargets() ?? []),
-      ...(this.scenarioPicker ? [this.scenarioPicker.button] : []),
-      ...(this.modeToggleButton ? [this.modeToggleButton] : []),
-      ...this.bottomBarObjects,
-    ];
+    const targets: FocusTarget[] = [];
+    const sync = (): void => {
+      targets.splice(
+        0,
+        targets.length,
+        this.backButton,
+        ...(this.reinforcementSetup?.focusTargets() ?? []),
+        ...(this.scenarioPicker ? [this.scenarioPicker.button] : []),
+        ...(this.modeToggleButton ? [this.modeToggleButton] : []),
+        ...(this.simpleFlow?.focusTargets ?? []),
+        ...this.bottomBarObjects,
+      );
+    };
+    sync();
+    this.simpleFlow?.on("focusTargetsChanged", sync);
     this.menuFocus = new MenuFocus(this, targets, {
       columns: targets.length,
       isActive: () =>

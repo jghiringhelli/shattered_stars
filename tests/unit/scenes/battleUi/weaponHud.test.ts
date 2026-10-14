@@ -68,13 +68,13 @@ describe("feedback labels", () => {
 
   it("names refused maneuvers and why", () => {
     expect(refusalLabel({ action: "tallon", reason: "stressed" })).toBe(
-      "STRESSED: NO TALLON ROLL",
+      "STRESSED: NO KNIFE ROLL",
     );
     expect(refusalLabel({ action: "boost", reason: "no_action" })).toBe(
       "NO BOOST ACTION",
     );
     expect(refusalLabel({ action: "kturn", reason: "not_on_dial" })).toBe(
-      "K-TURN NOT ON DIAL",
+      "SNAP NOT ON DIAL",
     );
   });
 });

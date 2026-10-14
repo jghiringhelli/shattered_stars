@@ -335,7 +335,7 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     pointLimit: 200,
     name: "Temple Inquisition",
     style: "balanced",
-    // Identity: Foresight and Force Sensitive under the acolyte's Aegis Field.
+    // Identity: Foresight and Psi-Sensitive under the acolyte's Aegis Field.
     ships: [
       { loadoutId: "inquisitor_force" },
       { loadoutId: "acolyte_relay" },

@@ -1,7 +1,7 @@
 /**
  * cycle-flight-ace-duel.spec.ts — Ace Duel flies the X-Wing cycle engine:
  * every ship rides template arcs on its own, holding a steering key banks
- * the player's flagship, and Z queues a K-turn (and costs stress).
+ * the player's flagship, and Z queues a Snap turn (and costs stress).
  *
  * Weapons are neutralised so no ship dies mid-test (dead ships don't fly).
  */
@@ -74,7 +74,7 @@ test.describe("AceDuelScene — cycle-engine flight", () => {
     expect(headingChange(start.angle, end.angle)).toBeLessThanOrEqual(-40);
   });
 
-  test("Z queues a K-turn and costs stress", async ({ page }) => {
+  test("Z queues a Snap turn and costs stress", async ({ page }) => {
     await ACE_DUEL.enter(page, { peaceful: true });
     await holdGameKey(page, "Z", 150);
     const ship = flagship(await readShips(page));

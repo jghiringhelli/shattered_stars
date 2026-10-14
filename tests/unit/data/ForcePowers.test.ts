@@ -1,5 +1,5 @@
 /**
- * Force powers — specification tests: the `force_power` slot that
+ * psionic disciplines — specification tests: the `force_power` slot that
  * Ascendant pilot cards add has real cards to fill it, each with a
  * real-time effect, and every such pilot can equip at least one of them.
  */
@@ -23,19 +23,19 @@ const FORCE_PILOTS = Object.values(PILOT_CARDS).filter((pilot) =>
 );
 
 describe("force power cards", () => {
-  it("offers a small set (3-5) of Force powers", () => {
+  it("offers a small set (3-5) of psionic disciplines", () => {
     expect(FORCE_CARDS.length).toBeGreaterThanOrEqual(3);
     expect(FORCE_CARDS.length).toBeLessThanOrEqual(5);
   });
 
-  it("restricts every Force power to the Ascendant Empire", () => {
+  it("restricts every psionic discipline to the Ascendant Empire", () => {
     const open = FORCE_CARDS.filter(
       (card) => card.requiredFaction !== "ascendant_empire",
     ).map((card) => card.id);
     expect(open).toEqual([]);
   });
 
-  it("gives every Force power a real-time effect that reads as a phrase", () => {
+  it("gives every psionic discipline a real-time effect that reads as a phrase", () => {
     const inert = FORCE_CARDS.filter(
       (card) => describeRealtimeEffect(card.realtime ?? {}).length === 0,
     ).map((card) => card.id);

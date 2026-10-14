@@ -27,11 +27,10 @@ import {
 import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
 import { EffectsManager } from "../rendering/EffectsManager";
-import { ParallaxBackground } from "../rendering/ParallaxBackground";
+import { installBattleSpace } from "../rendering/spaceMap/installBattleSpace";
 import { audioManager } from "../audio/AudioManager";
 import { hullFractionOf } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
-import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import {
   createPerformanceState,
   updateFPS,
@@ -274,7 +273,6 @@ export class DogfightScene extends Phaser.Scene {
 
   // Effects
   private effectsManager!: EffectsManager;
-  private background!: ParallaxBackground;
   private performanceState: PerformanceState = createPerformanceState();
   private telemetry: ShipTelemetry | null = null;
   private cameraShakeEnabled = true;
@@ -345,7 +343,6 @@ export class DogfightScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     // No setBounds — camera is driven manually for seamless toroid wrapping (see updateCameraFollow).
     this.cameras.main.setBackgroundColor(0x050510);
-    addPaintedSpaceBackground(this, "nebula_purple", 0);
 
     audioManager.initialize();
 
@@ -365,12 +362,7 @@ export class DogfightScene extends Phaser.Scene {
         showDamageNumbers: savedSettings.showDamageNumbers,
       });
     }
-    this.background = new ParallaxBackground(
-      this,
-      BATTLEFIELD_SIZE,
-      BATTLEFIELD_SIZE,
-    );
-    this.background.startShootingStars();
+    installBattleSpace(this);
 
     this.resetMatchState();
     this.weapons = createSceneWeapons(
@@ -984,7 +976,6 @@ export class DogfightScene extends Phaser.Scene {
     this.effectsManager.setQualitySettings(
       this.performanceState.effectSettings,
     );
-    this.background.update();
   }
 
   /**
@@ -1704,8 +1695,8 @@ export class DogfightScene extends Phaser.Scene {
 
   /**
    * Runs one step of a human pilot's flight input through the shared pilot
-   * controls (tap = drift, hold = bank, Q/E = hard turn, K-turn, Segnor,
-   * Tallon, boost, barrel roll).
+   * controls (tap = drift, hold = bank, Q/E = hard turn, Snap turn, Hook,
+   * Knife, boost, barrel roll).
    *
    * @param ship - The human's ship.
    * @param pilot - Its pilot controls (InputManager offline, a seat online).

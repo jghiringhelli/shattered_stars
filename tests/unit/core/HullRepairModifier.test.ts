@@ -39,7 +39,7 @@ describe("hull repair cards", () => {
     expect(mechanic?.realtime?.hullRepairPerSecond ?? 0).toBeGreaterThan(0);
   });
 
-  it("offers an astromech that patches hull (the R5-style repair droid)", () => {
+  it("offers a rigger that patches hull (the repair rigger)", () => {
     const patch = UPGRADE_CATALOG.patch_astromech;
     expect(patch?.slotType).toBe("astromech");
     expect(patch?.realtime?.hullRepairPerSecond ?? 0).toBeGreaterThan(0);

@@ -139,7 +139,7 @@ describe("hold-to-commit hard turn", () => {
   });
 });
 
-// ─── Double-tap UP: boost vs. Tallon Roll ────────────────────────────────────
+// ─── Double-tap UP: boost vs. Knife Roll ────────────────────────────────────
 
 describe("double-tap UP", () => {
   it("emits boost when UP is double-tapped with no direction held", () => {
@@ -196,7 +196,7 @@ describe("double-tap UP", () => {
   });
 });
 
-// ─── Double-tap DOWN: K-turn vs. Segnor Loop ────────────────────────────────
+// ─── Double-tap DOWN: Snap turn vs. Hook Loop ────────────────────────────────
 
 describe("double-tap DOWN", () => {
   it("emits kturn_gesture when DOWN double-tapped with no direction held", () => {

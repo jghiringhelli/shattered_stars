@@ -3,7 +3,7 @@
  * modifier sheet performs (the sheet itself is a merged number, so the
  * provenance is read back from the fitted upgrade cards).
  *
- * The credited kind picks the visual: an astromech sends one drone, a
+ * The credited kind picks the visual: an rigger sends one drone, a
  * mechanic crew two, plain shield regeneration only shimmers. Pure.
  */
 
@@ -32,7 +32,7 @@ const SOURCE_PRIORITY: readonly RepairSourceKind[] = [
 /**
  * The source kind a single card is credited as.
  * @param slotType - The card's slot.
- * @returns mechanic_crew for crew, astromech for droids, else self_regen.
+ * @returns mechanic_crew for crew, rigger for riggers, else self_regen.
  */
 function kindForSlot(slotType: string): RepairSourceKind {
   if (slotType === "crew") return "mechanic_crew";

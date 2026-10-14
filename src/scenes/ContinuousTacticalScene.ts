@@ -14,6 +14,7 @@
 import { weaponBarSlots } from "./battleUi/sceneWeapons";
 import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
+import { shipDisplayName } from "../ui/idLabels";
 import { addShipVisual } from "../rendering/ShipVisual";
 import type {
   ShipState,
@@ -48,11 +49,10 @@ import {
 import { HealthBar } from "../ui/HealthBar";
 import { overlaySide } from "../ui/hud/overlay";
 import { EffectsManager } from "../rendering/EffectsManager";
-import { renderBattleStarfield } from "../rendering/Starfield";
-import { ParallaxBackground } from "../rendering/ParallaxBackground";
+import { installBattleSpace } from "../rendering/spaceMap/installBattleSpace";
+import { TorusFollow } from "../rendering/torus/TorusFollow";
 import { audioManager } from "../audio/AudioManager";
 import { hullFractionOf } from "../audio/musicContexts";
-import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import { createPerformanceState } from "../systems/PerformanceSystem";
 import { findClosestEnemy as battleFindClosestEnemy } from "../systems/BattleHelpers";
 import {
@@ -91,7 +91,6 @@ import {
 } from "./battleUi/hudSnapshot";
 import { HoloPauseOverlay } from "./battleUi/HoloPauseOverlay";
 import { showHoloResultScreen } from "./battleUi/HoloResultScreen";
-import { fitBackdropToZoom } from "./battleUi/fitBackdropToZoom";
 import { TacticalHud } from "./tactical/TacticalHud";
 import type { OrdersView } from "./tactical/OrdersPanel";
 import { difficultyColor } from "./tactical/dialMarkers";
@@ -142,8 +141,9 @@ const PREVIEW_REMAINING_COLOR = 0xaaaaaa;
 const PREVIEW_GHOST_RADIUS = 15;
 /** Camera zoom in battle and the mouse-wheel limits (buttons appear only at zoom 1). */
 const TACTICAL_ZOOM = { battle: 0.9, min: 0.5, max: 2 } as const;
+/** Fraction of the gap to the selected ship the camera closes per frame. */
+const TACTICAL_FOLLOW_LERP = 0.1;
 /** Painted backdrop texture id. */
-const TACTICAL_BACKDROP = "nebula_blue";
 
 /**
  * Strokes a polyline through a list of poses (current line style).
@@ -170,6 +170,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   private playerFaction: FactionId = "free_confederation";
 
   private selectedShipId: string | null = null;
+  private torusFollow!: TorusFollow;
 
   private battleStartTime: number = 0;
 
@@ -204,10 +205,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     // stacks another set of input subscriptions.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.resetState();
-    this.cameras.main.setBounds(0, 0, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
     this.cameras.main.setBackgroundColor(0x050510);
-    addPaintedSpaceBackground(this, TACTICAL_BACKDROP, 0);
-    fitBackdropToZoom(this, TACTICAL_BACKDROP, TACTICAL_ZOOM.min);
 
     audioManager.initialize();
 
@@ -220,26 +218,10 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
         showDamageNumbers: savedSettings.showDamageNumbers,
       });
     }
-    this.background = new ParallaxBackground(
-      this,
-      BATTLEFIELD_SIZE,
-      BATTLEFIELD_SIZE,
-    );
-    this.background.startShootingStars();
-    this.background.addDistantPlanet(
-      BATTLEFIELD_SIZE * 0.8,
-      BATTLEFIELD_SIZE * 0.3,
-      80,
-      0x446688,
-    );
-    this.background.addSpaceStation(
-      BATTLEFIELD_SIZE * 0.2,
-      BATTLEFIELD_SIZE * 0.15,
-      0.8,
-    );
+    installBattleSpace(this);
+    this.torusFollow = new TorusFollow(this, BATTLEFIELD_SIZE);
     this.performanceState = createPerformanceState();
 
-    renderBattleStarfield(this, BATTLEFIELD_SIZE, { includeNebula: false });
     matchStats.start("continuous", {}, this.events);
     this.createWeapons();
     this.spawnShips();
@@ -366,12 +348,12 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       if (killer) {
         const killerName =
           killer.owner === "player"
-            ? killer.definitionId.replace(/_/g, " ")
-            : `Enemy ${killer.definitionId.replace(/_/g, " ")}`;
+            ? shipDisplayName(killer.definitionId)
+            : `Enemy ${shipDisplayName(killer.definitionId)}`;
         const victimName =
           ship.owner === "player"
-            ? ship.definitionId.replace(/_/g, " ")
-            : `Enemy ${ship.definitionId.replace(/_/g, " ")}`;
+            ? shipDisplayName(ship.definitionId)
+            : `Enemy ${shipDisplayName(ship.definitionId)}`;
         this.effectsManager.showKillNotification(
           killerName,
           victimName,
@@ -977,11 +959,9 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     const ship = this.ships.get(shipId);
     if (ship) {
       this.refreshHud();
-      this.cameras.main.startFollow(
+      this.torusFollow.follow(
         this.shipSprites.get(shipId) as Phaser.GameObjects.Container,
-        true,
-        0.1,
-        0.1,
+        TACTICAL_FOLLOW_LERP,
       );
     }
   }

@@ -35,6 +35,7 @@ import {
   MENU_LAYOUT,
 } from "../ui/menu/MenuScaffold";
 import { footerKeys } from "../ui/menu/footerKeys";
+import { attachTermTooltip } from "../ui/menu/HintTooltip";
 import {
   factionAccent,
   HOLO_PALETTE,
@@ -119,13 +120,18 @@ export class ShipPickerScene extends Phaser.Scene {
         this.refreshRoster();
       },
       isActive: () => !this.bannerOpen,
+      extraTargets: {
+        targets: this.catalogPanel.focusTargets,
+        onChange: (listener) =>
+          this.catalogPanel.on("focusTargetsChanged", listener),
+      },
     });
     addFooterHint(
       this,
       footerKeys([
         ["ESC", "done"],
         ["WHEEL", "scroll ships"],
-        ["HOVER", "squad row details"],
+        ["HOVER", "any tag for its meaning"],
       ]),
     );
     bindMenuBack(this, () => this.finish());
@@ -153,6 +159,7 @@ export class ShipPickerScene extends Phaser.Scene {
       })
       .setLetterSpacing(POINTS_FONT.letterSpacing)
       .setOrigin(1, 0.5);
+    attachTermTooltip(this, this.pointsText, "ui.points_total");
     createUnlockedToggle(
       this,
       { x: MENU_LAYOUT.margin, y: MENU_LAYOUT.subtitleY },
@@ -193,12 +200,24 @@ export class ShipPickerScene extends Phaser.Scene {
     };
   }
 
+  /** Capital ships the format leaves out (listed as an epic-only notice). */
+  private hiddenCapitalCount(): number {
+    if (this.config.allowCapitals) return 0;
+    return getShipsByFaction(this.config.factionId).filter(
+      (s) => s.role === "capital" || s.baseStats.size === "huge",
+    ).length;
+  }
+
   private buildCatalogPanel(): void {
     this.catalogPanel = new ShipCatalogPanel(
       this,
       this.ships,
       this.config.factionId,
       this.buildGating(),
+      "ADD",
+      undefined,
+      undefined,
+      { hiddenCapitals: this.hiddenCapitalCount() },
     );
     // Centre column between the catalog and the roster — never over the roster.
     const detailX = CAT_X + CAT_W + COLUMN_GAP;

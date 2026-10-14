@@ -5,10 +5,14 @@
  */
 
 import type { FactionId } from "../../config";
+import { CAMPAIGN_LORE } from "../../data/CampaignData";
+import type { EndingId } from "../../data/campaign/crossovers";
+import { ENDING_EPILOGUES } from "../../data/campaign/coalitionEpilogues";
 import {
   CAMPAIGN_EPILOGUES,
   type EpilogueLine,
 } from "../../data/campaign/epilogues";
+import type { EpiloguePatch } from "../../data/campaign/loreTypes";
 import { chosenResearchOptions } from "../armory/researchRules";
 import { conditionsHold } from "../scripting/ScriptInterpreter";
 import type { CampaignSaveData } from "../save/campaignSaveTypes";
@@ -20,15 +24,56 @@ export interface RecordEntry {
 }
 
 /**
+ * Applies the lore bible\u0027s epilogue edits: text swaps over the existing
+ * lines, and new lines slotted in before the closing line.
+ *
+ * @param base - A faction\u0027s shipped epilogue.
+ * @param patch - The edits, if any.
+ * @returns The patched epilogue.
+ */
+export function applyEpiloguePatch(
+  base: readonly EpilogueLine[],
+  patch: EpiloguePatch | undefined,
+): EpilogueLine[] {
+  const swapped = base.map((line) =>
+    (patch?.swaps ?? []).reduce(
+      (current, [from, to]) => ({
+        ...current,
+        text: current.text.split(from).join(to),
+      }),
+      line,
+    ),
+  );
+  const added = patch?.add ?? [];
+  if (added.length === 0 || swapped.length === 0) return [...swapped, ...added];
+  return [...swapped.slice(0, -1), ...added, swapped[swapped.length - 1]!];
+}
+
+/**
  * @param factionId - Campaign faction.
- * @param flags - Story flags of the save.
+ * @param flags - Story flags of the playthrough (the Chronicle\u0027s included).
  * @returns The epilogue lines this playthrough earned, in order.
  */
 export function epilogueLines(
   factionId: FactionId,
   flags: Readonly<Record<string, boolean>>,
 ): EpilogueLine[] {
-  return CAMPAIGN_EPILOGUES[factionId].filter(
+  return applyEpiloguePatch(
+    CAMPAIGN_EPILOGUES[factionId],
+    CAMPAIGN_LORE[factionId].epilogue,
+  ).filter((line) => !line.when || conditionsHold([line.when], flags));
+}
+
+/**
+ * @param ending - The Act V ending chosen.
+ * @param flags - Story flags of the playthrough (the Chronicle\u0027s included).
+ * @returns Its epilogue lines (flag-conditioned lines only when they hold).
+ */
+export function endingEpilogueLines(
+  ending: EndingId,
+  flags: Readonly<Record<string, boolean>>,
+): EpilogueLine[] {
+  return ENDING_EPILOGUES[ending].filter(
     (line) => !line.when || conditionsHold([line.when], flags),
   );
 }

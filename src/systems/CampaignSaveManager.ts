@@ -2,8 +2,9 @@
  * Campaign Save Manager
  *
  * Persists one campaign playthrough per faction in localStorage
- * (`shattered_stars_campaign_<faction>`). Loads validate and migrate any
- * older version (v1/v2 → v3) without losing data; unreadable JSON is backed
+ * (`shattered_stars_campaign_<slot>`; the slot is the faction, or `coalition`
+ * for the shared Coalition campaign). Loads validate and migrate any
+ * older version (v1/v2/v3 → v4) without losing data; unreadable JSON is backed
  * up under `<key>_corrupt` before the slot is treated as empty. Every
  * mission completion autosaves.
  */
@@ -14,6 +15,8 @@ import {
   CAMPAIGN_SAVE_VERSION,
   type CampaignPilotState,
   type CampaignSaveData,
+  type CampaignSlot,
+  COALITION_SLOT,
 } from "../campaign/save/campaignSaveTypes";
 import {
   freshV3Fields,
@@ -40,26 +43,41 @@ const ALL_FACTIONS: readonly FactionId[] = [
 ];
 
 /**
- * @param factionId - Faction.
+ * @param slot - Save slot.
  * @returns Its localStorage key.
  */
-function keyOf(factionId: FactionId): string {
-  return SAVE_KEY_PREFIX + factionId;
+function keyOf(slot: CampaignSlot): string {
+  return SAVE_KEY_PREFIX + slot;
+}
+
+/**
+ * @param slot - Save slot.
+ * @param raw - The parsed save.
+ * @returns The player faction: the slot, or the stored lead hero of a
+ *   Coalition save (the Hegemony when missing or invalid).
+ */
+function factionOfSlot(slot: CampaignSlot, raw: unknown): FactionId {
+  if (slot !== COALITION_SLOT) return slot;
+  const stored = (raw as { factionId?: unknown } | null)?.factionId;
+  return ALL_FACTIONS.find((f) => f === stored) ?? ALL_FACTIONS[0]!;
 }
 
 export const CampaignSaveManager = {
   /**
    * @param factionId - Faction.
    * @param initialPilots - Starting campaign pilots.
+   * @param slot - Save slot (defaults to the faction).
    * @returns A brand-new playthrough.
    */
   createNew(
     factionId: FactionId,
     initialPilots: CampaignPilotState[] = [],
+    slot: CampaignSlot = factionId,
   ): CampaignSaveData {
     return {
       version: CAMPAIGN_SAVE_VERSION,
       factionId,
+      slot,
       currentMission: 1,
       completedMissions: [],
       totalXp: 0,
@@ -78,31 +96,35 @@ export const CampaignSaveManager = {
   save(data: CampaignSaveData): void {
     try {
       const toSave = { ...data, lastPlayed: Date.now() };
-      browserStore().setItem(keyOf(toSave.factionId), JSON.stringify(toSave));
+      browserStore().setItem(
+        keyOf(toSave.slot ?? toSave.factionId),
+        JSON.stringify(toSave),
+      );
     } catch (e) {
       console.error("Failed to save campaign:", e);
     }
   },
 
   /**
-   * @param factionId - Faction.
+   * @param slot - Faction, or `coalition`.
    * @returns Its playthrough (validated, migrated), or null when none.
    */
-  load(factionId: FactionId): CampaignSaveData | null {
+  load(slot: CampaignSlot): CampaignSaveData | null {
     let saved: string | null;
     try {
-      saved = browserStore().getItem(keyOf(factionId));
+      saved = browserStore().getItem(keyOf(slot));
     } catch (e) {
       console.error("Failed to read campaign:", e);
       return null;
     }
     if (!saved) return null;
     try {
-      return migrateCampaignSave(JSON.parse(saved), factionId);
+      const raw: unknown = JSON.parse(saved);
+      return migrateCampaignSave(raw, factionOfSlot(slot, raw), slot);
     } catch (e) {
       console.error("Campaign save unreadable; backed up:", e);
       try {
-        browserStore().setItem(keyOf(factionId) + CORRUPT_BACKUP_SUFFIX, saved);
+        browserStore().setItem(keyOf(slot) + CORRUPT_BACKUP_SUFFIX, saved);
       } catch {
         // Storage full: the original stays in place, nothing else to do.
       }
@@ -110,21 +132,21 @@ export const CampaignSaveManager = {
     }
   },
 
-  /** @param factionId - Faction whose playthrough to delete. */
-  delete(factionId: FactionId): void {
+  /** @param slot - Slot whose playthrough to delete. */
+  delete(slot: CampaignSlot): void {
     try {
-      browserStore().removeItem(keyOf(factionId));
+      browserStore().removeItem(keyOf(slot));
     } catch (e) {
       console.error("Failed to delete campaign:", e);
     }
   },
 
   /**
-   * @param factionId - Faction.
+   * @param slot - Slot.
    * @returns Whether a playthrough is stored.
    */
-  exists(factionId: FactionId): boolean {
-    return browserStore().getItem(keyOf(factionId)) !== null;
+  exists(slot: CampaignSlot): boolean {
+    return browserStore().getItem(keyOf(slot)) !== null;
   },
 
   /** @returns Every stored playthrough, most recently played first. */
@@ -208,7 +230,7 @@ export const CampaignSaveManager = {
     oldData: Partial<CampaignSaveData> & Pick<CampaignSaveData, "factionId">,
   ): CampaignSaveData {
     return (
-      migrateCampaignSave(oldData, oldData.factionId) ??
+      migrateCampaignSave(oldData, oldData.factionId, oldData.slot) ??
       this.createNew(oldData.factionId)
     );
   },

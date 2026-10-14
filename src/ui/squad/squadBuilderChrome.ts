@@ -6,6 +6,7 @@
 
 import type Phaser from "phaser";
 import { createHoverButton } from "../ButtonFactory";
+import { attachTermTooltip } from "../menu/HintTooltip";
 import type { HoloPressButton } from "../menu/HoloPressButton";
 import { MENU_LAYOUT } from "../menu/MenuScaffold";
 import { HOLO_PALETTE } from "../theme/HoloTheme";
@@ -37,7 +38,7 @@ export function createModeToggle(
   onToggle: () => void,
 ): HoloPressButton {
   const { toggleW, toggleH } = CHROME_LAYOUT;
-  return createHoverButton(
+  const button = createHoverButton(
     scene,
     scene.scale.width - MENU_LAYOUT.margin - toggleW / 2,
     MENU_LAYOUT.titleY,
@@ -52,6 +53,8 @@ export function createModeToggle(
     },
     onToggle,
   );
+  attachTermTooltip(scene, button, simpleMode ? "mode.advanced" : "mode.simple");
+  return button;
 }
 
 /** Callbacks for the advanced builder's action bar. */
@@ -98,7 +101,7 @@ export function createActionBar(
       },
       onClick,
     );
-  return [
+  const bar = [
     secondary(cx - offset, "AUTO-FILL ALL", "fleet", handlers.onAutoFill),
     createHoverButton(
       scene,
@@ -117,4 +120,7 @@ export function createActionBar(
     ),
     secondary(cx + offset, "RANDOMIZE", "refresh", handlers.onRandomize),
   ];
+  const terms = ["ui.auto_fill", "ui.start_battle", "ui.randomize"] as const;
+  bar.forEach((button, i) => attachTermTooltip(scene, button, terms[i]!));
+  return bar;
 }

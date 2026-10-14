@@ -8,11 +8,11 @@ price is derived from its contents — never authored.
 ## 1. Catalog (`src/data/upgrades/`)
 
 Categories (`UpgradeSlotType`): modification, configuration, title, sensor,
-tech, cannon, turret, missile, torpedo, bomb, crew, gunner, astromech,
+tech, cannon, turret, missile, torpedo, bomb, crew, gunner, rigger,
 talent, illicit, force_power. Illicit slots sit on seven Void Corsair raider
 and smuggler hulls (Venom, Blade, Fang, Cutlass, Marauder, Bomber, Tender).
 The `force_power` slot comes from Ascendant pilot cards and takes the four
-Force powers (`forcePowers.ts`): Battle Meditation, Mending Light, Foresight,
+psionic disciplines (`forcePowers.ts`): War Chorus, Mending Light, Foresight,
 Righteous Wrath.
 
 Every card MUST change real-time combat in every mode — tested in
@@ -28,7 +28,7 @@ mode by mode, in `tests/unit/arcade/CardEffectsEveryMode.test.ts`:
 
 `CombatModifiers` knobs: laser damage (flat, calm-only, vs unshielded), damage
 taken, shield regen, hull repair, maneuver stress rate and relief tiers, boost / barrel
-roll / K-turn recharge, ordnance reload / charges / homing, turret rate of
+roll / Snap turn recharge, ordnance reload / charges / homing, turret rate of
 fire, stress inflicted per laser hit, cloak duration, aura projection, aura
 radius (command cards widen the aura on ships that already project one) and
 what the aura gives allies inside it (strength, stress relief, hit chance,
@@ -56,7 +56,7 @@ runs the weapons step **before** primary fire each frame.
 
 | Weapon | Rule (from the card's `WeaponProfile`) |
 |---|---|
-| Missile / torpedo | Needs a **lock** on the pilot's target (target within range 3 for one 500 ms cycle; the launch spends it), the target inside the front arc (80°) and the card's range band (default 2–3; config `RANGE_1..3`). Leaves the nose on the ship's heading (the pilot aims the launcher) and steers for its target's intercept point (lead guidance) at the card's turn rate (torpedoes 240°/s, Concussion 270°/s, Seeker 330°/s; turn budget ≈ 1.5 s of turning, so Targeting Computer / Astromech add a second chance) — a top-speed head-on pass still shakes a torpedo; at the old 50–140°/s bots landed 5–15% of warheads and ordnance measured as a net loss. On impact the warhead rolls its attack (card damage as dice) against the target's agility with the same odds as turrets and primaries (`calculateHitChance`) — agile interceptors shrug off missiles, as in X-Wing. A hit deals card damage × `ORDNANCE_DAMAGE_SCALE` (2: strong but never a one-shot, proton torpedo 10; card texts derive the number from the constant). The launch, and the warhead while it flies, is this attacker's attack on the target (`HitImmunityLedger`): no launch at a target it already hit this cycle — a human's press is held for up to one cycle ("LAUNCH QUEUED") and fires as soon as the cycle clears. |
+| Missile / torpedo | Needs a **lock** on the pilot's target (target within range 3 for one 500 ms cycle; the launch spends it), the target inside the front arc (80°) and the card's range band (default 2–3; config `RANGE_1..3`). Leaves the nose on the ship's heading (the pilot aims the launcher) and steers for its target's intercept point (lead guidance) at the card's turn rate (torpedoes 240°/s, Burst 270°/s, Seeker 330°/s; turn budget ≈ 1.5 s of turning, so Targeting Computer / Rigger add a second chance) — a top-speed head-on pass still shakes a torpedo; at the old 50–140°/s bots landed 5–15% of warheads and ordnance measured as a net loss. On impact the warhead rolls its attack (card damage as dice) against the target's agility with the same odds as turrets and primaries (`calculateHitChance`) — agile interceptors shrug off missiles, as in X-Wing. A hit deals card damage × `ORDNANCE_DAMAGE_SCALE` (2: strong but never a one-shot, proton torpedo 10; card texts derive the number from the constant). The launch, and the warhead while it flies, is this attacker's attack on the target (`HitImmunityLedger`): no launch at a target it already hit this cycle — a human's press is held for up to one cycle ("LAUNCH QUEUED") and fires as soon as the cycle clears. |
 | Bomb | Dropped astern (one speed-1 template); blasts 2 cycles later, every ship within range 1 (friendly fire). |
 | Mine | Dropped astern; arms after a cycle; the first **enemy** touching it sets it off (IFF); the blast hits every ship in reach; fizzles after 45 s. |
 | Turret | 360° within its band (default 1–2), the pilot's target first, finite traverse (240°/s), primary-laser dice for its card damage, at most one attack per cycle. Skirmish gunner crew aims it by hand. |
@@ -92,9 +92,9 @@ squad values: 7 per HP/s own, 4 per HP/s allies'.
 
 | Source | Knob / rule | Cards |
 |---|---|---|
-| Own shield regen | `shieldRegenPerSecond` (no pause) | Repair Astromech (R2-style, 0.12 HP/s), Jury-Rigged Deflectors (0.18), Regenerative Matrix (0.18), campaign Shield Upgrade / Regenerative Shields (0.12 / 0.24) |
-| Allies' shield regen | `auraShieldRegenPerSecond`: allies inside the pilot's aura, never the pilot | Mending Light (0.06), Healing Aura (0.12), Force Heal (0.12), Shield Transfer (0.06) |
-| Own hull repair | `hullRepairPerSecond`, paused `HULL_REPAIR_DAMAGE_PAUSE_MS` (3 s) after any hit | Mechanic crew (0.96 HP/s), Patch Astromech (R5-style, 0.6 HP/s) |
+| Own shield regen | `shieldRegenPerSecond` (no pause) | Repair Rigger (0.12 HP/s), Jury-Rigged Deflectors (0.18), Regenerative Matrix (0.18), campaign Shield Upgrade / Regenerative Shields (0.12 / 0.24) |
+| Allies' shield regen | `auraShieldRegenPerSecond`: allies inside the pilot's aura, never the pilot | Mending Light (0.06), Healing Aura (0.12), Mend (0.12), Shield Transfer (0.06) |
+| Own hull repair | `hullRepairPerSecond`, paused `HULL_REPAIR_DAMAGE_PAUSE_MS` (3 s) after any hit | Mechanic crew (0.96 HP/s), Patch Rigger (0.6 HP/s) |
 | Repair field | Ascendant Aegis Field: shield regen; projected by a support or capital ship it also repairs allied hull at `AURA_HULL_REPAIR_RATIO` (¼) of its rate, same 3 s pause (`src/systems/aura/AuraRepair.ts`) | — |
 | Damage control | A capital's emergency repair / power-to-engines order (Skirmish) | — |
 
@@ -107,7 +107,7 @@ trickles into one pulse per 500 ms per source (the first trickle is delivered
 at once). Scenes wire it through `ShipRepairFeedback`
 (`src/ui/hud/overlay/`): the per-ship overlay shimmers the restored bar's
 edge with a "+", and repair drones fly — from the allied projector for a
-repair field, from the ship itself for astromech (1), mechanic crew (2) or
+repair field, from the ship itself for rigger (1), mechanic crew (2) or
 damage control (3); plain shield regen only shimmers.
 
 ### Invariants (tested)
@@ -139,17 +139,17 @@ damage = 5). Ally effects were measured in 3v3. Per unit:
 | +1 laser dmg at range 1 / behind / bullseye / stressed / damaged | 1.2 / 1.3 / 0.8 / 1.6 / 2.7 | as listed |
 | +1 laser dmg with a wingman / in a kill frenzy | 2 / 2 | squad-only (1v1 reads 0) |
 | damage taken (per 1.0 of reduction) / with a wingman | 16 / 10 | Stealth Device 15% = 2.4 |
-| shield regen / allies' shield regen (per HP/s) | 7 / 4 | Repair Astromech 0.12 HP/s = 0.8 → 1 |
+| shield regen / allies' shield regen (per HP/s) | 7 / 4 | Repair Rigger 0.12 HP/s = 0.8 → 1 |
 | hull repair (per HP/s, paused after hits) | 5.5 | Mechanic 0.96 = 5.1 |
 | stress on hit (per 1.0) / stress relief tier / stress rate | 13 / 1.5 / 2 | Ion Cannon 0.12 = 1.5 |
-| boost / barrel roll / K-turn recharge (per 1.0) | 5 | bots barely use them (~0) |
+| boost / barrel roll / Snap turn recharge (per 1.0) | 5 | bots barely use them (~0) |
 | ordnance charges / reload / homing° | 2 / 3 / 0.005 | Weapons Engineer 1.8 |
 | turret rate of fire (per 1.0) | 5 | Veteran Gunner 1.6 |
 | aura projection / radius / strength / ally hit chance / ally relief | 1.5 / 2 / 2 / 10 / 1.5 | Tactical Officer (3v3) ≈ 2 |
 
 Weapon prices (measured on the same mirror): Light / Twin / Ion / Quad turret
-4 / 7 / 6 / 9 (Twin and Quad reload in 3 s), Proton / Ion torpedo 4 / 2,
-Concussion / Seeker missile 2 / 1, Proton bomb 1, Seismic charge 1, Cluster /
+4 / 7 / 6 / 9 (Twin and Quad reload in 3 s), Fusion / Ion torpedo 4 / 2,
+Burst / Seeker missile 2 / 1, Fusion bomb 1, Quake charge 1, Cluster /
 Proximity mine 5 / 3.
 
 ### Reach (tested in `QuickBuildReach.test.ts`)
@@ -221,7 +221,7 @@ loadout's modifier sheet is its upgrades plus its pilot's ability
 | "When destroyed" | death blast on enemies at range 1 |
 | "Free boost / barrel roll" | faster recharge of that action |
 | Acts on friendlies | projects the faction aura; heals / calms friendlies → allies inside the aura regenerate shields / fly a stress tier easier (never the pilot) |
-| Force "Action:" | automatic on a recharge (shield regen, stress per hit) |
+| Psi "Action:" | automatic on a recharge (shield regen, stress per hit) |
 
 Conditional knobs: range 1 (`RANGE_1`), rear arc (±45° behind the
 target), bullseye (±10° off the nose), wingman (a friendly within

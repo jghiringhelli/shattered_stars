@@ -63,7 +63,7 @@ export const ORDNANCE_DEFINITIONS: Record<string, OrdnanceDefinition> = {
   // MISSILES - Medium range, target lock required
   concussion_missile: {
     id: 'concussion_missile',
-    name: 'Concussion Missiles',
+    name: 'Burst Missiles',
     type: 'missile',
     effect: 'damage',
     attackDice: 3,
@@ -131,7 +131,7 @@ export const ORDNANCE_DEFINITIONS: Record<string, OrdnanceDefinition> = {
   // TORPEDOES - Long range, high damage
   proton_torpedoes: {
     id: 'proton_torpedoes',
-    name: 'Proton Torpedoes',
+    name: 'Fusion Torpedoes',
     type: 'torpedo',
     effect: 'damage',
     attackDice: 4,
@@ -183,7 +183,7 @@ export const ORDNANCE_DEFINITIONS: Record<string, OrdnanceDefinition> = {
   // BOMBS - Dropped behind ship, area damage
   proton_bombs: {
     id: 'proton_bombs',
-    name: 'Proton Bombs',
+    name: 'Fusion Bombs',
     type: 'bomb',
     effect: 'damage',
     attackDice: 0, // Direct damage, no dice
@@ -201,7 +201,7 @@ export const ORDNANCE_DEFINITIONS: Record<string, OrdnanceDefinition> = {
 
   seismic_charges: {
     id: 'seismic_charges',
-    name: 'Seismic Charges',
+    name: 'Quake Charges',
     type: 'bomb',
     effect: 'seismic',
     attackDice: 0,
@@ -524,7 +524,7 @@ export function detonateBomb(
     }
   }
 
-  // Seismic charges destroy obstacles
+  // Quake charges destroy obstacles
   if (ordnance.effect === 'seismic') {
     for (const obstacle of obstacles) {
       const dist = distance(bomb.x, bomb.y, obstacle.x, obstacle.y);

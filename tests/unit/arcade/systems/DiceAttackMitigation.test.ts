@@ -2,7 +2,7 @@
  * Mitigation on small hits — specification tests: a dice-mode hit deals a
  * few points (≈ attack dice), so rounding `damage × mitigation` to the
  * nearest whole number used to swallow every reduction under ~17% (3 × 0.85
- * rounds back to 3: Stealth Device, Force Sensitive, Elusive, wingman cover
+ * rounds back to 3: Stealth Device, Psi-Sensitive, Elusive, wingman cover
  * did nothing). The hit is rounded with a dither taken from the shot's own
  * roll, so the AVERAGE damage is exactly damage × mitigation, every hit stays
  * a whole number, and no extra random number is drawn (deterministic sims

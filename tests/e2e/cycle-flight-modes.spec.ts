@@ -1,7 +1,7 @@
 /**
  * cycle-flight-modes.spec.ts — every battle mode flies the X-Wing cycle
  * engine: ships ride template arcs, holding a steering key banks, Z queues a
- * K-turn (and costs stress), and AI ships move on their own.
+ * Snap turn (and costs stress), and AI ships move on their own.
  */
 
 import { test, expect, type Page } from "@playwright/test";
@@ -71,7 +71,7 @@ test.describe("DogfightScene — cycle-engine flight", () => {
     expect(headingChange(start.angle, end.angle)).toBeLessThanOrEqual(-40);
   });
 
-  test("Z queues a K-turn and costs stress", async ({ page }) => {
+  test("Z queues a Snap turn and costs stress", async ({ page }) => {
     await DOGFIGHT.enter(page, { peaceful: true });
     await holdGameKey(page, "Z", 150);
     const ship = player(await readShips(page, "DogfightScene"));

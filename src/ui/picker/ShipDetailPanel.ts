@@ -21,6 +21,10 @@ import { drawHoloFrame } from "../menu/holoChrome";
 import { factionAccent, HOLO_PALETTE, HOLO_RADIUS } from "../theme/HoloTheme";
 import { computeLoadoutBonuses, buildStatLine } from "./catalogHelpers";
 import { QuickBuildDetailView } from "./QuickBuildDetailView";
+import { BuildGuideView } from "./BuildGuideView";
+import { addTipZone } from "../menu/tooltipTargets";
+import { drawBuildTabs, type BuildTab } from "./BuildTabs";
+import { explainBaseShip, explainQuickBuild } from "../../data/roleHints";
 import {
   drawActions,
   drawLore,
@@ -64,7 +68,10 @@ export interface StagingSelection {
 export class ShipDetailPanel {
   private container: Phaser.GameObjects.Container | null = null;
   private loadoutPage = 0;
+  private tab: BuildTab = "build";
   private sectionGap: number = DENSITIES[0]!.gap;
+  /** Lowest y the content may reach in the current layout. */
+  private bottomLimit = 0;
   private lastArgs: {
     ships: readonly ShipDefinition[];
     staging: StagingSelection;
@@ -96,7 +103,9 @@ export class ShipDetailPanel {
     }
     // Start from the density the panel size calls for; fall back to denser
     // layouts only when a long build would spill past the panel.
-    for (let level = startDensity(w, h); level < DENSITIES.length; level++) {
+    const guideTab = this.tab !== "build";
+    const last = guideTab ? DENSITIES.length : DENSITIES.length - 1;
+    for (let level = startDensity(w, h, guideTab); level < last; level++) {
       const bottom = this.build(def, staging, rect, DENSITIES[level]!);
       if (bottom <= y + h - DETAIL_PAD) return;
     }
@@ -149,6 +158,7 @@ export class ShipDetailPanel {
       accent,
     });
     this.sectionGap = density.gap;
+    this.bottomLimit = rect.y + rect.height - DETAIL_PAD;
     const box = { x: rect.x + DETAIL_PAD, w: rect.width - DETAIL_PAD * 2 };
     const area = (top: number): SectionArea => ({
       scene: this.scene,
@@ -170,7 +180,8 @@ export class ShipDetailPanel {
       this.selectedLoadout(def, staging)?.upgrades ?? [],
     );
     cy = drawStatGauges(area(cy), def, bonuses) + gap;
-    cy = drawActions(area(cy), def, density.chipActions) + gap;
+    if (density.actions)
+      cy = drawActions(area(cy), def, density.chipActions) + gap;
     if (density.lore) cy = drawLore(area(cy), def) + gap;
     const rowBottom = drawLoadoutRow(this.scene, this.container!, {
       def,
@@ -249,12 +260,40 @@ export class ShipDetailPanel {
       }),
     );
     c.add([statT, descT]);
-    return new QuickBuildDetailView(this.scene, c).render({
-      shipId: def.id,
-      loadout: selLd,
+    addTipZone(
+      this.scene,
+      c,
+      { x: statT.x, y: statT.y, width: statT.width, height: statT.height },
+      selLd ? "stat.build_stats" : "stat.points",
+    );
+    const tabsY = box.y + Math.max(statT.height, descT.height) + this.sectionGap;
+    const bodyY =
+      drawBuildTabs(this.scene, c, {
+        x: box.x,
+        y: tabsY,
+        width: box.w,
+        accent: factionAccent(def.faction as FactionId),
+        active: this.tab,
+        onSelect: (tab) => {
+          this.tab = tab;
+          this.rerender();
+        },
+      }) + this.sectionGap;
+    if (this.tab === "build") {
+      return new QuickBuildDetailView(this.scene, c).render({
+        shipId: def.id,
+        loadout: selLd,
+        x: box.x,
+        y: bodyY,
+        width: box.w,
+      });
+    }
+    const guide = selLd ? explainQuickBuild(selLd) : explainBaseShip(def.id);
+    return new BuildGuideView(this.scene, c).render(this.tab, guide, {
       x: box.x,
-      y: box.y + Math.max(statT.height, descT.height) + this.sectionGap,
+      y: bodyY,
       width: box.w,
+      bottom: this.bottomLimit,
     });
   }
 }

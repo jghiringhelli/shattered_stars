@@ -10,8 +10,12 @@ import type { ShipDefinition } from "../../core/types";
 import { isStarterPick } from "../../data/ProgressionData";
 import { shipSpriteAsset } from "../../assets/assetManifest";
 import { swapWhenLoaded } from "../../assets/textureLoading";
+import { attachHintTooltip } from "../menu/HintTooltip";
 import { HOLO_PALETTE } from "../theme/HoloTheme";
 import { secondaryTags } from "./catalogHelpers";
+import { roleTermId, type TermId } from "../../data/tooltips";
+import { addTipZone, type TipSubject } from "../menu/tooltipTargets";
+import { shipTooltipContent } from "./shipTooltips";
 import { drawLockGlyph, drawTagChip, TAG_CHIP_HEIGHT } from "./pickerGlyphs";
 import {
   addPickerText,
@@ -56,6 +60,23 @@ export interface CatalogCardSpec {
 export interface CatalogCard {
   readonly objects: Phaser.GameObjects.GameObject[];
   readonly hit: Phaser.GameObjects.Rectangle;
+  /** Every interactive zone of the card (the card hit plus its tag zones). */
+  readonly hits: Phaser.GameObjects.Rectangle[];
+}
+
+/** A tooltip zone over part of a card (card-local pixel rect). */
+interface CardZone {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly subject: TipSubject;
+}
+
+/** Parts of a subline: what was drawn and where tooltips go. */
+interface Subline {
+  readonly objects: Phaser.GameObjects.GameObject[];
+  readonly zones: CardZone[];
 }
 
 /**
@@ -88,13 +109,27 @@ export function buildCatalogCard(
       0,
     )
     .setInteractive({ useHandCursor: !spec.locked });
+  attachHintTooltip(scene, hit, shipTooltipContent(spec.def, spec.lockReason));
   if (!spec.locked) {
     hit.on("pointerover", () => paint(true));
     hit.on("pointerout", () => paint(false));
     hit.on("pointerdown", onSelect);
   }
-  const body = [...buildHeadline(scene, spec), ...buildSubline(scene, spec)];
-  return { objects: [bg, ...body, hit], hit };
+  const subline = buildSubline(scene, spec);
+  const body = [...buildHeadline(scene, spec), ...subline.objects];
+  const zones = subline.zones.map((zone) => {
+    const hover = (on: boolean) => () => !spec.locked && paint(on);
+    const tipZone = addTipZone(
+      scene,
+      null,
+      zone,
+      zone.subject,
+      spec.locked ? undefined : onSelect,
+    );
+    tipZone.on("pointerover", hover(true)).on("pointerout", hover(false));
+    return tipZone;
+  });
+  return { objects: [bg, ...body, hit, ...zones], hit, hits: [hit, ...zones] };
 }
 
 /**
@@ -160,7 +195,7 @@ function buildHeadline(
 function buildSubline(
   scene: Phaser.Scene,
   spec: CatalogCardSpec,
-): Phaser.GameObjects.GameObject[] {
+): Subline {
   const left = spec.x + CARD.textX;
   const lineY = spec.y + CARD.subY;
   const points = addPickerText(
@@ -170,9 +205,20 @@ function buildSubline(
     "name",
     pointsColor(spec),
   ).setOrigin(1, 0);
+  const pointsZone: CardZone = {
+    x: points.x - points.width,
+    y: points.y,
+    width: points.width,
+    height: points.height,
+    subject: "stat.points",
+  };
   const maxRight = points.x - points.width - CARD.pointsGap;
   if (!spec.locked) {
-    return [points, ...buildTags(scene, spec, left, maxRight)];
+    const tags = buildTags(scene, spec, left, maxRight);
+    return {
+      objects: [points, ...tags.objects],
+      zones: [pointsZone, ...tags.zones],
+    };
   }
   const glyph = scene.add.graphics().setAlpha(CARD.lockedHintAlpha);
   drawLockGlyph(
@@ -195,7 +241,19 @@ function buildSubline(
     hint.setText(spec.lockReason.slice(0, tierStart));
   }
   fitOrEllipsize(hint, maxRight - textX);
-  return [points, glyph, hint];
+  return {
+    objects: [points, glyph, hint],
+    zones: [
+      pointsZone,
+      {
+        x: left,
+        y: lineY,
+        width: maxRight - left,
+        height: hint.height,
+        subject: "ui.locked",
+      },
+    ],
+  };
 }
 
 /**
@@ -215,7 +273,15 @@ interface SublineItem {
   readonly color: number;
   /** Framed chip (tags) vs plain text (role). */
   readonly chip: boolean;
+  readonly term: TermId;
 }
+
+/** Tooltip term of a capability chip. */
+const TAG_TERMS: Readonly<Record<string, TermId>> = {
+  TURRET: "tag.turret",
+  ORDNANCE: "tag.ordnance",
+  SUPPORT: "tag.support",
+};
 
 /**
  * ★ STARTER chip (first, so new players always see it), role, then
@@ -225,30 +291,40 @@ interface SublineItem {
  * @param spec - Card spec.
  * @param startX - Left edge of the line.
  * @param maxRight - Rightmost x an item may reach.
- * @returns Created objects.
+ * @returns Created objects and the tooltip zones over each item.
  */
 function buildTags(
   scene: Phaser.Scene,
   spec: CatalogCardSpec,
   startX: number,
   maxRight: number,
-): Phaser.GameObjects.GameObject[] {
+): Subline {
   const items: SublineItem[] = [
     ...(isStarterPick(spec.def.id)
-      ? [{ text: "\u2605 STARTER", color: HOLO_PALETTE.warning, chip: true }]
+      ? [
+          {
+            text: "\u2605 STARTER",
+            color: HOLO_PALETTE.warning,
+            chip: true,
+            term: "tag.starter" as TermId,
+          },
+        ]
       : []),
     {
       text: spec.def.role.replace(/_/g, " "),
       color: HOLO_PALETTE.textSecondary,
       chip: false,
+      term: roleTermId(spec.def.role),
     },
     ...secondaryTags(spec.def).map((text) => ({
       text,
       color: HOLO_PALETTE.textSecondary,
       chip: true,
+      term: TAG_TERMS[text] ?? ("tag.support" as TermId),
     })),
   ];
   const objects: Phaser.GameObjects.GameObject[] = [];
+  const zones: CardZone[] = [];
   const centreY = spec.y + CARD.subY + 1 + TAG_CHIP_HEIGHT / 2;
   let itemX = startX;
   for (const item of items) {
@@ -270,7 +346,14 @@ function buildTags(
       objects.push(
         drawTagChip(scene, { x: itemX, centreY, width: itemW }, item.color),
       );
+    zones.push({
+      x: itemX,
+      y: centreY - TAG_CHIP_HEIGHT / 2,
+      width: itemW,
+      height: TAG_CHIP_HEIGHT,
+      subject: item.term,
+    });
     itemX += itemW + CARD.tagGap * 2;
   }
-  return objects;
+  return { objects, zones };
 }

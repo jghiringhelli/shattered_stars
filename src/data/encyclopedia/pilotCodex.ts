@@ -11,7 +11,7 @@ import { summarizePilotAbility } from "../quickBuildDetails";
 import { pilotAbilityHint } from "../roleHints";
 import { buildsFlyingPilot } from "../quickBuildIndex";
 import {
-  titleCase,
+  slotDisplayName,
   withSearchText,
   type CodexEntry,
   type CodexParagraph,
@@ -46,7 +46,7 @@ function pilotEntry(pilot: PilotCard): CodexEntry {
   const builds = buildsFlyingPilot(pilot.id)
     .map((build) => `${build.name} (${build.pointCost} pts)`)
     .join(", ");
-  const extra = (pilot.extraSlots ?? []).map(titleCase).join(", ");
+  const extra = (pilot.extraSlots ?? []).map(slotDisplayName).join(", ");
   const paragraphs: CodexParagraph[] = [
     ...abilityParagraphs(pilot),
     ...(extra ? [{ heading: "EXTRA SLOTS", text: extra }] : []),

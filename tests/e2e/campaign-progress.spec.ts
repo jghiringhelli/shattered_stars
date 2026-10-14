@@ -61,7 +61,7 @@ test("flags, research, armory and credits survive a reload", async ({
     () => (window as any).game.scene.getScene("CampaignScene").saveData,
   );
   expect(save).toMatchObject({
-    version: 3,
+    version: 4,
     credits: 777,
     storyFlags: { asc_temple_intact: true },
     research: { hull_doctrine: "A" },
@@ -70,7 +70,7 @@ test("flags, research, armory and credits survive a reload", async ({
   });
 });
 
-test("a v2 save loads as v3 without losing progress", async ({ page }) => {
+test("a v2 save loads as v4 without losing progress", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() =>
     window.localStorage.setItem(
@@ -96,7 +96,7 @@ test("a v2 save loads as v3 without losing progress", async ({ page }) => {
     () => (window as any).game.scene.getScene("CampaignScene").saveData,
   );
   expect(save).toMatchObject({
-    version: 3,
+    version: 4,
     credits: 300,
     totalXp: 450,
     heroPowerRanks: { cloak_dash: 1, scatter_mines: 1 },

@@ -16,6 +16,8 @@ import {
 import { createHoverButton } from "../../ui/ButtonFactory";
 import type { HoloPressButton } from "../../ui/menu/HoloPressButton";
 import { MENU_LAYOUT } from "../../ui/menu/MenuScaffold";
+import { attachHintTooltip } from "../../ui/menu/HintTooltip";
+import { contentFromTerm } from "../../ui/menu/tooltipContent";
 import { HOLO_PALETTE, HOLO_SPACING } from "../../ui/theme/HoloTheme";
 import { createHoloText } from "../../ui/hud/holoPrimitives";
 
@@ -84,6 +86,11 @@ export class ScenarioPicker {
         font: `600 ${PICKER.font}px`,
       },
       () => this.cycle(),
+    );
+    attachHintTooltip(scene, this.button, () =>
+      contentFromTerm(
+        this.choice ? `scenario.${this.choice}` : "scenario.none",
+      ),
     );
     this.summary = createHoloText(
       scene,

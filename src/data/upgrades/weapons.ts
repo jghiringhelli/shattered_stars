@@ -101,7 +101,7 @@ export const TURRET_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
 export const ORDNANCE_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
   concussion_missile: {
     id: "concussion_missile",
-    name: "Concussion Missiles",
+    name: "Burst Missiles",
     slotType: "missile",
     description: `3 homing missiles (lock, front arc, range 2–3): ${warheadHp(3)} damage each, 4s reload.`,
     pointCost: 2,
@@ -132,7 +132,7 @@ export const ORDNANCE_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
   },
   proton_torpedo: {
     id: "proton_torpedo",
-    name: "Proton Torpedoes",
+    name: "Fusion Torpedoes",
     slotType: "torpedo",
     description: `2 torpedoes (lock, front arc, range 2–3): ${warheadHp(5)} damage each, 6s reload.`,
     pointCost: 4,
@@ -163,7 +163,7 @@ export const ORDNANCE_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
   },
   proton_bomb: {
     id: "proton_bomb",
-    name: "Proton Bombs",
+    name: "Fusion Bombs",
     slotType: "bomb",
     description: `2 bombs dropped astern: blast 1 s later hits every ship within range 1 for ${warheadHp(5)} damage, 8s reload.`,
     pointCost: 1,
@@ -193,7 +193,7 @@ export const ORDNANCE_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
   },
   seismic_charge: {
     id: "seismic_charge",
-    name: "Seismic Charges",
+    name: "Quake Charges",
     slotType: "bomb",
     description: `2 charges dropped astern: blast 1 s later hits every ship within range 1 for ${warheadHp(3)} damage and +25% stress, 8s reload.`,
     pointCost: 1,

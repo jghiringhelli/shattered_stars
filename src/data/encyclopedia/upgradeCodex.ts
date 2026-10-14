@@ -13,6 +13,7 @@ import { summarizeUpgrade } from "../quickBuildDetails";
 import { upgradeHint } from "../roleHints";
 import { buildsFlyingCard } from "../quickBuildIndex";
 import {
+  slotDisplayName,
   titleCase,
   withSearchText,
   type CodexEntry,
@@ -97,9 +98,9 @@ function upgradeEntry(card: UpgradeDefinition): CodexEntry {
     section: "upgrades",
     id: card.id,
     name: card.name,
-    tag: titleCase(card.slotType).toUpperCase(),
+    tag: slotDisplayName(card.slotType).toUpperCase(),
     faction: card.requiredFaction ?? null,
-    subtitle: `${titleCase(card.slotType)} · ${card.pointCost} pts`,
+    subtitle: `${slotDisplayName(card.slotType)} · ${card.pointCost} pts`,
     paragraphs,
   });
 }

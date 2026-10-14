@@ -40,8 +40,8 @@ describe("maneuverLabel", () => {
     expect(maneuverLabel("bank_left", 3)).toBe("BANK L 3");
   });
 
-  it("names the K-turn", () => {
-    expect(maneuverLabel("kturn", 4)).toBe("K-TURN 4");
+  it("names the Snap turn", () => {
+    expect(maneuverLabel("kturn", 4)).toBe("SNAP 4");
   });
 
   it("is null without a maneuver", () => {

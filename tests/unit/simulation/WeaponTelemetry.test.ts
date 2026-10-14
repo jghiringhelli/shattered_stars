@@ -76,7 +76,7 @@ describe("sampleOrdnanceDamage", () => {
   });
 
   it("bonus damage lifts the mean above the raw dice expectation", () => {
-    // Concussion missiles: 3 dice (~1.5 expected hits) + 1 bonus on hit.
+    // Burst missiles: 3 dice (~1.5 expected hits) + 1 bonus on hit.
     const s = sampleOrdnanceDamage(
       ORDNANCE_DEFINITIONS.concussion_missile!,
       SAMPLES,

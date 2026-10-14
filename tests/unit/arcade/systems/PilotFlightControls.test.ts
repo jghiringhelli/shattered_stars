@@ -165,7 +165,7 @@ describe("PilotFlightControls — steering", () => {
     expect(r.motion.control.nextManeuver).toBeNull();
   });
 
-  it("no steering keeps a queued K-turn", () => {
+  it("no steering keeps a queued Snap turn", () => {
     const base = flown();
     const motion = {
       ...base.motion,
@@ -193,7 +193,7 @@ describe("PilotFlightControls — steering", () => {
 });
 
 describe("PilotFlightControls — specials", () => {
-  it("KTURN queues the K-turn, spikes stress and reports it", () => {
+  it("KTURN queues the Snap turn, spikes stress and reports it", () => {
     const r = applyPilotFlightInput(
       INITIAL_PILOT_CONTROL,
       flown(),
@@ -339,7 +339,7 @@ describe("PilotFlightControls — committed maneuvers stay queued until the cycl
     );
   });
 
-  it("steering after a K-turn does not overwrite it", () => {
+  it("steering after a Snap turn does not overwrite it", () => {
     const k = applyPilotFlightInput(
       INITIAL_PILOT_CONTROL,
       flown(),
@@ -411,7 +411,7 @@ describe("PilotFlightControls — card and stress limits (X-Wing)", () => {
       BATTLEFIELD_SIZE,
     );
 
-  it("a stressed pilot is refused red Tallon and Segnor too", () => {
+  it("a stressed pilot is refused red Knife and Hook too", () => {
     const r = press(carded("terran_viper", STRESSED), "TALLON_LEFT");
     expect(r.motion.control.nextManeuver).toBeNull();
     expect(r.refusals).toEqual([{ action: "tallon", reason: "stressed" }]);
@@ -447,7 +447,7 @@ describe("PilotFlightControls — card and stress limits (X-Wing)", () => {
     expect(r.refusals).toEqual([{ action: "boost", reason: "no_action" }]);
   });
 
-  it("a huge ship cannot K-turn, loop, roll or boost", () => {
+  it("a huge ship cannot Snap turn, loop, roll or boost", () => {
     const ship = carded("terran_imperator");
     for (const edge of [
       "KTURN",

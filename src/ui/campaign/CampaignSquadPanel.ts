@@ -11,6 +11,7 @@ import type {
 } from "../../systems/CampaignSaveManager";
 import { getPilotDefinition } from "../../systems/CampaignPilotManager";
 import { createHoloPanel, type HoloPanel } from "../hud/HoloPanel";
+import { shipDisplayName } from "../idLabels";
 import { drawHoloFrame } from "../menu/holoChrome";
 import { HOLO_PALETTE, HOLO_RADIUS } from "../theme/HoloTheme";
 import { CAMPAIGN_TEXT, addHoloText } from "./campaignUi";
@@ -165,7 +166,7 @@ function createPilotEntry(
   const textX = left + L.thumbWidth + L.textGap;
   const textWidth = L.width / 2 - L.padding - textX;
   const callsign = def?.callsign ?? pilot.pilotId.toUpperCase();
-  const shipName = pilot.currentShipId.replace(/_/g, " ").toUpperCase();
+  const shipName = shipDisplayName(pilot.currentShipId).toUpperCase();
   parts.push(
     frame,
     addHoloText(scene, textX, rowTop + 2, callsign, {

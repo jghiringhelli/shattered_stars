@@ -42,7 +42,7 @@ export interface CombatModifiers {
   readonly boostCooldownMultiplier: number;
   /** Multiplier on the barrel-roll recharge time. */
   readonly barrelRollCooldownMultiplier: number;
-  /** Multiplier on the K-turn / Segnor / Tallon recharge time. */
+  /** Multiplier on the Snap turn / Hook / Knife recharge time. */
   readonly kturnCooldownMultiplier: number;
   /** Multiplier on every ordnance slot's reload time. */
   readonly ordnanceCooldownMultiplier: number;

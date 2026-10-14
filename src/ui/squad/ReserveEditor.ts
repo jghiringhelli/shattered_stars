@@ -20,6 +20,8 @@ import {
   type StrategyId,
 } from "../../arcade/reinforcements";
 import type { FactionId } from "../../config";
+import { attachHintTooltip, attachTermTooltip } from "../menu/HintTooltip";
+import { contentFromTerm } from "../menu/tooltipContent";
 import { createHoverButton } from "../ButtonFactory";
 import type { HoloPressButton } from "../menu/HoloPressButton";
 import { HoloPanel } from "../hud/HoloPanel";
@@ -221,6 +223,11 @@ export class ReserveEditor {
         },
         () => this.applyStrategy(id),
       );
+      attachHintTooltip(this.scene, button, {
+        ...contentFromTerm("battle.strategy"),
+        title: `${STRATEGY_LABELS[id].name} strategy`,
+        body: `${STRATEGY_LABELS[id].summary}. A preset that fills your reserve with this mix.`,
+      });
       this.panel.add(button);
       this.strategyButtons.set(id, button);
     });
@@ -255,6 +262,8 @@ export class ReserveEditor {
       },
       () => this.close(),
     );
+    attachTermTooltip(this.scene, reset, "battle.reset_reserve");
+    attachTermTooltip(this.scene, done, "ui.done");
     this.panel.add([reset, done]);
   }
 }

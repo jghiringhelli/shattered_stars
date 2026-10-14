@@ -1,6 +1,6 @@
 /**
  * FlightCapabilities — what a ship may fly beyond its dial's basic moves:
- * the specials on its dial (K-turn, Segnor, Tallon) and the dashes on its
+ * the specials on its dial (Snap turn, Hook, Knife) and the dashes on its
  * action bar (boost, barrel roll), and the X-Wing rule that a stressed
  * pilot performs no red maneuver and no action.
  */

@@ -35,7 +35,7 @@ describe("dialSteps", () => {
     expect(dialSteps([STRAIGHT_1_GREEN], { min: 1, max: 1 })).toBe(2);
   });
 
-  it("reads only the cells the stress model reads (left side, no K-turn)", () => {
+  it("reads only the cells the stress model reads (left side, no Snap turn)", () => {
     const dial: ManeuverDefinition[] = [
       { direction: "bank_right", speed: 1, difficulty: "green" },
       { direction: "kturn", speed: 1, difficulty: "green" },

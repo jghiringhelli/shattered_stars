@@ -30,7 +30,7 @@ export type AttackIntervalMode = "cycle" | "fixed";
 export interface TempoVariant {
   /** Maneuver cycle length (real ms). */
   readonly cycleMs: number;
-  /** Multiplier on K-turn/Segnor/Tallon, boost and barrel-roll recharge. */
+  /** Multiplier on Snap turn/Hook/Knife, boost and barrel-roll recharge. */
   readonly specialCooldownMultiplier: number;
   /** "cycle": at most one attack (and hit immunity) per cycle; "fixed": per engine 500 ms. */
   readonly attackInterval: AttackIntervalMode;

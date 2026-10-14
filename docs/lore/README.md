@@ -71,9 +71,9 @@ to X-Wing stat lines are obsolete.
 | Battle of Prometheus "in all five campaigns" | **15 crossovers** (2–3 sides each), plus The Breach in all five finales | Each crossover has a real mission on each side and shared flags |
 | Faction finales were contradictory total victories | Each finale is a faction climax ending on the **same Breach beat** | One canon, five points of view |
 
-## Implementation notes (for whoever builds it — not done here)
-- **Chronicle store** for cross-faction flags (per-faction saves stay as they are), plus variant support that reads it.
-- **Act gating:** extend `src/campaign/hub/missionGraph.ts` with the Rule of N across saves, and add the "Free Order" setting.
-- **Coalition campaign** (`coal_4_*`, `coal_5_*`), mixed-faction squads, and the final-choice scene.
-- **Display renames** from the [distancing table](./glossary.md#distancing-table), with their test assertions.
-- **Mission edits:** most changes are RETEXT. REWORK items: `cors_1_4` (enemies), `heg_2_4` (extra fleeing contacts), `heg_3_4` and `heg_3_5` (premise), `synth_3_5` (new bonus), `asc_2_2` (new bonus), `asc_3_5` (premise), plus new bonuses that set crossover flags.
+## Implementation notes (built 2026-10-14)
+- ~~**Chronicle store** for cross-faction flags (per-faction saves stay as they are), plus variant support that reads it.~~ DONE (`src/campaign/chronicle`, `src/systems/ChronicleManager.ts`; variants read the merged flags).
+- ~~**Act gating:** the Rule of N across saves, and the "Free Order" setting.~~ DONE (`actUnlocks.ts`; Free Order on the hub\u0027s CHRONICLE tab).
+- ~~**Coalition campaign** (`coal_4_*`, `coal_5_*`) and the final-choice scene.~~ DONE (lead hero + allied squads; the choice is on `CampaignCompleteScene`).
+- ~~**Display renames** from the [distancing table](./glossary.md#distancing-table), with their test assertions.~~ DONE 2026-10-13 (guard: `tests/unit/lore/distancing.test.ts`).
+- ~~**Mission edits:** most changes are RETEXT.~~ DONE (`src/data/campaign/lore/*`). The original note: most changes are RETEXT. REWORK items: `cors_1_4` (enemies), `heg_2_4` (extra fleeing contacts), `heg_3_4` and `heg_3_5` (premise), `synth_3_5` (new bonus), `asc_2_2` (new bonus), `asc_3_5` (premise), plus new bonuses that set crossover flags.

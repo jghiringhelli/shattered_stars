@@ -76,7 +76,7 @@ describe("conflict detection", () => {
     expect(findAllConflicts(defaults)).toEqual([]);
   });
 
-  it("reports a flight intent already on the key (Z is the K-turn)", () => {
+  it("reports a flight intent already on the key (Z is the Snap turn)", () => {
     expect(findConflicts(defaults, "MARK_TARGET", { key: "Z" })).toEqual([
       "KTURN",
     ]);

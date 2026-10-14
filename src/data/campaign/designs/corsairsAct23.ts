@@ -556,17 +556,21 @@ export const CORSAIR_ACT23_DESIGNS: Readonly<Record<string, MissionDesign>> = {
           "Everyone's at war, nobody's watching the cargo. Four fronts, four paydays.",
         ),
       ),
-      onArea(
-        -1200,
-        -600,
-        250,
-        wave("confed_kestrel", 1, "free_confederation", { at: "ahead" }),
-        say(
-          COMMAND,
-          "Confederation picket: pirates! Who let them in?",
-          "urgent",
+      {
+        ...onArea(
+          -1200,
+          -600,
+          250,
+          wave("confed_kestrel", 1, "free_confederation", { at: "ahead" }),
+          say(
+            COMMAND,
+            "Confederation picket: pirates! Who let them in?",
+            "urgent",
+          ),
         ),
-      ),
+        // The Confederation pact waves the Corsairs through this checkpoint.
+        if: [{ flag: "conf_corsair_pact", is: false }],
+      },
       onArea(
         -400,
         -1500,
@@ -689,14 +693,14 @@ export const CORSAIR_ACT23_DESIGNS: Readonly<Record<string, MissionDesign>> = {
     allies: [WOLVES],
     victoryFlags: { cors_pirate_king: true },
     objectives: [
-      hit("pretender", "Destroy Vorn the Pretender's war galley", {
+      hit("pretender", "Destroy Vosk the Pretender's war galley", {
         shipId: "corsair_ravager",
         at: [0, -1000],
         boss: true,
         hullScale: 2.5,
       }),
       kill("rivals", "Defeat the rival captains", 8),
-      bonus(kill("aces", "Destroy 3 of Vorn's Reaver aces", 3, "ace"), 3, 150),
+      bonus(kill("aces", "Destroy 3 of Vosk's Reaver aces", 3, "ace"), 3, 150),
     ],
     hazards: [
       asteroids("throne_rocks", -900, -700, 320, 6, 1500),
@@ -732,7 +736,7 @@ export const CORSAIR_ACT23_DESIGNS: Readonly<Record<string, MissionDesign>> = {
         music("boss"),
         say(
           KIRA,
-          "Blackmaw's dead. Vorn wants his chair. Over his burning galley.",
+          "Blackmaw's dead. Vosk wants his chair. Over his burning galley.",
           "proud",
         ),
       ),
@@ -740,17 +744,17 @@ export const CORSAIR_ACT23_DESIGNS: Readonly<Record<string, MissionDesign>> = {
         45,
         say(
           BLOODFANG,
-          "Vorn's Reavers are aces. Kill them and his crew starts doubting.",
+          "Vosk's Reavers are aces. Kill them and his crew starts doubting.",
         ),
       ),
       atTime(
         90,
         wave("corsair_blade", 2, "void_corsairs", { at: "flank" }),
-        say(COMMAND, "Vorn to all captains: gold for Kira's head!", "urgent"),
+        say(COMMAND, "Vosk to all captains: gold for Kira's head!", "urgent"),
       ),
       beat(
         { on: "time", atSeconds: 25 },
-        [say(KIRA, "Rescued crew, form on me. Let's show Vorn who saved you.")],
+        [say(KIRA, "Rescued crew, form on me. Let's show Vosk who saved you.")],
         { if: [{ flag: "cors_crew_rescued" }] },
       ),
       onObjective(

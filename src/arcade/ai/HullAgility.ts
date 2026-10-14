@@ -10,7 +10,7 @@ import {
 } from "../../data/ShipDefinitions";
 
 /**
- * Whether a hull may K-turn at all: capital hulls (capital movement profile
+ * Whether a hull may Snap turn at all: capital hulls (capital movement profile
  * or capital role) never flip.
  *
  * @param definitionId - Ship definition id.

@@ -35,7 +35,7 @@ const FIGHTER_DIAL: ManeuverDefinition[] = [
   { direction: "bank_right", speed: 3, difficulty: "red" },
   // Speed 4
   { direction: "straight", speed: 4, difficulty: "white" },
-  // K-turn
+  // Snap turn
   { direction: "kturn", speed: 3, difficulty: "red" },
 ];
 
@@ -85,14 +85,14 @@ const BOMBER_DIAL: ManeuverDefinition[] = [
   { direction: "turn_right", speed: 2, difficulty: "red" },
   // Speed 3
   { direction: "straight", speed: 3, difficulty: "white" },
-  // K-turn
+  // Snap turn
   { direction: "kturn", speed: 2, difficulty: "red" },
 ];
 
 /**
  * Light fighter dial — Z-95 tier. Between fighter and interceptor.
  * Agile at low speed (green banks speed 1), white turns 1–2, tops out at speed 5.
- * K-turn available but always red. No tallon/segnor — these aren't ace ships.
+ * Snap turn available but always red. No knife/hook — these aren't ace ships.
  */
 const LIGHT_FIGHTER_DIAL: ManeuverDefinition[] = [
   // Speed 1 — nimble in a dogfight
@@ -114,7 +114,7 @@ const LIGHT_FIGHTER_DIAL: ManeuverDefinition[] = [
   // Speed 4–5 — straightaways only
   { direction: "straight", speed: 4, difficulty: "white" },
   { direction: "straight", speed: 5, difficulty: "red" },
-  // K-turn available but always costly
+  // Snap turn available but always costly
   { direction: "kturn", speed: 3, difficulty: "red" },
 ];
 
@@ -134,7 +134,7 @@ export const CAPITAL_DIAL: ManeuverDefinition[] = [
 
 /**
  * Gunship dial — heavy brawler (Y-Wing / assault gunship tier).
- * Tougher than a bomber at close range; the K-turn is expensive but available.
+ * Tougher than a bomber at close range; the Snap turn is expensive but available.
  */
 const GUNSHIP_DIAL: ManeuverDefinition[] = [
   // Speed 1
@@ -153,13 +153,13 @@ const GUNSHIP_DIAL: ManeuverDefinition[] = [
   { direction: "straight", speed: 3, difficulty: "white" },
   { direction: "bank_left", speed: 3, difficulty: "red" },
   { direction: "bank_right", speed: 3, difficulty: "red" },
-  // K-turn (heavy — red, and only at speed 2)
+  // Snap turn (heavy — red, and only at speed 2)
   { direction: "kturn", speed: 2, difficulty: "red" },
 ];
 
 /**
  * Support dial — command/utility vessel (HWK-290 / Lambda shuttle tier).
- * Slower and less stressful than a bomber; no K-turn — these aren't combat pilots.
+ * Slower and less stressful than a bomber; no Snap turn — these aren't combat pilots.
  */
 const SUPPORT_DIAL: ManeuverDefinition[] = [
   // Speed 1
@@ -176,7 +176,7 @@ const SUPPORT_DIAL: ManeuverDefinition[] = [
   { direction: "straight", speed: 3, difficulty: "white" },
   { direction: "bank_left", speed: 3, difficulty: "red" },
   { direction: "bank_right", speed: 3, difficulty: "red" },
-  // No K-turn — support ships don't flip
+  // No Snap turn — support ships don't flip
 ];
 
 // ============================================
@@ -186,7 +186,7 @@ const SUPPORT_DIAL: ManeuverDefinition[] = [
 /**
  * TERRAN HARBINGER — "Defender-class" command support.
  * Inspired by: TIE Defender. Military-drilled support pilots can execute a
- * white K-turn — something no other support ship in the galaxy can do.
+ * white Snap turn — something no other support ship in the galaxy can do.
  * Speed 1–4; green banks at low speed; red only at top speed.
  */
 const HARBINGER_DIAL: ManeuverDefinition[] = [
@@ -200,7 +200,7 @@ const HARBINGER_DIAL: ManeuverDefinition[] = [
   { direction: "straight", speed: 2, difficulty: "green" },
   { direction: "bank_left", speed: 2, difficulty: "white" },
   { direction: "bank_right", speed: 2, difficulty: "white" },
-  // WHITE K-turn — the Harbinger's signature. Terran pilots train obsessively.
+  // WHITE Snap turn — the Harbinger's signature. Terran pilots train obsessively.
   { direction: "kturn", speed: 2, difficulty: "white" },
   // Speed 3
   { direction: "straight", speed: 3, difficulty: "white" },
@@ -214,7 +214,7 @@ const HARBINGER_DIAL: ManeuverDefinition[] = [
  * CONFED ALBATROSS — modified freighter repurposed as a heavy gunship.
  * Inspired by: YT-2400 / Millennium Falcon. Can punch the hyperdrive on the
  * straightaways (speed 0–4) and is surprisingly agile in banks, but the hull
- * is too wide for proper turns. No K-turn — you don't flip a freighter.
+ * is too wide for proper turns. No Snap turn — you don't flip a freighter.
  */
 const ALBATROSS_DIAL: ManeuverDefinition[] = [
   // Speed 0 — drift/hover (unexpected trick)
@@ -233,13 +233,13 @@ const ALBATROSS_DIAL: ManeuverDefinition[] = [
   { direction: "bank_right", speed: 3, difficulty: "red" },
   // Speed 4 — full burn, straight only
   { direction: "straight", speed: 4, difficulty: "red" },
-  // No turns at all — too wide. No K-turn — you don't flip a freighter.
+  // No turns at all — too wide. No Snap turn — you don't flip a freighter.
 ];
 
 /**
  * SYNTH HUNTER (IG-88 chassis: hunter / stalker / ravager) — machine precision.
  * Inspired by: IG-2000. Synthetics have no organic pilot fatigue; they bank
- * green well into speed 3 and can execute segnor loops and a white K-turn.
+ * green well into speed 3 and can execute hook loops and a white Snap turn.
  * All three units share this chassis — the foundation for future ability synergy
  * (e.g., "while another Hunter-chassis unit is alive, gain +1 agility").
  */
@@ -250,13 +250,13 @@ const HUNTER_DIAL: ManeuverDefinition[] = [
   { direction: "bank_right", speed: 1, difficulty: "green" },
   { direction: "turn_left", speed: 1, difficulty: "white" },
   { direction: "turn_right", speed: 1, difficulty: "white" },
-  // Speed 2 — segnor loops: precision curved approach
+  // Speed 2 — hook loops: precision curved approach
   { direction: "straight", speed: 2, difficulty: "green" },
   { direction: "bank_left", speed: 2, difficulty: "green" },
   { direction: "bank_right", speed: 2, difficulty: "green" },
   { direction: "segnor_left", speed: 2, difficulty: "white" },
   { direction: "segnor_right", speed: 2, difficulty: "white" },
-  // Speed 3 — WHITE K-turn (reorientation subroutine)
+  // Speed 3 — WHITE Snap turn (reorientation subroutine)
   { direction: "straight", speed: 3, difficulty: "green" },
   { direction: "bank_left", speed: 3, difficulty: "white" },
   { direction: "bank_right", speed: 3, difficulty: "white" },
@@ -271,7 +271,7 @@ const HUNTER_DIAL: ManeuverDefinition[] = [
 /**
  * CORSAIR TORPEDO BOAT — pirate-taught Jumpmaster equivalent.
  * Inspired by: Jumpmaster 5000. Pirates who learned wild flying from necessity.
- * White K-turn at speed 2 is the signature trick; segnor loops for bait-and-switch.
+ * White Snap turn at speed 2 is the signature trick; hook loops for bait-and-switch.
  */
 const TORPEDO_BOAT_DIAL: ManeuverDefinition[] = [
   // Speed 1
@@ -282,7 +282,7 @@ const TORPEDO_BOAT_DIAL: ManeuverDefinition[] = [
   { direction: "turn_right", speed: 1, difficulty: "white" },
   { direction: "segnor_left", speed: 1, difficulty: "white" },
   { direction: "segnor_right", speed: 1, difficulty: "white" },
-  // Speed 2 — WHITE K-turn. The Jumpmaster's trick. Pirates figured it out.
+  // Speed 2 — WHITE Snap turn. The Jumpmaster's trick. Pirates figured it out.
   { direction: "straight", speed: 2, difficulty: "green" },
   { direction: "bank_left", speed: 2, difficulty: "white" },
   { direction: "bank_right", speed: 2, difficulty: "white" },
@@ -300,11 +300,11 @@ const TORPEDO_BOAT_DIAL: ManeuverDefinition[] = [
 /**
  * ASCENDANT AVATAR — divine heavy gunship.
  * Inspired by: Aggressor assault fighter. A ponderous sacred vessel that moves
- * with deliberate, almost ceremonial precision. White K-turn at speed 2 ("the
- * Blessed Reversal") and segnor loops at speed 1 ("divine curved approach").
+ * with deliberate, almost ceremonial precision. White Snap turn at speed 2 ("the
+ * Blessed Reversal") and hook loops at speed 1 ("divine curved approach").
  */
 const AVATAR_DIAL: ManeuverDefinition[] = [
-  // Speed 1 — deliberate; green banks, segnors are white (blessed)
+  // Speed 1 — deliberate; green banks, hooks are white (blessed)
   { direction: "straight", speed: 1, difficulty: "green" },
   { direction: "bank_left", speed: 1, difficulty: "green" },
   { direction: "bank_right", speed: 1, difficulty: "green" },
@@ -312,7 +312,7 @@ const AVATAR_DIAL: ManeuverDefinition[] = [
   { direction: "turn_right", speed: 1, difficulty: "red" },
   { direction: "segnor_left", speed: 1, difficulty: "white" },
   { direction: "segnor_right", speed: 1, difficulty: "white" },
-  // Speed 2 — WHITE K-turn (the Blessed Reversal)
+  // Speed 2 — WHITE Snap turn (the Blessed Reversal)
   { direction: "straight", speed: 2, difficulty: "white" },
   { direction: "bank_left", speed: 2, difficulty: "white" },
   { direction: "bank_right", speed: 2, difficulty: "white" },
@@ -799,7 +799,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
   // Capital Ships (4)
   terran_imperator: {
     id: "terran_imperator",
-    name: "Imperator Battlecruiser",
+    name: "Aquila Battlecruiser",
     faction: "terran_hegemony",
     role: "capital",
     baseStats: {
@@ -837,7 +837,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
   },
   terran_executor: {
     id: "terran_executor",
-    name: "Executor Destroyer",
+    name: "Lictor Destroyer",
     faction: "terran_hegemony",
     role: "capital",
     baseStats: {
@@ -876,7 +876,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
 
   // ==========================================
   // FREE CONFEDERATION (20 ships)
-  // Theme: Versatility, rebellion, mixed tech, guerrilla warfare
+  // Theme: Versatility, defiance, mixed tech, guerrilla warfare
   // ==========================================
 
   // Light Fighters (4)
@@ -1202,7 +1202,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       pointCost: 72,
     },
     spriteKey: "ship_confed_heron",
-    description: "Mobile command post for rebel operations.",
+    description: "Mobile command post for cell operations.",
   },
 
   // Capital Ships (3)
@@ -1224,7 +1224,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     },
     spriteKey: "ship_confed_liberty",
     description:
-      "Rebel flagship converted from a freighter: thick hull, thin shields.",
+      "Cell flagship converted from a freighter: thick hull, thin shields.",
   },
   confed_independence: {
     id: "confed_independence",
@@ -2055,7 +2055,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
 
   // ==========================================
   // ASCENDANT EMPIRE (20 ships)
-  // Theme: Force powers, religious zealots, elite warriors, advanced tech
+  // Theme: psionic disciplines, religious zealots, elite warriors, advanced tech
   // ==========================================
 
   // Interceptors (4)
@@ -2075,7 +2075,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
       pointCost: 43,
     },
     spriteKey: "ship_ascendant_seraph",
-    description: "Elite fighter piloted by force-sensitive warriors.",
+    description: "Elite fighter piloted by psi-sensitive warriors.",
   },
   ascendant_cherub: {
     id: "ascendant_cherub",
@@ -2458,7 +2458,7 @@ const AUTHORED_DIALS: Record<string, readonly ManeuverDefinition[]> = {
   terran_javelin: LIGHT_FIGHTER_DIAL, // light torpedo skiff — white straight at top speed 4
   terran_sentinel: SUPPORT_DIAL, // fix: support vessels
   terran_guardian: SUPPORT_DIAL,
-  terran_harbinger: HARBINGER_DIAL, // ODD DUCK: white K-turn @ speed 2
+  terran_harbinger: HARBINGER_DIAL, // ODD DUCK: white Snap turn @ speed 2
   terran_bastion: GUNSHIP_DIAL, // fix: gunship, not bomber
   terran_bulwark: GUNSHIP_DIAL, // fix: large gunship, not capital
   terran_vindicator: VINDICATOR_DIAL,
@@ -2528,7 +2528,7 @@ const AUTHORED_DIALS: Record<string, readonly ManeuverDefinition[]> = {
   corsair_pillager: GUNSHIP_DIAL,
   corsair_ravager: GUNSHIP_DIAL,
   corsair_bomber: BOMBER_DIAL,
-  corsair_torpedo_boat: TORPEDO_BOAT_DIAL, // ODD DUCK: white K-turn + segnors
+  corsair_torpedo_boat: TORPEDO_BOAT_DIAL, // ODD DUCK: white Snap turn + hooks
   corsair_dreadnought: CAPITAL_DIAL,
   corsair_galleon: CAPITAL_DIAL,
   corsair_frigate: CAPITAL_DIAL,
@@ -2546,7 +2546,7 @@ const AUTHORED_DIALS: Record<string, readonly ManeuverDefinition[]> = {
   ascendant_oracle: ORACLE_DIAL, // support, green banks @ speed 1
   ascendant_prophet: SUPPORT_DIAL,
   ascendant_acolyte: ACOLYTE_DIAL,
-  ascendant_avatar: AVATAR_DIAL, // ODD DUCK: segnor + white K-turn
+  ascendant_avatar: AVATAR_DIAL, // ODD DUCK: hook + white Snap turn
   ascendant_wrath: GUNSHIP_DIAL, // fix: gunship (was BOMBER)
   ascendant_judgment: GUNSHIP_DIAL, // fix: large gunship (was CAPITAL)
   ascendant_smiter: BOMBER_DIAL,

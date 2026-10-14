@@ -195,7 +195,7 @@ describe("updateStress", () => {
 // ─── applyKturnStress ────────────────────────────────────────────────────────
 
 describe("applyKturnStress", () => {
-  it("adds instant stress when executing a K-turn", () => {
+  it("adds instant stress when executing a Snap turn", () => {
     const s = applyKturnStress(INITIAL_STRESS);
     expect(s.level).toBeGreaterThan(0);
   });

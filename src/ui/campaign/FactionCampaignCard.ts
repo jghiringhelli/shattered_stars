@@ -25,6 +25,7 @@ export const FACTION_CARD_LAYOUT = {
   titleY: -12,
   descriptionY: 14,
   descriptionSize: 13,
+  chipGap: 28,
 } as const;
 
 /** Progress shown on a faction card. */
@@ -33,6 +34,10 @@ export interface FactionCardProgress {
   readonly label: string;
   /** True when a save exists for the faction. */
   readonly inProgress: boolean;
+  /** Act chip text, e.g. "I DONE · II OPEN · III LOCKED". */
+  readonly actsLabel?: string;
+  /** Replaces the description (a lock reason). */
+  readonly note?: string;
 }
 
 /**
@@ -42,7 +47,8 @@ export interface FactionCardProgress {
  * @param position - Card centre.
  * @param campaign - Campaign shown on the card.
  * @param progress - Progress chip text and state.
- * @param onSelect - Invoked when the card is pressed / activated.
+ * @param onSelect - Invoked when the card is pressed / activated (omit to
+ *   show the card disabled).
  * @returns The interactive card.
  */
 export function createFactionCampaignCard(
@@ -50,7 +56,7 @@ export function createFactionCampaignCard(
   position: { readonly x: number; readonly y: number },
   campaign: FactionCampaign,
   progress: FactionCardProgress,
-  onSelect: () => void,
+  onSelect?: () => void,
 ): SelectableCard {
   const L = FACTION_CARD_LAYOUT;
   const accent = factionAccent(campaign.factionId);
@@ -77,7 +83,7 @@ export function createFactionCampaignCard(
     scene,
     textX,
     L.descriptionY,
-    campaign.description,
+    progress.note ?? campaign.description,
     {
       ...CAMPAIGN_TEXT.body,
       size: L.descriptionSize,
@@ -92,5 +98,16 @@ export function createFactionCampaignCard(
     progress.inProgress ? HOLO_PALETTE.success : HOLO_PALETTE.textSecondary,
   );
   card.add([emblem, title, description, chip]);
+  if (progress.actsLabel) {
+    const acts = addCaptionChip(
+      scene,
+      card.right - HOLO_SPACING.xl - chip.getBounds().width - L.chipGap,
+      L.titleY,
+      progress.actsLabel,
+      HOLO_PALETTE.textMuted,
+    );
+    acts.setName(`acts_chip_${campaign.factionId}`);
+    card.add(acts);
+  }
   return card;
 }

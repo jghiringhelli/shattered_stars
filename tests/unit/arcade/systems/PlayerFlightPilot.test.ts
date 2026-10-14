@@ -74,7 +74,7 @@ function setup() {
 }
 
 describe("PlayerFlightPilot", () => {
-  it("a K-turn press queues the K-turn on the next frame", () => {
+  it("a Snap turn press queues the Snap turn on the next frame", () => {
     const { intents, step } = setup();
     intents.press("KTURN");
     expect(step().motion.control.nextManeuver).toBe("kturn");

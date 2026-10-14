@@ -101,11 +101,10 @@ import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
 import { EffectsManager } from "../rendering/EffectsManager";
-import { ParallaxBackground } from "../rendering/ParallaxBackground";
+import { installBattleSpace } from "../rendering/spaceMap/installBattleSpace";
 import { audioManager } from "../audio/AudioManager";
 import { hullFractionOf } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
-import { addPaintedSpaceBackground } from "../ui/TexturedPanel";
 import {
   createPerformanceState,
   updateFPS,
@@ -273,7 +272,6 @@ export class AceDuelScene extends Phaser.Scene {
 
   // Effects
   private effectsManager!: EffectsManager;
-  private background!: ParallaxBackground;
   private performanceState: PerformanceState = createPerformanceState();
   private telemetry: ShipTelemetry | null = null;
   private cameraShakeEnabled = true;
@@ -295,9 +293,7 @@ export class AceDuelScene extends Phaser.Scene {
     // Phaser never calls shutdown() on its own; without this, every restart
     // stacks another set of input subscriptions.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
-    this.cameras.main.setBounds(0, 0, BATTLEFIELD_SIZE, BATTLEFIELD_SIZE);
     this.cameras.main.setBackgroundColor(0x050510);
-    addPaintedSpaceBackground(this, "nebula_crimson", 0);
 
     audioManager.initialize();
 
@@ -317,12 +313,7 @@ export class AceDuelScene extends Phaser.Scene {
         showDamageNumbers: savedSettings.showDamageNumbers,
       });
     }
-    this.background = new ParallaxBackground(
-      this,
-      BATTLEFIELD_SIZE,
-      BATTLEFIELD_SIZE,
-    );
-    this.background.startShootingStars();
+    installBattleSpace(this);
 
     this.loadCompletedMatchups();
     this.resetMatchState();
@@ -660,8 +651,6 @@ export class AceDuelScene extends Phaser.Scene {
     this.effectsManager.setQualitySettings(
       this.performanceState.effectSettings,
     );
-
-    this.background.update();
 
     if (this.isRoundActive) {
       this.roundTimer = tickMatchTimer(this.roundTimer, delta);
@@ -1371,8 +1360,8 @@ export class AceDuelScene extends Phaser.Scene {
 
   /**
    * Runs one frame of the player's flight input through the shared pilot
-   * controls (tap = drift, hold = bank, Q/E = hard turn, K-turn, Segnor,
-   * Tallon, boost, barrel roll).
+   * controls (tap = drift, hold = bank, Q/E = hard turn, Snap turn, Hook,
+   * Knife, boost, barrel roll).
    *
    * @param ship - The player's flagship.
    * @param time - Scene time (ms).

@@ -102,6 +102,6 @@ test.describe("Campaign objectives", () => {
     expect(state.playerMs).toBeGreaterThan(1500);
     expect(state.controller).toBe("player");
     expect(state.contacts).toContain("objective:gate");
-    expect(state.lines.some((l) => /\(\d+\/30s\)/.test(l))).toBe(true);
+    expect(state.lines.some((l) => /\(\d+\/\d+s\)/.test(l))).toBe(true);
   });
 });

@@ -27,7 +27,7 @@ export interface FactionIdentity {
   readonly levers: readonly string[];
   /** Cards whose effect is the identity (exclusive or signature cards). */
   readonly cards: readonly string[];
-  /** Slot types whose cards are the identity (illicit, astromech, psychic…). */
+  /** Slot types whose cards are the identity (illicit, rigger, psychic…). */
   readonly cardSlots: readonly UpgradeSlotType[];
   /** True when the named pilots' abilities are part of the identity. */
   readonly aceAbilities: boolean;
@@ -50,10 +50,10 @@ export const FACTION_IDENTITIES: Readonly<Record<FactionId, FactionIdentity>> =
     },
     free_confederation: {
       faction: "free_confederation",
-      specialty: "Crew, astromechs and versatile ordnance",
+      specialty: "Crew, riggers and versatile ordnance",
       levers: [
         "Rallying Banner aura: allies take 30% less damage",
-        "Astromech slots (Confederation-only: Repair / Targeting Astromech) and crew coordinators",
+        "Rigger slots (Confederation-only: Repair / Targeting Rigger) and crew coordinators",
         "Torpedo and missile racks on its fighters",
       ],
       cards: [],

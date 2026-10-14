@@ -11,6 +11,7 @@ import type {
 } from "../../data/CampaignData";
 import { createHoverButton } from "../ButtonFactory";
 import { createHoloPanel, type HoloPanel } from "../hud/HoloPanel";
+import { abilityDisplayName } from "../idLabels";
 import type { HoloPressButton } from "../menu/HoloPressButton";
 
 import { HOLO_ALPHA, HOLO_BORDER, HOLO_PALETTE } from "../theme/HoloTheme";
@@ -177,7 +178,7 @@ function addCardBody(
     ["STAT BONUSES", bonusLines(option), HOLO_PALETTE.success],
     [
       "GRANTS ABILITY",
-      option.grantAbilityId.replace(/_/g, " ").toUpperCase(),
+      abilityDisplayName(option.grantAbilityId).toUpperCase(),
       HOLO_PALETTE.warning,
     ],
   ] as const) {

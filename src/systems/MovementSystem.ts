@@ -33,7 +33,7 @@ interface ManeuverTemplate {
   /**
    * Heading swept along the template's circular arc (degrees, signed). The
    * chord (deltaX, deltaY) sits at arcAngle / 2. Any facing change beyond the
-   * arc (K-turn, Segnor, Tallon) is a flip performed while flying the arc.
+   * arc (Snap turn, Hook, Knife) is a flip performed while flying the arc.
    */
   readonly arcAngle: number;
   /** Path type for animation */
@@ -105,7 +105,7 @@ export const MANEUVER_TEMPLATES: Record<ManeuverDirection, ManeuverTemplate> = {
     arcAngle: 0,
     pathType: "kturn",
   },
-  // Segnor's Loop: fly the bank, then rotate 180° — carried on in the same
+  // Hook Loop: fly the bank, then rotate 180° — carried on in the same
   // direction as the bank, like a loop. A left loop ends at −45° − 180° =
   // −225° ≡ +135°, nose pointing back toward where the ship came from.
   segnor_left: {
@@ -122,7 +122,7 @@ export const MANEUVER_TEMPLATES: Record<ManeuverDirection, ManeuverTemplate> = {
     arcAngle: 45,
     pathType: "segnor",
   },
-  // Tallon Roll: fly the turn, then rotate a further 90° toward the turn.
+  // Knife Roll: fly the turn, then rotate a further 90° toward the turn.
   tallon_left: {
     deltaX: -Math.SQRT1_2,
     deltaY: -Math.SQRT1_2,
@@ -256,7 +256,7 @@ export function arcPoint(
  *
  * Every template is flown along its true circular arc with the nose tangent to
  * the arc, so in real time a 90° turn sweeps 180°/s on a tight radius and a
- * 45° bank 90°/s on a radius about twice as wide. K-turn, Segnor and Tallon
+ * 45° bank 90°/s on a radius about twice as wide. Snap turn, Hook and Knife
  * add their extra rotation progressively while the ship keeps moving, so it
  * never spins in place.
  *

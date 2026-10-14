@@ -199,7 +199,7 @@ export const HEGEMONY_ACT1_DESIGNS: Readonly<Record<string, MissionDesign>> = {
         fleeAtHull: 0.45,
         hullScale: 1.5,
       }),
-      bonus(kill("patrol", "Destroy the rebel patrol", 4)),
+      bonus(kill("patrol", "Destroy the insurgent patrol", 4)),
     ],
     script: [
       onStart(
@@ -251,12 +251,16 @@ export const HEGEMONY_ACT1_DESIGNS: Readonly<Record<string, MissionDesign>> = {
         wave("synth_drone", 2, "synthetic_collective", { at: "behind" }),
         say(WHISPER, "More drones, behind us!", "urgent"),
       ),
-      onObjective(
-        "relay",
-        "completed",
-        setFlag("heg_relay_held"),
-        say(CHEN, "Relay's ours. Command sees everything now."),
-      ),
+      {
+        ...onObjective(
+          "relay",
+          "completed",
+          setFlag("heg_relay_held", true),
+          say(CHEN, "Relay's ours. Command sees everything now."),
+        ),
+        // The Collective took the junction first: its canon excludes ours.
+        if: [{ flag: "x2_junction_collective", is: false }],
+      },
     ],
   },
 };

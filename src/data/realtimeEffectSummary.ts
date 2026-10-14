@@ -125,7 +125,7 @@ const KNOB_PHRASES: Readonly<Record<keyof CombatModifiers, KnobPhrase>> = {
   maxSpeedBonus: additive((v) => `${signed(v)} top speed`),
   boostCooldownMultiplier: recharge("boost recharges"),
   barrelRollCooldownMultiplier: recharge("barrel roll recharges"),
-  kturnCooldownMultiplier: recharge("K-turn recharges"),
+  kturnCooldownMultiplier: recharge("Snap turn recharges"),
   cloakDurationBonus: additive((v) => `cloak lasts ${signed(v)}s`),
   turretCooldownMultiplier: recharge("turret fires"),
   ordnanceCooldownMultiplier: recharge("ordnance reloads"),

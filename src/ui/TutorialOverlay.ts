@@ -23,9 +23,9 @@ const QUICK_TIPS: ReadonlyArray<{
   { label: "Switch Weapon", intents: ["WEAPON_CYCLE"] },
   { label: "Boost Dash", intents: ["BOOST"] },
   { label: "Barrel Roll", intents: ["BARREL_ROLL"] },
-  { label: "K-Turn (U-turn)", intents: ["KTURN"] },
-  { label: "Segnor Loop", intents: ["SEGNOR_LEFT", "SEGNOR_RIGHT"] },
-  { label: "Tallon Roll", intents: ["TALLON_LEFT", "TALLON_RIGHT"] },
+  { label: "Snap Turn (U-turn)", intents: ["KTURN"] },
+  { label: "Hook Loop", intents: ["SEGNOR_LEFT", "SEGNOR_RIGHT"] },
+  { label: "Knife Roll", intents: ["TALLON_LEFT", "TALLON_RIGHT"] },
   { label: "Pause", intents: ["PAUSE"] },
 ];
 

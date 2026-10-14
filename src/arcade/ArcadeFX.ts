@@ -160,13 +160,13 @@ export function playBarrelRollLean(
 }
 
 /**
- * Spawns a K-turn afterimage: one ghost at the flip origin pointing the old
+ * Spawns a Snap turn afterimage: one ghost at the flip origin pointing the old
  * heading, plus an expanding ghost-ring suggesting the 180° arc of the turn.
  *
  * @param scene - Active Phaser scene.
  * @param x     - Flip origin X.
  * @param y     - Flip origin Y.
- * @param angle - Ship heading *before* the K-turn.
+ * @param angle - Ship heading *before* the Snap turn.
  * @param size  - Ship sprite radius.
  * @param color - Faction hex color.
  */
@@ -218,7 +218,7 @@ export interface FlightEventFxInput {
 }
 
 /**
- * Visual feedback for a flight event (K-turn/Segnor/Tallon afterimage,
+ * Visual feedback for a flight event (Snap turn/Hook/Knife afterimage,
  * barrel-roll lean, boost trail). Shared by every cycle-engine scene.
  *
  * @param scene - Active Phaser scene.

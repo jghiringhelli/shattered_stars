@@ -3,7 +3,7 @@
  * the per-ship overlay and the repair-drone VFX (consumers).
  *
  * A repair event says WHO was restored (ship id), WHAT (hull or shield), by
- * HOW MUCH (real-time HP) and WHERE it came from (the ship's own astromech /
+ * HOW MUCH (real-time HP) and WHERE it came from (the ship's own rigger /
  * crew / shield regen, or an allied ship's repair field). Pure, no Phaser.
  */
 
@@ -14,7 +14,7 @@ export type RepairKind = "hull" | "shield";
 
 /**
  * Where a repair came from.
- * - `astromech`: the ship's own droid (shield regen or hull patching).
+ * - `astromech`: the ship's own rigger (shield regen or hull patching).
  * - `mechanic_crew`: the ship's own mechanic crew patching hull.
  * - `self_regen`: the ship's own shield regeneration (talent, ability, mod).
  * - `aura`: an allied support/capital ship's repair field (needs a source ship).

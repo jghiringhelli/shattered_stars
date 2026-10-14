@@ -1,12 +1,12 @@
 /**
  * gamepad-defaults.spec.ts — the default gamepad layout reaches every flight
- * special (the alpha audit found K-turn, Segnor, Tallon, boost and barrel
+ * special (the alpha audit found Snap turn, Hook, Knife, boost and barrel
  * roll unbound on gamepad), and right-stick flicks fire once per flick.
  *
- * Layout: A boost · LB/RB hard turns · LT/RT Tallon · D-pad ←/→ Segnor ·
- * right stick ←/→ barrel roll · right stick ↓ K-turn · X secondary ·
+ * Layout: A boost · LB/RB hard turns · LT/RT Knife · D-pad ←/→ Hook ·
+ * right stick ←/→ barrel roll · right stick ↓ Snap turn · X secondary ·
  * D-pad ↓ cycle weapon · commander orders on LT / RT / D-pad ← / → (a
- * capital ship can fly neither Tallon nor Segnor).
+ * capital ship can fly neither Knife nor Hook).
  */
 
 import { test, expect, type Page } from "@playwright/test";

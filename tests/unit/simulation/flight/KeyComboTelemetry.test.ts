@@ -4,9 +4,9 @@
  * exactly where the X-Wing rules put it.
  *
  * Bindings (src/input/DefaultBindings.ts): ←/→ steer (tap = drift, hold =
- * bank then drift), Q/E hard turn, Z K-turn, Shift+Q/E Segnor, T/Shift+T
- * Tallon, ↑/↓ throttle; gestures: ↑↑ boost, ↓↓ K-turn, ←/→ + ↑↑ Tallon,
- * ←/→ + ↓↓ Segnor, ← then → (or → then ←) quickly = barrel roll.
+ * bank then drift), Q/E hard turn, Z Snap turn, Shift+Q/E Hook, T/Shift+T
+ * Knife, ↑/↓ throttle; gestures: ↑↑ boost, ↓↓ Snap turn, ←/→ + ↑↑ Knife,
+ * ←/→ + ↓↓ Hook, ← then → (or → then ←) quickly = barrel roll.
  */
 
 import { describe, it, expect } from "vitest";
@@ -156,11 +156,11 @@ describe("key combos — action keys", () => {
 });
 
 describe("key combos — gestures", () => {
-  it("↓↓ flies a K-turn", () => {
+  it("↓↓ flies a Snap turn", () => {
     expectAtOracle(cycleFlying(fly(doubleTap("DOWN")), "kturn"));
   });
 
-  it("holding ← and ↑↑ flies a Tallon Roll left", () => {
+  it("holding ← and ↑↑ flies a Knife Roll left", () => {
     const trace = fly([
       { atMs: T0 - 50, down: "LEFT" },
       ...doubleTap("UP"),
@@ -169,7 +169,7 @@ describe("key combos — gestures", () => {
     expectAtOracle(cycleFlying(trace, "tallon_left"));
   });
 
-  it("holding → and ↓↓ flies a Segnor's Loop right", () => {
+  it("holding → and ↓↓ flies a Hook Loop right", () => {
     const trace = fly([
       { atMs: T0 - 50, down: "RIGHT" },
       ...doubleTap("DOWN"),
@@ -192,7 +192,7 @@ describe("key combos — gestures", () => {
     expect(trace.final.motion.control.speed).toBe(CRUISE);
   });
 
-  it("↓↓ K-turn leaves the throttle where it was", () => {
+  it("↓↓ Snap turn leaves the throttle where it was", () => {
     const trace = fly(doubleTap("DOWN"));
     expect(trace.final.motion.control.speed).toBe(CRUISE);
   });

@@ -1,7 +1,7 @@
 /**
  * cycle-flight-campaign.spec.ts — CampaignBattleScene flies the X-Wing cycle
  * engine: every ship rides template arcs on its own, holding LEFT banks the
- * flagship, and Z queues a K-turn that costs stress. Runs mission heg_1_3
+ * flagship, and Z queues a Snap turn that costs stress. Runs mission heg_1_3
  * (flagship + escort vs 3 enemies) with combat, reinforcements and
  * objectives disabled so nothing dies and the mission cannot end mid-test.
  *
@@ -81,7 +81,7 @@ test.describe("CampaignBattleScene — cycle-engine flight", () => {
     expect(headingChange(start.angle, end.angle)).toBeLessThanOrEqual(-40);
   });
 
-  test("Z queues a K-turn and costs stress", async ({ page }) => {
+  test("Z queues a Snap turn and costs stress", async ({ page }) => {
     await CAMPAIGN.enter(page, { peaceful: true });
     await holdGameKey(page, "Z", 150);
     const ship = await readFlagship(page);

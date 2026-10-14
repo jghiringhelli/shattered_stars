@@ -6,6 +6,7 @@
  */
 
 import type { ShipSize } from "../../config";
+import { MANEUVER_WORDS } from "../../core/maneuverLabels";
 import type { ManeuverDirection } from "../../core/types";
 import { getShipDefinition } from "../../data/ShipDefinitions";
 import type {
@@ -25,12 +26,6 @@ const BOSS_SIZE: ShipSize = "large";
 const PRIMARY_SLOT_ID = "primary";
 const PRIMARY_KEY_HINT = "1";
 
-/** Short words for maneuver-name parts on the flight readout. */
-const MANEUVER_WORDS: Readonly<Record<string, string>> = {
-  left: "L",
-  right: "R",
-  kturn: "K-TURN",
-};
 
 /** The ship fields the HUD reads. */
 export interface HudShipSource {
@@ -66,7 +61,7 @@ export interface SquadHudInput {
 }
 
 /**
- * Short readout label for a maneuver, e.g. "BANK L 3" or "K-TURN 4".
+ * Short readout label for a maneuver, e.g. "BANK L 3" or "SNAP 4".
  *
  * @param maneuver - The maneuver being flown, or null.
  * @param speed - Its speed.
