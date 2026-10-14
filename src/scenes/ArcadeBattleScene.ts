@@ -3,6 +3,7 @@
  * Real-time dogfighting with direct ship control
  */
 
+import { imageBaseScale, recordBaseScale } from "../assets/baseScale";
 import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
 import { addShipVisual } from "../rendering/ShipVisual";
@@ -252,9 +253,6 @@ interface ShipSprite extends Phaser.GameObjects.Container {
   ring?: Phaser.GameObjects.Graphics;
   /** Ship art image, when loaded — squashed/stretched by the banking effect on hard turns. */
   image?: Phaser.GameObjects.Image | null;
-  /** Image's base scale (from setDisplaySize) that banking must multiply, not overwrite. */
-  imageBaseScaleX?: number;
-  imageBaseScaleY?: number;
   bankState: BankState;
 }
 
@@ -2063,8 +2061,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     if (visual.ring) container.ring = visual.ring; // stored for per-frame stress pulse
     container.hull = visual.hull;
     container.image = visual.image;
-    container.imageBaseScaleX = visual.image?.scaleX ?? 1;
-    container.imageBaseScaleY = visual.image?.scaleY ?? 1;
+    if (visual.image) recordBaseScale(visual.image);
     container.bankState = { ...INITIAL_BANK_STATE, lastAngle: ship.angle };
     container.setAngle(ship.angle);
     container.setDepth(10);
@@ -2119,10 +2116,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
           deltaMs / 1000,
         );
         const { scaleX, scaleY } = bankSquashFor(sprite.bankState);
-        sprite.image.setScale(
-          (sprite.imageBaseScaleX ?? 1) * scaleX,
-          (sprite.imageBaseScaleY ?? 1) * scaleY,
-        );
+        const base = imageBaseScale(sprite.image);
+        sprite.image.setScale(base.x * scaleX, base.y * scaleY);
       }
 
       // Cloaked ships: nearly invisible to enemies, dimmed for the owning player

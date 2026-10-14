@@ -10,6 +10,7 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { imageBaseScale } from "../../../src/assets/baseScale";
 import { addShipVisual } from "../../../src/rendering/ShipVisual";
 
 /** Records the calls a fake image receives, so tests can assert on them. */
@@ -17,20 +18,44 @@ class FakeImage {
   blendMode: unknown = "untouched";
   displayWidth = 0;
   displayHeight = 0;
+  scaleX = 1;
+  scaleY = 1;
+  width: number;
+  height: number;
   readonly active = true;
+  private readonly data = new Map<string, unknown>();
 
-  constructor(public textureKey: string) {}
+  constructor(public textureKey: string) {
+    this.width = FakeImage.textureSize(textureKey);
+    this.height = this.width;
+  }
+
+  /** Placeholders are small textures, real ship art is large (as in the game). */
+  private static textureSize(key: string): number {
+    return /_(tiny|small|medium|large|huge)$/.test(key) ? 64 : 768;
+  }
 
   get texture(): { key: string } {
     return { key: this.textureKey };
   }
   setTexture(key: string): this {
     this.textureKey = key;
+    this.width = FakeImage.textureSize(key);
+    this.height = this.width;
     return this;
   }
   setDisplaySize(width: number, height: number): this {
     this.displayWidth = width;
     this.displayHeight = height;
+    this.scaleX = width / this.width;
+    this.scaleY = height / this.height;
+    return this;
+  }
+  getData(key: string): unknown {
+    return this.data.get(key);
+  }
+  setData(key: string, value: unknown): this {
+    this.data.set(key, value);
     return this;
   }
   setBlendMode(mode: unknown): this {
@@ -217,5 +242,8 @@ describe("addShipVisual", () => {
     finishLoad("ship_terran_javelin");
     expect(image.textureKey).toBe("ship_terran_javelin");
     expect(image.displayWidth).toBe(sizeBefore);
+    // The base scale follows the art, so banking never multiplies a stale one.
+    expect(image.scaleX).toBeCloseTo(sizeBefore / 768);
+    expect(imageBaseScale(image as never).x).toBeCloseTo(sizeBefore / 768);
   });
 });

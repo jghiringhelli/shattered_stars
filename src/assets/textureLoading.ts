@@ -8,6 +8,7 @@
  * atlases alike and resolve even if another scene loads the same key.
  */
 
+import { baseDisplaySize, recordBaseScale } from "./baseScale";
 import type Phaser from "phaser";
 import type { AssetEntry } from "./assetManifest";
 
@@ -104,15 +105,16 @@ export function swapWhenLoaded(
   if (image.texture.key === entry.key) return;
   requestTexture(scene, entry, () => {
     if (!image.active) return;
-    const width = image.displayWidth;
-    const height = image.displayHeight;
+    // The rest size, not displayWidth: a banking squash must not leak in.
+    const { width, height } = baseDisplaySize(image);
     image.setTexture(entry.key);
     if (fit === "stretch") {
       image.setDisplaySize(width, height);
-      return;
+    } else {
+      image.setScale(
+        Math.min(fit.maxWidth / image.width, fit.maxHeight / image.height),
+      );
     }
-    image.setScale(
-      Math.min(fit.maxWidth / image.width, fit.maxHeight / image.height),
-    );
+    recordBaseScale(image);
   });
 }

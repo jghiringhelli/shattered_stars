@@ -13,6 +13,7 @@
  * into its first combat node.
  */
 
+import { imageBaseScale } from "../assets/baseScale";
 import Phaser from "phaser";
 import { updateBankState, bankSquashFor } from "../rendering/ShipBanking";
 import type { FactionId } from "../config";
@@ -1547,10 +1548,8 @@ export class SurvivalScene extends Phaser.Scene {
       deltaMs / 1000,
     );
     const { scaleX, scaleY } = bankSquashFor(sprite.bankState);
-    sprite.image.setScale(
-      (sprite.imageBaseScaleX ?? 1) * scaleX,
-      (sprite.imageBaseScaleY ?? 1) * scaleY,
-    );
+    const base = imageBaseScale(sprite.image);
+    sprite.image.setScale(base.x * scaleX, base.y * scaleY);
   }
 
   /**

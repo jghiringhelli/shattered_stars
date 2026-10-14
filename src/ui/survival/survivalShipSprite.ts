@@ -5,6 +5,7 @@
  * Extracted from SurvivalScene.
  */
 
+import { recordBaseScale } from "../../assets/baseScale";
 import Phaser from "phaser";
 import type { FactionId } from "../../config";
 import { SHIP_SIZES } from "../../config";
@@ -21,9 +22,6 @@ export interface SurvivalShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
   /** Ship art image, when loaded — squashed/stretched by the banking effect on hard turns. */
   image?: Phaser.GameObjects.Image | null;
-  /** Image's base scale (from setDisplaySize) that banking must multiply, not overwrite. */
-  imageBaseScaleX?: number;
-  imageBaseScaleY?: number;
   bankState: BankState;
 }
 
@@ -90,8 +88,7 @@ export function addSurvivalShipSprite(
     isPlayer: ship.owner === "player",
   });
   container.image = visual.image;
-  container.imageBaseScaleX = visual.image?.scaleX ?? 1;
-  container.imageBaseScaleY = visual.image?.scaleY ?? 1;
+  if (visual.image) recordBaseScale(visual.image);
   container.bankState = { ...INITIAL_BANK_STATE, lastAngle: ship.angle };
   if (ranked) {
     const outline = scene.add.graphics();

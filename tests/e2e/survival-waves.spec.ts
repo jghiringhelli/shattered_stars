@@ -295,3 +295,31 @@ test.describe("SurvivalScene — spawn arc and Drive", () => {
     for (const b of speeds.boost) expect(b).toBeCloseTo(0.85 ** 3);
   });
 });
+
+test.describe("SurvivalScene — ship art scale", () => {
+  test("a ship image keeps its size when its art replaces the placeholder (and while banking)", async ({
+    page,
+  }) => {
+    await launchSurvival(page);
+    // Wait for the lazily loaded art of the flagship to replace its placeholder.
+    await page.waitForFunction(
+      () => {
+        const s = (window as any).game.scene.getScene("SurvivalScene") as any;
+        const sprite = s.shipSprites.get(s.playerShipIds[0]);
+        return /^ship_(?!.*_(tiny|small|medium|large|huge)$)/.test(
+          sprite?.image?.texture?.key ?? "",
+        );
+      },
+      { timeout: 15_000 },
+    );
+    await page.waitForTimeout(1_000);
+    const widths = await page.evaluate(() => {
+      const s = (window as any).game.scene.getScene("SurvivalScene") as any;
+      return [...s.shipSprites.values()].map(
+        (sprite: any) => sprite.image?.displayWidth ?? 0,
+      );
+    });
+    // Ships are drawn at most a few hundred px wide (boss sprites included).
+    for (const width of widths) expect(width).toBeLessThan(400);
+  });
+});

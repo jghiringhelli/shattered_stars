@@ -27,8 +27,6 @@ import { showCreatureArt } from "./creatureTextures";
 export interface CreatureContainer extends Phaser.GameObjects.Container {
   shipId: string;
   image?: Phaser.GameObjects.Image | null;
-  imageBaseScaleX?: number;
-  imageBaseScaleY?: number;
   bankState: BankState;
 }
 
