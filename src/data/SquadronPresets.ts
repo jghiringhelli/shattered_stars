@@ -104,10 +104,14 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     pointLimit: 200,
     name: "Iron Fist",
     style: "balanced",
+    // Identity: Kane (elite ace, Hold the Line) leading a disciplined line
+    // under Coordinated Fire. Four hulls, not three: a 3-heavy list won 23–39 %
+    // of scenarios (too few ships to hold objectives), this one 47–63 %.
     ships: [
       { loadoutId: "centurion_assault" },
-      { loadoutId: "centurion_defender" },
       { loadoutId: "gladius_basic" },
+      { loadoutId: "stiletto_basic" },
+      { loadoutId: "stiletto_basic" },
     ],
   },
   {
@@ -281,10 +285,12 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     pointLimit: 200,
     name: "Terror Squadron",
     style: "balanced",
+    // Identity: Bloody Cutlass (raider ace, illicit capacitors) leads the
+    // Raider's Cadence over two Scimitars.
     ships: [
       { loadoutId: "scimitar_assault" },
       { loadoutId: "scimitar_assault" },
-      { loadoutId: "cutlass_brawler" },
+      { loadoutId: "cutlass_black_market" },
     ],
   },
   {
@@ -297,7 +303,7 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
       { loadoutId: "reaver_boarding" },
       { loadoutId: "marauder_brawler" },
       { loadoutId: "scimitar_assault" },
-      { loadoutId: "blade_ace" },
+      { loadoutId: "blade_overcharged" },
       { loadoutId: "fang_hot_wired" },
     ],
   },
@@ -329,10 +335,11 @@ const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
     pointLimit: 200,
     name: "Temple Inquisition",
     style: "balanced",
+    // Identity: Foresight and Force Sensitive under the acolyte's Aegis Field.
     ships: [
-      { loadoutId: "inquisitor_hunter" },
+      { loadoutId: "inquisitor_force" },
       { loadoutId: "acolyte_relay" },
-      { loadoutId: "templar_guardian" },
+      { loadoutId: "templar_force" },
     ],
   },
   {

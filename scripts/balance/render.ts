@@ -32,18 +32,25 @@ import {
   mergeScenarios,
   mergeTallies,
 } from "./merge";
+import { totalFlag } from "./renderIdentity";
 
 type Results = ReadonlyMap<string, BalanceJobResult>;
 
-/** Fair band for matchups (share of games). */
+/** Fair band for duels and seat bias (share of games). */
 export const FAIR_LOW = 0.4;
 export const FAIR_HIGH = 0.6;
+
+/** Fair band for one faction pairing (squad matrices). */
+export const PAIR_LOW = 0.35;
+export const PAIR_HIGH = 0.65;
 
 const sec = (ms: number): string =>
   Number.isFinite(ms) ? `${Math.round(ms / 1000)} s` : "–";
 const pct = (share: number): string => `${Math.round(share * 100)}`;
 const flag = (share: number): string =>
   share < FAIR_LOW || share > FAIR_HIGH ? " ✘" : "";
+const pairFlag = (share: number): string =>
+  share < PAIR_LOW || share > PAIR_HIGH ? " ✘" : "";
 
 /** Median (p10–p90) of lengths in ms. */
 export function lengthSummary(durationsMs: readonly number[]): string {
@@ -70,7 +77,7 @@ export function renderFactionSection(
   const rows = BALANCE_FACTIONS.map((row) => {
     const cells = BALANCE_FACTIONS.map((col) => matrixCell(pairs, row, col));
     const total = shareInterval(totals.get(row)!);
-    return `| **${FACTION_SHORT[row]}** | ${cells.join(" | ")} | ${formatInterval(total)}${flag(total.share)} |`;
+    return `| **${FACTION_SHORT[row]}** | ${cells.join(" | ")} | ${formatInterval(total)}${totalFlag(total.share)} |`;
   });
   const games = pairs[0] ? shareInterval(pairs[0].tally).games : 0;
   const lengths = pairs.flatMap((p) => p.durationsMs);
@@ -95,7 +102,7 @@ function matrixCell(
   const tally = cellOf(pairs, row, col);
   if (!tally) return "";
   const share = shareInterval(tally).share;
-  return `${pct(share)}${flag(share)}`;
+  return `${pct(share)}${pairFlag(share)}`;
 }
 
 /** @param results - All results. @returns The Ace Duel preset section. */

@@ -52,6 +52,8 @@ export type BalanceJob =
       readonly a: FactionId;
       readonly b: FactionId;
       readonly seeds: SeedBlock;
+      /** Faction a flies without its identity levers (identity ablation). */
+      readonly withoutIdentityA?: boolean;
     }
   | {
       readonly kind: "shipValue";
@@ -144,15 +146,19 @@ export function runBalanceJob(job: BalanceJob): BalanceJobResult {
   switch (job.kind) {
     case "classic":
       return classicPair(
-        skirmishAutoFillList(job.a),
+        ablatedIf(skirmishAutoFillList(job.a), job.withoutIdentityA),
         skirmishAutoFillList(job.b),
         seeds,
       );
     case "preset":
-      return classicPair(presetListOf(job.a), presetListOf(job.b), seeds);
+      return classicPair(
+        ablatedIf(presetListOf(job.a), job.withoutIdentityA),
+        presetListOf(job.b),
+        seeds,
+      );
     case "reinforced":
       return reinforcedPair({
-        a: skirmishAutoFillList(job.a),
+        a: ablatedIf(skirmishAutoFillList(job.a), job.withoutIdentityA),
         b: skirmishAutoFillList(job.b),
         seeds,
       });
@@ -198,6 +204,18 @@ export function runBalanceJob(job: BalanceJob): BalanceJobResult {
         reinforced: job.reinforced,
       });
   }
+}
+
+/**
+ * @param list - A squad.
+ * @param withoutIdentity - Strip its faction's identity levers.
+ * @returns The list, flagged for the identity ablation when asked.
+ */
+export function ablatedIf(
+  list: SquadList,
+  withoutIdentity: boolean | undefined,
+): SquadList {
+  return withoutIdentity ? { ...list, withoutIdentity: true } : list;
 }
 
 function aceJob(

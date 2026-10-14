@@ -44,6 +44,8 @@ export interface SimAuraShip {
   shields: number;
   readonly maxShields: number;
   readonly modifiers: CombatModifiers;
+  /** Projects no faction aura (flown without its identity levers). */
+  readonly auraSuppressed?: boolean;
 }
 
 /**
@@ -93,6 +95,7 @@ function auraFieldOf<S extends SimAuraShip>(
     loadoutId: ship.loadoutId,
     owner: side,
     modifiers: ship.modifiers,
+    ...(ship.auraSuppressed ? { auraSuppressed: true } : {}),
   };
 }
 

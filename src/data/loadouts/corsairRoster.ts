@@ -64,6 +64,20 @@ export const CORSAIR_ROSTER: BlueprintsByShip = {
       description: "Extra black-market missiles, volatile cargo",
       role: "offense",
     },
+    {
+      id: "cutlass_black_market",
+      name: "Cutlass Black Market",
+      shipId: "corsair_cutlass",
+      pilotId: "bloody_cutlass",
+      upgrades: [
+        "marksman",
+        "heavy_laser_cannon",
+        "seeker_missile",
+        "overcharged_capacitors",
+      ],
+      description: "Bloody Cutlass runs her guns on overcharged capacitors",
+      role: "offense",
+    },
   ],
   corsair_tender: [
     {

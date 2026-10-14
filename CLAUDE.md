@@ -557,6 +557,15 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
   src/scenes/scenario/ (ScenarioController hooks in ArcadeBattleScene, HUD, picker).
 
 
+- **creatures/** (+ src/data/creatures/, src/scenes/creatures/) - Creature bosses and spawns (spec:
+  docs/specs/creatures.md): own movement styles (never the dial), telegraphed powers (1–2 cycle wind-up,
+  cooldown, one attack per cycle), body parts (weak points / plates that disable powers), enrage phases,
+  feeding on wrecks, seeded saveable RNG. `CreatureEncounter` (pure) per creature, `CreatureHost` steps them
+  through a mode's bridge (Survival scene + node sim, Campaign scene); `SceneCreatures` = views, telegraphs,
+  boss bar, cues. Survival sector bosses = Cinder Wyrm / Deepmaw / Choir-Hive (`CombatNodePlan.creatureBoss`);
+  Campaign: a creature id as an assassinate target or scripted spawn; every Act III finale ends on the Tide
+  Breach (`campaign/mission/tideBreach.ts`). Bestiary tab in the Encyclopedia. Art: `scripts/generate_creature_art.py`.
+
 ### Modes (beyond the battle scenes)
 - **Survival roguelite** - src/systems/survival/* (seeded sector maps, run state/persistence, shop,
   repair dock, events, relics, meta-progression, history), src/data/survival/*, SurvivalMapScene /
@@ -634,13 +643,20 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 
 ## Factions
 
-| ID | Name | Playstyle |
-|----|------|-----------|
-| `terran_hegemony` | Terran Hegemony | Elite, expensive ships |
-| `free_confederation` | Free Confederation | Balanced, versatile |
-| `synthetic_collective` | Synthetic Collective | Swarm tactics, drones |
-| `void_corsairs` | Void Corsairs | Fast raiders, hit-and-run |
-| `ascendant_empire` | Ascendant Empire | Heavy shields, support |
+Rosters are near-equal per role (every hull is inspired by an X-Wing TMG ship); each faction's
+identity is carried by levers — aura, identity cards/slots, ace abilities — defined in
+`src/data/factionIdentity.ts` (spec: docs/specs/factions.md) and gated by
+`tests/balance/FactionIdentity.test.ts` (removing it costs its faction ≥ 8 win points).
+Factions are balanced on squad results (classic, reinforced, scenarios: totals 45–55 %);
+solo value per point is informational only (duel modes keep their own gates).
+
+| ID | Name | Playstyle (identity) | Levers |
+|----|------|-----------|--------|
+| `terran_hegemony` | Terran Hegemony | Squad discipline and elite aces | Coordinated Fire (+0.35 dmg), Squadron Leader / Coordinated Assault, Hold the Line aces |
+| `free_confederation` | Free Confederation | Crew / rigger-tech (astromech equivalents) and versatile ordnance | Rallying Banner (−30 % dmg), astromech slots, crew, torpedoes / missiles |
+| `synthetic_collective` | Synthetic Collective | Cheap swarm and data-link coordination | Hive Resilience (−8 %/drone, 400 px), Swarm Uplink, Pattern Analyzer, cheapest hulls |
+| `void_corsairs` | Void Corsairs | Tricks (boost / barrel roll, illicit upgrades) and hit-and-run aces | Raider's Cadence (stress −1 tier, +10 % hit, 700 px), illicit slots, trick talents, raider aces |
+| `ascendant_empire` | Ascendant Empire | Shields, support and psychic powers | Aegis Field (0.25 shield HP/s), psychic powers / talents, support projectors |
 
 
 ## Ship Roles

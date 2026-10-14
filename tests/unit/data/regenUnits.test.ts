@@ -97,8 +97,8 @@ describe("regen units — catalog cards and pilot abilities (converted)", () => 
     expect(tooStrong).toEqual([]);
   });
 
-  it("states the Aegis Field shield regen in HP/s (0.4 HP/s, balance report)", () => {
-    expect(FACTION_AURAS.ascendant_empire.magnitude).toBeCloseTo(0.4, 10);
+  it("states the Aegis Field shield regen in HP/s (0.25 HP/s, balance report)", () => {
+    expect(FACTION_AURAS.ascendant_empire.magnitude).toBeCloseTo(0.25, 10);
     expect(FACTION_AURAS.ascendant_empire.description).toMatch(/HP\/s/);
   });
 });

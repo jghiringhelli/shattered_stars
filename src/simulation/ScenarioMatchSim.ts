@@ -56,6 +56,9 @@ export interface ScenarioTiers {
   /** Hulls of each side; default the FC / VC lists above. */
   readonly playerList?: readonly string[];
   readonly enemyList?: readonly string[];
+  /** Quick builds of each list (by index); omitted = the default builds. */
+  readonly playerBuilds?: readonly (string | null)[];
+  readonly enemyBuilds?: readonly (string | null)[];
 }
 
 /** One measured match. */
@@ -76,8 +79,9 @@ function sideSpec(
   ids: readonly string[],
   tier: BotTier,
   reactionScale: number,
+  chosen: readonly (string | null)[] = [],
 ): SideSpec {
-  const builds = assignQuickBuilds(ids);
+  const builds = assignQuickBuilds(ids, chosen);
   return {
     ships: ids.map((definitionId, i) => ({
       definitionId,
@@ -95,11 +99,13 @@ function spec(seed: number, tiers: ScenarioTiers): BattleSpec {
       tiers.playerList ?? SCENARIO_PLAYER_LIST,
       tiers.player,
       tiers.playerReaction ?? 1,
+      tiers.playerBuilds,
     ),
     B: sideSpec(
       tiers.enemyList ?? SCENARIO_ENEMY_LIST,
       tiers.enemy,
       tiers.enemyReaction ?? 1,
+      tiers.enemyBuilds,
     ),
     seed,
   };

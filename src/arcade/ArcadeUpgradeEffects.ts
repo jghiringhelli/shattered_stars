@@ -74,9 +74,26 @@ export function resolveLoadoutModifiers(
     ? getShipLoadouts(definitionId).find((l) => l.id === loadoutId)
     : undefined;
   if (!loadout) return combineEffects([]);
-  const abilityId = PILOT_CARDS[loadout.pilotId]?.abilityId;
+  return resolveEquipmentModifiers(
+    loadout.upgrades,
+    PILOT_CARDS[loadout.pilotId]?.abilityId,
+  );
+}
+
+/**
+ * The modifier sheet of an explicit equipment list: upgrades plus an
+ * optional pilot ability (the quick build's, or a filtered subset of it).
+ *
+ * @param upgradeIds - Equipped upgrade ids (unknown ids are ignored).
+ * @param abilityId - The pilot's signature ability id, if it flies with one.
+ * @returns The combined modifier sheet.
+ */
+export function resolveEquipmentModifiers(
+  upgradeIds: ReadonlyArray<string>,
+  abilityId: string | undefined,
+): CombatModifiers {
   const ability = abilityId ? PILOT_ABILITY_REALTIME[abilityId] : undefined;
-  const effects = upgradeEffects(loadout.upgrades);
+  const effects = upgradeEffects(upgradeIds);
   return combineEffects(ability ? [...effects, ability] : effects);
 }
 

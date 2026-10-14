@@ -103,6 +103,8 @@ interface ReinforcedLoop {
   readonly factions: Readonly<Record<SideId, FactionId>>;
   readonly sides: readonly string[];
   readonly skills: Readonly<Record<SideId, CrewSkill>>;
+  /** Sides flown without their identity levers (reinforcements too). */
+  readonly withoutIdentity: Readonly<Record<SideId, boolean>>;
   /** Pilots crewed per side so far (the next ship's slot). */
   readonly crewed: Record<SideId, number>;
   readonly alive: Set<string>;
@@ -178,6 +180,10 @@ function createReinforcedLoop(spec: ReinforcedBattleSpec): ReinforcedLoop {
     factions,
     sides: sideOrder(TEAM.A, [TEAM.A, TEAM.B]).map(teamKey),
     skills: { A: spec.player.skill, B: spec.enemy.skill },
+    withoutIdentity: {
+      A: spec.player.opening.withoutIdentity === true,
+      B: spec.enemy.opening.withoutIdentity === true,
+    },
     crewed: {
       A: spec.player.opening.ships.length,
       B: spec.enemy.opening.ships.length,
@@ -240,6 +246,7 @@ function spawn(state: ReinforcedLoop, deployment: Deployment): void {
     definitionId: deployment.option.definitionId,
     loadoutId: deployment.option.loadoutId,
     skill: crewSlotSkill(state.skills[side], state.crewed[side]++),
+    ...(state.withoutIdentity[side] ? { withoutIdentity: true } : {}),
     pose: reinforcementPose({
       side: deployment.side,
       slot: deployment.slot,

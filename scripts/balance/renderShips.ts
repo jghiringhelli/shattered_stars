@@ -3,7 +3,9 @@
  * squad (default quick builds) against the five auto-fill lists, its share
  * interpolated to 200 points, turned into "plays like N % more/fewer
  * points" with the sweep's own price slope, relative to the trend (the
- * mean over all hulls). Roles are summarised; hulls outside ±15 % flagged.
+ * mean over all hulls). Informational only: Shattered Stars is a squadron
+ * game (outside the duel modes), so factions are balanced on squad results
+ * and a hull's solo value is neither a target nor a gate.
  */
 
 import type { BalanceJobResult } from "../../src/simulation/balance/balanceJobs";
@@ -15,9 +17,6 @@ import {
 } from "../../src/simulation/balance/roleValue";
 import { SKIRMISH_POINT_LIMIT } from "../../src/simulation/balance/squadLists";
 import { cellsOf, shipValueOf } from "./merge";
-
-/** Value band around the trend (±15 %). */
-export const VALUE_BAND = 0.15;
 
 /** A hull's value relative to the trend. */
 export interface ValueRow {
@@ -61,22 +60,20 @@ export function renderShipsSection(
   const roleRows = roles.map((role) => {
     const own = rows.filter((r) => r.value.role === role);
     const mean = own.reduce((s, r) => s + r.residual, 0) / own.length;
-    const outside = own.filter((r) => Math.abs(r.residual) > VALUE_BAND).length;
-    return `| ${role} | ${own.length} | ${signed(mean)}${Math.abs(mean) > VALUE_BAND ? " ✘" : ""} | ${outside} |`;
+    return `| ${role} | ${own.length} | ${signed(mean)} |`;
   });
   const shipRows = rows.map((r) => {
     const v = r.value;
     const at200 = inverseLogit(v.logitAtBudget);
-    return `| ${v.definitionId} | ${v.role} | ${v.hullCost} | ${v.low.copies}×=${v.low.cost} ${Math.round(v.low.share * 100)}% / ${v.high.copies}×=${v.high.cost} ${Math.round(v.high.share * 100)}% | ${Math.round(at200 * 100)}% | ${signed(r.residual)}${Math.abs(r.residual) > VALUE_BAND ? " ✘" : ""} |`;
+    return `| ${v.definitionId} | ${v.role} | ${v.hullCost} | ${v.low.copies}×=${v.low.cost} ${Math.round(v.low.share * 100)}% / ${v.high.copies}×=${v.high.cost} ${Math.round(v.high.share * 100)}% | ${Math.round(at200 * 100)}% | ${signed(r.residual)} |`;
   });
-  const flagged = rows.filter((r) => Math.abs(r.residual) > VALUE_BAND).length;
   return [
-    "## Value per point (mono-hull squads on default quick builds vs the 5 auto-fill lists)",
+    "## Solo value per point (informational — not a target or gate)",
     "",
-    `Price slope ${slope.toFixed(4)} log-odds/pt; trend ${signed(trend)} (the reference lists' own strength). Residual = plays like N % more (+, under-costed) or fewer (−) points than the trend. ${flagged}/${rows.length} hulls outside ±${VALUE_BAND * 100}%.`,
+    `Mono-hull squads on default quick builds vs the 5 auto-fill lists. Outside the duel modes Shattered Stars is a squadron game, so this only helps explain squad results. Price slope ${slope.toFixed(4)} log-odds/pt; trend ${signed(trend)}. Residual = plays like N % more (+) or fewer (−) points than the trend when fielded alone.`,
     "",
-    "| role | hulls | mean residual | outside ±15% |",
-    "|---|---|---|---|",
+    "| role | hulls | mean residual |",
+    "|---|---|---|",
     ...roleRows,
     "",
     "<details><summary>Every hull</summary>",

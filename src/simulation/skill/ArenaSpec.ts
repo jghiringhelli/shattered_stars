@@ -32,6 +32,8 @@ export interface ShipEntry {
   readonly bot?: PilotBot;
   /** Quick build; omitted = the default one. */
   readonly loadoutId?: string | null;
+  /** Fly without the faction's identity levers (balance ablation). */
+  readonly withoutIdentity?: boolean;
 }
 
 /** A side's squad layer (SquadCommand with an AI leader). */

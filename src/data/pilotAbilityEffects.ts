@@ -58,7 +58,7 @@ export const PILOT_ABILITY_REALTIME: Readonly<Record<string, RealtimeEffect>> =
 
     // --- Defensive -----------------------------------------------------------
     elusive: { damageTakenMultiplier: 0.9 },
-    hold_the_line: { wingmanDamageTakenMultiplier: 0.8 },
+    hold_the_line: { wingmanDamageTakenMultiplier: 0.8, wingmanLaserBonus: 1 },
     radiant_judgment: { closeRangeLaserBonus: 1, damageTakenMultiplier: 0.95 },
     regenerative_matrix: { shieldRegenPerSecond: 0.18 },
     smugglers_luck: { damageTakenMultiplier: 0.92, cloakDurationBonus: 0.5 },

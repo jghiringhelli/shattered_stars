@@ -29,6 +29,8 @@ import type { BotPilot } from "../../arcade/ai/BotPilot";
 import type { Pose } from "../../arcade/ai/BotTypes";
 import type { BotContact } from "../../arcade/ai/BotView";
 import type { SideId } from "./ArenaSide";
+import { getLoadoutById } from "../../data/ShipLoadouts";
+import { equipWithoutIdentity } from "../identityAblation";
 
 /** A ship in the arena. */
 export interface ArenaShip {
@@ -54,6 +56,10 @@ export interface ArenaShip {
   readonly pilot: BotPilot;
   /** Special actions this ship's pilot has flown (telemetry). */
   specialsUsed: number;
+  /** Cards it flies with (its quick build's, minus ablated identity cards). */
+  upgradeIds: readonly string[];
+  /** Flown without its faction's identity: it projects no faction aura. */
+  readonly auraSuppressed: boolean;
 }
 
 /** What spawning a ship needs. */
@@ -65,6 +71,8 @@ export interface ArenaShipSpec {
   readonly pilot: BotPilot;
   /** Quick build to equip; omitted = the default one (as the scenes pick it). */
   readonly loadoutId?: string | null;
+  /** Fly without the faction's identity levers (balance ablation). */
+  readonly withoutIdentity?: boolean;
 }
 
 /**
@@ -100,11 +108,30 @@ export function spawnArenaShip(spec: ArenaShipSpec): ArenaShip {
     alive: true,
     pilot: spec.pilot,
     specialsUsed: 0,
+    upgradeIds: [],
+    auraSuppressed: spec.withoutIdentity === true,
   };
-  ship.modifiers = equipQuickBuild(ship, loadoutId);
+  equipArenaShip(ship, loadoutId, spec.withoutIdentity === true);
   ship.flight = equipFlight(ship.flight, ship.modifiers);
   ship.alive = ship.hull > 0;
   return ship;
+}
+
+function equipArenaShip(
+  ship: ArenaShip,
+  loadoutId: string | null,
+  withoutIdentity: boolean,
+): void {
+  const equipped = withoutIdentity
+    ? equipWithoutIdentity(ship, loadoutId)
+    : {
+        modifiers: equipQuickBuild(ship, loadoutId),
+        upgradeIds: loadoutId
+          ? (getLoadoutById(loadoutId)?.upgrades ?? [])
+          : [],
+      };
+  ship.modifiers = equipped.modifiers;
+  ship.upgradeIds = equipped.upgradeIds;
 }
 
 /**

@@ -53,6 +53,8 @@ export interface SquadList {
   readonly label: string;
   readonly faction: FactionId;
   readonly ships: readonly ListShip[];
+  /** Fly every ship without the faction's identity levers (ablation). */
+  readonly withoutIdentity?: boolean;
 }
 
 /**
@@ -164,6 +166,7 @@ export function sideOf(list: SquadList, skill: CrewSkill): SideSpec {
         loadoutId: ship.loadoutId,
         tier: pilot.tier,
         reactionScale: pilot.reactionScale,
+        ...(list.withoutIdentity ? { withoutIdentity: true } : {}),
       };
     }),
     squad: crewSquadSetup(skill),

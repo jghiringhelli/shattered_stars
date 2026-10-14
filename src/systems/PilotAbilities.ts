@@ -872,7 +872,7 @@ export const PILOT_ABILITIES: Record<string, PilotAbility> = {
     category: "defensive",
     trigger: "on_defend",
     description:
-      "While a friendly ship is at range 0-1, roll 1 additional defense die",
+      "While a friendly ship is at range 0-1, roll 1 additional defense die and deal +1 damage",
     pointCost: 4,
     xpCost: 150,
     requiredFaction: "terran_hegemony",

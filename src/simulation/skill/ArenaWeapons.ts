@@ -49,6 +49,7 @@ export function armArena(state: CombatState): WeaponsDriver {
       definitionId: ship.definitionId,
       loadoutId: ship.loadoutId,
       modifiers: ship.modifiers,
+      upgradeIds: ship.upgradeIds,
     });
   }
   state.weapons = driver;

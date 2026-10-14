@@ -39,6 +39,8 @@ export interface AuraShip {
   readonly maxShields: number;
   /** False when a disabled subsystem (e.g. a capital's bridge) blocks projection. Defaults to online. */
   readonly systemsOnline?: boolean;
+  /** True when the ship projects no aura at all (balance ablation). */
+  readonly auraSuppressed?: boolean;
   // --- Pilot-sheet aura knobs (auraShipFacts / auraFactsOf). Omitted = the
   // ship's folded sheet is unknown: eligibility and radius fall back to its
   // equipped cards, and there is no magnitude bonus or pilot extra.
@@ -82,8 +84,12 @@ export interface FactionAura {
   readonly description: string;
 }
 
-/** Per-ally reduction added by each nearby swarm member (synthetic). */
-export const SWARM_EVADE_PER_ALLY = 0.06;
+/**
+ * Per-ally reduction added by each nearby swarm member (synthetic). 0.08
+ * (was 0.06): the Collective's data-link edge, which also lifted its
+ * reinforced share from ~42 % into the 45–55 % band.
+ */
+export const SWARM_EVADE_PER_ALLY = 0.08;
 /** Maximum incoming-damage reduction the swarm aura can reach. */
 export const SWARM_EVADE_CAP = 0.3;
 export {
@@ -160,7 +166,10 @@ export function auraRadiusBonusFor(upgradeIds: ReadonlyArray<string>): number {
  *
  * Each field was valued on the real engine (a 3-ship list — support
  * projector + two fighters — with its aura on v off against every other
- * faction's, docs/balance/): every aura is worth roughly the same.
+ * faction's, docs/balance/): every aura is worth roughly the same. Each is
+ * also its faction's main identity lever (src/data/factionIdentity.ts,
+ * docs/specs/factions.md): flying a squad without it costs that faction
+ * ~10+ win points (docs/balance/latest.md, Faction identity).
  */
 export const FACTION_AURAS: Record<FactionId, FactionAura> = {
   terran_hegemony: {
@@ -169,8 +178,10 @@ export const FACTION_AURAS: Record<FactionId, FactionAura> = {
     faction: "terran_hegemony",
     effect: "damage",
     radius: 380,
-    magnitude: 0.6,
-    description: "Allied ships nearby deal +0.6 damage per hit.",
+    // 0.35 (was 0.6): Iron Fist flies four hulls under the field, so a
+    // smaller bonus keeps the Hegemony near 50 % (docs/specs/factions.md).
+    magnitude: 0.35,
+    description: "Allied ships nearby deal +0.35 damage per hit.",
   },
   free_confederation: {
     id: "rallying_banner",
@@ -178,15 +189,18 @@ export const FACTION_AURAS: Record<FactionId, FactionAura> = {
     faction: "free_confederation",
     effect: "damage_reduction",
     radius: 280,
-    magnitude: 0.2,
-    description: "Allied ships take 20% less damage.",
+    // 0.30 (was 0.2): the crew coordinators' banner is the Confederation's
+    // edge; its cheap hulls need it to trade evenly in classic squads.
+    magnitude: 0.3,
+    description: "Allied ships take 30% less damage.",
   },
   synthetic_collective: {
     id: "hive_resilience",
     name: "Hive Resilience",
     faction: "synthetic_collective",
     effect: "swarm_evade",
-    radius: 340,
+    // 400 px (was 340): a swarm spreads over the field, the link keeps up.
+    radius: 400,
     magnitude: SWARM_EVADE_PER_ALLY,
     description: "Allies take less damage, scaling with nearby swarm size.",
   },
@@ -195,11 +209,13 @@ export const FACTION_AURAS: Record<FactionId, FactionAura> = {
     name: "Raider's Cadence",
     faction: "void_corsairs",
     effect: "stress_relief",
-    radius: 300,
+    // 700 px / +10 % (was 300 / +5 %): raiders fly loose, so the cadence
+    // reaches the whole pack — the Corsairs' hit-and-run edge.
+    radius: 700,
     magnitude: 1,
-    hitChanceBonus: 0.05,
+    hitChanceBonus: 0.1,
     description:
-      "Allied maneuvers build stress one tier slower and shots gain +5% to hit.",
+      "Allied maneuvers build stress one tier slower and shots gain +10% to hit.",
   },
   ascendant_empire: {
     id: "aegis_field",
@@ -209,9 +225,9 @@ export const FACTION_AURAS: Record<FactionId, FactionAura> = {
     radius: 220,
     // Real-time shield HP per second. Regen accumulates over a whole battle
     // (a 3-minute reinforced match), so it is kept small: 2.4 HP/s made AE
-    // lists win 80 % of reinforced battles, 0.3–0.4 HP/s ~50 % (balance report).
-    magnitude: 0.4,
-    description: "Allied ships slowly regenerate shields (0.4 HP/s).",
+    // lists win 80 % of reinforced battles, 0.25–0.4 HP/s ~50 % (balance report).
+    magnitude: 0.25,
+    description: "Allied ships slowly regenerate shields (0.25 HP/s).",
   },
 };
 
@@ -238,6 +254,7 @@ export interface ProjectionScale {
 export function projectionScaleFor(ship: AuraShip): ProjectionScale | null {
   if (ship.hull <= 0) return null;
   if (ship.systemsOnline === false) return null;
+  if (ship.auraSuppressed === true) return null;
   if (ship.role === "capital") {
     return {
       kind: "capital",

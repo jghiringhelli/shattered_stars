@@ -171,7 +171,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     initiative: 6,
     isUnique: true,
     abilityText:
-      "While a friendly ship is at range 0-1, you hold the line and roll 1 additional defense die.",
+      "While a friendly ship is at range 0-1, you hold the line: roll 1 additional defense die and deal +1 damage.",
     abilityId: "hold_the_line",
     extraSlots: ["talent", "tech"],
   },
@@ -860,7 +860,7 @@ const PILOT_CARD_BLUEPRINTS: Record<string, PilotCardBlueprint> = {
     initiative: 5,
     isUnique: true,
     abilityText:
-      "While a friendly ship is at range 0-1, you shield them and roll 1 additional defense die.",
+      "While a friendly ship is at range 0-1, you shield them: roll 1 additional defense die and deal +1 damage.",
     abilityId: "hold_the_line",
     extraSlots: ["talent", "gunner"],
   },

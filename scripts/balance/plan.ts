@@ -14,6 +14,7 @@ import {
   type CurveMode,
 } from "../../src/simulation/balance/difficultyCurve";
 import { factionPairs } from "../../src/simulation/balance/factionMatrix";
+import { BALANCE_FACTIONS } from "../../src/simulation/balance/squadLists";
 import type {
   BalanceJob,
   SeedBlock,
@@ -30,6 +31,8 @@ export const SECTIONS = [
   "difficulty",
   "scenario",
   "ships",
+  "identity",
+  "identityReinforced",
 ] as const;
 export type SectionId = (typeof SECTIONS)[number];
 
@@ -43,6 +46,8 @@ const SIZES: Readonly<Record<SectionId, { blocks: number; seeds: number }>> = {
   difficulty: { blocks: 3, seeds: 4 },
   scenario: { blocks: 2, seeds: 4 },
   ships: { blocks: 1, seeds: 4 },
+  identity: { blocks: 4, seeds: 10 },
+  identityReinforced: { blocks: 3, seeds: 4 },
 };
 
 /** Difficulty seeds per block by mode (a mode's cell multiplies them). */
@@ -54,14 +59,12 @@ const CURVE_SEEDS: Readonly<Record<CurveMode, number>> = {
   scenario: 3,
 };
 
-/** Faction pairings each scenario is played with (lists swapped per seed). */
-export const SCENARIO_PAIRS: ReadonlyArray<[FactionId, FactionId]> = [
-  ["terran_hegemony", "void_corsairs"],
-  ["free_confederation", "ascendant_empire"],
-  ["synthetic_collective", "terran_hegemony"],
-  ["void_corsairs", "free_confederation"],
-  ["ascendant_empire", "synthetic_collective"],
-];
+/**
+ * Faction pairings each scenario is played with (lists swapped per seed):
+ * every pairing, so each faction's scenario total pools all four opponents.
+ */
+export const SCENARIO_PAIRS: ReadonlyArray<[FactionId, FactionId]> =
+  factionPairs();
 
 /** Seed bases are spread so sections never share seeds. */
 const SEED_STRIDE = 1000;
@@ -102,12 +105,19 @@ export function buildPlan(
   };
   for (const section of [
     "reinforced",
+    "identityReinforced",
     "ships",
     "difficulty",
     "scenario",
   ] as const)
     if (sections.has(section)) planSection(section, add);
-  for (const section of ["classic", "preset", "ace", "dogfight"] as const)
+  for (const section of [
+    "classic",
+    "identity",
+    "preset",
+    "ace",
+    "dogfight",
+  ] as const)
     if (sections.has(section)) planSection(section, add);
   return jobs;
 }
@@ -126,6 +136,17 @@ function planSection(section: SectionId, add: Adder): void {
     case "reinforced":
       for (const [a, b] of factionPairs())
         add(section, `${a}:${b}`, (seeds) => ({ kind: section, a, b, seeds }));
+      return;
+    case "identity":
+    case "identityReinforced":
+      for (const [a, b] of identityPairs())
+        add(section, `${a}:${b}`, (seeds) => ({
+          kind: section === "identity" ? "classic" : "reinforced",
+          a,
+          b,
+          seeds,
+          withoutIdentityA: true,
+        }));
       return;
     case "ships":
       for (const id of skirmishHulls())
@@ -178,6 +199,16 @@ function planSection(section: SectionId, add: Adder): void {
             );
       return;
   }
+}
+
+/** @returns Every ordered pairing: the first faction flown without its identity. */
+function identityPairs(): Array<[FactionId, FactionId]> {
+  return BALANCE_FACTIONS.flatMap((a) =>
+    BALANCE_FACTIONS.filter((b) => b !== a).map((b): [FactionId, FactionId] => [
+      a,
+      b,
+    ]),
+  );
 }
 
 /** @returns Every hull Skirmish can field (no capital, no huge). */

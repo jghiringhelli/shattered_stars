@@ -142,7 +142,10 @@ describe("faction aura effects", () => {
       ship({ id: "ally", faction: "free_confederation", x: 50, y: 0 }),
     ];
     const { buffs } = resolveSupportAuras(ships);
-    expect(buffs.get("ally")!.damageTakenMultiplier).toBeCloseTo(0.8, 5);
+    expect(buffs.get("ally")!.damageTakenMultiplier).toBeCloseTo(
+      1 - FACTION_AURAS.free_confederation.magnitude,
+      5,
+    );
   });
 
   it("Ascendant Aegis Field regenerates shields slowly", () => {
@@ -299,9 +302,10 @@ describe("class-based aura scaling", () => {
       ship({ id: "ally", faction: "free_confederation", x: reach, y: 0 }),
     ]);
     const mult = buffs.get("ally")!.damageTakenMultiplier;
-    // Huge damping (0.6) softens the 20% cut to ~12%.
-    expect(mult).toBeCloseTo(1 - 0.2 * 0.6, 5);
-    expect(mult).toBeGreaterThan(0.8);
+    // Huge damping (0.6) softens the Banner's full cut.
+    const fullCut = FACTION_AURAS.free_confederation.magnitude;
+    expect(mult).toBeCloseTo(1 - fullCut * 0.6, 5);
+    expect(mult).toBeGreaterThan(1 - fullCut);
   });
 
   it("a hero projects a small full-strength aura", () => {
@@ -389,8 +393,9 @@ describe("faction aura rework (balance round 2)", () => {
     const aura = FACTION_AURAS.terran_hegemony;
     expect(Number.isInteger(aura.magnitude)).toBe(false);
     expect(aura.radius).toBeGreaterThanOrEqual(
-      FACTION_AURAS.void_corsairs.radius,
+      FACTION_AURAS.free_confederation.radius,
     );
+    expect(aura.radius).toBeGreaterThanOrEqual(350);
     const { buffs } = resolveSupportAuras([
       ship({ id: "sup", role: "support", x: 0, y: 0 }),
       ship({ id: "ally", x: aura.radius - 10, y: 0 }),

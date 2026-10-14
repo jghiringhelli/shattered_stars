@@ -66,6 +66,7 @@ export function spawnShips(
         ...(entry.loadoutId !== undefined
           ? { loadoutId: entry.loadoutId }
           : {}),
+        ...(entry.withoutIdentity ? { withoutIdentity: true } : {}),
       });
       if (tempo) applyTempoToShip(ship, tempo);
       return ship;

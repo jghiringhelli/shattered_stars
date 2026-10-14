@@ -62,6 +62,8 @@ export interface WeaponsLoadout {
   readonly definitionId: string;
   readonly loadoutId: string | null;
   readonly modifiers: CombatModifiers;
+  /** Cards it flies with, when not exactly its quick build's (ablations). */
+  readonly upgradeIds?: readonly string[];
 }
 
 export class WeaponsDriver {
@@ -95,9 +97,11 @@ export class WeaponsDriver {
   equip(shipId: string, loadout: WeaponsLoadout): void {
     this.runtime.equip(shipId, {
       definitionId: loadout.definitionId,
-      upgradeIds: loadout.loadoutId
-        ? (getLoadoutById(loadout.loadoutId)?.upgrades ?? [])
-        : [],
+      upgradeIds:
+        loadout.upgradeIds ??
+        (loadout.loadoutId
+          ? (getLoadoutById(loadout.loadoutId)?.upgrades ?? [])
+          : []),
       modifiers: loadout.modifiers,
     });
   }

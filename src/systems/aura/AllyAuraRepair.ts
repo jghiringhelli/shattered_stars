@@ -48,6 +48,8 @@ export interface AuraFieldShip {
    * from the quick build (auraShipFacts).
    */
   readonly modifiers?: CombatModifiers;
+  /** Projects no faction aura (balance ablation of the faction identity). */
+  readonly auraSuppressed?: boolean;
 }
 
 /** Repair rates a covered ship receives this frame. */
@@ -115,6 +117,7 @@ export function auraShipOf(ship: AuraFieldShip): AuraShip {
     systemsOnline: ship.capitalSystems
       ? !isBridgeOffline(ship.capitalSystems)
       : true,
+    ...(ship.auraSuppressed ? { auraSuppressed: true } : {}),
     ...(ship.modifiers
       ? auraFactsOf(ship.modifiers)
       : auraShipFacts(ship.definitionId, ship.loadoutId)),

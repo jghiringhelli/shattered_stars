@@ -87,8 +87,21 @@ export function applyLoadoutEffects(
     (l) => l.id === loadoutId,
   );
   if (!loadout) return;
+  applyUpgradeStatEffects(ship, loadout.upgrades);
+}
 
-  for (const upgradeId of loadout.upgrades) {
+/**
+ * Applies the stat bonuses of a list of upgrades to the live ship object
+ * (hull, shields, and — if present — attack / agility dice), in place.
+ *
+ * @param ship - The freshly spawned ship object.
+ * @param upgradeIds - Equipped upgrade ids (unknown ids are ignored).
+ */
+export function applyUpgradeStatEffects(
+  ship: LoadoutTarget,
+  upgradeIds: ReadonlyArray<string>,
+): void {
+  for (const upgradeId of upgradeIds) {
     const upg = UPGRADE_DEFINITIONS[upgradeId];
     if (!upg?.effects) continue;
 

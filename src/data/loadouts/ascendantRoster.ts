@@ -51,6 +51,26 @@ export const ASCENDANT_ROSTER: BlueprintsByShip = {
       description: "Knight that stresses targets for the wing",
       role: "support",
     },
+    {
+      id: "templar_force",
+      name: "Templar Force Guardian",
+      shipId: "ascendant_templar",
+      pilotId: "templar_champion",
+      upgrades: ["force_sensitive", "advanced_sensors", "hull_upgrade"],
+      description: "Force-sensitive champion shrugging off the hits",
+      role: "defense",
+    },
+  ],
+  ascendant_inquisitor: [
+    {
+      id: "inquisitor_force",
+      name: "Inquisitor Foresight",
+      shipId: "ascendant_inquisitor",
+      pilotId: "grand_inquisitor",
+      upgrades: ["heavy_laser_cannon", "pattern_analyzer", "foresight"],
+      description: "The Grand Inquisitor reads every shot before it lands",
+      role: "offense",
+    },
   ],
   ascendant_cherub: [
     {

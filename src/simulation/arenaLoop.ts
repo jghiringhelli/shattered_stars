@@ -68,6 +68,8 @@ export interface LoopArrival {
   readonly loadoutId: string | null;
   readonly skill: SideSkill;
   readonly pose: Pose;
+  /** Fly without the faction's identity levers (balance ablation). */
+  readonly withoutIdentity?: boolean;
 }
 
 /** Optional per-frame hooks of a mode (scenario goals, evasive flying). */
@@ -117,6 +119,7 @@ export function addShip(loop: ArenaLoop, arrival: LoopArrival): ArenaShip {
     definitionId: arrival.definitionId,
     pose: arrival.pose,
     loadoutId: arrival.loadoutId,
+    ...(arrival.withoutIdentity ? { withoutIdentity: true } : {}),
     pilot: new BotPilot(arrival.skill.tier, {
       random: loop.random,
       reactionScale: arrival.skill.reactionScale,
@@ -127,6 +130,7 @@ export function addShip(loop: ArenaLoop, arrival: LoopArrival): ArenaShip {
     definitionId: ship.definitionId,
     loadoutId: ship.loadoutId,
     modifiers: ship.modifiers,
+    upgradeIds: ship.upgradeIds,
   });
   return ship;
 }

@@ -99,6 +99,8 @@ function playOne(
     enemyReaction: skill.reactionScale,
     playerList: player.ships.map((s) => s.definitionId),
     enemyList: enemy.ships.map((s) => s.definitionId),
+    playerBuilds: player.ships.map((s) => s.loadoutId),
+    enemyBuilds: enemy.ships.map((s) => s.loadoutId),
   });
   return {
     winner: match.result.winner,
