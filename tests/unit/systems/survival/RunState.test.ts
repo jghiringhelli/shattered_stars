@@ -7,6 +7,7 @@ import {
 } from "../../../../src/systems/survival/RunRng";
 import {
   addEscort,
+  createRun,
   adjustFleetHull,
   EVENT_HULL_FLOOR,
   enterSector,
@@ -16,7 +17,13 @@ import {
   withLog,
 } from "../../../../src/systems/survival/RunState";
 import { MAX_ESCORTS } from "../../../../src/data/survival/escorts";
-import { FACTION_STARTER_SHIPS } from "../../../../src/data/survival/starters";
+import { getRelic } from "../../../../src/data/survival/relicCatalog";
+import {
+  FACTION_STARTER_SHIPS,
+  NO_STARTER_KIT,
+  STARTER_KITS,
+  starterKitOf,
+} from "../../../../src/data/survival/starters";
 import type { FactionId } from "../../../../src/config";
 import {
   MAX_SHIP_UPGRADES,
@@ -108,6 +115,48 @@ describe("createRun", () => {
   it("clamps ascension to 0..10", () => {
     expect(RunBuilder.aRun().withAscension(42).build().ascension).toBe(10);
     expect(RunBuilder.aRun().withAscension(-3).build().ascension).toBe(0);
+  });
+});
+
+describe("starter kits", () => {
+  const newRun = (flagshipId: string) =>
+    createRun({
+      seed: 1,
+      faction: "terran_hegemony",
+      flagshipId,
+      loadoutId: null,
+      ascension: 0,
+      unlocked: [],
+      now: 0,
+    });
+
+  it("gives a flagship without a kit nothing extra", () => {
+    const run = newRun("terran_viper");
+    expect(starterKitOf("terran_viper")).toEqual(NO_STARTER_KIT);
+    expect(run.flagship.upgrades).toBe(0);
+    expect(run.relics).toEqual([]);
+    expect(run.salvage).toBe(STARTING_SALVAGE);
+    expect(run.escorts).toHaveLength(FREE_STARTING_ESCORTS);
+  });
+
+  it("applies every kit: upgrade levels, extra escorts, relic and salvage", () => {
+    for (const [flagshipId, kit] of Object.entries(STARTER_KITS)) {
+      const run = newRun(flagshipId);
+      expect(run.flagship.upgrades).toBe(kit.upgrades);
+      expect(run.escorts).toHaveLength(FREE_STARTING_ESCORTS + kit.escorts);
+      expect(run.relics).toEqual(kit.relicId ? [kit.relicId] : []);
+      expect(run.salvage).toBe(STARTING_SALVAGE + kit.salvage);
+    }
+  });
+
+  it("keeps every kit within the shop's upgrade cap and the wing cap and names real relics", () => {
+    for (const kit of Object.values(STARTER_KITS)) {
+      expect(kit.upgrades).toBeLessThanOrEqual(MAX_SHIP_UPGRADES);
+      expect(FREE_STARTING_ESCORTS + kit.escorts).toBeLessThanOrEqual(
+        MAX_ESCORTS,
+      );
+      if (kit.relicId) expect(getRelic(kit.relicId)).toBeDefined();
+    }
   });
 });
 

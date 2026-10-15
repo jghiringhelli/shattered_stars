@@ -1,0 +1,63 @@
+name: Release
+
+# Pushing a tag v<semver> (e.g. v0.2.0-beta.1) builds the game, attaches a zip and creates the
+# GitHub release with the notes of that version from CHANGELOG.md. Tags with a pre-release part
+# (-alpha, -beta, -rc) are marked as pre-releases. Release procedure: docs/CONTRIBUTING.md.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+
+      - name: Tag matches package.json
+        shell: bash
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${version}"
+            exit 1
+          fi
+
+      - name: Release notes from CHANGELOG.md
+        run: npx tsx scripts/release_notes.ts "${GITHUB_REF_NAME#v}" > release-notes.md
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_ONLINE_URL: ${{ vars.VITE_ONLINE_URL }}
+          VITE_FEEDBACK_URL: ${{ vars.VITE_FEEDBACK_URL }}
+          VITE_GAME_BUILD: ${{ github.sha }}
+
+      - name: Zip the build
+        run: |
+          cd dist
+          zip -qr "../shattered-stars-${GITHUB_REF_NAME}.zip" .
+
+      - name: Create the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=""
+          case "${GITHUB_REF_NAME}" in *-*) flags="--prerelease" ;; esac
+          gh release create "${GITHUB_REF_NAME}" "shattered-stars-${GITHUB_REF_NAME}.zip" \
+            --title "Shattered Stars ${GITHUB_REF_NAME}" \
+            --notes-file release-notes.md \
+            $flags

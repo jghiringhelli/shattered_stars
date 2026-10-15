@@ -18,7 +18,10 @@ import {
   unlockedRelicPools,
 } from "../../data/survival/metaUnlocks";
 import { relicsOf } from "../../data/survival/relicCatalog";
-import { FACTION_STARTER_SHIPS } from "../../data/survival/starters";
+import {
+  FACTION_STARTER_SHIPS,
+  starterKitOf,
+} from "../../data/survival/starters";
 import {
   flagshipLoadout,
   joiningSquadLoadouts,
@@ -68,10 +71,14 @@ export const FREE_STARTING_ESCORTS = 1;
  */
 export function createRun(options: NewRunOptions): RunState {
   const ascension = clampAscension(options.ascension);
-  const flagship = freshShip(
-    options.flagshipId,
-    flagshipLoadout(options.flagshipId, options.loadoutId),
-  );
+  const kit = starterKitOf(options.flagshipId);
+  const flagship = {
+    ...freshShip(
+      options.flagshipId,
+      flagshipLoadout(options.flagshipId, options.loadoutId),
+    ),
+    upgrades: Math.min(MAX_SHIP_UPGRADES, kit.upgrades),
+  };
   const base: RunState = {
     version: RUN_SCHEMA_VERSION,
     seed: options.seed >>> 0,
@@ -85,10 +92,11 @@ export function createRun(options: NewRunOptions): RunState {
     activeEventId: null,
     eventCombat: null,
     path: [],
-    salvage: STARTING_SALVAGE + bonusStartingSalvage(options.unlocked),
+    salvage:
+      STARTING_SALVAGE + bonusStartingSalvage(options.unlocked) + kit.salvage,
     rerolls: STARTING_REROLLS,
     rerollsSpentHere: 0,
-    relics: [],
+    relics: kit.relicId ? [kit.relicId] : [],
     mutations: {},
     flagship,
     escorts: [],
@@ -104,7 +112,8 @@ export function createRun(options: NewRunOptions): RunState {
     log: [],
   };
   let run = base;
-  const escorts = FREE_STARTING_ESCORTS + startingEscorts(options.unlocked);
+  const escorts =
+    FREE_STARTING_ESCORTS + kit.escorts + startingEscorts(options.unlocked);
   for (let i = 0; i < escorts; i++) {
     run = addEscort(run);
   }

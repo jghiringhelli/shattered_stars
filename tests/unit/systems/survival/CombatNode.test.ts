@@ -17,7 +17,10 @@ import {
   type CombatOutcome,
 } from "../../../../src/systems/survival/CombatResolution";
 import { addEscort } from "../../../../src/systems/survival/RunState";
-import { NODE_CLEAR_SALVAGE } from "../../../../src/data/survival/economy";
+import {
+  BASE_NODE_REPAIR,
+  NODE_CLEAR_SALVAGE,
+} from "../../../../src/data/survival/economy";
 import { survivalEnemyTier } from "../../../../src/arcade/systems/SurvivalSteering";
 import type { RunState } from "../../../../src/systems/survival/RunTypes";
 import { RunBuilder, atActiveNode } from "./survivalRunBuilder";
@@ -118,6 +121,16 @@ describe("planCombat", () => {
     expect(planCombat({ ...boss, sector: 3 })!.isFinalBoss).toBe(true);
   });
 
+  it("makes Second Wind a reinforcement call, not an extra creature enrage phase", () => {
+    const boss = atActiveNode(RunBuilder.aRun().build(), "boss");
+    for (const sector of [1, 2, 3]) {
+      const calm = planCombat({ ...boss, sector })!;
+      const wind = planCombat({ ...boss, sector, ascension: 8 })!;
+      expect(wind.bossPhases).toBe(calm.bossPhases + 1);
+      expect(wind.creatureBoss!.phases).toBe(calm.creatureBoss!.phases);
+    }
+  });
+
   it("never sends the player's own faction and does field the Free Confederation", () => {
     const factions = new Set<string>();
     for (let seed = 1; seed < 80; seed++) {
@@ -162,7 +175,7 @@ describe("completeCombat", () => {
   it("persists hull damage, partly recovers shields and returns to the map", () => {
     const run = atActiveNode(RunBuilder.aRun().build(), "combat");
     const next = completeCombat(run, outcome(run));
-    expect(next.flagship.hull).toBe(0.4);
+    expect(next.flagship.hull).toBeCloseTo(0.4 + BASE_NODE_REPAIR);
     expect(next.flagship.shields).toBe(0.5);
     expect(next.activeNodeId).toBeNull();
     expect(next.currentNodeId).toBe(run.activeNodeId);
@@ -183,7 +196,9 @@ describe("completeCombat", () => {
       ...atActiveNode(RunBuilder.aRun().build(), "combat"),
       relics: ["nanite_weave"],
     };
-    expect(completeCombat(run, outcome(run)).flagship.hull).toBeCloseTo(0.5);
+    expect(completeCombat(run, outcome(run)).flagship.hull).toBeCloseTo(
+      0.5 + BASE_NODE_REPAIR,
+    );
   });
 
   it("drops lost escorts and counts them", () => {

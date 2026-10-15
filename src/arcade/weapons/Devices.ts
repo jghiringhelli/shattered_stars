@@ -61,23 +61,22 @@ export interface Dropper extends FiringPose {
   readonly side: string;
 }
 
-let deviceCounter = 0;
-
 /**
  * @param dropper - The ship dropping it.
  * @param spec - The device's rules.
  * @param worldSize - Map edge length (px).
+ * @param id - The battle's next device id (per-battle, see FieldOrdnance).
  * @returns The device, astern of the ship.
  */
 export function dropDevice(
   dropper: Dropper,
   spec: DeviceSpec,
   worldSize: number,
+  id: string,
 ): DeviceObject {
   const at = pointAstern(dropper, DEVICE_DROP_DISTANCE_PX, worldSize);
-  deviceCounter += 1;
   return {
-    id: `device_${deviceCounter}`,
+    id,
     ownerId: dropper.id,
     ownerSide: dropper.side,
     kind: spec.kind,

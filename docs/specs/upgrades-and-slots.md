@@ -242,8 +242,7 @@ target), bullseye (±10° off the nose), wingman (a friendly within
 - The ship picker's detail panel shows all of the above for the selected
   build (`src/ui/picker/QuickBuildDetailView.ts`).
 - Dogfight, Ace Duel and Survival setup screens let the player cycle each
-  of their ships' quick builds (`src/ui/QuickBuildChooser.ts`,
-  `src/arcade/systems/QuickBuildChoice.ts`). The default pick is exactly
+  of their ships' quick builds (`src/arcade/systems/QuickBuildChoice.ts`). The default pick is exactly
   what `assignQuickBuilds` would hand out, so an untouched chooser changes
   nothing; cycling skips builds whose unique pilot already flies elsewhere
   in the squad. Online Dogfight skips the setup screen and flies defaults.

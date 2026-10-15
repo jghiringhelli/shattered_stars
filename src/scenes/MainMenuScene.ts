@@ -18,6 +18,7 @@ import {
 import { punch } from "../ui/UIJuice";
 import { openFeedbackDialog } from "../ui/feedback/feedbackDialog";
 import { openWelcomeDialog } from "../ui/welcome/welcomeDialog";
+import { openProgressDialog } from "../ui/progress/progressDialog";
 import {
   pageWelcomeEnvironment,
   shouldAutoOpenWelcome,
@@ -31,6 +32,12 @@ import {
 } from "../ui/menu/mainMenuEntries";
 import { MainMenuBriefing } from "../ui/menu/MainMenuBriefing";
 import { FlightSchoolCard } from "../ui/menu/FlightSchoolCard";
+import { ContinueCard } from "../ui/menu/ContinueCard";
+import { launchOfEntry } from "../ui/menu/continueModel";
+import {
+  loadLastLaunch,
+  saveLastLaunch,
+} from "../systems/setup/setupMemory";
 import {
   fadeInMenu,
   goToScene,
@@ -61,6 +68,8 @@ export class MainMenuScene extends Phaser.Scene {
   private menuItems: Phaser.GameObjects.Container[] = [];
   private selectedIndex = 0;
   private briefing!: MainMenuBriefing;
+  /** Whether a last launch is remembered (R and the footer hint). */
+  private continueAvailable = false;
 
   constructor() {
     super({ key: "MainMenuScene" });
@@ -95,9 +104,14 @@ export class MainMenuScene extends Phaser.Scene {
     const flightSchool = new FlightSchoolCard(this, () =>
       this.startFlightSchool(),
     );
+    const continueCard = new ContinueCard(this, () => this.continueLast());
+    this.continueAvailable = continueCard.canContinue;
     this.createFooter();
     this.setupInput();
-    this.playEntrance(flightSchool.container);
+    this.playEntrance(
+      flightSchool.container,
+      ...(continueCard.container ? [continueCard.container] : []),
+    );
     fadeInMenu(this);
     if (shouldAutoOpenWelcome(pageWelcomeEnvironment())) this.openWelcome();
   }
@@ -108,7 +122,10 @@ export class MainMenuScene extends Phaser.Scene {
     goToScene(this, "FlightSchoolScene");
   }
 
-  private playEntrance(card: Phaser.GameObjects.Container): void {
+  private playEntrance(
+    card: Phaser.GameObjects.Container,
+    ...extraCards: Phaser.GameObjects.Container[]
+  ): void {
     const centerX = this.scale.width / 2;
     this.titleText.setAlpha(0);
     this.tweens.add({
@@ -131,9 +148,10 @@ export class MainMenuScene extends Phaser.Scene {
       });
     });
     const briefing = this.briefing.container.setAlpha(0);
-    card.setAlpha(0);
+    const cards = [card, ...extraCards];
+    cards.forEach((c) => c.setAlpha(0));
     this.tweens.add({
-      targets: [briefing, card],
+      targets: [briefing, ...cards],
       alpha: 1,
       delay: ENTRANCE.briefingDelayMs,
       duration: ENTRANCE.rowMs,
@@ -144,7 +162,9 @@ export class MainMenuScene extends Phaser.Scene {
     const { width, height } = this.scale;
     addFooterHint(
       this,
-      "↑ ↓  NAVIGATE        ENTER  SELECT        F  FLIGHT SCHOOL",
+      this.continueAvailable
+        ? "↑ ↓  NAVIGATE      ENTER  SELECT      F  FLIGHT SCHOOL      R  CONTINUE LAST"
+        : "↑ ↓  NAVIGATE        ENTER  SELECT        F  FLIGHT SCHOOL",
     );
     const muted = MAIN_MENU_LAYOUT.footerColor;
     this.versionTag = this.add
@@ -164,6 +184,7 @@ export class MainMenuScene extends Phaser.Scene {
       [
         { label: "SEND FEEDBACK", onPress: () => this.openFeedback() },
         { label: "TESTER INFO", onPress: () => this.openWelcome() },
+        { label: "PROFILE", onPress: () => openProgressDialog() },
       ],
       { x: MAIN_MENU_LAYOUT.margin, y: height - 16 },
       {
@@ -199,7 +220,19 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private startEntry(entry: MainMenuEntry): void {
+    const launch = launchOfEntry(entry);
+    if (launch) saveLastLaunch(launch);
     goToScene(this, entry.target, entry.data);
+  }
+
+  /** CONTINUE LAST (card button / R): relaunch the last mode, a builder battle straight into the fight. */
+  private continueLast(): void {
+    const launch = loadLastLaunch();
+    if (!launch) return;
+    if (launch.battleConfig !== undefined)
+      this.registry.set("battleConfig", launch.battleConfig);
+    playUiPress();
+    goToScene(this, launch.scene, launch.data);
   }
 
   /**
@@ -254,6 +287,9 @@ export class MainMenuScene extends Phaser.Scene {
       this.selectMenuItem();
     });
     this.input.keyboard!.on("keydown-F", () => this.startFlightSchool());
+    this.input.keyboard!.on("keydown-R", () => {
+      if (this.continueAvailable) this.continueLast();
+    });
   }
 
   private selectMenuItem(): void {

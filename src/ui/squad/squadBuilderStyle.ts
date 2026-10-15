@@ -18,10 +18,10 @@ import { liftColor, toCssColor } from "../theme/colorMath";
 /** How far raw team colours are lifted to read as borders/captions. */
 const TEAM_ACCENT_LIFT = 0.35;
 
-/** Font sizes used by squad widgets (never below 10 px). */
+/** Font sizes used by squad widgets (never below 12 px). */
 export const SQUAD_TYPE = {
   caption: HOLO_TYPE_SCALE.caption.size,
-  small: 10,
+  small: 12,
   label: 12,
   body: 13,
   name: 14,

@@ -10,10 +10,6 @@ import {
   getShipsByFaction,
 } from "../../src/data/ShipDefinitions";
 import {
-  getTargetInfo,
-  isTargetInArc,
-} from "../../src/systems/TargetingSystem";
-import {
   getModeCombatStats,
   calculateHitChance,
 } from "../../src/data/ModeBalancing";

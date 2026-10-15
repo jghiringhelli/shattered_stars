@@ -60,7 +60,8 @@ export const AI_DEPLOY_DELAY_MS = 0;
 /** No limit for a quota field. */
 const UNLIMITED = Number.POSITIVE_INFINITY;
 
-const SKIRMISH_QUOTAS: readonly QuotaRule[] = [
+/** Skirmish / Scenario quotas (a table the balance sweeps tune). */
+export const SKIRMISH_QUOTAS: readonly QuotaRule[] = [
   { category: "bomber", maxOnField: 2, maxPerMatch: UNLIMITED },
   { category: "ace", maxOnField: 1, maxPerMatch: 3 },
   { category: "capital", maxOnField: 0, maxPerMatch: 0 },

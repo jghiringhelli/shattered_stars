@@ -88,7 +88,7 @@ test("DOWNLOAD ONLY saves a redacted bundle and opens nothing", async ({
   const bundle = JSON.parse(readFileSync((await download.path())!, "utf8"));
   expect(bundle.format).toBe("shattered-stars-feedback");
   expect(bundle.kind).toBe("balance");
-  expect(bundle.build.tag).toMatch(/^v\d+\.\d+\.\d+ BETA · /);
+  expect(bundle.build.tag).toMatch(/^v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)? BETA · /);
   expect(bundle.context.mode).toBe("menu");
   expect(bundle.environment.userAgent).toBeTruthy();
   expect(bundle.note).toContain("Boost is weak");

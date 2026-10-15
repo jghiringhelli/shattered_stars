@@ -6,7 +6,8 @@
  * |---|---|---|
  * | PORT | 8080 | HTTP + WebSocket port (Fly/Render inject it) |
  * | HOST | 0.0.0.0 | Bind address |
- * | ALLOWED_ORIGINS | * | Comma-separated browser origins allowed to connect |
+ * | ALLOWED_ORIGINS | * (dev) | Comma-separated browser origins allowed to connect; REQUIRED when NODE_ENV=production |
+ * | ALLOW_ANY_ORIGIN | false | Production opt-in to accept any origin (ALLOWED_ORIGINS unset or *) |
  * | MAX_CONNECTIONS | 500 | Open sockets, server-wide |
  * | MAX_CONNECTIONS_PER_ADDRESS | 8 | Open sockets per client address |
  * | MAX_ROOMS | 200 | Concurrent rooms |
@@ -16,7 +17,7 @@
  * | QUICK_MATCH_READY_MS | 20000 | Ready-check window of a quick-match room |
  * | START_COUNTDOWN_MS | 3000 | All-ready countdown before a match starts |
  * | LOAD_TIMEOUT_MS | 30000 | Longest wait for every client to load the battle |
- * | TRUST_PROXY | true | Read the client address from X-Forwarded-For |
+ * | TRUST_PROXY | false | Read the client address from X-Forwarded-For (set true behind Fly/Render) |
  * | LOG_LEVEL | info | debug, info, warn or error |
  */
 
@@ -73,7 +74,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   quickMatchReadyMs: 20_000,
   startCountdownMs: 3_000,
   loadTimeoutMs: 30_000,
-  trustProxy: true,
+  trustProxy: false,
   logLevel: "info",
 };
 
@@ -93,7 +94,7 @@ export function loadConfig(env: Env): ServerConfig {
   return {
     port: intVar(env, "PORT", d.port, 0, MAX_PORT),
     host: env["HOST"]?.trim() || d.host,
-    allowedOrigins: originsVar(env["ALLOWED_ORIGINS"]),
+    allowedOrigins: originsVar(env),
     maxConnections: intVar(env, "MAX_CONNECTIONS", d.maxConnections, 1),
     maxConnectionsPerAddress: intVar(
       env,
@@ -157,9 +158,19 @@ function boolVar(env: Env, name: string, fallback: boolean): boolean {
   throw new ConfigError(name, raw, "true or false");
 }
 
-function originsVar(raw: string | undefined): readonly string[] | "*" {
-  const trimmed = raw?.trim();
-  if (!trimmed || trimmed === "*") return "*";
+function originsVar(env: Env): readonly string[] | "*" {
+  const trimmed = env["ALLOWED_ORIGINS"]?.trim();
+  if (!trimmed || trimmed === "*") {
+    const production = env["NODE_ENV"] === "production";
+    if (production && !boolVar(env, "ALLOW_ANY_ORIGIN", false)) {
+      throw new ConfigError(
+        "ALLOWED_ORIGINS",
+        trimmed ?? "",
+        "an explicit origin list in production (or ALLOW_ANY_ORIGIN=true)",
+      );
+    }
+    return "*";
+  }
   const origins = trimmed
     .split(",")
     .map((o) => o.trim().replace(/\/$/, ""))

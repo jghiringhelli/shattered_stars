@@ -1,13 +1,52 @@
 #!/usr/bin/env bash
-# Master pre-commit dispatcher — runs all pre-commit-*.sh hooks in order.
-# Add new hooks by dropping a pre-commit-<name>.sh file in this directory.
-set -euo pipefail
+# Pre-commit dispatcher. Budget: < 90 s on a typical change.
+#   1. cheap gates, sequential, fail fast (branch, secrets, format, quality ratchet, prod scan, TDD)
+#   2. heavy gates, in PARALLEL (tsc x2, eslint on staged files, import cycles, related tests)
+# The FULL suite + coverage + skill gates run in CI and via `npm run verify:full`.
+set -uo pipefail
 
 HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GIT_DIR_PATH="$(git rev-parse --git-dir)"
+LOG_DIR="$GIT_DIR_PATH/hook-logs"
 
-for hook in "$HOOKS_DIR"/pre-commit-*.sh; do
-  [ -x "$hook" ] || chmod +x "$hook"
-  "$hook" || exit 1
+if [ -z "$(git diff --cached --name-only --diff-filter=ACMR)" ]; then
+  exit 0
+fi
+
+FAST_HOOKS="branch-check secrets format quality prod-quality tdd-check review"
+PARALLEL_HOOKS="compile lint import-cycles test"
+
+for name in $FAST_HOOKS; do
+  hook="$HOOKS_DIR/pre-commit-$name.sh"
+  [ -f "$hook" ] || continue
+  bash "$hook" || exit 1
 done
 
+mkdir -p "$LOG_DIR"
+PIDS=()
+NAMES=()
+for name in $PARALLEL_HOOKS; do
+  hook="$HOOKS_DIR/pre-commit-$name.sh"
+  [ -f "$hook" ] || continue
+  bash "$hook" >"$LOG_DIR/$name.log" 2>&1 &
+  PIDS+=("$!")
+  NAMES+=("$name")
+done
+
+FAILED=0
+for i in "${!PIDS[@]}"; do
+  name="${NAMES[$i]}"
+  if wait "${PIDS[$i]}"; then
+    tail -n 1 "$LOG_DIR/$name.log"
+  else
+    echo "---- $name FAILED ----"
+    tail -n 60 "$LOG_DIR/$name.log"
+    FAILED=1
+  fi
+done
+
+if [ "$FAILED" -ne 0 ]; then
+  echo "Pre-commit blocked. Full logs: $LOG_DIR/"
+  exit 1
+fi
 exit 0

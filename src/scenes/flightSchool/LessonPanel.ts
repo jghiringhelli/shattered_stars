@@ -18,7 +18,7 @@ const CARD = {
   height: 118,
   promptSize: 15,
   titleSize: 12,
-  hintSize: 11,
+  hintSize: 12,
 } as const;
 /** Corner hint: the course's skip / leave keys (same format as menu footers). */
 const KEY_HINT = "N  SKIP LESSON      ESC / B  LEAVE";

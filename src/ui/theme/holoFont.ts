@@ -24,6 +24,8 @@ export interface ParsedCssFont {
 
 /** Size used when a shorthand carries no `NNpx` token. */
 const DEFAULT_FONT_SIZE = 16;
+/** Smallest text size anywhere in the game (CSS px at 1280×720). */
+export const MIN_TEXT_PX = 12;
 /** Weight keywords / numeric weights accepted before the size token. */
 const WEIGHT_TOKEN = /^(bold|bolder|lighter|normal|italic|oblique|\d{3})$/i;
 const SIZE_TOKEN = /^(\d+(?:\.\d+)?)px$/i;
@@ -31,14 +33,14 @@ const SIZE_TOKEN = /^(\d+(?:\.\d+)?)px$/i;
 /**
  * Style fragment for the holo font family.
  *
- * @param size - Font size in CSS pixels.
+ * @param size - Font size in CSS pixels (raised to {@link MIN_TEXT_PX}).
  * @param weight - CSS weight / style keywords (e.g. "600", "bold", "italic").
  * @returns Fields to spread into a Phaser TextStyle.
  */
 export function holoFont(size: number, weight = "400"): HoloFontStyle {
   return {
     fontFamily: HOLO_FONT_FAMILY,
-    fontSize: `${size}px`,
+    fontSize: `${Math.max(MIN_TEXT_PX, size)}px`,
     fontStyle: weight,
   };
 }

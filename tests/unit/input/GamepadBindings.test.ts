@@ -26,7 +26,8 @@ const defaults = DEFAULT_GAMEPAD_BINDINGS;
 const A = 0;
 const B = 1;
 const X = 2;
-const Y = 3;
+const DPAD_UP = 12;
+const DPAD_LEFT = 14;
 const LB = 4;
 const RB = 5;
 const START = 9;
@@ -134,8 +135,8 @@ describe("conflict detection", () => {
   });
 
   it("a flight intent may share a button with a tactical-only intent", () => {
-    // Y is FOCUS_SELECTED (tactical) and HERO_POWER_1 (flight).
-    expect(findButtonConflicts(defaults, "HERO_POWER_1", Y)).toEqual([]);
+    // D-pad up is PAN_UP (tactical) and CLOAK (flight).
+    expect(findButtonConflicts(defaults, "CLOAK", DPAD_UP)).toEqual([]);
   });
 });
 
@@ -157,8 +158,8 @@ describe("rebindGamepadIntent", () => {
   });
 
   it("refuses a button a fixed (non-rebindable) intent needs in a shared context", () => {
-    // MARK_TARGET is live in tactical scenes too, where X executes the dial.
-    const result = rebindGamepadIntent(defaults, {}, "MARK_TARGET", X);
+    // MARK_TARGET is live in tactical scenes too, where the d-pad pans the camera.
+    const result = rebindGamepadIntent(defaults, {}, "MARK_TARGET", DPAD_LEFT);
     expect(result.rejected).toBe("fixed");
     expect(result.overrides).toEqual({});
   });

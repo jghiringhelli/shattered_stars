@@ -74,7 +74,7 @@ describe("SurvivalBattleRules — the player's fleet", () => {
     rules.equipPlayer(flagship, "flagship", run.flagship);
     rules.equipPlayer(escort, "escort", run.flagship);
     expect(flagship.modifiers.shieldRegenPerSecond).toBe(0);
-    expect(escort.modifiers.shieldRegenPerSecond).toBe(0.24);
+    expect(escort.modifiers.shieldRegenPerSecond).toBe(0.12);
   });
 });
 

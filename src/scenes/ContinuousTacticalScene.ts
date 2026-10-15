@@ -62,7 +62,6 @@ import {
 } from "./ContinuousBaseScene";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { InputManager } from "../input/InputManager";
-import { openSettingsOverBattle } from "./battleUi/openSettingsOverBattle";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import { trackModeEnd, trackModeStart } from "../telemetry/telemetry";
 import { matchStats } from "../telemetry/matchTelemetry";
@@ -75,7 +74,6 @@ import {
 import {
   createMatchTimer,
   tickMatchTimer,
-  formatMatchClock,
   type MatchTimerState,
 } from "../systems/arena/MatchTimer";
 import {
@@ -89,8 +87,9 @@ import {
   playerHudState,
   primaryWeaponSlot,
 } from "./battleUi/hudSnapshot";
-import { HoloPauseOverlay } from "./battleUi/HoloPauseOverlay";
-import { showHoloResultScreen } from "./battleUi/HoloResultScreen";
+import { BattlePauseMenu } from "./battleUi/BattlePauseMenu";
+import { showResultsPanel } from "../ui/results/ResultsPanel";
+import { resultRows } from "../ui/results/resultsModel";
 import { TacticalHud } from "./tactical/TacticalHud";
 import type { OrdersView } from "./tactical/OrdersPanel";
 import { difficultyColor } from "./tactical/dialMarkers";
@@ -174,7 +173,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
 
   private battleStartTime: number = 0;
 
-  private pauseMenu: HoloPauseOverlay | null = null;
+  private pauseMenu: BattlePauseMenu | null = null;
 
   private stats = { shipsDestroyed: 0, shipsLost: 0, damageDealt: 0 };
 
@@ -840,7 +839,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       size / 2 + 10,
       `S${ship.flight.motion.control.speed}`,
       {
-        fontSize: "10px",
+        fontSize: "12px",
         color: "#aaaaaa",
       },
     );
@@ -935,18 +934,19 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   }
 
   private createPauseMenu(): void {
-    this.pauseMenu = new HoloPauseOverlay({
+    this.pauseMenu = new BattlePauseMenu({
       scene: this,
       faction: this.playerFaction,
+      legend: "squad",
       onResume: () => this.resumeFromPause(),
       onRestart: () => {
         this.scene.restart();
       },
-      onSettings: () => {
-        openSettingsOverBattle(this);
-      },
       onQuit: () => {
         this.scene.start("MainMenuScene");
+      },
+      ensurePaused: () => {
+        if (!this.isPaused) this.togglePause();
       },
     });
   }
@@ -1165,31 +1165,15 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     );
     this.hud?.setVisible(false);
     this.previewGraphics?.clear();
-    showHoloResultScreen({
+    showResultsPanel({
       scene: this,
-      victory: isPlayerVictory,
+      tone: isPlayerVictory ? "victory" : "defeat",
       subtitle: `${winner} win`,
-      stats: [
-        { label: "Ships destroyed", value: `${this.stats.shipsDestroyed}` },
-        { label: "Ships lost", value: `${this.stats.shipsLost}` },
-        { label: "Damage dealt", value: `${this.stats.damageDealt}` },
-        {
-          label: "Battle time",
-          value: formatMatchClock(this.time.now - this.battleStartTime),
-        },
-      ],
-      actions: [
-        {
-          label: "Restart",
-          variant: "primary",
-          onClick: () => this.scene.restart(),
-        },
-        {
-          label: "Main menu",
-          variant: "secondary",
-          onClick: () => this.scene.start("MainMenuScene"),
-        },
-      ],
+      rows: resultRows(matchStats.lastSummary),
+      actions: {
+        onRematch: () => this.scene.restart(),
+        onMenu: () => this.scene.start("MainMenuScene"),
+      },
     });
   }
 }

@@ -109,12 +109,9 @@ async function openMode(
   );
 }
 
-async function rematchRestartsSetup(
-  page: Page,
-  sceneKey: string,
-): Promise<void> {
+async function backToSetup(page: Page, sceneKey: string): Promise<void> {
   expect(await cameraZoom(page, sceneKey)).toBe(1);
-  await clickText(page, sceneKey, "REMATCH");
+  await clickText(page, sceneKey, "BACK TO SETUP");
   await page.waitForFunction(
     (key) => {
       const scene = (window as any).game.scene.getScene(key);
@@ -123,6 +120,21 @@ async function rematchRestartsSetup(
     sceneKey,
     { timeout: 10_000 },
   );
+}
+
+/** REMATCH skips the setup screen and flies the same matchup again. */
+async function rematchStartsRound(
+  page: Page,
+  sceneKey: string,
+): Promise<void> {
+  await clickText(page, sceneKey, "REMATCH");
+  await waitForRound(page, sceneKey);
+  expect(
+    await page.evaluate(
+      (key) => (window as any).game.scene.getScene(key).isSetupPhase,
+      sceneKey,
+    ),
+  ).toBe(false);
 }
 
 test.describe("Dogfight — holographic HUD", () => {
@@ -156,8 +168,20 @@ test.describe("Dogfight — holographic HUD", () => {
       scene.endMatch();
     });
     await shoot(page, "hud2-dogfight-end.png");
-    await rematchRestartsSetup(page, "DogfightScene");
+    await backToSetup(page, "DogfightScene");
     expect(errors).toEqual([]);
+  });
+
+  test("REMATCH replays the match without the setup screen", async ({ page }) => {
+    await openMode(page, "DOGFIGHT", "DogfightScene");
+    await clickText(page, "DogfightScene", "FIGHT!");
+    await waitForRound(page, "DogfightScene");
+    await page.evaluate(() => {
+      const scene = (window as any).game.scene.getScene("DogfightScene");
+      scene.playerWins = 2;
+      scene.endMatch();
+    });
+    await rematchStartsRound(page, "DogfightScene");
   });
 });
 
@@ -201,7 +225,7 @@ test.describe("Ace Duel — holographic HUD", () => {
       scene.endMatch();
     });
     await shoot(page, "hud2-aceduel-end.png");
-    await rematchRestartsSetup(page, "AceDuelScene");
+    await backToSetup(page, "AceDuelScene");
     expect(errors).toEqual([]);
   });
 });

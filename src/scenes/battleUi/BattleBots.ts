@@ -19,6 +19,7 @@ import {
   type SquadOrder,
 } from "../../arcade/ai";
 import type { CycleFlightState } from "../../arcade/systems/CycleFlight";
+import { isMarkAssistEnabled } from "../../systems/SettingsStorage";
 import type { FlightControlResult } from "../../arcade/systems/PilotFlightTypes";
 import {
   forgetMarkedTarget,
@@ -70,6 +71,8 @@ export interface BattleBotsOptions {
   readonly worldSize: number;
   /** The battle's uniform random source in [0, 1). */
   readonly random: () => number;
+  /** Player-led squads' wingmen mark their own focus; default Settings > Gameplay. */
+  readonly markAssist?: boolean;
 }
 
 interface Squad {
@@ -99,7 +102,9 @@ export class BattleBots {
     const command = new SquadCommand({
       side: spec.key,
       aiLeader: spec.aiLeader,
-      assistMark: spec.assistMark ?? false,
+      assistMark:
+        (spec.assistMark ?? false) &&
+        (this.options.markAssist ?? isMarkAssistEnabled()),
       worldSize: this.options.worldSize,
     });
     this.squads.set(spec.key, { spec, command });

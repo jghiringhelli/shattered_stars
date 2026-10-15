@@ -90,8 +90,9 @@ into a creature ship (hull scale honoured). Hero powers work on it: damage
 goes through the same path (a phase-shifted creature is untouchable), EMP
 silences it, time-slow slows its clock. Every faction's Act III finale ends on
 the Breach beat (3 Tidecells arrive when its last goal completes).
-The Coalition missions (Acts IV–V) are not built yet; the Pruning Herald and
-Warden Avatar are ready for `coal_4_5`, `coal_5_2` and `coal_5_3`.
+The Coalition missions (Acts IV–V, `coalitionAct4a/4b/5`) are built but still field ordinary
+ships: the Pruning Herald and Warden Avatar are defined and ready to be named as the
+assassinate target (or scripted spawn) of `coal_4_5`, `coal_5_2` and `coal_5_3`.
 
 ## Art
 

@@ -12,19 +12,19 @@ import { term, type TermEntry } from "./termTypes";
 const BRANCH_TERMS: Readonly<Record<`survival.branch.${Branch}`, TermEntry>> = {
   "survival.branch.gunnery": term(
     "Branch: gunnery",
-    "Powers that improve your guns: damage, crit chance, range and fire rate.",
+    "Powers that improve your guns: damage, crit chance, range and volley (a second bolt every few attacks).",
     "Cannon Calibration: +1 primary damage. Marksman's Focus (5 gunnery powers): +3 primary damage.",
     "Depth in one branch unlocks its capstone: stack the branch your hull already amplifies.",
   ),
   "survival.branch.ordnance": term(
     "Branch: ordnance",
-    "Powers that improve primary damage, range and fire rate with a heavy-weapon flavour.",
+    "Powers that improve primary damage, range and volley with a heavy-weapon flavour.",
     "Warhead Yield: +1 primary damage. Barrage Doctrine (capstone): +3 primary damage.",
   ),
   "survival.branch.automation": term(
     "Branch: automation",
-    "Powers for turrets, drones and automated defence: fire rate, range, point defence.",
-    "Servo Turrets: +10 % fire rate. Swarm Logic (capstone): +30 % fire rate.",
+    "Powers for turrets, drones and automated defence: volley, range, point defence.",
+    "Servo Turrets: +10 % volley (every 10th attack fires a second bolt). Swarm Logic (capstone): +30 % volley.",
   ),
   "survival.branch.fleet": term(
     "Branch: fleet",

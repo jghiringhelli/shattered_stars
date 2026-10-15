@@ -75,8 +75,21 @@ export function projectileRawDamage(
   return projectile.damage + exposedBonus;
 }
 
-let projectileIdCounter = 0;
+/** Hands out projectile ids for one battle (owned by whoever fires). */
+export class ProjectileIdSequence {
+  private issued = 0;
 
+  /** @returns The next id of this battle. */
+  next(): string {
+    this.issued += 1;
+    return `proj_${this.issued}`;
+  }
+}
+
+/**
+ * @param ids - The battle's id sequence; without one the id is derived from
+ *   the shot itself (owner, origin, heading), never from global state.
+ */
 export function createProjectile(
   x: number,
   y: number,
@@ -88,9 +101,10 @@ export function createProjectile(
   homingTargetId: string | null = null,
   homingTurnRate: number = 0,
   homingTurnBudget: number = 0,
+  ids?: ProjectileIdSequence,
 ): Projectile {
   return {
-    id: `proj_${projectileIdCounter++}`,
+    id: ids?.next() ?? `proj_${ownerId}_${x}_${y}_${angle}`,
     x,
     y,
     angle,

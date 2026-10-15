@@ -166,6 +166,42 @@ describe("RelicCombatEngine triggers", () => {
   });
 });
 
+describe("RelicCombatEngine volley (the fire-rate bonus)", () => {
+  it("fires a second bolt on every 10th attack at +10 % volley", () => {
+    const engine = new RelicCombatEngine(loadout({}));
+    const shots = Array.from(
+      { length: 20 },
+      () => engine.shot({ ...SHOT, volleyRate: 0.1 }).shots,
+    );
+    expect(shots.filter((s) => s === 2)).toHaveLength(2);
+    expect(shots[9]).toBe(2);
+    expect(shots[19]).toBe(2);
+  });
+
+  it("charges each shooter on its own", () => {
+    const engine = new RelicCombatEngine(loadout({}));
+    for (let i = 0; i < 9; i++) engine.shot({ ...SHOT, volleyRate: 0.1 });
+    const other = engine.shot({ ...SHOT, shooterId: "b", volleyRate: 0.1 });
+    expect(other.shots).toBe(1);
+    expect(engine.shot({ ...SHOT, volleyRate: 0.1 }).shots).toBe(2);
+  });
+
+  it("never fires more than one extra bolt per attack below +100 %", () => {
+    const engine = new RelicCombatEngine(loadout({}));
+    const shots = Array.from(
+      { length: 30 },
+      () => engine.shot({ ...SHOT, volleyRate: 0.45 }).shots,
+    );
+    expect(Math.max(...shots)).toBe(2);
+    expect(shots.filter((s) => s === 2)).toHaveLength(13);
+  });
+
+  it("adds nothing without a volley bonus", () => {
+    const engine = new RelicCombatEngine(loadout({}));
+    expect(engine.shot(SHOT).shots).toBe(1);
+  });
+});
+
 describe("RelicCombatEngine shots", () => {
   it("rewards marked targets (Target Painter, Predator Optics)", () => {
     const engine = new RelicCombatEngine(

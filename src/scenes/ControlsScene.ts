@@ -23,6 +23,7 @@ import {
   MENU_LAYOUT,
 } from "../ui/menu/MenuScaffold";
 import { createHoloPanel } from "../ui/hud/HoloPanel";
+import { createHoloButton, type HoloButton } from "../ui/hud/HoloButton";
 import { drawMenuIcon, type MenuIconName } from "../ui/menu/MenuIcons";
 import {
   bindMenuBack,
@@ -37,15 +38,16 @@ import {
 } from "../ui/theme/HoloTheme";
 import { toCssColor } from "../ui/theme/colorMath";
 
-const ROW_HEIGHT = 18;
-const GROUP_HEADING_HEIGHT = 24;
-const GROUP_GAP = 6;
-const TABLE_TOP = 100;
+const ROW_HEIGHT = 32;
+const TAB_BUTTON = { width: 190, height: 34, gap: 12, y: 100 } as const;
+/** Phaser key names of the 1–4 number keys (tab shortcuts). */
+const TAB_KEY_NAMES = ["ONE", "TWO", "THREE", "FOUR"] as const;
+const TABLE_TOP = 126;
 const TABLE_BOTTOM = 708;
 const COLUMN_HEADER_HEIGHT = 26;
 const ICON_SIZE = 14;
 const ZEBRA_ALPHA = 0.05;
-const BODY_SIZE = 13;
+const BODY_SIZE = 14;
 // Absolute x positions (not centered) — the widest row (camera pan, which
 // merges WASD+Arrows on keyboard and D-pad+stick on gamepad) needs real room.
 const COL_X = { label: 56, keyboard: 330, gamepad: 640, touch: 950 } as const;
@@ -62,6 +64,12 @@ const DEVICE_COLUMNS: ReadonlyArray<{
 ];
 
 export class ControlsScene extends Phaser.Scene {
+  /** Index of the category tab showing. */
+  private activeTab = 0;
+  /** The current tab's table objects (destroyed on tab change). */
+  private tableObjects: Phaser.GameObjects.GameObject[] = [];
+  private tabButtons: HoloButton[] = [];
+
   constructor() {
     super({ key: "ControlsScene" });
   }
@@ -74,8 +82,10 @@ export class ControlsScene extends Phaser.Scene {
         "Your current bindings · rebind in Settings › Controls / Gamepad",
     });
     addBackButton(this, () => this.goBack());
+    this.activeTab = 0;
     this.createTablePanel();
     this.createColumnHeaders();
+    this.createTabs();
     this.createTable();
     this.setupInput();
     fadeInMenu(this);
@@ -124,34 +134,59 @@ export class ControlsScene extends Phaser.Scene {
     );
   }
 
+  /** One tab button per control category (Flight, Weapons, Squad, Camera & UI). */
+  private createTabs(): void {
+    const count = CONTROL_GROUPS.length;
+    const pitch = TAB_BUTTON.width + TAB_BUTTON.gap;
+    const firstX = this.scale.width / 2 - ((count - 1) * pitch) / 2;
+    this.tabButtons = CONTROL_GROUPS.map((group, index) =>
+      createHoloButton(
+        this,
+        firstX + index * pitch,
+        TAB_BUTTON.y,
+        {
+          width: TAB_BUTTON.width,
+          height: TAB_BUTTON.height,
+          label: `${index + 1} ${group.title}`,
+          variant: "secondary",
+        },
+        () => this.selectTab(index),
+      ),
+    );
+    this.refreshTabs();
+  }
+
+  private refreshTabs(): void {
+    this.tabButtons.forEach((button, index) =>
+      button.setVariant(index === this.activeTab ? "primary" : "secondary"),
+    );
+  }
+
+  /** @param index - Category to show (wraps around). */
+  private selectTab(index: number): void {
+    const count = CONTROL_GROUPS.length;
+    this.activeTab = (index + count) % count;
+    this.refreshTabs();
+    this.createTable();
+  }
+
   private createTable(): void {
+    for (const object of this.tableObjects) object.destroy();
+    this.tableObjects = [];
+    const group = CONTROL_GROUPS[this.activeTab];
+    if (!group) return;
     let y =
       TABLE_TOP + HOLO_SPACING.md + COLUMN_HEADER_HEIGHT + HOLO_SPACING.xs;
     const stripes = this.add.graphics();
-    for (const group of CONTROL_GROUPS) {
-      this.add
-        .text(
-          COL_X.label - HOLO_SPACING.sm,
-          y + GROUP_HEADING_HEIGHT / 2,
-          group.title.toUpperCase(),
-          {
-            ...holoFont(HOLO_TYPE_SCALE.caption.size + 1, "600"),
-            color: toCssColor(HOLO_PALETTE.warning),
-          },
-        )
-        .setLetterSpacing(HOLO_TYPE_SCALE.caption.letterSpacing)
-        .setOrigin(0, 0.5);
-      y += GROUP_HEADING_HEIGHT;
-      group.rows.forEach((row, index) => {
-        if (index % 2 === 0) this.drawStripe(stripes, y);
-        this.addCell(COL_X.label, y, row.label, HOLO_PALETTE.textSecondary);
-        this.addCell(COL_X.keyboard, y, keyboardLabelFor(row.intents));
-        this.addCell(COL_X.gamepad, y, gamepadLabelFor(row.intents));
-        this.addCell(COL_X.touch, y, touchLabelFor(row.intents));
-        y += ROW_HEIGHT;
-      });
-      y += GROUP_GAP;
-    }
+    this.tableObjects.push(stripes);
+    group.rows.forEach((row, index) => {
+      if (index % 2 === 0) this.drawStripe(stripes, y);
+      this.addCell(COL_X.label, y, row.label, HOLO_PALETTE.textSecondary);
+      this.addCell(COL_X.keyboard, y, keyboardLabelFor(row.intents));
+      this.addCell(COL_X.gamepad, y, gamepadLabelFor(row.intents));
+      this.addCell(COL_X.touch, y, touchLabelFor(row.intents));
+      y += ROW_HEIGHT;
+    });
   }
 
   private drawStripe(g: Phaser.GameObjects.Graphics, y: number): void {
@@ -166,16 +201,23 @@ export class ControlsScene extends Phaser.Scene {
     text: string,
     color: number = HOLO_PALETTE.textPrimary,
   ): void {
-    this.add
+    const cell = this.add
       .text(x, y + ROW_HEIGHT / 2, text, {
         ...holoFont(BODY_SIZE, "400"),
         color: toCssColor(color),
       })
       .setOrigin(0, 0.5);
+    this.tableObjects.push(cell);
   }
 
   private setupInput(): void {
     bindMenuBack(this, () => this.goBack());
+    const keyboard = this.input.keyboard;
+    TAB_KEY_NAMES.slice(0, CONTROL_GROUPS.length).forEach((name, index) =>
+      keyboard?.on(`keydown-${name}`, () => this.selectTab(index)),
+    );
+    keyboard?.on("keydown-LEFT", () => this.selectTab(this.activeTab - 1));
+    keyboard?.on("keydown-RIGHT", () => this.selectTab(this.activeTab + 1));
     // "R" jumps straight to rebinding (Settings › Controls).
     this.input.keyboard?.on("keydown-R", () =>
       goToScene(this, "SettingsScene", { tab: "controls" }),

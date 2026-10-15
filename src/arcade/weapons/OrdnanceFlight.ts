@@ -64,13 +64,12 @@ export interface Launcher extends FiringPose {
   readonly side: string;
 }
 
-let shotCounter = 0;
-
 /**
  * @param launcher - The firing ship.
  * @param spec - The launcher's rules.
  * @param target - Locked target (null = unguided).
  * @param worldSize - Map edge length (px).
+ * @param id - The battle's next shot id (per-battle, see FieldOrdnance).
  * @returns The shot, at the nose on the ship's heading, tracking its target.
  */
 export function launchShot(
@@ -78,11 +77,11 @@ export function launchShot(
   spec: LauncherSpec,
   target: LockedTarget | null,
   worldSize: number,
+  id: string,
 ): OrdnanceShot {
   const nose = pointAlong(launcher, LAUNCH_NOSE_OFFSET_PX, worldSize);
-  shotCounter += 1;
   return {
-    id: `ordnance_${shotCounter}`,
+    id,
     ownerId: launcher.id,
     ownerSide: launcher.side,
     kind: spec.kind,

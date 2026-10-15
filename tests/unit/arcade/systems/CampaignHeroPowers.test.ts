@@ -151,14 +151,15 @@ describe("withCampaignBonuses", () => {
     expect(withCampaignBonuses(ship, NEUTRAL_BONUSES, true)).toEqual(ship);
   });
 
-  it("scales caps and adds attack, faster fire and regen", () => {
+  it("scales caps and adds attack, faster secondary reloads, maneuver recharges and regen", () => {
     const next = withCampaignBonuses(
       ship,
       {
         ...NEUTRAL_BONUSES,
         hullMultiplier: 1.5,
         attackBonus: 1,
-        weaponIntervalMultiplier: 0.5,
+        secondaryReloadMultiplier: 0.5,
+        maneuverRechargeMultiplier: 0.8,
         shieldRegenPerSecond: 2,
         damageTakenMultiplier: 0.8,
       },
@@ -166,9 +167,12 @@ describe("withCampaignBonuses", () => {
     );
     expect(next.maxHull).toBe(Math.round(stats.maxHull * 1.5));
     expect(next.combatStats.attackDice).toBe(stats.attackDice + 1);
-    expect(next.combatStats.weaponCooldown).toBe(
-      Math.round(stats.weaponCooldown * 0.5),
-    );
+    expect(next.combatStats.weaponCooldown).toBe(stats.weaponCooldown);
+    expect(next.modifiers.ordnanceCooldownMultiplier).toBeCloseTo(0.5);
+    expect(next.modifiers.turretCooldownMultiplier).toBeCloseTo(0.5);
+    expect(next.modifiers.boostCooldownMultiplier).toBeCloseTo(0.8);
+    expect(next.modifiers.barrelRollCooldownMultiplier).toBeCloseTo(0.8);
+    expect(next.modifiers.kturnCooldownMultiplier).toBeCloseTo(0.8);
     expect(next.modifiers.shieldRegenPerSecond).toBe(
       NEUTRAL_MODIFIERS.shieldRegenPerSecond + 2,
     );

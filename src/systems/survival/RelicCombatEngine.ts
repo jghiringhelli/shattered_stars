@@ -39,6 +39,11 @@ export interface ShotQuery {
   readonly targetMarked: boolean;
   readonly escortsAlive: number;
   readonly nowMs: number;
+  /**
+   * The run's volley rate (StatBonuses.fireRate): a ship's attack fires a
+   * second bolt each time its attacks add up to one (0.1 = every 10th).
+   */
+  readonly volleyRate?: number;
 }
 
 /** What the scene must apply after a trigger. */
@@ -57,6 +62,9 @@ const FLIGHT_TRIGGERS: Readonly<Partial<Record<FlightEvent, RelicTrigger>>> = {
   tallon: "kturn",
 };
 
+/** Absorbs float drift so ten 0.1 charges add up to exactly one bolt. */
+const VOLLEY_EPSILON = 1e-9;
+
 const NO_TRIGGER: TriggerResult = { shieldRestoreFraction: 0, started: [] };
 
 export class RelicCombatEngine {
@@ -65,6 +73,8 @@ export class RelicCombatEngine {
     { buff: TimedBuff; untilMs: number }[]
   >();
   private readonly triggers: { on: RelicTrigger; buff: TimedBuff }[];
+  /** Volley charge of each shooter (a fraction of the next second bolt). */
+  private readonly volleyCharge = new Map<string, number>();
 
   /**
    * @param loadout - The run's relics, mutations and Drive investment.
@@ -186,8 +196,24 @@ export class RelicCombatEngine {
         1,
       ),
       critChanceBonus: crit,
-      shots: Math.max(1, ...mutations.map((m) => m.rules.shotsPerAttack ?? 1)),
+      shots:
+        Math.max(1, ...mutations.map((m) => m.rules.shotsPerAttack ?? 1)) +
+        this.volleyBolts(query),
     };
+  }
+
+  /**
+   * Charges the shooter's volley with this attack.
+   * @param query - The shot.
+   * @returns 1 when the charge reaches a whole bolt, else 0.
+   */
+  private volleyBolts(query: ShotQuery): number {
+    const rate = query.volleyRate ?? 0;
+    if (rate <= 0) return 0;
+    const charge = (this.volleyCharge.get(query.shooterId) ?? 0) + rate;
+    const bolts = Math.floor(charge + VOLLEY_EPSILON);
+    this.volleyCharge.set(query.shooterId, charge - bolts);
+    return bolts;
   }
 
   /**

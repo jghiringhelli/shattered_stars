@@ -21,8 +21,8 @@ describe("bonusFacts", () => {
     expect(bonusFacts({ damageTakenMultiplier: 0.88 })[0]?.label).toBe(
       "-12% damage taken",
     );
-    expect(bonusFacts({ weaponIntervalMultiplier: 0.85 })[0]?.label).toBe(
-      "15% faster weapons",
+    expect(bonusFacts({ secondaryReloadMultiplier: 0.75 })[0]?.label).toBe(
+      "25% faster ordnance and turrets",
     );
   });
 

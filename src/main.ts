@@ -1,35 +1,21 @@
 import Phaser from "phaser";
 import { BootScene } from "./scenes/BootScene";
 import { MainMenuScene } from "./scenes/MainMenuScene";
-import { SquadBuilderScene } from "./scenes/SquadBuilderScene";
 import { SettingsScene } from "./scenes/SettingsScene";
 import { CreditsScene } from "./scenes/CreditsScene";
-import { LobbyScene } from "./scenes/LobbyScene";
-import { ContinuousTacticalScene } from "./scenes/ContinuousTacticalScene";
-import { SurvivalScene } from "./scenes/SurvivalScene";
-import { SurvivalSetupScene } from "./scenes/SurvivalSetupScene";
-import { SurvivalMapScene } from "./scenes/SurvivalMapScene";
-import { SurvivalSummaryScene } from "./scenes/SurvivalSummaryScene";
-import { EpicBattleScene } from "./scenes/EpicBattleScene";
-import { DogfightScene } from "./scenes/DogfightScene";
-import { AceDuelScene } from "./scenes/AceDuelScene";
-import { CampaignScene } from "./scenes/CampaignScene";
-import { CampaignBattleScene } from "./scenes/CampaignBattleScene";
-import { DebriefScene } from "./scenes/DebriefScene";
-import { CampaignCompleteScene } from "./scenes/CampaignCompleteScene";
-import { ArcadeBattleScene } from "./scenes/ArcadeBattleScene";
-import { EncyclopediaScene } from "./scenes/EncyclopediaScene";
-import { ShipPickerScene } from "./scenes/ShipPickerScene";
 import { ControlsScene } from "./scenes/ControlsScene";
 import { HudPreviewScene } from "./scenes/HudPreviewScene";
-import { FlightSchoolScene } from "./scenes/FlightSchoolScene";
 import { bootstrapPlayerPreferences } from "./ui/settings/settingsRuntime";
 import { prepareBoot } from "./compat/bootCompat";
 import { guardWebGlStartup } from "./compat/webglFallback";
+import { installLazyScenes } from "./scenes/lazy/installLazyScenes";
+import { initLocale } from "./i18n";
 
 // Probes WebGL/Canvas/APIs and shows the HTML notice if the browser can't play.
 // Canvas is chosen for ?renderer=canvas / webdriver (e2e) and as a no-WebGL fallback.
 const boot = prepareBoot(window);
+// Player-facing text comes from the message catalog (docs/I18N.md); ?lang=xx overrides the browser language.
+initLocale(window);
 const config: Phaser.Types.Core.GameConfig = {
   type: boot.renderer === "canvas" ? Phaser.CANVAS : Phaser.AUTO, // AUTO will try WebGL first, then Canvas
   width: 1280,
@@ -39,27 +25,9 @@ const config: Phaser.Types.Core.GameConfig = {
   scene: [
     BootScene,
     MainMenuScene,
-    SquadBuilderScene,
     SettingsScene,
     CreditsScene,
-    LobbyScene,
-    ContinuousTacticalScene,
-    SurvivalScene,
-    SurvivalSetupScene,
-    SurvivalMapScene,
-    SurvivalSummaryScene,
-    EpicBattleScene,
-    DogfightScene,
-    AceDuelScene,
-    CampaignScene,
-    CampaignBattleScene,
-    DebriefScene,
-    CampaignCompleteScene,
-    ArcadeBattleScene,
-    EncyclopediaScene,
-    ShipPickerScene,
     ControlsScene,
-    FlightSchoolScene,
     ...(import.meta.env.DEV ? [HudPreviewScene] : []),
   ],
   physics: {
@@ -92,9 +60,13 @@ function adoptGame(game: Phaser.Game): void {
   // Settings (audio buses, palettes, key profile, camera comfort) and the
   // local telemetry log apply from boot, before any scene reads them.
   bootstrapPlayerPreferences(game);
+  // Every other scene loads (and registers) on first start: see src/scenes/lazy.
+  const lazyScenes = installLazyScenes(game);
   // Expose for debugging and E2E testing in non-production builds
   if (!import.meta.env.DEV) return;
   window.game = game;
+  window.ensureScene = (key) => lazyScenes.ensureScene(key);
+  window.ensureAllScenes = () => lazyScenes.ensureAll();
   void import("./debug/verifyHooks").then((m) => m.installVerifyHooks(game));
   void import("./debug/perfHooks").then((m) => m.installPerfHooks(game));
   void import("./debug/SessionLogger").then(({ SessionLogger }) => {
@@ -112,6 +84,10 @@ function adoptGame(game: Phaser.Game): void {
 declare global {
   interface Window {
     game: Phaser.Game;
+    /** DEV/e2e: loads a lazily registered scene without starting it. */
+    ensureScene: (key: string) => Promise<void>;
+    /** DEV/e2e: registers every lazy scene (specs that patch scene instances before starting them). */
+    ensureAllScenes: () => Promise<void>;
   }
 }
 

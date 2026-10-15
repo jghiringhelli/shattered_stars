@@ -5,7 +5,8 @@
  *
  * Version history:
  * - v1 (unversioned): flat { masterVolume, musicVolume, sfxVolume,
- *   cameraShake, showDamageNumbers, showMinimap }.
+ *   cameraShake, showDamageNumbers, showMinimap } (showMinimap is ignored:
+ *   the radar is always on).
  * - v2: sections audio / accessibility / gameplay / controls / privacy.
  *
  * Pure: no Phaser, no storage.
@@ -59,6 +60,10 @@ export interface AccessibilityPrefs {
   /** Camera-shake intensity multiplier in [0, 1]; 0 disables shake. */
   readonly screenShake: number;
   readonly reduceFlashes: boolean;
+  /** Stills screen shake, flashes and the backdrop's drifting decor (also follows the OS setting). */
+  readonly reduceMotion: boolean;
+  /** Crisp (nearest-neighbour) canvas scaling when the window magnifies the game by 2×, 3×... */
+  readonly sharpScaling: boolean;
   /** HUD text scale, one of {@link TEXT_SCALES}. */
   readonly textScale: number;
 }
@@ -68,7 +73,6 @@ export interface GameplayPrefs {
   /** Wingmen mark their own focus while the player has no mark. */
   readonly markAssist: boolean;
   readonly showDamageNumbers: boolean;
-  readonly showMinimap: boolean;
 }
 
 export interface ControlProfile {
@@ -127,13 +131,14 @@ export const DEFAULT_SETTINGS: GameSettings = {
     highContrastHud: false,
     screenShake: 1,
     reduceFlashes: false,
+    reduceMotion: false,
+    sharpScaling: true,
     textScale: 1,
   },
   gameplay: {
     defaultDifficulty: "normal",
     markAssist: true,
     showDamageNumbers: true,
-    showMinimap: true,
   },
   controls: { activeProfile: 0, profiles: DEFAULT_PROFILES },
   privacy: { telemetryEnabled: true },
@@ -181,6 +186,8 @@ function parseAccessibility(raw: Json): AccessibilityPrefs {
     highContrastHud: flag(raw.highContrastHud, d.highContrastHud),
     screenShake: unit(raw.screenShake, d.screenShake),
     reduceFlashes: flag(raw.reduceFlashes, d.reduceFlashes),
+    reduceMotion: flag(raw.reduceMotion, d.reduceMotion),
+    sharpScaling: flag(raw.sharpScaling, d.sharpScaling),
     textScale: oneOf<number>(TEXT_SCALES, raw.textScale, d.textScale),
   };
 }
@@ -195,7 +202,6 @@ function parseGameplay(raw: Json): GameplayPrefs {
     ),
     markAssist: flag(raw.markAssist, d.markAssist),
     showDamageNumbers: flag(raw.showDamageNumbers, d.showDamageNumbers),
-    showMinimap: flag(raw.showMinimap, d.showMinimap),
   };
 }
 
@@ -256,7 +262,6 @@ function migrateV1(v1: Json): Json {
     },
     gameplay: {
       showDamageNumbers: v1.showDamageNumbers,
-      showMinimap: v1.showMinimap,
     },
   };
 }

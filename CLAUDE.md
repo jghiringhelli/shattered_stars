@@ -11,10 +11,10 @@
 - **Project Tags**: `[UNIVERSAL]` `[GAME]`
 
 ## Code Standards
-- Maximum function/method length: 50 lines (hook-enforced).
-- Maximum file length: 300 lines (hook-enforced).
+- Maximum function/method length: 50 lines (ratchet-enforced: the pre-commit hook and CI block NEW or WORSENED offenders; debt in `scripts/quality-baseline.json`, list with `npm run quality`).
+- Maximum file length: 300 lines (ratchet-enforced, see above).
 - Maximum function parameters: 5. If more, use a parameter object.
-- No circular imports — module dependency graph must be acyclic (hook-enforced).
+- No circular imports — module dependency graph must be acyclic (hook- and CI-enforced: `npm run check:cycles`).
 - Every public function/method must have a JSDoc comment with typed params and returns.
 - Delete orphaned code. Do not comment it out. Git has history.
 - Before creating a new utility, search the entire codebase for existing ones.
@@ -483,18 +483,21 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 ## Key Systems
 
 
-### Combat Systems (src/systems/)
-- **CombatSystem.ts** - Dice rolling, damage resolution
-- **ActionsSystem.ts** - Focus, Evade, Barrel Roll, Boost, etc.
-- **TargetingSystem.ts** - Arc checking, range, line of sight
-- **MovementSystem.ts** - Maneuver templates and execution
-- **OrdnanceSystem.ts** - Missiles, torpedoes, bombs, mines
-- **TurretSystem.ts** - Turret arcs and rotation
-- **PilotAbilities.ts** - Pilot talents and triggered abilities
+### Systems (src/systems/)
+Combat is real time and lives in src/arcade/ (below). What stays here:
+- **MovementSystem.ts** - Maneuver templates and path geometry (used by ArcadeControls, TacticalOrders)
+- **ActionsSystem.ts** - Action definition catalogue shown in ship detail panels (data only)
+- **PilotAbilities.ts** - Pilot ability catalogue and triggers
 - **UpgradeSystem.ts** - Upgrade slots and shop
 - **SquadBuilder.ts** - X-Wing TMG style squad building
-- **FlightControlSystem.ts** - Momentum-based arcade flying
 - **PerformanceSystem.ts** - Adaptive quality for large battles
+- **PlayerProfile.ts** / **matchXp.ts** - Global profile + XP: every match that ends with a result (any mode, online too)
+  pays XP once through `matchStats`' `onResult` (rules: src/data/ModeXp.ts, spec: docs/specs/progression.md);
+  dev/test profiles exist only in dev builds or with `?debug=1`
+- **CombatSystem.ts**, **OrdnanceSystem.ts**, **TurretSystem.ts** - Legacy dice / ordnance / turret resolvers kept ONLY for the
+  balance harness (src/simulation/WeaponTelemetry, ShipEfficiency); live combat is arcade/DiceAttack + arcade/weapons
+- Removed with the turn-based engine: FlightControlSystem, TargetingSystem, FactionAbilities, the execute*/spend* helpers of
+  ActionsSystem, GameStore/EventBus/GameClock. `npx tsx scripts/dead_exports.ts` lists exports nothing (or only tests) uses
 
 
 ### Arcade Systems (src/arcade/)
@@ -584,6 +587,15 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 - **TorusFollow** replaces startFollow (short-way-round camera). 9 themes in mapThemes.ts; attleConfig.mapTheme (id|random) picks one offline, online derives it from the shared seed; Survival per sector, Campaign per mission.
 
 ### Menu UI (src/ui/menu/, src/ui/theme/)
+- **BattlePauseMenu** (src/scenes/battleUi/) is THE pause menu of every battle scene (RESUME / RESTART / SETTINGS /
+  CONTROLS / SEND FEEDBACK / QUIT TO MENU; online: LEAVE MATCH, never freezes); F1 / `?` open the hotkey legend
+  (src/ui/legend: live bindings per mode context, DOM modal). **ResultsPanel** (src/ui/results/) is THE results screen
+  (match stats from `matchStats.lastSummary` + REMATCH / CHANGE SQUAD / MAIN MENU, R = rematch). Duel/Boss rematch =
+  `scene.restart({ rematch: true })` (read in `init`, then `consumeSceneData(scene)` — Phaser keeps start data).
+- Remembered setup: src/systems/setup/setupMemory.ts (builder squads/difficulty/map, per-mode settings, last launch =
+  main-menu CONTINUE LAST card), squadShare.ts (SHARE CODES + saved squads, SQUADS dialog in the builder),
+  src/telemetry/lastBattleStore.ts ("Last: Skirmish — Victory 3:02" card). **SetupKeyNav** gives free-form setup
+  screens (Dogfight, Ace Duel, Boss Raid, Survival) arrows/D-pad + ENTER/A focus. `holoFont` clamps text to 12 px.
 - **HoloTheme.ts** tokens + **holoFont.ts** (`holoFont(size, weight)` — never use the `font: "bold 18px Arial"`
   shorthand: Phaser splits it on spaces and drops multi-word families)
 - **MenuScaffold.ts** - every non-battle screen: `addMenuBackdrop` (dimmed painted bg), `addMenuHeader`,
@@ -615,6 +627,15 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
   measure the menu's download size with `npx tsx scripts/measure_first_load.ts`
 
 
+### Lazy scenes & i18n (src/scenes/lazy/, src/i18n/)
+- Only BootScene, MainMenuScene, SettingsScene, ControlsScene and CreditsScene are registered at boot (`main.ts`); every other scene is in
+  `lazySceneManifest.ts` and loads its chunk on first start. `LazySceneRegistry` wraps the scene manager (`start/run/switch/queueOp`), so
+  `scene.start("X")` works unchanged and the calling scene keeps running while the chunk downloads. A NEW scene goes into the manifest, not
+  `main.ts`. Code that needs a not-yet-started scene INSTANCE (tests) calls `window.ensureScene(key)` / `ensureAllScenes()` (dev builds).
+  First menu load is budgeted (`npm run measure:first-load`, CI fails > 10 MB; keep < 5.5 MB).
+- Player-facing text of migrated screens goes through `t("area.screen.purpose")` (`src/i18n/messages.en.ts` is the source catalog; typed
+  placeholders). See docs/I18N.md; a unit test fails on missing/unused keys.
+
 ### Core Types (src/core/)
 - **types.ts** - ShipState, ManeuverDefinition, etc.
 - **errors.ts** - Typed error handling
@@ -642,6 +663,10 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
   Squad battles: a side is a TEAM (seat → `team_<n>`), never a faction — mirror and mixed-faction
   teams are allowed (protocol 3); every human seat has its own reinforcement picker (its input stream).
 - Rule: online battles are built in canonical seat order; only presentation may read `localSeat`.
+- Rule: simulation ids are per-battle state, never module counters: `FieldOrdnance` owns the shot / device id
+  counters (reset by `clear()`, captured by StateGraph, folded into the state hash); `SquadBattleAi` takes its
+  random source from the scene; sim modules default their dice to `utils/random` (which online battles swap for
+  the seeded combat RNG). No `Math.random` / `Date.now` / `performance.now` in sim paths.
 - E2E: `tests/e2e/online-battle.spec.ts` (two/four browsers behind `?netsim=latency,jitter,loss`:
   mirror 1v1, mixed-faction 2v2); offline teams: `tests/e2e/teams.spec.ts`.
 
@@ -694,12 +719,12 @@ Hulls per faction and role (spread <= 1 per role, at least one of every role; ga
 
 ## Testing
 
-Run tests before committing:
+Run the relevant tests before committing (the hook runs the related ones; `npm run verify:full` runs everything):
 ```bash
 npm test -- --run
 ```
 
-All tests must pass. Current: 4159 unit/balance/sim tests + 374 e2e tests (`npm run test:skill`: 24 gate tests).
+All tests must pass (`npm test -- --run`; counts drift — run it for the current number; `npm run test:skill`: 24 gate tests).
 
 Balance harness (src/simulation/balance — the same real engine: skill arena squads, DuelTempoSim with Ace
 abilities, ReinforcedBattleSim on the pure ReinforcementDirector, ScenarioMatchSim): CI guardrails in tests/balance
@@ -852,8 +877,8 @@ Surfaced by the verify loop (`npm run verify:loop`) — tracked SHOULD findings,
 
 - Survival balance sweep (threat, elites, relic values) with the headless simulator (ADR-0004 initial values)
 - Combat pace: ~0.5 dmg/s vs 70-95 HP fighters makes some nodes slow; revisit with duel_tempo_report
-- Gamepad rebinding; Survival/Campaign telemetry one-liners; default-difficulty setting consumer
-- Ally repair auras outside Skirmish; Scenario mode online (Lobby) and a main-menu entry
+- Survival/Campaign telemetry one-liners; default-difficulty setting consumer (Dogfight/Ace/Boss setups only)
+- Scenario mode online (Lobby) and a main-menu entry
 - Professionalization P1-5 / P2 items (docs/PROFESSIONALIZATION_PLAN.md)
 - Vercel/GitHub Pages publish (user-directed when ready)
 
@@ -883,10 +908,7 @@ Technology traps in this repo — what goes wrong, the wrong pattern, the right 
   (scripts, hooks, tests/integration/p2p_server.test.ts) hits the registry and hangs
   ~40s, making the coverage hook fail. → Run `npm install`; confirm `node_modules/.bin/tsx`
   exists before running tsx-based scripts.
-- **Coverage pre-commit hook runs the FULL suite under `--coverage`** only when `src/`
-  files are staged. A single slow/flaky suite (e.g. the p2p subprocess test) blocks the
-  commit even though unit tests pass. → Keep integration subprocess startup fast; never
-  bypass with `--no-verify`.
+- **The pre-commit hook is fast on purpose** (staged `tsc` x2, ESLint, `vitest related`, quality ratchet; see docs/CONTRIBUTING.md). The full suite with coverage and the skill gates run in CI and via `npm run verify:full`; never use `--no-verify`.
 - **Git identity is not set globally.** Commits succeed with a fallback author; set
   `git config user.email/name` if authorship matters.
 - **Never touch `localStorage` directly.** Access throws when storage is blocked or full

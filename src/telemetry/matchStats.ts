@@ -24,7 +24,11 @@ export * from "./matchStatTypes";
 
 type Counters = {
   -readonly [
-    K in keyof MatchSummary as MatchSummary[K] extends number ? K : never
+    K in keyof MatchSummary as K extends "mvpDamage"
+      ? never
+      : MatchSummary[K] extends number
+        ? K
+        : never
   ]: number;
 };
 
@@ -84,9 +88,16 @@ function positive(value: number): number {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
+/** Damage a friendly ship dealt this match. */
+interface DealerTally {
+  readonly definitionId: string;
+  damage: number;
+}
+
 export class MatchStatsAccumulator {
   private readonly counters = zeroCounters();
   private readonly hostileIds = new Set<string>();
+  private readonly dealers = new Map<string, DealerTally>();
   private readonly startedAt: number;
   private firstKillAt: number | null = null;
   private finished = false;
@@ -123,6 +134,7 @@ export class MatchStatsAccumulator {
       case "hit":
         return this.recordHit(event.friendly, event.weapon);
       case "damage":
+        this.creditDealer(event);
         return this.recordDamage(event.toFriendly, event.hull, event.shield);
       case "kill":
         return this.recordKill(event.victimFriendly, event.victimIsPlayer);
@@ -163,6 +175,7 @@ export class MatchStatsAccumulator {
    */
   finish(outcome: string): MatchSummary {
     this.finished = true;
+    const mvp = this.mostValuableShip();
     return {
       ...this.details,
       ...this.counters,
@@ -171,7 +184,33 @@ export class MatchStatsAccumulator {
       durationMs: Math.max(0, this.now() - this.startedAt),
       firstKillMs:
         this.firstKillAt === null ? null : this.firstKillAt - this.startedAt,
+      mvpShip: mvp?.definitionId ?? null,
+      mvpDamage: mvp?.damage ?? 0,
     };
+  }
+
+  /** Credit friendly damage to the ship that dealt it. */
+  private creditDealer(
+    event: Extract<MatchStatEvent, { kind: "damage" }>,
+  ): void {
+    if (event.toFriendly || !event.byShip) return;
+    const dealt = positive(event.hull) + positive(event.shield);
+    if (dealt <= 0) return;
+    const entry = this.dealers.get(event.byShip.id) ?? {
+      definitionId: event.byShip.definitionId,
+      damage: 0,
+    };
+    entry.damage += dealt;
+    this.dealers.set(event.byShip.id, entry);
+  }
+
+  /** @returns The friendly ship with the most damage dealt, or null. */
+  private mostValuableShip(): DealerTally | null {
+    let best: DealerTally | null = null;
+    for (const entry of this.dealers.values()) {
+      if (best === null || entry.damage > best.damage) best = entry;
+    }
+    return best;
   }
 
   private recordShot(

@@ -119,7 +119,8 @@ function availability(
     return blocked("Wing full");
   if (item.kind === "upgrade" && run.flagship.upgrades >= MAX_SHIP_UPGRADES)
     return blocked("Max level");
-  if (item.price > run.salvage) return blocked(`Needs ${item.price}`);
+  if (item.price > run.salvage)
+    return blocked(`Needs ${item.price} (${item.price - run.salvage} short)`);
   return { available: true, reason: null };
 }
 

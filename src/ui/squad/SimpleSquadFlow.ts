@@ -12,7 +12,7 @@
 
 import Phaser from "phaser";
 import { FACTION_COLORS, type FactionId } from "../../config";
-import { createToggleButton } from "../ButtonFactory";
+import { createToggleButton, createHoverButton } from "../ButtonFactory";
 import { getShipsByFaction } from "../../data/ShipDefinitions";
 import type { GameMode } from "../../core/squadTypes";
 import { ShipCatalogPanel, type CatalogSelection } from "../picker/ShipCatalogPanel";
@@ -24,8 +24,9 @@ import { previewSimpleSquad } from "./simpleBudget";
 import { factionTermId } from "../../data/tooltips";
 import type { FocusTarget } from "../menu/MenuFocus";
 import { attachToggleTooltip, focusTipTarget } from "../menu/tooltipTargets";
-import { HOLO_RADIUS, HOLO_SPACING, factionAccent } from "../theme/HoloTheme";
+import { HOLO_PALETTE, HOLO_RADIUS, HOLO_SPACING, factionAccent } from "../theme/HoloTheme";
 import { SQUAD_TYPE } from "./squadBuilderStyle";
+import { QUICK_PRESETS, presetShip, type QuickPreset } from "./quickPresets";
 
 const FACTION_ORDER: readonly FactionId[] = [
   "terran_hegemony",
@@ -61,6 +62,11 @@ const FLOW_LAYOUT = {
   barGap: 8,
   /** Map button beside the bar. */
   mapButtonW: 200,
+  /** Quick-start chips (header row 2, under the title). */
+  presetY: 64,
+  presetW: 104,
+  presetH: 26,
+  presetGap: 10,
 } as const;
 
 /** What the flow needs to price the squad. */
@@ -76,6 +82,7 @@ export class SimpleSquadFlow extends Phaser.Events.EventEmitter {
   private pointsBar: PointsBar | null = null;
   private mapButton: HoloPressButton | null = null;
   private factionButtons: Phaser.GameObjects.Container[] = [];
+  private presetButtons: HoloPressButton[] = [];
   private factionTargets: FocusTarget[] = [];
   /** Faction chips then filter chips — one array so a MenuFocus can keep it. */
   private readonly allTargets: FocusTarget[] = [];
@@ -104,12 +111,15 @@ export class SimpleSquadFlow extends Phaser.Events.EventEmitter {
     this.factionButtons = [];
     this.factionTargets = [];
     this.renderFactionRow();
+    this.renderPresets();
     this.renderCatalog();
   }
 
   /** Destroy the faction row and catalog. */
   destroy(): void {
     this.factionButtons.forEach((b) => b.destroy());
+    this.presetButtons.forEach((b) => b.destroy());
+    this.presetButtons = [];
     this.catalog?.destroy();
     this.pointsBar?.destroy();
     this.mapButton?.destroy();
@@ -178,6 +188,41 @@ export class SimpleSquadFlow extends Phaser.Events.EventEmitter {
     ).length;
   }
 
+  /** Quick-start chips (BALANCED / ACES / SWARM) under the title: one click launches. */
+  private renderPresets(): void {
+    this.presetButtons.forEach((b) => b.destroy());
+    const { presetY, presetW, presetH, presetGap } = FLOW_LAYOUT;
+    const count = QUICK_PRESETS.length;
+    const startX =
+      this.scene.scale.width / 2 - ((count - 1) * (presetW + presetGap)) / 2;
+    this.presetButtons = QUICK_PRESETS.map((preset, i) =>
+      createHoverButton(
+        this.scene,
+        startX + i * (presetW + presetGap),
+        presetY,
+        {
+          width: presetW,
+          height: presetH,
+          label: preset.label,
+          color: HOLO_PALETTE.panelFill,
+          variant: "secondary",
+          font: `600 ${SQUAD_TYPE.label}px`,
+        },
+        () => this.launchPreset(preset),
+      ).setName(`quickPreset_${preset.id}`),
+    );
+  }
+
+  private launchPreset(preset: QuickPreset): void {
+    const shipId = presetShip(this.selectedFaction, preset);
+    if (!shipId) return;
+    this.emit("start", {
+      factionId: this.selectedFaction,
+      shipId,
+      loadoutId: null,
+    });
+  }
+
   /** Faction chips then the catalog's filter chips (same array across re-renders). */
   get focusTargets(): FocusTarget[] {
     return this.allTargets;
@@ -188,6 +233,7 @@ export class SimpleSquadFlow extends Phaser.Events.EventEmitter {
       0,
       this.allTargets.length,
       ...this.factionTargets,
+      ...this.presetButtons,
       ...(this.catalog?.focusTargets ?? []),
       ...(this.mapButton ? [this.mapButton] : []),
     );

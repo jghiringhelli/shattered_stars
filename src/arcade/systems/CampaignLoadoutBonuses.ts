@@ -1,8 +1,8 @@
 /**
  * CampaignLoadoutBonuses — applies the Armory/Research squad bonuses to a
- * freshly spawned player ship: hull/shield caps, attack, evasion, rate of
- * fire, shield regeneration and damage taken (wingmen also get the escort
- * attack bonus). Pure: returns the changed fields.
+ * freshly spawned player ship: hull/shield caps, attack, evasion, secondary
+ * reloads, maneuver recharges, shield regeneration and damage taken (wingmen
+ * also get the escort attack bonus). Pure: returns the changed fields.
  */
 
 import type { CampaignShipBonuses } from "../../campaign/armory/bonusTypes";
@@ -44,9 +44,6 @@ export function withCampaignBonuses(
       maxShields,
       attackDice: stats.attackDice + attack,
       agilityDice: stats.agilityDice + bonuses.agilityBonus,
-      weaponCooldown: Math.round(
-        stats.weaponCooldown * bonuses.weaponIntervalMultiplier,
-      ),
     },
     modifiers: {
       ...ship.modifiers,
@@ -54,6 +51,21 @@ export function withCampaignBonuses(
         ship.modifiers.shieldRegenPerSecond + bonuses.shieldRegenPerSecond,
       damageTakenMultiplier:
         ship.modifiers.damageTakenMultiplier * bonuses.damageTakenMultiplier,
+      ordnanceCooldownMultiplier:
+        ship.modifiers.ordnanceCooldownMultiplier *
+        bonuses.secondaryReloadMultiplier,
+      turretCooldownMultiplier:
+        ship.modifiers.turretCooldownMultiplier *
+        bonuses.secondaryReloadMultiplier,
+      boostCooldownMultiplier:
+        ship.modifiers.boostCooldownMultiplier *
+        bonuses.maneuverRechargeMultiplier,
+      barrelRollCooldownMultiplier:
+        ship.modifiers.barrelRollCooldownMultiplier *
+        bonuses.maneuverRechargeMultiplier,
+      kturnCooldownMultiplier:
+        ship.modifiers.kturnCooldownMultiplier *
+        bonuses.maneuverRechargeMultiplier,
     },
   };
 }

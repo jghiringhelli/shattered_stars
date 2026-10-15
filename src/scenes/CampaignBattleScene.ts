@@ -122,6 +122,7 @@ import {
   trackModeStart,
 } from "../telemetry/telemetry";
 import { matchStats } from "../telemetry/matchTelemetry";
+import { dealerOf } from "../telemetry/matchStatTypes";
 import { addShipVisual } from "../rendering/ShipVisual";
 import type { CampaignMission, MissionEnemy } from "../data/CampaignData";
 import { campaignOfMission } from "../data/CampaignData";
@@ -155,7 +156,7 @@ import { EffectsManager } from "../rendering/EffectsManager";
 import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
 import { applyAllyAuraRepairs } from "../systems/aura/AllyAuraRepair";
-import { PauseMenu } from "../ui/PauseMenu";
+import { BattlePauseMenu } from "./battleUi/BattlePauseMenu";
 import {
   createPerformanceState,
   updateFPS,
@@ -183,7 +184,6 @@ import {
 } from "./creatures/SceneCreatures";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
 import { InputManager } from "../input/InputManager";
-import { openSettingsOverBattle } from "./battleUi/openSettingsOverBattle";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 
 /** Extra weapon range in pixels granted per point of an evolution's agility bonus. */
@@ -298,7 +298,7 @@ export class CampaignBattleScene extends Phaser.Scene {
   private missionComplete = false;
   private missionFailed = false;
   private isPaused = false;
-  private pauseMenu!: PauseMenu;
+  private pauseMenu!: BattlePauseMenu;
 
   // UI — holographic battle HUD (flight, radar, weapons) + mission readouts
   private battleHud: BattleHud | null = null;
@@ -597,19 +597,20 @@ export class CampaignBattleScene extends Phaser.Scene {
   }
 
   private createPauseMenu(): void {
-    this.pauseMenu = new PauseMenu({
+    this.pauseMenu = new BattlePauseMenu({
       scene: this,
+      legend: "campaign",
       onResume: () => {
         this.isPaused = false;
       },
       onRestart: () => {
         this.scene.restart();
       },
-      onSettings: () => {
-        openSettingsOverBattle(this);
-      },
       onQuit: () => {
         this.scene.start("CampaignScene", { factionId: this.factionId });
+      },
+      ensurePaused: () => {
+        if (!this.isPaused) this.togglePause();
       },
     });
   }
@@ -1644,6 +1645,7 @@ export class CampaignBattleScene extends Phaser.Scene {
       toFriendly: target.owner === "player",
       shield: target.shields - after.shields,
       hull: Math.min(target.hull, hullDamage),
+      ...dealerOf(attacker),
     });
     if (after.shields < target.shields) {
       audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);

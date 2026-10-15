@@ -1,24 +1,11 @@
-#!/bin/bash
-echo "🔄 Checking for circular imports..."
-if [ -f "tsconfig.json" ]; then
-  if command -v npx &> /dev/null; then
-    RESULT=$(npx --yes madge --circular --extensions ts src/ 2>&1)
-    if echo "$RESULT" | grep -q "Found.*circular"; then
-      echo "❌ Circular imports detected in TypeScript:"
-      echo "$RESULT"
-      exit 1
-    fi
-    echo "  ✅ No circular imports (TypeScript)"
-  fi
+#!/usr/bin/env bash
+# Import cycles: local, offline Tarjan check (scripts/check_import_cycles.ts); no network fetch.
+if ! git diff --cached --name-only --diff-filter=ACMR | grep -qE '^(src|server/src)/.*\.tsx?$'; then
+  echo "  import-cycles: no staged src files, skipped"
+  exit 0
 fi
-if [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
-  if command -v lint-imports &> /dev/null; then
-    lint-imports 2>&1
-    if [ $? -ne 0 ]; then
-      echo "❌ Circular imports detected in Python"
-      exit 1
-    fi
-    echo "  ✅ No circular imports (Python)"
-  fi
+if ! npx --no-install tsx scripts/check_import_cycles.ts 2>&1; then
+  echo "Circular imports detected."
+  exit 1
 fi
-echo "🔄 Import cycle check passed"
+echo "  import-cycles: none"

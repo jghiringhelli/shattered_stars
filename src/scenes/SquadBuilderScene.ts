@@ -44,10 +44,30 @@ import type { HoloPressButton } from "../ui/menu/HoloPressButton";
 import {
   createActionBar,
   createModeToggle,
+  createSquadsButton,
 } from "../ui/squad/squadBuilderChrome";
 import { FLASH_COLORS } from "../ui/squad/squadBuilderStyle";
 import { ScenarioPicker } from "./scenario/ScenarioPicker";
 import { SquadReinforcementSetup } from "../ui/squad/SquadReinforcementSetup";
+import { MAP_CHOICE_KEY, isMapChoice } from "../ui/squad/mapChoice";
+import { openSquadLibrary } from "../ui/squad/squadLibraryDialog";
+import type { SharedSquad } from "../systems/setup/squadShare";
+import {
+  loadBuilderMemory,
+  saveBuilderMemory,
+  saveLastLaunch,
+  type BuilderMemory,
+  type SquadMemory,
+} from "../systems/setup/setupMemory";
+import { DIFFICULTY_NAMES } from "../ai/AIDifficulty";
+
+/** Game modes whose builder state is remembered between visits. */
+const REMEMBERED_MODES: readonly GameMode[] = ["arcade", "epic", "continuous"];
+
+/** @returns Whether a stored string is a known AI difficulty. */
+function isAiDifficulty(value: string): value is AIDifficultyLevel {
+  return value in DIFFICULTY_NAMES;
+}
 
 type ShipsPickedEvent = {
   slotIndex: number;
@@ -78,6 +98,7 @@ export class SquadBuilderScene extends Phaser.Scene {
   private bottomBarObjects: HoloPressButton[] = [];
   private backButton!: HoloPressButton;
   private modeToggleButton: HoloPressButton | null = null;
+  private squadsButton: HoloPressButton | null = null;
   private menuFocus: MenuFocus | null = null;
   /** Skirmish only: the X-Wing 2.0 scenario selector (header, left of the mode toggle). */
   private scenarioPicker: ScenarioPicker | null = null;
@@ -115,6 +136,107 @@ export class SquadBuilderScene extends Phaser.Scene {
     // Simple mode only fits a single-ship, single-squad flow — other formats
     // (multi-squad epic, online, continuous) need the advanced builder.
     this.simpleMode = this.gameMode === "arcade";
+    this.restoreMemory();
+  }
+
+  /** The builder as the player last launched it in this mode (null: first visit). */
+  private memory: BuilderMemory | null = null;
+
+  /** Reopen the way the player left this mode: limits, difficulty, flow and map. */
+  private restoreMemory(): void {
+    this.memory = REMEMBERED_MODES.includes(this.gameMode)
+      ? loadBuilderMemory(this.gameMode)
+      : null;
+    const memory = this.memory;
+    if (!memory) return;
+    this.pointLimit = memory.pointLimit;
+    if (isAiDifficulty(memory.aiDifficulty)) this.aiDifficulty = memory.aiDifficulty;
+    this.simpleMode = this.gameMode === "arcade" && memory.simpleMode;
+    if (memory.mapTheme && isMapChoice(memory.mapTheme))
+      this.registry.set(MAP_CHOICE_KEY, memory.mapTheme);
+  }
+
+  /** Put the remembered squads back (skipping any with ships that no longer exist). */
+  private applyRememberedSquads(): void {
+    const remembered = this.memory?.squads ?? [];
+    const valid = remembered.every(
+      (s) =>
+        s.ships.length > 0 &&
+        s.ships.every((id) => SHIP_DEFINITIONS[id] !== undefined),
+    );
+    if (!valid || remembered.length === 0) return;
+    this.squads = remembered.map((s) => this.entryFromMemory(s));
+  }
+
+  private entryFromMemory(s: SquadMemory): SquadEntry {
+    const loadoutChoices = { ...s.loadoutChoices };
+    return {
+      teamId: s.teamId,
+      factionId: s.factionId as FactionId,
+      controller: s.controller === "player" ? "player" : "ai",
+      ships: [...s.ships],
+      loadoutChoices,
+      pointsUsed: flownSquadCost([...s.ships], loadoutChoices),
+    };
+  }
+
+  /** Remember this launch: the builder for next time and CONTINUE LAST. */
+  private rememberLaunch(): void {
+    if (!REMEMBERED_MODES.includes(this.gameMode)) return;
+    const mapTheme = readMapChoice(this.registry);
+    saveBuilderMemory(this.gameMode, {
+      pointLimit: this.pointLimit,
+      aiDifficulty: this.aiDifficulty,
+      simpleMode: this.simpleMode,
+      mapTheme,
+      squads: this.squads.map((s) => ({
+        factionId: s.factionId ?? "",
+        controller: s.controller,
+        teamId: s.teamId,
+        ships: s.ships,
+        loadoutChoices: s.loadoutChoices,
+      })),
+    });
+    saveLastLaunch({
+      label: this.gameMode === "epic" ? "EPIC FORMAT" : "SKIRMISH",
+      scene:
+        this.gameMode === "continuous"
+          ? "ContinuousTacticalScene"
+          : "ArcadeBattleScene",
+      battleConfig: this.registry.get("battleConfig"),
+    });
+  }
+
+  /** @returns The player's squad as a shareable value (null before one is built). */
+  private playerSquadShare(): SharedSquad | null {
+    const squad = this.squads.find((s) => s.controller === "player");
+    if (!squad?.factionId || squad.ships.length === 0) return null;
+    return {
+      factionId: squad.factionId,
+      ships: squad.ships,
+      loadoutChoices: squad.loadoutChoices,
+    };
+  }
+
+  /** Open the SQUADS dialog (save / copy code / paste code / load). */
+  private openSquads(): void {
+    openSquadLibrary({
+      current: this.playerSquadShare(),
+      onLoad: (shared) => {
+        const player = this.squads.findIndex((s) => s.controller === "player");
+        const slot = player >= 0 ? player : 0;
+        const base = this.squads[slot] ?? makeSquad(1, 0, "player");
+        this.squads[slot] = {
+          ...base,
+          factionId: shared.factionId as FactionId,
+          ships: [...shared.ships],
+          loadoutChoices: { ...shared.loadoutChoices },
+          pointsUsed: flownSquadCost([...shared.ships], shared.loadoutChoices),
+        };
+        this.simpleMode = false;
+        this.renderBuilderMode();
+      },
+    });
   }
 
   create(): void {
@@ -125,8 +247,10 @@ export class SquadBuilderScene extends Phaser.Scene {
     this.modeToggleButton = null;
     this.bottomBarObjects = [];
     this.buildDefaultSquads();
+    this.applyRememberedSquads();
     this.createTitle();
     this.backButton = addBackButton(this, () => this.goBack());
+    this.squadsButton = createSquadsButton(this, () => this.openSquads());
     this.scenarioPicker =
       this.gameMode === "arcade" ? new ScenarioPicker(this) : null;
     this.reinforcementSetup = new SquadReinforcementSetup(this, {
@@ -494,6 +618,7 @@ export class SquadBuilderScene extends Phaser.Scene {
         : {}),
       ...this.reinforcementSetup?.battleConfigFields(factions),
     });
+    this.rememberLaunch();
     this.navigateToBattle();
   }
 

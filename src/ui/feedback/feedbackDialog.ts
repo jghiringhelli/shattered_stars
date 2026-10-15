@@ -16,6 +16,7 @@ import {
   DEFAULT_FEEDBACK_URL,
 } from "../../feedback/feedbackLink";
 import { sendFeedback, pageEffects } from "../../feedback/sendFeedback";
+import { t, type PlainMessageKey } from "../../i18n";
 import {
   h,
   modalButton,
@@ -35,12 +36,12 @@ export interface FeedbackDialogOptions {
 }
 
 /** What the file contains, shown to the player before they send it. */
-const BUNDLE_CONTENTS: readonly string[] = [
-  "Game version, build id and date",
-  "Your settings (volume, difficulty, key bindings, accessibility)",
-  "The last 100 local events (mode starts and ends, deaths, errors) and your last 10 match summaries; empty if you turned Local Telemetry off",
-  "Browser, screen size, graphics renderer / GPU name and current FPS",
-  "The scene and mode you were in, and your note below",
+const BUNDLE_CONTENTS: readonly PlainMessageKey[] = [
+  "feedback.privacy.item.build",
+  "feedback.privacy.item.settings",
+  "feedback.privacy.item.events",
+  "feedback.privacy.item.environment",
+  "feedback.privacy.item.context",
 ];
 
 function link(label: string, href: string): HTMLElement {
@@ -49,53 +50,41 @@ function link(label: string, href: string): HTMLElement {
 
 function howItWorks(usesDefaultForm: boolean): HTMLElement {
   const formName = usesDefaultForm
-    ? "a prefilled GitHub issue"
-    : "the feedback form";
+    ? t("feedback.form.githubIssue")
+    : t("feedback.form.customForm");
   return h(
     "div",
     {},
-    h("h3", {}, "How to give feedback"),
+    h("h3", {}, t("feedback.how.title")),
     h(
       "ol",
       {},
-      h(
-        "li",
-        {},
-        "Pick what kind of feedback this is and, if you like, write a note.",
-      ),
-      h(
-        "li",
-        {},
-        `Press SEND: the game saves a small file and opens ${formName} in a new tab.`,
-      ),
-      h(
-        "li",
-        {},
-        "Drag the saved file into the issue (or the form), describe what happened, and submit.",
-      ),
+      h("li", {}, t("feedback.how.step1")),
+      h("li", {}, t("feedback.how.step2", { formName })),
+      h("li", {}, t("feedback.how.step3")),
     ),
     h(
       "p",
       { class: "ss-muted" },
-      "Most useful: what you were doing, what you expected, and how to repeat it. For balance, say which ship, upgrade or difficulty felt wrong. No GitHub account? Press DOWNLOAD ONLY and send the file to the person who invited you.",
+      t("feedback.how.tip"),
     ),
   );
 }
 
 function privacyBlock(): HTMLElement {
-  const items = BUNDLE_CONTENTS.map((text) => h("li", {}, text));
+  const items = BUNDLE_CONTENTS.map((key) => h("li", {}, t(key)));
   return h(
     "div",
     {},
     h(
       "p",
       { class: "ss-muted", "data-testid": "feedback-privacy" },
-      "Privacy: the file is created only when you press a button below. It contains no name, account or e-mail, and anything that looks like a password or token is removed. Nothing is sent automatically; you decide whether to attach it.",
+      t("feedback.privacy.promise"),
     ),
     h(
       "details",
       {},
-      h("summary", {}, "What is in the file?"),
+      h("summary", {}, t("feedback.privacy.summary")),
       h("ul", {}, ...items),
     ),
   );
@@ -107,7 +96,7 @@ function kindSelect(): HTMLSelectElement {
     const option = h(
       "option",
       { value },
-      kind.title === "UI/UX" ? "UI / UX" : kind.title,
+      kind.title === "UI/UX" ? t("feedback.kind.uiux") : kind.title,
     );
     select.appendChild(option);
   }
@@ -118,8 +107,7 @@ function noteField(): HTMLTextAreaElement {
   return h("textarea", {
     id: "ss-feedback-note",
     maxlength: String(FEEDBACK_MAX_NOTE_CHARS),
-    placeholder:
-      "Optional. What happened, what you expected, how to repeat it.",
+    placeholder: t("feedback.note.placeholder"),
   }) as HTMLTextAreaElement;
 }
 
@@ -136,7 +124,7 @@ export function openFeedbackDialog(
     resolveFeedbackBase(pageEffects().configuredUrl) === DEFAULT_FEEDBACK_URL;
   return openModal({
     id: FEEDBACK_DIALOG_ID,
-    title: "SEND FEEDBACK",
+    title: t("feedback.title"),
     build: (body, close) => {
       const status = h("div", {
         class: "ss-modal__status",
@@ -153,21 +141,20 @@ export function openFeedbackDialog(
           game: options.game,
           openForm,
         });
-        const extra = result.truncated ? " (trimmed to a safe size)" : "";
+        const params = {
+          fileName: result.fileName,
+          trimmed: result.truncated ? t("feedback.status.trimmed") : "",
+        };
         status.textContent = openForm
-          ? `Saved ${result.fileName}${extra}. Attach it to the page that just opened.`
-          : `Saved ${result.fileName}${extra}.`;
+          ? t("feedback.status.savedOpened", params)
+          : t("feedback.status.saved", params);
       };
       body.append(
-        h(
-          "p",
-          {},
-          "Thanks for testing Shattered Stars. Tell us what to fix, tune or build next.",
-        ),
+        h("p", {}, t("feedback.intro")),
         howItWorks(usesDefaultForm),
-        h("label", { for: "ss-feedback-kind" }, "Kind of feedback"),
+        h("label", { for: "ss-feedback-kind" }, t("feedback.kind.label")),
         kind,
-        h("label", { for: "ss-feedback-note" }, "Your note"),
+        h("label", { for: "ss-feedback-note" }, t("feedback.note.label")),
         note,
         privacyBlock(),
         status,
@@ -176,22 +163,22 @@ export function openFeedbackDialog(
           { class: "ss-modal__actions" },
           modalButton(
             usesDefaultForm
-              ? "SEND (SAVE FILE + OPEN ISSUE)"
-              : "SEND (SAVE FILE + OPEN FORM)",
+              ? t("feedback.action.sendIssue")
+              : t("feedback.action.sendForm"),
             () => run(true),
             true,
           ),
-          modalButton("DOWNLOAD ONLY", () => run(false)),
-          modalButton("CLOSE", close),
+          modalButton(t("feedback.action.downloadOnly"), () => run(false)),
+          modalButton(t("common.close"), close),
         ),
         h(
           "p",
           { class: "ss-muted" },
-          link("Tester guide", `${DOCS_URL}/TESTER_GUIDE.md`),
+          link(t("common.link.testerGuide"), `${DOCS_URL}/TESTER_GUIDE.md`),
           " · ",
-          link("Known issues", `${DOCS_URL}/KNOWN_ISSUES.md`),
+          link(t("common.link.knownIssues"), `${DOCS_URL}/KNOWN_ISSUES.md`),
           " · ",
-          link("Privacy", `${DOCS_URL}/PRIVACY.md`),
+          link(t("common.link.privacy"), `${DOCS_URL}/PRIVACY.md`),
         ),
       );
     },

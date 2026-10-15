@@ -61,6 +61,13 @@ import {
 import { pickQuickBuild } from "./duel/duelSetupModel";
 import { openDuelTabById, stepDuelTab } from "./duel/duelSetupChrome";
 import { bindTabKeys } from "../ui/menu/DetailTabs";
+import { SetupKeyNav } from "../ui/menu/SetupKeyNav";
+import { consumeSceneData } from "./battleUi/consumeSceneData";
+import { remember, remembered } from "./duel/duelMemory";
+
+/** Values the remembered Dogfight setup may hold. */
+const DUEL_DIFFICULTIES = ["easy", "normal", "hard", "brutal"] as const;
+const DUEL_FORMATS = ["best_of_3", "best_of_5"] as const;
 import { SettingsDefaultPick } from "../ui/menu/setupDefaults";
 import { defaultDifficulty } from "../systems/SettingsStorage";
 import { dogfightBriefing, showSortieBriefing } from "../ui/briefing";
@@ -99,7 +106,8 @@ import {
 import type { ActiveAura } from "../systems/SupportAura";
 import { applyAllyAuraRepairs } from "../systems/aura/AllyAuraRepair";
 import { buildDuelHudSnapshot, playerTargetId } from "./duel/duelHudSnapshot";
-import { showDuelEndScreen } from "./duel/DuelEndScreen";
+import { showResultsPanel, type ResultsActions } from "../ui/results/ResultsPanel";
+import { resultRows } from "../ui/results/resultsModel";
 import {
   renderDogfightSetup,
   type DogfightSetupActions,
@@ -116,9 +124,8 @@ import {
   type CombatModifiers,
 } from "../core/CombatModifiers";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
-import { PauseMenu } from "../ui/PauseMenu";
+import { BattlePauseMenu } from "./battleUi/BattlePauseMenu";
 import { InputManager } from "../input/InputManager";
-import { openSettingsOverBattle } from "./battleUi/openSettingsOverBattle";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import {
   trackDeath,
@@ -126,6 +133,7 @@ import {
   trackModeStart,
 } from "../telemetry/telemetry";
 import { matchStats } from "../telemetry/matchTelemetry";
+import { dealerOf } from "../telemetry/matchStatTypes";
 import { random, setDefaultRng, createRng } from "../utils/random";
 import {
   createSideScore,
@@ -264,6 +272,10 @@ export class DogfightScene extends Phaser.Scene {
   // Game state
   private isPaused = false;
   private isSetupPhase = true;
+  /** REMATCH / pause RESTART: skip the setup screen and fly the same match again. */
+  private rematchRequested = false;
+  /** Arrow / D-pad navigation of the setup screen (null outside setup). */
+  private setupNav: SetupKeyNav | null = null;
   private matchComplete = false;
 
   // Timing
@@ -293,7 +305,7 @@ export class DogfightScene extends Phaser.Scene {
   private hud: DuelHud | null = null;
   /** Setup-screen objects, tracked individually — see track()'s doc comment for why. */
   private setupObjects: Phaser.GameObjects.GameObject[] = [];
-  private pauseMenu!: PauseMenu;
+  private pauseMenu!: BattlePauseMenu;
   /** InputManager.on() subscription ids, unsubscribed in shutdown() to avoid duplicate callbacks after scene.restart(). */
   private inputSubscriptionIds: number[] = [];
 
@@ -324,9 +336,13 @@ export class DogfightScene extends Phaser.Scene {
    *
    * @param data - Scene data.
    */
-  init(data: Partial<OnlineDogfightInit> = {}): void {
+  init(data: Partial<OnlineDogfightInit> & { rematch?: boolean } = {}): void {
     this.online = null;
-    if (!data.online || !data.seats || data.seed === undefined) return;
+    this.rematchRequested = data.rematch === true;
+    if (!data.online || !data.seats || data.seed === undefined) {
+      consumeSceneData(this);
+      return;
+    }
     this.online = new DogfightOnline(data as OnlineDogfightInit);
     const [first, second] = data.seats;
     if (!first || !second) return;
@@ -378,9 +394,18 @@ export class DogfightScene extends Phaser.Scene {
       // Both players picked their ships in the lobby: no setup screen.
       this.startOnline(this.online);
     } else {
+      const fromSettings = this.difficultyDefault.next(defaultDifficulty());
       this.difficulty =
-        this.difficultyDefault.next(defaultDifficulty()) ?? this.difficulty;
+        remembered("dogfight", "difficulty", DUEL_DIFFICULTIES) ??
+        fromSettings ??
+        this.difficulty;
+      this.matchFormat =
+        remembered("dogfight", "format", DUEL_FORMATS) ?? this.matchFormat;
       this.showSetupScreen();
+      this.setupNav = new SetupKeyNav(this, {
+        isActive: () => this.isSetupPhase,
+      });
+      this.setupNav.refresh();
       // The one back affordance (ESC / gamepad B / right-click), setup only.
       bindMenuBack(this, () => this.scene.start("MainMenuScene"), {
         isActive: () => this.isSetupPhase,
@@ -392,6 +417,7 @@ export class DogfightScene extends Phaser.Scene {
         },
         isActive: () => this.isSetupPhase,
       });
+      if (this.rematchRequested) this.startMatch();
     }
 
     if (ShipTelemetry.isEnabled()) {
@@ -517,7 +543,13 @@ export class DogfightScene extends Phaser.Scene {
       ]);
     }
     const runtime = this.weapons?.runtime;
-    if (runtime) addOrdnance(h, runtime.shotsInFlight, runtime.devicesOnField);
+    if (runtime)
+      addOrdnance(
+        h,
+        runtime.shotsInFlight,
+        runtime.devicesOnField,
+        runtime.idCounters,
+      );
     return h.digest();
   }
 
@@ -736,6 +768,7 @@ export class DogfightScene extends Phaser.Scene {
       this.setupActions(),
       (obj) => this.track(obj),
     );
+    this.setupNav?.refresh();
   }
 
   /**
@@ -853,9 +886,15 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   private startMatch(): void {
+    this.setupNav?.destroy();
+    this.setupNav = null;
     this.setupObjects.forEach((o) => o.destroy());
     this.setupObjects = [];
     this.isSetupPhase = false;
+    remember("dogfight", {
+      difficulty: this.difficulty,
+      format: this.matchFormat,
+    });
     const online = this.online !== null;
     trackModeStart("dogfight", { difficulty: this.difficulty, online });
     matchStats.start(
@@ -1172,19 +1211,21 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   private createPauseMenu(): void {
-    this.pauseMenu = new PauseMenu({
+    this.pauseMenu = new BattlePauseMenu({
       scene: this,
+      legend: "duel",
+      online: this.online !== null,
       onResume: () => {
         this.isPaused = false;
       },
       onRestart: () => {
-        this.scene.restart();
-      },
-      onSettings: () => {
-        openSettingsOverBattle(this);
+        this.scene.restart({ rematch: true });
       },
       onQuit: () => {
         this.scene.start("MainMenuScene");
+      },
+      ensurePaused: () => {
+        if (!this.isPaused && this.online === null) this.togglePause();
       },
     });
   }
@@ -1507,6 +1548,7 @@ export class DogfightScene extends Phaser.Scene {
       toFriendly: this.isFriendly(target),
       hull: target.hull - after.hull,
       shield: target.shields - after.shields,
+      ...dealerOf(attacker),
     });
     if (after.shields < target.shields) {
       audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);
@@ -1812,26 +1854,29 @@ export class DogfightScene extends Phaser.Scene {
       playerWon ? "victory" : "defeat",
     );
     const sweep = (playerWon ? theirs : mine) === 0;
-    showDuelEndScreen(this, {
-      header: "Dogfight \u2014 match result",
-      title: playerWon ? "MATCH WON" : "MATCH LOST",
-      won: playerWon,
-      scoreLine: `Final score  ${mine}  \u2013  ${theirs}`,
+    showResultsPanel({
+      scene: this,
+      tone: playerWon ? "victory" : "defeat",
+      banner: playerWon ? "MATCH WON" : "MATCH LOST",
+      subtitle: `Final score  ${mine}  \u2013  ${theirs}`,
+      rows: resultRows(matchStats.lastSummary),
       notes: sweep ? ["Sweep!"] : [],
-      accent: factionAccent(this.localFaction()),
-      ...this.endScreenActions(),
+      actions: this.endScreenActions(),
     });
   }
 
-  /** @returns REMATCH / MENU: a local duel restarts; an online one returns to the room. */
-  private endScreenActions(): { onRematch: () => void; onMenu: () => void } {
+  /** @returns The results actions: a local duel replays or returns to setup; an online one returns to the room. */
+  private endScreenActions(): ResultsActions {
     if (!this.online)
       return {
-        onRematch: () => this.scene.restart(),
+        onRematch: () => this.scene.restart({ rematch: true }),
+        onSetup: () => this.scene.restart(),
+        setupLabel: "Back to setup",
         onMenu: () => this.scene.start("MainMenuScene"),
       };
     return {
       onRematch: () => this.scene.start(ONLINE_LOBBY_SCENE),
+      rematchLabel: "Rematch (room)",
       onMenu: () => {
         getOnlineSession(this.registry).leaveRoom();
         this.scene.start("MainMenuScene");

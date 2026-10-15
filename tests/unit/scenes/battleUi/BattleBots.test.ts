@@ -122,6 +122,34 @@ describe("BattleBots — squads", () => {
     expect(crew.markedTargetFor("p1", "player", 10)).toBe("e2");
     expect(crew.squadKeyOf("p1")).toBeNull();
   });
+
+  describe("wingmen mark assist (Settings > Gameplay)", () => {
+    function playerSquad(markAssist: boolean): BattleBots {
+      const crew = new BattleBots({
+        worldSize: WORLD,
+        random: () => 0.5,
+        markAssist,
+      });
+      crew.addSquad({
+        key: "player",
+        side: "player",
+        aiLeader: false,
+        assistMark: true,
+      });
+      crew.enlist("p1", "player");
+      crew.enlist("p2", "player");
+      command(crew, raid(), 1500);
+      return crew;
+    }
+
+    it("lets a player-led squad mark its own focus when the setting is on", () => {
+      expect(playerSquad(true).markedTarget("player", 1500)).not.toBeNull();
+    });
+
+    it("keeps a player-led squad from marking when the setting is off", () => {
+      expect(playerSquad(false).markedTarget("player", 1500)).toBeNull();
+    });
+  });
 });
 
 describe("BattleBots — leaving the battle", () => {

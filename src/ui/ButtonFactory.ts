@@ -119,9 +119,9 @@ export interface ToggleButtonConfig {
   readonly normalColor: number;
   /** Border colour when selected. Default: lifted `selectedColor`. */
   readonly strokeColor?: number;
-  /** Font used when not selected. Default: '10px'. */
+  /** Font used when not selected. Default: '12px'. */
   readonly font?: string;
-  /** Font used when selected. Default: 'bold 10px'. */
+  /** Font used when selected. Default: 'bold 12px'. */
   readonly selectedFont?: string;
 }
 
@@ -168,7 +168,7 @@ export function createToggleButton(
   draw(false);
 
   const font = parseCssFont(
-    selected ? (config.selectedFont ?? "bold 10px") : (config.font ?? "10px"),
+    selected ? (config.selectedFont ?? "bold 12px") : (config.font ?? "12px"),
   );
   const text = scene.add
     .text(0, 0, label, {

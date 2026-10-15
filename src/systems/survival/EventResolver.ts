@@ -64,7 +64,10 @@ export function choiceAvailability(
 ): ChoiceAvailability {
   const req = choice.requires;
   if (choice.cost !== undefined && run.salvage < choice.cost) {
-    return { enabled: false, reason: `Needs ${choice.cost} salvage` };
+    return {
+      enabled: false,
+      reason: `Needs ${choice.cost} salvage (${choice.cost - run.salvage} short)`,
+    };
   }
   if (req?.faction && req.faction !== run.faction) {
     return {

@@ -31,7 +31,7 @@ const CARD = {
   codenameSize: 28,
   objectiveSize: 18,
   intelSize: 13,
-  hintSize: 11,
+  hintSize: 12,
   intelLineHeight: 20,
   barHeight: 4,
   barInset: 32,

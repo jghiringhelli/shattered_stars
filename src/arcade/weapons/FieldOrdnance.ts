@@ -48,6 +48,9 @@ export function indexBodies(world: WeaponWorld): Map<string, WeaponBody> {
 export class FieldOrdnance {
   private shots: OrdnanceShot[] = [];
   private devices: DeviceObject[] = [];
+  /** Ids handed out this battle; part of the snapshot and the hash. */
+  private shotsLaunched = 0;
+  private devicesDropped = 0;
 
   /** @param worldSize - Map edge length (px). */
   constructor(private readonly worldSize: number) {}
@@ -62,10 +65,17 @@ export class FieldOrdnance {
     return this.devices;
   }
 
-  /** Remove everything (new round / restart). */
+  /** @returns The id counters (shots launched, devices dropped) for the state hash. */
+  get idCounters(): readonly number[] {
+    return [this.shotsLaunched, this.devicesDropped];
+  }
+
+  /** Remove everything and restart the ids (new battle / restart). */
   clear(): void {
     this.shots = [];
     this.devices = [];
+    this.shotsLaunched = 0;
+    this.devicesDropped = 0;
   }
 
   /**
@@ -79,7 +89,9 @@ export class FieldOrdnance {
     spec: LauncherSpec,
     target: LockedTarget,
   ): WeaponEvent {
-    const shot = launchShot(launcher, spec, target, this.worldSize);
+    this.shotsLaunched += 1;
+    const id = `ordnance_${this.shotsLaunched}`;
+    const shot = launchShot(launcher, spec, target, this.worldSize, id);
     this.shots.push(shot);
     return {
       kind: "launch",
@@ -97,7 +109,9 @@ export class FieldOrdnance {
    * @returns The drop event.
    */
   drop(dropper: Dropper, spec: DeviceSpec): WeaponEvent {
-    const device = dropDevice(dropper, spec, this.worldSize);
+    this.devicesDropped += 1;
+    const id = `device_${this.devicesDropped}`;
+    const device = dropDevice(dropper, spec, this.worldSize, id);
     this.devices.push(device);
     return {
       kind: "drop",

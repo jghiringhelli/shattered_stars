@@ -1,0 +1,80 @@
+name: Nightly
+
+# Slow, report-producing work that does not gate pushes: balance report, telemetry battery,
+# full coverage run and the whole skill-gate fighter matrix. Reports are uploaded as artifacts.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  balance:
+    name: Balance report and telemetry battery
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Balance report (docs/balance/latest.md)
+        run: npm run balance:report
+      - name: Telemetry battery
+        shell: bash
+        run: |
+          mkdir -p docs/telemetry/nightly
+          for script in telemetry:report telemetry:tempo telemetry:survival telemetry:weapons telemetry:ships telemetry:hitrate telemetry:aura; do
+            echo "::group::$script"
+            npm run "$script" 2>&1 | tee "docs/telemetry/nightly/${script//:/-}.txt" || echo "::warning::$script failed"
+            echo "::endgroup::"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: balance-and-telemetry
+          path: |
+            docs/balance/
+            docs/telemetry/
+          retention-days: 30
+
+  coverage:
+    name: Full suite with coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run test:coverage
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 14
+
+  skill-matrix:
+    name: Skill gates, whole fighter matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run test:skill
+        env:
+          SKILL_PAIRS: all

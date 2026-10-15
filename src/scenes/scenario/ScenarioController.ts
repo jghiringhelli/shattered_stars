@@ -30,9 +30,11 @@ import type { ArcadeBotFleet } from "../arcadeBattle/ArcadeBotFleet";
 import { ScenarioDirector } from "./ScenarioDirector";
 import { deployShips, type DeployableShip } from "./deployShips";
 import {
-  createScenarioEndOverlay,
-  type ScenarioEndActions,
-} from "./ScenarioEndOverlay";
+  showResultsPanel,
+  type ResultsActions,
+} from "../../ui/results/ResultsPanel";
+import { resultRows } from "../../ui/results/resultsModel";
+import { matchStats } from "../../telemetry/matchTelemetry";
 import { endSummary } from "./scenarioEndModel";
 import {
   ScenarioFrameTracker,
@@ -259,19 +261,29 @@ export class ScenarioController {
   }
 
   /**
-   * Show the scenario end screen (hides the scenario HUD).
-   * @param actions - Retry / Menu.
+   * Show the end screen for a scenario result (hides the scenario HUD).
+   * @param actions - Rematch / setup / menu.
    * @returns Whether it was shown (false until the match has a result).
    */
-  showResult(actions: ScenarioEndActions): boolean {
+  showResult(actions: ResultsActions): boolean {
     const result = this.viewState().result;
     if (!result) return false;
     this.hud.setVisible(false);
-    createScenarioEndOverlay(
-      this.scene,
-      endSummary(result, this.state.definition),
+    const summary = endSummary(result, this.state.definition);
+    showResultsPanel({
+      scene: this.scene,
+      tone: summary.outcome,
+      banner: summary.headline,
+      subtitle: summary.scenarioName.toUpperCase(),
+      rows: resultRows(matchStats.lastSummary, {
+        leadRows: summary.rows.map((row) => ({
+          label: row.label,
+          value: `${row.player} – ${row.enemy}`,
+        })),
+      }),
+      notes: [summary.reason, summary.footer],
       actions,
-    );
+    });
     return true;
   }
 

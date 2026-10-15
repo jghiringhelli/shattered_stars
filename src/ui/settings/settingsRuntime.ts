@@ -22,6 +22,12 @@ import {
 import { installTelemetry } from "../../telemetry/telemetry";
 import { applyThemePreferences } from "../theme/signalPalettes";
 import { installCameraComfort, setCameraComfort } from "./cameraComfort";
+import {
+  effectiveComfort,
+  osPrefersReducedMotion,
+  setMotionReduced,
+} from "./motionComfort";
+import { installCanvasSharpness, setSharpScaling } from "./canvasSharpness";
 
 /** Registry key holding the full settings document. */
 export const PREFERENCES_REGISTRY_KEY = "preferences";
@@ -46,10 +52,13 @@ export function applySettings(
   applyThemePreferences(accessibility);
   applyKeyboardOverrides(activeKeyOverrides(settings));
   applyGamepadButtonOverrides(activeGamepadOverrides(settings));
+  const comfort = effectiveComfort(accessibility, osPrefersReducedMotion());
   setCameraComfort({
-    shakeScale: accessibility.screenShake,
-    reduceFlashes: accessibility.reduceFlashes,
+    shakeScale: comfort.shakeScale,
+    reduceFlashes: comfort.reduceFlashes,
   });
+  setMotionReduced(comfort.reduceMotion);
+  setSharpScaling(accessibility.sharpScaling);
   registry?.set(PREFERENCES_REGISTRY_KEY, settings);
   registry?.set(LEGACY_SETTINGS_REGISTRY_KEY, legacyRegistrySettings(settings));
 }
@@ -76,5 +85,6 @@ export function commitSettings(
 export function bootstrapPlayerPreferences(game: Phaser.Game): void {
   installCameraComfort();
   if (typeof window !== "undefined") installTelemetry(window);
+  installCanvasSharpness(game);
   applySettings(loadSettings(), game.registry);
 }

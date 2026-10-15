@@ -51,6 +51,31 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ TRUST_PROXY: "maybe" })).toThrow(ConfigError);
     expect(loadConfig({ TRUST_PROXY: "0" }).trustProxy).toBe(false);
   });
+
+  it("does_not_trust_x_forwarded_for_unless_asked", () => {
+    expect(loadConfig({}).trustProxy).toBe(false);
+    expect(loadConfig({ TRUST_PROXY: "true" }).trustProxy).toBe(true);
+  });
+
+  it("requires_an_explicit_origin_list_in_production", () => {
+    expect(() => loadConfig({ NODE_ENV: "production" })).toThrow(/ALLOWED_ORIGINS/);
+    expect(() =>
+      loadConfig({ NODE_ENV: "production", ALLOWED_ORIGINS: "*" }),
+    ).toThrow(ConfigError);
+  });
+
+  it("accepts_an_explicit_origin_list_in_production", () => {
+    const config = loadConfig({
+      NODE_ENV: "production",
+      ALLOWED_ORIGINS: "https://jghiringhelli.github.io",
+    });
+    expect(config.allowedOrigins).toEqual(["https://jghiringhelli.github.io"]);
+  });
+
+  it("allows_any_origin_in_production_only_when_opted_in", () => {
+    const config = loadConfig({ NODE_ENV: "production", ALLOW_ANY_ORIGIN: "true" });
+    expect(config.allowedOrigins).toBe("*");
+  });
 });
 
 describe("isOriginAllowed", () => {

@@ -68,6 +68,13 @@ export const REGULARS_PER_EXTRA_ELITE = 2;
  * SurvivalSteering's wave bands 1–3 / 4–10 / 11+).
  */
 export const EFFECTIVE_WAVES_PER_SECTOR = 4;
+/** The curve above as one table the balance sweeps tune. */
+export const PLAN_TUNING = {
+  threatScale: ROGUELITE_THREAT_SCALE,
+  sectorThreatStep: SECTOR_THREAT_STEP,
+  rowThreatStep: ROW_THREAT_STEP,
+  wavesPerSector: EFFECTIVE_WAVES_PER_SECTOR,
+};
 /** Map rows per effective-wave step within a sector. */
 export const ROWS_PER_TIER_STEP = 2;
 /** Belt squeezes added per sector beyond the first. */
@@ -107,6 +114,8 @@ export interface CombatPlan {
   /** Belt tightening steps at the node's first wave. */
   readonly beltSteps: number;
   readonly bossPhases: number;
+  /** Of those, the phases Second Wind (ascension 8) added: shields only. */
+  readonly secondWindPhases: number;
   /**
    * The creature that is the boss of a boss node (its enrage adds
    * {@link CREATURE_EXTRA_PHASES} to the plan's phases), or null.
@@ -122,6 +131,45 @@ export interface CombatPlan {
   readonly isFinalBoss: boolean;
   /** Seed for the battle's own rolls (spawns, dice, affixes). */
   readonly combatSeed: number;
+}
+
+/** What grows with the sector, the row and the ascension level. */
+interface PlanScaling {
+  readonly effectiveWave: number;
+  readonly threatMultiplier: number;
+  readonly beltSteps: number;
+}
+
+/**
+ * @param run - The run.
+ * @param row - The active node's map row.
+ * @param rules - The run's ascension rules.
+ * @returns The wave tier, threat and belt squeeze the node's battle starts at.
+ */
+function planScaling(
+  run: RunState,
+  row: number,
+  rules: ReturnType<typeof ascensionRules>,
+): PlanScaling {
+  const sectorStep = run.sector - 1;
+  return {
+    effectiveWave:
+      sectorStep * PLAN_TUNING.wavesPerSector +
+      Math.floor((row + rules.tierRowShift) / ROWS_PER_TIER_STEP) +
+      1,
+    threatMultiplier:
+      PLAN_TUNING.threatScale *
+      (1 +
+        sectorStep * PLAN_TUNING.sectorThreatStep +
+        row * PLAN_TUNING.rowThreatStep) *
+      rules.threatMultiplier,
+    beltSteps: Math.min(
+      MAX_BELT_STEPS,
+      sectorStep * BELT_STEPS_PER_SECTOR +
+        Math.floor(row / ROWS_PER_BELT_STEP) +
+        rules.extraBeltSqueezes,
+    ),
+  };
 }
 
 /**
@@ -140,11 +188,7 @@ export function planCombat(run: RunState): CombatPlan | null {
     kind === "boss"
       ? BASE_BOSS_PHASES + (isFinalBoss ? 1 : 0) + rules.extraBossPhases
       : 0;
-  const effectiveWave =
-    (run.sector - 1) * EFFECTIVE_WAVES_PER_SECTOR +
-    Math.floor(row / ROWS_PER_TIER_STEP) +
-    1 +
-    rules.tierWaveShift;
+  const scaling = planScaling(run, row, rules);
   return {
     nodeId,
     kind,
@@ -155,30 +199,25 @@ export function planCombat(run: RunState): CombatPlan | null {
       rngFor(run.seed, "faction", nodeId),
       run.faction,
     ),
-    threatMultiplier:
-      ROGUELITE_THREAT_SCALE *
-      (1 + (run.sector - 1) * SECTOR_THREAT_STEP + row * ROW_THREAT_STEP) *
-      rules.threatMultiplier,
+    threatMultiplier: scaling.threatMultiplier,
     maxRegulars: MAX_REGULARS_PER_WAVE,
     extraElites:
       kind === "elite" ? ELITE_NODE_EXTRA_ELITES + rules.extraElites : 0,
     eliteAffixCount: rules.eliteAffixCount,
-    effectiveWave,
+    effectiveWave: scaling.effectiveWave,
     enemyHullMultiplier: rules.enemyHullMultiplier,
     enemyDamageMultiplier: rules.enemyDamageMultiplier,
-    beltSteps: Math.min(
-      MAX_BELT_STEPS,
-      (run.sector - 1) * BELT_STEPS_PER_SECTOR +
-        Math.floor(row / ROWS_PER_BELT_STEP) +
-        rules.extraBeltSqueezes,
-    ),
+    beltSteps: scaling.beltSteps,
     bossPhases,
+    secondWindPhases: kind === "boss" ? rules.extraBossPhases : 0,
     eventCreature: run.eventCombat?.creature ?? null,
     creatureBoss:
       kind === "boss"
         ? {
             id: survivalBossFor(run.sector).id,
-            phases: bossPhases + CREATURE_EXTRA_PHASES,
+            // Second Wind refills shields, it is no enrage level: an earlier,
+            // third enrage phase plus two reinforcements made A8 bosses clear 9 %.
+            phases: bossPhases - rules.extraBossPhases + CREATURE_EXTRA_PHASES,
           }
         : null,
     bossWave: run.sector * BOSS_WAVE_PER_SECTOR,
@@ -200,14 +239,27 @@ export function combatKindOf(run: RunState): CombatKind | null {
 export { BOSS_PHASE_THRESHOLDS };
 
 /**
- * Only the plan's own boss phases call reinforcements and restore shields;
- * a creature boss's extra enrage phase just makes it angrier.
+ * Only the plan's own boss phases call reinforcements; a creature boss's
+ * extra enrage phase just makes it angrier and Second Wind only refills
+ * its shields ({@link phaseRestoresShields}).
  *
- * @param planPhases - Phases of the plan (ascension and the final boss add some).
+ * @param planPhases - Phases of the plan, Second Wind's excluded.
  * @param phasesStarted - Phases already started when the next one begins.
  * @returns True when entering the next phase calls the wing in.
  */
 export function phaseCallsReinforcements(
+  planPhases: number,
+  phasesStarted: number,
+): boolean {
+  return phasesStarted < planPhases;
+}
+
+/**
+ * @param planPhases - Phases of the plan (ascension and the final boss add some).
+ * @param phasesStarted - Phases already started when the next one begins.
+ * @returns True when entering the next phase restores the boss's shields.
+ */
+export function phaseRestoresShields(
   planPhases: number,
   phasesStarted: number,
 ): boolean {

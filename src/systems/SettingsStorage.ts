@@ -154,7 +154,6 @@ export interface LegacyRegistrySettings {
   readonly sfxVolume: number;
   readonly cameraShake: boolean;
   readonly showDamageNumbers: boolean;
-  readonly showMinimap: boolean;
 }
 
 /**
@@ -170,6 +169,5 @@ export function legacyRegistrySettings(
     sfxVolume: settings.audio.sfx,
     cameraShake: settings.accessibility.screenShake > 0,
     showDamageNumbers: settings.gameplay.showDamageNumbers,
-    showMinimap: settings.gameplay.showMinimap,
   };
 }

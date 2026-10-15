@@ -28,14 +28,14 @@ function ship(id: string, side: string, x: number, y: number): WeaponBody {
 
 describe("dropDevice", () => {
   it("drops the device astern of the ship", () => {
-    const bomb = dropDevice(DROPPER, BOMB, WORLD);
+    const bomb = dropDevice(DROPPER, BOMB, WORLD, "d1");
     expect(bomb.x).toBeCloseTo(3000);
     expect(bomb.y).toBeCloseTo(3000 + DEVICE_DROP_DISTANCE_PX);
   });
 });
 
 describe("stepDevice — bombs", () => {
-  const bomb = dropDevice(DROPPER, BOMB, WORLD);
+  const bomb = dropDevice(DROPPER, BOMB, WORLD, "d1");
   const near = (side: string) => ship("n" + side, side, bomb.x + 50, bomb.y);
   const far = ship("far", "b", bomb.x + 500, bomb.y);
 
@@ -59,7 +59,7 @@ describe("stepDevice — bombs", () => {
 });
 
 describe("stepDevice — mines", () => {
-  const mine = dropDevice(DROPPER, MINE, WORLD);
+  const mine = dropDevice(DROPPER, MINE, WORLD, "d1");
   const touching = (side: string) =>
     ship("t" + side, side, mine.x + 10, mine.y);
 
@@ -85,6 +85,7 @@ describe("stepDevice — mines", () => {
       { ...DROPPER, y: WORLD - 20, angle: 180 },
       MINE,
       WORLD,
+      "d2",
     );
     const armed = stepDevice(edgeMine, [], MINE_ARM_MS, WORLD).device!;
     const across = ship("x", "b", edgeMine.x, (edgeMine.y + 20) % WORLD);

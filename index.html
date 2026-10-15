@@ -10,8 +10,12 @@
         padding: 0;
         box-sizing: border-box;
       }
+      /* Bars around the 16:9 canvas (ultrawide / 4:3 windows) continue the game's own sky instead of a flat black. */
+      html,
       body {
-        background-color: #0a0a0a;
+        background: #0a0a1a radial-gradient(ellipse at center, #17142f 0%, #0a0a1a 62%, #05050f 100%) fixed;
+      }
+      body {
         display: flex;
         justify-content: center;
         align-items: center;

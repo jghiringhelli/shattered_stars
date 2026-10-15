@@ -9,7 +9,9 @@
 
 import Phaser from "phaser";
 import { createHoverButton } from "../ui/ButtonFactory";
-import { addMenuBackdrop, addMenuHeader } from "../ui/menu/MenuScaffold";
+import { addBackButton, addMenuBackdrop, addMenuHeader } from "../ui/menu/MenuScaffold";
+import { bindMenuBack } from "../ui/menu/menuTransitions";
+import { SetupKeyNav } from "../ui/menu/SetupKeyNav";
 import { HOLO_PALETTE } from "../ui/theme/HoloTheme";
 import { holoFont } from "../ui/theme/holoFont";
 import { toCssColor } from "../ui/theme/colorMath";
@@ -98,7 +100,9 @@ export class SurvivalSummaryScene extends Phaser.Scene {
       ),
     );
     const rows =
-      history.length > 0 ? history.map(historyRow).join("\n") : "No runs yet.";
+      history.length > 0
+        ? history.map(historyRow).join("\n")
+        : "No runs yet — press NEW RUN (R) to start your first.";
     this.text(
       rows,
       y + 4,
@@ -108,6 +112,20 @@ export class SurvivalSummaryScene extends Phaser.Scene {
       true,
     ).setName("historyList");
     this.createButtons();
+    this.bindNavigation();
+  }
+
+  /** BACK / ESC / B leave, R starts a new run, arrows + ENTER drive the buttons. */
+  private bindNavigation(): void {
+    const leave = (): void => {
+      this.scene.start(this.historyOnly ? "SurvivalSetupScene" : "MainMenuScene");
+    };
+    addBackButton(this, leave);
+    bindMenuBack(this, leave);
+    this.input.keyboard?.on("keydown-R", () =>
+      this.scene.start("SurvivalSetupScene"),
+    );
+    new SetupKeyNav(this, { isActive: () => true });
   }
 
   private text(

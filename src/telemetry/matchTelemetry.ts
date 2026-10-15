@@ -14,9 +14,15 @@
  * privacy setting like every other event).
  */
 
-import { MatchStatsAccumulator, type MatchStatEvent } from "./matchStats";
+import {
+  MatchStatsAccumulator,
+  type MatchStatEvent,
+  type MatchSummary,
+} from "./matchStats";
 import type { TelemetryData } from "./TelemetryLog";
 import { trackMatchSummary } from "./telemetry";
+import { saveLastBattle } from "./lastBattleStore";
+import { awardMatchXp } from "../systems/matchXp";
 
 /** Outcome recorded for a match left without a result. */
 export const QUIT_OUTCOME = "quit";
@@ -32,10 +38,13 @@ export interface MatchTelemetryOptions {
   readonly emit: (summary: TelemetryData) => void;
   /** Clock (ms). */
   readonly now: () => number;
+  /** Runs for every match that ended with a result (not a quit). */
+  readonly onResult?: (summary: MatchSummary) => void;
 }
 
 export class MatchTelemetry {
   private active: MatchStatsAccumulator | null = null;
+  private last: MatchSummary | null = null;
 
   /** @param options - Summary sink and clock. */
   constructor(private readonly options: MatchTelemetryOptions) {}
@@ -84,7 +93,17 @@ export class MatchTelemetry {
     const match = this.active;
     if (!match) return;
     this.active = null;
-    this.options.emit({ ...match.finish(outcome), ...details });
+    const summary = { ...match.finish(outcome), ...details };
+    if (outcome !== QUIT_OUTCOME) {
+      this.last = summary;
+      this.options.onResult?.(summary);
+    }
+    this.options.emit(summary);
+  }
+
+  /** The latest match that ended with a result (never a quit), or null. */
+  get lastSummary(): MatchSummary | null {
+    return this.last;
   }
 }
 
@@ -92,4 +111,8 @@ export class MatchTelemetry {
 export const matchStats = new MatchTelemetry({
   emit: trackMatchSummary,
   now: () => Date.now(),
+  onResult: (summary) => {
+    saveLastBattle(summary);
+    awardMatchXp(summary);
+  },
 });

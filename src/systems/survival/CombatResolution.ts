@@ -7,7 +7,7 @@
 
 import {
   NODE_CLEAR_SALVAGE,
-  SHIELD_RECOVERY_BETWEEN_NODES,
+  RECOVERY_TUNING,
 } from "../../data/survival/economy";
 import { MUTATION_SLOT_BY_SECTOR } from "../../data/survival/mutations";
 import { relicsOf } from "../../data/survival/relicCatalog";
@@ -98,10 +98,10 @@ function recoverFleet(
     .reduce((sum, e) => sum + (e.kind === "nodeRepair" ? e.fraction : 0), 0);
   return survivors.map((ship) => ({
     ...ship,
-    hull: Math.min(1, ship.hull + repair),
+    hull: Math.min(1, ship.hull + repair + RECOVERY_TUNING.nodeRepair),
     shields: Math.min(
       1,
-      ship.shields + (1 - ship.shields) * SHIELD_RECOVERY_BETWEEN_NODES,
+      ship.shields + (1 - ship.shields) * RECOVERY_TUNING.shieldRecovery,
     ),
   }));
 }

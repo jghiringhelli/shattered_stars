@@ -13,17 +13,13 @@ import { test, expect, type Page } from "@playwright/test";
 import { ALL_BATTLES, DOGFIGHT, type BattleEntry } from "./helpers/battleEntry";
 import { injectFakeGamepad, tapFakeGamepadButton } from "./helpers/game";
 
-/** Arrow-down presses from "nothing focused" to SETTINGS / QUIT per pause UI. */
-const MENU_STEPS: Readonly<Record<string, { settings: number; quit: number }>> =
-  {
-    ArcadeBattleScene: { settings: 2, quit: 3 },
-  };
-const DEFAULT_STEPS = { settings: 3, quit: 4 } as const;
+/** Arrow-down presses from "nothing focused" to SETTINGS / QUIT in the shared pause menu. */
+const MENU_STEPS = { settings: 3, quit: 6 } as const;
 /** Gap between key presses so each lands in its own frame. */
 const KEY_GAP_MS = 120;
 const GAMEPAD = { A: 0, B: 1, DPAD_DOWN: 13, DPAD_LEFT: 14, START: 9 } as const;
 
-const stepsFor = (sceneKey: string) => MENU_STEPS[sceneKey] ?? DEFAULT_STEPS;
+const stepsFor = (_sceneKey: string) => MENU_STEPS;
 
 async function press(page: Page, key: string, times = 1): Promise<void> {
   for (let i = 0; i < times; i++) {
@@ -140,7 +136,7 @@ test("Dogfight: a gamepad alone can cancel and confirm the quit dialog", async (
   await DOGFIGHT.enter(page, { peaceful: true });
   await injectFakeGamepad(page);
   await openPause(page, DOGFIGHT);
-  for (let i = 0; i < DEFAULT_STEPS.quit; i++)
+  for (let i = 0; i < MENU_STEPS.quit; i++)
     await tapFakeGamepadButton(page, GAMEPAD.DPAD_DOWN);
   await tapFakeGamepadButton(page, GAMEPAD.A);
   await expect.poll(() => confirmOpen(page, DOGFIGHT.sceneKey)).toBe(true);

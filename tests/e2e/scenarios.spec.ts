@@ -226,7 +226,7 @@ test.describe("Scenario mode", () => {
     );
     expect(texts).toContain("VICTORY");
     expect(texts).toContain("ASSAULT AT THE SATELLITE ARRAY");
-    expect(texts).toContain("First to 20 points");
+    expect(texts).toContain("FIRST TO 20 POINTS");
     expect(texts).toContain("OBJECTIVES");
   });
 

@@ -9,8 +9,8 @@
 import { test, expect, type Page } from "@playwright/test";
 import { BOSS_RAID, CONTINUOUS } from "./helpers/battleEntry";
 
-/** RESUME is the first button of the centred pause panel (HoloPauseOverlay layout). */
-const RESUME_BUTTON_Y_FROM_CENTER = -100;
+/** RESUME is the first button of the centred pause panel (BattlePauseMenu layout). */
+const RESUME_BUTTON_Y_FROM_CENTER = -116;
 
 async function clickGamePoint(page: Page, x: number, y: number): Promise<void> {
   const box = (await page.locator("canvas").boundingBox())!;

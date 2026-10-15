@@ -44,7 +44,7 @@ const LAYOUT = {
   barDy: 6,
   valueX: 188,
   nameSize: 13,
-  captionSize: 10,
+  captionSize: 12,
   fillAlpha: 0.92,
 } as const;
 

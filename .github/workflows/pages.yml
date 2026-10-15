@@ -1,7 +1,8 @@
 name: Deploy to GitHub Pages
 
 # Publishes the game when the `release` branch is pushed (and on demand from
-# the Actions tab). The same gates as CI run first; a red build never ships.
+# the Actions tab). The full CI gates (ci.yml: static checks, tests, skill gates,
+# build budget, e2e) must be green first; a red build never ships.
 # One-time setup: Settings > Pages > Source: "GitHub Actions" (docs/RELEASE.md).
 on:
   push:
@@ -20,7 +21,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  gates:
+    uses: ./.github/workflows/ci.yml
+
   build:
+    needs: gates
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -28,20 +33,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
+          node-version-file: .nvmrc
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Type check
-        run: npx tsc --noEmit
-
-      - name: Unit, balance and simulation tests
-        run: npx vitest run tests/unit tests/balance tests/simulation
 
       - name: Configure Pages
         id: pages
@@ -54,6 +50,7 @@ jobs:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}/
           # Relay address players connect to (Settings → Variables → Actions → VITE_ONLINE_URL,
           # e.g. wss://shattered-stars-relay.fly.dev). Empty = online play shows "no server configured".
+          # It is also the only external origin the Content-Security-Policy allows (vite.config.ts).
           VITE_ONLINE_URL: ${{ vars.VITE_ONLINE_URL }}
           # Optional feedback form (Variables → VITE_FEEDBACK_URL). Empty = GitHub new-issue page.
           VITE_FEEDBACK_URL: ${{ vars.VITE_FEEDBACK_URL }}

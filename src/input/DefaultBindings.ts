@@ -32,14 +32,6 @@ export const DEFAULT_KEYBOARD_BINDINGS: readonly KeyboardBinding[] = [
   // Selection
   { key: "ENTER", intent: "CONFIRM" },
   { key: "ESC", intent: "CANCEL" },
-  { key: "TAB", intent: "CYCLE_NEXT" },
-  { key: "TAB", intent: "CYCLE_PREV", modifiers: { shift: true } },
-  // Maneuver speeds (number keys) — tactical dial / capital commander orders
-  { key: "ONE", intent: "SELECT_MANEUVER_1" },
-  { key: "TWO", intent: "SELECT_MANEUVER_2" },
-  { key: "THREE", intent: "SELECT_MANEUVER_3" },
-  { key: "FOUR", intent: "SELECT_MANEUVER_4" },
-  { key: "FIVE", intent: "SELECT_MANEUVER_5" },
   { key: "ONE", intent: "COMMANDER_ORDER_1" },
   { key: "TWO", intent: "COMMANDER_ORDER_2" },
   { key: "THREE", intent: "COMMANDER_ORDER_3" },
@@ -66,8 +58,6 @@ export const DEFAULT_KEYBOARD_BINDINGS: readonly KeyboardBinding[] = [
   // pausing on it froze battles for players (and on an early Shift release).
   { key: "P", intent: "PAUSE" },
   { key: "ESC", intent: "PAUSE" },
-  { key: "F", intent: "FOCUS_SELECTED" },
-  { key: "HOME", intent: "RESET_CAMERA" },
 ];
 
 export const DEFAULT_MOUSE_BINDINGS: readonly MouseBinding[] = [
@@ -127,12 +117,8 @@ export const DEFAULT_GAMEPAD_BINDINGS: readonly GamepadBinding[] = [
   { button: 0, intent: "BOOST" }, // A / Cross (flight)
   { button: 1, intent: "CANCEL" }, // B / Circle
   { button: 2, intent: "FIRE_SECONDARY" }, // X / Square
-  { button: 3, intent: "FOCUS_SELECTED" }, // Y / Triangle
-  { button: 2, intent: "EXECUTE_ACTION" }, // X / Square (tactical dial confirm)
-  // Bumpers: cycle selection (tactical) / hard turns (flight, keyboard Q/E)
-  { button: 4, intent: "CYCLE_PREV" }, // LB
+  // Bumpers: hard turns (keyboard Q/E)
   { button: 4, intent: "SHARP_TURN_LEFT" }, // LB (flight)
-  { button: 5, intent: "CYCLE_NEXT" }, // RB
   { button: 5, intent: "SHARP_TURN_RIGHT" }, // RB (flight)
   // D-pad in flight (it pans the camera in tactical scenes)
   { button: 12, intent: "CLOAK" }, // D-pad up

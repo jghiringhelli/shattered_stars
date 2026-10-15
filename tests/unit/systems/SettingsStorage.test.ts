@@ -69,7 +69,7 @@ describe("migration from the unversioned v1 document", () => {
     });
     expect(migrated.accessibility.screenShake).toBe(0);
     expect(migrated.gameplay.showDamageNumbers).toBe(false);
-    expect(migrated.gameplay.showMinimap).toBe(true);
+    expect("showMinimap" in migrated.gameplay).toBe(false);
   });
 
   it("keeps full shake when v1 had camera shake on", () => {

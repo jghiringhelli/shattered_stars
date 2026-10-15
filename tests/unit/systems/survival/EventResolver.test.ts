@@ -67,7 +67,7 @@ describe("choiceAvailability", () => {
       choiceAvailability(RunBuilder.aRun().with({ salvage: 10 }).build(), pay),
     ).toEqual({
       enabled: false,
-      reason: "Needs 30 salvage",
+      reason: "Needs 30 salvage (20 short)",
     });
   });
 

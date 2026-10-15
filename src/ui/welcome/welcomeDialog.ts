@@ -6,6 +6,7 @@
 
 import { BUILD_INFO, formatVersionTag } from "../../buildInfo";
 import { FEEDBACK_REPO_URL } from "../../feedback/feedbackLink";
+import { t } from "../../i18n";
 import {
   h,
   modalButton,
@@ -44,7 +45,7 @@ function flightSchoolButton(
   if (!onFlightSchool) return [];
   return [
     modalButton(
-      "FLIGHT SCHOOL",
+      t("welcome.action.flightSchool"),
       () => {
         close();
         onFlightSchool();
@@ -71,27 +72,27 @@ function controlsGrid(): HTMLElement {
 export function openWelcomeDialog(actions: WelcomeActions): ModalHandle {
   return openModal({
     id: WELCOME_DIALOG_ID,
-    title: "WELCOME, TESTER",
+    title: t("welcome.title"),
     onClose: () => markWelcomeSeen(),
     build: (body, close) => {
       body.append(
         h("p", { class: "ss-muted" }, formatVersionTag(BUILD_INFO)),
         section(
-          "What this is",
-          "Shattered Stars is a free, real-time tactical space-combat game that runs in your browser. This is a public BETA: expect bugs, rough edges and unbalanced content. Your progress is saved in this browser only.",
+          t("welcome.about.title"),
+          t("welcome.about.body"),
         ),
         section(
-          "Start here",
-          "Flight School (about 5 minutes) teaches the controls with live checks. Press F on the main menu any time. Then try a Skirmish, Survival or the Campaign.",
+          t("welcome.start.title"),
+          t("welcome.start.body"),
         ),
-        section("Controls (keyboard)", controlsGrid()),
+        section(t("welcome.controls.title"), controlsGrid()),
         section(
-          "Accessibility and settings",
-          "Main Menu > Settings: colour-blind palettes, key and gamepad rebinding, camera comfort, difficulty and volume. A gamepad works in every mode.",
+          t("welcome.settings.title"),
+          t("welcome.settings.body"),
         ),
         section(
-          "Feedback",
-          "Found a bug or something feels off? Use SEND FEEDBACK here, in the pause menu or in Settings > Advanced. Nothing is sent automatically.",
+          t("welcome.feedback.title"),
+          t("welcome.feedback.body"),
         ),
         h(
           "p",
@@ -103,7 +104,7 @@ export function openWelcomeDialog(actions: WelcomeActions): ModalHandle {
               target: "_blank",
               rel: "noopener noreferrer",
             },
-            "Known issues",
+            t("common.link.knownIssues"),
           ),
           " · ",
           h(
@@ -113,7 +114,7 @@ export function openWelcomeDialog(actions: WelcomeActions): ModalHandle {
               target: "_blank",
               rel: "noopener noreferrer",
             },
-            "Tester guide",
+            t("common.link.testerGuide"),
           ),
           " · ",
           h(
@@ -123,15 +124,15 @@ export function openWelcomeDialog(actions: WelcomeActions): ModalHandle {
               target: "_blank",
               rel: "noopener noreferrer",
             },
-            "Privacy",
+            t("common.link.privacy"),
           ),
         ),
         h(
           "div",
           { class: "ss-modal__actions" },
           ...flightSchoolButton(actions, close),
-          modalButton("SEND FEEDBACK", () => actions.onFeedback()),
-          modalButton("LET ME PLAY", close),
+          modalButton(t("common.sendFeedback"), () => actions.onFeedback()),
+          modalButton(t("welcome.action.play"), close),
         ),
       );
     },

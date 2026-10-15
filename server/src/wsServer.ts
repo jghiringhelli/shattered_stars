@@ -271,7 +271,6 @@ function answerHttp(
     res
       .writeHead(200, {
         "content-type": "application/json",
-        "access-control-allow-origin": "*",
         "cache-control": "no-store",
       })
       .end(body);

@@ -10,8 +10,8 @@ Every change is saved immediately and applied live (`ui/settings/settingsRuntime
 
 | Version | Shape |
 |---|---|
-| v1 (no `version`) | flat `{ masterVolume, musicVolume, sfxVolume, cameraShake, showDamageNumbers, showMinimap }` |
-| v2 | `{ version: 2, audio{master,music,sfx,ui}, accessibility{colorVision,highContrastHud,screenShake,reduceFlashes,textScale}, gameplay{defaultDifficulty,markAssist,showDamageNumbers,showMinimap}, controls{activeProfile,profiles[3]{name,keyboard}}, privacy{telemetryEnabled} }` |
+| v1 (no `version`) | flat `{ masterVolume, musicVolume, sfxVolume, cameraShake, showDamageNumbers, showMinimap }` (showMinimap is ignored: the radar is always on) |
+| v2 | `{ version: 2, audio{master,music,sfx,ui}, accessibility{colorVision,highContrastHud,screenShake,reduceFlashes,textScale}, gameplay{defaultDifficulty,markAssist,showDamageNumbers}, controls{activeProfile,profiles[3]{name,keyboard}}, privacy{telemetryEnabled} }` |
 
 `parseSettings` migrates v1 and validates each field independently (bad field → its default;
 volumes clamped; unknown enums rejected; unknown intents / unbindable keys dropped from profiles).

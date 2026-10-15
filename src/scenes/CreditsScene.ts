@@ -58,7 +58,7 @@ const CREDIT_STYLES: Readonly<
     advance: 44,
   },
   role: {
-    size: 11,
+    size: 12,
     weight: "600",
     color: HOLO_PALETTE.textSecondary,
     spacing: 2,

@@ -12,10 +12,10 @@
 import Phaser from "phaser";
 import { ShipStatCard } from "../ui/ShipStatCard";
 import { InputManager } from "../input/InputManager";
-import { openSettingsOverBattle } from "./battleUi/openSettingsOverBattle";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import { trackModeEnd, trackModeStart } from "../telemetry/telemetry";
 import { matchStats } from "../telemetry/matchTelemetry";
+import { dealerOf } from "../telemetry/matchStatTypes";
 import { addShipVisual } from "../rendering/ShipVisual";
 import type { FactionId } from "../config";
 import {
@@ -132,6 +132,19 @@ import {
 } from "./epicRaid/bossDefinitions";
 import { buildRaidSetupScreen, stepRaidTab } from "./epicRaid/RaidSetupScreen";
 import { bindTabKeys } from "../ui/menu/DetailTabs";
+import { SetupKeyNav } from "../ui/menu/SetupKeyNav";
+import { consumeSceneData } from "./battleUi/consumeSceneData";
+import { remember, remembered } from "./duel/duelMemory";
+
+/** Values the remembered Boss Raid setup may hold. */
+const RAID_DIFFICULTIES = ["easy", "medium", "hard", "mythic"] as const;
+const RAID_BOSSES = [
+  "terran_hegemony",
+  "free_confederation",
+  "synthetic_collective",
+  "void_corsairs",
+  "ascendant_empire",
+] as const;
 import {
   SettingsDefaultPick,
   raidDifficultyFor,
@@ -166,8 +179,10 @@ import {
   screenBossUntilEscortsFall,
 } from "./epicRaid/raidTactics";
 import type { BossStatusView } from "./epicRaid/bossStatus";
-import { HoloPauseOverlay } from "./battleUi/HoloPauseOverlay";
-import { showHoloResultScreen } from "./battleUi/HoloResultScreen";
+import { BattlePauseMenu } from "./battleUi/BattlePauseMenu";
+import { showResultsPanel } from "../ui/results/ResultsPanel";
+import { resultRows } from "../ui/results/resultsModel";
+import { bindMenuBack } from "../ui/menu/menuTransitions";
 import {
   markContacts,
   playerHudState,
@@ -345,6 +360,10 @@ export class EpicBattleScene extends Phaser.Scene {
   // Game state
   private isPaused = false;
   private isSetupPhase = true;
+  /** REMATCH / pause RESTART: skip the setup screen and fly the same raid again. */
+  private rematchRequested = false;
+  /** Arrow / D-pad navigation of the setup screen (null outside setup). */
+  private setupNav: SetupKeyNav | null = null;
   private gameResult: "none" | "victory" | "defeat" = "none";
 
   /** Raid time limit (ms); on timeout the boss survives and points decide it. */
@@ -391,7 +410,7 @@ export class EpicBattleScene extends Phaser.Scene {
   // UI
   private raidHud: RaidHud | null = null;
   private setupRoot: Phaser.GameObjects.Container | null = null;
-  private pauseMenu: HoloPauseOverlay | null = null;
+  private pauseMenu: BattlePauseMenu | null = null;
   private inputSubscriptionIds: number[] = [];
 
   constructor() {
@@ -405,6 +424,12 @@ export class EpicBattleScene extends Phaser.Scene {
     this.pilot.detach();
     this.weapons?.destroy();
     this.weapons = null;
+  }
+
+  /** @param data - `rematch: true` skips the setup screen and flies the same raid again. */
+  init(data: { rematch?: boolean } = {}): void {
+    this.rematchRequested = data.rematch === true;
+    consumeSceneData(this);
   }
 
   create(): void {
@@ -437,9 +462,20 @@ export class EpicBattleScene extends Phaser.Scene {
 
     this.weapons = createSceneWeapons(this, this.weaponsLink(), this.hitLedger);
     this.resetState();
+    const fromSettings = this.difficultyDefault.next(defaultDifficulty());
     this.difficulty =
-      this.difficultyDefault.next(defaultDifficulty()) ?? this.difficulty;
+      remembered("boss_raid", "difficulty", RAID_DIFFICULTIES) ??
+      fromSettings ??
+      this.difficulty;
+    this.selectedBossFaction =
+      remembered("boss_raid", "boss", RAID_BOSSES) ?? this.selectedBossFaction;
     this.showSetupScreen();
+    this.setupNav = new SetupKeyNav(this, { isActive: () => this.isSetupPhase });
+    this.setupNav.refresh();
+    // ESC / gamepad B / right-click leave the setup (menu-back convention).
+    bindMenuBack(this, () => this.scene.start("MainMenuScene"), {
+      isActive: () => this.isSetupPhase && this.sys.isActive(),
+    });
     bindTabKeys(this, {
       step: (direction) => {
         stepRaidTab(direction);
@@ -447,6 +483,7 @@ export class EpicBattleScene extends Phaser.Scene {
       },
       isActive: () => this.isSetupPhase,
     });
+    if (this.rematchRequested) this.startBattle();
 
     if (ShipTelemetry.isEnabled()) {
       this.telemetry = new ShipTelemetry();
@@ -514,6 +551,7 @@ export class EpicBattleScene extends Phaser.Scene {
       onStart: () => this.briefSortie(),
       onBack: () => this.scene.start("MainMenuScene"),
     });
+    this.setupNav?.refresh();
   }
 
   /** The pre-sortie briefing (≤ 3 s, skippable); the raid starts when it closes. */
@@ -533,9 +571,15 @@ export class EpicBattleScene extends Phaser.Scene {
   }
 
   private startBattle(): void {
+    this.setupNav?.destroy();
+    this.setupNav = null;
     this.setupRoot?.destroy();
     this.setupRoot = null;
     this.isSetupPhase = false;
+    remember("boss_raid", {
+      difficulty: this.difficulty,
+      boss: this.selectedBossFaction,
+    });
     trackModeStart("boss_raid");
     matchStats.start(
       "boss_raid",
@@ -696,18 +740,19 @@ export class EpicBattleScene extends Phaser.Scene {
   }
 
   private createPauseMenu(): void {
-    this.pauseMenu = new HoloPauseOverlay({
+    this.pauseMenu = new BattlePauseMenu({
       scene: this,
       faction: this.playerFaction,
+      legend: "arcade",
       onResume: () => this.resumeFromPause(),
       onRestart: () => {
-        this.scene.restart();
-      },
-      onSettings: () => {
-        openSettingsOverBattle(this);
+        this.scene.restart({ rematch: true });
       },
       onQuit: () => {
         this.scene.start("MainMenuScene");
+      },
+      ensurePaused: () => {
+        if (!this.isPaused) this.togglePause();
       },
     });
   }
@@ -1653,6 +1698,7 @@ export class EpicBattleScene extends Phaser.Scene {
         ship.hull,
         Math.max(0, damage - Math.max(0, ship.shields)),
       ),
+      ...dealerOf(killer),
     });
     if (ship.shields > 0) {
       const shieldDmg = Math.min(ship.shields, damage);
@@ -2001,36 +2047,31 @@ export class EpicBattleScene extends Phaser.Scene {
     const bossHullPct = boss
       ? Math.floor((Math.max(0, boss.totalHull) / boss.maxTotalHull) * 100)
       : 0;
-    showHoloResultScreen({
+    showResultsPanel({
       scene: this,
-      victory,
+      tone: victory ? "victory" : "defeat",
       subtitle,
-      stats: [
-        {
-          label: "Ships remaining",
-          value: `${this.livingShips(this.playerShipIds).length}`,
-        },
-        { label: "Boss hull remaining", value: `${bossHullPct}%` },
-        { label: "Escorts destroyed", value: `${this.playerSideScore.kills}` },
-        {
-          label: "Raid time",
-          value: formatMatchClock(
-            EpicBattleScene.RAID_DURATION_MS - this.raidTimer.remainingMs,
-          ),
-        },
-      ],
-      actions: [
-        {
-          label: "Retry",
-          variant: "primary",
-          onClick: () => this.scene.restart(),
-        },
-        {
-          label: "Menu",
-          variant: "secondary",
-          onClick: () => this.scene.start("MainMenuScene"),
-        },
-      ],
+      rows: resultRows(matchStats.lastSummary, {
+        leadRows: [
+          {
+            label: "Ships remaining",
+            value: `${this.livingShips(this.playerShipIds).length}`,
+          },
+          { label: "Boss hull remaining", value: `${bossHullPct}%` },
+          {
+            label: "Raid time",
+            value: formatMatchClock(
+              EpicBattleScene.RAID_DURATION_MS - this.raidTimer.remainingMs,
+            ),
+          },
+        ],
+      }),
+      actions: {
+        onRematch: () => this.scene.restart({ rematch: true }),
+        onSetup: () => this.scene.restart(),
+        setupLabel: "Back to setup",
+        onMenu: () => this.scene.start("MainMenuScene"),
+      },
     });
   }
 }

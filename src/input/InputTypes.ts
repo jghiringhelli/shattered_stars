@@ -19,19 +19,7 @@ export type ActionIntent =
   | "SELECT"
   | "CONFIRM"
   | "CANCEL"
-  | "CYCLE_NEXT"
-  | "CYCLE_PREV"
-  // Tactical maneuver dial
-  | "SELECT_MANEUVER_1"
-  | "SELECT_MANEUVER_2"
-  | "SELECT_MANEUVER_3"
-  | "SELECT_MANEUVER_4"
-  | "SELECT_MANEUVER_5"
-  | "EXECUTE_ACTION"
   | "PAUSE"
-  // Camera
-  | "FOCUS_SELECTED"
-  | "RESET_CAMERA"
   // Continuous flight — steering/throttle (held, digital or analog `value`)
   | "STEER_LEFT"
   | "STEER_RIGHT"

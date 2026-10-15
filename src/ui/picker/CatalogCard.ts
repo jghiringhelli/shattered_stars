@@ -36,7 +36,7 @@ const CARD = {
   pointsGap: 8,
   tagGap: 4,
   tagPadX: 4,
-  lockSize: 11,
+  lockSize: 12,
   lockTextGap: 6,
   lockedSpriteAlpha: 0.35,
   lockedHintAlpha: 0.8,

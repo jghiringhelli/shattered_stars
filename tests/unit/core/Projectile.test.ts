@@ -5,6 +5,7 @@
 import { describe, it, expect } from "vitest";
 import {
   createProjectile,
+  ProjectileIdSequence,
   updateProjectile,
   isProjectileAlive,
   checkProjectileHit,
@@ -39,11 +40,29 @@ describe("Projectile", () => {
       expect(proj.damage).toBe(3);
     });
 
-    it("should generate unique IDs", () => {
-      const proj1 = createProjectile(0, 0, 0, "ship-1", "terran_hegemony");
-      const proj2 = createProjectile(0, 0, 0, "ship-1", "terran_hegemony");
+    it("should generate unique IDs within a battle's sequence", () => {
+      const ids = new ProjectileIdSequence();
+      const args = [0, 0, 0, "ship-1", "terran_hegemony", 1, false, null, 0, 0] as const;
+      const proj1 = createProjectile(...args, ids);
+      const proj2 = createProjectile(...args, ids);
 
       expect(proj1.id).not.toBe(proj2.id);
+    });
+
+    it("should number two sequential battles identically", () => {
+      const first = new ProjectileIdSequence();
+      const second = new ProjectileIdSequence();
+      first.next();
+      first.next();
+
+      expect(second.next()).toBe("proj_1");
+    });
+
+    it("should derive the id from the shot without a sequence", () => {
+      const a = createProjectile(5, 6, 7, "ship-1", "terran_hegemony");
+      const b = createProjectile(5, 6, 7, "ship-1", "terran_hegemony");
+
+      expect(a.id).toBe(b.id);
     });
   });
 

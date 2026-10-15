@@ -2,7 +2,7 @@
  * PlayerProfileManager — persistence, XP awards, seed profiles (PRG-6, PRG-8).
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   PlayerProfileManager,
   createProfile,
@@ -35,17 +35,40 @@ describe("PlayerProfileManager", () => {
     vi.clearAllMocks();
   });
 
-  describe("PRG-8 seed profiles", () => {
-    it("seeds player + dev unlock-all + graded test profiles on first use", () => {
+  describe("PRG-8 default profile", () => {
+    beforeEach(() => {
+      vi.stubEnv("DEV", false);
+      vi.stubGlobal("location", { search: "" });
+    });
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it("gives a player exactly one fresh profile", () => {
       const profiles = PlayerProfileManager.list();
-      const ids = profiles.map((p) => p.id);
-      expect(ids).toContain("player-default");
-      expect(ids).toContain("dev-unlock-all");
-      expect(ids).toContain("test-novice");
-      expect(ids).toContain("test-veteran");
-      expect(ids).toContain("test-admiral");
+      expect(profiles.map((p) => p.id)).toEqual(["player-default"]);
+      expect(profiles[0]!.unlockAll).toBe(false);
+      expect(profiles[0]!.totalXp).toBe(0);
+    });
+    it("seeds the dev and graded test profiles only in a dev build", () => {
+      vi.stubEnv("DEV", true);
+      const ids = PlayerProfileManager.list().map((p) => p.id);
+      expect(ids).toEqual([
+        "player-default",
+        "dev-unlock-all",
+        "test-novice",
+        "test-veteran",
+        "test-admiral",
+      ]);
+    });
+    it("seeds the dev profiles with ?debug=1", () => {
+      vi.stubGlobal("location", { search: "?debug=1" });
+      expect(PlayerProfileManager.list().map((p) => p.id)).toContain(
+        "dev-unlock-all",
+      );
     });
     it("the dev profile unlocks every ship", () => {
+      vi.stubEnv("DEV", true);
       const dev = PlayerProfileManager.list().find(
         (p) => p.id === "dev-unlock-all",
       )!;
@@ -54,6 +77,7 @@ describe("PlayerProfileManager", () => {
       }
     });
     it("graded profiles have increasing XP", () => {
+      vi.stubEnv("DEV", true);
       const by = (id: string): PlayerProfile =>
         PlayerProfileManager.list().find((p) => p.id === id)!;
       expect(by("test-novice").totalXp).toBeLessThan(
@@ -63,9 +87,27 @@ describe("PlayerProfileManager", () => {
         by("test-admiral").totalXp,
       );
     });
+    it("drops dev profiles a player's old store still holds, keeping their progress", () => {
+      vi.stubEnv("DEV", true);
+      PlayerProfileManager.addXp("player-default", 700);
+      PlayerProfileManager.setActive("dev-unlock-all");
+      vi.stubEnv("DEV", false);
+      expect(PlayerProfileManager.list().map((p) => p.id)).toEqual([
+        "player-default",
+      ]);
+      expect(PlayerProfileManager.getActive().id).toBe("player-default");
+      expect(PlayerProfileManager.getActive().totalXp).toBe(700);
+    });
   });
 
   describe("active profile", () => {
+    beforeEach(() => {
+      vi.stubEnv("DEV", true);
+    });
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
     it("defaults to the fresh player and can be switched", () => {
       expect(PlayerProfileManager.getActive().id).toBe("player-default");
       PlayerProfileManager.setActive("dev-unlock-all");
@@ -77,6 +119,45 @@ describe("PlayerProfileManager", () => {
     });
   });
 
+  describe("reset progress", () => {
+    it("clears XP, stats and unlocks but keeps the profile and its name", () => {
+      PlayerProfileManager.awardBattleResult("player-default", {
+        kills: 4,
+        won: true,
+      });
+      const reset = PlayerProfileManager.resetProgress("player-default")!;
+      expect(reset.totalXp).toBe(0);
+      expect(reset.stats).toEqual({ battles: 0, kills: 0, wins: 0, losses: 0 });
+      expect(reset.unlockedShipIds).toEqual([]);
+      expect(reset.unlockedFactionIds).toEqual([]);
+      expect(reset.id).toBe("player-default");
+      expect(PlayerProfileManager.getActive().totalXp).toBe(0);
+    });
+    it("returns null for an unknown profile", () => {
+      expect(PlayerProfileManager.resetProgress("nope")).toBeNull();
+    });
+  });
+
+  describe("match XP", () => {
+    it("awardMatchResult adds the given XP and counts the battle", () => {
+      const updated = PlayerProfileManager.awardMatchResult("player-default", {
+        xp: 130,
+        kills: 3,
+        won: true,
+      })!;
+      expect(updated.totalXp).toBe(130);
+      expect(updated.stats).toEqual({ battles: 1, kills: 3, wins: 1, losses: 0 });
+    });
+    it("awardMatchResult never applies negative XP", () => {
+      const updated = PlayerProfileManager.awardMatchResult("player-default", {
+        xp: -9,
+        kills: 0,
+        won: false,
+      })!;
+      expect(updated.totalXp).toBe(0);
+      expect(updated.stats.losses).toBe(1);
+    });
+  });
   describe("PRG-6 XP awards", () => {
     it("awardBattleResult adds kill XP + win bonus and updates stats", () => {
       const before = PlayerProfileManager.getActive().totalXp;
@@ -115,11 +196,13 @@ describe("PlayerProfileManager", () => {
       expect(PlayerProfileManager.list().some((x) => x.id === p.id)).toBe(true);
     });
     it("refuses to delete the last remaining profile", () => {
+      vi.stubEnv("DEV", false);
       for (const p of PlayerProfileManager.list().slice(1))
         PlayerProfileManager.delete(p.id);
       const remaining = PlayerProfileManager.list();
       PlayerProfileManager.delete(remaining[0]!.id);
       expect(PlayerProfileManager.list().length).toBe(1);
+      vi.unstubAllEnvs();
     });
   });
 

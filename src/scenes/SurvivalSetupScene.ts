@@ -19,6 +19,7 @@ import {
   type RoguelikeRunService,
 } from "../systems/survival/RoguelikeRunService";
 import { RunSetupControls } from "../ui/survival/RunSetupControls";
+import { SetupKeyNav } from "../ui/menu/SetupKeyNav";
 import { SurvivalChoicePanel } from "../ui/survival/SurvivalChoicePanel";
 import { addDailyButton, openDailyPanel } from "../ui/survival/dailyMenu";
 import {
@@ -153,6 +154,9 @@ export class SurvivalSetupScene extends Phaser.Scene {
         this.launchDaily(),
       ),
     );
+    new SetupKeyNav(this, {
+      isActive: () => !this.controls.isTyping && !this.panel.isOpen,
+    });
   }
 
   /** Starts today's Daily challenge run (also the e2e entry point). */

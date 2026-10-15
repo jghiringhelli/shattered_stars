@@ -20,6 +20,7 @@ import {
   flyAround,
   onlineDebug,
   openOnlineLobby,
+  leaveBattle,
   startOnlineMatch,
   startOnlineRoom,
   waitForTicks,
@@ -30,6 +31,8 @@ import {
 const NETSIM = "40,15";
 /** Ticks of play compared: 60 s at 60 Hz. */
 const MATCH_TICKS = 3600;
+/** Ticks compared in each follow-up match played in the same pages. */
+const SECOND_MATCH_TICKS = 900;
 /** Real time allowed to simulate them (stalls included). */
 const PLAY_TIMEOUT_MS = 100_000;
 /** The same minute with four clients on one machine (each renders a full battle). */
@@ -224,6 +227,29 @@ test.describe("online battles stay in lockstep", () => {
     await guest.context().close();
   });
 
+  test("Two consecutive matches in the same pages: the second hashes identically (ids restart per battle)", async ({
+    browser,
+  }) => {
+    const host = await openOnlineLobby(browser, relay.port, NETSIM);
+    const guest = await openOnlineLobby(browser, relay.port, NETSIM);
+    const pages = [host, guest];
+    const scene = "ArcadeBattleScene";
+    await startOnlineRoom(pages, "reinforcements", scene);
+    await Promise.all(
+      pages.map((p) => waitForTicks(p, scene, SECOND_MATCH_TICKS, 90_000)),
+    );
+    await leaveBattle(pages);
+    await startOnlineRoom(pages, "reinforcements", scene);
+    await Promise.all([
+      ...pages.map((p, i) => flyAround(p, i * 5 + 1)),
+      ...pages.map((p) => waitForTicks(p, scene, SECOND_MATCH_TICKS, 90_000)),
+    ]);
+    const debug = [await onlineDebug(host, scene), await onlineDebug(guest, scene)];
+    report("Second match, same pages", debug);
+    expectIdentical(debug[0]!, debug[1]!, SECOND_MATCH_TICKS - 300);
+    await host.context().close();
+    await guest.context().close();
+  });
   test("Skirmish 2v2 with mixed-faction teams: four clients hash identically", async ({
     browser,
   }) => {

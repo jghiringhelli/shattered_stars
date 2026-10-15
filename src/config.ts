@@ -6,8 +6,6 @@
 export const GAME_WIDTH = 1280;
 export const GAME_HEIGHT = 720;
 export const BATTLEFIELD_SIZE = 6000; // Large open space; camera follows player at zoom ~0.25
-/** Turn-based field sized for X-Wing TMG proportions: Range 3 = 300px ≈ 37% of field, ships 29px at 0.9 zoom. */
-export const TURN_BASED_FIELD_SIZE = 800;
 
 // Timing
 export const LOGIC_FPS = 60;
@@ -43,19 +41,11 @@ export const ORDNANCE_DAMAGE_SCALE = 2;
  * holding a direction reads as a wide banking arc that still crosses the map.
  */
 export const SUSTAINED_TURN_DEGREES_PER_CYCLE = 30;
-export const MANEUVER_DURATION_BASE = 500; // ms for speed 1
-export const MANEUVER_DURATION_SCALE = 0.15; // Faster speeds are quicker
 
 // Combat ranges (in pixels)
 export const RANGE_1 = 100;
 export const RANGE_2 = 200;
 export const RANGE_3 = 300;
-
-// Camera
-export const CAMERA_ZOOM_MIN = 0.5;
-export const CAMERA_ZOOM_MAX = 2.0;
-export const CAMERA_ZOOM_SPEED = 0.1;
-export const CAMERA_FOLLOW_LERP = 0.1;
 
 // Colors per faction (for placeholder shapes)
 export const FACTION_COLORS = {

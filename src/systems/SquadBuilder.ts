@@ -3225,6 +3225,38 @@ export function exportSquad(squad: Squad): string {
   return btoa(JSON.stringify(data));
 }
 
+/** Most units a share code may carry (a legal squad is far smaller). */
+const MAX_IMPORTED_UNITS = 24;
+
+/**
+ * Check the decoded share-code payload before anything is built from it.
+ *
+ * @param data - Parsed JSON of a share code.
+ * @returns An error message, or null when the payload is well-formed.
+ */
+function importShapeError(data: unknown): string | null {
+  if (typeof data !== "object" || data === null) return "Invalid squad data";
+  const d = data as Record<string, unknown>;
+  if (d.v !== 1) return "Unsupported squad format version";
+  if (typeof d.f !== "string") return "Invalid squad data: faction";
+  if (typeof d.m !== "string" || !(d.m in SQUAD_POINT_LIMITS))
+    return "Invalid squad data: format";
+  if (!Array.isArray(d.u) || d.u.length > MAX_IMPORTED_UNITS)
+    return "Invalid squad data: units";
+  const badUnit = d.u.some(
+    (unit: unknown) =>
+      typeof unit !== "object" ||
+      unit === null ||
+      typeof (unit as { p?: unknown }).p !== "string" ||
+      ((unit as { g?: unknown }).g !== undefined &&
+        !(
+          Array.isArray((unit as { g?: unknown }).g) &&
+          ((unit as { g: unknown[] }).g).every((id) => typeof id === "string")
+        )),
+  );
+  return badUnit ? "Invalid squad data: unit" : null;
+}
+
 /**
  * Import squad from shareable string format
  */
@@ -3233,12 +3265,9 @@ export function importSquad(
   name: string,
 ): Squad | { error: string } {
   try {
-    const data = JSON.parse(atob(encoded));
-
-    if (data.v !== 1) {
-      return { error: "Unsupported squad format version" };
-    }
-
+    const data = JSON.parse(atob(encoded.trim()));
+    const shapeError = importShapeError(data);
+    if (shapeError) return { error: shapeError };
     const squad = createSquad(name, data.f, data.m);
 
     let currentSquad: Squad = squad;

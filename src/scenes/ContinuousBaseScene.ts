@@ -52,6 +52,7 @@ import { applyInstantStress } from "../arcade/ArcadeStress";
 import type { CombatModifiers } from "../core/CombatModifiers";
 import { random } from "../utils/random";
 import { matchStats } from "../telemetry/matchTelemetry";
+import { dealerOf } from "../telemetry/matchStatTypes";
 import type { ShipTelemetry } from "../debug/ShipTelemetry";
 import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback } from "../ui/hud/overlay";
@@ -371,6 +372,7 @@ export abstract class ContinuousBaseScene<
       toFriendly: target.owner === "player",
       shield: shieldsBefore - absorbed.shields,
       hull: Math.min(target.hull, hullDamage),
+      ...dealerOf(attacker),
     });
     target.shields = absorbed.shields;
     if (shieldsBefore > 0) {

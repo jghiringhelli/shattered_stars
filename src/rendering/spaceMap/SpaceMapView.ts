@@ -26,6 +26,7 @@ import {
 import type { MapTheme } from "./mapThemes";
 import { generateDecorField, planetStart, tileOffset } from "./parallaxMath";
 import { SpaceQualityGovernor } from "./spaceQualityGovernor";
+import { isMotionReduced } from "../../ui/settings/motionComfort";
 
 /** Depth of the lowest layer; background depth only orders objects among themselves. */
 const BASE_DEPTH = -1000;
@@ -240,7 +241,7 @@ export class SpaceMapView {
     }
     view.travelX = travel.x;
     view.travelY = travel.y;
-    view.seconds = this.scene.time.now / MS_PER_SECOND;
+    view.seconds = isMotionReduced() ? 0 : this.scene.time.now / MS_PER_SECOND;
     view.halfWidth = camera.width / (2 * camera.zoom);
     view.halfHeight = camera.height / (2 * camera.zoom);
     this.decor.update(view, level >= LEVEL_DUST_AND_DECOR, level >= LEVEL_PLANET);

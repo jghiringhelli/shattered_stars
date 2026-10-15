@@ -38,6 +38,13 @@ screenshots/verify/
 screenshots/review/
 tests/e2e/screenshots/playthrough/
 tests/e2e/screenshots/debug-*.png
+screenshots/qa/
+screenshots/vqa/
+screenshots/debug_*.png
+
+# Local tool configuration (machine-specific absolute paths; keep out of the repo)
+.mcp.json
+.claude/settings.local.json
 
 # Playwright output
 playwright-report/

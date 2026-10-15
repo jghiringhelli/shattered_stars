@@ -34,11 +34,10 @@ export interface ControlGroup {
 
 export const CONTROL_GROUPS: readonly ControlGroup[] = [
   {
-    title: "Flight & Combat",
+    title: "Flight",
     rows: [
       { label: "Steer", intents: ["STEER_LEFT", "STEER_RIGHT"] },
       { label: "Throttle Up / Down", intents: ["THRUST_UP", "THRUST_DOWN"] },
-      { label: "Primary Weapon", intents: [] }, // always autofires, no input
       { label: "Maneuver Key (Snap / Hook / Knife)", intents: ["MANEUVER"] },
       { label: "Snap Turn (180°)", intents: ["KTURN"] },
       { label: "Boost Dash", intents: ["BOOST"] },
@@ -52,14 +51,25 @@ export const CONTROL_GROUPS: readonly ControlGroup[] = [
       },
       { label: "Hook Loop", intents: ["SEGNOR_LEFT", "SEGNOR_RIGHT"] },
       { label: "Knife Roll", intents: ["TALLON_LEFT", "TALLON_RIGHT"] },
+    ],
+  },
+  {
+    title: "Weapons",
+    rows: [
+      { label: "Primary Weapon", intents: [] }, // always autofires, no input
+      { label: "Fire Secondary / Bomb", intents: ["FIRE_SECONDARY"] },
+      { label: "Cycle Weapon", intents: ["WEAPON_CYCLE"] },
+      { label: "Cloak", intents: ["CLOAK"] },
+    ],
+  },
+  {
+    title: "Squad",
+    rows: [
       { label: "Mark Target (squad focus)", intents: ["MARK_TARGET"] },
       {
         label: "Hero Powers (Campaign)",
         intents: ["HERO_POWER_1", "HERO_POWER_2"],
       },
-      { label: "Fire Secondary / Bomb", intents: ["FIRE_SECONDARY"] },
-      { label: "Cycle Weapon", intents: ["WEAPON_CYCLE"] },
-      { label: "Cloak", intents: ["CLOAK"] },
       { label: "Cycle Crew Role", intents: ["CREW_CYCLE"] },
       {
         label: "Commander Orders",
@@ -73,39 +83,19 @@ export const CONTROL_GROUPS: readonly ControlGroup[] = [
     ],
   },
   {
-    title: "Tactical & Camera",
+    title: "Camera & UI",
     rows: [
       {
         label: "Pan Camera",
         intents: ["PAN_UP", "PAN_DOWN", "PAN_LEFT", "PAN_RIGHT"],
       },
       { label: "Zoom In / Out", intents: ["ZOOM_IN", "ZOOM_OUT"] },
-      {
-        label: "Select Maneuver",
-        intents: [
-          "SELECT_MANEUVER_1",
-          "SELECT_MANEUVER_2",
-          "SELECT_MANEUVER_3",
-          "SELECT_MANEUVER_4",
-          "SELECT_MANEUVER_5",
-        ],
-      },
-      { label: "Execute Action", intents: ["EXECUTE_ACTION"] },
-      { label: "Focus Selected Ship", intents: ["FOCUS_SELECTED"] },
-      { label: "Reset Camera", intents: ["RESET_CAMERA"] },
-      { label: "Cycle Selection", intents: ["CYCLE_NEXT", "CYCLE_PREV"] },
-    ],
-  },
-  {
-    title: "Menus & System",
-    rows: [
       { label: "Select / Confirm", intents: ["SELECT", "CONFIRM"] },
       { label: "Cancel / Back", intents: ["CANCEL"] },
       { label: "Pause", intents: ["PAUSE"] },
     ],
   },
 ];
-
 const NICE_KEY_NAMES: Record<string, string> = {
   UP: "↑",
   DOWN: "↓",

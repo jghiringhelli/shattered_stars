@@ -165,15 +165,15 @@ describe("KeyboardAdapter", () => {
 
   it("respects exact modifier matching (unshifted binding does not fire while shift is held)", () => {
     const bindings: KeyboardBinding[] = [
-      { key: "TAB", intent: "CYCLE_NEXT" },
-      { key: "TAB", intent: "CYCLE_PREV", modifiers: { shift: true } },
+      { key: "TAB", intent: "WEAPON_CYCLE" },
+      { key: "TAB", intent: "CLOAK", modifiers: { shift: true } },
     ];
     const adapter = new KeyboardAdapter(scene, bindings);
     adapter.init();
 
     setKeyDown("SHIFT", true);
     setKeyDown("TAB", true);
-    expect(adapter.poll().map((e) => e.intent)).toEqual(["CYCLE_PREV"]);
+    expect(adapter.poll().map((e) => e.intent)).toEqual(["CLOAK"]);
   });
 
   it("regression: a keydown+keyup that both happen between two polls still fires the edge intent", () => {

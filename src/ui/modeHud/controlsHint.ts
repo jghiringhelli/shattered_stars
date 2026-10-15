@@ -12,8 +12,8 @@ export const FLIGHT_CONTROLS_HINT =
   "UP/DOWN SPEED · 2×UP BOOST · LEFT/RIGHT TAP DRIFT, HOLD BANK\n" +
   "Q/E HARD TURN · Z SNAP · WEAPONS AUTOFIRE · ESC PAUSE";
 
-/** Hint opacity — present but quiet. */
-const HINT_ALPHA = 0.7;
+/** Hint opacity — present but readable over nebulae and hazard zones. */
+const HINT_ALPHA = 0.9;
 
 /**
  * @param scene - Owning scene.
@@ -28,7 +28,7 @@ export function createControlsHint(
     HOLO_SPACING.lg,
     FLIGHT_CONTROLS_HINT,
     "caption",
-    HOLO_PALETTE.textMuted,
+    HOLO_PALETTE.textSecondary,
   )
     .setOrigin(0.5, 0)
     .setAlign("center")

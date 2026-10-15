@@ -39,7 +39,7 @@ const SHOOTER = { id: "s", side: "a", x: 3000, y: 3000, angle: 0 };
 
 describe("launchShot", () => {
   it("leaves the nose heading where the ship points when unguided", () => {
-    const shot = launchShot(SHOOTER, TORPEDO, null, WORLD);
+    const shot = launchShot(SHOOTER, TORPEDO, null, WORLD, "s1");
     expect(shot.y).toBeLessThan(3000);
     expect(shot.angle).toBe(0);
     expect(shot.damage).toBe(TORPEDO.damage);
@@ -50,7 +50,7 @@ describe("launchShot", () => {
     // 30° right of the nose, inside the launch arc: the pilot aims the
     // launcher, the warhead then tracks its target from the first frame.
     const target = body({ x: 3000 + 150, y: 3000 - 260 });
-    const shot = launchShot(SHOOTER, TORPEDO, target, WORLD);
+    const shot = launchShot(SHOOTER, TORPEDO, target, WORLD, "s1");
     expect(shot.targetId).toBe("t");
     expect(shot.angle).toBe(0);
     expect(shot.targetFix).toEqual({ x: target.x, y: target.y });
@@ -65,7 +65,7 @@ describe("a locked launch against a manoeuvring fighter", () => {
   ): boolean {
     const frameMs = 16;
     let target = start;
-    let shot = launchShot(SHOOTER, spec, target, WORLD);
+    let shot = launchShot(SHOOTER, spec, target, WORLD, "s1");
     while (shot.lifetimeMs > 0) {
       target = {
         ...target,
@@ -106,7 +106,7 @@ describe("a locked launch against a manoeuvring fighter", () => {
 
 describe("flyShot", () => {
   it("turns toward its target and spends turn budget", () => {
-    const shot = launchShot(SHOOTER, TORPEDO, null, WORLD);
+    const shot = launchShot(SHOOTER, TORPEDO, null, WORLD, "s1");
     const flown = flyShot(shot, { x: 3300, y: 3000 }, 100, WORLD);
     expect(flown.angle).toBeGreaterThan(0);
     expect(flown.homingTurnBudget).toBeLessThan(shot.homingTurnBudget);
@@ -119,6 +119,7 @@ describe("flyShot", () => {
       TORPEDO,
       null,
       WORLD,
+      "s2",
     );
     const flown = flyShot(atEdge, { x: WORLD - 100, y: atEdge.y }, 100, WORLD);
     expect(flown.angle).toBeGreaterThan(180);
@@ -126,14 +127,14 @@ describe("flyShot", () => {
 
   it("flies straight once the budget is spent", () => {
     const spent = {
-      ...launchShot(SHOOTER, TORPEDO, null, WORLD),
+      ...launchShot(SHOOTER, TORPEDO, null, WORLD, "s1"),
       homingTurnBudget: 0,
     };
     expect(flyShot(spent, { x: 3300, y: 3000 }, 100, WORLD).angle).toBe(0);
   });
 
   it("wraps onto the map", () => {
-    const shot = { ...launchShot({ ...SHOOTER, y: 5 }, TORPEDO, null, WORLD) };
+    const shot = { ...launchShot({ ...SHOOTER, y: 5 }, TORPEDO, null, WORLD, "s1") };
     const flown = flyShot(shot, null, 100, WORLD);
     expect(flown.y).toBeGreaterThan(WORLD - 100);
   });
@@ -141,13 +142,13 @@ describe("flyShot", () => {
 
 describe("shotImpact", () => {
   it("strikes a hostile hull on its path, even between frames", () => {
-    const shot = launchShot(SHOOTER, TORPEDO, body(), WORLD);
+    const shot = launchShot(SHOOTER, TORPEDO, body(), WORLD, "s1");
     const flown = flyShot(shot, null, 600, WORLD);
     expect(shotImpact(shot, flown, [body({ y: 2850 })], WORLD)?.id).toBe("t");
   });
 
   it("passes through friends and the destroyed", () => {
-    const shot = launchShot(SHOOTER, TORPEDO, body(), WORLD);
+    const shot = launchShot(SHOOTER, TORPEDO, body(), WORLD, "s1");
     const flown = flyShot(shot, null, 600, WORLD);
     expect(
       shotImpact(shot, flown, [body({ y: 2850, side: "a" })], WORLD),

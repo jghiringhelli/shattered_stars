@@ -35,6 +35,10 @@ const MODAL_CSS = `
 .ss-modal__panel kbd{font-family:ui-monospace,Consolas,monospace;color:#ffcc66}
 .ss-modal__panel .ss-muted{color:#8899aa;font-size:12px}
 .ss-modal__panel .ss-keys{display:grid;grid-template-columns:1fr auto;gap:2px 18px;margin:6px 0}
+.ss-modal__panel .ss-legend{display:grid;grid-template-columns:minmax(170px,1.3fr) minmax(120px,1fr) minmax(120px,1fr);gap:3px 16px;margin:6px 0}
+.ss-modal__panel .ss-legend__head{color:#88aacc;font-size:12px;letter-spacing:1px}
+.ss-modal__panel .ss-legend span:not(.ss-legend__head):nth-child(3n+2),.ss-modal__panel .ss-legend span:not(.ss-legend__head):nth-child(3n){font-family:ui-monospace,Consolas,monospace;color:#ffcc66}
+.ss-modal__panel--wide{width:min(900px,96vw)}
 .ss-modal__panel .ss-keys span:nth-child(even){font-family:ui-monospace,Consolas,monospace;color:#ffcc66;text-align:right}
 .ss-modal__panel label{display:block;margin:10px 0 4px;color:#88aacc;font-size:12px}
 .ss-modal__panel select,.ss-modal__panel textarea{width:100%;box-sizing:border-box;padding:8px;color:#ddeeff;background:#080a16;border:1px solid #445577;border-radius:6px;font:inherit}
@@ -58,6 +62,8 @@ export interface ModalOptions {
   readonly build: (body: HTMLElement, close: () => void) => void;
   /** Runs once after the modal closed (any reason). */
   readonly onClose?: () => void;
+  /** Wider panel for tables. */
+  readonly wide?: boolean;
 }
 
 /** An open modal. */
@@ -162,7 +168,10 @@ export function openModal(options: ModalOptions): ModalHandle {
   const body = h("div");
   const panel = h(
     "div",
-    { class: "ss-modal__panel", tabindex: "-1" },
+    {
+      class: `ss-modal__panel${options.wide ? " ss-modal__panel--wide" : ""}`,
+      tabindex: "-1",
+    },
     heading,
     body,
   );

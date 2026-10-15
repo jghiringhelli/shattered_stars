@@ -43,11 +43,17 @@ export const CAMPAIGN_HUB_TERMS = {
     "Most valuable on fast, fragile ships that already fly out of the enemy's arc.",
     "agility",
   ),
-  "campaign.bonus_fire_rate": term(
-    "Weapon recycle",
-    "Shortens the pause between primary weapon shots. A smaller number means a faster gun.",
-    "Rapid Cyclers recycles 15% faster: a gun that fires once every second now fires about every 0.85 seconds.",
-    "More shots per cycle of flying means more chances to land hits while an enemy is in your front arc.",
+  "campaign.bonus_secondary_reload": term(
+    "Secondary reload",
+    "Shortens the reload of ordnance (missiles, torpedoes, bombs) and the pause between turret shots. Every ship attacks once per cycle with its primary guns, so faster primaries would change nothing.",
+    "Rapid Cyclers reloads 25% faster: a torpedo that needs 8 seconds to reload is ready again after 6.",
+    "Best on bombers and turret ships; a ship with only primary guns gains nothing.",
+  ),
+  "campaign.bonus_maneuver_recharge": term(
+    "Maneuver recharge",
+    "Shortens the wait before boost, barrel roll and Snap Turn can be used again.",
+    "Phase Cyclers recharges maneuvers 20% faster: a 4.5-second boost is ready again after 3.6.",
+    "Most valuable on interceptors that dodge and reposition every cycle.",
   ),
   "campaign.bonus_damage_taken": term(
     "Damage reduction",

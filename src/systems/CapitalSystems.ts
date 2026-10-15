@@ -16,6 +16,8 @@
  * - bridge: the ship stops projecting its faction aura (loses command/support).
  */
 
+import { random } from "../utils/random";
+
 export type CapitalSystemId = "engines" | "turrets" | "bridge";
 
 export interface CapitalSystemState {
@@ -96,7 +98,7 @@ export interface CapitalDamageResult {
 export function applyCapitalSystemDamage(
   systems: CapitalSystemsState,
   damage: number,
-  rng: () => number = Math.random,
+  rng: () => number = random.next,
 ): CapitalDamageResult {
   const hitSystemId = pickWeightedSystem(systems, rng);
   if (hitSystemId === null) {

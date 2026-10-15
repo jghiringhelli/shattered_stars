@@ -40,7 +40,7 @@ export async function openOnlineLobby(
   page.on("framenavigated", (frame) => {
     if (frame === page.mainFrame()) console.log(`[nav] ${frame.url()}`);
   });
-  page.on("pageerror", (error) => console.log(`[pageerror] ${error.message}`));
+  page.on("pageerror", (error) => console.log(`[pageerror] ${error.stack ?? error.message}`));
   page.on("console", (message) => {
     if (message.type() === "error") console.log(`[console] ${message.text()}`);
   });
@@ -268,4 +268,25 @@ export async function expectGuestSteersOnHost(
   const after = await seatShipAngle(host, sceneKey, 1);
   const turned = Math.abs(((after - before + 540) % 360) - 180);
   expect(turned).toBeGreaterThan(30);
+}
+
+/**
+ * Both clients leave the running battle through the pause menu's LEAVE (the
+ * AI takes their seats) and end up in the lobby with no room, ready to open
+ * a new one in the same pages.
+ *
+ * @param pages - The clients.
+ */
+export async function leaveBattle(pages: readonly Page[]): Promise<void> {
+  for (const page of pages) {
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(400);
+    await page.keyboard.press("ArrowLeft");
+    await page.waitForTimeout(400);
+    await page.keyboard.press("Enter");
+  }
+  for (const page of pages) {
+    await waitForScene(page, "LobbyScene", 20_000);
+    await waitForLobby(page, "s.connection === 'online' && s.room === null");
+  }
 }

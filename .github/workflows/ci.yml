@@ -1,50 +1,226 @@
 name: CI
 
-# Every push and pull request: lint, type-check, unit tests, production build.
+# Every push and pull request: static checks, sharded unit/balance/simulation tests, skill gates,
+# build + first-load budget, Playwright e2e (chromium, 4 shards). Firefox/WebKit smoke and
+# `npm audit` are non-blocking. Called by pages.yml so a deploy needs the same green gates.
+# Nightly balance/coverage work lives in nightly.yml.
 on:
   push:
   pull_request:
+  workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# The caller's workflow name is part of the key, so pages.yml's call never cancels the push run.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Players are only matched with identical builds (lockstep needs identical game data).
+  VITE_GAME_BUILD: ${{ github.sha }}
+
 jobs:
-  ci:
+  static:
+    name: Lint, types, cycles, quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Type check (src + server, then tests + scripts)
+        run: npm run typecheck:all
+      - name: Import cycles
+        run: npm run check:cycles
+      - name: Quality ratchet (file/function/parameter limits)
+        run: npm run quality:check
+
+  unit:
+    name: Unit, balance, simulation (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Vitest shard
+        run: npx vitest run tests/unit tests/balance tests/simulation --shard=${{ matrix.shard }}/4
+
+  integration:
+    name: Integration (relay)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx vitest run tests/integration
+
+  skill:
+    name: Piloting skill gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run test:skill
+
+  build:
+    name: Build and first-load budget
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Type check
-        run: npx tsc --noEmit
-
-      - name: Type check tests and scripts
-        run: npx tsc -p tsconfig.tests.json --noEmit
-
-      - name: Unit, balance and simulation tests
-        run: npx vitest run tests/unit tests/balance tests/simulation
-
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
       - name: Build
         run: npm run build
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
+      - name: Install Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Install Chromium system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      - name: First-load budget (fails above 10 MB)
+        shell: bash
+        run: npm run measure:first-load -- --budget-mb 10 | tee first-load.txt
+      - name: Publish the measurement
+        if: always()
+        run: |
+          {
+            echo '### First load (to main menu)'
+            echo '```'
+            cat first-load.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/
           retention-days: 7
+
+  e2e:
+    name: E2E chromium (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-chromium-${{ hashFiles('package-lock.json') }}
+      - name: Install Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Install Chromium system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      # playwright.config.ts starts `npm run dev` on :3003 itself (window.game exists in dev builds only)
+      # and uses retries=1, 2 workers, failure-only screenshots and on-first-retry traces when CI is set.
+      - name: Playwright shard
+        run: npx playwright test --project=chromium --shard=${{ matrix.shard }}/4
+      - name: Upload report and traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ matrix.shard }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  cross-browser:
+    name: Firefox and WebKit smoke (non-blocking)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-all-${{ hashFiles('package-lock.json') }}
+      - name: Install browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Install system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium firefox webkit
+      - name: Smoke (Chromium, Firefox, WebKit; Canvas and WebGL)
+        run: npx playwright test tests/e2e/cross-browser.spec.ts --project=chromium
+        env:
+          BROWSERS: all
+      - name: Upload report and traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-cross-browser
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  audit:
+    name: npm audit (report only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Audit everything (summary only)
+        if: always()
+        run: npm audit --audit-level=critical || true

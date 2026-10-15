@@ -1,32 +1,24 @@
-#!/bin/bash
-echo "🔨 Running build check..."
-if [ -f "pyproject.toml" ] || [ -f "setup.py" ] || [ -f "requirements.txt" ]; then
-  STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$')
-  if [ -n "$STAGED_PY" ]; then
-    for file in $STAGED_PY; do
-      python -m py_compile "$file" 2>&1
-      if [ $? -ne 0 ]; then
-        echo "❌ Syntax error in $file"
-        exit 1
-      fi
-    done
-    echo "  ✅ Python syntax OK"
-  fi
+#!/usr/bin/env bash
+# Type-check both projects (src + server, then tests + scripts). Incremental, so repeat runs are fast.
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
+if ! echo "$STAGED" | grep -qE '\.(ts|tsx)$|^tsconfig.*\.json$|^package(-lock)?\.json$'; then
+  echo "  compile: no TypeScript changes, skipped"
+  exit 0
 fi
-if [ -f "tsconfig.json" ]; then
-  npx tsc --noEmit 2>&1
-  if [ $? -ne 0 ]; then
-    echo "❌ TypeScript compilation failed."
-    exit 1
-  fi
-  echo "  ✅ TypeScript compilation OK"
+
+CACHE_DIR="node_modules/.cache/precommit"
+mkdir -p "$CACHE_DIR"
+
+npx --no-install tsc --noEmit --incremental --tsBuildInfoFile "$CACHE_DIR/src.tsbuildinfo" 2>&1 &
+SRC_PID=$!
+npx --no-install tsc -p tsconfig.tests.json --noEmit --incremental --tsBuildInfoFile "$CACHE_DIR/tests.tsbuildinfo" 2>&1 &
+TESTS_PID=$!
+
+STATUS=0
+wait "$SRC_PID" || STATUS=1
+wait "$TESTS_PID" || STATUS=1
+if [ "$STATUS" -ne 0 ]; then
+  echo "TypeScript compilation failed (tsconfig.json and/or tsconfig.tests.json)."
+  exit 1
 fi
-if [ -f "tsconfig.tests.json" ]; then
-  npx tsc -p tsconfig.tests.json --noEmit 2>&1
-  if [ $? -ne 0 ]; then
-    echo "❌ TypeScript compilation of tests/scripts failed."
-    exit 1
-  fi
-  echo "  ✅ Tests/scripts compilation OK"
-fi
-echo "🔨 Build check passed"
+echo "  compile: tsc (src + tests/scripts) OK"

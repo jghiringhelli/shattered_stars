@@ -37,6 +37,9 @@ export async function waitForScene(
 export async function waitForMenuReady(page: Page): Promise<void> {
   // Allow up to 50s for cold Vite boot with 4 parallel workers
   await waitForScene(page, "MainMenuScene", 50_000);
+  // Scenes load on first start (src/scenes/lazy); specs patch scene instances before starting them,
+  // so register them all here. tests/e2e/lazy-scenes.spec.ts covers the lazy path itself.
+  await page.evaluate(() => (window as any).ensureAllScenes());
   await page.waitForFunction(
     () => {
       const g = (window as any).game;

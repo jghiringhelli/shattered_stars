@@ -24,6 +24,12 @@ async function main(): Promise<void> {
     throw error;
   }
   const logger = createLogger(config.logLevel);
+  const fatal = (kind: string) => (error: unknown): void => {
+    logger.error(kind, { error: error instanceof Error ? error.stack ?? error.message : String(error) });
+    process.exit(1);
+  };
+  process.on("uncaughtException", fatal("uncaught exception"));
+  process.on("unhandledRejection", fatal("unhandled rejection"));
   const relay = await startRelayServer(config, { logger });
   const stop = (signal: string): void => {
     logger.info("shutting down", { signal });

@@ -13,7 +13,6 @@ import {
   bankSquashFor,
   type BankState,
 } from "../rendering/ShipBanking";
-import { showConfirmDialog } from "../ui/ConfirmDialog";
 import { updateCooldowns } from "../core/ArcadeControls";
 import {
   type GestureState,
@@ -26,10 +25,11 @@ import {
   CANNON_BOLT_WIDTH_PX,
 } from "../rendering/BoltRenderer";
 import { InputManager } from "../input/InputManager";
-import { openSettingsOverBattle } from "./battleUi/openSettingsOverBattle";
+import { BattlePauseMenu } from "./battleUi/BattlePauseMenu";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import { trackModeEnd, trackModeStart } from "../telemetry/telemetry";
 import { matchStats } from "../telemetry/matchTelemetry";
+import { dealerOf } from "../telemetry/matchStatTypes";
 import { cycleEvent, stressEvent } from "../telemetry/matchEvents";
 import type { ActionIntent } from "../input/InputTypes";
 import { getShipDefinition } from "../data/ShipDefinitions";
@@ -103,7 +103,6 @@ import {
   type FrameCache,
 } from "../arcade/systems/ArcadeFrameCache";
 import { checkVictoryCondition } from "../arcade/systems/ArcadeVictorySystem";
-import { PlayerProfileManager } from "../systems/PlayerProfile";
 import {
   createFleeState,
   updateFleeState,
@@ -176,10 +175,8 @@ import {
   ArcadeBattleHud,
   type ArcadeHudReadout,
 } from "./arcadeBattle/ArcadeBattleHud";
-import {
-  createEndOverlay,
-  createPauseOverlay,
-} from "./arcadeBattle/ArcadeOverlays";
+import { showResultsPanel, type ResultsActions } from "../ui/results/ResultsPanel";
+import { resultRows } from "../ui/results/resultsModel";
 import { spawnDeflectFlash } from "./arcadeBattle/hitFx";
 import {
   ArcadeBotFleet,
@@ -401,7 +398,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private perfState: PerformanceState = createPerformanceState();
   private gameEnded = false;
   private isPaused = false;
-  private pauseOverlay: Phaser.GameObjects.Container | null = null;
+  private pauseMenu: BattlePauseMenu | null = null;
 
   private fleeState: FleeState = createFleeState();
   private damageThisFrame = false;
@@ -812,7 +809,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.framesAlive = 0;
     this.score = 0;
     this.isPaused = false;
-    this.pauseOverlay = null;
+    this.pauseMenu = null;
     this.activeAuras = new Map();
     this.playerWasAuraCovered = false;
     this.pilotControls = new Map();
@@ -1074,6 +1071,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   private setupInput(): void {
     setupSceneInput(this);
+    this.createPauseMenu();
     this.inputSubscriptionIds.push(
       InputManager.onAny((event) => {
         if (this.trackedEdgeIntents.has(event.intent)) {
@@ -1134,26 +1132,31 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.hud?.setVisible(false);
     this.scenario?.setHudVisible(false);
     this.reinforcements?.setHudVisible(false);
-    this.pauseOverlay = createPauseOverlay(this, {
-      onResume: () => this.resumeBattle(),
-      onSettings: () => openSettingsOverBattle(this),
-      onQuit: () =>
-        showConfirmDialog({
-          scene: this,
-          message: "Quit to menu? Battle progress will be lost.",
-          onConfirm: () => this.scene.start("MainMenuScene"),
-        }),
-    });
+    this.pauseMenu?.show();
   }
 
   /** Close the pause menu and resume the battle. */
   private resumeBattle(): void {
     this.isPaused = false;
-    this.pauseOverlay?.destroy();
-    this.pauseOverlay = null;
+    this.pauseMenu?.hide();
     this.hud?.setVisible(true);
     this.scenario?.setHudVisible(true);
     this.reinforcements?.setHudVisible(true);
+  }
+
+  /** The shared pause menu (hidden until ESC / Start); online it never freezes the battle. */
+  private createPauseMenu(): void {
+    this.pauseMenu = new BattlePauseMenu({
+      scene: this,
+      legend: "squad",
+      online: this.online !== null,
+      onResume: () => this.resumeBattle(),
+      onRestart: () => this.scene.start("ArcadeBattleScene"),
+      onQuit: () => this.scene.start("MainMenuScene"),
+      ensurePaused: () => {
+        if (!this.online) this.pauseBattle();
+      },
+    });
   }
 
   /**
@@ -1923,6 +1926,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       toFriendly: target.team === this.viewTeam(),
       shield: before.shields - target.shields,
       hull: before.hull - target.hull,
+      ...dealerOf(attacker),
     });
     if (this.damageNumbersEnabled) {
       this.showFloatingText(
@@ -2537,20 +2541,6 @@ export class ArcadeBattleScene extends Phaser.Scene {
     );
   }
 
-  /** Award global progression XP for this battle (score is exactly KILL_SCORE per kill). */
-  private awardProgressionXp(victory: boolean): void {
-    try {
-      const kills = Math.max(0, Math.floor(this.score / KILL_SCORE));
-      const active = PlayerProfileManager.getActive();
-      PlayerProfileManager.awardBattleResult(active.id, {
-        kills,
-        won: victory,
-      });
-    } catch (e) {
-      console.error("Failed to award progression XP:", e);
-    }
-  }
-
   /**
    * Show the victory / defeat screen. The battle HUD is hidden and the
    * camera returns to zoom 1 so the overlay buttons hit-test correctly.
@@ -2573,36 +2563,49 @@ export class ArcadeBattleScene extends Phaser.Scene {
       this.viewFaction(),
       victory ? "victory" : "defeat",
     );
-    this.awardProgressionXp(victory);
     this.hud?.hideFleeWarning();
     this.hud?.setVisible(false);
-    const { onRetry, onMenu } = this.endScreenActions();
-    if (this.scenario?.showResult({ onRetry, onMenu })) return;
-    createEndOverlay(this, {
-      victory,
-      score: this.score,
-      pointsDestroyed: this.playerSideScore.destroyedPoints,
-      pointsLost: this.enemySideScore.destroyedPoints,
-      ...this.reinforcements?.endOverlayExtras(),
-      onRetry,
-      onMenu,
+    const actions = this.endScreenActions();
+    if (this.scenario?.showResult(actions)) return;
+    const extras = this.reinforcements?.endOverlayExtras();
+    showResultsPanel({
+      scene: this,
+      tone: victory ? "victory" : "defeat",
+      ...(extras?.outcomeLabel ? { banner: extras.outcomeLabel } : {}),
+      subtitle: `Score ${this.score}`,
+      rows: resultRows(matchStats.lastSummary, {
+        pointsDestroyed:
+          extras?.pointsDestroyed ?? this.playerSideScore.destroyedPoints,
+        pointsLost: extras?.pointsLost ?? this.enemySideScore.destroyedPoints,
+      }),
+      notes: extras?.details ?? [],
+      actions,
     });
   }
 
-  /** @returns RETRY / MENU: a local battle restarts; an online one returns to the room. */
-  private endScreenActions(): { onRetry: () => void; onMenu: () => void } {
+  /** @returns REMATCH / SQUAD / MENU: a local battle replays; an online one returns to the room. */
+  private endScreenActions(): ResultsActions {
     if (!this.online)
       return {
-        onRetry: () => this.scene.start("ArcadeBattleScene"),
+        onRematch: () => this.scene.start("ArcadeBattleScene"),
+        onSetup: () => this.scene.start("SquadBuilderScene", this.setupData()),
         onMenu: () => this.scene.start("MainMenuScene"),
       };
     return {
-      onRetry: () => this.scene.start(ONLINE_LOBBY_SCENE),
+      onRematch: () => this.scene.start(ONLINE_LOBBY_SCENE),
+      rematchLabel: "Rematch (room)",
       onMenu: () => {
         getOnlineSession(this.registry).leaveRoom();
         this.scene.start("MainMenuScene");
       },
     };
+  }
+
+  /** @returns Squad Builder entry data that reopens this battle's builder. */
+  private setupData(): { initialMode: string } {
+    const config = this.registry.get("battleConfig") as
+      { gameMode?: string } | undefined;
+    return { initialMode: config?.gameMode ?? "arcade" };
   }
 
   /** @returns Fingerprint of the battle (ships, ordnance, clocks, RNGs, scores). */
@@ -2618,6 +2621,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       ships: this.ships.values(),
       shots: runtime?.shotsInFlight ?? [],
       devices: runtime?.devicesOnField ?? [],
+      idCounters: runtime?.idCounters ?? [],
       scalars: [
         this.matchTimer,
         this.playerSideScore,

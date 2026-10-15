@@ -99,6 +99,11 @@ export class SecondaryWeapons {
     return this.field.devicesOnField;
   }
 
+  /** @returns The battle's ordnance id counters (state hash). */
+  get idCounters(): readonly number[] {
+    return this.field.idCounters;
+  }
+
   /** WEAPON_CYCLE. @param shipId - The ship. */
   cycleWeapon(shipId: string): void {
     const arsenal = this.arsenals.get(shipId);

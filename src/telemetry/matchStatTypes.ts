@@ -43,6 +43,8 @@ export type MatchStatEvent =
       readonly toFriendly: boolean;
       readonly hull: number;
       readonly shield: number;
+      /** The friendly ship that dealt it (credits the MVP). */
+      readonly byShip?: { readonly id: string; readonly definitionId: string };
     }
   | {
       readonly kind: "kill";
@@ -115,6 +117,20 @@ export interface MatchSummary extends TelemetryData {
   readonly repairHull: number;
   readonly deployedFriendly: number;
   readonly deployedHostile: number;
+  /** Ship definition id of the friendly ship that dealt the most damage. */
+  readonly mvpShip: string | null;
+  /** Damage dealt by {@link MatchSummary.mvpShip}. */
+  readonly mvpDamage: number;
+}
+
+/**
+ * @param ship - The attacker, when known.
+ * @returns A spreadable `byShip` credit for a damage event (empty when unknown).
+ */
+export function dealerOf(
+  ship: { readonly id: string; readonly definitionId: string } | null | undefined,
+): { readonly byShip?: { readonly id: string; readonly definitionId: string } } {
+  return ship ? { byShip: { id: ship.id, definitionId: ship.definitionId } } : {};
 }
 
 /**

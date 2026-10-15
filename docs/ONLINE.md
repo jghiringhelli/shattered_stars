@@ -68,13 +68,13 @@ Relay (environment variables; full table in `server/src/config.ts`):
 | Variable | Default | Notes |
 |---|---|---|
 | `PORT` | 8080 | Fly and Render inject/expect it |
-| `ALLOWED_ORIGINS` | `*` | **Set to the game's origin in production**, e.g. `https://jghiringhelli.github.io` |
+| `ALLOWED_ORIGINS` | `*` (dev only) | **Required when `NODE_ENV=production`** (the Docker image): the game's origin, e.g. `https://jghiringhelli.github.io`. `*` in production needs the explicit opt-in `ALLOW_ANY_ORIGIN=true` |
 | `RECONNECT_WINDOW_MS` | 30000 | Seat kept for a dropped player |
 | `MAX_CONNECTIONS` / `MAX_CONNECTIONS_PER_ADDRESS` | 500 / 8 | |
 | `MAX_ROOMS` | 200 | |
 | `HEARTBEAT_INTERVAL_MS` / `HEARTBEAT_TIMEOUT_MS` | 5000 / 15000 | |
 | `QUICK_MATCH_READY_MS`, `START_COUNTDOWN_MS`, `LOAD_TIMEOUT_MS` | 20000, 3000, 30000 | |
-| `TRUST_PROXY` | true | Client address from `X-Forwarded-For` (both platforms proxy) |
+| `TRUST_PROXY` | false | Client address from `X-Forwarded-For`; set `true` only behind a proxy you control (`fly.toml` and `render.yaml` do) |
 | `LOG_LEVEL` | info | JSON lines on stdout/stderr |
 
 Game (build time, Vite):

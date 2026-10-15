@@ -158,6 +158,7 @@ import {
   trackModeStart,
 } from "../telemetry/telemetry";
 import { matchStats } from "../telemetry/matchTelemetry";
+import { dealerOf } from "../telemetry/matchStatTypes";
 import {
   layoutWave,
   reinforcementPoints,
@@ -188,9 +189,8 @@ import type {
   TriggerResult,
 } from "../systems/survival/RelicCombatEngine";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
-import { PauseMenu } from "../ui/PauseMenu";
+import { BattlePauseMenu } from "./battleUi/BattlePauseMenu";
 import { InputManager } from "../input/InputManager";
-import { openSettingsOverBattle } from "./battleUi/openSettingsOverBattle";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 
 /** Starter ships moved to data/survival/starters; re-exported for callers. */
@@ -214,9 +214,6 @@ const ELITE_ATTACK_BONUS = 1;
 
 /** Damage multiplier of a crit drafted by the player fleet. */
 const CRIT_DAMAGE_MULTIPLIER = 2;
-
-/** Floor on the fire-rate bonus's cooldown multiplier (at most 2x faster). */
-const MIN_PLAYER_COOLDOWN_MOD = 0.5;
 
 /** Relic hit-chance bonuses never push a shot above this. */
 const MAX_HIT_CHANCE = 0.95;
@@ -387,6 +384,7 @@ export class SurvivalScene extends Phaser.Scene {
   /** Bots, squad orders and marks of every AI-flown ship (enemies, escorts). */
   private readonly squadAi = new SquadBattleAi({
     worldSize: SURVIVAL_AI_WORLD_SIZE,
+    random: () => this.rules.rng.next(),
     safePointFor: (x, y) =>
       beltRetreatPoint(
         { x, y },
@@ -399,7 +397,7 @@ export class SurvivalScene extends Phaser.Scene {
   private cameraShakeEnabled = true;
 
   // Player input (routed through InputManager — see setupInput())
-  private pauseMenu!: PauseMenu;
+  private pauseMenu!: BattlePauseMenu;
   private inputSubscriptionIds: number[] = [];
 
   // Camera follow (manual — toroid wrap makes Phaser's startFollow jump at the seam)
@@ -780,8 +778,9 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   private createPauseMenu(): void {
-    this.pauseMenu = new PauseMenu({
+    this.pauseMenu = new BattlePauseMenu({
       scene: this,
+      legend: "survival",
       onResume: () => {
         this.isPaused = false;
       },
@@ -791,12 +790,12 @@ export class SurvivalScene extends Phaser.Scene {
         this.service.abandon();
         this.scene.start("SurvivalSetupScene");
       },
-      onSettings: () => {
-        openSettingsOverBattle(this);
-      },
       onQuit: () => {
         // The run stays saved at the node before this battle ("Continue").
         this.scene.start("MainMenuScene");
+      },
+      ensurePaused: () => {
+        if (!this.isPaused) this.togglePause();
       },
     });
   }
@@ -1641,22 +1640,19 @@ export class SurvivalScene extends Phaser.Scene {
   }
 
   /**
-   * Time between a ship's attacks: its weapon cooldown (the run's fire-rate
-   * bonus applies to the player fleet), never faster than once per cycle.
+   * Time between a ship's attacks: its weapon cooldown, never faster than
+   * once per cycle (the run's fire-rate bonus is a volley, see
+   * RelicCombatEngine.shot).
    *
    * @param ship - The ship.
    * @returns Attack interval (ms).
    */
   private attackIntervalOf(ship: SurvivalShip): number {
-    const isPlayer = ship.owner === "player";
-    const fireRate = isPlayer ? this.run.bonuses.fireRate : 0;
-    const cooldownMod = Math.max(MIN_PLAYER_COOLDOWN_MOD, 1 - fireRate);
-    const mutation = isPlayer
-      ? this.rules.engine.attackIntervalMultiplier(this.roleOf(ship))
-      : 1;
-    return attackIntervalMs(
-      ship.combatStats.weaponCooldown * cooldownMod * mutation,
-    );
+    const mutation =
+      ship.owner === "player"
+        ? this.rules.engine.attackIntervalMultiplier(this.roleOf(ship))
+        : 1;
+    return attackIntervalMs(ship.combatStats.weaponCooldown * mutation);
   }
 
   /**
@@ -1748,6 +1744,7 @@ export class SurvivalScene extends Phaser.Scene {
       targetMarked: marked,
       escortsAlive: Math.max(0, this.playerShipIds.length - 1),
       nowMs: this.time.now,
+      volleyRate: this.run.bonuses.fireRate,
     });
   }
 
@@ -1976,6 +1973,7 @@ export class SurvivalScene extends Phaser.Scene {
       toFriendly: target.owner === "player",
       shield: target.shields - after.shields,
       hull: Math.min(target.hull, hullDamage),
+      ...dealerOf(attacker),
     });
     if (after.shields < target.shields) {
       audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);

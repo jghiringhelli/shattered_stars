@@ -75,8 +75,8 @@ export interface SquadAiShip {
 export interface SquadBattleAiOptions {
   /** Torus edge (px). */
   readonly worldSize: number;
-  /** Uniform random source in [0, 1) for the pilots; default Math.random. */
-  readonly random?: () => number;
+  /** Uniform random source in [0, 1) for the pilots (seeded by the scene). */
+  readonly random: () => number;
   /**
    * Hazard escape: for a position, where a bot should flee to (the arena
    * centre near a belt...), or null when it is safe there.
@@ -112,7 +112,7 @@ export class SquadBattleAi {
   /** @param options - World size and the pilots' random source. */
   constructor(private readonly options: SquadBattleAiOptions) {
     const { worldSize } = options;
-    this.random = options.random ?? Math.random;
+    this.random = options.random;
     this.playerSquad = new SquadCommand({
       side: PLAYER_SIDE,
       aiLeader: false,

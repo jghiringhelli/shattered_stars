@@ -35,12 +35,14 @@ its own unlock cadence reflecting its playstyle.
 - **PRG-4 (MUST)** — Every faction's tier-0 (`minXp = 0`) MUST grant at least one flyable role
   so a just-unlocked faction is immediately playable.
 - **PRG-5 (MUST)** — `unlockAll` profiles MUST treat every ship as unlocked (dev/testing).
-- **PRG-6 (MUST)** — XP is awarded from battle outcomes across all modes via `XP_REWARDS`
-  (`perKill`, `win`, `loss`, `missionComplete`); XP only ever increases.
+- **PRG-6 (MUST)** — XP is awarded once per finished match in every mode (online included) via
+  `XP_REWARDS` / `MODE_XP_RULES` (see "XP awards"); XP only ever increases, except an explicit
+  progress reset.
 - **PRG-7 (SHOULD)** — Locked ships SHOULD surface a human requirement string (faction unlock
   XP or role-tier XP) so the picker can explain *why* and *when*.
-- **PRG-8 (MUST)** — Seed profiles MUST include a fresh player profile, a dev `unlockAll`
-  profile, and graded progression-test profiles (novice/veteran/admiral).
+- **PRG-8 (MUST)** — A player's store MUST hold exactly one fresh default profile; the dev
+  `unlockAll` profile and the graded progression-test profiles (novice/veteran/admiral) MUST exist
+  only in dev builds or with `?debug=1`.
 
 ## Starting configuration (see ProgressionData.ts for exact numbers)
 
@@ -56,14 +58,33 @@ its own unlock cadence reflecting its playstyle.
 `localStorage` key `shattered_stars_profiles` = `{ activeId, profiles: PlayerProfile[] }`,
 versioned. Independent of `shattered_stars_campaign_*`.
 
-## XP awards & testing
+## XP awards
 
-- Arcade battles award XP on the end screen: `kills × XP_REWARDS.perKill` plus the
-  win/loss bonus (`ArcadeBattleScene.awardProgressionXp`, kills derived exactly from score
-  at 100/kill). Playing arcade therefore advances the picker's unlocks.
-- Seeded profiles (created on first load): `player-default` (fresh), `dev-unlock-all`
-  (everything unlocked), `test-novice` (0 XP), `test-veteran` (3000 XP), `test-admiral`
-  (8000 XP).
-- Select a profile for a session with the `?profile=<id>` URL param, e.g.
-  `?profile=dev-unlock-all` to test with the full roster, or `?profile=test-veteran`
-  to test a mid-progression roster.
+XP is paid **once per match that ends with a result** (victory, defeat or draw), in every mode,
+online matches included. The hook is the match recorder (`matchStats` → `onResult` →
+`awardMatchXp`, `src/systems/matchXp.ts`); a quit, a restart or a rematch that replaces an
+unfinished match pays nothing, and finishing an already finished match again is a no-op, so
+nothing is double-awarded. Rules per mode (`src/data/ModeXp.ts`, constants in `XP_REWARDS`):
+
+| Mode (`mode` id) | Victory | Defeat / draw | Per hostile kill |
+|---|---|---|---|
+| Skirmish `skirmish`, Continuous `continuous`, Dogfight `dogfight`, Ace Duel `ace_duel` | 100 | 20 | 10 |
+| Boss Raid `boss_raid`, Campaign `campaign` (per mission) | 150 | 20 | 10 |
+| Survival `survival` (per node; a defeat ends the run) | 50 | 20 | 10 |
+| Survival run won (`runWon`) | +150 on the final node | — | — |
+
+Kills past 60 in one match earn nothing more (anti-farm). Flight School pays nothing. Because
+every mode pays, nobody is locked out of the picker's roster by never playing Skirmish.
+
+## Profiles
+
+A player has **one** profile (`player-default`, "Commander"). The dev / test profiles
+(`dev-unlock-all`, `test-novice` 0 XP, `test-veteran` 3000 XP, `test-admiral` 8000 XP) exist only
+in dev builds (`import.meta.env.DEV`) or when the page is opened with `?debug=1`; a player's
+store that still carries them loses them on the next read (progress on `player-default` is kept).
+Select one with `?profile=<id>` (ignored when the profile does not exist).
+
+The **PROFILE** link in the main-menu footer (and Settings › Advanced › PROFILE & PROGRESS) opens
+the progress panel: pilot name, level (`XP_PER_LEVEL` = 500), XP into the level, ships / factions
+unlocked, the battle record, and RESET PROGRESS behind a confirmation (clears XP, stats and
+unlocks; the profile stays).

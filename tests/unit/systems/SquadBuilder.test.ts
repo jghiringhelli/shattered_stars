@@ -298,6 +298,36 @@ describe("SquadBuilder", () => {
       const result = importSquad(futureVersionData, "Future Version");
       expect("error" in result).toBe(true);
     });
+
+    it("rejects a code whose units are not a list of pilot ids", () => {
+      const shapes = [
+        { v: 1, f: "terran_hegemony", m: "standard", u: "nope" },
+        { v: 1, f: "terran_hegemony", m: "standard", u: [{ p: 7 }] },
+        { v: 1, f: "terran_hegemony", m: "standard", u: [{ p: "x", g: [1] }] },
+        { v: 1, f: 3, m: "standard", u: [] },
+        { v: 1, f: "terran_hegemony", m: "no_such_format", u: [] },
+      ];
+      for (const shape of shapes) {
+        const result = importSquad(btoa(JSON.stringify(shape)), "Bad shape");
+        expect("error" in result, JSON.stringify(shape)).toBe(true);
+      }
+    });
+
+    it("rejects a code carrying an absurd number of units", () => {
+      const units = Array.from({ length: 500 }, () => ({ p: "viper_cadet", g: [] }));
+      const code = btoa(
+        JSON.stringify({ v: 1, f: "terran_hegemony", m: "standard", u: units }),
+      );
+      expect("error" in importSquad(code, "Huge")).toBe(true);
+    });
+
+    it("accepts a code pasted with surrounding whitespace", () => {
+      const squad = createSquad("Test", "terran_hegemony");
+      const added = addUnitToSquad(squad, "viper_cadet");
+      if ("error" in added) throw new Error(added.error);
+      const result = importSquad(`  ${exportSquad(added)}\n`, "Padded");
+      expect("error" in result).toBe(false);
+    });
   });
 
   describe("epic format validation", () => {

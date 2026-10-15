@@ -47,6 +47,12 @@ import {
 import { pickQuickBuild } from "./duel/duelSetupModel";
 import { openDuelTabById, stepDuelTab } from "./duel/duelSetupChrome";
 import { bindTabKeys } from "../ui/menu/DetailTabs";
+import { SetupKeyNav } from "../ui/menu/SetupKeyNav";
+import { consumeSceneData } from "./battleUi/consumeSceneData";
+import { remember, remembered } from "./duel/duelMemory";
+
+/** Values the remembered Ace Duel difficulty may hold. */
+const ACE_DIFFICULTIES = ["easy", "normal", "hard", "brutal"] as const;
 import {
   absorbDamage,
   combatantOf,
@@ -79,7 +85,8 @@ import {
 import type { ActiveAura } from "../systems/SupportAura";
 import { applyAllyAuraRepairs } from "../systems/aura/AllyAuraRepair";
 import { buildDuelHudSnapshot, playerTargetId } from "./duel/duelHudSnapshot";
-import { showDuelEndScreen } from "./duel/DuelEndScreen";
+import { showResultsPanel } from "../ui/results/ResultsPanel";
+import { resultRows } from "../ui/results/resultsModel";
 import {
   renderAceDuelSetup,
   type AceDuelDifficulty,
@@ -114,9 +121,8 @@ import {
 } from "../systems/PerformanceSystem";
 import type { ManeuverDefinition } from "../core/types";
 import { ACE_MATCHUPS, type AceMatchup } from "../data/AceMatchups";
-import { PauseMenu } from "../ui/PauseMenu";
+import { BattlePauseMenu } from "./battleUi/BattlePauseMenu";
 import { InputManager } from "../input/InputManager";
-import { openSettingsOverBattle } from "./battleUi/openSettingsOverBattle";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import {
   trackDeath,
@@ -124,6 +130,7 @@ import {
   trackModeStart,
 } from "../telemetry/telemetry";
 import { matchStats } from "../telemetry/matchTelemetry";
+import { dealerOf } from "../telemetry/matchStatTypes";
 import { browserStore } from "../systems/keyValueStore";
 import {
   createSideScore,
@@ -260,7 +267,11 @@ export class AceDuelScene extends Phaser.Scene {
   private crew: DuelBotCrew | null = null;
 
   // Player input (routed through InputManager — see setupInput())
-  private pauseMenu!: PauseMenu;
+  private pauseMenu!: BattlePauseMenu;
+  /** REMATCH / pause RESTART: skip the setup screen and replay the matchup. */
+  private rematchRequested = false;
+  /** Arrow / D-pad navigation of the setup screen (null outside setup). */
+  private setupNav: SetupKeyNav | null = null;
   private inputSubscriptionIds: number[] = [];
 
   // Camera follow (manual — toroid wrap makes Phaser's startFollow jump at the seam)
@@ -284,6 +295,12 @@ export class AceDuelScene extends Phaser.Scene {
 
   constructor() {
     super({ key: "AceDuelScene" });
+  }
+
+  /** @param data - `rematch: true` skips the setup screen and replays the matchup. */
+  init(data: { rematch?: boolean } = {}): void {
+    this.rematchRequested = data.rematch === true;
+    consumeSceneData(this);
   }
 
   create(): void {
@@ -315,10 +332,14 @@ export class AceDuelScene extends Phaser.Scene {
     this.loadCompletedMatchups();
     this.resetMatchState();
     this.weapons = createSceneWeapons(this, this.weaponsLink(), this.hitLedger);
+    const fromSettings = this.difficultyDefault.next(defaultDifficulty());
     this.difficulty =
-      this.difficultyDefault.next(defaultDifficulty()) ?? this.difficulty;
+      remembered("ace_duel", "difficulty", ACE_DIFFICULTIES) ??
+      fromSettings ??
+      this.difficulty;
     this.showSetupScreen();
-    // The one back affordance (ESC / gamepad B / right-click), setup only.
+    this.setupNav = new SetupKeyNav(this, { isActive: () => this.isSetupPhase });
+    this.setupNav.refresh();
     bindMenuBack(this, () => this.scene.start("MainMenuScene"), {
       isActive: () => this.isSetupPhase,
     });
@@ -329,6 +350,7 @@ export class AceDuelScene extends Phaser.Scene {
       },
       isActive: () => this.isSetupPhase,
     });
+    if (this.rematchRequested) this.startDuel();
 
     if (ShipTelemetry.isEnabled()) {
       this.telemetry = new ShipTelemetry();
@@ -468,6 +490,7 @@ export class AceDuelScene extends Phaser.Scene {
       this.setupActions(),
       (obj) => this.track(obj),
     );
+    this.setupNav?.refresh();
   }
 
   /**
@@ -580,9 +603,12 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   private startDuel(): void {
+    this.setupNav?.destroy();
+    this.setupNav = null;
     this.setupObjects.forEach((o) => o.destroy());
     this.setupObjects = [];
     this.isSetupPhase = false;
+    remember("ace_duel", { difficulty: this.difficulty });
     trackModeStart("ace_duel", { matchup: this.selectedMatchup.name });
     matchStats.start(
       "ace_duel",
@@ -792,19 +818,20 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   private createPauseMenu(): void {
-    this.pauseMenu = new PauseMenu({
+    this.pauseMenu = new BattlePauseMenu({
       scene: this,
+      legend: "duel",
       onResume: () => {
         this.isPaused = false;
       },
       onRestart: () => {
-        this.scene.restart();
-      },
-      onSettings: () => {
-        openSettingsOverBattle(this);
+        this.scene.restart({ rematch: true });
       },
       onQuit: () => {
         this.scene.start("MainMenuScene");
+      },
+      ensurePaused: () => {
+        if (!this.isPaused) this.togglePause();
       },
     });
   }
@@ -1177,6 +1204,7 @@ export class AceDuelScene extends Phaser.Scene {
       toFriendly: this.isPlayerSide(target.id),
       hull: target.hull - after.hull,
       shield: target.shields - after.shields,
+      ...dealerOf(attacker),
     });
     if (after.shields < target.shields) {
       audioManager.playSoundAt("shield_hit", target.x, target.y, 0.4);
@@ -1473,33 +1501,35 @@ export class AceDuelScene extends Phaser.Scene {
       this.completedMatchups.add(this.selectedMatchup.id);
       this.saveCompletedMatchups();
     }
-    this.showEndScreen(playerWon, playerWins, enemyWins, playerMatchupFaction);
+    this.showEndScreen(playerWon, playerWins, enemyWins);
   }
 
   /**
-   * The end-of-match panel with REMATCH / MENU.
+   * The end-of-match panel with REMATCH / BACK TO SETUP / MAIN MENU.
    *
    * @param playerWon - Whether the player took the match.
    * @param playerWins - Rounds the player won.
    * @param enemyWins - Rounds the opponent won.
-   * @param faction - The player's faction (accent), if known.
    */
   private showEndScreen(
     playerWon: boolean,
     playerWins: number,
     enemyWins: number,
-    faction: FactionId | undefined,
   ): void {
     const allDone = this.completedMatchups.size === ACE_MATCHUPS.length;
-    showDuelEndScreen(this, {
-      header: `Ace Duel \u2014 ${this.selectedMatchup.name ?? "match"}`,
-      title: playerWon ? "DUEL WON" : "DUEL LOST",
-      won: playerWon,
-      scoreLine: `Final score  ${playerWins}  \u2013  ${enemyWins}`,
+    showResultsPanel({
+      scene: this,
+      tone: playerWon ? "victory" : "defeat",
+      banner: playerWon ? "DUEL WON" : "DUEL LOST",
+      subtitle: `${this.selectedMatchup.name ?? "Match"}  \u00b7  final score  ${playerWins}  \u2013  ${enemyWins}`,
+      rows: resultRows(matchStats.lastSummary),
       notes: allDone ? ["\u2605 Duelist achievement unlocked"] : [],
-      accent: factionAccent(faction),
-      onRematch: () => this.scene.restart(),
-      onMenu: () => this.scene.start("MainMenuScene"),
+      actions: {
+        onRematch: () => this.scene.restart({ rematch: true }),
+        onSetup: () => this.scene.restart(),
+        setupLabel: "Back to setup",
+        onMenu: () => this.scene.start("MainMenuScene"),
+      },
     });
   }
 }

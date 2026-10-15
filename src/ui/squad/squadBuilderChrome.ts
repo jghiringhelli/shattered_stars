@@ -16,6 +16,7 @@ import { SQUAD_TYPE } from "./squadBuilderStyle";
 const CHROME_LAYOUT = {
   toggleW: 128,
   toggleH: 30,
+  squadsDrop: 32,
   primaryW: 220,
   secondaryW: 180,
   barH: 40,
@@ -55,6 +56,36 @@ export function createModeToggle(
   );
   attachTermTooltip(scene, button, simpleMode ? "mode.advanced" : "mode.simple");
   return button;
+}
+
+/**
+ * SQUADS button (save / share code / paste code / saved squads), left of the
+ * mode toggle on the header row.
+ *
+ * @param scene - Squad builder scene.
+ * @param onOpen - Opens the squads dialog.
+ * @returns The button.
+ */
+export function createSquadsButton(
+  scene: Phaser.Scene,
+  onOpen: () => void,
+): HoloPressButton {
+  const { toggleW, toggleH, squadsDrop } = CHROME_LAYOUT;
+  return createHoverButton(
+    scene,
+    scene.scale.width - MENU_LAYOUT.margin - toggleW / 2,
+    MENU_LAYOUT.titleY + squadsDrop,
+    {
+      width: toggleW,
+      height: toggleH,
+      color: HOLO_PALETTE.panelFill,
+      variant: "secondary",
+      label: "SQUADS",
+      font: `600 ${SQUAD_TYPE.label}px`,
+      icon: "fleet",
+    },
+    onOpen,
+  );
 }
 
 /** Callbacks for the advanced builder's action bar. */

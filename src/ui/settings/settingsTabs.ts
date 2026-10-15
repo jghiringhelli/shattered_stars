@@ -25,8 +25,11 @@ import { holoFont } from "../theme/holoFont";
 import { HOLO_PALETTE } from "../theme/HoloTheme";
 import { toCssColor } from "../theme/colorMath";
 import { downloadTextFile } from "./downloadFile";
+import { applyAccessibilityPreset } from "./accessibilityPreset";
+import { showConfirmDialog } from "../ConfirmDialog";
 import { openFeedbackDialog } from "../feedback/feedbackDialog";
 import { openWelcomeDialog } from "../welcome/welcomeDialog";
+import { openProgressDialog } from "../progress/progressDialog";
 import { openTelemetryStats } from "../telemetry/TelemetryStatsScene";
 import { PalettePreview } from "./PalettePreview";
 import { SettingsChoiceRow } from "./settingsChoiceRows";
@@ -174,6 +177,44 @@ export function buildAccessibilityTab(ctx: SettingsTabContext): void {
       (textScale) => after({ textScale }),
     ),
   );
+  ctx.addFocus(
+    new SettingsSwitchRow(
+      ctx.scene,
+      at(5, "Reduce Motion"),
+      a.reduceMotion,
+      (v) => after({ reduceMotion: v }),
+    ),
+  );
+  ctx.addFocus(
+    new SettingsSwitchRow(
+      ctx.scene,
+      at(6, "Sharp Scaling"),
+      a.sharpScaling,
+      (v) => after({ sharpScaling: v }),
+    ),
+  );
+  const presetY = rowsArea.y + 7 * (grid.rowHeight + grid.gap) + 28;
+  ctx.addFocus(
+    createHoverButton(
+      ctx.scene,
+      rowsArea.x + rowsArea.width / 2,
+      presetY,
+      {
+        ...BUTTON,
+        width: 320,
+        label: "ACCESSIBILITY PRESET",
+        color: HOLO_PALETTE.panelFill,
+        variant: "primary",
+      },
+      () => {
+        ctx.update(applyAccessibilityPreset(ctx.settings()));
+        ctx.notify(
+          "Preset on: colour-blind palette, high contrast, no flashes or motion, 115% text, low shake.",
+        );
+        ctx.rebuild();
+      },
+    ),
+  );
 }
 
 /**
@@ -196,11 +237,10 @@ export function buildGameplayTab(ctx: SettingsTabContext): void {
     ),
   );
   const toggles: ReadonlyArray<
-    [string, "markAssist" | "showDamageNumbers" | "showMinimap"]
+    [string, "markAssist" | "showDamageNumbers"]
   > = [
     ["Wingmen Mark Assist", "markAssist"],
     ["Damage Numbers", "showDamageNumbers"],
-    ["Minimap", "showMinimap"],
   ];
   toggles.forEach(([label, key], i) => {
     ctx.addFocus(
@@ -272,9 +312,15 @@ export function buildAdvancedTab(ctx: SettingsTabContext): void {
     ctx.rebuild();
   });
   button(buttonY + 104, "RESET ALL SETTINGS", () => {
-    ctx.update(DEFAULT_SETTINGS);
-    ctx.notify("All settings restored to defaults.", "warning");
-    ctx.rebuild();
+    showConfirmDialog({
+      scene: ctx.scene,
+      message: "Reset every setting to its default?",
+      onConfirm: () => {
+        ctx.update(DEFAULT_SETTINGS);
+        ctx.notify("All settings restored to defaults.", "warning");
+        ctx.rebuild();
+      },
+    });
   });
   button(buttonY + 156, "VIEW STATS", () => openTelemetryStats(ctx.scene));
   const feedbackY = buttonY + 220;
@@ -301,4 +347,5 @@ export function buildAdvancedTab(ctx: SettingsTabContext): void {
         }),
     }),
   );
+  button(feedbackY + 52, "PROFILE & PROGRESS", () => openProgressDialog());
 }

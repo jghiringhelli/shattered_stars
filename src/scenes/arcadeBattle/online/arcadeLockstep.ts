@@ -42,6 +42,8 @@ export interface ArcadeHashView {
   readonly ships: Iterable<ArcadeShip>;
   readonly shots: Iterable<HashedOrdnance>;
   readonly devices: Iterable<HashedOrdnance>;
+  /** Ordnance id counters of the battle. */
+  readonly idCounters?: readonly number[];
   /** Flat scalars (match timer, side scores, flags). */
   readonly scalars: readonly object[];
 }
@@ -65,7 +67,7 @@ export function hashArcade(view: ArcadeHashView): number {
       },
     ]);
   }
-  addOrdnance(h, view.shots, view.devices);
+  addOrdnance(h, view.shots, view.devices, view.idCounters);
   for (const scalar of view.scalars) addFields(h, scalar);
   return h.digest();
 }

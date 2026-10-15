@@ -151,11 +151,15 @@ export const SURVIVAL: BattleEntry = {
   sceneKey: "SurvivalScene",
   enter: async (page, options = {}) => {
     await openMenu(page);
-    await page.evaluate(() =>
-      (window as any).game.scene.start("SurvivalScene", {
-        factionId: "free_confederation",
-      }),
-    );
+    await page.evaluate(() => {
+      const g = (window as any).game;
+      // Like the real menu flow: the menu stops when a mode starts (a menu left
+      // running behind would also react to the pause menu's arrow keys).
+      g.scene
+        .getScenes(true)
+        .forEach((s: any) => g.scene.stop(s.sys.settings.key));
+      g.scene.start("SurvivalScene", { factionId: "free_confederation" });
+    });
     await waitForScene(page, "SurvivalScene", 30_000);
     await page.waitForFunction(
       () =>

@@ -2,7 +2,7 @@
  * measure_first_load — how many bytes a player downloads before the main
  * menu, from the production build in dist/.
  *
- *   npm run build && npx tsx scripts/measure_first_load.ts [--budget-mb 10]
+ *   npm run build && npx tsx scripts/measure_first_load.ts [--budget-mb 10] [--dist dist]
  *
  * Serves dist/ from an in-process static server, opens it in headless
  * Chromium and sums every response's transferred size (CDP
@@ -12,10 +12,13 @@
 
 import { createServer, type Server } from "node:http";
 import { createReadStream, existsSync, readdirSync, statSync } from "node:fs";
-import { extname, join, normalize, sep } from "node:path";
+import { extname, join, normalize, resolve, sep } from "node:path";
 import { chromium } from "@playwright/test";
 
-const DIST = join(process.cwd(), "dist");
+/** Build folder: `--dist <dir>` (compare two builds), default ./dist. */
+const DIST_ARG = process.argv.indexOf("--dist");
+const DIST =
+  DIST_ARG > 0 ? resolve(process.argv[DIST_ARG + 1]!) : join(process.cwd(), "dist");
 const BYTES_PER_MB = 1024 * 1024;
 const DEFAULT_BUDGET_MB = 10;
 /** Quiet period after "networkidle" so late lazy requests are counted. */
@@ -84,6 +87,10 @@ interface LoadMeasurement {
   readonly total: number;
   readonly requests: number;
   readonly afterInput: number;
+  /** Navigation start to the game canvas being attached (ms). */
+  readonly canvasMs: number;
+  /** Navigation start to network idle (ms). */
+  readonly idleMs: number;
   readonly byType: Breakdown;
 }
 
@@ -118,14 +125,20 @@ async function measure(url: string): Promise<LoadMeasurement> {
     total += e.encodedDataLength;
     requests++;
   });
+  const startedAt = Date.now();
+  const canvasReady = page
+    .waitForSelector("canvas", { state: "attached", timeout: 60_000 })
+    .then(() => Date.now() - startedAt);
   await page.goto(url, { waitUntil: "networkidle" });
+  const idleMs = Date.now() - startedAt;
+  const canvasMs = await canvasReady;
   await page.waitForTimeout(SETTLE_MS);
   const beforeInput = { total, requests, byType: new Map(byType) };
   // A click in an empty corner: unlocks audio without choosing a menu item.
   await page.mouse.click(INPUT_CLICK.x, INPUT_CLICK.y);
   await page.waitForTimeout(SETTLE_MS);
   await browser.close();
-  return { ...beforeInput, afterInput: total };
+  return { ...beforeInput, afterInput: total, canvasMs, idleMs };
 }
 
 async function main(): Promise<void> {
@@ -148,6 +161,9 @@ async function main(): Promise<void> {
       console.log(
         `  ${type.padEnd(8)} ${mb(entry.bytes).padStart(8)} MB  ${entry.requests} req`,
       );
+    console.log(
+      `canvas attached:        ${result.canvasMs} ms (network idle ${result.idleMs} ms)`,
+    );
     console.log(
       `after first input:      ${mb(result.afterInput)} MB (menu music starts)`,
     );

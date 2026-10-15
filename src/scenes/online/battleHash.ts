@@ -19,6 +19,7 @@ export interface HashedShip {
 
 /** A shot or device on the field. */
 export interface HashedOrdnance {
+  readonly id?: string;
   readonly x: number;
   readonly y: number;
 }
@@ -66,17 +67,23 @@ export function addShip(
  * @param hasher - The hasher.
  * @param shots - Missiles and torpedoes in flight.
  * @param devices - Bombs and mines on the field.
+ * @param idCounters - The battle's ordnance id counters (peers must agree).
  * @returns The hasher.
  */
 export function addOrdnance(
   hasher: StateHasher,
   shots: Iterable<HashedOrdnance>,
   devices: Iterable<HashedOrdnance>,
+  idCounters: readonly number[] = [],
 ): StateHasher {
   for (const group of [shots, devices]) {
     const items = [...group];
     hasher.addInt(items.length);
-    for (const item of items) hasher.addFloat(item.x).addFloat(item.y);
+    for (const item of items) {
+      if (item.id !== undefined) hasher.addString(item.id);
+      hasher.addFloat(item.x).addFloat(item.y);
+    }
   }
+  for (const counter of idCounters) hasher.addInt(counter);
   return hasher;
 }

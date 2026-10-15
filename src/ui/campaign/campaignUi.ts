@@ -28,7 +28,7 @@ export const CAMPAIGN_TEXT = {
   panelHeading: { size: 16, weight: "600", letterSpacing: 2 },
   body: { size: 14, weight: "400", color: HOLO_PALETTE.textSecondary },
   caption: {
-    size: 11,
+    size: 12,
     weight: "600",
     letterSpacing: 1.5,
     color: HOLO_PALETTE.textSecondary,
