@@ -10,7 +10,7 @@
 import {
   HALF_POINTS_HEALTH_FRACTION,
   MIN_SHIP_SCENARIO_VALUE,
-  SCENARIO_POINTS_PER_SQUAD_POINT,
+  SCENARIO_TUNING,
 } from "./scenarioConstants";
 import type { ScenarioFrame, ScenarioSide } from "./scenarioTypes";
 
@@ -27,7 +27,7 @@ export interface DestructionStep {
  */
 export function scenarioShipValue(
   pointCost: number,
-  pointsPerSquadPoint: number = SCENARIO_POINTS_PER_SQUAD_POINT,
+  pointsPerSquadPoint: number = SCENARIO_TUNING.pointsPerSquadPoint,
 ): number {
   return Math.max(
     MIN_SHIP_SCENARIO_VALUE,

@@ -6,6 +6,7 @@ import {
 } from "../../../../src/arcade/reinforcements/poolLedger";
 import {
   createPlannerState,
+  PATIENT_STRATEGIES,
   planNextDeployment,
   type PlanInput,
 } from "../../../../src/arcade/reinforcements/strategyPlanner";
@@ -73,11 +74,20 @@ describe("AI deployment planner", () => {
       "x",
       pelican,
     );
-    const step = planNextDeployment(
-      input([thunderbird, wasp], { strategy: "heavy", ledger }),
-    );
-    expect(step.option).toBeNull();
-    expect(step.state.cursor).toBe(0);
+    PATIENT_STRATEGIES.add("heavy");
+    try {
+      const step = planNextDeployment(
+        input([thunderbird, wasp], { strategy: "heavy", ledger }),
+      );
+      expect(step.option).toBeNull();
+      expect(step.state.cursor).toBe(0);
+    } finally {
+      PATIENT_STRATEGIES.delete("heavy");
+    }
+  });
+
+  it("holds no strategy back by default (patience measured 8-10 points weaker)", () => {
+    expect(PATIENT_STRATEGIES.size).toBe(0);
   });
 
   it("an eager strategy fills the room with a later ship that fits", () => {

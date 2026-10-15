@@ -181,6 +181,7 @@ import { spawnDeflectFlash } from "./arcadeBattle/hitFx";
 import {
   ArcadeBotFleet,
   DEFAULT_SKIRMISH_DIFFICULTY,
+  squadFormatFor,
 } from "./arcadeBattle/ArcadeBotFleet";
 import { toBotContact } from "./arcadeBattle/arcadeBotContact";
 import { selectHudTargetId } from "./arcadeBattle/arcadeHudModel";
@@ -2036,7 +2037,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
         ? () => online.fleetRng.next()
         : createSeededRng(seed).next,
       worldSize: BATTLEFIELD_SIZE,
-      squadFormat: parseReinforcementSetup(config) ? "reinforced" : "classic",
+      squadFormat: squadFormatFor(
+        Boolean(parseReinforcementSetup(config)),
+        this.scenario !== null,
+      ),
       ...(online ? { humanSides: online.humanSides, markAssist: true } : {}),
     });
     for (const ship of this.ships.values()) {

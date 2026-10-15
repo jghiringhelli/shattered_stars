@@ -11,7 +11,10 @@ import {
   type DeviceSpec,
   type LauncherSpec,
 } from "../../../../src/arcade/weapons/weaponSpecs";
-import { captureGraph, restoreGraph } from "../../../../src/net/lockstep/StateGraph";
+import {
+  captureGraph,
+  restoreGraph,
+} from "../../../../src/net/lockstep/StateGraph";
 import { addOrdnance } from "../../../../src/scenes/online/battleHash";
 import { StateHasher } from "../../../../src/net/lockstep/StateHasher";
 

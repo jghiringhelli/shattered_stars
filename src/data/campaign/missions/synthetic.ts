@@ -333,12 +333,18 @@ export const SYNTHETIC_COLLECTIVE_MISSIONS: CampaignMission[] = [
     playerShips: ["synth_drone", "synth_interceptor_drone", "synth_hunter"],
     maxSquadSize: 4,
     enemies: [
-      { shipId: "terran_raptor", count: 4, faction: "terran_hegemony" },
+      {
+        shipId: "terran_raptor",
+        count: 4,
+        faction: "terran_hegemony",
+        hullScale: 0.7,
+      },
       {
         shipId: "terran_bastion",
         count: 3,
         faction: "terran_hegemony",
         spawnDelay: 60000,
+        hullScale: 0.7,
       },
     ],
     rewards: { xp: 750, credits: 650 },

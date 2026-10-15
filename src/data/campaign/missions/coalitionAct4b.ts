@@ -38,7 +38,11 @@ export const COALITION_ACT4B_MISSIONS: CampaignMission[] = [
     maxSquadSize: 5,
     enemies: [
       { shipId: "synth_drone", count: 4, faction: "synthetic_collective" },
-      { shipId: "synth_heavy_drone", count: 2, faction: "synthetic_collective" },
+      {
+        shipId: "synth_heavy_drone",
+        count: 2,
+        faction: "synthetic_collective",
+      },
     ],
     rewards: { xp: 1300, credits: 1250 },
     debrief: [
@@ -82,7 +86,9 @@ export const COALITION_ACT4B_MISSIONS: CampaignMission[] = [
     ],
     playerShips: [...PLACEHOLDER_SHIPS],
     maxSquadSize: 6,
-    enemies: [{ shipId: "terran_centurion", count: 2, faction: LOYALIST_FACTION }],
+    enemies: [
+      { shipId: "terran_centurion", count: 10, faction: LOYALIST_FACTION },
+    ],
     rewards: { xp: 1500, credits: 1500 },
     debrief: [
       line(

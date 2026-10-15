@@ -7,6 +7,7 @@
 import { describe, it, expect } from "vitest";
 import {
   ArcadeBotFleet,
+  squadFormatFor,
   WINGMAN_SKILL,
 } from "../../../../src/scenes/arcadeBattle/ArcadeBotFleet";
 import type { BotContact } from "../../../../src/arcade/ai";
@@ -228,5 +229,17 @@ describe("ArcadeBotFleet flight", () => {
     expect(fleet.tierOf("enemy_1")).toBe("expert");
     expect(result.motion.control).toBeDefined();
     expect(result.stress).toBeDefined();
+  });
+});
+
+describe("squadFormatFor", () => {
+  it("flies classic crews unless the battle runs on reinforcement pools", () => {
+    expect(squadFormatFor(false, false)).toBe("classic");
+    expect(squadFormatFor(false, true)).toBe("classic");
+  });
+
+  it("gives a reinforced scenario its own crews and a reinforced skirmish the shared ones", () => {
+    expect(squadFormatFor(true, true)).toBe("scenario");
+    expect(squadFormatFor(true, false)).toBe("reinforced");
   });
 });

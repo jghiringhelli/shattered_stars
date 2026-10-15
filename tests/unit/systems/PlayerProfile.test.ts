@@ -146,7 +146,12 @@ describe("PlayerProfileManager", () => {
         won: true,
       })!;
       expect(updated.totalXp).toBe(130);
-      expect(updated.stats).toEqual({ battles: 1, kills: 3, wins: 1, losses: 0 });
+      expect(updated.stats).toEqual({
+        battles: 1,
+        kills: 3,
+        wins: 1,
+        losses: 0,
+      });
     });
     it("awardMatchResult never applies negative XP", () => {
       const updated = PlayerProfileManager.awardMatchResult("player-default", {

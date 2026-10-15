@@ -15,10 +15,7 @@ import {
 import { UPGRADE_CATALOG } from "../../../src/data/upgrades";
 import { PILOT_ABILITY_REALTIME } from "../../../src/data/pilotAbilityEffects";
 import { getAffix } from "../../../src/data/survival/affixes";
-import {
-  BULWARK_RELICS,
-  SQUADRON_RELICS,
-} from "../../../src/data/survival/relicCatalogSupport";
+import { BULWARK_RELICS } from "../../../src/data/survival/relicCatalogSupport";
 import { ARCHETYPE_SETS, type Relic } from "../../../src/data/survival/relics";
 import { ATOMS } from "../../../src/data/survival/powers";
 import { getArmoryMod } from "../../../src/data/campaign/armory";
@@ -126,12 +123,6 @@ describe("regen units — Survival and Campaign values are HP/s as authored", ()
       relic(BULWARK_RELICS, "regen_lattice")?.description ?? "",
     ],
     [
-      "relic escort_foundry",
-      staticEffectOf(relic(SQUADRON_RELICS, "escort_foundry"))
-        .shieldRegenPerSecond ?? 0,
-      relic(SQUADRON_RELICS, "escort_foundry")?.description ?? "",
-    ],
-    [
       "set bulwark",
       (() => {
         const e = ARCHETYPE_SETS.bulwark.effects.find(
@@ -157,9 +148,8 @@ describe("regen units — Survival and Campaign values are HP/s as authored", ()
 
   it.each([
     ["affix regenerating", 0.24],
-    ["relic regen_lattice", 0.24],
-    ["relic escort_foundry", 0.12],
-    ["set bulwark", 0.24],
+    ["relic regen_lattice", 0.04],
+    ["set bulwark", 0.12],
     ["armory regenerative_emitters", 0.24],
     ["research shield_harmonics", 0.12],
   ] as const)("%s regenerates %d HP/s", (name, hpPerSecond) => {
@@ -175,14 +165,14 @@ describe("regen units — Survival and Campaign values are HP/s as authored", ()
     expect(tooStrong).toEqual([]);
   });
 
-  it("drafted Regen Coils (bul_regen) add 0.12 shield HP/s, unscaled", () => {
+  it("drafted Regen Coils (bul_regen) add 0.06 shield HP/s, unscaled", () => {
     const coils = ATOMS.find((p) => p.id === "bul_regen");
-    expect(coils?.amount).toBe(0.12);
-    expect(coils?.description).toMatch(/0\.12 shield HP\/s/);
+    expect(coils?.amount).toBe(0.06);
+    expect(coils?.description).toMatch(/0\.06 shield HP\/s/);
     expect(
-      realTimeRunBonuses({ maxHull: 0, maxShields: 0, shieldRegen: 0.12 })
+      realTimeRunBonuses({ maxHull: 0, maxShields: 0, shieldRegen: 0.06 })
         .shieldRegenPerSecond,
-    ).toBe(0.12);
+    ).toBe(0.06);
   });
 
   it("repairs exactly r shield HP in one second for every authored rate r", () => {

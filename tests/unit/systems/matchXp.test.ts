@@ -95,9 +95,9 @@ describe("awardMatchXp", () => {
   });
 
   it("pays nothing for a mode without XP", () => {
-    expect(awardMatchXp({ mode: "flight_school", outcome: "victory", kills: 0 })).toBe(
-      false,
-    );
+    expect(
+      awardMatchXp({ mode: "flight_school", outcome: "victory", kills: 0 }),
+    ).toBe(false);
     expect(xp()).toBe(0);
   });
 });

@@ -59,6 +59,24 @@ export const UPGRADE_LASER_DAMAGE = 1;
  */
 export const SHIELD_RECOVERY_BETWEEN_NODES = 0.5;
 
+/**
+ * Share of max hull every ship repairs for free after a cleared battle
+ * (Nanite Weave adds 10 % more). Hull damage persists across ~15 battles, so
+ * without it the run is decided by attrition (round 4: +7 % lifts the
+ * run win of the weakest starters from 14 to 24–30 %).
+ */
+export const BASE_NODE_REPAIR = 0.07;
+
+/**
+ * Between-node recovery as one table the balance sweeps tune: a share of max
+ * hull every ship repairs after each cleared battle (relics add to it) and
+ * the share of missing shields restored.
+ */
+export const RECOVERY_TUNING = {
+  nodeRepair: BASE_NODE_REPAIR,
+  shieldRecovery: SHIELD_RECOVERY_BETWEEN_NODES,
+};
+
 /** Salvage paid instead of a power when skipping a draft. */
 export const SKIP_DRAFT_SALVAGE = 12;
 

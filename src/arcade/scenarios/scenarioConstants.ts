@@ -88,6 +88,16 @@ export const SMALL_CONTROL_WEIGHT = 1;
 /** Control weight of medium and bigger ships (X-Wing 2.0: they count double). */
 export const LARGE_CONTROL_WEIGHT = 2;
 
+/**
+ * Scoring knobs as one table the balance sweeps tune: control weight of
+ * small and of medium-or-bigger hulls, scenario points per squad point.
+ */
+export const SCENARIO_TUNING = {
+  smallControlWeight: SMALL_CONTROL_WEIGHT,
+  largeControlWeight: LARGE_CONTROL_WEIGHT,
+  pointsPerSquadPoint: SCENARIO_POINTS_PER_SQUAD_POINT,
+};
+
 /** Distance of each side's deployment line from the centre line (px). */
 export const SCENARIO_DEPLOY_OFFSET_PX = 1400;
 

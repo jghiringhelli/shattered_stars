@@ -7,6 +7,7 @@
  */
 
 import { test, expect, type Page } from "@playwright/test";
+import { BASE_NODE_REPAIR } from "../../src/data/survival/economy";
 import {
   waitForMenuReady,
   waitForScene,
@@ -174,7 +175,8 @@ test.describe("Survival roguelite — a seeded run", () => {
 
     // Back on the map: hull damage persisted, a power draft is waiting.
     const afterBattle = await mapRun(page);
-    expect(afterBattle.flagship.hull).toBeCloseTo(0.5, 1);
+    // 0.5 left in the fight + the free repair every cleared battle grants.
+    expect(afterBattle.flagship.hull).toBeCloseTo(0.5 + BASE_NODE_REPAIR, 1);
     expect(afterBattle.stats.nodesCleared).toBe(1);
     expect(afterBattle.stats.kills).toBeGreaterThan(0);
     expect(afterBattle.pendingRewards[0].kind).toBe("power");

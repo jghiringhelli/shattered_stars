@@ -58,7 +58,7 @@ export const TURRET_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
     name: "Light Laser Turret",
     slotType: "turret",
     description: "360° auto-turret, range 1–2: 1 damage every 1.5s.",
-    pointCost: 4,
+    pointCost: 1,
     creditCost: 100,
     weapon: { damage: 1, cooldownMs: 1500, rangeBand: [1, 2] },
   },
@@ -67,7 +67,7 @@ export const TURRET_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
     name: "Twin Laser Turret",
     slotType: "turret",
     description: "360° auto-turret, range 2–3: 2 damage every 3s.",
-    pointCost: 7,
+    pointCost: 3,
     creditCost: 200,
     weapon: { damage: 2, cooldownMs: 3000, rangeBand: [2, 3] },
   },
@@ -77,7 +77,7 @@ export const TURRET_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
     slotType: "turret",
     description:
       "360° auto-turret, range 1–2: 1 damage every 2s, +20% stress per hit.",
-    pointCost: 6,
+    pointCost: 2,
     creditCost: 200,
     weapon: {
       damage: 1,
@@ -91,7 +91,7 @@ export const TURRET_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
     name: "Quad Laser Cannon",
     slotType: "turret",
     description: "360° auto-turret, range 1–3: 3 damage every 3s.",
-    pointCost: 9,
+    pointCost: 4,
     creditCost: 300,
     requiredShipSize: ["medium", "large", "huge"],
     weapon: { damage: 3, cooldownMs: 3000, rangeBand: [1, 3] },
@@ -104,7 +104,7 @@ export const ORDNANCE_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
     name: "Burst Missiles",
     slotType: "missile",
     description: `3 homing missiles (lock, front arc, range 2–3): ${warheadHp(3)} damage each, 4s reload.`,
-    pointCost: 2,
+    pointCost: 1,
     creditCost: 200,
     effects: { chargesAdded: 3 },
     weapon: {
@@ -135,7 +135,7 @@ export const ORDNANCE_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
     name: "Fusion Torpedoes",
     slotType: "torpedo",
     description: `2 torpedoes (lock, front arc, range 2–3): ${warheadHp(5)} damage each, 6s reload.`,
-    pointCost: 4,
+    pointCost: 2,
     creditCost: 250,
     effects: { chargesAdded: 2 },
     weapon: {
@@ -150,7 +150,7 @@ export const ORDNANCE_UPGRADES: Readonly<Record<string, UpgradeDefinition>> = {
     name: "Ion Torpedoes",
     slotType: "torpedo",
     description: `2 torpedoes (lock, front arc, range 2–3): ${warheadHp(3)} damage and +45% stress, 6s reload.`,
-    pointCost: 2,
+    pointCost: 1,
     creditCost: 250,
     effects: { chargesAdded: 2 },
     weapon: {

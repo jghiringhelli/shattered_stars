@@ -66,9 +66,35 @@ radius of the Hegemony, hit-chance bonus of the Corsairs (capped at +10 % by the
 ## Tuning history (levers changed)
 
 - Hegemony Coordinated Fire 0.6 → 0.35 (Iron Fist now flies four hulls under it).
-- Confederation Rallying Banner 20 % → 30 %.
+- Confederation Rallying Banner 20 % → 30 % → 33 % (round 4: with the stacking falloff below, 30 % left FC at 44 % classic; 35 % made it 59 % in classic scenarios).
 - Collective Hive Resilience per drone 6 % → 8 %, radius 340 → 400 px.
 - Corsair Raider's Cadence 300 px / +5 % → 700 px / +10 % hit, stress relief unchanged.
 - Ascendant Aegis Field 2.4 → 0.4 → 0.25 shield HP/s (long battles accumulate regeneration).
 - Presets carry identity: Iron Fist (Kane, four hulls), Terror Squadron (Bloody Cutlass, illicit
   capacitors), Temple Inquisition (psychic Foresight / Sensitive under the Aegis Field).
+
+## Aura stacking and mixed teams (round 4, 2026-10-15)
+
+Two rules in `src/systems/aura/FactionAuras.ts` (`AURA_STACKING`), applied by `resolveSupportAuras`
+(`withStackWeight`):
+
+- **Diminishing returns per recipient** (`falloff` 0.75): the strongest projector covering a ship counts in
+  full, the next ×0.75, the third ×0.56 … Additive shield regeneration is exempt (the pool bounds it).
+- **Mixed-team share** (`mixedTeamShare` 0.5, team battles / allied sides only: `resolveTeamAuras`,
+  `applyAllyAuraRepairs`): a projector's field keeps half its strength on a teammate of *another* faction.
+  Doctrine stays faction-bound for enemies and for single-faction sides (the share is 0 outside a team).
+
+Measured on 105 team pairings (2v2 = two 200-point squads a side, 3 seeds × both seatings):
+
+| | same-faction teams | mixed teams | SC+SC | FC+AE |
+|---|---|---|---|---|
+| plain stacking (before) | 63 % | 44 % | 89 % | 31 % |
+| share 0.5, falloff 0.6 | 56 % | 47 % | 86 % | 35 % |
+
+The falloff alone did not move the gap (same-faction teams win because their two squads' doctrine covers every
+ship, a mixed team's covers half). SC+SC stays high (cheap hulls ×2 squads of swarm count); lowering the
+Hive Resilience magnitude to 0.06 brought it to 71 % but took Collective below 45 % reinforced, so it stays open.
+
+Classic totals after round 4: TH 52 / FC 45 / SC 51 / VC 52 / AE 50 (all 45–55). Reinforced: TH 50 / FC 57 / SC 48 /
+VC 56 / AE 39–41 (open: AE is aura-driven and loses to FC / VC). Identity margins (`latest.md`): classic +14…+20,
+reinforced +15…+34, all ≥ +8.

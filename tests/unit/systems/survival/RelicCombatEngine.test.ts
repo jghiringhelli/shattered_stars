@@ -79,7 +79,7 @@ describe("FleetEffects", () => {
       combineEffects(staticEffectsFor(l, "escort", 0));
     expect(
       sheet(three).shieldRegenPerSecond - sheet(two).shieldRegenPerSecond,
-    ).toBeCloseTo(0.24, 10);
+    ).toBeCloseTo(0.12, 10);
     expect(
       sheet(three).damageTakenMultiplier / sheet(two).damageTakenMultiplier,
     ).toBeCloseTo(0.85, 10);
@@ -231,8 +231,8 @@ describe("RelicCombatEngine shots", () => {
     const engine = new RelicCombatEngine(
       loadout({ relicIds: ["formation_lock"] }),
     );
-    expect(engine.incomingMultiplier("p0", "flagship", 1, 0)).toBe(1);
-    expect(engine.incomingMultiplier("p0", "flagship", 2, 0)).toBe(0.8);
+    expect(engine.incomingMultiplier("p0", "flagship", 0, 0)).toBe(1);
+    expect(engine.incomingMultiplier("p0", "flagship", 1, 0)).toBe(0.85);
   });
 
   it("changes the fire pattern with weapon mutations", () => {
@@ -240,7 +240,7 @@ describe("RelicCombatEngine shots", () => {
       loadout({ mutationIds: ["rail_driver"] }),
     );
     expect(rail.attackIntervalMultiplier("flagship")).toBe(1.8);
-    expect(rail.shot(SHOT).damageMultiplier).toBe(2.2);
+    expect(rail.shot(SHOT).damageMultiplier).toBe(2.5);
     expect(rail.rangeBonusPx("flagship")).toBe(120);
     const scatter = new RelicCombatEngine(
       loadout({ mutationIds: ["scatter_array"] }),

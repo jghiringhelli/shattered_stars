@@ -138,6 +138,7 @@ import {
 } from "../systems/survival/RoguelikeRunService";
 import {
   phaseCallsReinforcements,
+  phaseRestoresShields,
   planCombat,
   shouldStartNextBossPhase,
 } from "../systems/survival/CombatNodePlan";
@@ -1217,7 +1218,7 @@ export class SurvivalScene extends Phaser.Scene {
     if (started + 1 >= totalPhases) {
       audioManager.setBossFinalPhase(true);
     }
-    if (boss.creature && !phaseCallsReinforcements(plan.bossPhases, started)) {
+    if (boss.creature && !phaseRestoresShields(plan.bossPhases, started)) {
       this.showMessage(
         `${boss.creature.definition.name.toUpperCase()}: ${boss.creature.phase.name}`,
         "It is enraged!",
@@ -1225,6 +1226,14 @@ export class SurvivalScene extends Phaser.Scene {
       return;
     }
     boss.shields = boss.maxShields;
+    const callsWing = phaseCallsReinforcements(
+      plan.bossPhases - plan.secondWindPhases,
+      started,
+    );
+    if (!callsWing) {
+      this.showMessage(`BOSS PHASE ${started + 1}`, "Second wind — shields restored!");
+      return;
+    }
     this.showMessage(
       `BOSS PHASE ${started + 1}`,
       "Shields restored — reinforcements inbound!",

@@ -21,7 +21,7 @@ import { getLoadoutById } from "../../data/ShipLoadouts";
 import { uniquePilotOf } from "../../data/squadRules";
 import { isBridgeOffline, type CapitalSystemsState } from "../CapitalSystems";
 import { resolveSupportAuras, type ActiveAura } from "../SupportAura";
-import type { AuraShip } from "./FactionAuras";
+import { AURA_STACKING, type AuraShip } from "./FactionAuras";
 import type { CombatModifiers } from "../../core/CombatModifiers";
 import { auraFactsOf, auraShipFacts } from "./AuraShipFacts";
 
@@ -148,7 +148,10 @@ export function applyAllyAuraRepairs<S extends AuraFieldShip>(
   }
   const buffs = new Map<string, ActiveAura>();
   for (const roster of sides.values()) {
-    const resolved = resolveSupportAuras(roster.map(auraShipOf)).buffs;
+    const resolved = resolveSupportAuras(
+      roster.map(auraShipOf),
+      AURA_STACKING.mixedTeamShare,
+    ).buffs;
     for (const ship of roster) {
       const aura = resolved.get(ship.id);
       if (!aura) continue;

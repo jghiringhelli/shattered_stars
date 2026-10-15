@@ -30,6 +30,81 @@ export const SURVIVAL_STARTER_CHOICES: Readonly<
   ascendant_empire: ["ascendant_herald", "ascendant_seraph"],
 };
 
+/** What a starting flagship brings besides its hull (balance lever per hull). */
+export interface StarterKit {
+  /** Ship upgrade levels the flagship starts with (+1 damage and hull each). */
+  readonly upgrades: number;
+  /** Escort wingmen on top of the free one. */
+  readonly escorts: number;
+  /** Relic the run starts with, or null. */
+  readonly relicId: string | null;
+  /** Salvage added to the starting purse. */
+  readonly salvage: number;
+}
+
+/** A starter that needs no help. */
+export const NO_STARTER_KIT: StarterKit = {
+  upgrades: 0,
+  escorts: 0,
+  relicId: null,
+  salvage: 0,
+};
+
+/**
+ * Starting kits by flagship id: the hulls that measure far below the
+ * viper / herald get what their faction's identity trades in (tuned with
+ * the run sim so every base starter wins roughly as often).
+ */
+export const STARTER_KITS: Readonly<Record<string, StarterKit>> = {
+  // Riggers: two upgrade levels and a repair crew (Nanite Weave).
+  confed_wasp: {
+    upgrades: 2,
+    escorts: 0,
+    relicId: "nanite_weave",
+    salvage: 0,
+  },
+  confed_sparrow: {
+    upgrades: 2,
+    escorts: 0,
+    relicId: "nanite_weave",
+    salvage: 0,
+  },
+  corsair_blade: {
+    upgrades: 3,
+    escorts: 0,
+    relicId: "smugglers_hold",
+    salvage: 0,
+  },
+  synth_drone: {
+    upgrades: 3,
+    escorts: 2,
+    relicId: null,
+    salvage: 0,
+  },
+  // Raiders: a fully refitted hull and a smuggler's hold.
+  corsair_fang: {
+    upgrades: 3,
+    escorts: 0,
+    relicId: "smugglers_hold",
+    salvage: 0,
+  },
+  // Swarm: a refitted scout and two extra drone wingmen.
+  synth_scout_drone: {
+    upgrades: 3,
+    escorts: 2,
+    relicId: null,
+    salvage: 0,
+  },
+};
+
+/**
+ * @param flagshipId - The starting flagship.
+ * @returns Its starting kit (none for hulls that need no help).
+ */
+export function starterKitOf(flagshipId: string): StarterKit {
+  return STARTER_KITS[flagshipId] ?? NO_STARTER_KIT;
+}
+
 /** Heavy-fighter flagships unlocked by the "Heavy Flagships" meta unlock. */
 export const HEAVY_STARTERS: Readonly<Record<FactionId, string>> = {
   terran_hegemony: "terran_gladius",

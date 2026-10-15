@@ -81,19 +81,15 @@ describe("RollDoubleTap", () => {
 
   it("input flicker (a bounce faster than a deliberate tap) never rolls", () => {
     const flick = ROLL_TAP_MIN_MS - 10;
-    expect(play([...tap("left", 0, flick), ...tap("left", flick + 10)])).toEqual(
-      [],
-    );
+    expect(
+      play([...tap("left", 0, flick), ...tap("left", flick + 10)]),
+    ).toEqual([]);
     const gap = ROLL_TAP_GAP_MIN_MS - 10;
     expect(play([...tap("left", 0, 60), ...tap("left", 60 + gap)])).toEqual([]);
   });
 
   it("a third quick tap does not roll again", () => {
-    const steps = [
-      ...tap("left", 0),
-      ...tap("left", 110),
-      ...tap("left", 220),
-    ];
+    const steps = [...tap("left", 0), ...tap("left", 110), ...tap("left", 220)];
     expect(play(steps)).toEqual(["left"]);
   });
 

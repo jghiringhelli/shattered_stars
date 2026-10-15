@@ -111,21 +111,31 @@ describe("Chronicle canon (first witness writes it)", () => {
   });
 
   it("adds extra flags (Coalition lead markers) to the effective flags", () => {
-    const flags = effectiveFlags({}, emptyChronicle(), { lead_void_corsairs: true });
+    const flags = effectiveFlags({}, emptyChronicle(), {
+      lead_void_corsairs: true,
+    });
     expect(flags["lead_void_corsairs"]).toBe(true);
   });
 });
 
 describe("derived flags, unity and keys", () => {
   it("derives the Hegemony key from either source flag", () => {
-    expect(deriveFlags({ heg_phoenix_defected: true })["key_heg_witness"]).toBe(true);
-    expect(deriveFlags({ x11_betrayal_averted: true })["key_heg_witness"]).toBe(true);
+    expect(deriveFlags({ heg_phoenix_defected: true })["key_heg_witness"]).toBe(
+      true,
+    );
+    expect(deriveFlags({ x11_betrayal_averted: true })["key_heg_witness"]).toBe(
+      true,
+    );
     expect(deriveFlags({})["key_heg_witness"]).toBeUndefined();
   });
 
   it("counts unity flags only", () => {
     expect(
-      unityCount({ x7_shards_saved: true, x8_node_preserved: true, heg_lance_lost: true }),
+      unityCount({
+        x7_shards_saved: true,
+        x8_node_preserved: true,
+        heg_lance_lost: true,
+      }),
     ).toBe(2);
   });
 
@@ -148,7 +158,13 @@ describe("act completion and seeding", () => {
 
   it("accepts either mission of a branch pair", () => {
     expect(
-      completedActs(heg, ["heg_1_1", "heg_1_2", "heg_1_3b", "heg_1_4", "heg_1_5"]),
+      completedActs(heg, [
+        "heg_1_1",
+        "heg_1_2",
+        "heg_1_3b",
+        "heg_1_4",
+        "heg_1_5",
+      ]),
     ).toEqual([1]);
   });
 

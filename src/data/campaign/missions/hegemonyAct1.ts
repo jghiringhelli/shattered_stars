@@ -250,8 +250,18 @@ export const HEGEMONY_ACT1_MISSIONS: CampaignMission[] = [
     playerShips: ["terran_viper"],
     maxSquadSize: 1,
     enemies: [
-      { shipId: "corsair_fang", count: 2, faction: "void_corsairs" },
-      { shipId: "corsair_marauder", count: 1, faction: "void_corsairs" },
+      {
+        shipId: "corsair_fang",
+        count: 2,
+        faction: "void_corsairs",
+        hullScale: 0.7,
+      },
+      {
+        shipId: "corsair_marauder",
+        count: 1,
+        faction: "void_corsairs",
+        hullScale: 0.7,
+      },
     ],
     rewards: { xp: 250, credits: 150, unlocks: ["terran_raptor"] },
     newMechanic: "Solo Operations",
@@ -318,12 +328,18 @@ export const HEGEMONY_ACT1_MISSIONS: CampaignMission[] = [
     playerShips: ["terran_raptor", "terran_centurion"],
     maxSquadSize: 2,
     enemies: [
-      { shipId: "confed_falcon", count: 3, faction: "free_confederation" },
+      {
+        shipId: "confed_falcon",
+        count: 3,
+        faction: "free_confederation",
+        hullScale: 0.7,
+      },
       {
         shipId: "confed_hawk",
         count: 1,
         faction: "free_confederation",
         isAce: true,
+        hullScale: 0.7,
       },
     ],
     rewards: { xp: 250, credits: 150, unlocks: ["terran_centurion"] },
@@ -397,8 +413,18 @@ export const HEGEMONY_ACT1_MISSIONS: CampaignMission[] = [
     playerShips: ["terran_viper", "terran_raptor", "terran_centurion"],
     maxSquadSize: 3,
     enemies: [
-      { shipId: "confed_falcon", count: 4, faction: "free_confederation" },
-      { shipId: "synth_drone", count: 2, faction: "synthetic_collective" },
+      {
+        shipId: "confed_falcon",
+        count: 4,
+        faction: "free_confederation",
+        hullScale: 0.7,
+      },
+      {
+        shipId: "synth_drone",
+        count: 2,
+        faction: "synthetic_collective",
+        hullScale: 0.7,
+      },
     ],
     rewards: { xp: 300, credits: 200 },
     debrief: [

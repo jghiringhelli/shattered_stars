@@ -18,7 +18,7 @@ import type { RunState } from "../../../../src/systems/survival/RunTypes";
 import { RunBuilder, atActiveNode } from "./survivalRunBuilder";
 
 /** Hardened Hulls (ascension 5): enemy hull ×1.15 on top of the base. */
-const HARDENED_HULLS = 1.15;
+const HARDENED_HULLS = 1.1;
 
 function rulesFor(run: RunState): SurvivalBattleRules {
   return new SurvivalBattleRules(run, planCombat(run)!);
@@ -74,7 +74,7 @@ describe("SurvivalBattleRules — the player's fleet", () => {
     rules.equipPlayer(flagship, "flagship", run.flagship);
     rules.equipPlayer(escort, "escort", run.flagship);
     expect(flagship.modifiers.shieldRegenPerSecond).toBe(0);
-    expect(escort.modifiers.shieldRegenPerSecond).toBe(0.12);
+    expect(escort.modifiers.shieldRegenPerSecond).toBe(0.04);
   });
 });
 

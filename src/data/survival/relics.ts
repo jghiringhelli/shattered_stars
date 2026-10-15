@@ -170,12 +170,12 @@ export const ARCHETYPE_SETS: Readonly<Record<RelicArchetype, ArchetypeSet>> = {
     archetype: "bulwark",
     name: "Bulwark",
     description:
-      "Set: +0.24 shield HP/s regen and -15% damage taken for the fleet",
+      "Set: +0.12 shield HP/s regen and -15% damage taken for the fleet",
     effects: [
       {
         kind: "static",
         scope: "fleet",
-        effect: { shieldRegenPerSecond: 0.24, damageTakenMultiplier: 0.85 },
+        effect: { shieldRegenPerSecond: 0.12, damageTakenMultiplier: 0.85 },
       },
     ],
   },

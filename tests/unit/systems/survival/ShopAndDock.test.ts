@@ -103,7 +103,7 @@ describe("prices and salvage", () => {
           .build(),
         100,
       ),
-    ).toBe(80);
+    ).toBe(75);
   });
 
   it("cuts salvage gains at ascension 4", () => {
@@ -116,9 +116,9 @@ describe("prices and salvage", () => {
     const run = RunBuilder.aRun()
       .with({ relics: ["salvage_drones", "bounty_contract"] })
       .build();
-    expect(killSalvage(run, "regular")).toBe(SALVAGE_PER_KILL.regular + 1);
+    expect(killSalvage(run, "regular")).toBe(SALVAGE_PER_KILL.regular + 2);
     expect(killSalvage(run, "elite")).toBe(
-      Math.round(SALVAGE_PER_KILL.elite * 1.5) + 1,
+      Math.round(SALVAGE_PER_KILL.elite * 2) + 2,
     );
   });
 });

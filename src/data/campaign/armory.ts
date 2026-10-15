@@ -75,9 +75,9 @@ export const ARMORY_MODS: readonly ArmoryMod[] = [
     id: "rapid_cyclers",
     name: "Rapid Cyclers",
     slot: "weapons",
-    cost: 220,
-    description: "Primary weapons recycle 15% faster.",
-    bonuses: { weaponIntervalMultiplier: 0.85 },
+    cost: 170,
+    description: "Ordnance and turrets reload 25% faster.",
+    bonuses: { secondaryReloadMultiplier: 0.75 },
   },
   {
     id: "combat_computer",

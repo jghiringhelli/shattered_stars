@@ -69,3 +69,10 @@ simulator (`scripts/headless_sim.ts`, kept as legacy):
   geometry is symmetric — look at ScenarioDirector / scoring order.
 - Easy squads are 91–100 % (target ~80): novice squads never mark, so reaction alone cannot close it.
 - Survival node length median 16–19 s (target 45–90 s), owner decision pending.
+
+## Round 4 (2026-10-15)
+
+Work log, grids and before/after tables: [round4-notes.md](round4-notes.md). Reproduce the Survival baseline with
+`npm run telemetry:survival -- --runs 300 --mixed` (every faction's starter in turn). Tuning tables the sweeps patch in memory:
+`ASCENSION_TUNING`, `PLAN_TUNING`, `RECOVERY_TUNING`, `STARTER_KITS` (Survival), `AURA_STACKING`, `STRATEGY_TUNING`, `SKIRMISH_QUOTAS`,
+`SCENARIO_TUNING`, `PLANNER_TUNING`. Headless Survival runs accept `start` / `claim` hooks (force a relic / power / mutation).

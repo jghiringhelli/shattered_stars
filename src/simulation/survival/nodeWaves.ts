@@ -13,6 +13,7 @@
 import { planWaveRoster } from "../../arcade/systems/SurvivalLoadouts";
 import {
   phaseCallsReinforcements,
+  phaseRestoresShields,
   shouldStartNextBossPhase,
 } from "../../systems/survival/CombatNodePlan";
 import { nodeWaveRoster } from "../../systems/survival/NodeWaveRoster";
@@ -129,8 +130,10 @@ export function spawnBossReinforcements(
   )
     return;
   battle.bossPhases.set(boss.id, started + 1);
-  if (!phaseCallsReinforcements(rules.plan.bossPhases, started)) return;
+  if (!phaseRestoresShields(rules.plan.bossPhases, started)) return;
   boss.shields = boss.maxShields;
+  const { bossPhases, secondWindPhases } = rules.plan;
+  if (!phaseCallsReinforcements(bossPhases - secondWindPhases, started)) return;
   const spec = { ...rules.currentWave(), isBossWave: false };
   const [slot] = planWaveRoster(rules.roster(spec.faction), {
     enemyCount: BOSS_PHASE_REINFORCEMENTS,

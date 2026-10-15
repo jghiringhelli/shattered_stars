@@ -131,7 +131,8 @@ const UNINTENDED: readonly FlightEvent[] = ["barrel_roll", "segnor", "tallon"];
 function expectNoSpecials(outcome: Outcome): void {
   for (const event of UNINTENDED) expect(outcome.events).not.toContain(event);
   expect(outcome.refusals).toEqual([]);
-  for (const queued of outcome.queued) expect(queued).not.toMatch(/segnor|tallon/);
+  for (const queued of outcome.queued)
+    expect(queued).not.toMatch(/segnor|tallon/);
 }
 
 describe("false positives — ordinary flying never triggers a special", () => {
@@ -269,12 +270,12 @@ describe("positive controls — every special fires from its documented gesture"
   });
 
   it("↓↓ is still a Snap Turn and ↑↑ a boost", () => {
-    expect(replay([...tap("down", 0, 40), ...tap("down", 120, 40)]).events).toEqual([
-      "kturn",
-    ]);
-    expect(replay([...tap("up", 0, 40), ...tap("up", 120, 40)]).events).toEqual([
-      "boost",
-    ]);
+    expect(
+      replay([...tap("down", 0, 40), ...tap("down", 120, 40)]).events,
+    ).toEqual(["kturn"]);
+    expect(replay([...tap("up", 0, 40), ...tap("up", 120, 40)]).events).toEqual(
+      ["boost"],
+    );
   });
 
   it("a Knife costs the stress of one special (the first tap's Snap Turn is never queued)", () => {
@@ -347,6 +348,8 @@ describe("unavailable specials degrade quietly on the arrows", () => {
       },
     });
     const outcome = replay([...tap("maneuver", 0, 60)], 300, noSpecials);
-    expect(outcome.refusals).toEqual([{ action: "kturn", reason: "not_on_dial" }]);
+    expect(outcome.refusals).toEqual([
+      { action: "kturn", reason: "not_on_dial" },
+    ]);
   });
 });

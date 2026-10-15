@@ -61,7 +61,12 @@ export const COALITION_ACT4A_DESIGNS: Readonly<Record<string, MissionDesign>> =
           seconds: 180,
         }),
         bonus(
-          kill("cells", "Burn six tidecells before they reach the envoys", 6, "tide"),
+          kill(
+            "cells",
+            "Burn six tidecells before they reach the envoys",
+            6,
+            "tide",
+          ),
           2,
           80,
         ),
@@ -135,7 +140,11 @@ export const COALITION_ACT4A_DESIGNS: Readonly<Record<string, MissionDesign>> =
         atTime(
           80,
           wave("terran_vindicator", 2, LOYALIST_FACTION, { at: "flank" }),
-          say(STRIKER, "Kronos's gunships, low on the left. Mark them.", "urgent"),
+          say(
+            STRIKER,
+            "Kronos's gunships, low on the left. Mark them.",
+            "urgent",
+          ),
         ),
         atTime(
           125,
@@ -160,7 +169,8 @@ export const COALITION_ACT4A_DESIGNS: Readonly<Record<string, MissionDesign>> =
     },
     coal_4_2: {
       style: "escort",
-      tagline: "Humans and Vaelith on the same liners. The front is behind them.",
+      tagline:
+        "Humans and Vaelith on the same liners. The front is behind them.",
       prerequisites: [1],
       allies: [templarGuard(2), kiraRaiders(2)],
       objectives: [
@@ -267,12 +277,19 @@ export const COALITION_ACT4A_DESIGNS: Readonly<Record<string, MissionDesign>> =
         atTime(
           25,
           wave("tidecell", 3, TIDE_FACTION, { at: "ahead", tag: "tide" }),
-          say(WHISPER, "Tidecells off the lane mouth. They heard the liners.", "urgent"),
+          say(
+            WHISPER,
+            "Tidecells off the lane mouth. They heard the liners.",
+            "urgent",
+          ),
         ),
         atTime(
           70,
           hazardOn("front"),
-          banner("THE FRONT", "The Tide's edge reaches Vega Prime, so stay ahead of it"),
+          banner(
+            "THE FRONT",
+            "The Tide's edge reaches Vega Prime, so stay ahead of it",
+          ),
         ),
         atTime(
           95,
@@ -281,7 +298,11 @@ export const COALITION_ACT4A_DESIGNS: Readonly<Record<string, MissionDesign>> =
         atTime(
           140,
           wave("tidecell", 4, TIDE_FACTION, { at: "flank", tag: "tide" }),
-          say(STRIKER, "Fresh cells on the flank. They want the liners.", "urgent"),
+          say(
+            STRIKER,
+            "Fresh cells on the flank. They want the liners.",
+            "urgent",
+          ),
         ),
         onObjective(
           "intact",

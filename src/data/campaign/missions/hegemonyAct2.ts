@@ -489,12 +489,18 @@ export const HEGEMONY_ACT2_MISSIONS: CampaignMission[] = [
     ],
     maxSquadSize: 5,
     enemies: [
-      { shipId: "synth_drone", count: 6, faction: "synthetic_collective" },
+      {
+        shipId: "synth_drone",
+        count: 6,
+        faction: "synthetic_collective",
+        hullScale: 0.7,
+      },
       {
         shipId: "synth_nexus",
         count: 1,
         faction: "synthetic_collective",
         isBoss: true,
+        hullScale: 0.7,
       },
     ],
     rewards: { xp: 600, credits: 500 },

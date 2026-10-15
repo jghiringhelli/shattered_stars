@@ -49,10 +49,10 @@ export const MUTATIONS: readonly Mutation[] = [
     name: "Rail Driver",
     icon: "🔱",
     description:
-      "Primary fires 45% slower, but every bolt hits 2.2x harder and reaches 120px further",
+      "Primary fires 45% slower, but every bolt hits 2.5x harder and reaches 120px further",
     rules: {
       attackIntervalMultiplier: 1.8,
-      damageMultiplier: 2.2,
+      damageMultiplier: 2.5,
       rangeBonusPx: 120,
     },
   },
@@ -62,8 +62,8 @@ export const MUTATIONS: readonly Mutation[] = [
     name: "Scatter Array",
     icon: "✳",
     description:
-      "Every attack fires two bolts, each rolled separately, at 60% damage",
-    rules: { shotsPerAttack: 2, damageMultiplier: 0.6 },
+      "Every attack fires two bolts, each rolled separately, at 70% damage",
+    rules: { shotsPerAttack: 2, damageMultiplier: 0.7 },
   },
   {
     id: "ion_lance",
@@ -71,10 +71,10 @@ export const MUTATIONS: readonly Mutation[] = [
     name: "Ion Lance",
     icon: "⚡",
     description:
-      "Bolts deal 20% less damage but gain +10% hit chance and stress every target they hit",
+      "Bolts deal 10% less damage but gain +15% hit chance and stress every target they hit",
     rules: {
-      damageMultiplier: 0.8,
-      hitChanceBonus: 0.1,
+      damageMultiplier: 0.9,
+      hitChanceBonus: 0.15,
       staticEffect: { stressOnHit: 0.35 },
     },
   },

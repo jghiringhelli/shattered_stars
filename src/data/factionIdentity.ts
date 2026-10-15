@@ -52,7 +52,7 @@ export const FACTION_IDENTITIES: Readonly<Record<FactionId, FactionIdentity>> =
       faction: "free_confederation",
       specialty: "Crew, riggers and versatile ordnance",
       levers: [
-        "Rallying Banner aura: allies take 30% less damage",
+        "Rallying Banner aura: allies take 33% less damage",
         "Rigger slots (Confederation-only: Repair / Targeting Rigger) and crew coordinators",
         "Torpedo and missile racks on its fighters",
       ],

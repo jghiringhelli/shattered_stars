@@ -314,7 +314,10 @@ describe("SquadBuilder", () => {
     });
 
     it("rejects a code carrying an absurd number of units", () => {
-      const units = Array.from({ length: 500 }, () => ({ p: "viper_cadet", g: [] }));
+      const units = Array.from({ length: 500 }, () => ({
+        p: "viper_cadet",
+        g: [],
+      }));
       const code = btoa(
         JSON.stringify({ v: 1, f: "terran_hegemony", m: "standard", u: units }),
       );

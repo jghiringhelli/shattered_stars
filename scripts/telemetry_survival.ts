@@ -6,6 +6,8 @@
  * rate at an ascension, node length.
  *
  * Usage: npx tsx scripts/telemetry_survival.ts [--runs 200] [--seed 1] [--ascension 0] [--belt-aware]
+ *   --mixed       fly every faction's starter in turn (seed % 5), not the Terran
+ *                 Hegemony viper alone (the audit's and round 4's baseline)
  *   --belt-aware  the simulated player never takes belt damage (a pilot who
  *                 keeps clear of it; the default flies the scene's autopilot)
  */
@@ -44,7 +46,13 @@ function main(): void {
   const started = Date.now();
   const beltAware = process.argv.includes("--belt-aware");
   const summary = summarizeSweep(
-    sweepRuns(runs, seed, ascension, { playerBeltDamage: !beltAware }),
+    sweepRuns(
+      runs,
+      seed,
+      ascension,
+      { playerBeltDamage: !beltAware },
+      process.argv.includes("--mixed"),
+    ),
   );
   console.log(
     `Survival node sweep — ${runs} runs, ascension ${ascension}, seeds ${seed}..${seed + runs - 1}` +

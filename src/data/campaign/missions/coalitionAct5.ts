@@ -36,7 +36,9 @@ export const COALITION_ACT5_MISSIONS: CampaignMission[] = [
     ],
     playerShips: [...PLACEHOLDER_SHIPS],
     maxSquadSize: 6,
-    enemies: [{ shipId: "terran_vindicator", count: 2, faction: LOYALIST_FACTION }],
+    enemies: [
+      { shipId: "terran_vindicator", count: 6, faction: LOYALIST_FACTION },
+    ],
     rewards: { xp: 1600, credits: 1600 },
     debrief: [
       line(
@@ -79,7 +81,9 @@ export const COALITION_ACT5_MISSIONS: CampaignMission[] = [
     ],
     playerShips: [...PLACEHOLDER_SHIPS],
     maxSquadSize: 5,
-    enemies: [{ shipId: "terran_vindicator", count: 2, faction: LOYALIST_FACTION }],
+    enemies: [
+      { shipId: "terran_vindicator", count: 8, faction: LOYALIST_FACTION },
+    ],
     rewards: { xp: 1750, credits: 1700 },
     debrief: [
       line(
@@ -122,7 +126,9 @@ export const COALITION_ACT5_MISSIONS: CampaignMission[] = [
     ],
     playerShips: [...PLACEHOLDER_SHIPS],
     maxSquadSize: 6,
-    enemies: [{ shipId: "terran_centurion", count: 2, faction: LOYALIST_FACTION }],
+    enemies: [
+      { shipId: "terran_centurion", count: 10, faction: LOYALIST_FACTION },
+    ],
     rewards: { xp: 2500, credits: 2500 },
     debrief: [
       line(

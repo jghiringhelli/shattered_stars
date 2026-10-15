@@ -48,7 +48,10 @@ describe("explainQuickBuild", () => {
   it("breaks the price into hull + pilot + cards that add up to the build's cost", () => {
     for (const build of ALL_BUILDS) {
       const guide = explainQuickBuild(build);
-      const sum = guide.costLines.reduce((total, line) => total + line.points, 0);
+      const sum = guide.costLines.reduce(
+        (total, line) => total + line.points,
+        0,
+      );
       expect(sum, build.id).toBe(build.pointCost);
       expect(guide.totalPoints).toBe(build.pointCost);
       expect(guide.costLines[0]?.kind).toBe("hull");

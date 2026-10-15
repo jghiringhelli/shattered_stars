@@ -13,8 +13,10 @@ export interface CampaignShipBonuses {
   readonly attackBonus: number;
   /** + agility (evasion) dice. */
   readonly agilityBonus: number;
-  /** × time between attacks (< 1 = faster). */
-  readonly weaponIntervalMultiplier: number;
+  /** × reload time of ordnance and turret shots (< 1 = faster). */
+  readonly secondaryReloadMultiplier: number;
+  /** × recharge time of boost, barrel roll and Snap Turn (< 1 = faster). */
+  readonly maneuverRechargeMultiplier: number;
   /** + real-time shield HP regenerated per second (never rescaled). */
   readonly shieldRegenPerSecond: number;
   /** × incoming damage (< 1 = tougher). */
@@ -35,7 +37,8 @@ export const NEUTRAL_BONUSES: CampaignShipBonuses = {
   shieldMultiplier: 1,
   attackBonus: 0,
   agilityBonus: 0,
-  weaponIntervalMultiplier: 1,
+  secondaryReloadMultiplier: 1,
+  maneuverRechargeMultiplier: 1,
   shieldRegenPerSecond: 0,
   damageTakenMultiplier: 1,
   powerCooldownMultiplier: 1,
@@ -49,7 +52,8 @@ export const MULTIPLICATIVE_BONUSES: ReadonlySet<keyof CampaignShipBonuses> =
   new Set([
     "hullMultiplier",
     "shieldMultiplier",
-    "weaponIntervalMultiplier",
+    "secondaryReloadMultiplier",
+    "maneuverRechargeMultiplier",
     "damageTakenMultiplier",
     "powerCooldownMultiplier",
     "creditMultiplier",

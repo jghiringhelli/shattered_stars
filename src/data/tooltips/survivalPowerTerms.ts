@@ -13,23 +13,23 @@ const BRANCH_TERMS: Readonly<Record<`survival.branch.${Branch}`, TermEntry>> = {
   "survival.branch.gunnery": term(
     "Branch: gunnery",
     "Powers that improve your guns: damage, crit chance, range and volley (a second bolt every few attacks).",
-    "Cannon Calibration: +1 primary damage. Marksman's Focus (5 gunnery powers): +3 primary damage.",
+    "Cannon Calibration: +1 primary damage. Marksman's Focus (5 gunnery powers): +2 primary damage.",
     "Depth in one branch unlocks its capstone: stack the branch your hull already amplifies.",
   ),
   "survival.branch.ordnance": term(
     "Branch: ordnance",
     "Powers that improve primary damage, range and volley with a heavy-weapon flavour.",
-    "Warhead Yield: +1 primary damage. Barrage Doctrine (capstone): +3 primary damage.",
+    "Warhead Yield: +1 primary damage. Barrage Doctrine (capstone): +2 primary damage.",
   ),
   "survival.branch.automation": term(
     "Branch: automation",
     "Powers for turrets, drones and automated defence: volley, range, point defence.",
-    "Servo Turrets: +10 % volley (every 10th attack fires a second bolt). Swarm Logic (capstone): +30 % volley.",
+    "Servo Turrets: +10 % volley (every 10th attack fires a second bolt). Swarm Logic (capstone): +15 % volley.",
   ),
   "survival.branch.fleet": term(
     "Branch: fleet",
     "Powers that make the whole fleet (flagship and escorts) harder to kill or faster.",
-    "Screening Wing: +1 evasion for the fleet. Admiral's Command (capstone): +3 evasion.",
+    "Screening Wing: +1 evasion for the fleet. Admiral's Command (capstone): +2 evasion.",
   ),
   "survival.branch.bulwark": term(
     "Branch: bulwark",
@@ -53,7 +53,7 @@ const TIER_TERMS: Readonly<Record<`survival.tier.${PowerTier}`, TermEntry>> = {
   "survival.tier.capstone": term(
     "Tier: capstone",
     "A big bonus that appears only after you own 5 powers of one branch.",
-    "Marksman's Focus: +3 primary damage, offered once gunnery reaches depth 5.",
+    "Marksman's Focus: +2 primary damage, offered once gunnery reaches depth 5.",
     "Plan your drafts: a capstone is worth several atoms.",
   ),
   "survival.tier.cross": term(

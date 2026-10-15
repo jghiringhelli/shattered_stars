@@ -813,7 +813,7 @@ export class CampaignBattleScene extends Phaser.Scene {
         ...(enemy.isAce ? ["ace"] : []),
         ...(enemy.isBoss ? ["boss"] : []),
       ],
-      hullScale: 1,
+      hullScale: enemy.hullScale ?? 1,
       scripted: false,
       piloted: true,
       isAce: enemy.isAce === true,

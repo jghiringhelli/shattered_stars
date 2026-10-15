@@ -20,7 +20,9 @@ const CHEN = FACTION_HEROES.terran_hegemony;
 describe("heroOverview", () => {
   it("shows key, glyph, name and rank of an unlocked power", () => {
     const view = heroOverview(CHEN, { orbital_strike: 2 });
-    expect(view.powers[0]?.line).toBe("[V]  \u2738  ORBITAL STRIKE \u00b7 RANK II");
+    expect(view.powers[0]?.line).toBe(
+      "[V]  \u2738  ORBITAL STRIKE \u00b7 RANK II",
+    );
     expect(view.powers[0]?.locked).toBe(false);
   });
 
@@ -56,7 +58,9 @@ describe("power tooltips", () => {
     expect(ranked.howItPlays).toContain("Cast with V (gamepad Y)");
     expect(ranked.howItPlays).toContain("three ranks");
     expect(ranked.example).toBeTruthy();
-    expect(powerTooltip(second!).howItPlays).toContain("Cast with B (gamepad L3)");
+    expect(powerTooltip(second!).howItPlays).toContain(
+      "Cast with B (gamepad L3)",
+    );
     expect(powerTooltip(second!).howItPlays).toContain("not available yet");
   });
 
@@ -87,7 +91,11 @@ describe("slotTooltip", () => {
   });
 
   it("says nothing about recharging when ready or locked", () => {
-    expect(slotTooltip(CHEN.powers[0], 0, 1, 0).howItPlays).not.toContain("Recharging");
-    expect(slotTooltip(CHEN.powers[1], 1, 0, 0).howItPlays).toContain("not available yet");
+    expect(slotTooltip(CHEN.powers[0], 0, 1, 0).howItPlays).not.toContain(
+      "Recharging",
+    );
+    expect(slotTooltip(CHEN.powers[1], 1, 0, 0).howItPlays).toContain(
+      "not available yet",
+    );
   });
 });

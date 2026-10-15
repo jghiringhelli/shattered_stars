@@ -7,7 +7,10 @@
 
 import { describe, expect, it } from "vitest";
 import { compileMission } from "../../../src/campaign/mission/compileMission";
-import { MAX_ESCORT_TARGETS, isConstraintObjective } from "../../../src/arcade/objectives";
+import {
+  MAX_ESCORT_TARGETS,
+  isConstraintObjective,
+} from "../../../src/arcade/objectives";
 import type { CampaignMission } from "../../../src/data/campaign/campaignTypes";
 import { CHRONICLE_FLAGS } from "../../../src/data/campaign/crossovers";
 import { COALITION_INFO } from "../../../src/data/campaign/missions/coalition";
@@ -121,7 +124,9 @@ describe("Coalition campaign", () => {
       expect(new Set(beats.map((b) => b.id)).size).toBe(beats.length);
       for (const b of beats)
         if (b.when.on === "objective")
-          expect(objectiveIds, b.when.objectiveId).toContain(b.when.objectiveId);
+          expect(objectiveIds, b.when.objectiveId).toContain(
+            b.when.objectiveId,
+          );
       for (const a of actionsOf(beats)) {
         if (
           a.do === "revealObjective" ||
@@ -156,8 +161,13 @@ describe("Coalition campaign", () => {
 
   it("puts the Warden's avatar and the Herald on assassination objectives", () => {
     const bossTargets = (id: string): string[] =>
-      compileMission(MISSIONS.find((m) => m.id === id)!, {}, ORIGIN)
-        .objectives.flatMap((o) => (o.type === "assassinate" ? [o.targetShipId] : []));
+      compileMission(
+        MISSIONS.find((m) => m.id === id)!,
+        {},
+        ORIGIN,
+      ).objectives.flatMap((o) =>
+        o.type === "assassinate" ? [o.targetShipId] : [],
+      );
     expect(bossTargets("coal_4_5")).toEqual(["pruning_herald"]);
     expect(bossTargets("coal_5_3")).toEqual(["warden_avatar"]);
   });
@@ -183,9 +193,7 @@ describe("Coalition campaign", () => {
       expect(new Set(factions).size, mission.id).toBe(factions.length);
     }
     const truce = MISSIONS.find((m) => m.id === "coal_4_1")!;
-    expect(
-      (truce.allies ?? []).map((a) => [a.tag, a.unlessLead]),
-    ).toEqual([
+    expect((truce.allies ?? []).map((a) => [a.tag, a.unlessLead])).toEqual([
       ["ironfist", "terran_hegemony"],
       ["libre", "free_confederation"],
     ]);
@@ -195,7 +203,9 @@ describe("Coalition campaign", () => {
     for (const mission of MISSIONS)
       for (const flag of readFlags(mission))
         expect(
-          CHRONICLE_FLAGS.has(flag) || WRITTEN.has(flag) || LEAD_FLAGS.has(flag),
+          CHRONICLE_FLAGS.has(flag) ||
+            WRITTEN.has(flag) ||
+            LEAD_FLAGS.has(flag),
           `${mission.id} reads ${flag}`,
         ).toBe(true);
   });
@@ -211,7 +221,11 @@ describe("Coalition campaign", () => {
   it("carries story consequences forward and reads Chronicle echoes", () => {
     const read = new Set(MISSIONS.flatMap(readFlags));
     expect([...WRITTEN].some((f) => read.has(f))).toBe(true);
-    for (const flag of ["synth_gate_virus", "x3_shard_taken", "cors_gate_codes"])
+    for (const flag of [
+      "synth_gate_virus",
+      "x3_shard_taken",
+      "cors_gate_codes",
+    ])
       expect(read.has(flag), flag).toBe(true);
     expect(WRITTEN.has("coal_vance_stopped")).toBe(true);
     expect(WRITTEN.has("coal_exodus_complete")).toBe(true);
@@ -240,4 +254,3 @@ describe("Coalition campaign", () => {
     },
   );
 });
-

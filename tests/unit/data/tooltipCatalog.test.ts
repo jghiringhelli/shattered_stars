@@ -55,16 +55,24 @@ describe("tooltip catalog", () => {
   });
 
   it("covers every upgrade slot, role, action, style, faction and difficulty", () => {
-    for (const slot of new Set(Object.values(UPGRADE_DEFINITIONS).map((c) => c.slotType)))
+    for (const slot of new Set(
+      Object.values(UPGRADE_DEFINITIONS).map((c) => c.slotType),
+    ))
       expect(TERM_CATALOG[slotTermId(slot as never)], slot).toBeDefined();
     for (const role of ROLE_SECTION_ORDER)
       expect(TERM_CATALOG[roleTermId(role)], role).toBeDefined();
     for (const style of Object.keys(PLAYSTYLES))
       expect(TERM_CATALOG[styleTermId(style as never)], style).toBeDefined();
     for (const faction of Object.keys(FACTION_COLORS))
-      expect(TERM_CATALOG[factionTermId(faction as never)], faction).toBeDefined();
+      expect(
+        TERM_CATALOG[factionTermId(faction as never)],
+        faction,
+      ).toBeDefined();
     for (const level of Object.keys(DIFFICULTY_NAMES))
-      expect(TERM_CATALOG[difficultyTermId(level as never)], level).toBeDefined();
+      expect(
+        TERM_CATALOG[difficultyTermId(level as never)],
+        level,
+      ).toBeDefined();
     for (const size of new Set(
       Object.values(SHIP_DEFINITIONS).map((s) => s.baseStats.size),
     ))
@@ -99,21 +107,26 @@ describe("tooltip catalog", () => {
 
   it("uses the new maneuver and slot names, never the old ones", () => {
     const text = Object.values(TERM_CATALOG)
-      .map((e) => `${e.title} ${e.definition} ${e.example} ${e.howItPlays ?? ""}`)
+      .map(
+        (e) => `${e.title} ${e.definition} ${e.example} ${e.howItPlays ?? ""}`,
+      )
       .join("\n");
     expect(text).toContain("Snap Turn");
     expect(text).toContain("Hook Loop");
     expect(text).toContain("Knife Roll");
     expect(text).toContain("Rigger");
-    expect(text).not.toMatch(/K-turn|Koiogran|Segnor|Tallon|astromech|the Force/i);
+    expect(text).not.toMatch(
+      /K-turn|Koiogran|Segnor|Tallon|astromech|the Force/i,
+    );
   });
 
   it("only references term ids that exist in the UI source", () => {
     const pattern =
       /["'`]((?:stat|size|dial|maneuver|tag|ui|battle|team|mode|scenario)\.[a-z_0-9]+)["'`]/g;
     const missing: string[] = [];
-    for (const file of sourceFiles(join(process.cwd(), "src", "ui"))
-      .concat(sourceFiles(join(process.cwd(), "src", "scenes")))) {
+    for (const file of sourceFiles(join(process.cwd(), "src", "ui")).concat(
+      sourceFiles(join(process.cwd(), "src", "scenes")),
+    )) {
       const text = readFileSync(file, "utf8");
       for (const match of text.matchAll(pattern)) {
         const id = match[1]!;

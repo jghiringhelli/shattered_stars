@@ -22,6 +22,7 @@ import {
   SWARM_EVADE_CAP,
   auraRadiusBonusFor,
   projectionScaleFor,
+  AURA_STACKING,
   type AuraShip,
   type FactionAura,
 } from "./FactionAuras";
@@ -188,6 +189,34 @@ function withFactionEffect(acc: ActiveAura, source: SourceInfo): ActiveAura {
         hullRepairPerSecond: acc.hullRepairPerSecond + source.hullRepair,
       };
   }
+}
+
+/**
+ * @param source - A projector covering an ally.
+ * @param rank - 0 for the strongest projector covering that ally, 1 for the
+ *   next, ...
+ * @param share - Strength kept on this ally (1 for its own faction).
+ * @returns The source with its field effects scaled by the stacking falloff
+ *   and the share.
+ */
+export function withStackWeight(
+  source: SourceInfo,
+  rank: number,
+  share = 1,
+): SourceInfo {
+  // Additive shield regen is bounded by the shield pool: no falloff (it cut
+  // Ascendant reinforced from 45 % to 39 %).
+  const falloff = source.effect === "shield_regen" ? 1 : AURA_STACKING.falloff;
+  const weight = falloff ** rank * share;
+  if (weight === 1) return source;
+  return {
+    ...source,
+    magnitude: source.magnitude * weight,
+    swarmReduction: source.swarmReduction * weight,
+    hullRepair: source.hullRepair * weight,
+    hitChance: source.hitChance * weight,
+    allyShieldRegen: source.allyShieldRegen * weight,
+  };
 }
 
 /**

@@ -135,16 +135,25 @@ export function botProfile(tier: BotTier, reactionScale = 1): BotProfile {
 }
 
 /** How a squad battle is fought: one squad each (classic) or reinforcement pools. */
-export type SquadFormat = "classic" | "reinforced";
+export type SquadFormat = "classic" | "reinforced" | "scenario";
 
 /** Classic-squad Hard: an expert reacting this much slower (27.5 %). */
 export const CLASSIC_HARD_REACTION_SCALE = 1.2;
 /** Classic-squad Brutal: an expert reacting this much faster (19 %). */
 export const CLASSIC_BRUTAL_REACTION_SCALE = 0.35;
-/** Reinforced / Scenario Hard: an expert reacting this much slower (27 %). */
+/** Reinforced Hard: an expert reacting this much slower (27 %). */
 export const REINFORCED_HARD_REACTION_SCALE = 1.75;
-/** Reinforced / Scenario Brutal: an expert reacting this much faster (16 %). */
+/** Reinforced Brutal: an expert reacting this much faster (16 %). */
 export const REINFORCED_BRUTAL_REACTION_SCALE = 0.4;
+/**
+ * Scenario Hard: an expert reacting this much slower. Objective scoring
+ * amplifies the stronger side, so the reinforced crews (×1.75 / ×0.4) left the
+ * average player bot 22 % / 11 % (audit: 14 % / 6 %): ×2.2 26 %, ×2.8 28 % (400
+ * games a cell, ±4).
+ */
+export const SCENARIO_HARD_REACTION_SCALE = 2.2;
+/** Scenario Brutal: an expert reacting this much faster (×0.4 11 %, ×0.55 11 %, ×0.7 16 %). */
+export const SCENARIO_BRUTAL_REACTION_SCALE = 0.55;
 
 /**
  * How a difficulty label crews an AI squad: a skill per ship slot (cycled —
@@ -174,7 +183,7 @@ const skill = (tier: BotTier, reactionScale = 1): BotSkill => ({
  *   ×1.2 / ×1.75 reaction 27.5 % / 27 %, Brutal 19 % / 16 % (expert pilots
  *   are the bots' ceiling: ×0.35–0.6 reaction all land at 17–21 %).
  */
-const SQUAD_PLANS: Readonly<
+export const SQUAD_PLANS: Readonly<
   Record<SquadFormat, Readonly<Record<string, SquadSkillPlan>>>
 > = {
   classic: {
@@ -204,6 +213,21 @@ const SQUAD_PLANS: Readonly<
     },
     brutal: {
       slots: [skill("expert", REINFORCED_BRUTAL_REACTION_SCALE)],
+      marks: true,
+    },
+  },
+  scenario: {
+    easy: {
+      slots: [skill("average"), skill("novice"), skill("novice")],
+      marks: true,
+    },
+    normal: { slots: [skill("average")], marks: true },
+    hard: {
+      slots: [skill("expert", SCENARIO_HARD_REACTION_SCALE)],
+      marks: true,
+    },
+    brutal: {
+      slots: [skill("expert", SCENARIO_BRUTAL_REACTION_SCALE)],
       marks: true,
     },
   },

@@ -13,7 +13,10 @@ import {
   AURA_GRANTING_CREW,
   type AuraShip,
 } from "../../../src/systems/SupportAura";
-import { auraRadiusBonusFor } from "../../../src/systems/aura/FactionAuras";
+import {
+  AURA_STACKING,
+  auraRadiusBonusFor,
+} from "../../../src/systems/aura/FactionAuras";
 
 /**
  * Build a ship fixture with sensible defaults.
@@ -49,6 +52,51 @@ describe("FACTION_AURAS", () => {
       (a) => a.effect !== "shield_regen",
     );
     expect(others.every((a) => a.radius >= aegis.radius)).toBe(true);
+  });
+});
+
+describe("aura stacking falloff", () => {
+  const twoProjectors = [
+    ship({ id: "s1", role: "support", x: 0, y: 0 }),
+    ship({ id: "s2", role: "support", x: 20, y: 0 }),
+    ship({ id: "ally", x: 60, y: 0 }),
+  ];
+  const bonusAtFalloff = (falloff: number): number => {
+    const previous = AURA_STACKING.falloff;
+    AURA_STACKING.falloff = falloff;
+    try {
+      return resolveSupportAuras(twoProjectors).buffs.get("ally")!.damageBonus;
+    } finally {
+      AURA_STACKING.falloff = previous;
+    }
+  };
+
+  it("counts every projector in full without a falloff", () => {
+    const single = resolveSupportAuras(twoProjectors.slice(1)).buffs.get(
+      "ally",
+    )!.damageBonus;
+    expect(bonusAtFalloff(1)).toBeCloseTo(2 * single);
+  });
+
+  it("scales the second projector by the falloff", () => {
+    const single = resolveSupportAuras(twoProjectors.slice(1)).buffs.get(
+      "ally",
+    )!.damageBonus;
+    expect(bonusAtFalloff(0.5)).toBeCloseTo(single * 1.5);
+  });
+
+  it("leaves a lone projector untouched", () => {
+    const lone = twoProjectors.slice(1);
+    const plain = resolveSupportAuras(lone).buffs.get("ally")!.damageBonus;
+    const previous = AURA_STACKING.falloff;
+    AURA_STACKING.falloff = 0.3;
+    try {
+      expect(resolveSupportAuras(lone).buffs.get("ally")!.damageBonus).toBe(
+        plain,
+      );
+    } finally {
+      AURA_STACKING.falloff = previous;
+    }
   });
 });
 

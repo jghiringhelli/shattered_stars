@@ -9,6 +9,7 @@
 import { getShipDefinition } from "./ShipDefinitions";
 import { DURABILITY_SCALE } from "../config";
 import type { ShipStats } from "../core/types";
+import { random } from "../utils/random";
 
 /** The fewest miniature hull points any ship has in a real-time mode. */
 const MIN_MINIATURE_HULL = 1;
@@ -331,7 +332,7 @@ export function calculateHitChance(
  */
 export function rollAttackDice(
   numDice: number,
-  rng: () => number = Math.random,
+  rng: () => number = random.next,
 ): { hits: number; crits: number; focuses: number } {
   let hits = 0;
   let crits = 0;
@@ -361,7 +362,7 @@ export function rollAttackDice(
  */
 export function rollDefenseDice(
   numDice: number,
-  rng: () => number = Math.random,
+  rng: () => number = random.next,
 ): { evades: number; focuses: number } {
   let evades = 0;
   let focuses = 0;
@@ -409,7 +410,7 @@ export function resolveTurnBasedAttack(
   attackerHasFocus: boolean,
   defenderHasFocus: boolean,
   defenderHasEvade: boolean,
-  rng: () => number = Math.random,
+  rng: () => number = random.next,
 ): AttackResult {
   // Roll attack
   const attack = rollAttackDice(attackDice, rng);

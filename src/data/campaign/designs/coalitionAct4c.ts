@@ -172,7 +172,11 @@ export const COALITION_ACT4C_DESIGNS: Readonly<Record<string, MissionDesign>> =
         atTime(
           75,
           wave("hulk_gnawer", 2, TIDE_FACTION, { at: "flank", tag: "tide" }),
-          say(STRIKER, "Gnawers, off the wrecks. Keep clear of the debris.", "urgent"),
+          say(
+            STRIKER,
+            "Gnawers, off the wrecks. Keep clear of the debris.",
+            "urgent",
+          ),
         ),
         atTime(
           130,
@@ -181,7 +185,11 @@ export const COALITION_ACT4C_DESIGNS: Readonly<Record<string, MissionDesign>> =
         atTime(
           160,
           wave("tidecell", 3, TIDE_FACTION, { at: "behind", tag: "tide" }),
-          say(WHISPER, "The Herald is pruning the squad's comms. Stay tight.", "urgent"),
+          say(
+            WHISPER,
+            "The Herald is pruning the squad's comms. Stay tight.",
+            "urgent",
+          ),
         ),
         onObjective(
           "proto",

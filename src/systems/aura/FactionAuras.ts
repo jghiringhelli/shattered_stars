@@ -90,6 +90,20 @@ export interface FactionAura {
  * reinforced share from ~42 % into the 45–55 % band.
  */
 export const SWARM_EVADE_PER_ALLY = 0.08;
+/**
+ * Diminishing returns when several projectors cover one ship: the strongest
+ * projector counts in full, the next `falloff` times its strength, the third
+ * `falloff`² … (1 = plain stacking). Same-faction 2v2 teams, whose squads
+ * both project onto every ship, won 63 % against mixed teams (44 %)
+ * on plain stacking; the mixed-team share below narrows the gap to ~9
+ * points, the falloff (0.75) only caps what is left (0.5 cut the reinforced
+ * identity margins of TH / AE to +4–5; round 4, docs/balance/round4-notes.md).
+ *
+ * `mixedTeamShare` is the strength a projector's field keeps on a teammate of
+ * ANOTHER faction (team battles only, see resolveTeamAuras): doctrine is
+ * faction-bound, but a coalition partner standing in it still benefits.
+ */
+export const AURA_STACKING = { falloff: 0.75, mixedTeamShare: 0.5 };
 /** Maximum incoming-damage reduction the swarm aura can reach. */
 export const SWARM_EVADE_CAP = 0.3;
 export {
@@ -189,10 +203,11 @@ export const FACTION_AURAS: Record<FactionId, FactionAura> = {
     faction: "free_confederation",
     effect: "damage_reduction",
     radius: 280,
-    // 0.30 (was 0.2): the crew coordinators' banner is the Confederation's
-    // edge; its cheap hulls need it to trade evenly in classic squads.
-    magnitude: 0.3,
-    description: "Allied ships take 30% less damage.",
+    // 0.33 (was 0.30, 0.2 before): the crew coordinators' banner is the
+    // Confederation's edge; its cheap hulls need it to trade evenly in classic
+    // squads (round 4: with diminishing stacking 0.30 left FC at 44 %, 0.35 at 47 % but 59 % in classic scenarios).
+    magnitude: 0.33,
+    description: "Allied ships take 33% less damage.",
   },
   synthetic_collective: {
     id: "hive_resilience",

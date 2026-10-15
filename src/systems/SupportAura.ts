@@ -20,6 +20,7 @@ import {
   accumulate,
   buildSources,
   distanceSquared,
+  withStackWeight,
   type SourceInfo,
 } from "./aura/AuraSources";
 import { strongerRepairSource } from "./aura/AuraRepair";
@@ -56,11 +57,16 @@ export interface AuraResolution {
  * Resolve every faction aura against the current ship set for one tick.
  *
  * @param ships - All ships in play (players + allies + enemies).
+ * @param crossFactionShare - Strength a projector's field keeps on a ship of
+ *   another faction (default 0: doctrine covers its own faction only; set
+ *   only for ships of one team, see resolveTeamAuras).
  * @returns Combined per-ship aura buffs and the covered-ship id set.
  */
 export function resolveSupportAuras(
   ships: ReadonlyArray<AuraShip>,
+  crossFactionShare = 0,
 ): AuraResolution {
+  const crossShare = crossFactionShare;
   const buffs = new Map<string, ActiveAura>();
   const coveredShipIds = new Set<string>();
   const sources = buildSources(ships);
@@ -71,21 +77,22 @@ export function resolveSupportAuras(
   for (const ally of ships) {
     if (ally.hull <= 0) continue;
     let aura = NEUTRAL_AURA;
-    let covered = false;
     let repairSource: SourceInfo | null = null;
-    for (const source of sources) {
-      if (source.id === ally.id || source.faction !== ally.faction) continue;
-      if (
-        distanceSquared(source.x, source.y, ally.x, ally.y) >
-        source.radiusSquared
-      ) {
-        continue;
-      }
-      covered = true;
-      aura = accumulate(aura, source);
+    const covering = sources
+      .filter(
+        (source) =>
+          source.id !== ally.id &&
+          (source.faction === ally.faction || crossShare > 0) &&
+          distanceSquared(source.x, source.y, ally.x, ally.y) <=
+            source.radiusSquared,
+      )
+      .sort((a, b) => b.magnitude - a.magnitude);
+    for (const [rank, source] of covering.entries()) {
+      const share = source.faction === ally.faction ? 1 : crossShare;
+      aura = accumulate(aura, withStackWeight(source, rank, share));
       repairSource = strongerRepairSource(repairSource, source);
     }
-    if (covered) {
+    if (covering.length > 0) {
       coveredShipIds.add(ally.id);
       buffs.set(ally.id, { ...aura, repairSourceId: repairSource?.id ?? null });
     }

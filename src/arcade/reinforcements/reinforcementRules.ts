@@ -16,8 +16,9 @@
  *   lets a side that loses the exchange run dry near the 3:00 mark.
  * - Scenario: the Skirmish numbers, but the picker only offers the
  *   pre-planned reserve (tabletop lists are fixed before the game).
- * Quotas keep every field a mix: at most a couple of bombers, one or two
- * aces (unique pilots) and capital ships only in Epic.
+ * Quotas keep every field a mix: at most four bombers, two aces (unique
+ * pilots; nine a match) and capital ships only in Epic. Round 4 loosened the
+ * Skirmish ace quota (1 on field / 3 a match) so Aces is a real plan.
  *
  * Pure.
  */
@@ -62,8 +63,8 @@ const UNLIMITED = Number.POSITIVE_INFINITY;
 
 /** Skirmish / Scenario quotas (a table the balance sweeps tune). */
 export const SKIRMISH_QUOTAS: readonly QuotaRule[] = [
-  { category: "bomber", maxOnField: 2, maxPerMatch: UNLIMITED },
-  { category: "ace", maxOnField: 1, maxPerMatch: 3 },
+  { category: "bomber", maxOnField: 4, maxPerMatch: UNLIMITED },
+  { category: "ace", maxOnField: 2, maxPerMatch: 9 },
   { category: "capital", maxOnField: 0, maxPerMatch: 0 },
 ];
 

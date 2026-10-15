@@ -79,23 +79,34 @@ describe("Coalition launch", () => {
   it("flies the lead hero's faction roster", () => {
     const mission = missionForLead(opener, "void_corsairs");
     expect(mission.playerShips.length).toBeGreaterThan(0);
-    expect(mission.playerShips.every((s) => s.startsWith("corsair_"))).toBe(true);
+    expect(mission.playerShips.every((s) => s.startsWith("corsair_"))).toBe(
+      true,
+    );
     expect(mission.id).toBe(opener.id);
   });
 
   it("does not deploy the ally squad of the hero that leads", () => {
     const squads = (lead: "terran_hegemony" | "free_confederation") =>
-      compileMission(missionForLead(opener, lead), leadFlags(lead), { x: 0, y: 0 }, lead).allies;
+      compileMission(
+        missionForLead(opener, lead),
+        leadFlags(lead),
+        { x: 0, y: 0 },
+        lead,
+      ).allies;
     const asHeg = squads("terran_hegemony");
     const asConf = squads("free_confederation");
     expect(asHeg.length).toBeGreaterThan(0);
     expect(asHeg.some((a) => a.unlessLead === "terran_hegemony")).toBe(false);
-    expect(asConf.some((a) => a.unlessLead === "free_confederation")).toBe(false);
+    expect(asConf.some((a) => a.unlessLead === "free_confederation")).toBe(
+      false,
+    );
     expect(asHeg.map((a) => a.name)).not.toEqual(asConf.map((a) => a.name));
   });
 
   it("names the lead as a mission-local flag", () => {
-    expect(leadFlags("ascendant_empire")).toEqual({ lead_ascendant_empire: true });
+    expect(leadFlags("ascendant_empire")).toEqual({
+      lead_ascendant_empire: true,
+    });
   });
 });
 
@@ -123,7 +134,9 @@ describe("epilogues", () => {
 
   it("shows a flag-conditioned faction line only when the flag holds", () => {
     const without = epilogueLines("free_confederation", {});
-    const withFlag = epilogueLines("free_confederation", { x14_ceasefire_called: true });
+    const withFlag = epilogueLines("free_confederation", {
+      x14_ceasefire_called: true,
+    });
     expect(withFlag.length).toBeGreaterThan(without.length);
   });
 

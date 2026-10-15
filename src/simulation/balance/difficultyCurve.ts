@@ -65,8 +65,9 @@ export function playerVersusDifficulty(
     case "classic":
       return playerVersusCrew(mode, squadSkillPlan(label, "classic"), seeds);
     case "reinforced":
-    case "scenario":
       return playerVersusCrew(mode, squadSkillPlan(label, "reinforced"), seeds);
+    case "scenario":
+      return playerVersusCrew(mode, squadSkillPlan(label, "scenario"), seeds);
     default:
       return playerVersusSkill(mode, difficultyToTier(label, mode), seeds);
   }

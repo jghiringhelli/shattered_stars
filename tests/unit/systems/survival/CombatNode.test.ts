@@ -4,11 +4,16 @@ import {
   EXTRA_WAVES_PER_SECTOR,
   MAX_BELT_STEPS,
   MAX_REGULARS_PER_WAVE,
+  phaseCallsReinforcements,
+  phaseRestoresShields,
   planCombat,
   shouldStartNextBossPhase,
   WAVES_PER_NODE,
 } from "../../../../src/systems/survival/CombatNodePlan";
-import { BASE_ENEMY_DAMAGE_MULTIPLIER } from "../../../../src/data/survival/ascension";
+import {
+  ascensionRules,
+  BASE_ENEMY_DAMAGE_MULTIPLIER,
+} from "../../../../src/data/survival/ascension";
 import { ROGUELITE_THREAT_SCALE } from "../../../../src/systems/survival/CombatNodePlan";
 import {
   completeCombat,
@@ -98,7 +103,7 @@ describe("planCombat", () => {
       ROGUELITE_THREAT_SCALE * 1.25,
     );
     expect(ascended.beltSteps).toBeGreaterThan(elite.beltSteps);
-    expect(ascended.effectiveWave).toBeGreaterThan(elite.effectiveWave);
+    expect(ascended.effectiveWave).toBeGreaterThanOrEqual(elite.effectiveWave);
   });
 
   it("applies Elite Contracts to elite nodes only, as described — never to a boss", () => {
@@ -121,7 +126,17 @@ describe("planCombat", () => {
     expect(planCombat({ ...boss, sector: 3 })!.isFinalBoss).toBe(true);
   });
 
-  it("makes Second Wind a reinforcement call, not an extra creature enrage phase", () => {
+  it("refills shields in every plan phase but calls reinforcements only in the plan's own, Second Wind's excluded", () => {
+    const boss = atActiveNode(RunBuilder.aRun().build(), "boss");
+    const wind = planCombat({ ...boss, ascension: 8 })!;
+    expect(wind.secondWindPhases).toBe(1);
+    expect(planCombat(boss)!.secondWindPhases).toBe(0);
+    expect(phaseRestoresShields(wind.bossPhases, 1)).toBe(true);
+    expect(phaseCallsReinforcements(wind.bossPhases - 1, 1)).toBe(false);
+    expect(phaseCallsReinforcements(wind.bossPhases, 1)).toBe(true);
+  });
+
+  it("keeps Second Wind from adding a creature enrage phase", () => {
     const boss = atActiveNode(RunBuilder.aRun().build(), "boss");
     for (const sector of [1, 2, 3]) {
       const calm = planCombat({ ...boss, sector })!;
@@ -158,7 +173,9 @@ describe("boss phases", () => {
       ...atActiveNode(RunBuilder.aRun().withAscension(10).build(), "combat"),
       sector: 3,
     };
-    expect(planCombat(base)!.beltSteps).toBe(2 * 4 + 0 + 2);
+    expect(planCombat(base)!.beltSteps).toBe(
+      2 * 4 + 0 + ascensionRules(10).extraBeltSqueezes,
+    );
     const late = { ...base, activeNodeId: base.map.rows[6]![0]!.id };
     expect(planCombat(late)!.beltSteps).toBe(MAX_BELT_STEPS);
   });

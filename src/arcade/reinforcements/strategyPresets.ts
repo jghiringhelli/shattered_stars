@@ -61,8 +61,30 @@ export function isStrategyId(value: unknown): value is StrategyId {
 /** Ships per rotation at most (keeps plans varied but short). */
 const MAX_ROTATION = 12;
 
-/** Escorts each heavy pair brings (Heavy-Bombers). */
-const HEAVIES_PER_ESCORT = 2;
+/**
+ * Strategy knobs the balance sweeps tune as one table:
+ * - heavyMaxCost: Heavy-Bombers skip hulls dearer than this (a 100-point
+ *   gunship eats 40 % of the field cap and measures 15–25 % below its price);
+ * - heaviesPerEscort: heavies that bring one escort (Heavy-Bombers);
+ * - acesPerEscort: aces that bring one escort (Aces);
+ * - balancedStyles: the curated quick-build styles Balanced rotates through;
+ * - supportPerRotation: support hulls (aura projectors) every non-Balanced
+ *   rotation brings once per lap, as Balanced's curated squads do (without
+ *   them Balanced won 66–71 % of the strategy matrix, with one 59 %).
+ */
+export const STRATEGY_TUNING: {
+  heavyMaxCost: number;
+  heaviesPerEscort: number;
+  acesPerEscort: number;
+  balancedStyles: readonly QuickBuildSquad["style"][];
+  supportPerRotation: number;
+} = {
+  heavyMaxCost: Number.POSITIVE_INFINITY,
+  heaviesPerEscort: 2,
+  acesPerEscort: 1,
+  balancedStyles: ["balanced", "control"],
+  supportPerRotation: 1,
+};
 
 /**
  * @param faction - The faction.
@@ -76,7 +98,11 @@ export function strategyRotation(
   format: ReinforcementFormat,
 ): ReserveEntry[] {
   const catalog = factionCatalog(faction, format);
-  const planned = PLANNERS[strategy](faction, catalog, format);
+  const planned = withSupport(
+    PLANNERS[strategy](faction, catalog, format),
+    catalog,
+    strategy,
+  );
   const rotation = (planned.length > 0 ? planned : catalog.slice(0, 3)).slice(
     0,
     MAX_ROTATION,
@@ -112,6 +138,28 @@ export function buildReserve(
   return reserve;
 }
 
+/**
+ * @param planned - A strategy's planned ships.
+ * @param catalog - The faction's deployable ships.
+ * @param strategy - The strategy.
+ * @returns Non-Balanced plans with the cheapest generic support hulls added
+ *   (STRATEGY_TUNING.supportPerRotation of them) after the first two ships.
+ */
+function withSupport(
+  planned: readonly DeployOption[],
+  catalog: readonly DeployOption[],
+  strategy: StrategyId,
+): DeployOption[] {
+  const count = STRATEGY_TUNING.supportPerRotation;
+  if (strategy === "balanced" || count <= 0 || planned.length === 0)
+    return [...planned];
+  const supports = catalog
+    .filter((o) => o.role === "support" && isGeneric(o))
+    .sort((a, b) => a.cost - b.cost)
+    .slice(0, count);
+  return [...planned.slice(0, 2), ...supports, ...planned.slice(2)];
+}
+
 type Planner = (
   faction: FactionId,
   catalog: readonly DeployOption[],
@@ -120,7 +168,11 @@ type Planner = (
 
 const PLANNERS: Readonly<Record<StrategyId, Planner>> = {
   balanced: (faction, catalog, format) => {
-    const squads = quickBuildOptions(faction, ["balanced", "control"], format);
+    const squads = quickBuildOptions(
+      faction,
+      STRATEGY_TUNING.balancedStyles,
+      format,
+    );
     return squads.length > 0 ? squads : catalog.filter(isGeneric);
   },
   swarm: (faction, catalog, format) => {
@@ -135,12 +187,15 @@ const PLANNERS: Readonly<Record<StrategyId, Planner>> = {
       (o) => o.uniquePilotId !== null && !o.categories.includes("capital"),
     );
     const escorts = escortsOf(catalog);
-    return interleave(aces, escorts, 1);
+    return interleave(aces, escorts, STRATEGY_TUNING.acesPerEscort);
   },
   heavy: (_faction, catalog, format) => {
     const heavies = catalog
       .filter(
-        (o) => (o.role === "bomber" || o.role === "gunship") && isGeneric(o),
+        (o) =>
+          (o.role === "bomber" || o.role === "gunship") &&
+          isGeneric(o) &&
+          o.cost <= STRATEGY_TUNING.heavyMaxCost,
       )
       .sort(byOffenseThenCost);
     const capital =
@@ -151,7 +206,11 @@ const PLANNERS: Readonly<Record<StrategyId, Planner>> = {
         : [];
     return [
       ...capital.slice(0, 1),
-      ...interleave(heavies, escortsOf(catalog), HEAVIES_PER_ESCORT),
+      ...interleave(
+        heavies,
+        escortsOf(catalog),
+        STRATEGY_TUNING.heaviesPerEscort,
+      ),
     ];
   },
 };

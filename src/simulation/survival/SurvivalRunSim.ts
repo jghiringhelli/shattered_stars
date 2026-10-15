@@ -68,6 +68,10 @@ export interface RunSimOptions {
   readonly faction?: FactionId;
   /** Battle options (belt behaviour of the simulated player). */
   readonly node?: NodeSimOptions;
+  /** Edits the fresh run (the balance sweeps force a relic, power or mutation). */
+  readonly start?: (run: RunState) => RunState;
+  /** Replaces the average player's reward claim. */
+  readonly claim?: (run: RunState) => RunState;
 }
 
 /** One battle node of a run. */
@@ -105,10 +109,12 @@ export function simulateSurvivalRun(options: RunSimOptions): RunSimResult {
     unlocked: [],
     now: 0,
   });
+  if (options.start) run = options.start(run);
   const rng = createSeededRng((options.seed ^ 0x2545f491) >>> 0);
   const battles: NodeRecord[] = [];
+  const claim = options.claim ?? claimRewards;
   for (let step = 0; step < MAX_STEPS && run.status === "active"; step++) {
-    run = claimRewards(run);
+    run = claim(run);
     if (run.status !== "active") break;
     const reachable = nextOptions(run.map, run.currentNodeId);
     if (reachable.length === 0) break;
@@ -218,18 +224,28 @@ function resolveEvent(
     : finishNode(resolution.run);
 }
 
-function shop(run: RunState): RunState {
-  const nodeId = run.activeNodeId ?? "";
-  const stock = shopStock(run, nodeId);
-  const buy = (kind: string, keep = 0) =>
-    stock.find(
-      (i) => i.kind === kind && i.available && run.salvage - i.price >= keep,
-    );
-  const pick =
-    (run.flagship.hull < REPAIR_THRESHOLD ? buy("repair") : undefined) ??
-    (run.escorts.length < WANTED_ESCORTS ? buy("escort") : undefined) ??
-    buy("relic", SHOP_RESERVE);
-  return pick ? (buyShopItem(run, nodeId, pick.id) ?? run) : run;
+/** Items the average player buys in one shop visit (salvage permitting). */
+const MAX_SHOP_PURCHASES = 4;
+
+function shop(start: RunState): RunState {
+  const nodeId = start.activeNodeId ?? "";
+  let run = start;
+  for (let bought = 0; bought < MAX_SHOP_PURCHASES; bought++) {
+    const stock = shopStock(run, nodeId);
+    const buy = (kind: string, keep = 0) =>
+      stock.find(
+        (i) => i.kind === kind && i.available && run.salvage - i.price >= keep,
+      );
+    const pick =
+      (run.flagship.hull < REPAIR_THRESHOLD ? buy("repair") : undefined) ??
+      (run.escorts.length < WANTED_ESCORTS ? buy("escort") : undefined) ??
+      buy("upgrade", SHOP_RESERVE) ??
+      buy("relic", SHOP_RESERVE);
+    const next = pick ? buyShopItem(run, nodeId, pick.id) : null;
+    if (!next) break;
+    run = next;
+  }
+  return run;
 }
 
 function dock(run: RunState): RunState {

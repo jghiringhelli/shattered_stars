@@ -5,10 +5,19 @@
  */
 
 import { compileMission } from "../../../src/campaign/mission/compileMission";
-import { objectiveSpawns, type ObjectiveDefinition } from "../../../src/arcade/objectives";
-import type { ScriptAction, ScriptBeat } from "../../../src/campaign/scripting/scriptTypes";
+import {
+  objectiveSpawns,
+  type ObjectiveDefinition,
+} from "../../../src/arcade/objectives";
+import type {
+  ScriptAction,
+  ScriptBeat,
+} from "../../../src/campaign/scripting/scriptTypes";
 import { FACTION_CAMPAIGNS } from "../../../src/data/CampaignData";
-import type { CampaignMission, MissionDesign } from "../../../src/data/campaign/campaignTypes";
+import type {
+  CampaignMission,
+  MissionDesign,
+} from "../../../src/data/campaign/campaignTypes";
 import { COALITION_DESIGNS } from "../../../src/data/campaign/designs/coalition";
 import { CAMPAIGN_EPILOGUES } from "../../../src/data/campaign/epilogues";
 import { COALITION_MISSIONS } from "../../../src/data/campaign/missions/coalition";
@@ -24,7 +33,9 @@ export const FACTIONS = [
 export const MAX_DEBRIEF_CHARACTERS = 140;
 /** Highest reward of a faction Act III finale: the Coalition must pay more. */
 export const ACT_THREE_FINALE_XP = 1000;
-export const EXPECTED_PREREQUISITES: Readonly<Record<string, readonly number[]>> = {
+export const EXPECTED_PREREQUISITES: Readonly<
+  Record<string, readonly number[]>
+> = {
   coal_4_1: [],
   coal_4_2: [1],
   coal_4_3: [1],
@@ -52,7 +63,9 @@ export const beatsOf = (mission: CampaignMission): ScriptBeat[] => [
   ...(mission.script ?? []),
   ...(mission.variants ?? []).flatMap((v) => v.script ?? []),
 ];
-export const addedObjectives = (beats: readonly ScriptBeat[]): ObjectiveDefinition[] =>
+export const addedObjectives = (
+  beats: readonly ScriptBeat[],
+): ObjectiveDefinition[] =>
   actionsOf(beats).flatMap((a) =>
     a.do === "addObjective" ? [a.objective] : [],
   );
@@ -113,4 +126,3 @@ export const KNOWN_PORTRAITS = new Set([
     lines.map((l) => l.portraitKey),
   ),
 ]);
-

@@ -45,7 +45,10 @@ const actionsOf = (m: CampaignMission): ScriptAction[] =>
   beatsOf(m).flatMap((b) => b.actions);
 
 /** Flags a mission writes into the story (persisted) or only for itself. */
-function writes(m: CampaignMission): { persisted: Set<string>; local: Set<string> } {
+function writes(m: CampaignMission): {
+  persisted: Set<string>;
+  local: Set<string>;
+} {
   const persisted = new Set(Object.keys(m.victoryFlags ?? {}));
   const local = new Set<string>();
   for (const a of actionsOf(m)) {
@@ -67,7 +70,9 @@ function reads(m: CampaignMission): Set<string> {
   return out;
 }
 
-const PERSISTED_ANYWHERE = new Set(ALL_MISSIONS.flatMap((m) => [...writes(m).persisted]));
+const PERSISTED_ANYWHERE = new Set(
+  ALL_MISSIONS.flatMap((m) => [...writes(m).persisted]),
+);
 
 describe("flag consistency", () => {
   it.each(ALL_MISSIONS.map((m) => [m.id, m] as const))(
@@ -93,18 +98,24 @@ describe("flag consistency", () => {
     ];
     for (const line of lines.filter((l) => l.when)) {
       const flag = line.when!.flag;
-      expect(PERSISTED_ANYWHERE.has(flag) || DERIVED.has(flag), flag).toBe(true);
+      expect(PERSISTED_ANYWHERE.has(flag) || DERIVED.has(flag), flag).toBe(
+        true,
+      );
     }
   });
 
   it("every Chronicle flag is written by some mission or derived", () => {
     for (const flag of CHRONICLE_FLAGS)
-      expect(PERSISTED_ANYWHERE.has(flag) || DERIVED.has(flag), flag).toBe(true);
+      expect(PERSISTED_ANYWHERE.has(flag) || DERIVED.has(flag), flag).toBe(
+        true,
+      );
   });
 
   it("every unity flag and key source can be earned", () => {
     for (const flag of UNITY_FLAGS)
-      expect(PERSISTED_ANYWHERE.has(flag) || DERIVED.has(flag), flag).toBe(true);
+      expect(PERSISTED_ANYWHERE.has(flag) || DERIVED.has(flag), flag).toBe(
+        true,
+      );
     for (const key of FACTION_KEYS)
       expect(
         key.earnedBy.some((f) => PERSISTED_ANYWHERE.has(f) || DERIVED.has(f)),
@@ -118,13 +129,18 @@ describe("flag consistency", () => {
       for (const group of EXCLUSIVE_FLAG_GROUPS) {
         if (group.filter((f) => persisted.has(f)).length < 2) continue;
         for (const flag of group) {
-          expect(mission.victoryFlags?.[flag], `${mission.id} victoryFlags`).toBeUndefined();
+          expect(
+            mission.victoryFlags?.[flag],
+            `${mission.id} victoryFlags`,
+          ).toBeUndefined();
           const others = group.filter((f) => f !== flag);
           for (const b of beatsOf(mission).filter((beat) =>
             beat.actions.some((a) => a.do === "setFlag" && a.flag === flag),
           ))
             expect(
-              (b.if ?? []).some((c) => others.includes(c.flag) && c.is === false),
+              (b.if ?? []).some(
+                (c) => others.includes(c.flag) && c.is === false,
+              ),
               `${mission.id} ${flag}`,
             ).toBe(true);
         }
@@ -156,7 +172,10 @@ describe("crossovers and echoes", () => {
         for (const id of side.missionIds) {
           const mission = BY_ID.get(id)!;
           expect(mission.crossover, id).toBeDefined();
-          expect(Math.abs((mission.day ?? 0) - crossover.day), id).toBeLessThanOrEqual(10);
+          expect(
+            Math.abs((mission.day ?? 0) - crossover.day),
+            id,
+          ).toBeLessThanOrEqual(10);
         }
   });
 
@@ -166,7 +185,10 @@ describe("crossovers and echoes", () => {
         const writers = crossover.sides
           .flatMap((s) => s.missionIds)
           .some((id) => writes(BY_ID.get(id)!).persisted.has(flag));
-        expect(writers || DERIVED.has(flag) || PERSISTED_ANYWHERE.has(flag), flag).toBe(true);
+        expect(
+          writers || DERIVED.has(flag) || PERSISTED_ANYWHERE.has(flag),
+          flag,
+        ).toBe(true);
       }
   });
 
@@ -176,7 +198,10 @@ describe("crossovers and echoes", () => {
       const reader = BY_ID.get(echo.readerMissionId);
       expect(writer, echo.id).toBeDefined();
       expect(reader, echo.id).toBeDefined();
-      expect(writes(writer!).persisted.has(echo.flag), `${echo.id} writer`).toBe(true);
+      expect(
+        writes(writer!).persisted.has(echo.flag),
+        `${echo.id} writer`,
+      ).toBe(true);
       expect(reads(reader!).has(echo.flag), `${echo.id} reader`).toBe(true);
     }
   });
@@ -184,12 +209,16 @@ describe("crossovers and echoes", () => {
   it("every second witness has a variant for the first witness's exclusive flag", () => {
     for (const group of EXCLUSIVE_FLAG_GROUPS)
       for (const flag of group) {
-        const writers = ALL_MISSIONS.filter((m) => writes(m).persisted.has(flag));
+        const writers = ALL_MISSIONS.filter((m) =>
+          writes(m).persisted.has(flag),
+        );
         for (const writer of writers) {
           const other = group.find((f) => f !== flag)!;
           const guarded =
             reads(writer).has(other) ||
-            beatsOf(writer).some((b) => (b.if ?? []).some((c) => c.flag === other));
+            beatsOf(writer).some((b) =>
+              (b.if ?? []).some((c) => c.flag === other),
+            );
           expect(guarded, `${writer.id} writes ${flag}`).toBe(true);
         }
       }
@@ -205,7 +234,6 @@ describe("day and place", () => {
       expect((mission.location ?? "").length).toBeGreaterThan(0);
     },
   );
-
 });
 
 /** @param faction - A faction id. @returns Its mission id prefix. */

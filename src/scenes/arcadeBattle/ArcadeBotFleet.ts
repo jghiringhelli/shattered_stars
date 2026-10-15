@@ -96,6 +96,20 @@ export interface FleetFlightInput {
   readonly deltaMs: number;
 }
 
+/**
+ * @param reinforced - The battle runs on reinforcement pools.
+ * @param scenario - The battle plays a scenario.
+ * @returns The squad-plan format: a reinforced scenario has its own measured
+ *   crews (objective scoring amplifies the stronger side).
+ */
+export function squadFormatFor(
+  reinforced: boolean,
+  scenario: boolean,
+): SquadFormat {
+  if (!reinforced) return "classic";
+  return scenario ? "scenario" : "reinforced";
+}
+
 export class ArcadeBotFleet {
   private readonly squadPlan: SquadSkillPlan;
   /** AI pilots enlisted per side so far (the next ship's crew slot). */

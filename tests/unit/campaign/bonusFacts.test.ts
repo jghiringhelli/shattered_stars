@@ -8,10 +8,7 @@ import { describe, expect, it } from "vitest";
 import { ARMORY_MODS } from "../../../src/data/campaign/armory";
 import { RESEARCH_TREE } from "../../../src/data/campaign/research";
 import { termEntry } from "../../../src/data/tooltips";
-import {
-  bonusFacts,
-  effectTooltip,
-} from "../../../src/ui/campaign/bonusFacts";
+import { bonusFacts, effectTooltip } from "../../../src/ui/campaign/bonusFacts";
 
 describe("bonusFacts", () => {
   it("states a multiplier as a percentage", () => {
@@ -50,7 +47,8 @@ describe("bonusFacts", () => {
         tier.optionB.bonuses,
       ]),
     ];
-    for (const set of bonuses) expect(bonusFacts(set).length).toBeGreaterThan(0);
+    for (const set of bonuses)
+      expect(bonusFacts(set).length).toBeGreaterThan(0);
   });
 });
 
@@ -60,7 +58,9 @@ describe("effectTooltip", () => {
     const tip = effectTooltip("Reinforced Bulkheads", "+20% hull.", facts);
     expect(tip.title).toBe("Reinforced Bulkheads");
     expect(tip.body).toBe("+20% hull.");
-    expect(tip.howItPlays).toContain(termEntry("campaign.bonus_hull").definition);
+    expect(tip.howItPlays).toContain(
+      termEntry("campaign.bonus_hull").definition,
+    );
     expect(tip.example).toBe(termEntry("campaign.bonus_hull").example);
   });
 });

@@ -134,7 +134,9 @@ describe("flyShot", () => {
   });
 
   it("wraps onto the map", () => {
-    const shot = { ...launchShot({ ...SHOOTER, y: 5 }, TORPEDO, null, WORLD, "s1") };
+    const shot = {
+      ...launchShot({ ...SHOOTER, y: 5 }, TORPEDO, null, WORLD, "s1"),
+    };
     const flown = flyShot(shot, null, 100, WORLD);
     expect(flown.y).toBeGreaterThan(WORLD - 100);
   });

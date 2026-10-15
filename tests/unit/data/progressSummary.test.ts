@@ -47,7 +47,10 @@ describe("summarizeProgress", () => {
   });
 
   it("reports XP earned inside the current level", () => {
-    const summary = summarizeProgress({ ...FRESH, totalXp: XP_PER_LEVEL + 120 }, SHIPS);
+    const summary = summarizeProgress(
+      { ...FRESH, totalXp: XP_PER_LEVEL + 120 },
+      SHIPS,
+    );
     expect(summary.level).toBe(2);
     expect(summary.xpIntoLevel).toBe(120);
   });

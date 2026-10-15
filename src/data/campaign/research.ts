@@ -94,8 +94,8 @@ export const RESEARCH_TREE: readonly ResearchTier[] = [
     optionB: {
       id: "phase_cyclers",
       name: "Phase Cyclers",
-      description: "Primary weapons recycle 15% faster.",
-      bonuses: { weaponIntervalMultiplier: 0.85 },
+      description: "Boost, barrel roll and Snap Turn recharge 20% faster.",
+      bonuses: { maneuverRechargeMultiplier: 0.8 },
     },
   },
 ];

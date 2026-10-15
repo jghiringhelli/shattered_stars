@@ -9,6 +9,7 @@
 import type { RunSimResult, NodeRecord } from "./SurvivalRunSim";
 import { simulateSurvivalRun } from "./SurvivalRunSim";
 import type { NodeSimOptions } from "./SurvivalNodeSim";
+import { BALANCE_FACTIONS } from "../balance/squadLists";
 
 /** Clear rate of one group of battle nodes. */
 export interface ClearStats {
@@ -39,6 +40,8 @@ export interface SweepSummary {
  * @param baseSeed - First seed.
  * @param ascension - Ascension level.
  * @param node - Battle options (belt behaviour of the simulated player).
+ * @param mixedFactions - Fly every faction's starter in turn (seed % 5)
+ *   instead of the Terran Hegemony's alone.
  * @returns Every run.
  */
 export function sweepRuns(
@@ -46,10 +49,19 @@ export function sweepRuns(
   baseSeed: number,
   ascension = 0,
   node: NodeSimOptions = {},
+  mixedFactions = false,
 ): RunSimResult[] {
-  return Array.from({ length: runs }, (_, i) =>
-    simulateSurvivalRun({ seed: baseSeed + i, ascension, node }),
-  );
+  return Array.from({ length: runs }, (_, i) => {
+    const seed = baseSeed + i;
+    return simulateSurvivalRun({
+      seed,
+      ascension,
+      node,
+      ...(mixedFactions
+        ? { faction: BALANCE_FACTIONS[seed % BALANCE_FACTIONS.length]! }
+        : {}),
+    });
+  });
 }
 
 /**

@@ -132,7 +132,7 @@ export const ATOMS: readonly Power[] = [
     "gun_rof",
     "gunnery",
     "Autoloader",
-    "+10% fire rate",
+    "+10% volley: every 10th attack fires a second bolt",
     "🔁",
     "fireRate",
     0.1,
@@ -159,7 +159,7 @@ export const ATOMS: readonly Power[] = [
     "ord_rof",
     "ordnance",
     "Rapid Reload",
-    "+10% primary fire rate",
+    "+10% volley: every 10th primary attack fires a second bolt",
     "🧨",
     "fireRate",
     0.1,
@@ -177,7 +177,7 @@ export const ATOMS: readonly Power[] = [
     "auto_rof",
     "automation",
     "Servo Turrets",
-    "+10% fire rate",
+    "+10% volley: every 10th attack fires a second bolt",
     "🛰️",
     "fireRate",
     0.1,
@@ -258,10 +258,10 @@ export const ATOMS: readonly Power[] = [
     "bul_regen",
     "bulwark",
     "Regen Coils",
-    "+0.12 shield HP/s regen",
+    "+0.06 shield HP/s regen",
     "💠",
     "shieldRegen",
-    0.12,
+    0.06,
   ),
   atom(
     "bul_evade",
@@ -294,7 +294,7 @@ export const ATOMS: readonly Power[] = [
     "drv_rof",
     "drive",
     "Overcharged Capacitors",
-    "+10% fire rate",
+    "+10% volley: every 10th attack fires a second bolt",
     "⚡",
     "fireRate",
     0.1,
@@ -317,37 +317,37 @@ export const CAPSTONES: readonly Power[] = [
     "cap_gunnery",
     "gunnery",
     "Marksman's Focus",
-    "+3 primary damage",
+    "+2 primary damage",
     "🏆",
     "damage",
-    3,
+    2,
   ),
   capstone(
     "cap_ordnance",
     "ordnance",
     "Barrage Doctrine",
-    "+3 primary damage",
+    "+2 primary damage",
     "🏆",
     "damage",
-    3,
+    2,
   ),
   capstone(
     "cap_automation",
     "automation",
     "Swarm Logic",
-    "+30% fire rate",
+    "+15% volley: every 7th attack fires a second bolt",
     "🏆",
     "fireRate",
-    0.3,
+    0.15,
   ),
   capstone(
     "cap_fleet",
     "fleet",
     "Admiral's Command",
-    "+3 evasion (fleet)",
+    "+2 evasion (fleet)",
     "🏆",
     "evasion",
-    3,
+    2,
   ),
   capstone(
     "cap_bulwark",
@@ -376,11 +376,11 @@ export const CROSS_POWERS: readonly Power[] = [
     "ordnance",
     "automation",
     "Saturation Barrage",
-    "Ordnance + automation: +2 primary dmg, +15% fire rate",
+    "Ordnance + automation: +1 primary dmg, +5% volley",
     "🌟",
     (b) => {
-      b.damage += 2;
-      b.fireRate += 0.15;
+      b.damage += 1;
+      b.fireRate += 0.05;
     },
   ),
   cross(
@@ -388,11 +388,11 @@ export const CROSS_POWERS: readonly Power[] = [
     "fleet",
     "gunnery",
     "Squadron Marshal",
-    "Fleet + guns: +1 escort (wing cap 5), +2 dmg",
+    "Fleet + guns: +1 escort (wing cap 5), +1 dmg",
     "🌟",
     (b, s) => {
       s.escorts = Math.min(MAX_ESCORTS, s.escorts + 1);
-      b.damage += 2;
+      b.damage += 1;
     },
   ),
   cross(
@@ -412,11 +412,11 @@ export const CROSS_POWERS: readonly Power[] = [
     "gunnery",
     "ordnance",
     "Alpha Strike",
-    "Guns + ordnance: +2 dmg, +10% crit",
+    "Guns + ordnance: +1 dmg, +5% crit",
     "🌟",
     (b) => {
-      b.damage += 2;
-      b.critChance += 0.1;
+      b.damage += 1;
+      b.critChance += 0.05;
     },
   ),
 ];

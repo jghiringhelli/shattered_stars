@@ -16,7 +16,7 @@ export type DifficultyTermId = `diff.${AIDifficultyLevel}`;
 
 const FACTION_EXAMPLES: Readonly<Record<FactionId, string>> = {
   terran_hegemony: "Two aces plus wingmen inside the aura deal noticeably more damage.",
-  free_confederation: "A crew-heavy bomber squad whose allies take 30% less damage nearby.",
+  free_confederation: "A crew-heavy bomber squad whose allies take 33% less damage nearby.",
   synthetic_collective: "A swarm of cheap drones that each make the others tougher.",
   void_corsairs: "A raider flies a red maneuver every cycle and stays stress-free.",
   ascendant_empire: "A shield-weaver keeps the wing healthy while a psion shoots.",

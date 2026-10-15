@@ -3,6 +3,7 @@ import type { FactionId } from "../../../../src/config";
 import { getShipDefinition } from "../../../../src/data/ShipDefinitions";
 import {
   STRATEGY_IDS,
+  STRATEGY_TUNING,
   buildReserve,
   strategyRotation,
   MAX_RESERVE_ENTRIES,
@@ -79,6 +80,23 @@ describe("strategy presets", () => {
     const total = toDeployOptions(reserve).reduce((s, o) => s + o.cost, 0);
     expect(total).toBeGreaterThanOrEqual(800);
     expect(reserve.length).toBeLessThanOrEqual(MAX_RESERVE_ENTRIES);
+  });
+
+  it("brings the planned number of support hulls in every non-Balanced rotation, none extra in Balanced", () => {
+    const supports = (strategy: "balanced" | "swarm" | "aces" | "heavy") =>
+      toDeployOptions(
+        strategyRotation("terran_hegemony", strategy, "skirmish"),
+      ).filter((o) => o.role === "support").length;
+    for (const strategy of ["swarm", "aces", "heavy"] as const)
+      expect(supports(strategy)).toBe(STRATEGY_TUNING.supportPerRotation);
+    const previous = STRATEGY_TUNING.supportPerRotation;
+    STRATEGY_TUNING.supportPerRotation = 0;
+    try {
+      for (const strategy of ["swarm", "aces", "heavy"] as const)
+        expect(supports(strategy)).toBe(0);
+    } finally {
+      STRATEGY_TUNING.supportPerRotation = previous;
+    }
   });
 
   it("is deterministic", () => {

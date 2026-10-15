@@ -9,6 +9,7 @@
  * Pure.
  */
 
+import { AURA_STACKING } from "../../systems/aura/FactionAuras";
 import {
   resolveSupportAuras,
   type ActiveAura,
@@ -33,7 +34,7 @@ export function resolveTeamAuras(
   const buffs = new Map<string, ActiveAura>();
   const coveredShipIds = new Set<string>();
   for (const team of byTeam.values()) {
-    const resolution = resolveSupportAuras(team);
+    const resolution = resolveSupportAuras(team, AURA_STACKING.mixedTeamShare);
     for (const [id, aura] of resolution.buffs) buffs.set(id, aura);
     for (const id of resolution.coveredShipIds) coveredShipIds.add(id);
   }

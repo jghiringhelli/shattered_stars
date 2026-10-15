@@ -128,13 +128,13 @@ describe("squadSkillPlan — squad modes", () => {
     ({ novice: 0, average: 1, expert: 2 })[s.tier]! * 10 - s.reactionScale;
 
   it("crews every squad label with marks (a squad that never marks loses ~100 %)", () => {
-    for (const format of ["classic", "reinforced"] as const)
+    for (const format of ["classic", "reinforced", "scenario"] as const)
       for (const label of ["easy", "normal", "hard", "brutal"])
         expect(squadSkillPlan(label, format).marks).toBe(true);
   });
 
-  it("orders the labels easy < normal < hard < brutal in both formats", () => {
-    for (const format of ["classic", "reinforced"] as const) {
+  it("orders the labels easy < normal < hard < brutal in every format", () => {
+    for (const format of ["classic", "reinforced", "scenario"] as const) {
       const best = (label: string) =>
         Math.max(...squadSkillPlan(label, format).slots.map(strength));
       const mean = (label: string) => {

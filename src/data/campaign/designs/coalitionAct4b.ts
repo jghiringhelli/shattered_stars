@@ -53,7 +53,10 @@ export const COALITION_ACT4B_DESIGNS: Readonly<Record<string, MissionDesign>> =
           hullScale: 2,
         }),
         bonus(
-          within(kill("screen", "Break his screen within 90 seconds", 3, "screen"), 90),
+          within(
+            kill("screen", "Break his screen within 90 seconds", 3, "screen"),
+            90,
+          ),
           2,
           80,
         ),
@@ -136,7 +139,11 @@ export const COALITION_ACT4B_DESIGNS: Readonly<Record<string, MissionDesign>> =
         atTime(
           70,
           wave("terran_centurion", 2, LOYALIST_FACTION, { at: "behind" }),
-          say(STRIKER, "More of his loyalists, behind us. They'd die for him.", "urgent"),
+          say(
+            STRIKER,
+            "More of his loyalists, behind us. They'd die for him.",
+            "urgent",
+          ),
         ),
         atTime(
           95,
@@ -169,4 +176,3 @@ export const COALITION_ACT4B_DESIGNS: Readonly<Record<string, MissionDesign>> =
       ],
     },
   };
-

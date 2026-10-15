@@ -45,16 +45,14 @@ export const SQUADRON_RELICS: readonly Relic[] = [
     archetype: "squadron",
     tags: ["escort", "shields"],
     pool: "base",
-    description:
-      "Escorts gain +1 damage, take 10% less damage and regenerate 0.12 shield HP/s",
+    description: "Escorts gain +1 damage and take 5% less damage",
     effects: [
       {
         kind: "static",
         scope: "escorts",
         effect: {
           laserDamageBonus: 1,
-          damageTakenMultiplier: 0.9,
-          shieldRegenPerSecond: 0.12,
+          damageTakenMultiplier: 0.95,
         },
       },
     ],
@@ -82,8 +80,10 @@ export const SQUADRON_RELICS: readonly Relic[] = [
     archetype: "squadron",
     tags: ["escort", "hull"],
     pool: "fleet_pack",
-    description: "While 2+ escorts live, your flagship takes 20% less damage",
-    effects: [{ kind: "formation", minEscorts: 2, damageTakenMultiplier: 0.8 }],
+    description: "While an escort lives, your flagship takes 15% less damage",
+    effects: [
+      { kind: "formation", minEscorts: 1, damageTakenMultiplier: 0.85 },
+    ],
   },
 ];
 
@@ -97,9 +97,9 @@ export const BULWARK_RELICS: readonly Relic[] = [
     archetype: "bulwark",
     tags: ["kill", "shields"],
     pool: "base",
-    description: "Each kill restores 6 shield HP",
+    description: "Each kill restores 2 shield HP",
     effects: [
-      { kind: "static", scope: "fleet", effect: { shieldsPerKill: 6 } },
+      { kind: "static", scope: "fleet", effect: { shieldsPerKill: 2 } },
     ],
   },
   {
@@ -139,12 +139,12 @@ export const BULWARK_RELICS: readonly Relic[] = [
     tags: ["shields"],
     pool: "base",
     description:
-      "+0.24 shield HP/s regen and +4 shield HP per kill for the fleet",
+      "+0.04 shield HP/s regen and +1 shield HP per kill for the fleet",
     effects: [
       {
         kind: "static",
         scope: "fleet",
-        effect: { shieldRegenPerSecond: 0.24, shieldsPerKill: 4 },
+        effect: { shieldRegenPerSecond: 0.04, shieldsPerKill: 1 },
       },
     ],
   },
@@ -173,8 +173,8 @@ export const SALVAGER_RELICS: readonly Relic[] = [
     archetype: "salvager",
     tags: ["salvage", "kill"],
     pool: "base",
-    description: "+1 salvage per kill",
-    effects: [{ kind: "onKill", salvage: 1 }],
+    description: "+2 salvage per kill",
+    effects: [{ kind: "onKill", salvage: 2 }],
   },
   {
     id: "black_market_codes",
@@ -184,8 +184,8 @@ export const SALVAGER_RELICS: readonly Relic[] = [
     archetype: "salvager",
     tags: ["salvage", "shop"],
     pool: "salvage_pack",
-    description: "Shop prices -20%",
-    effects: [{ kind: "economy", shopDiscount: 0.2 }],
+    description: "Shop prices -25%",
+    effects: [{ kind: "economy", shopDiscount: 0.25 }],
   },
   {
     id: "scrap_converter",
@@ -195,8 +195,8 @@ export const SALVAGER_RELICS: readonly Relic[] = [
     archetype: "salvager",
     tags: ["repair", "salvage"],
     pool: "salvage_pack",
-    description: "Repairs restore 15% more hull",
-    effects: [{ kind: "economy", repairBonus: 0.15 }],
+    description: "Repairs restore 25% more hull",
+    effects: [{ kind: "economy", repairBonus: 0.25 }],
   },
   {
     id: "loaded_dice",
@@ -217,8 +217,8 @@ export const SALVAGER_RELICS: readonly Relic[] = [
     archetype: "salvager",
     tags: ["elite", "salvage"],
     pool: "salvage_pack",
-    description: "Elites and bosses drop +50% salvage",
-    effects: [{ kind: "economy", eliteSalvageMultiplier: 1.5 }],
+    description: "Elites and bosses drop +100% salvage",
+    effects: [{ kind: "economy", eliteSalvageMultiplier: 2 }],
   },
   {
     id: "smugglers_hold",
@@ -228,9 +228,9 @@ export const SALVAGER_RELICS: readonly Relic[] = [
     archetype: "salvager",
     tags: ["salvage", "shop"],
     pool: "base",
-    description: "Shop prices -10%; each kill +1 salvage",
+    description: "Shop prices -15%; each kill +1 salvage",
     effects: [
-      { kind: "economy", shopDiscount: 0.1 },
+      { kind: "economy", shopDiscount: 0.15 },
       { kind: "onKill", salvage: 1 },
     ],
   },

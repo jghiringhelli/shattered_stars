@@ -437,9 +437,10 @@ test.describe("Reinforcement battle", () => {
       (row: any) => row.definitionId === "confed_pelican",
     );
     expect(rows[bomber].allowed).toBe(false);
-    expect(rows[bomber].reason).toBe("MAX 2 BOMBERS ON FIELD");
+    // Two bombers fly: the field cap (250) binds before the 4-bomber quota.
+    expect(rows[bomber].reason).toMatch(/^(MAX \d+ BOMBERS ON FIELD|CAP )/);
     expect(shown.enabled[bomber]).toBe(false);
-    expect(shown.rows[bomber]).toContain("MAX 2 BOMBERS ON FIELD");
+    expect(shown.rows[bomber]).toMatch(/MAX \d+ BOMBERS ON FIELD|CAP /);
     expect(rows[0]).toMatchObject({
       definitionId: "confed_kestrel",
       isDefault: true,

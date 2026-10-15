@@ -71,7 +71,7 @@ const SYNERGY_TAG_TERMS: Readonly<Record<`survival.tag.${SynergyTag}`, TermEntry
   "survival.tag.kill": term(
     "Tag: kill",
     "Relics that trigger when your fleet destroys an enemy.",
-    "Capacitor Bank: each kill restores 6 shield HP.",
+    "Capacitor Bank: each kill restores 2 shield HP.",
   ),
   "survival.tag.escort": term(
     "Tag: escort",
@@ -87,7 +87,7 @@ const SYNERGY_TAG_TERMS: Readonly<Record<`survival.tag.${SynergyTag}`, TermEntry
   "survival.tag.shields": term(
     "Tag: shields",
     "Relics that add, regenerate or protect shields. Shields take hits before the hull and can recharge.",
-    "Regen Lattice: +0.24 shield HP per second and +4 shield HP per kill for the fleet.",
+    "Regen Lattice: +0.04 shield HP per second and +1 shield HP per kill for the fleet.",
   ),
   "survival.tag.hull": term(
     "Tag: hull",
@@ -102,12 +102,12 @@ const SYNERGY_TAG_TERMS: Readonly<Record<`survival.tag.${SynergyTag}`, TermEntry
   "survival.tag.salvage": term(
     "Tag: salvage",
     "Relics that increase the salvage (run currency) you earn from kills and cleared nodes.",
-    "Salvage Drones: +1 salvage per kill, on top of 3 per regular enemy.",
+    "Salvage Drones: +2 salvage per kill, on top of 3 per regular enemy.",
   ),
   "survival.tag.shop": term(
     "Tag: shop",
     "Relics that change shop prices or stock.",
-    "Black Market Codes: shop prices -20 %, so a 90 salvage relic costs 72.",
+    "Black Market Codes: shop prices -25 %, so a 90 salvage relic costs 68.",
   ),
   "survival.tag.reroll": term(
     "Tag: reroll",
@@ -117,7 +117,7 @@ const SYNERGY_TAG_TERMS: Readonly<Record<`survival.tag.${SynergyTag}`, TermEntry
   "survival.tag.elite": term(
     "Tag: elite",
     "Relics that help against elite and boss waves, the hardest fights of a sector.",
-    "Bounty Contract: elites and bosses drop +50 % salvage.",
+    "Bounty Contract: elites and bosses drop +100 % salvage.",
   ),
 };
 
@@ -140,7 +140,7 @@ const ARCHETYPE_TERMS: Readonly<Record<`survival.set.${RelicArchetype}`, TermEnt
   ),
   "survival.set.bulwark": term(
     "Set: Bulwark",
-    "A defensive build. Own 3 bulwark relics for +0.24 shield HP per second and -15 % damage taken fleet-wide.",
+    "A defensive build. Own 3 bulwark relics for +0.12 shield HP per second and -15 % damage taken fleet-wide.",
     "Hold the line while shields refill between volleys.",
   ),
   "survival.set.salvager": term(

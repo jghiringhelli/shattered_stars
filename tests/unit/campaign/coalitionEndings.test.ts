@@ -8,7 +8,10 @@ import {
   ENDING_EPILOGUES,
   ENDING_TEXT,
 } from "../../../src/data/campaign/coalitionEpilogues";
-import { CHRONICLE_FLAGS, type EndingId } from "../../../src/data/campaign/crossovers";
+import {
+  CHRONICLE_FLAGS,
+  type EndingId,
+} from "../../../src/data/campaign/crossovers";
 import { KNOWN_PORTRAITS, WRITTEN } from "./coalitionFixtures";
 
 const ENDINGS: readonly EndingId[] = ["answer", "sever", "seal", "quiet"];
@@ -40,8 +43,7 @@ describe("Coalition endings", () => {
       const speakers = ENDING_EPILOGUES[ending]
         .filter((l) => !l.when)
         .map((l) => l.speaker);
-      for (const hero of HERO_SPEAKERS)
-        expect(speakers, hero).toContain(hero);
+      for (const hero of HERO_SPEAKERS) expect(speakers, hero).toContain(hero);
     },
   );
 

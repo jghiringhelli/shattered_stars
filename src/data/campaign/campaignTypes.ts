@@ -41,6 +41,8 @@ export interface MissionEnemy {
   isAce?: boolean;
   isBoss?: boolean;
   spawnDelay?: number; // ms
+  /** Hull and shield scale of this group (per-mission difficulty knob; default 1). */
+  hullScale?: number;
 }
 
 export interface MissionReward {

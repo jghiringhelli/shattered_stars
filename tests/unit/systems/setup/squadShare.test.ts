@@ -17,7 +17,11 @@ const FACTIONS: Record<string, string> = {
   b1: "beta",
 };
 const factionOf: FactionOfShip = (id) => FACTIONS[id];
-const SQUAD = { factionId: "alpha", ships: ["a1", "a2"], loadoutChoices: { "1": "build" } };
+const SQUAD = {
+  factionId: "alpha",
+  ships: ["a1", "a2"],
+  loadoutChoices: { "1": "build" },
+};
 
 function codeOf(payload: unknown): string {
   return SHARE_CODE_PREFIX + btoa(JSON.stringify(payload));
@@ -25,32 +29,61 @@ function codeOf(payload: unknown): string {
 
 describe("squad share codes", () => {
   it("round-trips a squad", () => {
-    expect(decodeSquadCode(encodeSquadCode(SQUAD), factionOf)).toEqual({ squad: SQUAD });
+    expect(decodeSquadCode(encodeSquadCode(SQUAD), factionOf)).toEqual({
+      squad: SQUAD,
+    });
   });
 
   it("tolerates whitespace around a pasted code", () => {
-    const decoded = decodeSquadCode(`\n ${encodeSquadCode(SQUAD)} \n`, factionOf);
+    const decoded = decodeSquadCode(
+      `\n ${encodeSquadCode(SQUAD)} \n`,
+      factionOf,
+    );
     expect("squad" in decoded).toBe(true);
   });
 
   it("rejects text that is not a code", () => {
-    expect(decodeSquadCode("hello", factionOf)).toEqual({ error: "Not a squad code" });
-    expect("error" in decodeSquadCode(SHARE_CODE_PREFIX + "%%%", factionOf)).toBe(true);
+    expect(decodeSquadCode("hello", factionOf)).toEqual({
+      error: "Not a squad code",
+    });
+    expect(
+      "error" in decodeSquadCode(SHARE_CODE_PREFIX + "%%%", factionOf),
+    ).toBe(true);
   });
 
   it("rejects an unknown ship and a ship of another faction", () => {
-    expect(decodeSquadCode(codeOf({ v: 1, f: "alpha", s: ["zz"] }), factionOf)).toEqual({
+    expect(
+      decodeSquadCode(codeOf({ v: 1, f: "alpha", s: ["zz"] }), factionOf),
+    ).toEqual({
       error: "Unknown ship: zz",
     });
-    expect("error" in decodeSquadCode(codeOf({ v: 1, f: "alpha", s: ["a1", "b1"] }), factionOf)).toBe(true);
+    expect(
+      "error" in
+        decodeSquadCode(
+          codeOf({ v: 1, f: "alpha", s: ["a1", "b1"] }),
+          factionOf,
+        ),
+    ).toBe(true);
   });
 
   it("rejects empty, oversized and badly typed squads", () => {
-    expect("error" in decodeSquadCode(codeOf({ v: 1, f: "alpha", s: [] }), factionOf)).toBe(true);
+    expect(
+      "error" in
+        decodeSquadCode(codeOf({ v: 1, f: "alpha", s: [] }), factionOf),
+    ).toBe(true);
     const many = Array.from({ length: 50 }, () => "a1");
-    expect("error" in decodeSquadCode(codeOf({ v: 1, f: "alpha", s: many }), factionOf)).toBe(true);
-    expect("error" in decodeSquadCode(codeOf({ v: 1, f: "alpha", s: [3] }), factionOf)).toBe(true);
-    expect("error" in decodeSquadCode(codeOf({ v: 2, f: "alpha", s: ["a1"] }), factionOf)).toBe(true);
+    expect(
+      "error" in
+        decodeSquadCode(codeOf({ v: 1, f: "alpha", s: many }), factionOf),
+    ).toBe(true);
+    expect(
+      "error" in
+        decodeSquadCode(codeOf({ v: 1, f: "alpha", s: [3] }), factionOf),
+    ).toBe(true);
+    expect(
+      "error" in
+        decodeSquadCode(codeOf({ v: 2, f: "alpha", s: ["a1"] }), factionOf),
+    ).toBe(true);
   });
 
   it("rejects loadout picks for ships that are not in the squad", () => {
@@ -73,14 +106,22 @@ describe("saved squads", () => {
   it("replaces a squad saved under the same name", () => {
     const store = createMemoryStore();
     saveSquad("Aces", SQUAD, store, () => 1, factionOf);
-    saveSquad("aces", { ...SQUAD, ships: ["a1"], loadoutChoices: {} }, store, () => 2, factionOf);
+    saveSquad(
+      "aces",
+      { ...SQUAD, ships: ["a1"], loadoutChoices: {} },
+      store,
+      () => 2,
+      factionOf,
+    );
     const listed = listSavedSquads(store, factionOf);
     expect(listed).toHaveLength(1);
     expect(listed[0]?.squad.ships).toEqual(["a1"]);
   });
 
   it("refuses an empty name", () => {
-    expect(saveSquad("   ", SQUAD, createMemoryStore(), Date.now, factionOf)).toEqual({
+    expect(
+      saveSquad("   ", SQUAD, createMemoryStore(), Date.now, factionOf),
+    ).toEqual({
       error: "Give the squad a name",
     });
   });

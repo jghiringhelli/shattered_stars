@@ -42,8 +42,6 @@ import type { NodeShip } from "./nodeShips";
 export const RANGE_PER_POINT = 40;
 /** Damage multiplier of a crit (scene's CRIT_DAMAGE_MULTIPLIER). */
 export const CRIT_DAMAGE_MULTIPLIER = 2;
-/** Floor on the fire-rate cooldown multiplier (scene's MIN_PLAYER_COOLDOWN_MOD). */
-export const MIN_PLAYER_COOLDOWN_MOD = 0.5;
 /** Relic hit-chance bonuses never push a shot above this (scene's MAX_HIT_CHANCE). */
 export const MAX_HIT_CHANCE = 0.95;
 const MS_PER_S = 1000;
@@ -110,15 +108,11 @@ function roleOf(ship: NodeShip): "flagship" | "escort" {
 }
 
 function attackIntervalOf(combat: NodeCombat, ship: NodeShip): number {
-  const isPlayer = ship.owner === "player";
-  const fireRate = isPlayer ? combat.bonuses.fireRate : 0;
-  const cooldownMod = Math.max(MIN_PLAYER_COOLDOWN_MOD, 1 - fireRate);
-  const mutation = isPlayer
-    ? combat.rules.engine.attackIntervalMultiplier(roleOf(ship))
-    : 1;
-  return attackIntervalMs(
-    ship.combatStats.weaponCooldown * cooldownMod * mutation,
-  );
+  const mutation =
+    ship.owner === "player"
+      ? combat.rules.engine.attackIntervalMultiplier(roleOf(ship))
+      : 1;
+  return attackIntervalMs(ship.combatStats.weaponCooldown * mutation);
 }
 
 /**
@@ -164,6 +158,7 @@ function fireAt(
           targetMarked: marked,
           escortsAlive: Math.max(0, livingPlayers(combat).length - 1),
           nowMs,
+          volleyRate: combat.bonuses.fireRate,
         });
   for (let bolt = 0; bolt < adjust.shots && target.hull > 0; bolt++)
     fireBolt(combat, { attacker, target, marked, adjust, nowMs });

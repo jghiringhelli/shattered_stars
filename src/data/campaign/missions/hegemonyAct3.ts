@@ -114,12 +114,18 @@ export const HEGEMONY_ACT3_MISSIONS: CampaignMission[] = [
     playerShips: ["terran_viper", "terran_raptor"],
     maxSquadSize: 3,
     enemies: [
-      { shipId: "confed_falcon", count: 4, faction: "free_confederation" },
+      {
+        shipId: "confed_falcon",
+        count: 4,
+        faction: "free_confederation",
+        hullScale: 0.7,
+      },
       {
         shipId: "confed_hawk",
         count: 3,
         faction: "free_confederation",
         spawnDelay: 60000,
+        hullScale: 0.7,
       },
     ],
     rewards: { xp: 650, credits: 550 },

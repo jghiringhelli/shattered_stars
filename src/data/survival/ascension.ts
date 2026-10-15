@@ -27,25 +27,25 @@ export const ASCENSION_MODIFIERS: readonly AscensionModifier[] = [
   {
     level: 2,
     name: "Tight Belt",
-    description: "The asteroid belt starts two squeezes tighter",
+    description: "The asteroid belt starts one squeeze tighter",
   },
   {
     level: 3,
     name: "Veteran Wings",
-    description: "Enemy pilots reach the next skill tier earlier",
+    description: "Enemy pilots reach the next skill tier a row earlier",
   },
   {
     level: 4,
     name: "Lean Pickings",
     description: "-20% salvage from every source",
   },
-  { level: 5, name: "Hardened Hulls", description: "Enemies have +15% hull" },
+  { level: 5, name: "Hardened Hulls", description: "Enemies have +10% hull" },
   { level: 6, name: "Price Gouging", description: "Shop prices +25%" },
   { level: 7, name: "Affix Surge", description: "Elites roll two affixes" },
   {
     level: 8,
     name: "Second Wind",
-    description: "Sector bosses gain an extra phase",
+    description: "Sector bosses refill their shields once more",
   },
   {
     level: 9,
@@ -60,8 +60,8 @@ export interface AscensionRules {
   readonly extraElites: number;
   readonly eliteWeightMultiplier: number;
   readonly extraBeltSqueezes: number;
-  /** Added to the effective wave used to pick enemy AI tiers. */
-  readonly tierWaveShift: number;
+  /** Map rows every AI tier arrives earlier (Veteran Wings). */
+  readonly tierRowShift: number;
   readonly salvageMultiplier: number;
   readonly enemyHullMultiplier: number;
   /** Multiplier on all damage the player's fleet takes from enemies. */
@@ -73,14 +73,6 @@ export interface AscensionRules {
   readonly threatMultiplier: number;
 }
 
-/** Elite weight boost from Elite Contracts. */
-const ELITE_WEIGHT_BOOST = 1.6;
-/**
- * Effective-wave shift from Veteran Wings: every tier arrives two map rows
- * earlier. A full band (3) made sector 1 average from its first node and,
- * with multi-wave nodes, dropped the run win from 16 % (A2) to 1 % (A3).
- */
-const VETERAN_TIER_SHIFT = 1;
 /**
  * Enemy hull at ascension 0, as a fraction of the survival-mode hull.
  * Tuned with the node-based run sim (SurvivalRunSim, ADR-0004): at 1.0 an
@@ -95,12 +87,37 @@ export const BASE_ENEMY_HULL_MULTIPLIER = 0.55;
  * on the player's fleet deals this fraction (RelicCombatEngine). Battle nodes
  * fight several waves (CombatNodePlan.WAVES_PER_NODE); the fleet's damage
  * persists across them, so each wave must cost less than the old single
- * wave: at 1.0 the run win was 11 %; after the R2 regen cap 0.62 gives
+ * wave: at 1.0 the run win was 11 %; after the R2 regen cap 0.62 gave
  * 29–30.5 % over two 200-run seed ranges (ADR-0004, node-length pass).
+ * Round 4 (creature bosses, volley, kits: A0 mixed starters won 7 %) 0.6
+ * with a 7 % free repair per cleared battle gives ~35 % (docs/balance/round4-notes.md).
  */
-export const BASE_ENEMY_DAMAGE_MULTIPLIER = 0.62;
-/** Hardened Hulls (ascension 5): enemy hull ×1.15 on top of the base. */
-const HARDENED_HULLS_MULTIPLIER = 1.15;
+export const BASE_ENEMY_DAMAGE_MULTIPLIER = 0.6;
+
+/**
+ * The numeric knobs of the ladder, gathered so the balance sweeps
+ * (src/simulation, tests/balance) tune them as one table.
+ *
+ * - eliteWeightBoost: Elite Contracts map weight.
+ * - veteranTierRows: Veteran Wings shifts every AI tier this many map rows
+ *   earlier (2 = one tier step, 1 = half a step; a full band, 6 rows, made sector 1 average
+ *   from its first node and dropped the run win from 16 % (A2) to 1 % (A3)).
+ */
+export const ASCENSION_TUNING = {
+  enemyHull: BASE_ENEMY_HULL_MULTIPLIER,
+  enemyDamage: BASE_ENEMY_DAMAGE_MULTIPLIER,
+  eliteWeightBoost: 1.6,
+  extraElites: 1,
+  extraBeltSqueezes: 1,
+  veteranTierRows: 1,
+  leanSalvage: 0.8,
+  hardenedHulls: 1.1,
+  priceGouging: 1.25,
+  eliteAffixes: 2,
+  secondWindPhases: 1,
+  battleScars: 0.7,
+  voidTideThreat: 1.25,
+};
 
 /**
  * @param level - Ascension level (clamped to 0..MAX_ASCENSION).
@@ -108,20 +125,20 @@ const HARDENED_HULLS_MULTIPLIER = 1.15;
  */
 export function ascensionRules(level: number): AscensionRules {
   const at = (step: number): boolean => clampAscension(level) >= step;
+  const t = ASCENSION_TUNING;
   return {
-    extraElites: at(1) ? 1 : 0,
-    eliteWeightMultiplier: at(1) ? ELITE_WEIGHT_BOOST : 1,
-    extraBeltSqueezes: at(2) ? 2 : 0,
-    tierWaveShift: at(3) ? VETERAN_TIER_SHIFT : 0,
-    salvageMultiplier: at(4) ? 0.8 : 1,
-    enemyHullMultiplier:
-      BASE_ENEMY_HULL_MULTIPLIER * (at(5) ? HARDENED_HULLS_MULTIPLIER : 1),
-    enemyDamageMultiplier: BASE_ENEMY_DAMAGE_MULTIPLIER,
-    shopPriceMultiplier: at(6) ? 1.25 : 1,
-    eliteAffixCount: at(7) ? 2 : 1,
-    extraBossPhases: at(8) ? 1 : 0,
-    repairMultiplier: at(9) ? 0.7 : 1,
-    threatMultiplier: at(10) ? 1.25 : 1,
+    extraElites: at(1) ? t.extraElites : 0,
+    eliteWeightMultiplier: at(1) ? t.eliteWeightBoost : 1,
+    extraBeltSqueezes: at(2) ? t.extraBeltSqueezes : 0,
+    tierRowShift: at(3) ? t.veteranTierRows : 0,
+    salvageMultiplier: at(4) ? t.leanSalvage : 1,
+    enemyHullMultiplier: t.enemyHull * (at(5) ? t.hardenedHulls : 1),
+    enemyDamageMultiplier: t.enemyDamage,
+    shopPriceMultiplier: at(6) ? t.priceGouging : 1,
+    eliteAffixCount: at(7) ? t.eliteAffixes : 1,
+    extraBossPhases: at(8) ? t.secondWindPhases : 0,
+    repairMultiplier: at(9) ? t.battleScars : 1,
+    threatMultiplier: at(10) ? t.voidTideThreat : 1,
   };
 }
 

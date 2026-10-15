@@ -23,11 +23,7 @@ import {
 import type { EndingId } from "./crossovers";
 import type { EpilogueLine } from "./epilogues";
 
-const epi = (
-  speaker: Speaker,
-  text: string,
-  flag?: string,
-): EpilogueLine => {
+const epi = (speaker: Speaker, text: string, flag?: string): EpilogueLine => {
   const when: FlagCondition | undefined = flag ? { flag } : undefined;
   return {
     speaker: speaker.name,

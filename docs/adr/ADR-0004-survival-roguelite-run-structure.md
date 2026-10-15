@@ -382,3 +382,27 @@ choir scream). The structure of this ADR is unchanged — a boss node is `WAVES_
   24–28 s instead of 9–17 s); combat / elite unchanged (S1 100 / 99 %, S2 87 / 66 %, S3 85 / 77 %). Run win
   17 % on this sample (n = 200, ±5 %; the ADR's 30.5 % was measured on seeds 1–200 before the creature events).
   Human pilots dodge the telegraphs, so the live clear rate is higher than the bots'.
+
+
+## Balance round 4 (2026-10-15)
+
+The audit measured the creature-boss build at A0 run win **7 %** (mixed starters by `seed % 5`: TH 16, AE 15, FC 3, VC 2, SC 0),
+35 % of runs dying in sector 1, `regen_lattice` 36 % and `bul_regen` 48 % against an 8 % base, a Second Wind cliff
+(boss clear 61 % → 9 % at A8) and four rate-of-fire powers that did nothing. Changes (grids: docs/balance/round4-notes.md):
+
+| lever | before | after |
+|---|---|---|
+| enemy damage (`BASE_ENEMY_DAMAGE_MULTIPLIER`) | 0.62 | 0.60 |
+| free hull repair after every cleared battle (`BASE_NODE_REPAIR`) | 0 | 7 % (Nanite Weave still +10 %) |
+| starter kits (`STARTER_KITS`, by flagship) | none | wasp / sparrow: 2 upgrade levels + Nanite Weave; fang / blade: 3 levels + Smuggler's Hold; scout drone / drone: 3 levels + 2 extra drone wingmen |
+| Cinder Wyrm | 56 HP, spray 6 / strike 8 / nova 9 | 44 HP, 5 / 7 / 8 |
+| shield regen | Regen Lattice 0.24/s + 4 per kill, Regen Coils 0.12/s, Capacitor Bank 6, bulwark set 0.24 | 0.06/s + 1, 0.06/s, 3, 0.12/s |
+| "faster weapons" (`fireRate`) | shortened the attack interval (floor: one attack per 500 ms cycle ⇒ no-op) | **volley**: a ship's attacks add up the bonus; every time they reach 1.0 the attack fires a second bolt (+10 % = every 10th) |
+| capstones / crosses | +3 damage, +30 % fire rate, +2 damage crosses | +2 damage, +15 % volley, +1 damage crosses |
+| Second Wind (A8) | an extra creature enrage phase + 2 reinforcements | a shield refill at the next phase, no extra enrage level, no reinforcements |
+| ascension ladder (`ASCENSION_TUNING`) | belt +2, tier shift 2 rows, hulls +15 % | belt +1, tier shift 1 row, hulls +10 % |
+
+Result (A0 mixed, n 300): run win **30 % [25–35]**, node clear 99/89/90 %, boss clear 92/90/84 %, node medians 46 / 65 / 70 s (combat / elite / boss).
+Ascension 1..10: battles cleared per run fall gradually 10.5 → 8.7 → … → 7.2, elite clear 93 → 60 %, boss clear at A8 78/82/80 % (was 9 %).
+The ratio between the strongest forced picks and the mean is now ≈ 4 : 1 (it was 8 : 1); trigger relics a headless autopilot cannot fire and the
+salvage relics (the average player spends 1 of every 3 salvage) cannot be measured by the sweep and stay open (see docs/balance/round4-notes.md).

@@ -15,10 +15,7 @@ import {
   type ObjectivePoint,
   type ObjectiveShip,
 } from "../objectives";
-import {
-  LARGE_CONTROL_WEIGHT,
-  SMALL_CONTROL_WEIGHT,
-} from "./scenarioConstants";
+import { SCENARIO_TUNING } from "./scenarioConstants";
 import type {
   ControlZone,
   ObjectiveOwner,
@@ -32,8 +29,8 @@ import type {
  */
 export function controlWeight(size: ShipSize): number {
   return size === "tiny" || size === "small"
-    ? SMALL_CONTROL_WEIGHT
-    : LARGE_CONTROL_WEIGHT;
+    ? SCENARIO_TUNING.smallControlWeight
+    : SCENARIO_TUNING.largeControlWeight;
 }
 
 /**

@@ -6,7 +6,7 @@
  *   is dropped from the plan;
  * - a head ship blocked for now (no room under the cap, field quota, its
  *   unique pilot still flying): patient strategies (Aces, Heavy-Bombers)
- *   wait for room for it; eager ones (Balanced, Swarm) fill the room with
+ *   wait for room for it (none is by default); eager ones fill the room with
  *   the first later ship that fits;
  * - Balanced counters a heavy enemy field (bombers, gunships, capitals) by
  *   pulling an interceptor or heavy fighter forward from its next ships.
@@ -19,17 +19,24 @@ import type { SideLedger } from "./poolLedger";
 import { canEverDeploy, checkDeploy } from "./quotaRules";
 import type { DeployOption, QuotaRule, StrategyId } from "./reinforcementTypes";
 
-/** Strategies that hold field room for their planned ship. */
-export const PATIENT_STRATEGIES: ReadonlySet<StrategyId> = new Set([
-  "aces",
-  "heavy",
-]);
+/**
+ * Strategies that hold field room for their planned ship. None does: Aces and
+ * Heavy-Bombers used to (their expensive head ship waited while Balanced
+ * filled the room) and measured 8–10 points weaker than eager play.
+ */
+export const PATIENT_STRATEGIES: Set<StrategyId> = new Set<StrategyId>();
 
 /** Heavy enemy ships on the field that make Balanced counter-pick. */
 export const HEAVY_THREAT_COUNT = 2;
 
 /** How many of its next ships Balanced looks through for a counter. */
 export const COUNTER_LOOKAHEAD = 3;
+
+/** The counter-pick knobs above as one table the balance sweeps tune. */
+export const PLANNER_TUNING = {
+  heavyThreatCount: HEAVY_THREAT_COUNT,
+  counterLookahead: COUNTER_LOOKAHEAD,
+};
 
 const HEAVY_ROLES: ReadonlySet<ShipRole> = new Set([
   "bomber",
@@ -125,10 +132,10 @@ function counterPick(
   const threats = input.battle.opposingRoles.filter((role) =>
     HEAVY_ROLES.has(role),
   ).length;
-  if (threats < HEAVY_THREAT_COUNT) return null;
+  if (threats < PLANNER_TUNING.heavyThreatCount) return null;
   return (
     upcoming
-      .slice(0, COUNTER_LOOKAHEAD)
+      .slice(0, PLANNER_TUNING.counterLookahead)
       .find((o) => COUNTER_ROLES.has(o.role) && allowed(o)) ?? null
   );
 }

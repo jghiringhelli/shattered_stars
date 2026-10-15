@@ -11,9 +11,9 @@ import { rulesFor } from "../../../../src/arcade/reinforcements";
 describe("quotaSentence", () => {
   it("spells out the skirmish quotas in plain words", () => {
     const text = quotaSentence(rulesFor("skirmish"));
-    expect(text).toContain("up to 2 bombers");
-    expect(text).toContain("up to 1 ace");
-    expect(text).toContain("3 per match");
+    expect(text).toContain("up to 4 bombers");
+    expect(text).toContain("up to 2 aces");
+    expect(text).toContain("9 per match");
     expect(text).toContain("no capital ships");
   });
 

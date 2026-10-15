@@ -73,7 +73,9 @@ describe("researchModel", () => {
       "hull_doctrine:B",
     ]);
     expect(model.groups[1]?.caption).toContain("LOCKED (6 POINTS)");
-    expect(model.groups[1]?.cards.every((c) => c.actionKey === null)).toBe(true);
+    expect(model.groups[1]?.cards.every((c) => c.actionKey === null)).toBe(
+      true,
+    );
     expect(model.groups[1]?.cards.every((c) => c.dim)).toBe(true);
   });
 
