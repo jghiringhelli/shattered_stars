@@ -229,10 +229,21 @@ export const CONTINUOUS: BattleEntry = {
 
 export const SKIRMISH: BattleEntry = {
   sceneKey: "ArcadeBattleScene",
-  enter: async (page) => {
+  enter: async (page, options = {}) => {
     await openMenu(page);
     await startConfigured(page, "ArcadeBattleScene");
     await waitForShips(page, "ArcadeBattleScene", 2);
+    if (options.peaceful)
+      await page.evaluate(() => {
+        const scene = (window as any).game.scene.getScene("ArcadeBattleScene");
+        scene.processCombat = () => undefined;
+        scene.events.on("preupdate", () => {
+          scene.ships.forEach((s: any) => {
+            s.hull = s.maxHull;
+            s.shields = s.maxShields;
+          });
+        });
+      });
   },
 };
 

@@ -70,3 +70,11 @@ in Settings. They have no default key.
   `KeyComboTelemetry` (every special ends where X-Wing puts it), defaults / codec / labels.
 - E2E: `key-bindings` (every mode: each combo, refusal, silent roll, negatives),
   `input-full-playthrough` (keyboard + touch), `gamepad-defaults`, `flight-school`.
+- Live telemetry: `flight-telemetry-live` plays seeded random keyboard gestures in Dogfight,
+  Ace Duel, Boss Raid, Survival, Campaign and Skirmish, samples every ship (player and bots)
+  each frame and checks it against `XWingFlightOracle`: every 500 ms cycle ends on its template
+  (≤ 2 px / 1°; measured 0.01 px / 0°), mid-cycle poses sit on the template arc, no frame
+  teleports, a boost / barrel roll inside a cycle displaces it by exactly its distance
+  (220 px / speed-1 template + base) without turning the ship, and boost (4.5 s), roll (3 s)
+  and Snap Turn (5 s) never fire again before recharging. A throttle change lands in
+  `control.speed` at once but flies from the next cycle (the path is built at the boundary).
