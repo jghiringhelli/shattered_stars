@@ -16,7 +16,10 @@ export interface Loadout {
   readonly ships: readonly string[];
 }
 
-/** Host-chosen room options. */
+/**
+ * Room options. The relay validates every change; in scenario mode it always
+ * holds a known `scenarioId` (the room starts on the first scenario).
+ */
 export interface RoomOptions {
   /** Scenario id (scenario mode only). */
   readonly scenarioId?: string;
@@ -53,6 +56,16 @@ export interface RoomView {
   /** "starting": the match starts at this server time (ms). */
   readonly startsAt: number | null;
   readonly quickMatch: boolean;
+  /** The relay's squad point limit for this room (loadouts are validated against it). */
+  readonly pointLimit: number;
+  /** Open after a match: everyone who sets ready replays it; null when no rematch is open. */
+  readonly rematch: RematchView | null;
+}
+
+/** The rematch window after a match (ready flags are the votes). */
+export interface RematchView {
+  /** Server time (ms) when the window closes. */
+  readonly closesAt: number;
 }
 
 /** One seat of a started match (seat order is canonical on every client). */
@@ -64,12 +77,20 @@ export interface SeatView {
   readonly loadout: Loadout;
 }
 
-/** Everything a client needs to build the identical battle. */
+/**
+ * The match definition. The relay owns every field: clients only choose
+ * their own loadout, which the relay validated against `pointLimit`.
+ */
 export interface MatchStart {
   readonly matchId: string;
   readonly seed: number;
   readonly mode: MatchMode;
+  /** Fixed by the relay (scenario mode always carries a `scenarioId`). */
   readonly options: RoomOptions;
+  /** Map theme id, derived by the relay from `seed` (clients verify the same derivation). */
+  readonly mapTheme: string;
+  /** Squad point limit of the battle. */
+  readonly pointLimit: number;
   readonly seats: readonly SeatView[];
   /** Ticks between sampling an input and simulating it. */
   readonly inputDelay: number;
@@ -101,6 +122,8 @@ export type ClientMessage =
   | { readonly t: "set_team"; readonly team: TeamId }
   | { readonly t: "set_options"; readonly options: RoomOptions }
   | { readonly t: "set_ready"; readonly ready: boolean }
+  /** Vote for (or against) replaying the match that just ended, with the same squads and teams. */
+  | { readonly t: "rematch"; readonly vote: boolean }
   | { readonly t: "chat"; readonly text: string }
   | { readonly t: "loaded" }
   | ClientInputMessage
@@ -139,6 +162,9 @@ export type ErrorCode =
   | "not_in_room"
   | "not_host"
   | "invalid_loadout"
+  | "invalid_options"
+  | "team_full"
+  | "no_rematch"
   | "not_allowed"
   | "server_busy";
 
@@ -172,7 +198,7 @@ export type ServerMessage =
   | { readonly t: "room"; readonly room: RoomView }
   | {
       readonly t: "room_left";
-      readonly reason: "left" | "ready_timeout" | "closed";
+      readonly reason: "left" | "ready_timeout" | "closed" | "rematch_expired";
     }
   | {
       readonly t: "queue";

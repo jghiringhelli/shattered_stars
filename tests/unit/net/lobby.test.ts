@@ -40,13 +40,15 @@ function room(overrides: Partial<RoomView> = {}): RoomView {
     readyDeadline: null,
     startsAt: null,
     quickMatch: false,
+    pointLimit: 200,
+    rematch: null,
     players: [
       {
         id: "me",
         name: "Me",
         seat: 0,
         team: 0,
-        loadout: { faction: "void_corsairs", ships: ["corsair_raider"] },
+        loadout: { faction: "void_corsairs", ships: ["corsair_blade"] },
         ready: false,
         pingMs: 30,
         connected: true,
@@ -174,7 +176,7 @@ describe("LobbyModel", () => {
         shared.players[0]!,
         {
           ...shared.players[1]!,
-          loadout: { faction: "void_corsairs", ships: ["corsair_raider"] },
+          loadout: { faction: "void_corsairs", ships: ["corsair_blade"] },
         },
       ],
     };
@@ -204,7 +206,11 @@ describe("LobbyModel", () => {
         room: room({ startsAt: 3_000, readyDeadline: 20_000 }),
       },
     });
-    expect(roomCountdowns(state, 1_100)).toEqual({ start: 2, ready: 19 });
+    expect(roomCountdowns(state, 1_100)).toEqual({
+      start: 2,
+      ready: 19,
+      rematch: null,
+    });
   });
 });
 
@@ -226,7 +232,7 @@ describe("team factions", () => {
             id: i === 0 ? "me" : `p${i}`,
             seat: i,
             team: teams[i] ?? 0,
-            loadout: faction ? { faction, ships: ["corsair_raider"] } : null,
+            loadout: faction ? { faction, ships: ["corsair_blade"] } : null,
           })),
         }),
       },
@@ -311,6 +317,8 @@ const MATCH: MatchStart = {
   seed: 99,
   mode: "reinforcements",
   options: {},
+  mapTheme: "kessa_lane",
+  pointLimit: 200,
   inputDelay: 4,
   authoritySeat: 0,
   seats: [
@@ -321,7 +329,7 @@ const MATCH: MatchStart = {
       team: 0,
       loadout: {
         faction: "void_corsairs",
-        ships: ["corsair_raider", "corsair_cutlass"],
+        ships: ["corsair_blade", "corsair_cutlass"],
       },
     },
     {
@@ -394,7 +402,7 @@ describe("matchSetup", () => {
   it("lists dogfight seats canonically", () => {
     const init = buildOnlineDogfightInit({ ...MATCH, mode: "dogfight" }, 1);
     expect(init.seats.map((s) => s.shipId)).toEqual([
-      "corsair_raider",
+      "corsair_blade",
       "terran_viper",
     ]);
     expect(init.online.localSeat).toBe(1);
@@ -426,7 +434,7 @@ describe("OnlineSession", () => {
     link.clock.advance(100);
     expect(a.state.room?.quickMatch).toBe(true);
     for (const s of [a, b]) {
-      s.setLoadout({ faction: "void_corsairs", ships: ["corsair_raider"] });
+      s.setLoadout({ faction: "void_corsairs", ships: ["corsair_blade"] });
       s.setReady(true);
     }
     link.clock.advance(1_000);

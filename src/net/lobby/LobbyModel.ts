@@ -162,8 +162,10 @@ function reduceMessage(state: LobbyState, message: ServerMessage): LobbyState {
 }
 
 function roomLeftNotice(
-  reason: "left" | "ready_timeout" | "closed",
+  reason: "left" | "ready_timeout" | "closed" | "rematch_expired",
 ): LobbyState["notice"] {
+  if (reason === "rematch_expired")
+    return { text: "Nobody asked for a rematch — room closed.", tone: "neutral" };
   if (reason === "ready_timeout")
     return {
       text: "Ready check missed — you left the match.",
@@ -267,11 +269,12 @@ export function openSeats(state: LobbyState): number {
 export function roomCountdowns(
   state: LobbyState,
   nowMs: number,
-): { start: number | null; ready: number | null } {
+): { start: number | null; ready: number | null; rematch: number | null } {
   const left = (at: number | null): number | null =>
     at === null ? null : Math.max(0, Math.ceil((at - nowMs) / 1000));
   return {
     start: left(state.room?.startsAt ?? null),
     ready: left(state.room?.readyDeadline ?? null),
+    rematch: left(state.room?.rematch?.closesAt ?? null),
   };
 }

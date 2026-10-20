@@ -5,21 +5,26 @@
  */
 
 import {
-  computeInputDelay,
   type ClientMessage,
   type ErrorCode,
   type MatchMode,
-  type MatchStart,
   type ServerMessage,
 } from "../../src/net/protocol";
+import { buildMatchStart } from "./matchDefinition";
 import { MatchRelay } from "./MatchRelay";
 import { Matchmaker } from "./Matchmaker";
-import { Room } from "./Room";
+import { Room, type JoinRefusal, type Refusal } from "./Room";
 import { generateRoomCode } from "./roomCodes";
 import type { RelayDeps, Session } from "./types";
 
 /** Range of battle seeds (unsigned 32-bit). */
 const SEED_RANGE = 0x1_0000_0000;
+
+/** What a refused seat request tells the player. */
+const JOIN_REFUSALS: Readonly<Record<JoinRefusal, string>> = {
+  room_full: "That room is full.",
+  room_started: "That match already started.",
+};
 
 /** Messages handled while the sender sits in a running match. */
 type MatchMessage = Extract<
@@ -32,6 +37,8 @@ export class RoomService {
   private readonly matches = new Map<string, MatchRelay>();
   private readonly matchmaker = new Matchmaker();
   private matchCounter = 0;
+  /** `match_end` a disconnected player missed (delivered when they resume). */
+  private readonly missedEnds = new Map<string, ServerMessage>();
 
   /**
    * @param deps - Scheduler, randomness, logger, config.
@@ -44,13 +51,13 @@ export class RoomService {
 
   /** @param session - Requester. @param mode - Room mode. */
   create(session: Session, mode: MatchMode): void {
-    this.leave(session);
-    if (this.rooms.size >= this.deps.config.maxRooms)
+    if (this.roomsFull(session))
       return this.error(
         session,
         "server_busy",
         "Too many rooms open; try again shortly.",
       );
+    this.leave(session);
     const room = this.openRoom(mode, session.build, false);
     this.seat(session, room);
   }
@@ -72,12 +79,21 @@ export class RoomService {
       );
     if (session.roomCode === code)
       return this.send(session, { t: "room", room: room.view() });
+    // Refuse before leaving: a failed join must not cost the player their current room.
+    const refusal = room.joinRefusal();
+    if (refusal) return this.error(session, refusal, JOIN_REFUSALS[refusal]);
     this.leave(session);
     this.seat(session, room);
   }
 
   /** @param session - Requester. @param mode - Mode to queue for. */
   quickMatch(session: Session, mode: MatchMode): void {
+    if (this.roomsFull(session))
+      return this.error(
+        session,
+        "server_busy",
+        "Too many rooms open; try again shortly.",
+      );
     this.leave(session);
     const group = this.matchmaker.enqueue(
       session.id,
@@ -107,9 +123,10 @@ export class RoomService {
   /** @param session - Player leaving their room / queue (no-op when in neither). */
   leave(
     session: Session,
-    reason: "left" | "ready_timeout" | "closed" = "left",
+    reason: "left" | "ready_timeout" | "closed" | "rematch_expired" = "left",
   ): void {
     this.matchmaker.remove(session.id);
+    this.missedEnds.delete(session.id);
     const room = session.roomCode
       ? this.rooms.get(session.roomCode)
       : undefined;
@@ -119,8 +136,12 @@ export class RoomService {
     if (seat !== null) this.matches.get(room.setup.code)?.leave(seat);
     room.remove(session.id);
     this.send(session, { t: "room_left", reason });
-    if (room.isEmpty()) this.closeRoom(room);
-    else room.broadcastView();
+    if (room.isEmpty()) {
+      this.closeRoom(room);
+      return;
+    }
+    room.broadcastView();
+    if (reason === "left") this.requeueOrphans(room);
   }
 
   /** @param session - Sender. @param message - A lobby edit (loadout, team, options, ready). */
@@ -132,14 +153,20 @@ export class RoomService {
     >,
   ): void {
     const room = this.roomOf(session);
-    if (!room) return;
-    const error = this.applyEdit(room, session.id, message);
-    if (error)
-      return this.error(
-        session,
-        error,
-        `Cannot ${message.t.replace("set_", "change ")} now.`,
-      );
+    if (!room)
+      return this.error(session, "not_in_room", "You are not in a room.");
+    const refusal = this.applyEdit(room, session.id, message);
+    if (refusal) return this.error(session, refusal.code, refusal.message);
+    room.broadcastView();
+  }
+
+  /** @param session - Sender. @param vote - Replay the match that just ended (yes / no). */
+  rematch(session: Session, vote: boolean): void {
+    const room = this.roomOf(session);
+    if (!room)
+      return this.error(session, "not_in_room", "You are not in a room.");
+    const refusal = room.voteRematch(session.id, vote);
+    if (refusal) return this.error(session, refusal.code, refusal.message);
     room.broadcastView();
   }
 
@@ -191,6 +218,9 @@ export class RoomService {
     const room = this.roomOf(session);
     if (!room) return;
     room.setConnected(session.id, true);
+    const missed = this.missedEnds.get(session.id);
+    this.missedEnds.delete(session.id);
+    if (missed) this.send(session, missed);
     room.broadcastView();
     const match = this.matches.get(room.setup.code);
     const seat = this.seatInMatch(room, session.id);
@@ -222,7 +252,7 @@ export class RoomService {
     room: Room,
     id: string,
     message: Parameters<RoomService["edit"]>[1],
-  ): ErrorCode | null {
+  ): Refusal | null {
     switch (message.t) {
       case "set_loadout":
         return room.setLoadout(id, message.loadout);
@@ -249,12 +279,14 @@ export class RoomService {
         quickMatch,
         countdownMs: config.startCountdownMs,
         readyWindowMs: config.quickMatchReadyMs,
+        rematchWindowMs: config.rematchWindowMs,
       },
       scheduler,
       {
         send: (id, message) => this.sendTo(id, message),
         onCountdownDone: (r) => this.startMatch(r),
         onReadyTimeout: (r, unready) => this.expireReadyCheck(r, unready),
+        onRematchExpired: (r) => this.expireRematch(r),
       },
     );
     this.rooms.set(code, room);
@@ -263,35 +295,20 @@ export class RoomService {
 
   private seat(session: Session, room: Room): void {
     const error = room.add(session.id, session.name, session.rttMs);
-    if (error)
-      return this.error(
-        session,
-        error,
-        error === "room_full"
-          ? "That room is full."
-          : "That match already started.",
-      );
+    if (error) return this.error(session, error, JOIN_REFUSALS[error]);
     session.roomCode = room.setup.code;
     room.broadcastView();
   }
 
   private startMatch(room: Room): void {
     const members = room.list();
-    const match: MatchStart = {
+    const match = buildMatchStart({
       matchId: `${room.setup.code}-${++this.matchCounter}`,
       seed: this.deps.random.int(SEED_RANGE),
       mode: room.setup.mode,
       options: room.options,
-      seats: members.map((m, seat) => ({
-        seat,
-        playerId: m.id,
-        name: m.name,
-        team: m.team,
-        loadout: m.loadout ?? { faction: "", ships: [] },
-      })),
-      inputDelay: computeInputDelay(members.map((m) => m.pingMs)),
-      authoritySeat: 0,
-    };
+      members,
+    });
     room.beginPlaying();
     const relay = new MatchRelay(match, this.deps.scheduler, this.deps.config, {
       sendToSeat: (seat, message) =>
@@ -316,8 +333,13 @@ export class RoomService {
   ): void {
     const relay = this.matches.get(room.setup.code);
     this.matches.delete(room.setup.code);
-    room.broadcast({ t: "match_end", reason, winnerTeam });
-    room.endPlaying();
+    const ended: ServerMessage = { t: "match_end", reason, winnerTeam };
+    room.broadcast(ended);
+    // Members whose socket is down get the result when they come back.
+    for (const member of room.list())
+      if (!this.sessionOf(member.id)?.connection)
+        this.missedEnds.set(member.id, ended);
+    room.endPlaying(reason === "finished");
     if (room.isEmpty()) this.closeRoom(room);
     else room.broadcastView();
     this.deps.logger.info("match ended", {
@@ -340,6 +362,33 @@ export class RoomService {
       const session = this.sessionOf(id);
       if (session) this.quickMatch(session, room.setup.mode);
     }
+  }
+
+  private expireRematch(room: Room): void {
+    if (!room.setup.quickMatch) return room.broadcastView();
+    // A quick-match room is ephemeral: nobody replayed, so it dissolves.
+    for (const member of room.list()) {
+      const session = this.sessionOf(member.id);
+      if (session) this.leave(session, "rematch_expired");
+    }
+  }
+
+  /** A quick-match opponent left before the match: the rest search for a new one. */
+  private requeueOrphans(room: Room): void {
+    if (!room.setup.quickMatch || room.hasPlayed || room.phase === "playing")
+      return;
+    for (const member of room.list()) {
+      const session = this.sessionOf(member.id);
+      if (!session) continue;
+      this.leave(session, "closed");
+      this.quickMatch(session, room.setup.mode);
+    }
+  }
+
+  private roomsFull(session: Session): boolean {
+    if (this.rooms.size < this.deps.config.maxRooms) return false;
+    // Leaving the only seat of a room frees that room for the new one.
+    return this.roomOf(session)?.list().length !== 1;
   }
 
   private closeRoom(room: Room): void {

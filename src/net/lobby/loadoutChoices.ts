@@ -16,6 +16,7 @@ import {
   FACTION_NAMES,
 } from "../../ui/lobby/lobbyData";
 import { MODE_RULES, type Loadout, type MatchMode } from "../protocol";
+import { fitToPointLimit, isOnlineShip } from "../rules/squadRules";
 
 /** A squad saved by the Squad Builder (registry `onlineFaction` / `onlineSquad`). */
 export interface SavedSquad {
@@ -29,8 +30,15 @@ export interface SavedSquad {
  */
 export function onlineShipChoices(faction: FactionId): string[] {
   return getShipsByFaction(faction)
-    .filter((ship) => ship.role !== "capital" && ship.baseStats.size !== "huge")
+    .filter(isOnlineShip)
     .map((ship) => ship.id);
+}
+
+/** @param faction - A faction. @returns Its first online ship (a one-ship squad). */
+function defaultFlagship(faction: FactionId): string[] {
+  const ship =
+    onlineShipChoices(faction)[0] ?? defaultShipsForFaction(faction)[0];
+  return ship ? [ship] : [];
 }
 
 /**
@@ -45,20 +53,22 @@ export function defaultLoadout(
   saved?: SavedSquad | null,
 ): Loadout {
   const rules = MODE_RULES[mode];
-  if (rules.maxShips === 1)
-    return {
-      faction,
-      ships: [
-        onlineShipChoices(faction)[0] ??
-          defaultShipsForFaction(faction)[0] ??
-          "",
-      ],
-    };
+  if (rules.maxShips === 1) return { faction, ships: defaultFlagship(faction) };
   const squad =
     saved && saved.faction === faction && saved.ships.length > 0
       ? [...saved.ships]
       : defaultShipsForFaction(faction);
-  return { faction, ships: squad.slice(0, rules.maxShips) };
+  const flyable = squad.filter((id) => {
+    const definition = getShipDefinition(id);
+    return (
+      definition?.faction === faction && isOnlineShip(definition)
+    );
+  });
+  const ships = fitToPointLimit(
+    flyable.slice(0, rules.maxShips),
+    rules.pointLimit,
+  );
+  return { faction, ships: ships.length > 0 ? ships : defaultFlagship(faction) };
 }
 
 /**

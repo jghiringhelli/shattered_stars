@@ -39,6 +39,13 @@ export {
   type MatchRelayTimings,
 } from "./matchRelayTypes";
 
+/** A desync-triggered resync is not started again within this long (ms): a bad client cannot make the authority ship snapshots in a loop. */
+export const RESYNC_COOLDOWN_MS = 2_000;
+/** How long the authority has to answer a snapshot request (ms). */
+export const RESYNC_TIMEOUT_MS = 10_000;
+/** Unanswered snapshot requests after which the match is abandoned. */
+export const RESYNC_MAX_ATTEMPTS = 3;
+
 export class MatchRelay {
   phase: "loading" | "running" | "ended" = "loading";
   authority: number;
@@ -48,6 +55,9 @@ export class MatchRelay {
   private readonly resync: ResyncBarrier;
   private loadTimer: TimerHandle | null;
   private overTimer: TimerHandle | null = null;
+  private resyncTimer: TimerHandle | null = null;
+  private resyncAttempts = 0;
+  private lastDesyncResyncAt = Number.NEGATIVE_INFINITY;
 
   /**
    * @param start - The match as clients received it.
@@ -85,6 +95,8 @@ export class MatchRelay {
   loaded(seat: number): void {
     const s = this.seats[seat];
     if (!s || s.left || !s.connected || this.phase === "ended") return;
+    // A seat already in the match asks for nothing: only a rejoining seat re-sends `loaded`.
+    if (this.phase === "running" && s.loaded) return;
     s.loaded = true;
     if (this.phase === "loading") {
       if (this.seats.every((x) => x.left || !x.connected || x.loaded))
@@ -130,6 +142,9 @@ export class MatchRelay {
       .map((x) => x.seat);
     if (this.hashes.record(seat, tick, hash, expected) !== "mismatch") return;
     this.desyncCount++;
+    const now = this.scheduler.now();
+    if (now - this.lastDesyncResyncAt < RESYNC_COOLDOWN_MS) return;
+    this.lastDesyncResyncAt = now;
     const targets = this.seats
       .filter((x) => this.isPresent(x) && x.seat !== this.authority)
       .map((x) => x.seat);
@@ -140,6 +155,7 @@ export class MatchRelay {
   snapshot(seat: number, tick: number, data: string): void {
     const resolved = this.resync.resolve(seat, tick, this.authority);
     if (!resolved) return;
+    this.clearResyncTimer();
     for (const target of resolved.targets) {
       const t = this.seats[target];
       if (!t || !this.isPresent(t)) continue;
@@ -218,6 +234,7 @@ export class MatchRelay {
     this.overTimer?.cancel();
     this.loadTimer = null;
     this.overTimer = null;
+    this.clearResyncTimer();
   }
 
   private go(): void {
@@ -298,8 +315,51 @@ export class MatchRelay {
   ): void {
     const barrier =
       Math.max(...this.seats.map((s) => s.log.next)) + RESYNC_MARGIN_TICKS;
-    if (this.resync.request(targets, reason, barrier, this.authority))
-      this.hashes.clearThrough(barrier);
+    if (!this.resync.request(targets, reason, barrier, this.authority)) return;
+    this.hashes.clearThrough(barrier);
+    this.armResyncTimer();
+  }
+
+  private armResyncTimer(): void {
+    this.resyncTimer?.cancel();
+    this.resyncTimer = this.scheduler.setTimeout(
+      () => this.resyncStalled(),
+      RESYNC_TIMEOUT_MS,
+    );
+  }
+
+  private clearResyncTimer(): void {
+    this.resyncTimer?.cancel();
+    this.resyncTimer = null;
+    this.resyncAttempts = 0;
+  }
+
+  /** The authority never sent its snapshot (a background tab, a stalled client): try another seat, then give up. */
+  private resyncStalled(): void {
+    this.resyncTimer = null;
+    const pending = this.resync.cancel();
+    if (!pending || this.phase !== "running") return;
+    if (++this.resyncAttempts >= RESYNC_MAX_ATTEMPTS) {
+      this.end("abandoned", null);
+      return;
+    }
+    const others = this.seats.filter(
+      (s) => s.seat !== this.authority && this.isPresent(s),
+    );
+    // A target may take over only while another target still needs the snapshot.
+    const next =
+      others.find((s) => !pending.targets.has(s.seat)) ??
+      (pending.targets.size > 1 ? others[0] : undefined);
+    if (next) this.setAuthority(next.seat);
+    const targets = [...pending.targets].filter((t) => t !== next?.seat);
+    this.requestResync(targets, pending.reason);
+    this.armResyncTimer();
+  }
+
+  private setAuthority(seat: number): void {
+    this.authority = seat;
+    for (const s of this.seats)
+      if (!s.left) this.hooks.sendToSeat(s.seat, { t: "authority", seat });
   }
 
   private afterSeatLost(): void {
@@ -317,10 +377,7 @@ export class MatchRelay {
     if (current && this.isPresent(current)) return;
     const next = this.seats.find((s) => this.isPresent(s));
     if (!next) return;
-    this.authority = next.seat;
-    for (const s of this.seats)
-      if (!s.left)
-        this.hooks.sendToSeat(s.seat, { t: "authority", seat: next.seat });
+    this.setAuthority(next.seat);
     const pending = this.resync.cancel();
     if (pending) this.requestResync([...pending.targets], pending.reason);
   }
@@ -345,12 +402,20 @@ export class MatchRelay {
 
   private finish(): void {
     if (this.phase === "ended") return;
-    const reports = this.seats.filter((s) => s.report);
-    const winner =
-      this.seats[this.authority]?.report?.winner ??
-      reports[0]?.report?.winner ??
-      null;
-    this.end("finished", winner);
+    this.end("finished", this.reportedWinner());
+  }
+
+  /** The winner most seats reported; a tie goes to the authority's report. */
+  private reportedWinner(): TeamId | null {
+    const votes = new Map<TeamId | null, number>();
+    for (const s of this.seats)
+      if (s.report) votes.set(s.report.winner, (votes.get(s.report.winner) ?? 0) + 1);
+    const top = Math.max(0, ...votes.values());
+    const leaders = [...votes.entries()].filter(([, n]) => n === top);
+    const authorityReport = this.seats[this.authority]?.report;
+    if (authorityReport && votes.get(authorityReport.winner) === top)
+      return authorityReport.winner;
+    return leaders[0]?.[0] ?? null;
   }
 
   private end(reason: "finished" | "abandoned", winner: TeamId | null): void {

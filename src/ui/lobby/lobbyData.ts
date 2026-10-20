@@ -35,7 +35,7 @@ const DEFAULT_FACTION_SHIPS: Readonly<
     "synth_drone",
     "synth_drone",
   ],
-  void_corsairs: ["corsair_raider", "corsair_raider", "corsair_cutlass"],
+  void_corsairs: ["corsair_blade", "corsair_blade", "corsair_cutlass"],
   ascendant_empire: ["ascendant_seraph", "ascendant_seraph"],
 };
 

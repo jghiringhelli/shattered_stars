@@ -47,8 +47,11 @@ const HEGEMONY_SQUAD = {
 };
 const CORSAIR_SQUAD = {
   faction: COR,
-  ships: ["corsair_raider", "corsair_raider", "corsair_raider"],
+  ships: ["corsair_blade", "corsair_blade", "corsair_blade"],
 };
+
+/** Set to the port of a running `npm run start:server` to fly the battles against that real process. */
+const EXTERNAL_RELAY_PORT = Number(process.env["E2E_RELAY_PORT"] ?? 0);
 
 let relay: RunningRelay;
 
@@ -78,6 +81,14 @@ async function seatSides(
 }
 
 test.beforeAll(async () => {
+  if (EXTERNAL_RELAY_PORT > 0) {
+    relay = {
+      port: EXTERNAL_RELAY_PORT,
+      core: undefined as never,
+      close: async () => undefined,
+    };
+    return;
+  }
   relay = await startRelayServer(
     {
       ...DEFAULT_CONFIG,

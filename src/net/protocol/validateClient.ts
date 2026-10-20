@@ -79,7 +79,7 @@ export function readTickInput(value: unknown): TickInput | undefined {
 
 /**
  * @param value - Anything.
- * @returns A well-formed loadout (shape only; game rules are the client's), or undefined.
+ * @returns A well-formed loadout (shape only; the relay checks it against the game's squad rules), or undefined.
  */
 export function readLoadout(value: unknown): Loadout | undefined {
   if (!isRecord(value)) return undefined;
@@ -198,6 +198,10 @@ const READERS: Readonly<Record<string, Reader>> = {
   set_ready: (raw) => {
     const ready = readBoolean(raw["ready"]);
     return ready === undefined ? undefined : { t: "set_ready", ready };
+  },
+  rematch: (raw) => {
+    const vote = readBoolean(raw["vote"]);
+    return vote === undefined ? undefined : { t: "rematch", vote };
   },
   chat: (raw) => {
     const text = readDisplayText(raw["text"], NET_LIMITS.chatMaxLength);

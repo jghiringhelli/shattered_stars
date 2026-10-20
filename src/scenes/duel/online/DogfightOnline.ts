@@ -12,6 +12,7 @@
  * Pure: no Phaser.
  */
 
+import { lockTrickRuleToIdentity } from "../../../arcade/systems/FlightCapabilities";
 import { PlayerFlightPilot } from "../../../arcade/systems/PlayerFlightPilot";
 import { SeatInput } from "../../../net/battle/SeatInput";
 import { decodePilotInput } from "../../../net/input/PilotInputCodec";
@@ -48,6 +49,7 @@ export class DogfightOnline {
 
   /** @param init - The online duel (canonical seats, local seat, seed). */
   constructor(readonly init: OnlineDogfightInit) {
+    lockTrickRuleToIdentity(true);
     this.seats = init.seats.map(() => new SeatInput());
     this.pilots = this.seats.map((seat) => {
       const pilot = new PlayerFlightPilot(seat);
@@ -140,6 +142,7 @@ export class DogfightOnline {
 
   /** Stop the seat pilots listening (scene shutdown). */
   dispose(): void {
+    lockTrickRuleToIdentity(false);
     this.pilots.forEach((pilot) => pilot.detach());
   }
 }

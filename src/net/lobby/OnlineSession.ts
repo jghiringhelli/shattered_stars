@@ -145,6 +145,11 @@ export class OnlineSession {
     this.client.send({ t: "set_ready", ready });
   }
 
+  /** @param vote - Replay the match that just ended (everyone present must vote yes). */
+  rematch(vote: boolean): void {
+    this.client.send({ t: "rematch", vote });
+  }
+
   /** @param scenarioId - Scenario (host, scenario mode). */
   setScenario(scenarioId: string): void {
     this.client.send({ t: "set_options", options: { scenarioId } });

@@ -74,6 +74,23 @@ describe("NetClient handshake and heartbeat", () => {
 });
 
 describe("NetClient reconnection", () => {
+  it("does not open a second socket when connect() is called while reconnecting", () => {
+    const link = createRelayLink();
+    const c = client(link);
+    c.connect();
+    link.clock.advance(100);
+    link.down = true;
+    link.cutAll();
+    link.clock.advance(LINK_MS);
+    expect(c.state).toBe("reconnecting");
+    link.down = false;
+    const before = link.opened;
+    c.connect();
+    link.clock.advance(5_000);
+    expect(c.state).toBe("online");
+    expect(link.opened - before).toBe(1);
+  });
+
   it("resumes the same session after a network drop and gets its room back", () => {
     const link = createRelayLink();
     const c = client(link);

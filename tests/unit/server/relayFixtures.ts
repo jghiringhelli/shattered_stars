@@ -77,6 +77,8 @@ export interface CoreHarness {
     build?: string,
   ): { session: Session; conn: RecordingConnection };
   send(session: Session, message: ClientMessage): void;
+  /** Resume a dropped session on a fresh connection. */
+  reconnect(session: Session): RecordingConnection;
 }
 
 /** @param overrides - Config overrides. @returns A fresh relay core harness. */
@@ -111,6 +113,17 @@ export function createCoreHarness(
       return { session, conn };
     },
     send: (session, message) => core.handle(session, message),
+    reconnect(session) {
+      const conn = new RecordingConnection();
+      core.hello(conn, {
+        t: "hello",
+        protocol: PROTOCOL_VERSION,
+        build: session.build,
+        name: session.name,
+        token: session.token,
+      });
+      return conn;
+    },
   };
 }
 

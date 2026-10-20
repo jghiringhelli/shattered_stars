@@ -92,7 +92,7 @@ export class NetClient {
 
   /** Open the connection (resuming the stored session when there is one). */
   connect(): void {
-    if (this.state === "online" || this.state === "connecting") return;
+    if (["online", "connecting", "reconnecting"].includes(this.state)) return;
     this.attempts = 0;
     this.open("connecting");
   }
@@ -143,6 +143,9 @@ export class NetClient {
     this.setState(state);
     this.attempts++;
     this.welcomed = false;
+    this.retryTimer?.cancel();
+    this.retryTimer = null;
+    this.transport?.close(NORMAL_CLOSE, "superseded");
     // Events from a transport this client already abandoned are ignored.
     const transport: Transport = this.options.transport(this.options.url, {
       onOpen: () => {

@@ -187,6 +187,8 @@ const MATCH: MatchStart = {
   seed: 1,
   mode: "dogfight",
   options: {},
+  mapTheme: "kessa_lane",
+  pointLimit: 200,
   inputDelay: 2,
   authoritySeat: 0,
   seats: [

@@ -26,6 +26,7 @@ import {
   type Scheduler,
 } from "../../src/net/time";
 import { isOriginAllowed, type ServerConfig } from "./config";
+import { guardScheduler, runGuarded } from "./guarded";
 import { createLogger, type Logger } from "./logger";
 import { ConnectionRateLimiter } from "./RateLimiter";
 import { RelayCore } from "./RelayCore";
@@ -68,7 +69,10 @@ export async function startRelayServer(
   overrides: RelayOverrides = {},
 ): Promise<RunningRelay> {
   const logger = overrides.logger ?? createLogger(config.logLevel);
-  const scheduler = overrides.scheduler ?? createSystemScheduler();
+  const scheduler = guardScheduler(
+    overrides.scheduler ?? createSystemScheduler(),
+    logger,
+  );
   const core = new RelayCore({
     scheduler,
     logger,
@@ -182,12 +186,22 @@ function handleSocket(
   });
   ws.on("message", (data: RawData) => {
     lastSeen = ctx.scheduler.now();
-    session = onFrame(data, session, {
-      connection,
-      limiter,
-      ctx,
-      helloTimer: () => helloTimer.cancel(),
+    const before = session;
+    const ok = runGuarded(ctx.logger, "frame", () => {
+      session = onFrame(data, session, {
+        connection,
+        limiter,
+        ctx,
+        helloTimer: () => helloTimer.cancel(),
+      });
     });
+    if (!ok && before)
+      connection.send({
+        t: "error",
+        code: "server_busy",
+        message: "The relay hit an internal error — please try again.",
+      });
+    else if (!ok) connection.close(CLOSE_CODES.badHello, "internal error");
   });
   ws.on("close", () => {
     helloTimer.cancel();
@@ -195,7 +209,12 @@ function handleSocket(
     const remaining = (ctx.perAddress.get(address) ?? 1) - 1;
     if (remaining <= 0) ctx.perAddress.delete(address);
     else ctx.perAddress.set(address, remaining);
-    if (session) ctx.core.disconnected(session, connection);
+    if (session) {
+      const closing = session;
+      runGuarded(ctx.logger, "disconnect", () =>
+        ctx.core.disconnected(closing, connection),
+      );
+    }
   });
   ws.on("error", (error) =>
     ctx.logger.warn("socket error", { error: error.message }),

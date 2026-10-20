@@ -23,7 +23,14 @@ export interface ModeRules {
   readonly maxShips: number;
   /** Players pick team A/B (otherwise seat order decides: seat 0 vs seat 1). */
   readonly teams: boolean;
+  /** Most humans on one team. */
+  readonly maxPerTeam: number;
+  /** Squad point limit: a loadout's hull points may not exceed it (the server enforces it). */
+  readonly pointLimit: number;
 }
+
+/** Squad point limit of every online mode (the Skirmish standard). */
+export const ONLINE_POINT_LIMIT = 200;
 
 /**
  * Dogfight is a 1v1 duel (one ship each). Skirmish seats up to 2v2: each
@@ -38,6 +45,8 @@ export const MODE_RULES: Readonly<Record<MatchMode, ModeRules>> = {
     minShips: 1,
     maxShips: 1,
     teams: false,
+    maxPerTeam: 1,
+    pointLimit: ONLINE_POINT_LIMIT,
   },
   skirmish: {
     minPlayers: 2,
@@ -45,6 +54,8 @@ export const MODE_RULES: Readonly<Record<MatchMode, ModeRules>> = {
     minShips: 1,
     maxShips: 8,
     teams: true,
+    maxPerTeam: 2,
+    pointLimit: ONLINE_POINT_LIMIT,
   },
   scenario: {
     minPlayers: 2,
@@ -52,6 +63,8 @@ export const MODE_RULES: Readonly<Record<MatchMode, ModeRules>> = {
     minShips: 1,
     maxShips: 8,
     teams: false,
+    maxPerTeam: 1,
+    pointLimit: ONLINE_POINT_LIMIT,
   },
   reinforcements: {
     minPlayers: 2,
@@ -59,6 +72,8 @@ export const MODE_RULES: Readonly<Record<MatchMode, ModeRules>> = {
     minShips: 1,
     maxShips: 8,
     teams: false,
+    maxPerTeam: 1,
+    pointLimit: ONLINE_POINT_LIMIT,
   },
 };
 

@@ -22,6 +22,14 @@ type an address: the relay URL is baked into the build. Design and measurements:
   A side is a **team**, never a faction: any seat may fly any faction, so mirror matches
   (Hegemony vs Hegemony) and mixed-faction teams start like any other room.
   Seat → team is canonical (the room's team, `team_<n>` in the battle config).
+- **The relay owns the match definition (protocol 5).** Mode is fixed when the room opens;
+  seed, map theme (derived from the seed), point limit (200), scenario (always a known one),
+  seat order and team layout (fixed by seat in duel modes; Skirmish teams capped at 2 per
+  side) are decided by the relay and sent in `match_start`. Clients only pick their own
+  loadout, and the relay checks it against the game's squad rules (`src/net/rules/squadRules.ts`:
+  known faction and ships of that faction, no capital/huge hulls, ship count, hull points
+  within the limit) — an illegal squad is refused with a readable `invalid_loadout` error.
+  The host only convenience-edits the scenario; the relay validates every option change.
 - **Ready check + countdown** (3 s) → `match_start` with one seed, canonical seats and the
   input delay sized from everyone's ping.
 - **Heartbeat** (WebSocket ping every 5 s, drop after 15 s silence; clients ping every 2 s
@@ -32,7 +40,7 @@ type an address: the relay URL is baked into the build. Design and measurements:
 - **Abuse limits:** origin allowlist, connection caps (server and per address), 600 KB
   frames, strict schema validation of every message, token-bucket rate limits per message
   type (inputs 160/s, chat 1/s, …), repeat offenders closed (4008).
-- **Health:** `GET /healthz` → `{"status":"ok","protocol":4,"uptimeS":…,"sessions":…,"connected":…,"rooms":…,"matches":…,"queued":…,"desyncs":…}`.
+- **Health:** `GET /healthz` → `{"status":"ok","protocol":5,"uptimeS":…,"sessions":…,"connected":…,"rooms":…,"matches":…,"queued":…,"desyncs":…}`.
 
 ## Online battles (how a match plays)
 
@@ -59,7 +67,15 @@ type an address: the relay URL is baked into the build. Design and measurements:
   mismatch triggers a resync: the authority's snapshot (StateGraph of the simulation
   objects, LZ77-packed) replaces the diverged client's state.
 - Results are reported by team; the relay ends the match and the room returns to the lobby
-  (REMATCH = back to the room).
+  (REMATCH = a server-side vote: after a finished match the room stays open for
+  `REMATCH_WINDOW_MS`; the room's READY button reads REMATCH and starts a new match with the same
+  squads and teams once everyone present voted yes. A quick-match room dissolves when the window
+  closes unused). A player offline at match end gets the result when they resume.
+- Online battles always use the **ship-identity rule** for specials, whatever the local
+  Settings say (`lockTrickRuleToIdentity`, set by the online link / seat models).
+- The relay survives a failing handler (logged, the socket stays), abandons a match whose
+  authority never answers a resync after 3 × 10 s, rate-limits desync resyncs (2 s) and takes the
+  winner most seats report.
 
 ## Configuration
 
@@ -74,6 +90,7 @@ Relay (environment variables; full table in `server/src/config.ts`):
 | `MAX_ROOMS` | 200 | |
 | `HEARTBEAT_INTERVAL_MS` / `HEARTBEAT_TIMEOUT_MS` | 5000 / 15000 | |
 | `QUICK_MATCH_READY_MS`, `START_COUNTDOWN_MS`, `LOAD_TIMEOUT_MS` | 20000, 3000, 30000 | |
+| `REMATCH_WINDOW_MS` | 60000 | How long the rematch vote stays open after a finished match |
 | `TRUST_PROXY` | false | Client address from `X-Forwarded-For`; set `true` only behind a proxy you control (`fly.toml` and `render.yaml` do) |
 | `LOG_LEVEL` | info | JSON lines on stdout/stderr |
 

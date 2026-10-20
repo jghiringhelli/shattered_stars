@@ -13,9 +13,6 @@ import type { FactionId } from "../../config";
 import { SCENARIO_IDS } from "../../arcade/scenarios";
 import type { MatchStart, SeatView, TeamId } from "../protocol";
 
-/** Squad point limit of online team battles (the Skirmish standard). */
-export const ONLINE_POINT_LIMIT = 200;
-
 /**
  * Whether the lobby launches the battle scenes on match start (both battle
  * scenes run on the lockstep session). Off, a started match shows the
@@ -100,8 +97,9 @@ export function buildOnlineBattleConfig(
   return {
     factions,
     gameMode: "arcade",
-    pointLimit: ONLINE_POINT_LIMIT,
+    pointLimit: match.pointLimit,
     seed: match.seed,
+    mapTheme: match.mapTheme,
     online: onlineContext(match, localSeat),
     ...modeFields(match),
   };

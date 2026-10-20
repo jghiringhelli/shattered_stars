@@ -13,6 +13,7 @@
  */
 
 import type { ActionIntent } from "../../../input/InputTypes";
+import { lockTrickRuleToIdentity } from "../../../arcade/systems/FlightCapabilities";
 import { SeatInput } from "../../../net/battle/SeatInput";
 import { decodePilotInput } from "../../../net/input/PilotInputCodec";
 import { DeterministicRng } from "../../../net/lockstep/DeterministicRng";
@@ -93,6 +94,8 @@ export class ArcadeOnline {
 
   /** @param battle - The online battle (seats, local seat, seed). */
   constructor(readonly battle: OnlineArcadeBattle) {
+    // Ships are spawned before the online link starts: the identity rule must already be in force.
+    lockTrickRuleToIdentity(true);
     this.seats = battle.seats.map(() => new SeatInput());
     this.seatShips = battle.seats.map(() => null);
     this.fleetRng = new DeterministicRng(battle.seed);

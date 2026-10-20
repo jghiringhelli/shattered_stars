@@ -49,6 +49,7 @@ export interface OnlineRoomModel {
   readonly countdowns: {
     readonly start: number | null;
     readonly ready: number | null;
+    readonly rematch: number | null;
   };
 }
 
@@ -230,6 +231,8 @@ function countdownText(model: OnlineRoomModel): string | null {
     return `Launching in ${model.countdowns.start}…`;
   if (model.countdowns.ready !== null)
     return `Ready check: ${model.countdowns.ready} s`;
+  if (model.countdowns.rematch !== null)
+    return `Rematch vote: ${model.countdowns.rematch} s`;
   return null;
 }
 
@@ -288,8 +291,9 @@ function actionSpecs(
       enabled: editable,
     });
   const ready = me?.ready ?? false;
+  const rematch = room.rematch !== null;
   specs.push({
-    label: ready ? "UNREADY" : "READY",
+    label: rematch ? (ready ? "WITHDRAW" : "REMATCH") : ready ? "UNREADY" : "READY",
     name: "online_ready",
     icon: ready ? "close" : "next",
     variant: ready ? "secondary" : "primary",

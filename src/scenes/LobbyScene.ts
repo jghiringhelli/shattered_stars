@@ -39,6 +39,7 @@ import {
   ONLINE_BATTLES_ENABLED,
 } from "../net/lobby/matchSetup";
 import type { OnlineSession } from "../net/lobby/OnlineSession";
+import type { Loadout } from "../net/protocol";
 import type { FactionId } from "../config";
 import {
   addBackButton,
@@ -80,6 +81,7 @@ export class LobbyScene extends Phaser.Scene {
   private focus: MenuFocus | null = null;
   private renderKey = "";
   private shownMatchId: string | null = null;
+  private autoLoadoutKey = "";
   private matchCard: Phaser.GameObjects.Container | null = null;
 
   constructor() {
@@ -132,7 +134,11 @@ export class LobbyScene extends Phaser.Scene {
 
   private onState(state: LobbyState): void {
     const loadout = pendingLoadout(state, this.savedSquad());
-    if (loadout) this.session.setLoadout(loadout);
+    if (loadout && state.room)
+      this.sendAutoLoadout(
+        [state.room.code, localPlayer(state)?.loadout ?? null],
+        loadout,
+      );
     if (state.match && state.match.matchId !== this.shownMatchId)
       this.onMatchStart();
     if (!state.match && this.matchCard) {
@@ -140,6 +146,14 @@ export class LobbyScene extends Phaser.Scene {
       this.matchCard = null;
     }
     this.render(true);
+  }
+
+  /** Sends a suggested loadout once per (room, current loadout): a refusal must not be re-sent on every state change. */
+  private sendAutoLoadout(context: unknown, loadout: Loadout): void {
+    const key = JSON.stringify([context, loadout]);
+    if (key === this.autoLoadoutKey) return;
+    this.autoLoadoutKey = key;
+    this.session.setLoadout(loadout);
   }
 
   /** Re-render: always on state changes, once per second for clocks. */
@@ -257,7 +271,11 @@ export class LobbyScene extends Phaser.Scene {
       toggleTeam: () => s.setTeam(otherTeam(me()?.team ?? 0)),
       cycleScenario: () =>
         s.setScenario(nextScenario(s.state.room?.options.scenarioId)),
-      toggleReady: () => s.setReady(!(me()?.ready ?? false)),
+      toggleReady: () => {
+        const vote = !(me()?.ready ?? false);
+        if (s.state.room?.rematch) s.rematch(vote);
+        else s.setReady(vote);
+      },
       copyCode: () => this.copyCode(),
       leave: () => s.leaveRoom(),
       focusChat: () => this.chat.focus(),

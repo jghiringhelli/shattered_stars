@@ -127,7 +127,7 @@ describe("RelayCore rooms", () => {
     expect(host.conn.last("error")?.code).toBe("invalid_loadout");
     h.send(host.session, {
       t: "set_loadout",
-      loadout: { faction: "void_corsairs", ships: ["a", "b"] },
+      loadout: { faction: "void_corsairs", ships: ["corsair_blade", "corsair_blade"] },
     });
     expect(host.conn.last("error")?.code).toBe("invalid_loadout");
   });
@@ -165,7 +165,7 @@ describe("RelayCore rooms", () => {
     });
     const squad = (faction: string) => ({
       t: "set_loadout" as const,
-      loadout: { faction, ships: ["corsair_raider"] },
+      loadout: { faction, ships: ["corsair_blade"] },
     });
     for (const p of [host, guest]) {
       h.send(p.session, squad("void_corsairs"));

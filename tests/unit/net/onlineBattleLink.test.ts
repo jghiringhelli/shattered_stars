@@ -15,6 +15,12 @@ import type { LockstepSimulation } from "../../../src/net/lockstep/types";
 import type { TickInput } from "../../../src/net/protocol";
 import type { InputEvent } from "../../../src/input/InputTypes";
 import { createRelayLink, memoryTokenStore } from "./netFixtures";
+import { activeTrickRule } from "../../../src/arcade/systems/FlightCapabilities";
+import { resetBrowserStore } from "../../../src/systems/keyValueStore";
+import {
+  DEFAULT_SETTINGS,
+  saveSettings,
+} from "../../../src/systems/SettingsStorage";
 
 const SERVER = { url: "ws://relay/ws", source: "query" as const };
 const FRAME_MS = 16;
@@ -70,7 +76,7 @@ function startMatch() {
   sessions.forEach((s) => s.quickMatch());
   link.clock.advance(100);
   for (const s of sessions) {
-    s.setLoadout({ faction: "void_corsairs", ships: ["corsair_raider"] });
+    s.setLoadout({ faction: "void_corsairs", ships: ["corsair_blade"] });
     s.setReady(true);
   }
   link.clock.advance(1_000);
@@ -87,6 +93,36 @@ function run(
     link.clock.advance(FRAME_MS);
   }
 }
+
+describe("OnlineBattleLink ship-identity rule", () => {
+  it("ignores the offline Full card setting while a lockstep battle runs and restores it after", () => {
+    resetBrowserStore();
+    saveSettings({
+      ...DEFAULT_SETTINGS,
+      gameplay: { ...DEFAULT_SETTINGS.gameplay, shipSpecials: "full" },
+    });
+    expect(activeTrickRule()).toBe("full");
+    const { sessions } = startMatch();
+    const battle = startOnlineBattle(sessions[0]!, { intents: new Keys() })!;
+    expect(activeTrickRule()).toBe("identity");
+    battle.dispose();
+    expect(activeTrickRule()).toBe("full");
+    resetBrowserStore();
+  });
+
+  it("does not leave the lock on when no match is running", () => {
+    resetBrowserStore();
+    const link = createRelayLink();
+    const lone = player(link, "Lone");
+    expect(startOnlineBattle(lone, { intents: new Keys() })).toBeNull();
+    saveSettings({
+      ...DEFAULT_SETTINGS,
+      gameplay: { ...DEFAULT_SETTINGS.gameplay, shipSpecials: "full" },
+    });
+    expect(activeTrickRule()).toBe("full");
+    resetBrowserStore();
+  });
+});
 
 describe("OnlineBattleLink", () => {
   it("runs both clients through identical ticks and traces a hash per tick", () => {

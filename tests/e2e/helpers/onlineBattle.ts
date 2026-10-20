@@ -150,7 +150,7 @@ const SQUADS: readonly OnlineSquad[] = [
   },
   {
     faction: "void_corsairs",
-    ships: ["corsair_raider", "corsair_raider", "corsair_raider"],
+    ships: ["corsair_blade", "corsair_blade", "corsair_blade"],
   },
 ];
 

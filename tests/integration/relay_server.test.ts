@@ -162,6 +162,38 @@ describe("relay WebSocket guards", () => {
 });
 
 describe("relay lobby over real sockets", () => {
+  it("refuses an illegal squad with a readable error and a legal one after it", async () => {
+    const socket = raw();
+    await socket.opened;
+    socket.ws.send(
+      JSON.stringify({
+        t: "hello",
+        protocol: PROTOCOL_VERSION,
+        build: "b",
+        name: "Cheat",
+      }),
+    );
+    socket.ws.send(JSON.stringify({ t: "create_room", mode: "dogfight" }));
+    socket.ws.send(
+      JSON.stringify({
+        t: "set_loadout",
+        loadout: { faction: "terran_hegemony", ships: ["terran_imperator"] },
+      }),
+    );
+    await until(() => socket.messages.some((m) => m.t === "error"));
+    const error = socket.messages.find((m) => m.t === "error");
+    expect(error).toMatchObject({ code: "invalid_loadout" });
+    expect((error as { message: string }).message).toMatch(/online/i);
+    socket.ws.close();
+  });
+
+  it("closes a socket that sends a frame over the size limit", async () => {
+    const socket = raw();
+    await socket.opened;
+    socket.ws.send("x".repeat(700 * 1024));
+    expect((await socket.closed).code).toBe(1009);
+  });
+
   it("lets two NetClients meet by room code and start the same match", async () => {
     const make = (name: string) =>
       new NetClient({
@@ -189,7 +221,7 @@ describe("relay lobby over real sockets", () => {
     for (const c of [host, guest]) {
       c.send({
         t: "set_loadout",
-        loadout: { faction: "void_corsairs", ships: ["corsair_raider"] },
+        loadout: { faction: "void_corsairs", ships: ["corsair_blade"] },
       });
       c.send({ t: "set_ready", ready: true });
     }

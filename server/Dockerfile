@@ -1,13 +1,14 @@
 # Shattered Stars relay — build context is the REPOSITORY ROOT:
 #   docker build -f server/Dockerfile -t ss-relay .
-# The relay imports the shared wire protocol from src/net, so both trees are copied.
+# The relay imports the shared wire protocol (src/net) and the game rules it validates
+# against (ship data, map themes), so the whole src tree is copied; esbuild bundles only what is imported.
 
 FROM node:22-alpine AS build
 WORKDIR /app/server
 COPY server/package.json server/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY server/src ./src
-COPY src/net /app/src/net
+COPY src /app/src
 RUN npm run build
 
 FROM node:22-alpine

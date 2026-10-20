@@ -39,6 +39,8 @@ export interface ServerConfig {
   readonly quickMatchReadyMs: number;
   readonly startCountdownMs: number;
   readonly loadTimeoutMs: number;
+  /** How long a finished match's rematch vote stays open (ms). */
+  readonly rematchWindowMs: number;
   readonly trustProxy: boolean;
   readonly logLevel: LogLevel;
 }
@@ -74,6 +76,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   quickMatchReadyMs: 20_000,
   startCountdownMs: 3_000,
   loadTimeoutMs: 30_000,
+  rematchWindowMs: 60_000,
   trustProxy: false,
   logLevel: "info",
 };
@@ -129,6 +132,7 @@ export function loadConfig(env: Env): ServerConfig {
     ),
     startCountdownMs: intVar(env, "START_COUNTDOWN_MS", d.startCountdownMs, 0),
     loadTimeoutMs: intVar(env, "LOAD_TIMEOUT_MS", d.loadTimeoutMs, 1_000),
+    rematchWindowMs: intVar(env, "REMATCH_WINDOW_MS", d.rematchWindowMs, 1_000),
     trustProxy: boolVar(env, "TRUST_PROXY", d.trustProxy),
     logLevel: logLevelVar(env["LOG_LEVEL"]),
   };

@@ -111,6 +111,8 @@ export class RelayCore {
       case "set_options":
       case "set_ready":
         return this.rooms.edit(session, message);
+      case "rematch":
+        return this.rooms.rematch(session, message.vote);
       default:
         return this.rooms.matchMessage(session, message);
     }
