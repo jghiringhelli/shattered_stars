@@ -106,9 +106,9 @@ Sith, etc. Remaining occurrences outside code comments:
 
 ## ACTION ITEMS FOR THE OWNER
 
-1. **Suno plan:** confirm you were on a paid plan (Pro/Premier) when each of the 13 shipped
-   tracks was generated; keep the receipts/generation dates. Free-tier tracks must be
-   regenerated or removed before any commercial use.
+1. **Suno plan:** ✅ the owner confirmed (2026-10-20) a paid plan (Pro/Premier) was active
+   when each of the 13 shipped tracks was generated. Keep the receipts/generation dates on
+   file; free-tier tracks would have to be regenerated or removed before commercial use.
 2. **Civitai LoRAs:** open the model pages for `concept_art` (Lined Concept Art, 1711179),
    `scifi_style` (SDXL Science Fiction, 122837), `alien_species` (Alien Species XL, 638529)
    and every stained-glass LoRA you actually used; confirm "Sell generated images" is

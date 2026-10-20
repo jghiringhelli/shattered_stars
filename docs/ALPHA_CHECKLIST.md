@@ -10,7 +10,7 @@ Started from four evidence-based audits (core gameplay, content, balance, releas
 
 | # | Action | Why |
 |---|---|---|
-| 1 | Confirm the Suno plan covered each generation date of the 13 shipped Suno tracks (free-tier output is non-commercial) | Music rights; see [THIRD_PARTY.md](THIRD_PARTY.md) |
+| 1 | ✅ Done 2026-10-20 (owner confirmed a paid plan for all 13 shipped Suno tracks; keep the receipts) | Music rights; see [THIRD_PARTY.md](THIRD_PARTY.md) |
 | 2 | Verify the Civitai licence ("may sell generated images") of the `concept_art`, `scifi_style`, `alien_species` and the stained-glass LoRAs actually used; list which LoRA made the shipped art | AI-art licence risk; the credits claim about `concept_art` may be inaccurate |
 | 3 | Decide online: ship the beta **offline-only** (leave `VITE_ONLINE_URL` empty; the lobby then explains and offers offline play) or deploy the relay per [RELEASE.md](RELEASE.md) and set `ALLOWED_ORIGINS` | No relay is deployed |
 | 4 | Push `release`, enable Pages, set the Actions variables, create the issue labels (`bug`, `balance`, `ui-ux`, `enhancement`) | Nothing is published yet |
