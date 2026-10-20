@@ -97,9 +97,9 @@ export const BULWARK_RELICS: readonly Relic[] = [
     archetype: "bulwark",
     tags: ["kill", "shields"],
     pool: "base",
-    description: "Each kill restores 2 shield HP",
+    description: "Each kill restores 1 shield HP",
     effects: [
-      { kind: "static", scope: "fleet", effect: { shieldsPerKill: 2 } },
+      { kind: "static", scope: "fleet", effect: { shieldsPerKill: 1 } },
     ],
   },
   {
@@ -139,12 +139,12 @@ export const BULWARK_RELICS: readonly Relic[] = [
     tags: ["shields"],
     pool: "base",
     description:
-      "+0.04 shield HP/s regen and +1 shield HP per kill for the fleet",
+      "+0.04 shield HP/s regen for the fleet",
     effects: [
       {
         kind: "static",
         scope: "fleet",
-        effect: { shieldRegenPerSecond: 0.04, shieldsPerKill: 1 },
+        effect: { shieldRegenPerSecond: 0.04 },
       },
     ],
   },

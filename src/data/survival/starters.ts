@@ -34,7 +34,7 @@ export const SURVIVAL_STARTER_CHOICES: Readonly<
 export interface StarterKit {
   /** Ship upgrade levels the flagship starts with (+1 damage and hull each). */
   readonly upgrades: number;
-  /** Escort wingmen on top of the free one. */
+  /** Escort wingmen on top of the free one (−1 starts the run without a wingman). */
   readonly escorts: number;
   /** Relic the run starts with, or null. */
   readonly relicId: string | null;
@@ -87,6 +87,15 @@ export const STARTER_KITS: Readonly<Record<string, StarterKit>> = {
     escorts: 0,
     relicId: "smugglers_hold",
     salvage: 0,
+  },
+  // Lone ace: the Seraph (hull 4, attack 3) out-flies the herald, so it
+  // starts without the free wingman (escorts −1) and trades it for a full
+  // refit and a bigger purse (measured 33 % vs the herald's 33 %, was 58–70 %).
+  ascendant_seraph: {
+    upgrades: 3,
+    escorts: -1,
+    relicId: null,
+    salvage: 60,
   },
   // Swarm: a refitted scout and two extra drone wingmen.
   synth_scout_drone: {

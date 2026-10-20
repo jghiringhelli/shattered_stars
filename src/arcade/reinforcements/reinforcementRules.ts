@@ -63,8 +63,8 @@ const UNLIMITED = Number.POSITIVE_INFINITY;
 
 /** Skirmish / Scenario quotas (a table the balance sweeps tune). */
 export const SKIRMISH_QUOTAS: readonly QuotaRule[] = [
-  { category: "bomber", maxOnField: 4, maxPerMatch: UNLIMITED },
-  { category: "ace", maxOnField: 2, maxPerMatch: 9 },
+  { category: "bomber", maxOnField: 5, maxPerMatch: UNLIMITED },
+  { category: "ace", maxOnField: 3, maxPerMatch: 9 },
   { category: "capital", maxOnField: 0, maxPerMatch: 0 },
 ];
 

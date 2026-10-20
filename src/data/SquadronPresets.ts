@@ -16,6 +16,18 @@
 
 import type { FactionId } from "../config";
 import { getLoadoutById } from "./ShipLoadouts";
+import type {
+  QuickBuildShip,
+  QuickBuildSquad,
+  SquadBlueprint,
+} from "./squadronBlueprints/types";
+import { TERRAN_HEGEMONY_BLUEPRINTS } from "./squadronBlueprints/terranHegemony";
+import { FREE_CONFEDERATION_BLUEPRINTS } from "./squadronBlueprints/freeConfederation";
+import { SYNTHETIC_COLLECTIVE_BLUEPRINTS } from "./squadronBlueprints/syntheticCollective";
+import { VOID_CORSAIRS_BLUEPRINTS } from "./squadronBlueprints/voidCorsairs";
+import { ASCENDANT_EMPIRE_BLUEPRINTS } from "./squadronBlueprints/ascendantEmpire";
+
+export type { QuickBuildShip, QuickBuildSquad };
 
 /** Structurally compatible with SimShipSpec in BattleSimulator (no circular import). */
 export interface SquadShipSpec {
@@ -25,25 +37,6 @@ export interface SquadShipSpec {
 }
 
 // ─── Interfaces ───────────────────────────────────────────────────────────────
-
-export interface QuickBuildShip {
-  /** A SHIP_LOADOUTS id — ship, pilot and upgrades in one quick build. */
-  readonly loadoutId: string;
-}
-
-export interface QuickBuildSquad {
-  readonly id: string;
-  readonly factionId: FactionId;
-  readonly pointLimit: number;
-  readonly name: string;
-  readonly style: "aggressive" | "balanced" | "swarm" | "control";
-  readonly ships: ReadonlyArray<QuickBuildShip>;
-  /** Sum of every loadout in the squad. Derived, never authored. */
-  readonly totalCost: number;
-}
-
-/** A preset as authored: the roster, with no total attached. */
-type SquadBlueprint = Omit<QuickBuildSquad, "totalCost">;
 
 /**
  * What a roster costs: the sum of its loadouts (each already includes the
@@ -77,285 +70,11 @@ function specFor(ship: QuickBuildShip): SquadShipSpec {
 // ─── Squad Data ───────────────────────────────────────────────────────────────
 
 const SQUAD_BLUEPRINTS: ReadonlyArray<SquadBlueprint> = [
-  // ── TERRAN_HEGEMONY ──
-  {
-    id: "th_100_iron_cadets",
-    factionId: "terran_hegemony",
-    pointLimit: 100,
-    name: "Iron Cadets",
-    style: "aggressive",
-    ships: [{ loadoutId: "viper_basic" }, { loadoutId: "raptor_pursuit" }],
-  },
-  {
-    id: "th_150_patrol_alpha",
-    factionId: "terran_hegemony",
-    pointLimit: 150,
-    name: "Patrol Alpha",
-    style: "aggressive",
-    ships: [
-      { loadoutId: "viper_pursuit" },
-      { loadoutId: "raptor_pursuit" },
-      { loadoutId: "javelin_hunter" },
-    ],
-  },
-  {
-    id: "th_200_iron_fist",
-    factionId: "terran_hegemony",
-    pointLimit: 200,
-    name: "Iron Fist",
-    style: "balanced",
-    // Identity: Kane (elite ace, Hold the Line) leading a disciplined line
-    // under Coordinated Fire. Four hulls, not three: a 3-heavy list won 23–39 %
-    // of scenarios (too few ships to hold objectives), this one 47–63 %.
-    ships: [
-      { loadoutId: "centurion_assault" },
-      { loadoutId: "gladius_basic" },
-      { loadoutId: "stiletto_basic" },
-      { loadoutId: "stiletto_basic" },
-    ],
-  },
-  {
-    id: "th_300_battle_squadron",
-    factionId: "terran_hegemony",
-    pointLimit: 300,
-    name: "Battle Squadron",
-    style: "aggressive",
-    ships: [
-      { loadoutId: "bastion_defender" },
-      { loadoutId: "viper_ace" },
-      { loadoutId: "viper_pursuit" },
-      { loadoutId: "raptor_basic" },
-      { loadoutId: "stiletto_picket" },
-    ],
-  },
-
-  // ── FREE_CONFEDERATION ──
-  {
-    id: "fc_100_scout_squadron",
-    factionId: "free_confederation",
-    pointLimit: 100,
-    name: "Scout Squadron",
-    style: "swarm",
-    ships: [
-      { loadoutId: "wasp_ace" },
-      { loadoutId: "wasp_picket" },
-      { loadoutId: "finch_patrol" },
-    ],
-  },
-  {
-    id: "fc_150_freedom_wing",
-    factionId: "free_confederation",
-    pointLimit: 150,
-    name: "Freedom Wing",
-    style: "swarm",
-    ships: [
-      { loadoutId: "wasp_ace" },
-      { loadoutId: "wasp_picket" },
-      { loadoutId: "wasp_picket" },
-      { loadoutId: "finch_patrol" },
-      { loadoutId: "finch_scout" },
-    ],
-  },
-  {
-    id: "fc_200_confederacy_strike",
-    factionId: "free_confederation",
-    pointLimit: 200,
-    name: "Confederacy Strike",
-    // Not "balanced": in reinforced battles its cheap escorts pack the
-    // field cap too well; the AI's Balanced rotation flies Confederacy Line.
-    style: "aggressive",
-    ships: [
-      { loadoutId: "falcon_defender" },
-      { loadoutId: "eagle_striker" },
-      { loadoutId: "finch_patrol" },
-      { loadoutId: "wasp_ace" },
-    ],
-  },
-  {
-    id: "fc_190_confederacy_line",
-    factionId: "free_confederation",
-    pointLimit: 190,
-    name: "Confederacy Line",
-    style: "balanced",
-    ships: [
-      { loadoutId: "falcon_defender" },
-      { loadoutId: "eagle_defender" },
-      { loadoutId: "crane_coordinator" },
-    ],
-  },
-  {
-    id: "fc_300_liberation_fleet",
-    factionId: "free_confederation",
-    pointLimit: 300,
-    name: "Liberation Fleet",
-    style: "aggressive",
-    ships: [
-      { loadoutId: "hawk_assault" },
-      { loadoutId: "falcon_striker" },
-      { loadoutId: "sparrow_swarm" },
-      { loadoutId: "sparrow_swarm" },
-      { loadoutId: "sparrow_swarm" },
-      { loadoutId: "sparrow_swarm" },
-    ],
-  },
-
-  // ── SYNTHETIC_COLLECTIVE ──
-  {
-    id: "sc_100_recon_cluster",
-    factionId: "synthetic_collective",
-    pointLimit: 100,
-    name: "Recon Cluster",
-    style: "swarm",
-    ships: [
-      { loadoutId: "drone_standard" },
-      { loadoutId: "scout_recon" },
-      { loadoutId: "drone_standard" },
-    ],
-  },
-  {
-    id: "sc_150_hunter_pack",
-    factionId: "synthetic_collective",
-    pointLimit: 150,
-    name: "Hunter Pack",
-    style: "aggressive",
-    ships: [
-      { loadoutId: "interceptor_overdrive" },
-      { loadoutId: "interceptor_swarm_uplink" },
-      { loadoutId: "drone_standard" },
-      { loadoutId: "scout_swarm_picket" },
-    ],
-  },
-  {
-    id: "sc_200_precision_strike",
-    factionId: "synthetic_collective",
-    pointLimit: 200,
-    name: "Precision Strike",
-    style: "balanced",
-    ships: [
-      { loadoutId: "hunter_evasion_protocol" },
-      { loadoutId: "heavy_patrol" },
-      { loadoutId: "scout_basic" },
-      { loadoutId: "relay_coordinator" },
-    ],
-  },
-  {
-    id: "sc_300_hive_fleet",
-    factionId: "synthetic_collective",
-    pointLimit: 300,
-    name: "Hive Fleet",
-    style: "aggressive",
-    ships: [
-      { loadoutId: "interceptor_hunter" },
-      { loadoutId: "bomber_basic" },
-      { loadoutId: "interceptor_swarm" },
-      { loadoutId: "relay_basic" },
-      { loadoutId: "relay_basic" },
-      { loadoutId: "drone_standard" },
-    ],
-  },
-
-  // ── VOID_CORSAIRS ──
-  {
-    id: "vc_100_fang_blade",
-    factionId: "void_corsairs",
-    pointLimit: 100,
-    name: "Fang Blade",
-    style: "aggressive",
-    ships: [
-      { loadoutId: "fang_raider" },
-      { loadoutId: "fang_hot_wired" },
-      { loadoutId: "fang_hot_wired" },
-    ],
-  },
-  {
-    id: "vc_150_corsair_raider",
-    factionId: "void_corsairs",
-    pointLimit: 150,
-    name: "Corsair Raider",
-    style: "aggressive",
-    ships: [
-      { loadoutId: "fang_raider" },
-      { loadoutId: "venom_assassin" },
-      { loadoutId: "torpedo_hunter" },
-    ],
-  },
-  {
-    id: "vc_200_terror_squadron",
-    factionId: "void_corsairs",
-    pointLimit: 200,
-    name: "Terror Squadron",
-    style: "balanced",
-    // Identity: Bloody Cutlass (raider ace, illicit capacitors) leads the
-    // Raider's Cadence over two Scimitars.
-    ships: [
-      { loadoutId: "scimitar_assault" },
-      { loadoutId: "scimitar_assault" },
-      { loadoutId: "cutlass_black_market" },
-    ],
-  },
-  {
-    id: "vc_300_corsair_fleet",
-    factionId: "void_corsairs",
-    pointLimit: 300,
-    name: "Corsair Fleet",
-    style: "balanced",
-    ships: [
-      { loadoutId: "reaver_boarding" },
-      { loadoutId: "marauder_brawler" },
-      { loadoutId: "scimitar_assault" },
-      { loadoutId: "blade_overcharged" },
-      { loadoutId: "fang_hot_wired" },
-    ],
-  },
-
-  // ── ASCENDANT_EMPIRE ──
-  {
-    id: "ae_100_holy_herald",
-    factionId: "ascendant_empire",
-    pointLimit: 100,
-    name: "Holy Herald",
-    style: "aggressive",
-    ships: [{ loadoutId: "herald_striker" }, { loadoutId: "cherub_ace" }],
-  },
-  {
-    id: "ae_150_sacred_guard",
-    factionId: "ascendant_empire",
-    pointLimit: 150,
-    name: "Sacred Guard",
-    style: "aggressive",
-    ships: [
-      { loadoutId: "seraph_champion" },
-      { loadoutId: "virtue_pursuit" },
-      { loadoutId: "herald_scout" },
-    ],
-  },
-  {
-    id: "ae_200_crusader_host",
-    factionId: "ascendant_empire",
-    pointLimit: 200,
-    name: "Temple Inquisition",
-    style: "balanced",
-    // Identity: Foresight and Psi-Sensitive under the acolyte's Aegis Field.
-    ships: [
-      { loadoutId: "inquisitor_force" },
-      { loadoutId: "acolyte_relay" },
-      { loadoutId: "templar_force" },
-    ],
-  },
-  {
-    id: "ae_300_holy_crusade",
-    factionId: "ascendant_empire",
-    pointLimit: 300,
-    name: "Holy Crusade",
-    style: "control",
-    ships: [
-      { loadoutId: "crusader_defender" },
-      { loadoutId: "acolyte_support" },
-      { loadoutId: "virtue_basic" },
-      { loadoutId: "crusader_defender" },
-      { loadoutId: "cherub_ace" },
-    ],
-  },
+  ...TERRAN_HEGEMONY_BLUEPRINTS,
+  ...FREE_CONFEDERATION_BLUEPRINTS,
+  ...SYNTHETIC_COLLECTIVE_BLUEPRINTS,
+  ...VOID_CORSAIRS_BLUEPRINTS,
+  ...ASCENDANT_EMPIRE_BLUEPRINTS,
 ];
 
 // ─── Public API ───────────────────────────────────────────────────────────────

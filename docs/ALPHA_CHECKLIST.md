@@ -17,14 +17,14 @@ Started from four evidence-based audits (core gameplay, content, balance, releas
 | 5 | Bump `package.json` version for the public build (corner tag now reads `v0.1.0 BETA`) | Testers must be able to name the build |
 | 6 | Read the new texts once (README, PRIVACY, TESTER_GUIDE, KNOWN_ISSUES, in-game welcome) | They state what the game stores and sends |
 
-### Gate results (2026-10-14)
+### Gate results (2026-10-20, after balance round 5)
 
 | Gate | Result |
 |---|---|
 | `npm run lint`, `tsc --noEmit` (src and `tsconfig.tests.json`) | Clean |
-| Vitest unit + balance + simulation | 395 files, 6078 tests passed (run before the last small edits; feedback, welcome, lobby and survival tests re-run green after) |
-| `npm run test:skill` (piloting gates) | 25 passed (gate 1 expert ≥ 85 % in every pair, gate 2 coordinated squad ≥ 70 %) |
-| `npm run build` + `scripts/measure_first_load.ts` | First menu **5.11 MB** in 14 requests (6.06 MB with menu music); target < 10 MB; whole `dist/` 110 MB |
+| Vitest unit + balance + simulation | 418 files, 5997 tests passed |
+| `npm run test:skill` (piloting gates) | 25 passed (gate 1 expert >= 85 % in every pair, gate 2 coordinated squad >= 70 %) |
+| `npm run build` + `scripts/measure_first_load.ts` | First menu 3.8 MB in the JS/HTML requests, 4.71 MB after the first input (menu music); target < 10 MB |
 | Scripted tour of all 12 menu scenes (each restarted once) + Flight School + `verify:loop` (5 battle scenarios) | 0 page errors, 0 "Texture key already in use", INV-6b/6c clean; the only console error is the dev build's default relay `ws://localhost:8080` being down |
 | Playwright full suite | 651 tests: 626 passed on the first run, 15 failed. Rerun individually: 12 were flakes or mine and are fixed or green (see below); **3 still fail** (below) |
 | Browsers (Chromium, Firefox 146, WebKit 26, each Canvas and WebGL) | Smoke 6/6 on dev and on the production preview (`tests/e2e/cross-browser.spec.ts`, `BROWSERS=all`) |

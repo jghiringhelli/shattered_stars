@@ -336,7 +336,7 @@ test.describe("Reserve editor", () => {
     expect(texts.some((t) => t.startsWith("Pool 1000: every ship you deploy spends points"))).toBe(true);
     expect(texts.some((t) => t.startsWith("On-field cap 250: at most 250 flown points"))).toBe(true);
     // The bomber quota comes from the reinforcement rules (balance round 4: 4 on the field).
-    expect(texts.some((t) => t.startsWith("Mix limits on the field at once: up to 4 bombers"))).toBe(true);
+    expect(texts.some((t) => t.startsWith("Mix limits on the field at once: up to 5 bombers"))).toBe(true);
     await expectShortThenFull(
       page,
       "SquadBuilderScene",

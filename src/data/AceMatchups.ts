@@ -60,7 +60,9 @@ export const ACE_MATCHUPS: readonly AceMatchup[] = [
       name: "Raptor Squadron Leader",
       faction: "terran_hegemony",
       ships: ["terran_viper"],
-      abilities: ["supernatural_reflexes", "predator"],
+      // Tenacity instead of Predator (round 5): the Viper won 40-44 % at
+      // average, 51 % at expert; now 49 / 53 %.
+      abilities: ["supernatural_reflexes", "tenacity"],
     },
     side2: {
       name: "Vortex Ace",
@@ -68,7 +70,8 @@ export const ACE_MATCHUPS: readonly AceMatchup[] = [
       ships: ["corsair_phantom"],
       // Evade Mastery + Predator (was Fearless + Outmaneuver): the Viper
       // won 67 % at expert once the bots stopped weaving; now 45 / 59 %.
-      abilities: ["evade_mastery", "predator"],
+      // Focus Mastery instead of Predator (round 5, see the Viper above).
+      abilities: ["evade_mastery", "focus_mastery"],
     },
   },
   {

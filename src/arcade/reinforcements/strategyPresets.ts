@@ -70,7 +70,8 @@ const MAX_ROTATION = 12;
  * - balancedStyles: the curated quick-build styles Balanced rotates through;
  * - supportPerRotation: support hulls (aura projectors) every non-Balanced
  *   rotation brings once per lap, as Balanced's curated squads do (without
- *   them Balanced won 66–71 % of the strategy matrix, with one 59 %).
+ *   them Balanced won 66–71 % of the strategy matrix, with one 59 %; round 5:
+ *   three of them 57 %, with Swarm / Aces / Heavy at 46–49 %).
  */
 export const STRATEGY_TUNING: {
   heavyMaxCost: number;
@@ -83,7 +84,7 @@ export const STRATEGY_TUNING: {
   heaviesPerEscort: 2,
   acesPerEscort: 1,
   balancedStyles: ["balanced", "control"],
-  supportPerRotation: 1,
+  supportPerRotation: 3,
 };
 
 /**

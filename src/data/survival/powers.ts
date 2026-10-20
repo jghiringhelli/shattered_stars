@@ -317,37 +317,37 @@ export const CAPSTONES: readonly Power[] = [
     "cap_gunnery",
     "gunnery",
     "Marksman's Focus",
-    "+2 primary damage",
+    "+1 primary damage",
     "🏆",
     "damage",
-    2,
+    1,
   ),
   capstone(
     "cap_ordnance",
     "ordnance",
     "Barrage Doctrine",
-    "+2 primary damage",
+    "+1 primary damage",
     "🏆",
     "damage",
-    2,
+    1,
   ),
   capstone(
     "cap_automation",
     "automation",
     "Swarm Logic",
-    "+15% volley: every 7th attack fires a second bolt",
+    "+12% volley: every 8th attack fires a second bolt",
     "🏆",
     "fireRate",
-    0.15,
+    0.12,
   ),
   capstone(
     "cap_fleet",
     "fleet",
     "Admiral's Command",
-    "+2 evasion (fleet)",
+    "+1.5 evasion (fleet)",
     "🏆",
     "evasion",
-    2,
+    1.5,
   ),
   capstone(
     "cap_bulwark",
@@ -376,10 +376,10 @@ export const CROSS_POWERS: readonly Power[] = [
     "ordnance",
     "automation",
     "Saturation Barrage",
-    "Ordnance + automation: +1 primary dmg, +5% volley",
+    "Ordnance + automation: +0.6 primary dmg, +5% volley",
     "🌟",
     (b) => {
-      b.damage += 1;
+      b.damage += 0.6;
       b.fireRate += 0.05;
     },
   ),
@@ -388,11 +388,11 @@ export const CROSS_POWERS: readonly Power[] = [
     "fleet",
     "gunnery",
     "Squadron Marshal",
-    "Fleet + guns: +1 escort (wing cap 5), +1 dmg",
+    "Fleet + guns: +1 escort (wing cap 5), -1.8 dmg (the wing takes the shots)",
     "🌟",
     (b, s) => {
       s.escorts = Math.min(MAX_ESCORTS, s.escorts + 1);
-      b.damage += 1;
+      b.damage -= 1.8;
     },
   ),
   cross(
@@ -400,11 +400,11 @@ export const CROSS_POWERS: readonly Power[] = [
     "bulwark",
     "drive",
     "Phase Runner",
-    "Tank + mobility: +4 hull, +2 evasion",
+    "Tank + mobility: +3 hull, +1.5 evasion",
     "🌟",
     (b) => {
-      b.maxHull += 4;
-      b.evasion += 2;
+      b.maxHull += 3;
+      b.evasion += 1.5;
     },
   ),
   cross(
@@ -412,10 +412,10 @@ export const CROSS_POWERS: readonly Power[] = [
     "gunnery",
     "ordnance",
     "Alpha Strike",
-    "Guns + ordnance: +1 dmg, +5% crit",
+    "Guns + ordnance: +0.75 dmg, +5% crit",
     "🌟",
     (b) => {
-      b.damage += 1;
+      b.damage += 0.75;
       b.critChance += 0.05;
     },
   ),
