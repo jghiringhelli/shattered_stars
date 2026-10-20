@@ -29,6 +29,7 @@ import {
   type ObjectiveStatus,
 } from "../objectives";
 import type { MissionPlan } from "../../campaign/mission/compileMission";
+import type { DebriefLine } from "../../data/campaign/campaignTypes";
 import {
   createScriptState,
   stepScript,
@@ -175,6 +176,22 @@ export class CampaignMissionRuntime {
     sceneActions: ScriptAction[];
     newSpawns: EntitySpawn[];
   } {
+    const { actions, newSpawns } = this.runScript(ships, false);
+    return {
+      sceneActions: actions.filter((a) => SCENE_ACTIONS.has(a.do)),
+      newSpawns,
+    };
+  }
+
+  /**
+   * @param ships - Living ships.
+   * @param victory - Whether this is the step that seals a won mission.
+   * @returns Every action that fired, and entities newly needed.
+   */
+  private runScript(
+    ships: readonly RuntimeShip[],
+    victory: boolean,
+  ): { actions: ScriptAction[]; newSpawns: EntitySpawn[] } {
     const result = stepScript(this.script, {
       elapsedMs: this.clockMs,
       objectives: this.objectiveStates.map((s) => ({
@@ -185,14 +202,12 @@ export class CampaignMissionRuntime {
       destroyed: this.scriptDestroyed,
       ships,
       worldSize: this.worldSize,
+      victory,
     });
     this.scriptDestroyed = [];
     this.script = result.state;
     const newSpawns = result.actions.flatMap((a) => this.applyAction(a));
-    return {
-      sceneActions: result.actions.filter((a) => SCENE_ACTIONS.has(a.do)),
-      newSpawns,
-    };
+    return { actions: result.actions, newSpawns };
   }
 
   /**
@@ -260,23 +275,39 @@ export class CampaignMissionRuntime {
   }
 
   /**
-   * Seals a won mission: holding constraints complete, completion beats run
-   * (they may persist story flags).
+   * Seals a won mission: holding constraints complete and the on-win phase
+   * runs (beats triggered by the winning completion and `victory` beats; they
+   * may persist story flags).
    *
-   * @returns Completed bonus objectives and the story flags to save.
+   * @returns Completed bonus objectives, the story flags to save, and the
+   *   on-win dialogue that opens the debrief.
    */
   finalizeVictory(): {
     bonuses: ObjectiveDefinition[];
     storyFlags: Readonly<Record<string, boolean>>;
+    victoryLines: DebriefLine[];
   } {
     this.objectiveStates = finalizeOnVictory(this.objectiveStates);
-    this.stepScript([]);
+    const { actions } = this.runScript([], true);
     const ids = completedBonusIds(this.objectiveStates);
     return {
       bonuses: this.objectiveStates
         .filter((s) => ids.includes(s.def.id))
         .map((s) => s.def),
       storyFlags: this.script.storyFlags,
+      victoryLines: actions.flatMap(
+        (a): DebriefLine[] =>
+          a.do === "say"
+            ? [
+                {
+                  speaker: a.speaker,
+                  portraitKey: a.portraitKey,
+                  text: a.text,
+                  ...(a.mood ? { mood: a.mood } : {}),
+                },
+              ]
+            : [],
+      ),
     };
   }
 

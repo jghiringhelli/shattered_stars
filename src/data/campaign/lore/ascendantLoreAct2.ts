@@ -185,7 +185,7 @@ export const ASCENDANT_ACT2_LORE: Readonly<Record<string, MissionLore>> = {
     script: [
       atTime(
         55,
-        music("tension"),
+        music("tide_motif"),
         say(
           DREAMER,
           "Three notes, falling. I know that song. It is not theirs. The machines learned it from something.",

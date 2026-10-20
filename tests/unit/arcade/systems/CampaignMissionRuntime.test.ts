@@ -11,6 +11,7 @@ import {
   type RuntimeShip,
 } from "../../../../src/arcade/systems/CampaignMissionRuntime";
 import type { MissionPlan } from "../../../../src/campaign/mission/compileMission";
+import type { ScriptAction } from "../../../../src/campaign/scripting/scriptTypes";
 
 const WORLD = 6000;
 
@@ -158,6 +159,59 @@ describe("CampaignMissionRuntime", () => {
     const result = runtime.finalizeVictory();
     expect(result.bonuses.map((b) => b.id)).toEqual(["bonus"]);
     expect(result.storyFlags).toEqual({ clean_run: true });
+  });
+
+  it("on victory hands back the lines of on-win beats, in beat order", () => {
+    const say = (text: string): ScriptAction => ({
+      do: "say",
+      speaker: "CHEN",
+      portraitKey: "portrait_chen",
+      text,
+      mood: "solemn",
+    });
+    const runtime = new CampaignMissionRuntime(
+      plan({
+        objectives: plan().objectives.slice(0, 2),
+        script: [
+          { id: "a", when: { on: "victory" }, actions: [say("Cease fire.")] },
+          {
+            id: "b",
+            when: { on: "victory" },
+            delaySeconds: 6,
+            actions: [say("Stand down.")],
+          },
+          {
+            id: "bonus-done",
+            when: { on: "objective", objectiveId: "bonus", status: "completed" },
+            actions: [say("Clean run.")],
+          },
+        ],
+      }),
+      {},
+      WORLD,
+    );
+    const lines = runtime.finalizeVictory().victoryLines.map((l) => l.text);
+    expect(lines).toEqual(["Cease fire.", "Stand down.", "Clean run."]);
+  });
+
+  it("keeps on-win lines out of the live script step", () => {
+    const runtime = new CampaignMissionRuntime(
+      plan({
+        script: [
+          {
+            id: "a",
+            when: { on: "victory" },
+            actions: [
+              { do: "say", speaker: "C", portraitKey: "p", text: "Done." },
+            ],
+          },
+        ],
+      }),
+      {},
+      WORLD,
+    );
+    expect(runtime.stepScript([flagship]).sceneActions).toEqual([]);
+    expect(runtime.finalizeVictory().victoryLines).toHaveLength(1);
   });
 
   it("advances its clock and drives hazards", () => {

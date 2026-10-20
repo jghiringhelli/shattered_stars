@@ -27,8 +27,10 @@ import { HeroPowerInput } from "../powers/HeroPowerInput";
 import type { PowerWorld } from "../powers/heroPowerEffects";
 import type { CampaignSaveData } from "../save/campaignSaveTypes";
 import type { ScriptAction } from "../scripting/scriptTypes";
+import type { DebriefLine } from "../../data/campaign/campaignTypes";
 import { InputManager } from "../../input/InputManager";
 import { audioManager } from "../../audio/AudioManager";
+import { campaignStingerTrack } from "../../audio/musicContexts";
 import type { ContactHudState } from "../../ui/hud/types";
 import type { ObjectiveProgress } from "../../ui/modeHud/objectiveRows";
 import type { ZoomCameraLike } from "../../ui/modeHud/screenSpace";
@@ -227,10 +229,11 @@ export class CampaignMissionDirector {
     return trackerProgress(this.runtime.trackerRows());
   }
 
-  /** @returns Bonus objectives completed and story flags to save. */
+  /** @returns Bonus objectives, story flags to save and the on-win debrief lines. */
   finalizeVictory(): {
     bonuses: ObjectiveDefinition[];
     storyFlags: Readonly<Record<string, boolean>>;
+    victoryLines: DebriefLine[];
   } {
     return this.runtime.finalizeVictory();
   }
@@ -276,13 +279,17 @@ export class CampaignMissionDirector {
       case "banner":
         this.bridge.banner(action.title, action.subtitle);
         return;
-      case "music":
-        if (action.cue === "victory")
+      case "music": {
+        const { cue } = action;
+        const stinger = campaignStingerTrack(cue);
+        if (stinger) audioManager.playMusic(stinger);
+        else if (cue === "victory")
           audioManager.playFactionStinger(this.bridge.factionId, "victory");
-        else if (action.cue === "tension")
-          audioManager.playMusic("tension_alert");
-        else audioManager.playFactionMusic(this.bridge.factionId, action.cue);
+        else if (cue === "tension") audioManager.playMusic("tension_alert");
+        else if (cue === "tactical" || cue === "combat" || cue === "boss")
+          audioManager.playFactionMusic(this.bridge.factionId, cue);
         return;
+      }
       case "spawn": {
         const flagship = this.bridge.flagship() ?? {
           ...this.config.playerStart,

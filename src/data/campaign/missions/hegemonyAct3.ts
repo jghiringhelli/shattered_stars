@@ -116,13 +116,13 @@ export const HEGEMONY_ACT3_MISSIONS: CampaignMission[] = [
     enemies: [
       {
         shipId: "confed_falcon",
-        count: 4,
+        count: 3,
         faction: "free_confederation",
         hullScale: 0.7,
       },
       {
         shipId: "confed_hawk",
-        count: 3,
+        count: 2,
         faction: "free_confederation",
         spawnDelay: 60000,
         hullScale: 0.7,

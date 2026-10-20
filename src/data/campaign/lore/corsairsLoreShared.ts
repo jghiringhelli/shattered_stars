@@ -21,12 +21,12 @@ export const CAPTAIN_LABEL_SWAP: TextSwap = [KIRA_LABEL, CAPT_KIRA.name];
 /** Kira's captain, murdered by Vosk before the Moot. */
 export const BLACKMAW: Speaker = {
   name: "BLACKMAW",
-  portraitKey: "portrait_command",
+  portraitKey: "portrait_blackmaw",
 };
 /** The usurper (renamed from the old Corsair rival). */
 export const VOSK: Speaker = {
   name: "VOSK",
-  portraitKey: "portrait_command",
+  portraitKey: "portrait_vosk",
 };
 /** The Ascendant voice Kira hears over the Cinder Gate comms. */
 export const DREAMER: Speaker = {

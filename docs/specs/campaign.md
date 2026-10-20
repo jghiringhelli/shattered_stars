@@ -61,13 +61,23 @@ geometry (`src/campaign/mission/normalizeObjective.ts`).
 Declarative beats: `{ when, if?, delaySeconds?, repeat?, actions }`.
 
 - **Triggers:** `start`, `time`, `objective` (status or `revealed`),
-  `destroyed` (tag / side / count), `area` (side / tag), `flag`.
+  `destroyed` (tag / side / count), `area` (side / tag), `flag`, `victory` (the on-win phase, below).
 - **Actions:** `say` (speaker, portrait, mood), `spawn` (enemy or ally group,
   `flank` / `ahead` / `behind` / point), `addObjective`, `revealObjective`,
   `completeObjective`, `failObjective`, `setFlag` (`persist: true` = story
   flag saved on victory), `hazard` on/off, `music` cue, `banner`.
 - `ScriptInterpreter` is pure; flag actions apply immediately so flag
   triggers chain within a step (`MAX_CHAIN_PASSES = 8`).
+- **On-win phase** (`{ on: "victory" }`, `onVictory` in the design kit): when the win condition fires, the runtime seals the
+  mission with one last script step (`CampaignMissionRuntime.finalizeVictory`) before the debrief. Beats that match that step
+  play there: `victory` beats (delays collapse, `if` flags still apply, `setFlag persist` still saves) and beats triggered by
+  the winning completion itself, whose lines used to be dropped. Their `say` lines are returned as `victoryLines` and open the
+  debrief (`withVictoryLines`, ahead of the mission's own debrief lines); `banner` / `spawn` / `music` actions do not
+  play after a win (a test keeps `victory` beats to `say` and `setFlag`). Nothing is saved, so saves are unchanged (v4).
+  Shipped use: the Brannoc ceasefire call (`conf_3_4`) is now an on-win beat instead of a seventh-kill beat.
+- **Music cues:** `tactical` / `combat` / `boss` / `victory` / `tension` switch the battle track; `broadcast`
+  (relay clicks, then a carrier tone) and `tide_motif` (the three falling notes, G-F-E) are procedural stingers layered over the
+  playing music (`src/audio/musicCues.ts`; catalog ids `broadcast_click` / `tide_motif`; no files, no fetch).
 - Authoring helpers: `src/data/campaign/designKit.ts`. Positions are offsets
   from the battlefield centre (player squad starts at 0,+220).
 
@@ -189,4 +199,20 @@ Design: `docs/lore/campaign_arc.md`. Code: `src/campaign/chronicle/` (pure), `sr
   (interpreter, hazards, powers, armory/research, save v3, compiler, hub
   graph, hub actions, spawns, content integrity),
   `tests/unit/arcade/systems/Campaign{MissionRuntime,HeroPowers,Victory}.test.ts`.
+  On-win phase / cues: `ScriptInterpreter` (victory trigger), `victoryLines`, `victoryBeats` (Brannoc), `scriptMusicCues`, `tests/unit/audio/musicCues`.
 - E2E: `tests/e2e/campaign-hub.spec.ts`, `campaign-objectives.spec.ts`, `campaign-powers.spec.ts`, `campaign-progress.spec.ts`, `campaign-chronicle.spec.ts` (locks + reasons, two factions unlock Act II, canon from both sides, Coalition + lead hero, endings, reload), `campaign-missions-smoke.spec.ts` (all 86 missions boot).
+
+## 11. Difficulty proxy and open design decisions
+
+- **Force-ratio proxy** (scratch script, not shipped): every mission's squad (`playerShips[0..maxSquadSize]` + allies) against all of its
+  enemy groups and scripted enemy waves lumped into one fight, average-tier bots on both sides through the skill arena, 6 seeds × 2 seats.
+  `hullScale` is emulated by scaling the enemy hull / shields; hero powers, Armory, Research, objectives, timers, hazards and flag-gated
+  waves are not modelled, so win rates sit near 0 outside Act I and only the **enemy / player points ratio** (hullScale-weighted: points × (1 + scale) / 2)
+  is compared. Medians: Act I 2.0, Act II 1.8, Act III 2.4, Coalition 2.7. Outliers (≥ 1.6 × the act median) were `heg_1_3b` (3.7), `heg_3_2` (4.9)
+  and `synth_3_5` (4.2); tuned in data (`heg_1_3b` stealth-fail wave 2 → 1; `heg_3_2` falcons 4 → 3, delayed hawks 3 → 2; `synth_3_5`
+  raptor / kestrel groups `hullScale` 0.7), leaving `heg_3_2` 3.9 and `synth_3_5` 4.0 (the rest of the gap is flag-gated waves the proxy lumps in).
+  Watch list just under the line: `synth_3_2` 3.7, `asc_3_5` 3.8, `cors_2_3` 2.8.
+- **Coalition lead swap** (open): only the lead chosen on first entry has the hero powers on the bar; the others fly as allies. A swap between
+  missions is data-light (a pure `switchCoalitionLead(save, lead)` that sets `factionId` and veteran `heroPowerRanks`; `lead_<faction>` flags and
+  `unlessLead` allies already follow `save.factionId`, credits / research / Armory are shared), but it needs a hub control in
+  `CampaignScene` / `src/ui/campaign` and a call to the protagonist progress keyed by faction, so it is left to the owner.

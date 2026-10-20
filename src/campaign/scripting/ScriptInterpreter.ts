@@ -49,6 +49,8 @@ export interface ScriptInput {
   readonly destroyed: readonly ScriptDestroyed[];
   readonly ships: readonly ScriptShip[];
   readonly worldSize: number;
+  /** True on the one step that seals a won mission (the on-win phase). */
+  readonly victory?: boolean;
 }
 
 /** Interpreter state. */
@@ -144,6 +146,8 @@ function triggerMatches(
       return input.elapsedMs >= trigger.atSeconds * MS_PER_SECOND;
     case "flag":
       return (state.flags[trigger.flag] ?? false) === (trigger.value ?? true);
+    case "victory":
+      return input.victory === true;
     case "area":
       return input.ships.some(
         (ship) =>
@@ -195,7 +199,7 @@ function evaluate(
     }
     if (!hit || !conditionsHold(beat.if, state.flags)) continue;
     fired.push(beat.id);
-    if (beat.delaySeconds) {
+    if (beat.delaySeconds && input.victory !== true) {
       pending.push({
         beatId: beat.id,
         dueMs: input.elapsedMs + beat.delaySeconds * MS_PER_SECOND,

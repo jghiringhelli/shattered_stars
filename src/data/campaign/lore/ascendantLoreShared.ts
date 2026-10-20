@@ -13,10 +13,10 @@ export const CDR_CHEN: Speaker = {
   portraitKey: "portrait_admiral_chen",
 };
 
-/** The false Prophet's broadcast (no portrait of his own yet: comms fallback). */
+/** The false Prophet's broadcast. */
 export const ILSANDRE: Speaker = {
   name: "PROPHET ILSANDRE",
-  portraitKey: "portrait_command",
+  portraitKey: "portrait_ilsandre",
 };
 
 /** The Hegemony envoy's parley hail at Cinder Gate. */

@@ -45,6 +45,7 @@ class FakeSource {
 
 class FakeAudioContext {
   static sources: FakeSource[] = [];
+  static oscillators = 0;
   state = "running";
   currentTime = 10;
   destination = {};
@@ -58,6 +59,7 @@ class FakeAudioContext {
     return source;
   }
   createOscillator() {
+    FakeAudioContext.oscillators += 1;
     return {
       type: "sine",
       frequency: { value: 0 },
@@ -83,6 +85,7 @@ const fetchOk = vi.fn((_url: string) =>
 
 beforeEach(() => {
   FakeAudioContext.sources = [];
+  FakeAudioContext.oscillators = 0;
   fetchOk.mockClear();
   (globalThis as any).window = globalThis;
   (globalThis as any).AudioContext = FakeAudioContext;
@@ -232,5 +235,20 @@ describe("recorded music playback", () => {
     await settle();
     const live = FakeAudioContext.sources.filter((s) => s.stoppedAt === null);
     expect(live).toHaveLength(1);
+  });
+
+  it("layers a procedural cue over the playing music without fetching or switching", async () => {
+    const manager = await freshManager();
+    manager.playFactionMusic("terran_hegemony", "tactical");
+    await settle();
+    fetchOk.mockClear();
+    const live = () =>
+      FakeAudioContext.sources.filter((s) => s.stoppedAt === null);
+    const before = live().length;
+    manager.playMusic("tide_motif");
+    manager.playMusic("broadcast_click");
+    expect(fetchOk).not.toHaveBeenCalled();
+    expect(live()).toHaveLength(before);
+    expect(FakeAudioContext.oscillators).toBeGreaterThanOrEqual(3 + 4);
   });
 });

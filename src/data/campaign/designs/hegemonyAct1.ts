@@ -179,7 +179,7 @@ export const HEGEMONY_ACT1_DESIGNS: Readonly<Record<string, MissionDesign>> = {
         "survive",
         "failed",
         say(STRIKER, "Alarm's up! Here they come!", "urgent"),
-        wave("corsair_blade", 2, "void_corsairs", { at: "ahead" }),
+        wave("corsair_blade", 1, "void_corsairs", { at: "ahead" }),
       ),
       onObjective(
         "kill",

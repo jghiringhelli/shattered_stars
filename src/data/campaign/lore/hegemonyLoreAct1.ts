@@ -54,7 +54,7 @@ export const HEGEMONY_ACT1_LORE: Readonly<Record<string, MissionLore>> = {
     script: [
       atTime(
         35,
-        music("tension"),
+        music("broadcast"),
         banner("NEXUS BROADCAST", "Every channel clicks. The gate beacons go dark."),
         say(WHISPER, "That wasn't us.", "grim"),
       ),

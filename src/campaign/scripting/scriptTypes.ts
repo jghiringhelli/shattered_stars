@@ -40,7 +40,13 @@ export type ScriptTrigger =
       readonly side?: ObjectiveSide;
       readonly tag?: string;
     }
-  | { readonly on: "flag"; readonly flag: string; readonly value?: boolean };
+  | { readonly on: "flag"; readonly flag: string; readonly value?: boolean }
+  /**
+   * The mission was won: the on-win phase between the winning frame and the
+   * debrief. `say` actions become the debrief's opening lines; `setFlag`
+   * persists story flags. Delays collapse to "now".
+   */
+  | { readonly on: "victory" };
 
 /** A flag test; `is` defaults to true. Unset flags read false. */
 export interface FlagCondition {
@@ -52,7 +58,16 @@ export interface FlagCondition {
 export type DialogueMood = "neutral" | "urgent" | "solemn" | "proud" | "grim";
 
 /** Music cue names the scene maps to its audio manager. */
-export type MusicCue = "tactical" | "combat" | "boss" | "victory" | "tension";
+export type MusicCue =
+  | "tactical"
+  | "combat"
+  | "boss"
+  | "victory"
+  | "tension"
+  /** The Nexus Broadcast: relay clicks, then a carrier tone (stinger). */
+  | "broadcast"
+  /** The Tide's three falling notes (stinger). */
+  | "tide_motif";
 
 /** Where a scripted group arrives. */
 export type SpawnPlacement = ObjectivePoint | "flank" | "ahead" | "behind";

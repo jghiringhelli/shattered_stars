@@ -79,6 +79,11 @@ export const onArea = (
 ): ScriptBeat => beat({ on: "area", at: { x, y }, radius }, actions);
 export const onFlag = (flag: string, ...actions: ScriptAction[]): ScriptBeat =>
   beat({ on: "flag", flag }, actions);
+/** On-win phase: plays after the win fires, as the debrief's opening lines. */
+export const onVictory = (
+  actions: readonly ScriptAction[],
+  extra: { if?: readonly FlagCondition[] } = {},
+): ScriptBeat => beat({ on: "victory" }, actions, extra);
 
 // ── Actions ─────────────────────────────────────────────────────────────────
 export const say = (

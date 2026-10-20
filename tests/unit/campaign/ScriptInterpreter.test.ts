@@ -203,3 +203,56 @@ describe("ScriptInterpreter conditions and timing", () => {
     expect(state.storyFlags).toEqual({ convoy_saved: true });
   });
 });
+
+describe("ScriptInterpreter victory phase", () => {
+  const victoryBeat: ScriptBeat = {
+    id: "after",
+    when: { on: "victory" },
+    actions: [SAY],
+  };
+
+  it("never fires a victory beat while the mission is still on", () => {
+    expect(
+      emitted([victoryBeat], [input(), input({ elapsedMs: 90_000 })]),
+    ).toEqual([[], []]);
+  });
+
+  it("fires a victory beat once the step reports the win", () => {
+    expect(emitted([victoryBeat], [input({ victory: true })])).toEqual([
+      ["say"],
+    ]);
+  });
+
+  it("plays a victory beat at once even when it carries a delay", () => {
+    const delayed: ScriptBeat = { ...victoryBeat, delaySeconds: 8 };
+    expect(emitted([delayed], [input({ victory: true })])).toEqual([["say"]]);
+  });
+
+  it("holds a victory beat to its flag conditions", () => {
+    const gated: ScriptBeat = {
+      ...victoryBeat,
+      if: [{ flag: "kept_promise" }],
+    };
+    expect(emitted([gated], [input({ victory: true })])).toEqual([[]]);
+    expect(
+      emitted([gated], [input({ victory: true })], { kept_promise: true }),
+    ).toEqual([["say"]]);
+  });
+
+  it("lets a victory beat persist a story flag", () => {
+    const beats: ScriptBeat[] = [
+      {
+        id: "seal",
+        when: { on: "victory" },
+        actions: [
+          { do: "setFlag", flag: "x14_ceasefire_called", persist: true },
+        ],
+      },
+    ];
+    const { state } = stepScript(
+      createScriptState(beats, {}),
+      input({ victory: true }),
+    );
+    expect(state.storyFlags).toEqual({ x14_ceasefire_called: true });
+  });
+});

@@ -26,7 +26,7 @@ export const CDR_CHEN: Speaker = {
 /** Admiral Kronos, Rim Command's hardliner. */
 export const KRONOS: Speaker = {
   name: "ADMIRAL KRONOS",
-  portraitKey: "portrait_command",
+  portraitKey: "portrait_kronos",
 };
 
 /**

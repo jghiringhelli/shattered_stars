@@ -3,7 +3,7 @@
  * (docs/lore/campaigns/confederation.md).
  */
 
-import { atTime, banner, beat, music, onObjective, say } from "../designKit";
+import { atTime, onObjective, onVictory, say } from "../designKit";
 import {
   COMMAND,
   PHOENIX,
@@ -18,19 +18,8 @@ import {
   KRONOS,
 } from "./confederationLoreShared";
 
-/** Enemy ships down at Brannoc when Chen's ceasefire call comes in (of ten). */
-const CEASEFIRE_CALL_KILLS = 7;
-/** Seconds between Chen's call and Santos's answer. */
-const SANTOS_ANSWER_DELAY_SECONDS = 4;
-/** Seconds between Santos's answer and Command's reminder. */
-const LOYALIST_WARNING_DELAY_SECONDS = 8;
-
+/** Set by the Hegemony campaign when Chen's ceasefire already took place. */
 const CEASEFIRE_CALLED = [{ flag: "x14_ceasefire_called" }] as const;
-const CEASEFIRE_CALL = {
-  on: "destroyed",
-  side: "enemy",
-  count: CEASEFIRE_CALL_KILLS,
-} as const;
 
 /** Slots 11–15 of the Confederation campaign. */
 export const CONFEDERATION_ACT3_LORE: Readonly<Record<string, MissionLore>> = {
@@ -156,36 +145,20 @@ export const CONFEDERATION_ACT3_LORE: Readonly<Record<string, MissionLore>> = {
     ],
     victoryFlags: { x14_ceasefire_called: true },
     script: [
-      beat(
-        CEASEFIRE_CALL,
-        [
-          banner("CEASEFIRE CALLED", "Chen on the open channel"),
-          music("tension"),
-          say(
-            CDR_CHEN,
-            "Libre One, this is Iron Actual. I'm calling a ceasefire.",
-            "solemn",
-          ),
-        ],
-      ),
-      beat(
-        CEASEFIRE_CALL,
-        [say(SANTOS, "...Hold fire. All cells, hold fire.", "solemn")],
-        { delaySeconds: SANTOS_ANSWER_DELAY_SECONDS },
-      ),
-      beat(
-        CEASEFIRE_CALL,
-        [
-          say(
-            COMMAND,
-            "Chen's wing is standing down. Rim Command's loyalists are not. Finish whoever still fires.",
-            "urgent",
-          ),
-        ],
-        { delaySeconds: LOYALIST_WARNING_DELAY_SECONDS },
-      ),
-      beat(
-        CEASEFIRE_CALL,
+      onVictory([
+        say(
+          CDR_CHEN,
+          "Libre One, this is Iron Actual. I'm calling a ceasefire.",
+          "solemn",
+        ),
+        say(SANTOS, "...Hold fire. All cells, hold fire.", "solemn"),
+        say(
+          COMMAND,
+          "Chen's wing is standing down, and Rim Command's loyalists have gone dark. Brannoc is open.",
+          "urgent",
+        ),
+      ]),
+      onVictory(
         [
           say(
             PHOENIX,
@@ -193,7 +166,7 @@ export const CONFEDERATION_ACT3_LORE: Readonly<Record<string, MissionLore>> = {
             "proud",
           ),
         ],
-        { if: CEASEFIRE_CALLED, delaySeconds: LOYALIST_WARNING_DELAY_SECONDS },
+        { if: CEASEFIRE_CALLED },
       ),
     ],
     debriefAppend: [

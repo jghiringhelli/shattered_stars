@@ -13,7 +13,6 @@ import {
   hazardOn,
   hold,
   kill,
-  music,
   onObjective,
   onStart,
   protect,
@@ -210,16 +209,6 @@ export const HEGEMONY_ACT3_LORE_B: Readonly<Record<string, MissionLore>> = {
           ),
         ],
         { delaySeconds: 6 },
-      ),
-      onObjective(
-        "kill",
-        "completed",
-        music("tension"),
-        say(
-          WHISPER,
-          "Commander, the Spine gates. They are going dark, one by one.",
-          "urgent",
-        ),
       ),
     ],
     replaceDebrief: [

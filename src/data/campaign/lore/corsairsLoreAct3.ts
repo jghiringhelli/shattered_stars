@@ -151,7 +151,7 @@ export const CORSAIRS_ACT3_LORE: Readonly<Record<string, MissionLore>> = {
       onObjective(
         "pretender",
         "completed",
-        music("tension"),
+        music("tide_motif"),
         banner("THE LANE GOES DEAD", "Three notes. Loud this time."),
         say(KIRA, "That's my nightmare. It's real.", "grim"),
       ),

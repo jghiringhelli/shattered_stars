@@ -47,7 +47,7 @@ export const SYNTHETIC_ACT1_LORE: Readonly<Record<string, MissionLore>> = {
       "Unit activated at Node Kel-9. A click-tone is running through every relay in the Lattice, and nothing in the Lattice sent it. Primary directive: complete the calibration course. Deviation is error.",
     replaceScript: [
       onStart(
-        music("tension"),
+        music("broadcast"),
         banner("THE BROADCAST", "A click-tone runs through every relay"),
         say(OMEGA, "Signal received. Origin: not ours.", "grim"),
       ),

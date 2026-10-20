@@ -58,7 +58,9 @@ export type MusicTrack =
   | "arcade_action"
   | "tactical_planning"
   | "survival_ramp"
-  | "campaign_briefing";
+  | "campaign_briefing"
+  | "broadcast_click"
+  | "tide_motif";
 
 /** Legacy phase API: faction theme, faction battle, boss. */
 export type BattleMusicPhase = "tactical" | "combat" | "boss";

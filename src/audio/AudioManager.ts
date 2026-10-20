@@ -29,6 +29,7 @@ import {
   type MusicTrack,
 } from "./musicTracks";
 import { MusicDirector } from "./MusicDirector";
+import { cueNotes, isCueTrack, scheduleCue } from "./musicCues";
 
 /** Browser codec probe; Node/test environments without a DOM get mp3. */
 function probeAudioSupport(mime: string): string {
@@ -305,7 +306,17 @@ export class AudioManager {
    * @param requested - Track id (aliases such as menu_theme resolve).
    */
   playMusic(requested: MusicTrack): void {
+    if (isCueTrack(requested)) {
+      this.playCue(requested);
+      return;
+    }
     this.musicDirector.context(requested);
+  }
+
+  /** Layer a procedural stinger over the music; the playing track is kept. */
+  private playCue(cue: MusicTrack): void {
+    if (!this.context || !this.musicGain) return;
+    scheduleCue(this.context, this.musicGain, cueNotes(cue));
   }
 
   /** Crossfade to a track (the director's player). */

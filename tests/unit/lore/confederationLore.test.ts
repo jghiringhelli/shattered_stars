@@ -250,10 +250,14 @@ describe("confederation lore", () => {
     const said = speechOf(m).join(" ");
     expect(said).toContain("Libre One, this is Iron Actual");
     expect(said).toContain("Hold fire. All cells, hold fire.");
-    const answer = beatsOf(m).find((b) =>
-      b.actions.some((a) => a.do === "say" && a.text.includes("Hold fire")),
-    )!;
-    expect(answer.delaySeconds).toBeGreaterThan(0);
+    const callOrder = beatsOf(m)
+      .filter((b) => b.when.on === "victory")
+      .flatMap((b) => b.actions)
+      .flatMap((a) => (a.do === "say" ? [a.text] : []));
+    expect(callOrder.findIndex((t) => t.includes("Iron Actual"))).toBeLessThan(
+      callOrder.findIndex((t) => t.includes("Hold fire")),
+    );
+    expect(callOrder.findIndex((t) => t.includes("Iron Actual"))).toBe(0);
   });
 
   it("ends on Kronos's fall, the witnessed breach and the Prometheus signal", () => {

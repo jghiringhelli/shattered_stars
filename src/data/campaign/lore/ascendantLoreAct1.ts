@@ -25,7 +25,7 @@ export const ASCENDANT_ACT1_LORE: Readonly<Record<string, MissionLore>> = {
     script: [
       atTime(
         30,
-        music("tension"),
+        music("broadcast"),
         banner("THE BROADCAST", "Every relay in the Reach clicks once"),
         say(HERALD, "A sleeper has woken. The Oracles... take note.", "solemn"),
       ),

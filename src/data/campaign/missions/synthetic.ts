@@ -429,8 +429,18 @@ export const SYNTHETIC_COLLECTIVE_MISSIONS: CampaignMission[] = [
     ],
     maxSquadSize: 6,
     enemies: [
-      { shipId: "terran_raptor", count: 4, faction: "terran_hegemony" },
-      { shipId: "confed_kestrel", count: 4, faction: "free_confederation" },
+      {
+        shipId: "terran_raptor",
+        count: 4,
+        faction: "terran_hegemony",
+        hullScale: 0.7,
+      },
+      {
+        shipId: "confed_kestrel",
+        count: 4,
+        faction: "free_confederation",
+        hullScale: 0.7,
+      },
       {
         shipId: "terran_bulwark",
         count: 2,

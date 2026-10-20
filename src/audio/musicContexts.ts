@@ -56,6 +56,23 @@ export function campaignBattleMode(
 }
 
 /**
+ * Campaign script cues that are procedural stingers layered over the battle
+ * music (the other cues switch the battle track).
+ */
+const CAMPAIGN_STINGER_CUES: Readonly<Record<string, MusicTrack>> = {
+  broadcast: "broadcast_click",
+  tide_motif: "tide_motif",
+};
+
+/**
+ * @param cue - A campaign script music cue name.
+ * @returns The stinger track it layers, or null for a track-switching cue.
+ */
+export function campaignStingerTrack(cue: string): MusicTrack | null {
+  return CAMPAIGN_STINGER_CUES[cue] ?? null;
+}
+
+/**
  * @param activeKind - The run's open node kind (null while choosing a route).
  * @returns The cantina in the shop, Long Haul everywhere else on the map.
  */
