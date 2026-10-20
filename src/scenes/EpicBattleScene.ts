@@ -393,7 +393,7 @@ export class EpicBattleScene extends Phaser.Scene {
   /** Ship the pilot last flew; a new flagship starts with fresh input memory. */
   private pilotedShipId: string | null = null;
 
-  /** X-Wing round tempo: who struck whom this maneuver cycle. */
+  /** Tabletop round tempo: who struck whom this maneuver cycle. */
   private readonly hitLedger = new HitImmunityLedger();
   /** Secondary weapons (missiles, torpedoes, turrets, bombs, mines, cloak). */
   private weapons: BattleWeapons | null = null;
@@ -1305,7 +1305,7 @@ export class EpicBattleScene extends Phaser.Scene {
   }
 
   /**
-   * Flies every ship one frame on the X-Wing cycle engine (template arcs,
+   * Flies every ship one frame on the tabletop cycle engine (template arcs,
    * cycle-boundary commits, stress) and syncs sprites to the new poses.
    *
    * @param deltaMs - Frame length (ms).
@@ -1389,7 +1389,7 @@ export class EpicBattleScene extends Phaser.Scene {
   }
 
   /**
-   * One frame of laser fire on the X-Wing round tempo: each ship attacks at
+   * One frame of laser fire on the tabletop round tempo: each ship attacks at
    * most once per maneuver cycle, and holds its shot while its target is
    * still immune to it (struck by it this cycle).
    *

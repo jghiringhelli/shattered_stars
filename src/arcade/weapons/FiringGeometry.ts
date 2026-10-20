@@ -1,7 +1,7 @@
 /**
  * FiringGeometry — the one torus-aware geometry every weapon uses: range
  * and bearing the short way across the map seam, firing-arc envelopes with
- * an optional minimum range (X-Wing range bands), the point astern where
+ * an optional minimum range (tabletop range bands), the point astern where
  * devices are dropped and the heading toward a target.
  *
  * Angles follow the ship convention: degrees, 0 = up/north, clockwise.

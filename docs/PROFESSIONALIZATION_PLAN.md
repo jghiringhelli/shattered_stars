@@ -9,8 +9,8 @@ acceptance criteria; the status column tracks delivery.
 | Game | Practice we adopt |
 |---|---|
 | [Star Wars: Squadrons](https://squadrons.fandom.com/wiki/HUD) | Segmented shields, redundant audio + visual state changes, off-screen threats folded into the radar, one deep settings surface. |
-| [X-Wing Miniatures 2.0 scenarios](https://www.atomicmassgames.com/xwing-docs/) | Control-based scoring (more ships in range; medium/large count double), carry-and-drop salvage (dropped on boost / barrel roll / destruction), first-to-threshold wins. |
-| [X-Wing / TIE Fighter / X-Wing Alliance](https://www.gdcvault.com/play/1034651/Classic-Game-Postmortem-Star-Wars) | Primary + bonus objectives, escort missions with explicit fail states (never more than 3 critical escorts), briefing → mission → debrief loop with consequences. |
+| [classic tabletop dogfighting games 2.0 scenarios](https://www.atomicmassgames.com/xwing-docs/) | Control-based scoring (more ships in range; medium/large count double), carry-and-drop salvage (dropped on boost / barrel roll / destruction), first-to-threshold wins. |
+| [tabletop / TIE Fighter / tabletop Alliance](https://www.gdcvault.com/play/1034651/Classic-Game-Postmortem-Star-Wars) | Primary + bonus objectives, escort missions with explicit fail states (never more than 3 critical escorts), briefing → mission → debrief loop with consequences. |
 | [StarCraft II: Wings of Liberty](https://liquipedia.net/starcraft2/Campaign) | Hub with non-linear mission choice, Armory + Research with mutually exclusive permanent picks, hero abilities, every mission a different mechanic. |
 | [FTL](https://ftl.fandom.com/wiki/Sectors) | Typed sector node graph, text events with risk/reward, resources that persist between fights. |
 | [Slay the Spire](https://deepwiki.com/silverua/slay-the-spire-map-in-unity/2.2-node-structure-and-types) | Legible branching map with node-type icons, relic archetypes with visible synergies, ascension levels. |
@@ -25,7 +25,7 @@ acceptance criteria; the status column tracks delivery.
 ## Already delivered
 
 - Holographic HUD kit: radar with off-screen edge arrows, status ring, mark reticle (`src/ui/hud/`).
-- Combat tempo on the X-Wing round model: one attack per cycle, per-attacker hit immunity, ×12 durability, ×10 ordnance.
+- Combat tempo on the tabletop round model: one attack per cycle, per-attacker hit immunity, ×12 durability, ×10 ordnance.
 - Piloting skill gates (`npm run test:skill`): an expert beats a novice ≥ 85% in every sampled pair (even with a +30% ship), a coordinated average squad beats equal points of solo experts ≥ 70%.
 - One AI for every mode: skill-tier BotPilots flying through the player's controls, squads with focus fire and the squad mark (R), mark assist for the player's wingmen.
 - Key-combo telemetry battery proving every maneuver and special fires from the documented keys.
@@ -46,7 +46,7 @@ acceptance criteria; the status column tracks delivery.
 |---|---|---|---|
 | P1-1 | Survival as a full roguelite | Branching sector map (≥ 5 node types), relic archetypes with synergy tags, ascension, meta-unlocks on every run, run save/resume, run history, seeded runs, final boss. | In progress (survival workstream) |
 | P1-2 | Campaign like StarCraft II | Hub with ≥ 2 missions open, Armory + Research with exclusive choices, hero active powers (V / B), ≥ 4 mission archetypes beyond "destroy all", bonus objectives, persistent consequences, completion state. | In progress (campaign workstream) |
-| P1-3 | X-Wing 2.0 scenario mode | ≥ 2 of Satellite Array / Chance Engagement / Salvage / Scramble with real-time scoring, objective state on HUD + radar, carried salvage visible and dropped on boost / roll / death, score threshold or time limit. | Done — all 4 scenarios: Squad Builder › SCENARIO picker → `battleConfig.scenario`; rules in `src/arcade/scenarios/`, scene glue in `src/scenes/scenario/` (6 s rounds = DURABILITY_SCALE cycles, control range 400 px = range 0–1, first to 20 or 5 min) |
+| P1-3 | tabletop scenario mode | ≥ 2 of Satellite Array / Chance Engagement / Salvage / Scramble with real-time scoring, objective state on HUD + radar, carried salvage visible and dropped on boost / roll / death, score threshold or time limit. | Done — all 4 scenarios: Squad Builder › SCENARIO picker → `battleConfig.scenario`; rules in `src/arcade/scenarios/`, scene glue in `src/scenes/scenario/` (6 s rounds = DURABILITY_SCALE cycles, control range 400 px = range 0–1, first to 20 or 5 min) |
 | P1-4 | Escort / bonus-objective archetype | Escort HP on HUD/radar, ≥ 3 wingman orders, immediate clear failure, ≤ 3 critical escorts. | In progress (campaign objectives, reusable in `src/arcade/objectives/`) |
 | P1-5 | Ranked seasons + daily challenges (online 1v1) | Placement matches, soft reset, widening MMR tolerance, ≥ 3 daily challenges. | Partly — offline Daily in Survival setup (DAILY: seed, faction, base starter and ascension 1–3 derived from the local date, ascension applies even before it is unlocked; score = 1000/sector + 100/node + 10/kill + 5000 on victory; local best + last 30 results) — `src/systems/survival/DailyChallenge.ts`. Online ranked seasons still planned |
 

@@ -1,6 +1,6 @@
 /**
  * XWingFlightOracle — where a ship MUST be after flying a sequence of
- * maneuvers, computed from the X-Wing 2.0 rules, independently of the game's
+ * maneuvers, computed from the tabletop rules, independently of the game's
  * own template tables (src/systems/MovementSystem.ts).
  *
  * The flight-telemetry battery flies ships through the real arcade motion code
@@ -57,7 +57,7 @@ function arcDegOf(rule: ManeuverRule): number {
   return rule.chordDeg * 2;
 }
 
-/** The X-Wing 2.0 rule for every dial maneuver (plus the arcade drift). */
+/** The tabletop rule for every dial maneuver (plus the arcade drift). */
 export const XWING_RULES: Readonly<Record<ManeuverDirection, ManeuverRule>> = {
   straight: { chordDeg: 0, facingDeg: 0 },
   bank_left: { chordDeg: -BANK_CHORD_DEG, facingDeg: -45 },

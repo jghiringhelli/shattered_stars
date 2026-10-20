@@ -1,7 +1,7 @@
 /**
  * pilotAbilityEffects — what every pilot-card ability does in real time.
  *
- * X-Wing abilities are written for dice and rounds; each entry here is the
+ * Tabletop abilities are written for dice and rounds; each entry here is the
  * real-time reading of the card text (src/systems/PilotAbilities.ts):
  * - Dice/reroll bonuses become laser damage or damage-taken knobs, gated by
  *   the card's condition (range 1, behind the target, bullseye, wingman,

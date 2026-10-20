@@ -22,7 +22,7 @@ verify*, using Playwright + the game's expose-to-window hooks + optional Claude 
    telemetry (`window.__shipTelemetry` via `?debug=1`), console/page errors, and a
    screenshot.
 3. **VERIFY** — Assert the invariants below. Optionally add a Claude-vision check on the
-   screenshot. Cross-check captured telemetry against the X-Wing reference
+   screenshot. Cross-check captured telemetry against the tabletop reference
    (`docs/specs/telemetry-xwing-reference.md`).
 4. **REGENERATE** — On any FAIL, the runner prints a regeneration block naming the
    failing invariant, the scene, and the exact spec + source files to reload (via

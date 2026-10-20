@@ -1,7 +1,7 @@
 /**
  * Squad Builder System
  *
- * Implements X-Wing TMG style squad building with:
+ * Implements tabletop style squad building with:
  * - Point-based squad construction
  * - Upgrade slot validation
  * - Unique card restrictions

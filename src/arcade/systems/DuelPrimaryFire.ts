@@ -1,6 +1,6 @@
 /**
  * DuelPrimaryFire — the autofiring primary weapon of the duel scenes
- * (Dogfight, Ace Duel) on the X-Wing round tempo (CombatTempo): a ready gun
+ * (Dogfight, Ace Duel) on the tabletop round tempo (CombatTempo): a ready gun
  * fires at its pilot's target when it is in range and arc (else the first
  * such enemy) that is not immune to it this cycle, then waits at least one
  * maneuver cycle before its next attack.

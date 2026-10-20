@@ -1,7 +1,7 @@
 /**
  * Squadron Presets
  *
- * Quick-build squads per faction and point budget, modeled after X-Wing 2.0
+ * Quick-build squads per faction and point budget, modeled after tabletop
  * quick-play cards. Curated, internally consistent loadouts that let players
  * or AI field a competent squad without manual list-building.
  *

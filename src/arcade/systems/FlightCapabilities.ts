@@ -8,7 +8,7 @@
  * {barrel roll, Hook Loop, Knife Roll} (src/data/shipSpecials.ts); boost and
  * Snap Turn are never affected. Bots and the player share this one rule.
  *
- * X-Wing stress rule: a stressed pilot cannot execute a red maneuver and
+ * Tabletop stress rule: a stressed pilot cannot execute a red maneuver and
  * cannot perform actions, so it is refused red specials and every dash.
  *
  * Pure: no Phaser. The pilot flight controls consult it every frame, for

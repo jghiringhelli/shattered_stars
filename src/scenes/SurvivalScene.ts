@@ -378,7 +378,7 @@ export class SurvivalScene extends Phaser.Scene {
   /** Pulsing edge/text/icon warning + audio cue near the asteroid belt. */
   private beltWarning: BeltWarningHud | null = null;
 
-  /** X-Wing round tempo: a struck target ignores its attacker for a cycle. */
+  /** Tabletop round tempo: a struck target ignores its attacker for a cycle. */
   private readonly hitLedger = new HitImmunityLedger();
   /** Secondary weapons (missiles, torpedoes, turrets, bombs, mines, cloak). */
   private weapons: BattleWeapons | null = null;
@@ -1450,7 +1450,7 @@ export class SurvivalScene extends Phaser.Scene {
   // ==========================================
 
   /**
-   * Flies every ship one frame on the X-Wing cycle engine (template arcs,
+   * Flies every ship one frame on the tabletop cycle engine (template arcs,
    * cycle-boundary commits, stress) and syncs sprites to the new poses. A
    * boss whose engines are offline holds position.
    *
@@ -1632,7 +1632,7 @@ export class SurvivalScene extends Phaser.Scene {
   /**
    * One frame of weapons: the run's shield regen for the player fleet,
    * cooldowns, and autofire at the nearest target in range and arc — at
-   * most one attack per maneuver cycle (X-Wing round tempo).
+   * most one attack per maneuver cycle (tabletop round tempo).
    *
    * @param delta - Frame length (ms).
    */
@@ -1706,7 +1706,7 @@ export class SurvivalScene extends Phaser.Scene {
    * The foe a ship fires at: its pilot's chosen target (a bot's target; the
    * player's mark for the flagship) when valid, else the nearest foe in
    * weapon range and forward arc — never one still immune to this ship's
-   * hits (X-Wing round: one hit per attacker per cycle).
+   * hits (tabletop round: one hit per attacker per cycle).
    *
    * @param ship - The firing ship.
    * @returns Its target, or null when none can be fired at.

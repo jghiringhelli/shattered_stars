@@ -1,5 +1,5 @@
 /**
- * salvageRules — X-Wing 2.0 "Salvage Mission" for both sides, in real time:
+ * salvageRules — tabletop "Salvage Mission" for both sides, in real time:
  * an unstressed ship not already carrying, at range 0 of a loose crate,
  * picks it up (nearest eligible ship first; an exact tie between the sides
  * goes to the side carrying fewer crates, else waits a frame); a carried

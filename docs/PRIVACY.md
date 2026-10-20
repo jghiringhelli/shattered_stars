@@ -1,6 +1,6 @@
 # Privacy
 
-Shattered Stars is a free browser game. It has **no accounts, no cookies, no ads and no analytics**. This page says exactly what the game stores and what leaves your machine.
+Shattered Stars is a browser game, free to play during its alpha and beta (it may become a paid game later; if that happens, the price and what it includes will be announced on the game's page, and what is described here about your data would still apply unless this page says otherwise). It has **no accounts, no cookies, no ads and no analytics**. This page says exactly what the game stores and what leaves your machine.
 
 ## Short version
 

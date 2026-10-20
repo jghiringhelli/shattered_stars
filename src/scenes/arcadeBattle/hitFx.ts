@@ -1,6 +1,6 @@
 /**
  * hitFx — cheap feedback for a bolt that struck a ship still immune to its
- * attacker this cycle (X-Wing round tempo): a small ring that pops and fades.
+ * attacker this cycle (tabletop round tempo): a small ring that pops and fades.
  */
 
 import Phaser from "phaser";

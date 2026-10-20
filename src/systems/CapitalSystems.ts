@@ -1,7 +1,7 @@
 /**
  * CapitalSystems — subsystem damage model for capital-class ships.
  *
- * Inspired by X-Wing TMG's epic-ship system damage, made more precise since
+ * Inspired by tabletop's epic-ship system damage, made more precise since
  * this is a digital game: instead of a discrete crit-card draw, each of the
  * three named systems (engines/turrets/bridge) has its own continuous hull
  * pool and a weighted hit chance reflecting how exposed it is. As the ship

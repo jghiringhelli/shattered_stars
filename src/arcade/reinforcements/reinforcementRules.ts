@@ -51,7 +51,7 @@ export const PICKER_AUTO_ACCEPT_MS = 5000;
 
 /**
  * A ship that warps in ignores hits for one maneuver cycle — the same span
- * as the X-Wing round's hit immunity (CombatTempo.HIT_IMMUNITY_MS).
+ * as the tabletop round's hit immunity (CombatTempo.HIT_IMMUNITY_MS).
  */
 export const ARRIVAL_PROTECTION_MS = CYCLE_DURATION_MS;
 

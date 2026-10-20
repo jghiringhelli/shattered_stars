@@ -9,7 +9,7 @@
  *   protection) times its faction aura, floored at
  *   MIN_DAMAGE_TAKEN_MULTIPLIER — the same product for lasers (via
  *   resolveDiceAttack), ordnance, bombs and turrets.
- * - X-Wing has no "stressed pilots deal less damage" rule: nothing here
+ * - tabletop has no "stressed pilots deal less damage" rule: nothing here
  *   penalises a stressed shooter.
  *
  * Pure: no Phaser.

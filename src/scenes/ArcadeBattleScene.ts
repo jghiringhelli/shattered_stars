@@ -261,7 +261,7 @@ interface ShipSprite extends Phaser.GameObjects.Container {
 /** Score for each enemy the player's side destroys. */
 /** Gunner crew turret traverse (degrees per second). */
 const GUNNER_TURN_DEG_PER_S = 180;
-/** The capital main beam reaches twice X-Wing range 3. */
+/** The capital main beam reaches twice tabletop range 3. */
 const MAIN_BEAM_RANGE_PX = 2 * RANGE_3;
 const MAIN_BEAM_COLOR = 0x99ddff;
 const PLAYER_LASER_COLOR = 0xff8800;
@@ -323,7 +323,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   /** Holographic HUD; created in create(), destroyed on shutdown. */
   private hud: ArcadeBattleHud | null = null;
   /**
-   * X-Wing round tempo: a ship struck by an attacker ignores that attacker's
+   * Tabletop round tempo: a ship struck by an attacker ignores that attacker's
    * lasers, turret and ordnance until the next maneuver cycle.
    */
   private readonly hitLedger = new HitImmunityLedger();
@@ -438,7 +438,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   /** The AI: a bot pilot per AI ship, a squad command per team, the marks. */
   private botFleet: ArcadeBotFleet | null = null;
 
-  /** X-Wing 2.0 scenario (battleConfig.scenario), or null for a plain Skirmish. */
+  /** Tabletop scenario (battleConfig.scenario), or null for a plain Skirmish. */
   private scenario: ScenarioController | null = null;
 
   /** Reinforcement-pool battle (battleConfig.battle), or null for a classic one. */
@@ -1746,7 +1746,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   /**
-   * Every ship's primary weapon on the X-Wing round tempo, by the rule all
+   * Every ship's primary weapon on the tabletop round tempo, by the rule all
    * modes share: its pilot's target (else the nearest enemy) inside its
    * range and firing arc the short way across the map seam, at most one
    * attack per cycle, never at a target still immune to it. A cloaked ship

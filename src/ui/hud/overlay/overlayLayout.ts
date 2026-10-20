@@ -3,7 +3,7 @@
  * hull/shield overlay (src/ui/HealthBar.ts draws it).
  *
  * Shields read as discrete segments, one per miniature shield token (the
- * X-Wing shield tokens: maxShields / DURABILITY_SCALE), capped so capital
+ * Tabletop shield tokens: maxShields / DURABILITY_SCALE), capped so capital
  * ships stay readable. Hull reads as a continuous bar with a tick per
  * miniature hull point. No Phaser.
  */

@@ -270,7 +270,7 @@ function clampModifiers(sheet: MutableModifiers): CombatModifiers {
 /**
  * Forward-laser damage for one bolt, after upgrade bonuses.
  *
- * @param baseDamage - Damage before upgrades. X-Wing has no "stressed pilots
+ * @param baseDamage - Damage before upgrades. Tabletop has no "stressed pilots
  *   deal less damage" rule, so nothing here penalises a stressed shooter.
  * @param modifiers - The firing ship's modifier sheet.
  * @param isStressed - Whether the firing pilot is currently stressed.

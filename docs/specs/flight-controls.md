@@ -59,7 +59,7 @@ in Settings. They have no default key.
 ## Ship identity — one signature trick
 
 A ship with many specials is impractical to fly by hand and a smart AI would destroy a human with
-it. In X-Wing the hulls with the barrel roll do not have the Hook (Segnor) or the Knife (Tallon),
+it. In tabletop the hulls with the barrel roll do not have the Hook (Segnor) or the Knife (Tallon),
 and the ones with one do not have the other. So by default a ship flies **at most one of
 {barrel roll, Hook Loop, Knife Roll}** — its signature trick. **Boost and Snap Turn are never
 affected.** Bots and the player use the same rule (it lives in `flightCapabilitiesOf`, which
@@ -111,7 +111,7 @@ code must call it when a lockstep battle is built (and `false` when it ends), or
 - Unit: `ShipIdentity` (capabilities of every hull, signature table, effective labels),
   `ShipIdentityGestures` (identity traces, capital maneuver key), `RollDoubleTap`, `ManeuverKey`, `GestureFalsePositives` (replayed traces: rapid
   alternation, tap-spam, hold-then-tap, boost during a turn, chords, unavailable roll),
-  `KeyComboTelemetry` (every special ends where X-Wing puts it), defaults / codec / labels.
+  `KeyComboTelemetry` (every special ends where tabletop puts it), defaults / codec / labels.
 - E2E: `key-bindings` (every mode: each combo, refusal, silent roll, negatives),
   `input-full-playthrough` (keyboard + touch), `gamepad-defaults`, `flight-school`.
 - Live telemetry: `flight-telemetry-live` plays seeded random keyboard gestures in Dogfight,

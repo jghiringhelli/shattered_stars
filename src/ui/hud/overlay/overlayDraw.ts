@@ -2,7 +2,7 @@
  * overlayDraw — draws one ship's hull/shield overlay into a Graphics object
  * from the pure layout + animation state. Thin view code: no game rules.
  *
- * Reading order (top to bottom): shield segments (one per X-Wing shield
+ * Reading order (top to bottom): shield segments (one per tabletop shield
  * token) over a hull bar with a tick per miniature hull point. Side is told
  * by SHAPE as well as colour: player = filled chevron, ally = hollow
  * diamond, enemy = reticle corner brackets (amber when targeted). Damage

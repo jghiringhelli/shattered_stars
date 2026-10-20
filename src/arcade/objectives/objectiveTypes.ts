@@ -1,6 +1,6 @@
 /**
  * objectiveTypes — data contracts of the reusable mission-objective models
- * (Campaign today, an X-Wing 2.0 Scenario mode later). Pure data: the
+ * (Campaign today, a tabletop Scenario mode later). Pure data: the
  * models in this folder step these states from a per-frame
  * {@link ObjectiveFrame}; scenes build the frame from their own ships and
  * draw the {@link ObjectiveMarker}s / move the {@link EntityPose}s.
@@ -28,7 +28,7 @@ export interface ObjectiveShip {
   readonly y: number;
   readonly hull: number;
   readonly maxHull: number;
-  /** Control weight: 1 small/tiny, 2 medium or bigger (X-Wing 2.0 rule). */
+  /** Control weight: 1 small/tiny, 2 medium or bigger (tabletop rule). */
   readonly weight: number;
   readonly tags: readonly string[];
   /** Pilot stressed (cannot pick up salvage). */

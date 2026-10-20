@@ -139,7 +139,7 @@ export function applySteering(
 
 /**
  * Snap turn, Hook and Knife: queued specials. Refused when not on the
- * ship's dial, or when red and the pilot is stressed (X-Wing).
+ * ship's dial, or when red and the pilot is stressed (tabletop).
  * @param flown - Ship being flown.
  * @param flight - Motion/stress being built this frame (mutated).
  * @param wants - Which specials were requested this frame.
@@ -193,7 +193,7 @@ function dashRefused(flight: Flight, dash: FlightDash): boolean {
 
 /**
  * Boost and barrel roll: instant dashes that carry the cycle along.
- * Refused when not on the ship's action bar or while stressed (X-Wing).
+ * Refused when not on the ship's action bar or while stressed (tabletop).
  * @param flown - Ship being flown.
  * @param flight - Motion/stress being built this frame (mutated).
  * @param boost - Whether a boost was requested.

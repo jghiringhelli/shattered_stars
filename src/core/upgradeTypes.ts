@@ -55,7 +55,7 @@ export interface WeaponProfile {
   /** Time between shots, in milliseconds. */
   readonly cooldownMs: number;
   /**
-   * X-Wing range band [min, max] (1–3; config RANGE_1..RANGE_3 px) the
+   * Tabletop range band [min, max] (1–3; config RANGE_1..RANGE_3 px) the
    * weapon engages at. Omitted = the class default (missiles/torpedoes
    * 2–3, turrets 1–2).
    */

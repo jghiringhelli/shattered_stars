@@ -1,7 +1,7 @@
 /**
  * ShotConditions — when a pilot ability's conditional knobs apply.
  *
- * Pilot abilities in X-Wing are conditional ("at range 1", "while behind
+ * Pilot abilities in tabletop are conditional ("at range 1", "while behind
  * the target", "while stressed"...). In real time those conditions are read
  * at the moment a laser bolt hits: the attacker's pose against the target's,
  * whether a wingman flies close, and the attacker's own state.
@@ -20,7 +20,7 @@ import { headingDiffToTarget } from "../systems/MovementSystem";
 /** Range 1 (px, centre to centre). */
 export const CLOSE_RANGE_PX = RANGE_1;
 
-/** Half-width of the bullseye arc (X-Wing bullseye: a narrow 20° strip). */
+/** Half-width of the bullseye arc (tabletop bullseye: a narrow 20° strip). */
 export const BULLSEYE_HALF_ARC_DEG = 10;
 
 /** Half-width of a ship's rear arc. */

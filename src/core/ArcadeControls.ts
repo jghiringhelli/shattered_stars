@@ -6,7 +6,7 @@
  * template path. Player input queues the NEXT maneuver; the queue commits at
  * cycle end. Default queue is 'straight' at current speed.
  *
- * This mirrors X-Wing TMG: you commit to a maneuver in advance and ride it out.
+ * This mirrors tabletop: you commit to a maneuver in advance and ride it out.
  * The template distance includes the ship's physical base size (front-to-back
  * geometry), so larger ships naturally cover more ground at the same speed.
  */

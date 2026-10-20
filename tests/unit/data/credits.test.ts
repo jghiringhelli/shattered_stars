@@ -31,8 +31,8 @@ describe("credits", () => {
     expect(allText).toMatch(/System fonts only/);
   });
 
-  it("names Wing Commander among the trademarks it disclaims", () => {
-    expect(allText).toMatch(/Star Wars, X-Wing, Wing Commander/);
+  it("names no third-party game or franchise", () => {
+    expect(allText).not.toMatch(/X-Wing|Star Wars|Wing Commander|Lucasfilm/i);
   });
 
   it("discloses AI-generated content", () => {
@@ -40,15 +40,9 @@ describe("credits", () => {
   });
 
   it("carries the non-affiliation and trademark disclaimer", () => {
-    for (const owner of [
-      "Lucasfilm",
-      "Disney",
-      "Atomic Mass Games",
-      "Fantasy Flight Games",
-    ])
-      expect(allText).toContain(owner);
     expect(allText).toMatch(/not affiliated/i);
     expect(allText).toMatch(/trademarks/i);
+    expect(allText).toMatch(/classic dogfighting games/i);
   });
 
   it("states the proprietary license and free alpha", () => {

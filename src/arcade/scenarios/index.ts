@@ -1,5 +1,5 @@
 /**
- * Scenario mode — public API. X-Wing Miniatures 2.0 scenarios (Assault at
+ * Scenario mode — public API. Tabletop miniatures 2.0 scenarios (Assault at
  * the Satellite Array, Chance Engagement, Salvage Mission, Scramble the
  * Transmissions) adapted to the real-time battle: pure rules, deployment
  * and the squad layer's objective assignments. Scenes build a

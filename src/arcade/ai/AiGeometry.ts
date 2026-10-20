@@ -98,7 +98,7 @@ export function inFiringArc(
  * @param attacker - Attacker position.
  * @param target - Target pose and firing arc width.
  * @param worldSize - Torus edge length (px).
- * @returns front (target can shoot back), rear (X-Wing rear arc) or flank.
+ * @returns front (target can shoot back), rear (tabletop rear arc) or flank.
  */
 export function arcPositionOf(
   attacker: Point,

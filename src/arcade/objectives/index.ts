@@ -1,6 +1,6 @@
 /**
  * Mission objectives — public API. Pure, Phaser-free models reusable by any
- * mode (Campaign now, an X-Wing 2.0 Scenario mode later): scenes build an
+ * mode (Campaign now, a tabletop Scenario mode later): scenes build an
  * ObjectiveFrame per frame, step the states, spawn/move the entities the
  * objectives ask for and draw their markers.
  */

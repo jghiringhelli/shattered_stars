@@ -55,10 +55,10 @@
 
 ### Ship Roster (16 ships total)
 **Elite Fighters (4)**
-- **Phoenix-class Starfighter** *(X-Wing stats)*
+- **Phoenix-class Starfighter** *(tabletop stats)*
 - **Vortex Interceptor** *(A-Wing stats)*
 - **Thunderbolt Advanced Fighter** *(E-Wing stats)*
-- **Nova-class Heavy Fighter** *(T-70 X-Wing stats)*
+- **Nova-class Heavy Fighter** *(T-70 tabletop stats)*
 
 **Balanced Fighters (3)**
 - **Comet-class Fighter** *(Z-95 stats)*
@@ -177,7 +177,7 @@
 **Bio-Fighters (5)**
 - **Symbiont-class Fighter** *(TIE Aggressor stats)*
 - **Evolved Interceptor** *(A-Wing alternate stats)*
-- **Hybrid Heavy Fighter** *(X-Wing alternate stats)*
+- **Hybrid Heavy Fighter** *(tabletop alternate stats)*
 - **Metamorph-class Striker** *(TIE Striker alternate stats)*
 - **Adaptation Fighter** *(E-Wing alternate stats)*
 

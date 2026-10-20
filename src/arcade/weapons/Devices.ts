@@ -1,13 +1,13 @@
 /**
  * Devices — bombs and mines as real objects on the battlefield.
  *
- * - Dropped one speed-1 template astern of the ship (X-Wing drop).
+ * - Dropped one speed-1 template astern of the ship (tabletop drop).
  * - Bomb: a timed fuse; at the end it blasts.
  * - Mine: arms after one cycle; the first ENEMY whose hull touches it sets
  *   it off (IFF, so a squad flying over its own mines is safe); untouched
  *   mines fizzle after their lifetime.
  * - A blast hits EVERY living ship within its radius, friend or foe
- *   (X-Wing devices are indiscriminate: friendly fire applies).
+ *   (tabletop devices are indiscriminate: friendly fire applies).
  *
  * Pure: no Phaser.
  */

@@ -3,7 +3,7 @@
  *
  * Ship hull and shields come from getModeCombatStats (the path every mode
  * spawns by). Commander repair orders are written in miniature points; the
- * X-Wing round tempo (one attack per maneuver cycle) needs DURABILITY_SCALE
+ * Tabletop round tempo (one attack per maneuver cycle) needs DURABILITY_SCALE
  * times as many hit points, so every scene-local HP source goes through here
  * and the scale is applied exactly once. Pure: no Phaser.
  */

@@ -4,11 +4,11 @@
  * price and battle behaviour come from one place:
  *
  * - Launchers (missiles, torpedoes): need a target lock, fire from the
- *   front arc (X-Wing 80°) at the card's range band (default 2–3), fly as
+ *   front arc (tabletop 80°) at the card's range band (default 2–3), fly as
  *   homing projectiles and hit for card damage × ORDNANCE_DAMAGE_SCALE.
  * - Devices (bombs, mines): dropped astern. A bomb detonates on a timed
  *   fuse; a mine arms after a cycle and waits for an enemy to touch it.
- *   Either blast hits EVERY ship in its radius (X-Wing devices are
+ *   Either blast hits EVERY ship in its radius (tabletop devices are
  *   indiscriminate: friendly fire applies).
  * - Turrets: all-round (360°) auto-tracking at the card's band (default
  *   1–2), card damage per hit like a primary laser.
@@ -104,13 +104,13 @@ export function isLauncher(spec: SecondarySpec): spec is LauncherSpec {
   return spec.kind === "missile" || spec.kind === "torpedo";
 }
 
-/** X-Wing front arc: launchers fire at targets within ±40° of the nose. */
+/** Tabletop front arc: launchers fire at targets within ±40° of the nose. */
 export const LAUNCH_ARC_DEG = 80;
 /** All-round turret arc. */
 export const TURRET_ARC_DEG = 360;
 /** Charges a card carries when it does not state its own. */
 export const DEFAULT_CHARGES = 2;
-/** Launcher band when the card states none (X-Wing missiles/torpedoes). */
+/** Launcher band when the card states none (tabletop missiles/torpedoes). */
 const DEFAULT_LAUNCHER_BAND: readonly [number, number] = [2, 3];
 /** Turret band when the card states none. */
 const DEFAULT_TURRET_BAND: readonly [number, number] = [1, 2];
@@ -124,7 +124,7 @@ export const LAUNCHER_LIFETIME_MS = 2000;
 
 /** Bombs detonate two maneuver cycles after the drop. */
 export const BOMB_FUSE_MS = 2 * CYCLE_DURATION_MS;
-/** Bomb blast reach: X-Wing range 0–1. */
+/** Bomb blast reach: tabletop range 0–1. */
 export const BOMB_BLAST_RADIUS_PX = RANGE_1;
 /** Mines can be set off one cycle after the drop. */
 export const MINE_ARM_MS = CYCLE_DURATION_MS;
@@ -137,11 +137,11 @@ export const MINE_LIFETIME_MS = 45_000;
 /** Devices are dropped one speed-1 template plus half a base astern. */
 export const DEVICE_DROP_DISTANCE_PX = SPEED_SCALE_FACTOR + 16;
 
-/** Upper bound (px) of each X-Wing range band, band 0 = touching. */
+/** Upper bound (px) of each tabletop range band, band 0 = touching. */
 const RANGE_BAND_EDGE_PX = [0, RANGE_1, RANGE_2, RANGE_3] as const;
 
 /**
- * @param band - X-Wing range band [min, max], 1–3.
+ * @param band - tabletop range band [min, max], 1–3.
  * @returns The band in px: min = upper edge of the band below `min`.
  */
 export function rangeBandPx(band: readonly [number, number]): RangeBandPx {

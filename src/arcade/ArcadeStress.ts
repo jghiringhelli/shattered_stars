@@ -5,7 +5,7 @@
  * green = easy, white = neutral, red = stressful. Arcade inputs are classified
  * into the nearest dial template each frame; sustained red-difficulty flying
  * accumulates stress until the pilot is "stressed", blocking further red maneuvers
- * until green flying drains it. This mirrors the X-Wing TMG rule set in real-time.
+ * until green flying drains it. This mirrors the tabletop rule set in real-time.
  */
 
 import type { ManeuverDefinition, ManeuverDifficulty } from "../core/types";
@@ -45,7 +45,7 @@ export const STRESS_LOW = 0.15;
 /**
  * Maximum deflection ratio (|angVel| / maxAngVel) allowed when stressed.
  * 0.64 is just below the 0.65 threshold that classifies a maneuver as 'turn',
- * so stressed ships are limited to bank-level turning — matching X-Wing's rule
+ * so stressed ships are limited to bank-level turning — matching tabletop's rule
  * that a stressed pilot cannot choose a red maneuver.
  */
 export const STRESSED_MAX_DEFLECTION = 0.64;
@@ -244,7 +244,7 @@ export function difficultyColor(difficulty: ManeuverDifficulty): string {
 /**
  * Finds the best speed for executing a discrete sharp turn (Q/E keys).
  * Prefers currentSpeed; if that speed is absent or blocked by stress, searches
- * outward for the nearest valid dial entry — auto-adjusting speed to match X-Wing
+ * outward for the nearest valid dial entry — auto-adjusting speed to match tabletop
  * template rules (a ship always has *some* speed where it can hard-turn).
  *
  * @param dial         - Ship's maneuver dial from ShipDefinitions.

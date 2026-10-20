@@ -1,7 +1,7 @@
 /**
  * Continuous Tactical Battle Scene
  *
- * Squad command on the X-Wing cycle engine:
+ * Squad command on the tabletop cycle engine:
  * - Every ship flies true template arcs in fixed 500 ms cycles
  * - The player dials a standing maneuver order (direction + speed) for the
  *   selected ship; it latches into the engine's queue and flies at the next

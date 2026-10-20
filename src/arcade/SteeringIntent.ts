@@ -1,7 +1,7 @@
 /**
  * SteeringIntent — maps raw steering input to the maneuver queued for the next cycle.
  *
- * The arcade flight model rides X-Wing's discrete cycle system: input queues a
+ * The arcade flight model rides tabletop's discrete cycle system: input queues a
  * maneuver, which commits at the cycle boundary. That model assumes a *fresh*
  * choice each cycle. A held key does the opposite — it re-queues the same
  * maneuver forever — so mapping "held left" straight onto a dial maneuver made

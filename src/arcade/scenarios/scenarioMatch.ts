@@ -1,5 +1,5 @@
 /**
- * scenarioMatch — one X-Wing 2.0 scenario match, stepped frame by frame:
+ * scenarioMatch — one tabletop scenario match, stepped frame by frame:
  * objectives update continuously (control, scrambling, salvage carried and
  * dropped), destruction scores as it happens, and every
  * {@link SCENARIO_ROUND_MS} a round ends and the objectives score

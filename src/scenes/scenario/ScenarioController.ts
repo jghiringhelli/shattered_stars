@@ -1,5 +1,5 @@
 /**
- * ScenarioController — runs an X-Wing 2.0 scenario inside the Skirmish
+ * ScenarioController — runs a tabletop scenario inside the Skirmish
  * scene behind a handful of one-line hooks: deploys both sides on their
  * lines, steps the pure match every logic tick (frame from the scene's
  * ship records, evasive actions from its flight hook), drives the AI's

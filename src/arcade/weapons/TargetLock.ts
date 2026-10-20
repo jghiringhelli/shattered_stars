@@ -1,5 +1,5 @@
 /**
- * TargetLock — the X-Wing target lock in real time. A pilot that keeps the
+ * TargetLock — the tabletop target lock in real time. A pilot that keeps the
  * target it wants within range 3 (any bearing) for one full maneuver cycle
  * acquires a lock; the lock holds until a launch spends it, the target
  * leaves {@link LOCK_BREAK_RANGE_PX}, dies or cloaks (the caller passes a
@@ -13,7 +13,7 @@ import { CYCLE_DURATION_MS, RANGE_3 } from "../../config";
 
 /** Time the wanted target must stay in lock range to acquire a lock. */
 export const LOCK_ACQUIRE_MS = CYCLE_DURATION_MS;
-/** A lock is acquired at X-Wing range 0–3. */
+/** A lock is acquired at tabletop range 0–3. */
 export const LOCK_RANGE_PX = RANGE_3;
 /** An acquired lock breaks once the target is this far away. */
 export const LOCK_BREAK_RANGE_PX = 2 * RANGE_3;

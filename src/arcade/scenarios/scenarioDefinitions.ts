@@ -1,5 +1,5 @@
 /**
- * scenarioDefinitions — the four X-Wing 2.0 scenarios, adapted to real time:
+ * scenarioDefinitions — the four tabletop scenarios, adapted to real time:
  * where their objectives lie (offsets from the battlefield centre, in the
  * middle band between the two deployment lines), how they score and when
  * scoring starts.

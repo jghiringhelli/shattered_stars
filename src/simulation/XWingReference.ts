@@ -1,7 +1,7 @@
 /**
- * X-Wing 2.0 geometric reference for movement-telemetry fidelity.
+ * Tabletop geometric reference for movement-telemetry fidelity.
  *
- * Anchors the game's per-cycle movement to the tabletop X-Wing Miniatures Game 2.0
+ * Anchors the game's per-cycle movement to the tabletop the tabletop game 2.0
  * geometry so speed, turn radius and facing change can be verified against a physical
  * reference. See docs/specs/telemetry-xwing-reference.md and docs/adr/ADR-0001.
  *
@@ -19,10 +19,10 @@ import type {
 /** Canonical scale: pixels per millimetre, anchored by the straight templates. */
 export const PX_PER_MM = 1;
 
-/** Official X-Wing 2.0 straight template length per speed unit, in millimetres. */
+/** Official tabletop straight template length per speed unit, in millimetres. */
 export const XWING_STRAIGHT_MM_PER_SPEED = 40;
 
-/** Official X-Wing 2.0 square base sizes, in millimetres. */
+/** Official tabletop square base sizes, in millimetres. */
 export const XWING_BASE_MM: Readonly<
   Record<"small" | "medium" | "large", number>
 > = {
@@ -31,7 +31,7 @@ export const XWING_BASE_MM: Readonly<
   large: 80,
 };
 
-/** Facing change (degrees) per maneuver direction, per X-Wing 2.0 rules. */
+/** Facing change (degrees) per maneuver direction, per tabletop rules. */
 export const XWING_FACING_CHANGE: Readonly<
   Record<DialManeuverDirection, number>
 > = {
@@ -49,18 +49,18 @@ export const XWING_FACING_CHANGE: Readonly<
 };
 
 /**
- * The maneuver directions the X-Wing fidelity gates apply to.
+ * The maneuver directions the tabletop fidelity gates apply to.
  *
  * Derived from {@link XWING_FACING_CHANGE} so it stays exhaustive over the
  * dial. Arcade-only templates (drift_*) are deliberately excluded: they have
- * no X-Wing counterpart, so holding them to X-Wing facing-change rules would
+ * no tabletop counterpart, so holding them to tabletop facing-change rules would
  * be meaningless. Every *dial* maneuver remains gated.
  */
 export const DIAL_DIRECTIONS: readonly DialManeuverDirection[] = Object.keys(
   XWING_FACING_CHANGE,
 ) as DialManeuverDirection[];
 
-/** Templates that exist for arcade feel only and are outside the X-Wing gates. */
+/** Templates that exist for arcade feel only and are outside the tabletop gates. */
 export const NON_DIAL_DIRECTIONS: readonly ManeuverDirection[] = [
   "drift_left",
   "drift_right",

@@ -85,24 +85,17 @@ redistributed rather than only hosted, add `ws`'s notice.
 
 ## 5. Disclaimer
 
-Shattered Stars is an independent work **inspired by** the mechanics of the X-Wing
-Miniatures Game. It is not affiliated with, endorsed, sponsored or approved by
-Lucasfilm Ltd., The Walt Disney Company, Atomic Mass Games or Fantasy Flight Games.
-Star Wars, X-Wing, Wing Commander and related names are trademarks of their respective
-owners. The factions, ships and characters are original.
+Shattered Stars is an independent original work inspired by classic dogfighting games.
+It is not affiliated with, endorsed, sponsored or approved by any other game, publisher
+or franchise. All trademarks belong to their respective owners. The factions, ships and
+characters are original.
 
 ## 6. Player-facing trademark occurrences (audit result)
 
-Searched `src/**`, `server/src/**`, `index.html`, `public/**`, `package.json` for X-Wing,
-Star Wars, Lucasfilm, Disney, Wing Commander, Atomic Mass, Fantasy Flight, TIE, Jedi,
-Sith, etc. Remaining occurrences outside code comments:
-
-- `src/data/credits.ts`: nominative / disclaimer use only. OK.
-- `src/data/survival/powers.ts:390`: a Survival power is **named "Wing Commander"**
-  (id `x_wingcmd`), shown to players. Recommend renaming (e.g. "Squadron Marshal").
-- `package.json` `description`: "…with X-Wing Miniatures mechanics". Not shown in game;
-  recommend neutral wording if the package is ever published.
-- README.md and LICENSE carry the non-affiliation disclaimer (README not edited by this audit).
+Searched `src/**`, `server/src/**`, `index.html`, `public/**`, `package.json` for
+third-party game and franchise names. Result after the 2026-10-20 clean-up: none remain in
+player-facing text, credits, README, LICENSE or `package.json`. The Survival power formerly
+named "Wing Commander" (id `x_wingcmd`, id unchanged) is now "Squadron Marshal".
 
 ## ACTION ITEMS FOR THE OWNER
 

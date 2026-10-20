@@ -1,7 +1,7 @@
 /**
  * Movement System
  * Handles maneuver template resolution and path calculation
- * Based on X-Wing Miniatures movement mechanics
+ * Based on tabletop miniatures movement mechanics
  */
 
 import type {
@@ -187,7 +187,7 @@ export function rotatePoint(
 /**
  * Resolve a maneuver to get the final position and angle.
  *
- * The template length follows X-Wing TMG geometry: the template starts at the
+ * The template length follows tabletop geometry: the template starts at the
  * front of the ship's base and ends at the back of the destination, so the
  * total displacement is (speed × SPEED_SCALE_FACTOR) + baseSize pixels.
  *

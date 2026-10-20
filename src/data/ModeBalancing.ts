@@ -138,7 +138,7 @@ const MODE_BASE_STATS: Record<GameMode, ModeBaseStats> = {
     maneuverSpeed: 1.8,
   },
   continuous: {
-    // === ARCADE MODE TUNING (Target: ~4 hit TTK like X-Wing) ===
+    // === ARCADE MODE TUNING (Target: ~4 hit TTK like tabletop) ===
     // Lower HP for faster kills - aim for 4-6 effective HP
     hullMultiplier: 0.6, // Reduced from 1.0 - faster deaths
     shieldMultiplier: 0.5, // Reduced from 0.8 - shields break fast

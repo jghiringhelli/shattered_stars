@@ -437,7 +437,7 @@ When I correct your output, record the correction pattern here so you don't repe
 
 ## Project Overview
 
-Shattered Stars is a Phaser 3 tactical space combat game inspired by X-Wing Miniatures Game (TMG). It features multiple real-time arcade game modes (skirmish, survival, continuous tactical, dogfight, ace duel, campaign) with X-Wing-inspired ship dials, actions, and upgrade cards. All combat is real-time — the old discrete turn-based engine (BattleManager/TurnSystem) was removed; Campaign now runs on the same real-time flight/combat model as every other mode.
+Shattered Stars is a Phaser 3 tactical space combat game inspired by classic tabletop dogfighting games. It features multiple real-time arcade game modes (skirmish, survival, continuous tactical, dogfight, ace duel, campaign) with tabletop-inspired ship dials, actions, and upgrade cards. All combat is real-time — the old discrete turn-based engine (BattleManager/TurnSystem) was removed; Campaign now runs on the same real-time flight/combat model as every other mode.
 
 
 ## Tech Stack
@@ -489,7 +489,7 @@ Combat is real time and lives in src/arcade/ (below). What stays here:
 - **ActionsSystem.ts** - Action definition catalogue shown in ship detail panels (data only)
 - **PilotAbilities.ts** - Pilot ability catalogue and triggers
 - **UpgradeSystem.ts** - Upgrade slots and shop
-- **SquadBuilder.ts** - X-Wing TMG style squad building
+- **SquadBuilder.ts** - tabletop style squad building
 - **PerformanceSystem.ts** - Adaptive quality for large battles
 - **PlayerProfile.ts** / **matchXp.ts** - Global profile + XP: every match that ends with a result (any mode, online too)
   pays XP once through `matchStats`' `onResult` (rules: src/data/ModeXp.ts, spec: docs/specs/progression.md);
@@ -501,7 +501,7 @@ Combat is real time and lives in src/arcade/ (below). What stays here:
 
 
 ### Arcade Systems (src/arcade/)
-- **systems/CycleFlight.ts** - The X-Wing cycle engine for every battle scene: spawn control from the
+- **systems/CycleFlight.ts** - The tabletop cycle engine for every battle scene: spawn control from the
   definition, tick motion + cycle stress (AI ships fly BotPilots through the same controls)
 - **systems/PlayerFlightPilot.ts** / **PilotFlightControls.ts** - Player flight input shared by all scenes
 - **RollDoubleTap.ts** / **ManeuverKey.ts** - THE special-maneuver gestures (pure): barrel roll = double-tap of the SAME arrow / left-stick side (alternating ← → is steering; an unavailable roll just steers, silently); one MANEUVER key (Z / LT / MNVR button, held intent): tap = Snap Turn, hold + side = Hook Loop, double-tap + side = Knife Roll. Spec: docs/specs/flight-controls.md; bots press the direct BARREL_ROLL_*/SEGNOR_*/TALLON_*/KTURN intents (PilotHands)
@@ -531,7 +531,7 @@ Combat is real time and lives in src/arcade/ (below). What stays here:
 - **ArcadeStress.ts** - Pilot stress driven by ship dial difficulty (green/white/red rates,
   Snap turn + boost instant spikes, hysteresis thresholds, HUD color helpers)
 - **weapons/** - THE secondary-weapons model of every battle mode: `weaponSpecs` (cards → rules:
-  lock, front arc, X-Wing range bands, ×10 ordnance), `Arsenal` (slots, turret, cloak), `TargetLock`,
+  lock, front arc, tabletop range bands, ×10 ordnance), `Arsenal` (slots, turret, cloak), `TargetLock`,
   `OrdnanceFlight` (homing, torus), `Devices` (bombs/mines: drop astern, fuse/arm/trigger, friendly
   fire), `TurretGunnery`, `FiringGeometry` (torus-aware arcs/ranges), `SecondaryWeapons` (runtime).
   `WeaponsDriver` (Phaser-free driver: arming from quick builds, hit routing, cloak factor, held
@@ -555,7 +555,7 @@ Combat is real time and lives in src/arcade/ (below). What stays here:
   pool exhaustion or 3:00 destroyed points decide. Pure `ReinforcementDirector`; scene glue in
   src/scenes/arcadeBattle/reinforcements/ (ReinforcementController, HUD panel, picker).
   Reinforced scenarios play to higher thresholds (reinforcedScenario.ts).
-- **scenarios/** - X-Wing 2.0 Scenario mode rules (Satellite Array, Chance Engagement,
+- **scenarios/** - tabletop Scenario mode rules (Satellite Array, Chance Engagement,
   Salvage, Scramble): control (medium+ count double), round scoring (12-cycle rounds),
   half/full destruction points, first to 20; AI objective roles (scenarioAi). Scene glue:
   src/scenes/scenario/ (ScenarioController hooks in ArcadeBattleScene, HUD, picker).
@@ -663,6 +663,10 @@ Combat is real time and lives in src/arcade/ (below). What stays here:
   Squad battles: a side is a TEAM (seat → `team_<n>`), never a faction — mirror and mixed-faction
   teams are allowed (protocol 3); every human seat has its own reinforcement picker (its input stream).
 - Rule: online battles are built in canonical seat order; only presentation may read `localSeat`.
+- Protocol 5: the relay owns the match definition (`server/src/matchDefinition.ts`: mode, teams, point limit,
+  seed, map theme; squads validated by `src/net/rules/squadRules.ts`); room options are host-only and validated;
+  REMATCH is a server vote (60 s window); relay handlers are wrapped by `server/src/guarded.ts`. Online battles
+  always fly the ship-identity trick rule (`lockTrickRuleToIdentity`, see docs/specs/flight-controls.md).
 - Rule: simulation ids are per-battle state, never module counters: `FieldOrdnance` owns the shot / device id
   counters (reset by `clear()`, captured by StateGraph, folded into the state hash); `SquadBattleAi` takes its
   random source from the scene; sim modules default their dice to `utils/random` (which online battles swap for
@@ -680,7 +684,7 @@ Libre / cells / insurgents. Internal ids keep their old names (`force_power`, `a
 
 ## Factions
 
-Rosters are near-equal per role (every hull is inspired by an X-Wing TMG ship); each faction's
+Rosters are near-equal per role (every hull is inspired by a tabletop ship); each faction's
 identity is carried by levers — aura, identity cards/slots, ace abilities — defined in
 `src/data/factionIdentity.ts` (spec: docs/specs/factions.md) and gated by
 `tests/balance/FactionIdentity.test.ts` (removing it costs its faction ≥ 8 win points).

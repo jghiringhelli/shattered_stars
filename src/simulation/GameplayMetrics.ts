@@ -9,7 +9,7 @@
  *
  * Reference benchmarks from well-regarded games:
  * - FTL: Slower, strategic pacing (TTK 30-60s per ship)
- * - X-Wing Miniatures: Moderate pacing (TTK 2-4 turns)
+ * - tabletop miniatures: Moderate pacing (TTK 2-4 turns)
  * - Star Wars Squadrons: Fast, action-oriented (TTK 5-15s)
  */
 
@@ -491,7 +491,7 @@ export class GameplayMetricsAnalyzer {
     // Find similar games
     const similarTo: string[] = [];
     if (ttk.averageTTK >= 3 && ttk.averageTTK <= 5) {
-      similarTo.push("X-Wing Miniatures");
+      similarTo.push("tabletop miniatures");
     }
     if (skill.rating === "tactical" || skill.rating === "chess") {
       similarTo.push("Into the Breach");
@@ -506,7 +506,7 @@ export class GameplayMetricsAnalyzer {
     // Target audience
     let targetAudience: string;
     if (skill.rating === "chess" || skill.rating === "tactical") {
-      targetAudience = "Strategy enthusiasts, X-Wing/Armada fans";
+      targetAudience = "Strategy enthusiasts, tabletop fans";
     } else if (archetype === "action") {
       targetAudience = "Action gamers, casual players";
     } else {
@@ -616,13 +616,13 @@ export class GameplayMetricsAnalyzer {
       );
     }
 
-    // Comparison to X-Wing Miniatures target
+    // Comparison to tabletop miniatures target
     const xwingTTK = TTK_BENCHMARKS.xwingMiniatures.ttk;
     const ttkDiff = Math.abs(ttk.averageTTK - xwingTTK) / xwingTTK;
     if (ttkDiff > 0.3) {
       recommendations.push(
         `TTK CALIBRATION: Current TTK (${ttk.averageTTK.toFixed(1)} turns) differs significantly ` +
-          `from X-Wing Miniatures target (${xwingTTK} turns). Adjust if targeting similar feel.`,
+          `from tabletop miniatures target (${xwingTTK} turns). Adjust if targeting similar feel.`,
       );
     }
 
@@ -689,7 +689,7 @@ export class GameplayMetricsAnalyzer {
     output +=
       "│ Reference Benchmarks:                                           │\n";
     output +=
-      "│   • X-Wing Miniatures: ~4 turns (tactical)                      │\n";
+      "│   • tabletop miniatures: ~4 turns (tactical)                      │\n";
     output +=
       "│   • Star Wars Squadrons: ~2 turns (action)                      │\n";
     output +=

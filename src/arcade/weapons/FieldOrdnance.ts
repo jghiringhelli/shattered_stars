@@ -151,7 +151,7 @@ export class FieldOrdnance {
       const after = flyShot(shot, guided, deltaMs, this.worldSize);
       const struck = shotImpact(shot, after, bodies, this.worldSize);
       if (struck) {
-        // X-Wing: the warhead's attack still rolls against the agility.
+        // Tabletop: the warhead's attack still rolls against the agility.
         const odds = calculateHitChance(shot.attackDice, struck.agilityDice);
         if (field.random() < odds)
           events.push(this.hitOf(shot.ownerId, struck, shot, field));

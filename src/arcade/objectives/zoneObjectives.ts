@@ -1,6 +1,6 @@
 /**
  * zoneObjectives — area objectives:
- * - capture: X-Wing 2.0 control — a side controls the zone while it has more
+ * - capture: tabletop control — a side controls the zone while it has more
  *   ship weight in range than the other (medium/large count double); the
  *   player completes it after `holdSeconds` of control, and (optionally)
  *   fails if the enemy gets there first.
@@ -41,7 +41,7 @@ export interface SabotageState extends ObjectiveStateCore<SabotageDefinition> {
 }
 
 /**
- * Who controls a zone this frame (X-Wing 2.0: more weight in range wins).
+ * Who controls a zone this frame (tabletop: more weight in range wins).
  *
  * @param frame - The frame.
  * @param at - Zone centre.

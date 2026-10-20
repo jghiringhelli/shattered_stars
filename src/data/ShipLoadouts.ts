@@ -1,7 +1,7 @@
 /**
  * Ship Loadouts System
  *
- * Pre-configured builds for each ship (X-Wing TMG "quick builds"). Every
+ * Pre-configured builds for each ship (tabletop "quick builds"). Every
  * build must fit its ship's slot bar (src/data/ShipSlots.ts) and its price is
  * derived from its contents. AI enemies, campaign missions and the ship
  * picker all use these loadouts.

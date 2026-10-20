@@ -2,7 +2,7 @@
  * Campaign Battle Scene
  *
  * Real-time arcade combat for campaign missions — same flight/combat model as
- * DogfightScene/SurvivalScene (X-Wing cycle engine: template arcs committed
+ * DogfightScene/SurvivalScene (tabletop cycle engine: template arcs committed
  * each cycle, pilot stress; autofire; toroidal battlefield). The flagship is
  * flown by the player through the shared pilot controls; escorts and enemies
  * are BotPilots (the bots the skill gates measure, tiers per
@@ -307,7 +307,7 @@ export class CampaignBattleScene extends Phaser.Scene {
   private modeHud!: CampaignModeHud;
   private resultOverlay: ResultOverlay | null = null;
 
-  /** X-Wing round tempo: a struck target ignores its attacker for a cycle. */
+  /** Tabletop round tempo: a struck target ignores its attacker for a cycle. */
   private readonly hitLedger = new HitImmunityLedger();
   /** Secondary weapons (missiles, torpedoes, turrets, bombs, mines, cloak). */
   private weapons: BattleWeapons | null = null;
@@ -1309,7 +1309,7 @@ export class CampaignBattleScene extends Phaser.Scene {
   }
 
   /**
-   * Flies every ship one frame on the X-Wing cycle engine (template arcs,
+   * Flies every ship one frame on the tabletop cycle engine (template arcs,
    * cycle-boundary commits, stress) and syncs sprites to the new poses.
    * A hero's time-slow scales the enemy side's frame.
    *
@@ -1443,7 +1443,7 @@ export class CampaignBattleScene extends Phaser.Scene {
 
   /**
    * One frame of weapons: cooldowns and autofire at the nearest target in
-   * range and arc — at most one attack per maneuver cycle (X-Wing round).
+   * range and arc — at most one attack per maneuver cycle (tabletop round).
    *
    * @param delta - Frame length (ms).
    */
@@ -1471,7 +1471,7 @@ export class CampaignBattleScene extends Phaser.Scene {
    * The foe a ship fires at: its pilot's chosen target (a bot's target; the
    * player's mark for the flagship) when valid, else the nearest foe in
    * weapon range and forward arc — never one still immune to this ship's
-   * hits (X-Wing round: one hit per attacker per cycle). Sides are owners,
+   * hits (tabletop round: one hit per attacker per cycle). Sides are owners,
    * so a mission against the player's own faction still fights.
    *
    * @param ship - The firing ship.

@@ -184,7 +184,7 @@ function dash(
 /**
  * Barrel-roll slide: one speed-1 template plus the ship's base, sideways.
  * @param baseSize - Ship base size in px.
- * @returns Slide length in px (X-Wing 2.0 barrel roll).
+ * @returns Slide length in px (tabletop barrel roll).
  */
 export function barrelRollDistance(baseSize: number): number {
   return SPEED_SCALE_FACTOR + baseSize;

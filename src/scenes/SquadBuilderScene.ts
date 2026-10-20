@@ -100,7 +100,7 @@ export class SquadBuilderScene extends Phaser.Scene {
   private modeToggleButton: HoloPressButton | null = null;
   private squadsButton: HoloPressButton | null = null;
   private menuFocus: MenuFocus | null = null;
-  /** Skirmish only: the X-Wing 2.0 scenario selector (header, left of the mode toggle). */
+  /** Skirmish only: the tabletop scenario selector (header, left of the mode toggle). */
   private scenarioPicker: ScenarioPicker | null = null;
   /** Exposed for E2E tests — Classic / Reinforcements, strategy and reserve (Skirmish, Epic, Scenario). */
   public reinforcementSetup: SquadReinforcementSetup | null = null;

@@ -3,7 +3,7 @@
  * simulator (BattleSimulator): one template per turn at a flat 60 px per
  * speed, no base size, inside a 1000 px bounded board.
  *
- * Simulator-only. The game itself flies the X-Wing cycle engine
+ * Simulator-only. The game itself flies the tabletop cycle engine
  * (MovementSystem / ArcadeControls / CycleFlight); the balance acceptance
  * thresholds in tests/balance are calibrated against this geometry.
  */

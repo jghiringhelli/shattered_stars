@@ -1358,7 +1358,7 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   /**
-   * Flies every ship one frame on the X-Wing cycle engine (template arcs,
+   * Flies every ship one frame on the tabletop cycle engine (template arcs,
    * cycle-boundary commits, stress) and syncs sprites to the new poses.
    *
    * @param deltaMs - Frame length (ms).

@@ -1,5 +1,5 @@
 /**
- * TacticalOrders — the continuous-tactical dial on the X-Wing cycle engine.
+ * TacticalOrders — the continuous-tactical dial on the tabletop cycle engine.
  *
  * The player commands a squad by dialing a standing maneuver order per ship
  * (direction + speed from that ship's dial). The order latches into the

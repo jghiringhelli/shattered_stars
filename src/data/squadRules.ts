@@ -1,7 +1,7 @@
 /**
  * Squad-level rules for quick-build rosters.
  *
- * X-Wing's uniqueness rule: a named (unique) pilot can appear at most once in a
+ * Tabletop's uniqueness rule: a named (unique) pilot can appear at most once in a
  * squad. Since every loadout names its pilot, a roster is a list of loadout ids
  * (null = the bare ship flown by a rookie, which is never unique).
  */

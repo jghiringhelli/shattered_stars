@@ -1,5 +1,5 @@
 /**
- * destructionScoring — X-Wing 2.0's destroyed-ship points, adapted: every
+ * destructionScoring — tabletop's destroyed-ship points, adapted: every
  * ship is worth its squad cost in scenario points (a full standard list is
  * worth the threshold); a ship at half health or below concedes half its
  * value (rounded up) once, and its destruction concedes the rest.

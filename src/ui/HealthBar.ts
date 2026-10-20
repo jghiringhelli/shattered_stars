@@ -1,7 +1,7 @@
 /**
  * HealthBar — the per-ship hull/shield overlay (holographic HUD style).
  *
- * Shields read as discrete segments (one per X-Wing shield token) above a
+ * Shields read as discrete segments (one per tabletop shield token) above a
  * hull bar ticked per miniature hull point. Damage flashes white and leaves
  * a draining ghost trail; repair sweeps a shimmer along the restored bar's
  * edge with a "+" glyph. Player / ally / enemy differ by marker SHAPE

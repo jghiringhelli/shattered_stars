@@ -33,7 +33,7 @@ arrives.
 3. **Psionics is rare and physical.** It strains the pilot, it has limits, and it is loud in the Deep, which has cosmic consequences.
 4. **The threat arrives through consequence.** Dead lanes, wrong music (the three-note motif in every boss track), staged battles. Not exposition dumps.
 5. **One war, five witnesses.** The same days and battles, never the same missions.
-6. **Own vocabulary.** Nothing that reads as Star Wars or X-Wing in player-facing text.
+6. **Own vocabulary.** Nothing that reads as Star Wars or tabletop in player-facing text.
 
 ## Contents
 | File | What |
@@ -46,12 +46,12 @@ arrives.
 | [factions/ascendant.md](./factions/ascendant.md) | Ascendant Empire: shields, support, psionics · hero the Dreamer (and the Templar Kaeth) |
 | [campaign_arc.md](./campaign_arc.md) | The 5 acts, the act-unlock rule, the Chronicle, the crossovers, keys and endings |
 | [campaigns/](./campaigns/) | Per faction, all 15 slots mapped to the existing 78 mission ids: [Hegemony](./campaigns/hegemony.md) · [Confederation](./campaigns/confederation.md) · [Synthetic](./campaigns/synthetic.md) · [Corsairs](./campaigns/corsairs.md) · [Ascendant](./campaigns/ascendant.md) |
-| [glossary.md](./glossary.md) | Canonical terms and the **distancing table** (Star Wars/X-Wing terms in `src/` with counts and replacements) |
+| [glossary.md](./glossary.md) | Canonical terms and the **distancing table** (Star Wars/tabletop terms in `src/` with counts and replacements) |
 
 The bible **supersedes** [../campaign_narrative.md](../campaign_narrative.md)
 and the lore sections of [../scifi_factions.md](../scifi_factions.md). Those
 files stay as history. The roster tables in `scifi_factions.md` that map ships
-to X-Wing stat lines are obsolete.
+to tabletop stat lines are obsolete.
 
 ## What changed vs the old lore, and why
 

@@ -1,5 +1,5 @@
 /**
- * escortObjective — a convoy of transports flying a path (X-Wing Alliance
+ * escortObjective — a convoy of transports flying a path (tabletop Alliance
  * escort archetype). Transports are player-side scripted ships the enemy
  * hunts; the objective fails as soon as more than `maxLosses` are lost and
  * completes when every surviving transport reaches the path's end. Never

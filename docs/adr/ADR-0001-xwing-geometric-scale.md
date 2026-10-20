@@ -1,4 +1,4 @@
-# ADR-0001 — X-Wing 2.0 geometric scale for movement telemetry
+# ADR-0001 — tabletop geometric scale for movement telemetry
 
 - **Status:** Accepted
 - **Date:** 2026-03-30
@@ -7,12 +7,12 @@
 
 ## Context
 
-The game is based on the X-Wing Miniatures Game 2.0. To claim gameplay fidelity we
+The game is based on the classic tabletop dogfighting games 2.0. To claim gameplay fidelity we
 must map the tabletop's physical geometry (millimetres) to screen pixels and verify
 in-game movement reproduces it. Two scale factors are in play today and they disagree:
 
 - **Maneuver templates:** `SPEED_SCALE_FACTOR = 40`. Straight speed N = `N × 40` px,
-  matching X-Wing's `N × 40 mm` straight template at **S = 1.0 px/mm**.
+  matching tabletop's `N × 40 mm` straight template at **S = 1.0 px/mm**.
 - **Ship bases:** `SHIP_SIZES` = { small 32, medium 48, large 64 } px, i.e. 0.8× the
   official 40/60/80 mm bases — **S = 0.8 px/mm**.
 

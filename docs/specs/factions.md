@@ -1,6 +1,6 @@
 # Factions — identity, levers and balance
 
-Every hull is inspired by an X-Wing Miniatures Game ship and every faction fields a near-equal
+Every hull is inspired by an classic tabletop dogfighting games ship and every faction fields a near-equal
 roster per role (ships per role differ by at most one across factions). A faction's identity is
 therefore carried by **levers**, not by ship counts. Factions are balanced on **squad** results
 (classic squads, reinforced battles, scenarios); solo value per point is informational only, and the

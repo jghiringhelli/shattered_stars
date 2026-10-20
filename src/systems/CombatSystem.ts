@@ -1,7 +1,7 @@
 /**
  * Combat System
  * Handles dice rolling, attack resolution, and damage application
- * Based on X-Wing Miniatures combat mechanics
+ * Based on tabletop miniatures combat mechanics
  */
 
 import type { RandomGenerator } from "../utils/random";

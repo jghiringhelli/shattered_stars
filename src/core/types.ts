@@ -72,7 +72,7 @@ export interface ShipDefinition {
 // ============================================
 
 /**
- * The maneuvers printed on an X-Wing ship dial. These are the only directions
+ * The maneuvers printed on a tabletop ship dial. These are the only directions
  * a dial entry may use, and the only ones with official facing-change rules.
  */
 export type DialManeuverDirection =
@@ -94,7 +94,7 @@ export type DialManeuverDirection =
 export type ManeuverDirection =
   | DialManeuverDirection
   /**
-   * Sustained shallow turn. Not an X-Wing dial maneuver — this is the arcade
+   * Sustained shallow turn. Not a tabletop dial maneuver — this is the arcade
    * "held steering key" template, gentle enough that holding it flies a wide
    * arc across the map instead of a tight closed orbit.
    */

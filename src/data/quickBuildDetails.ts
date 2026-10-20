@@ -43,7 +43,7 @@ export interface PilotSummary {
 export interface AbilitySummary {
   readonly id: string;
   readonly name: string;
-  /** The pilot card's own wording (X-Wing style). */
+  /** The pilot card's own wording (tabletop style). */
   readonly cardText: string;
   /** What it does in real-time combat, derived from its effect knobs. */
   readonly summary: string;

@@ -22,7 +22,7 @@ import {
   type RepairSourceKind,
 } from "./RepairEvents";
 
-/** One pulse per source every X-Wing maneuver cycle (500 ms). */
+/** One pulse per source every tabletop maneuver cycle (500 ms). */
 export const REPAIR_PULSE_INTERVAL_MS = 500;
 
 /** Receives every delivered repair event. */

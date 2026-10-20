@@ -1,5 +1,5 @@
 /**
- * controlRules — X-Wing 2.0 objective control in real time: a side controls
+ * controlRules — tabletop objective control in real time: a side controls
  * an objective while it has more ship weight within control range than the
  * other (medium and bigger ships count double; equal weight = contested).
  * Wraps the mission objectives' zoneController so both modes resolve

@@ -65,7 +65,7 @@ These are the defaults. Rebind keys and gamepad buttons in **Settings › Contro
 | Pause | Esc / P / Space | Start |
 | Menus | ↑ ↓ ← → / Tab, Enter, Esc | D-pad, A, B |
 
-Specials (Snap turn, Hook, Knife) and actions (boost, barrel roll) work only if they are on your ship's dial / action bar; a stressed pilot cannot fly red maneuvers or perform actions (X-Wing rules) — the HUD says why a key was refused. Capital ships fly none of them, which is why the gamepad commander orders share LT (the Maneuver button), RT and the left/right D-pad buttons.
+Specials (Snap turn, Hook, Knife) and actions (boost, barrel roll) work only if they are on your ship's dial / action bar; a stressed pilot cannot fly red maneuvers or perform actions — the HUD says why a key was refused. Capital ships fly none of them, which is why the gamepad commander orders share LT (the Maneuver button), RT and the left/right D-pad buttons.
 
 Gestures are built so ordinary play never triggers them by accident: a barrel roll needs two quick taps of the *same* arrow (alternating ← → is plain steering, and if the roll is recharging, stressed or not on your ship the taps just steer); the Maneuver key does nothing until you tap it (Snap turn) or add a side while holding it. On a touchscreen the left stick rolls with a double-tap on its left/right half, and the MNVR button beside the fire zone is the Maneuver key (tap · press and drag ← / → · double-tap then drag ← / →).
 
@@ -144,8 +144,8 @@ art-archive/      # Unshipped art kept in git
 
 Third-party models, licences and the music-rights checklist are in [docs/THIRD_PARTY.md](docs/THIRD_PARTY.md).
 
-**Disclaimer:** Shattered Stars is an independent fan game inspired by the X-Wing Miniatures Game. It is not affiliated with, endorsed, sponsored or approved by Lucasfilm Ltd., The Walt Disney Company, Atomic Mass Games or Fantasy Flight Games. Star Wars, X-Wing and related names are trademarks of their respective owners. The factions, ships and characters in this game are original.
+**Disclaimer:** Shattered Stars is an independent original work inspired by classic dogfighting games. It is not affiliated with, endorsed, sponsored or approved by any other game, publisher or franchise. All trademarks belong to their respective owners. The factions, ships and characters in this game are original.
 
 ## License
 
-Proprietary. © 2026 Juan Carlos Ghiringhelli, all rights reserved. The game is free to play, but you may not redistribute or modify it without permission. See [LICENSE](LICENSE).
+Proprietary. © 2026 Juan Carlos Ghiringhelli, all rights reserved. The game is free to play during the alpha and beta and may become a paid product later; you may not redistribute or modify it without permission. See [LICENSE](LICENSE).

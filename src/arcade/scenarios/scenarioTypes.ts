@@ -1,5 +1,5 @@
 /**
- * scenarioTypes — data contracts of the X-Wing 2.0 Scenario mode: the
+ * scenarioTypes — data contracts of the tabletop Scenario mode: the
  * per-frame view the rules read, the objective states they keep and the
  * match result. Ships and markers reuse the mission-objective contracts
  * (src/arcade/objectives) so both modes speak the same language.

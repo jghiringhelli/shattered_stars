@@ -1,5 +1,5 @@
 /**
- * scenarioConstants — the numbers of the X-Wing 2.0 Scenario mode, adapted
+ * scenarioConstants — the numbers of the tabletop Scenario mode, adapted
  * from the tabletop's rounds and range ruler to the real-time battle.
  *
  * Pure data.
@@ -28,13 +28,13 @@ export const SCENARIO_ROUND_CYCLES = DURABILITY_SCALE;
 /** One scenario round in battle time (ms). */
 export const SCENARIO_ROUND_MS = SCENARIO_ROUND_CYCLES * CYCLE_DURATION_MS;
 
-/** Score that wins a scenario (X-Wing 2.0: first to 20). */
+/** Score that wins a scenario (tabletop: first to 20). */
 export const DEFAULT_SCENARIO_THRESHOLD = 20;
 
 /** Time limit of a scenario match (ms); the higher score wins at the bell. */
 export const SCENARIO_TIME_LIMIT_MS = 300_000;
 
-/** Range bands on the X-Wing ruler (range 1–3). */
+/** Range bands on the tabletop ruler (range 1–3). */
 export const X_WING_RANGE_BANDS = 3;
 
 /**
@@ -73,8 +73,8 @@ export const HALF_POINTS_HEALTH_FRACTION = 0.5;
 
 /**
  * Scenario points per squad point: destroying a full standard list
- * (200 squad points) is worth the whole threshold, as in X-Wing 2.0 where a
- * tabletop list totals the 20 points it plays to.
+ * (200 squad points) is worth the whole threshold, as in tabletop where a
+ * Tabletop list totals the 20 points it plays to.
  */
 export const SCENARIO_POINTS_PER_SQUAD_POINT =
   DEFAULT_SCENARIO_THRESHOLD / SQUAD_POINT_LIMITS.standard;
@@ -85,7 +85,7 @@ export const MIN_SHIP_SCENARIO_VALUE = 1;
 /** Control weight of tiny and small ships. */
 export const SMALL_CONTROL_WEIGHT = 1;
 
-/** Control weight of medium and bigger ships (X-Wing 2.0: they count double). */
+/** Control weight of medium and bigger ships (tabletop: they count double). */
 export const LARGE_CONTROL_WEIGHT = 2;
 
 /**

@@ -95,7 +95,7 @@ display text, not the keys, so saves, tests and balance data keep working.
 53 lines in 29 test files, `SEGNOR|Segnor` 37/15, `TALLON|Tallon` 27/11,
 `Force` 12/8. Rename labels together with their assertions.
 
-### Medium — X-Wing card-name echoes (generic words; optional)
+### Medium — tabletop card-name echoes (generic words; optional)
 **Status:** not applied. The glossary only suggests them "where it's cheap" and they are generic English words.
 Expert Handling, Squadron Leader, Predator, Marksman, Daredevil, Elusive,
 Outmaneuver, Fearless, Heavy Laser Cannon, Quad Laser Cannon, Twin Laser
@@ -110,7 +110,7 @@ Torpedo, Bomb) stay.
 ### Keep (not player-facing, or required)
 | Term | All | Display | Decision |
 |---|---|---|---|
-| X-Wing / X-Wing Miniatures | 124 / 73 | 6 / 2 | Keep in `credits.ts` (attribution and trademark notice, legally required). `GameplayMetrics.ts` is an internal report. Comments and docs ("X-Wing-style cycle") are internal |
+| X-Wing (removed 2026-10-20) | 124 / 73 | 6 / 2 | All references were replaced by "tabletop" / "classic dogfighting games" in `src/`, credits, README, LICENSE and the docs under `docs/` (except the historical balance notes and archive). `tests/unit/lore/distancing.test.ts` now bans the name in `src/` |
 | TIE / Lambda / Millennium | 4 / 2 | 0 | Comments only. Clean up opportunistically |
 | Aturi (Cluster) | 2 / 2 | 0 | Comment in `PilotData.ts`. Clean up opportunistically |
 | Ion cannon, ion storm | — | — | Keep: generic sci-fi and core to the setting |

@@ -2,7 +2,7 @@
  * missionSpawns — turns objective entities, scripted groups and allied
  * squadrons into battle spawn requests (placement around the flagship for
  * "flank" / "ahead" / "behind", tags, side), and reads ships for objectives
- * (X-Wing 2.0 weight: medium or larger counts double). Pure.
+ * (tabletop weight: medium or larger counts double). Pure.
  */
 
 import type { FactionId } from "../../config";

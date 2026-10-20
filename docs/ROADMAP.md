@@ -59,3 +59,14 @@ Legend: [x] done, [ ] open.
       literals in `.text(` calls
 - [ ] Focus-order audit of menus, ADR for localisation and accessibility decisions (I-2)
 - [ ] Release train: weekly tagged alpha builds from `release`, rollback drill, relay blue/green with the build-id handshake
+
+## Ideas (not scheduled)
+
+- **Crew stations on epic ships.** A player flying an epic ship can cycle between stations with one key:
+  **pilot** (flies), **commander** (activates orders that spend energy), **engineer** (per-cycle actions that
+  move energy between weapons, shields, systems and engine) and **gunner** (turrets). Some epic ships carry
+  small craft inside, with "launch" as a commander action; with AI they act as a defence escort. Inside the
+  ship they regenerate hull and shields, so they must be small and cheap. Needs: station model per ship
+  card, energy budget rules, input mapping (keyboard, gamepad, touch), online input word bits, balance pass.
+- **Packaged builds (Steam / Switch).** Art downloads on demand only for the web build; a packaged build
+  ships everything together (no lazy art, no relay requirement for offline modes).

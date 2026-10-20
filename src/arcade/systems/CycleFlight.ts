@@ -1,5 +1,5 @@
 /**
- * CycleFlight — the X-Wing cycle engine packaged for battle scenes that keep
+ * CycleFlight — the tabletop cycle engine packaged for battle scenes that keep
  * their own ship records (dogfight, ace duel, survival, campaign, epic,
  * continuous tactical).
  *

@@ -1,5 +1,5 @@
 /**
- * CombatTempo — the X-Wing "round" in real time: a weapon attacks at most
+ * CombatTempo — the tabletop "round" in real time: a weapon attacks at most
  * once per maneuver cycle, and a target struck by an attacker is immune to
  * that attacker (any of its weapons) until the next cycle. Together with
  * DURABILITY_SCALE this turns per-frame trading into round-by-round attacks.

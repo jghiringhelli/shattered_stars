@@ -33,7 +33,7 @@ faction"). Acts that already hold progress are never closed.
 
 Each objective is a pure model (`create / step / readout / markers / spawns
 / poses / isConstraint`) stepped by an `ObjectiveFrame` (ships, events,
-time). Designed so an X-Wing 2.0 Scenario mode can reuse them.
+time). Designed so a tabletop Scenario mode can reuse them.
 
 | Type | Mechanic |
 |---|---|
@@ -41,11 +41,11 @@ time). Designed so an X-Wing 2.0 Scenario mode can reuse them.
 | `survive` | hold out `timeLimit` s with a player ship alive |
 | `escort` | ≤ **3** transports (`MAX_ESCORT_TARGETS`) fly a path; fails when losses > `maxLosses`; hull per transport on the tracker, ally blips on radar |
 | `defend` | a scripted station must survive (`timeLimit`, or the whole mission → constraint) |
-| `capture` | X-Wing 2.0 control: more ship weight in range controls (tiny/small = 1, medium+ = 2); `holdSeconds` of control wins; `enemyHoldFails` optional |
+| `capture` | tabletop control: more ship weight in range controls (tiny/small = 1, medium+ = 2); `holdSeconds` of control wins; `enemyHoldFails` optional |
 | `assassinate` | named target (escorted by the mission's enemies); flees along `fleePath` when hurt (`fleeAtHullFraction`) or late (`fleeAfterSeconds`); escape = fail |
 | `waypoints` | flagship flies through points in order (race with `timeLimit`; `extraction` exit) |
 | `sabotage` | keep a player ship in range `holdSeconds` (optional decay) |
-| `salvage` | X-Wing 2.0 Salvage Mission: unstressed ship at range picks up a crate; boost / barrel roll / destruction drops it; deliver `required` crates |
+| `salvage` | tabletop Salvage Mission: unstressed ship at range picks up a crate; boost / barrel roll / destruction drops it; deliver `required` crates |
 | `protect` | constraint: fail when a player ship with `tag` dies (`wingman`, `squad`, ally tags…) |
 | `stealth` | constraint: fail when lingering `graceSeconds` in a sentry's radius |
 

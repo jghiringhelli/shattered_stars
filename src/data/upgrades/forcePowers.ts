@@ -1,6 +1,6 @@
 /**
  * Upgrade catalog — psionic disciplines (the `force_power` slot that Ascendant
- * pilot cards add). Each power is a steady real-time effect: X-Wing's
+ * pilot cards add). Each power is a steady real-time effect: tabletop's
  * "spend 1 psi" cards fire on their own on a recharge, read as a rate
  * or a permanent edge (docs/specs/upgrades-and-slots.md §4). Two act on
  * allies inside the pilot's aura, two on the pilot.

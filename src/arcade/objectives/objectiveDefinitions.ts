@@ -126,7 +126,7 @@ export interface SabotageDefinition extends ObjectiveBase {
   readonly decayPerSecond?: number | undefined;
 }
 
-/** Carry crates to a drop zone (X-Wing 2.0 Salvage Mission rules). */
+/** Carry crates to a drop zone (tabletop Salvage Mission rules). */
 export interface SalvageDefinition extends ObjectiveBase {
   readonly type: "salvage";
   readonly crates: readonly ObjectivePoint[];

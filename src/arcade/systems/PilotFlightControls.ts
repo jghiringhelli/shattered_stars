@@ -1,6 +1,6 @@
 /**
  * PilotFlightControls — the player's flight inputs, shared by every battle
- * scene that flies the X-Wing cycle engine.
+ * scene that flies the tabletop cycle engine.
  *
  * Turns one frame of input (held steering/throttle + edge intents) into
  * changes on the ship's motion and stress:

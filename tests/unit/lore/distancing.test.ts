@@ -43,6 +43,7 @@ const BANNED_TERMS: readonly BannedTerm[] = [
   { term: "Blaster", pattern: /\b[Bb]laster(?!_)\b/, replacement: "Pulse" },
   { term: "Rebel", pattern: /\b[Rr]ebel(?!_)\b|[Rr]ebellion/, replacement: "Libre / cell / insurgent" },
   { term: "Vorn", pattern: /\bVorn\b/, replacement: "Vosk" },
+  { term: "X-Wing", pattern: /X-Wing/i, replacement: "tabletop" },
   { term: "Torpedo Ace Zara", pattern: /Torpedo Ace Zara/, replacement: "Torpedo Ace Zhao" },
 ];
 
@@ -55,12 +56,6 @@ interface AllowedLine {
 }
 
 const ALLOWED_LINES: readonly AllowedLine[] = [
-  {
-    file: "src/data/credits.ts",
-    term: "*",
-    line: /./,
-    why: "Attribution and trademark notice: X-Wing credits are legally required.",
-  },
   {
     term: "Vorn",
     line: /Crusader Vorn/,

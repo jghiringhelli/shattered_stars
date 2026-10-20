@@ -16,7 +16,7 @@ export const SPEED_SCALE_FACTOR = 40; // Pixels per speed unit (template unit le
 export const CYCLE_DURATION_MS = 500; // Fixed duration of every maneuver cycle
 
 /**
- * Miniature hull/shield points → real-time hit points. X-Wing resolves one
+ * Miniature hull/shield points → real-time hit points. Tabletop resolves one
  * attack per round with dice; real time attacks every cycle, so a ship needs
  * this many times its card's points to last a comparable number of rounds.
  * Calibrated with the skill-tier bots (src/simulation/skill): equal pilots

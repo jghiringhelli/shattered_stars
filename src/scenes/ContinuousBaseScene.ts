@@ -1,7 +1,7 @@
 /**
  * ContinuousBaseScene — shared update loop for all real-time combat scenes.
  *
- * Handles: X-Wing cycle-engine flight (template arcs, cycle-boundary commits,
+ * Handles: tabletop cycle-engine flight (template arcs, cycle-boundary commits,
  * stress), quick builds (upgrades + pilot ability: stat bonuses, flight,
  * cycle stress, shield regen, dice shots, kill rewards and death blasts),
  * weapon cooldown/firing (squad marks: a side shoots its marked target
@@ -161,7 +161,7 @@ export abstract class ContinuousBaseScene<
   protected performanceState: PerformanceState = createPerformanceState();
   /** Debug pose recorder (?debug=1); sampled every frame by {@link flyShips}. */
   protected telemetry: ShipTelemetry | null = null;
-  /** X-Wing round tempo: who struck whom this maneuver cycle (clear on restart). */
+  /** Tabletop round tempo: who struck whom this maneuver cycle (clear on restart). */
   protected readonly hitLedger = new HitImmunityLedger();
   /** Secondary weapons (missiles, torpedoes, turrets, bombs, mines, cloak). */
   protected weapons: BattleWeapons | null = null;
@@ -474,7 +474,7 @@ export abstract class ContinuousBaseScene<
   }
 
   /**
-   * Flies every ship one frame on the X-Wing cycle engine (template arcs,
+   * Flies every ship one frame on the tabletop cycle engine (template arcs,
    * cycle-boundary commits, stress) and syncs sprites and telemetry to the
    * new poses.
    *
@@ -556,7 +556,7 @@ export abstract class ContinuousBaseScene<
   }
 
   /**
-   * Tick weapon cooldowns and fire on the X-Wing round tempo: each ship
+   * Tick weapon cooldowns and fire on the tabletop round tempo: each ship
    * attacks at most once per maneuver cycle, and holds its shot (without
    * spending the cooldown) while its target is immune to it.
    *

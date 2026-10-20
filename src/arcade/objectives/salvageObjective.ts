@@ -1,5 +1,5 @@
 /**
- * salvageObjective — X-Wing 2.0 "Salvage Mission" in real time: an
+ * salvageObjective — tabletop "Salvage Mission" in real time: an
  * unstressed player ship not already carrying picks up a crate at range;
  * boosting, barrel-rolling or being destroyed drops it where the carrier is;
  * crates brought into the drop zone are delivered. Completes at `required`
