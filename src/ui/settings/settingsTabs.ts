@@ -9,6 +9,7 @@ import {
   COLOR_VISION_MODES,
   DEFAULT_SETTINGS,
   DIFFICULTY_LEVELS,
+  SHIP_SPECIALS_OPTIONS,
   TEXT_SCALES,
   type AccessibilityPrefs,
   type AudioPrefs,
@@ -217,8 +218,11 @@ export function buildAccessibilityTab(ctx: SettingsTabContext): void {
   );
 }
 
+/** Gameplay tab row after the difficulty row and the two switches. */
+const SHIP_SPECIALS_ROW = 3;
+
 /**
- * Gameplay: default difficulty, squad mark assist, damage numbers, minimap.
+ * Gameplay: default difficulty, squad mark assist, damage numbers, ship specials rule.
  *
  * @param ctx - Tab context.
  */
@@ -234,6 +238,15 @@ export function buildGameplayTab(ctx: SettingsTabContext): void {
       DIFFICULTY_LEVELS.map((value) => ({ value, label: value })),
       g.defaultDifficulty,
       (defaultDifficulty) => patchGameplay(ctx, { defaultDifficulty }),
+    ),
+  );
+  ctx.addFocus(
+    new SettingsChoiceRow(
+      ctx.scene,
+      at(SHIP_SPECIALS_ROW, "Ship Specials"),
+      SHIP_SPECIALS_OPTIONS.map(({ value, label }) => ({ value, label })),
+      g.shipSpecials,
+      (shipSpecials) => patchGameplay(ctx, { shipSpecials }),
     ),
   );
   const toggles: ReadonlyArray<

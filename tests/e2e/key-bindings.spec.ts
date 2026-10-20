@@ -398,7 +398,7 @@ for (const entry of PILOTED_BATTLES) {
       ).toBe(true);
     });
 
-    test("a huge ship flies no Snap turn, Hook, Knife, boost or barrel roll (the roll double-tap steers)", async ({
+    test("a huge ship flies no Snap turn, Hook, Knife, boost or barrel roll (the maneuver key is silent, the roll double-tap steers)", async ({
       page,
     }) => {
       test.setTimeout(120_000);
@@ -408,7 +408,13 @@ for (const entry of PILOTED_BATTLES) {
       )) {
         await reset(page);
         await page.evaluate(() => (window as any).__keys.makeHuge());
-        await expectSpecial(page, combo, false);
+        // The maneuver key does nothing at all on a capital (it shares LT with
+        // commander order 1): nothing queued and no NOT ON DIAL flash.
+        await combo.press(page);
+        await page.waitForTimeout(SETTLE_MS);
+        const { control, label } = await probe(page);
+        expect(label, `${combo.name} flashes nothing`).toBeNull();
+        expect(control.nextManeuver).not.toBe(combo.maneuver);
       }
       for (const dash of ["boost", "barrel_roll"] as const) {
         await reset(page);

@@ -5,7 +5,8 @@
  */
 
 import type { ManeuverDifficulty } from "../../core/types";
-import { getShipDial } from "../../data/ShipDefinitions";
+import { effectiveDial } from "../../data/shipSpecials";
+import { shipSpecialsRule } from "../../systems/SettingsStorage";
 import { termEntry } from "../../data/tooltips";
 import { firstSentence } from "../menu/tooltipContent";
 import { addTipZone } from "../menu/tooltipTargets";
@@ -36,7 +37,7 @@ const LEGEND_GAP = 16;
  */
 export function drawDialDiagram(area: SectionArea, shipId: string): number {
   const { scene, container, x, y } = area;
-  const grid = buildDialGrid(getShipDial(shipId));
+  const grid = buildDialGrid(effectiveDial(shipId, shipSpecialsRule()));
   const step = CELL.width + CELL.gap;
   const gridX = x + CELL.labelW;
   const g = scene.add.graphics();

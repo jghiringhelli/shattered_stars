@@ -18,6 +18,8 @@ import { addCycler } from "../menu/FlatControls";
 import { drawHoloFrame, drawHoloGauge } from "../menu/holoChrome";
 import { addTipZone } from "../menu/tooltipTargets";
 import { addContainedImage, computeLoadoutBonuses } from "../picker/catalogHelpers";
+import { shipSpecialLabels } from "../../data/shipSpecials";
+import { shipSpecialsRule } from "../../systems/SettingsStorage";
 import { drawStatGauges } from "../picker/detailSections";
 import { costSummary } from "../picker/guideSections";
 import { factionAuraTag, shortDescription } from "../picker/overviewModel";
@@ -94,7 +96,14 @@ export function drawOverview(
     `AURA  ${aura.name}`,
     pickerTextStyle("micro", HOLO_PALETTE.accent, { wordWrap: { width: textW } }),
   );
-  container.add([description, auraText]);
+  const specials = shipSpecialLabels(def.id, shipSpecialsRule());
+  const specialsText = scene.add.text(
+    left,
+    auraY + auraText.height + HOLO_SPACING.xs,
+    `SPECIALS  ${specials.length > 0 ? specials.join(" \u00b7 ") : "none"}`,
+    pickerTextStyle("micro", HOLO_PALETTE.textSecondary, { wordWrap: { width: textW } }),
+  );
+  container.add([description, auraText, specialsText]);
   addTipZone(scene, container, { x: left, y: auraY, width: textW, height: auraText.height }, "ui.aura_tag");
   addTipZone(scene, container, { x: left, y, width: textW, height: ctx.hintText.height }, "codex.signature_build");
   const gaugesY = y + OVERVIEW.artH + HOLO_SPACING.xl;

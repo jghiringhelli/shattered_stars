@@ -43,11 +43,12 @@ function view(definitionId: string, stressed = false) {
 
 describe("ownShipView — card and stress", () => {
   it("offers only the specials on the ship's dial", () => {
-    expect([...view("terran_viper").availableSpecials].sort()).toEqual([
+    expect([...view("corsair_talon").availableSpecials].sort()).toEqual([
       "kturn",
       "tallon_left",
       "tallon_right",
     ]);
+    expect(view("terran_viper").availableSpecials).toEqual(["kturn"]);
     expect(view("terran_viper").kturnReady).toBe(true);
   });
 

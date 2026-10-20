@@ -19,6 +19,11 @@ import {
   type KeyChord,
   type KeyOverrides,
 } from "../input/KeyBindings";
+import {
+  DEFAULT_TRICK_RULE,
+  TRICK_RULES,
+  type TrickRule,
+} from "../core/flightCapabilityTypes";
 import { isRebindableIntent } from "../input/RebindableIntents";
 import {
   parseGamepadOverrides,
@@ -40,6 +45,24 @@ export type ColorVisionMode = (typeof COLOR_VISION_MODES)[number];
 /** Bot difficulty presets (setup screens' default selection). */
 export const DIFFICULTY_LEVELS = ["easy", "normal", "hard", "brutal"] as const;
 export type DifficultyLevel = (typeof DIFFICULTY_LEVELS)[number];
+
+/** Ship specials choices (Settings › Gameplay): label and what it means. */
+export const SHIP_SPECIALS_OPTIONS: ReadonlyArray<{
+  readonly value: TrickRule;
+  readonly label: string;
+  readonly hint: string;
+}> = [
+  {
+    value: "identity",
+    label: "Ship identity",
+    hint: "One signature trick per ship: barrel roll, Hook Loop or Knife Roll",
+  },
+  {
+    value: "full",
+    label: "Full card",
+    hint: "Everything the ship card prints (offline modes only)",
+  },
+];
 
 /** HUD text scale steps. */
 export const TEXT_SCALES = [1, 1.15, 1.3] as const;
@@ -73,6 +96,11 @@ export interface GameplayPrefs {
   /** Wingmen mark their own focus while the player has no mark. */
   readonly markAssist: boolean;
   readonly showDamageNumbers: boolean;
+  /**
+   * Ship specials rule for offline modes; online battles always use ship
+   * identity (lockstep needs identical rules).
+   */
+  readonly shipSpecials: TrickRule;
 }
 
 export interface ControlProfile {
@@ -139,6 +167,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
     defaultDifficulty: "normal",
     markAssist: true,
     showDamageNumbers: true,
+    shipSpecials: DEFAULT_TRICK_RULE,
   },
   controls: { activeProfile: 0, profiles: DEFAULT_PROFILES },
   privacy: { telemetryEnabled: true },
@@ -202,6 +231,7 @@ function parseGameplay(raw: Json): GameplayPrefs {
     ),
     markAssist: flag(raw.markAssist, d.markAssist),
     showDamageNumbers: flag(raw.showDamageNumbers, d.showDamageNumbers),
+    shipSpecials: oneOf(TRICK_RULES, raw.shipSpecials, d.shipSpecials),
   };
 }
 

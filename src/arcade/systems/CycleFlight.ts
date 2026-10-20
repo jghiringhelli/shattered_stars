@@ -30,6 +30,7 @@ import {
   type StressState,
 } from "../ArcadeStress";
 import { flightCapabilitiesOf } from "./FlightCapabilities";
+import type { TrickRule } from "../../core/flightCapabilityTypes";
 import {
   stepMotion,
   type CompletedCycle,
@@ -72,11 +73,13 @@ export interface FlightTick {
  *
  * @param definitionId - Ship definition id.
  * @param pose - Spawn pose.
+ * @param trickRule - Ship specials rule; omitted = Settings (identity online).
  * @returns A fresh control state at the definition's cruise speed.
  */
 export function createShipControl(
   definitionId: string,
   pose: ShipPose,
+  trickRule?: TrickRule,
 ): ShipControlState {
   const def = getShipDefinition(definitionId);
   return createControlState(
@@ -84,7 +87,7 @@ export function createShipControl(
     SHIP_SIZES[def?.baseStats.size ?? "small"] ?? FALLBACK_BASE_SIZE_PX,
     getMovementProfile(definitionId),
     def?.baseStats.speed ?? { min: 1, max: 5 },
-    flightCapabilitiesOf(definitionId),
+    flightCapabilitiesOf(definitionId, trickRule),
   );
 }
 
@@ -93,14 +96,19 @@ export function createShipControl(
  *
  * @param definitionId - Ship definition id.
  * @param pose - Spawn pose.
+ * @param trickRule - Ship specials rule; omitted = Settings (identity online).
  * @returns The initial flight state.
  */
 export function createCycleFlight(
   definitionId: string,
   pose: ShipPose,
+  trickRule?: TrickRule,
 ): CycleFlightState {
   return {
-    motion: { ...pose, control: createShipControl(definitionId, pose) },
+    motion: {
+      ...pose,
+      control: createShipControl(definitionId, pose, trickRule),
+    },
     stress: INITIAL_STRESS,
   };
 }

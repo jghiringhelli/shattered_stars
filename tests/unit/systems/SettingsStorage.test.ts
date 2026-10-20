@@ -11,6 +11,8 @@ import {
   activeKeyOverrides,
   defaultDifficulty,
   isMarkAssistEnabled,
+  shipSpecialsRule,
+  SHIP_SPECIALS_OPTIONS,
   isTelemetryEnabled,
   legacyRegistrySettings,
   loadSettings,
@@ -189,5 +191,54 @@ describe("legacyRegistrySettings", () => {
     expect(legacy.cameraShake).toBe(false);
     expect(legacy.showDamageNumbers).toBe(true);
     expect(legacy.masterVolume).toBe(DEFAULT_SETTINGS.audio.master);
+  });
+});
+
+describe("ship specials setting (Ship identity / Full card)", () => {
+  it("defaults to ship identity", () => {
+    expect(DEFAULT_SETTINGS.gameplay.shipSpecials).toBe("identity");
+    expect(shipSpecialsRule(createMemoryStore())).toBe("identity");
+  });
+
+  it("persists the full-card choice", () => {
+    const store = createMemoryStore();
+    saveSettings(
+      {
+        ...DEFAULT_SETTINGS,
+        gameplay: { ...DEFAULT_SETTINGS.gameplay, shipSpecials: "full" },
+      },
+      store,
+    );
+    expect(loadSettings(store).gameplay.shipSpecials).toBe("full");
+    expect(shipSpecialsRule(store)).toBe("full");
+  });
+
+  it("falls back to identity for an unknown value and for old documents", () => {
+    expect(
+      shipSpecialsRule(
+        storeWith({ version: 2, gameplay: { shipSpecials: "everything" } }),
+      ),
+    ).toBe("identity");
+    expect(shipSpecialsRule(storeWith({ version: 2, gameplay: {} }))).toBe(
+      "identity",
+    );
+  });
+
+  it("keeps the other gameplay fields when the value is invalid", () => {
+    const loaded = loadSettings(
+      storeWith({
+        version: 2,
+        gameplay: { shipSpecials: 7, markAssist: false },
+      }),
+    );
+    expect(loaded.gameplay.markAssist).toBe(false);
+    expect(loaded.gameplay.shipSpecials).toBe("identity");
+  });
+
+  it("offers Ship identity first, then Full card", () => {
+    expect(SHIP_SPECIALS_OPTIONS.map((o) => o.label)).toEqual([
+      "Ship identity",
+      "Full card",
+    ]);
   });
 });

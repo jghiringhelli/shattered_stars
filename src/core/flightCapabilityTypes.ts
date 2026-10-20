@@ -7,6 +7,19 @@
 
 import type { ManeuverDifficulty } from "./types";
 
+export type { SignatureTrick } from "./types";
+
+/**
+ * Which of {barrel roll, Hook Loop, Knife Roll} a ship may fly.
+ * `identity`: only its signature trick (default; always used online).
+ * `full`: everything its card prints (offline Settings choice).
+ */
+export const TRICK_RULES = ["identity", "full"] as const;
+export type TrickRule = (typeof TRICK_RULES)[number];
+
+/** The rule every mode uses unless Settings lifts it. */
+export const DEFAULT_TRICK_RULE: TrickRule = "identity";
+
 /** A special maneuver queued by a dedicated key or gesture. */
 export type SpecialManeuver =
   "kturn" | "segnor_left" | "segnor_right" | "tallon_left" | "tallon_right";
@@ -22,6 +35,12 @@ export interface FlightCapabilities {
   readonly specials: Readonly<
     Partial<Record<SpecialManeuver, ManeuverDifficulty>>
   >;
+  /**
+   * False for huge ships, which have no maneuver key at all (it shares LT
+   * with commander order 1): pressing it does nothing and flashes nothing.
+   * Absent = true.
+   */
+  readonly canManeuver?: boolean;
 }
 
 /** Anything goes: unknown ships and legacy/test control states. */

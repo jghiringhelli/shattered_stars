@@ -45,11 +45,23 @@ export interface ShipStats {
   readonly pointCost: number;
 }
 
+/** A ship's signature trick; "none" = Snap Turn and boost only. */
+export type SignatureTrick =
+  | "barrel_roll"
+  | "hook_loop"
+  | "knife_roll"
+  | "none";
+
 export interface ShipDefinition {
   readonly id: string;
   readonly name: string;
   readonly faction: FactionId;
   readonly role: ShipRole;
+  /**
+   * The one of {barrel roll, Hook Loop, Knife Roll} the ship flies under the
+   * ship identity rule; absent = the role fallback (src/data/shipSpecials.ts).
+   */
+  readonly signatureTrick?: SignatureTrick;
   readonly baseStats: ShipStats;
   readonly spriteKey: string;
   readonly description: string;

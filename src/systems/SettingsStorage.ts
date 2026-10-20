@@ -12,6 +12,7 @@ import {
   type DifficultyLevel,
   type GameSettings,
 } from "./settingsSchema";
+import type { TrickRule } from "../core/flightCapabilityTypes";
 import type { KeyOverrides } from "../input/KeyBindings";
 import type { GamepadOverrides } from "../input/GamepadBindings";
 
@@ -125,6 +126,20 @@ export function isMarkAssistEnabled(
   store: KeyValueStore = browserStore(),
 ): boolean {
   return loadSettings(store).gameplay.markAssist;
+}
+
+/**
+ * Ship specials rule (Settings › Gameplay): ship identity (default) or full
+ * card. Offline battles read it; online battles force identity
+ * (lockTrickRuleToIdentity in FlightCapabilities).
+ *
+ * @param store - Persistence (default: localStorage).
+ * @returns The stored trick rule.
+ */
+export function shipSpecialsRule(
+  store: KeyValueStore = browserStore(),
+): TrickRule {
+  return loadSettings(store).gameplay.shipSpecials;
 }
 
 /**

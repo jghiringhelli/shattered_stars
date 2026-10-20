@@ -49,8 +49,51 @@ in Settings. They have no default key.
   held when the key went down never hooks (steer left, tap Z = Snap Turn).
 - While the key is held the arrows belong to it (no roll tracking); after a roll or a
   Hook/Knife the arrows steer nothing until both are released.
-- Stress, action bar, dial and huge-hull rules are `FlightCapabilities` unchanged, so refusals
-  and HUD notices are identical in every mode and for bots.
+- Stress, action bar, dial, ship-identity and huge-hull rules are `FlightCapabilities`, so
+  refusals and HUD notices are identical in every mode and for bots.
+- Capital (huge) ships have no maneuver key at all (`FlightCapabilities.canManeuver = false`):
+  the key — on the gamepad it is LT, shared with commander order 1 — is not a flight input for
+  them: no Snap request, no "NOT ON DIAL" flash, and the arrows keep steering while it is held.
+  Orders (LT / RT / D-pad on the gamepad, 1–4 on the keyboard) work as before.
+
+## Ship identity — one signature trick
+
+A ship with many specials is impractical to fly by hand and a smart AI would destroy a human with
+it. In X-Wing the hulls with the barrel roll do not have the Hook (Segnor) or the Knife (Tallon),
+and the ones with one do not have the other. So by default a ship flies **at most one of
+{barrel roll, Hook Loop, Knife Roll}** — its signature trick. **Boost and Snap Turn are never
+affected.** Bots and the player use the same rule (it lives in `flightCapabilitiesOf`, which
+feeds `BotView`, `PilotFlightControls` and the HUD refusals).
+
+The signature is `ShipDefinition.signatureTrick` (`barrel_roll | hook_loop | knife_roll | none`).
+When absent, it is the first trick the hull's card prints out of its role's preference order
+(`src/data/shipSpecials.ts`):
+
+| Role | Preference (first printed wins) |
+|---|---|
+| light fighter, interceptor | barrel roll → Knife → Hook |
+| heavy fighter, gunship, bomber | Hook → Knife → barrel roll |
+| support | none (Snap Turn only) |
+| capital (huge) | none, and no maneuver key |
+
+Explicit data overrides: Raven, Owl, Fang, Talon → `knife_roll` (so the Knife stays flown by
+somebody); Specter → `barrel_roll` (a support hull whose only trick is the roll). A hull that
+prints one trick only keeps it (Gladius: roll, Ravager: Hook).
+
+Effective set = card ∩ rule: the dial hides the Hook / Knife cells a ship may not fly, the action bar
+hides the barrel roll, and the pick screen (stats tab) and encyclopedia overview list
+"SPECIALS  Boost · Barrel Roll · Snap Turn" from the same helpers. A refused gesture reports as
+"NOT ON DIAL" (maneuver key) or stays silent (arrow double-tap), exactly like any trick the card lacks.
+
+**Setting** (Settings › Gameplay › Ship Specials; `gameplay.shipSpecials`): *Ship identity*
+(default) or *Full card*. Full card lifts the rule in offline modes (Skirmish, Dogfight, Ace Duel,
+Survival, Campaign, bots included); Flight School's trainee is always unrestricted.
+
+**Online**: lockstep needs identical rules, so online battles always use identity.
+`flightCapabilitiesOf(id, trickRule?)`, `createShipControl` and `createCycleFlight` take an explicit
+pure `trickRule` ("identity" | "full"). With none given they use `activeTrickRule()` = the Settings
+choice unless `lockTrickRuleToIdentity(true)` (FlightCapabilities.ts) is set — the online battle
+code must call it when a lockstep battle is built (and `false` when it ends), or pass `"identity"`.
 
 ## Input layer
 
@@ -65,7 +108,8 @@ in Settings. They have no default key.
 
 ## Verification
 
-- Unit: `RollDoubleTap`, `ManeuverKey`, `GestureFalsePositives` (replayed traces: rapid
+- Unit: `ShipIdentity` (capabilities of every hull, signature table, effective labels),
+  `ShipIdentityGestures` (identity traces, capital maneuver key), `RollDoubleTap`, `ManeuverKey`, `GestureFalsePositives` (replayed traces: rapid
   alternation, tap-spam, hold-then-tap, boost during a turn, chords, unavailable roll),
   `KeyComboTelemetry` (every special ends where X-Wing puts it), defaults / codec / labels.
 - E2E: `key-bindings` (every mode: each combo, refusal, silent roll, negatives),

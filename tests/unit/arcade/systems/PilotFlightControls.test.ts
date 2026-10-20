@@ -412,7 +412,7 @@ describe("PilotFlightControls — card and stress limits (X-Wing)", () => {
     );
 
   it("a stressed pilot is refused red Knife and Hook too", () => {
-    const r = press(carded("terran_viper", STRESSED), "TALLON_LEFT");
+    const r = press(carded("corsair_talon", STRESSED), "TALLON_LEFT");
     expect(r.motion.control.nextManeuver).toBeNull();
     expect(r.refusals).toEqual([{ action: "tallon", reason: "stressed" }]);
   });

@@ -4,6 +4,10 @@
  * (Snap turn, Hook Loop, Knife Roll) and the dashes on its action bar
  * (boost, barrel roll). Huge ships fly neither, whatever the data says.
  *
+ * Ship identity: unless the trick rule is "full", a ship keeps at most one of
+ * {barrel roll, Hook Loop, Knife Roll} (src/data/shipSpecials.ts); boost and
+ * Snap Turn are never affected. Bots and the player share this one rule.
+ *
  * X-Wing stress rule: a stressed pilot cannot execute a red maneuver and
  * cannot perform actions, so it is refused red specials and every dash.
  *
@@ -13,18 +17,24 @@
 
 import type { ManeuverDefinition, ManeuverDifficulty } from "../../core/types";
 import {
+  DEFAULT_TRICK_RULE,
   UNRESTRICTED_CAPABILITIES,
   type FlightCapabilities,
   type FlightDash,
   type SpecialManeuver,
+  type TrickRule,
 } from "../../core/flightCapabilityTypes";
-import { getShipDefinition, getShipDial } from "../../data/ShipDefinitions";
+import { getShipDefinition } from "../../data/ShipDefinitions";
+import { effectiveActions, effectiveDial } from "../../data/shipSpecials";
+import { shipSpecialsRule } from "../../systems/SettingsStorage";
 
 export {
   UNRESTRICTED_CAPABILITIES,
   type FlightCapabilities,
   type FlightDash,
   type SpecialManeuver,
+  type TrickRule,
+  DEFAULT_TRICK_RULE,
 } from "../../core/flightCapabilityTypes";
 
 /** Why the controls refused a special or a dash. */
@@ -56,7 +66,32 @@ const HUGE_CAPABILITIES: FlightCapabilities = {
   boost: false,
   barrelRoll: false,
   specials: {},
+  canManeuver: false,
 };
+
+/** Set by online battles: lockstep needs identical rules on every client. */
+let onlineLock = false;
+
+/**
+ * Online hook: while locked, every capability lookup that names no rule uses
+ * "identity", whatever the local Settings say. The online battle code calls
+ * `lockTrickRuleToIdentity(true)` when a lockstep battle is built and
+ * `false` when it ends (or passes "identity" explicitly to
+ * flightCapabilitiesOf / createCycleFlight / createShipControl).
+ *
+ * @param locked - Whether to force the identity rule.
+ */
+export function lockTrickRuleToIdentity(locked: boolean): void {
+  onlineLock = locked;
+}
+
+/**
+ * @returns The trick rule in force when a caller names none: identity while
+ * the online lock is set, else the Settings choice (default identity).
+ */
+export function activeTrickRule(): TrickRule {
+  return onlineLock ? DEFAULT_TRICK_RULE : shipSpecialsRule();
+}
 
 /**
  * @param dial - A ship's dial.
@@ -78,17 +113,21 @@ function specialsOnDial(
 
 /**
  * @param definitionId - Ship definition id.
+ * @param trickRule - Pure rule override; omitted = {@link activeTrickRule}.
  * @returns What the ship may fly beyond its basic dial.
  */
-export function flightCapabilitiesOf(definitionId: string): FlightCapabilities {
+export function flightCapabilitiesOf(
+  definitionId: string,
+  trickRule: TrickRule = activeTrickRule(),
+): FlightCapabilities {
   const def = getShipDefinition(definitionId);
   if (!def) return UNRESTRICTED_CAPABILITIES;
   if (def.baseStats.size === "huge") return HUGE_CAPABILITIES;
-  const actions: readonly string[] = def.baseStats.actions ?? [];
+  const actions: readonly string[] = effectiveActions(def, trickRule);
   return {
     boost: actions.includes("boost"),
     barrelRoll: actions.includes("barrel_roll"),
-    specials: specialsOnDial(getShipDial(definitionId)),
+    specials: specialsOnDial(effectiveDial(definitionId, trickRule)),
   };
 }
 

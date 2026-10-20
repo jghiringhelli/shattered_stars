@@ -100,6 +100,7 @@ export function applyPilotFlightInput(
     events: [],
     refusals: [],
   };
+  const maneuverHeld = holdsManeuverKey(flown, input);
   const gestures = updateGestures({
     state: pilot.gesture,
     leftDown: input.left,
@@ -109,10 +110,10 @@ export function applyPilotFlightInput(
     nowMs: input.nowMs,
     deltaMs: input.deltaMs,
     allowChordBarrelRoll: input.allowChordBarrelRoll ?? false,
-    maneuverHeld: input.maneuver ?? false,
+    maneuverHeld,
   });
   const key = updateManeuverKey(pilot.maneuver, {
-    held: input.maneuver ?? false,
+    held: maneuverHeld,
     left: input.left,
     right: input.right,
     nowMs: input.nowMs,
@@ -145,6 +146,20 @@ export function applyPilotFlightInput(
     events: flight.events,
     refusals: flight.refusals,
   };
+}
+
+/**
+ * Huge ships have no maneuver key: it shares LT with commander order 1, so
+ * for them it is not a flight input at all (no gesture, no refusal flash,
+ * the arrows keep steering).
+ *
+ * @param flown - The ship being flown.
+ * @param input - This frame's input.
+ * @returns Whether the maneuver key counts as held for this ship.
+ */
+function holdsManeuverKey(flown: FlownShip, input: FlightInput): boolean {
+  if (!input.maneuver) return false;
+  return flown.motion.control.capabilities?.canManeuver !== false;
 }
 
 /** This frame's presses: edge intents and recognised arrow gestures. */

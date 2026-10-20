@@ -1040,6 +1040,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     name: "Raven Stealth Fighter",
     faction: "free_confederation",
     role: "interceptor",
+    signatureTrick: "knife_roll",
     baseStats: {
       hull: 3,
       shields: 3,
@@ -1059,6 +1060,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     name: "Owl Night Fighter",
     faction: "free_confederation",
     role: "interceptor",
+    signatureTrick: "knife_roll",
     baseStats: {
       hull: 3,
       shields: 3,
@@ -1705,6 +1707,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     name: "Fang Light Raider",
     faction: "void_corsairs",
     role: "light_fighter",
+    signatureTrick: "knife_roll",
     baseStats: {
       hull: 2,
       shields: 1,
@@ -1723,6 +1726,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     name: "Talon Strike Fighter",
     faction: "void_corsairs",
     role: "interceptor",
+    signatureTrick: "knife_roll",
     baseStats: {
       hull: 4,
       shields: 1,
@@ -1837,6 +1841,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     name: "Specter Infiltrator",
     faction: "void_corsairs",
     role: "support",
+    signatureTrick: "barrel_roll",
     baseStats: {
       hull: 4,
       shields: 3,

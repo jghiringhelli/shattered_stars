@@ -26,8 +26,11 @@ describe("flightCapabilitiesOf", () => {
   it("reads each special and its easiest difficulty from the dial", () => {
     const viper = flightCapabilitiesOf("terran_viper");
     expect(viper.specials.kturn).toBe("red");
-    expect(viper.specials.tallon_left).toBe("red");
+    expect(viper.specials.tallon_left).toBeUndefined();
     expect(viper.specials.segnor_left).toBeUndefined();
+    expect(flightCapabilitiesOf("corsair_talon").specials.tallon_left).toBe(
+      "red",
+    );
     const hunter = flightCapabilitiesOf("synth_hunter");
     expect(hunter.specials.segnor_right).toBe("white");
   });
@@ -48,6 +51,7 @@ describe("flightCapabilitiesOf", () => {
 
 describe("specialRefusal", () => {
   const viper = flightCapabilitiesOf("terran_viper");
+  const talon = flightCapabilitiesOf("corsair_talon");
   const hunter = flightCapabilitiesOf("synth_hunter");
 
   it("allows a special on the dial while calm", () => {
@@ -56,7 +60,7 @@ describe("specialRefusal", () => {
 
   it("refuses a red special while stressed", () => {
     expect(specialRefusal(viper, "kturn", true)).toBe("stressed");
-    expect(specialRefusal(viper, "tallon_right", true)).toBe("stressed");
+    expect(specialRefusal(talon, "tallon_right", true)).toBe("stressed");
   });
 
   it("allows a white special while stressed", () => {
