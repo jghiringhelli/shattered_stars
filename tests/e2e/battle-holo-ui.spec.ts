@@ -75,6 +75,21 @@ test("Boss Raid: ESC opens the holo pause menu and RESUME resumes the raid", asy
   );
 });
 
+test("Boss Raid: leaving the page pauses the raid and coming back does not resume it", async ({
+  page,
+}) => {
+  await BOSS_RAID.enter(page, { peaceful: true });
+  await page.evaluate(() => (window as any).game.events.emit("hidden"));
+  await page.waitForFunction(
+    () => (window as any).game.scene.getScene("EpicBattleScene").isPaused,
+  );
+  await page.evaluate(() => (window as any).game.events.emit("visible"));
+  expect(
+    await page.evaluate(
+      () => (window as any).game.scene.getScene("EpicBattleScene").isPaused,
+    ),
+  ).toBe(true);
+});
 test("Continuous Tactical: a match restarted after its end screen runs again", async ({
   page,
 }) => {

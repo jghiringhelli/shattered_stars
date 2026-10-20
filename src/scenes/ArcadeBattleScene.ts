@@ -25,6 +25,7 @@ import {
   CANNON_BOLT_WIDTH_PX,
 } from "../rendering/BoltRenderer";
 import { InputManager } from "../input/InputManager";
+import { bindAutoPause, pauseBattleIfRunning } from "./battleUi/AutoPause";
 import { BattlePauseMenu } from "./battleUi/BattlePauseMenu";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 import { trackModeEnd, trackModeStart } from "../telemetry/telemetry";
@@ -1146,7 +1147,13 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   /** The shared pause menu (hidden until ESC / Start); online it never freezes the battle. */
+  /** Leaving the page (tab switch, minimise) pauses an offline battle; resuming is manual. */
+  pauseIfRunning(): void {
+    pauseBattleIfRunning({ paused: this.isPaused, online: this.online !== null }, () => this.pauseBattle());
+  }
+
   private createPauseMenu(): void {
+    bindAutoPause(this, () => this.pauseIfRunning());
     this.pauseMenu = new BattlePauseMenu({
       scene: this,
       legend: "squad",

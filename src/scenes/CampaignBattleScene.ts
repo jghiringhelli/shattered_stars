@@ -139,6 +139,7 @@ import type {
   CampaignBattleBridge,
 } from "../campaign/battle/battleTypes";
 import { factionOfShip } from "../campaign/battle/missionSpawns";
+import { withVictoryLines } from "../campaign/battle/victoryLines";
 import {
   compileMission,
   type MissionPlan,
@@ -156,6 +157,7 @@ import { EffectsManager } from "../rendering/EffectsManager";
 import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
 import { applyAllyAuraRepairs } from "../systems/aura/AllyAuraRepair";
+import { bindAutoPause, pauseBattleIfRunning } from "./battleUi/AutoPause";
 import { BattlePauseMenu } from "./battleUi/BattlePauseMenu";
 import {
   createPerformanceState,
@@ -596,7 +598,13 @@ export class CampaignBattleScene extends Phaser.Scene {
     );
   }
 
+  /** Leaving the page (tab switch, minimise) pauses an offline battle; resuming is manual. */
+  pauseIfRunning(): void {
+    pauseBattleIfRunning({ paused: this.isPaused, online: false }, () => this.togglePause());
+  }
+
   private createPauseMenu(): void {
+    bindAutoPause(this, () => this.pauseIfRunning());
     this.pauseMenu = new BattlePauseMenu({
       scene: this,
       legend: "campaign",
@@ -1916,7 +1924,8 @@ export class CampaignBattleScene extends Phaser.Scene {
     trackModeEnd("campaign", "victory", { mission: this.mission.id });
     matchStats.finish("victory");
     audioManager.playFactionStinger(this.factionId, "victory");
-    const { bonuses, storyFlags } = this.director.finalizeVictory();
+    const { bonuses, storyFlags, victoryLines } =
+      this.director.finalizeVictory();
     const victory = missionVictoryRecord({
       mission: this.mission,
       campaign: campaignOfMission(this.mission, this.factionId),
@@ -1934,7 +1943,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     this.showMissionCompleteFlash(() => {
       this.scene.start("DebriefScene", {
         factionId: this.factionId,
-        mission: this.mission,
+        mission: withVictoryLines(this.mission, victoryLines),
         preMissionSave,
         updatedSave: result.save,
         xpEarned: victory.record.xp,

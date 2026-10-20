@@ -24,6 +24,7 @@ import {
   HOLO_RADIUS,
 } from "./theme/HoloTheme";
 import { toCssColor } from "./theme/colorMath";
+import { fitNameText } from "./theme/nameFit";
 
 const CARD_W = 220;
 const CARD_H = 182;
@@ -31,7 +32,10 @@ const CARD_H = 182;
 const LAYOUT = {
   pad: 10,
   nameY: 8,
-  nameMaxChars: 23,
+  /** Width the ship name may take. */
+  nameMaxWidth: 200,
+  /** Name row top when the name wraps onto two lines. */
+  wrappedNameY: 1,
   badgeY: 28,
   badgeW: 92,
   badgeH: 16,
@@ -119,14 +123,12 @@ export class ShipStatCard extends Phaser.GameObjects.Container {
     scene: Phaser.Scene,
     name: string,
   ): Phaser.GameObjects.Text {
-    const display =
-      name.length > LAYOUT.nameMaxChars
-        ? name.slice(0, LAYOUT.nameMaxChars - 1) + "…"
-        : name;
-    return scene.add.text(LAYOUT.pad, LAYOUT.nameY, display, {
+    const text = scene.add.text(LAYOUT.pad, LAYOUT.nameY, name, {
       ...holoFont(LAYOUT.nameSize, "600"),
       color: toCssColor(HOLO_PALETTE.textPrimary),
     });
+    if (fitNameText(text, LAYOUT.nameMaxWidth) > 1) text.setY(LAYOUT.wrappedNameY);
+    return text;
   }
 
   private buildRoleBadge(

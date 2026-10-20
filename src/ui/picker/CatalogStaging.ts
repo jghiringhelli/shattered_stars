@@ -21,7 +21,8 @@ import {
   HOLO_PALETTE,
   HOLO_SPACING,
 } from "../theme/HoloTheme";
-import { addPickerText, fitOrEllipsize, fittedFontSize } from "./pickerStyle";
+import { fitNameText } from "../theme/nameFit";
+import { addPickerText, fittedFontSize } from "./pickerStyle";
 
 /** Staging strip layout (inside the catalog panel). */
 const STAGE = {
@@ -137,7 +138,7 @@ export class CatalogStaging
       "heading",
       HOLO_PALETTE.textPrimary,
     ).setLetterSpacing(0);
-    fitOrEllipsize(name, size.x - size.width - STAGE.pad - name.x);
+    fitNameText(name, size.x - size.width - STAGE.pad - name.x);
     container.add([name, size]);
     const sizeBox = { x: size.x - size.width, y: size.y, width: size.width, height: size.height };
     addTipZone(this.scene, container, sizeBox, sizeTermId(def.baseStats.size));

@@ -179,6 +179,7 @@ import {
   screenBossUntilEscortsFall,
 } from "./epicRaid/raidTactics";
 import type { BossStatusView } from "./epicRaid/bossStatus";
+import { bindAutoPause, pauseBattleIfRunning } from "./battleUi/AutoPause";
 import { BattlePauseMenu } from "./battleUi/BattlePauseMenu";
 import { showResultsPanel } from "../ui/results/ResultsPanel";
 import { resultRows } from "../ui/results/resultsModel";
@@ -739,7 +740,13 @@ export class EpicBattleScene extends Phaser.Scene {
     );
   }
 
+  /** Leaving the page (tab switch, minimise) pauses an offline battle; resuming is manual. */
+  pauseIfRunning(): void {
+    pauseBattleIfRunning({ paused: this.isPaused, online: false }, () => this.togglePause());
+  }
+
   private createPauseMenu(): void {
+    bindAutoPause(this, () => this.pauseIfRunning());
     this.pauseMenu = new BattlePauseMenu({
       scene: this,
       faction: this.playerFaction,

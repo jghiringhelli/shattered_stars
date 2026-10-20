@@ -9,6 +9,7 @@
 import Phaser from "phaser";
 import { drawHoloFrame } from "../menu/holoChrome";
 import { holoFont } from "../theme/holoFont";
+import { fitNameText } from "../theme/nameFit";
 import { toCssColor } from "../theme/colorMath";
 import {
   HOLO_BORDER,
@@ -46,7 +47,6 @@ const ROW_STYLE = {
   hoverFillAlpha: 0.6,
   hoverBorderAlpha: 0.45,
   selectedFillAlpha: 0.16,
-  ellipsis: "…",
 } as const;
 
 /** One selectable ship row (origin = row top-left). */
@@ -92,7 +92,7 @@ export class EncyclopediaShipRow {
       .setOrigin(0, 0.5);
     const maxNameWidth =
       role.x - role.width - this.nameText.x - HOLO_SPACING.sm;
-    fitTextToWidth(this.nameText, model.name, maxNameWidth);
+    fitNameText(this.nameText, maxNameWidth);
     const hit = scene.add
       .zone(size.width / 2, size.height / 2, size.width, size.height)
       .setInteractive({ useHandCursor: true });
@@ -177,25 +177,5 @@ export class EncyclopediaShipRow {
         borderAlpha: ROW_STYLE.hoverBorderAlpha,
       });
     }
-  }
-}
-
-/**
- * Set a text's content, shortening it with an ellipsis until it fits.
- *
- * @param text - Text object (style already applied).
- * @param content - Full content.
- * @param maxWidth - Maximum rendered width in pixels.
- */
-export function fitTextToWidth(
-  text: Phaser.GameObjects.Text,
-  content: string,
-  maxWidth: number,
-): void {
-  text.setText(content);
-  let length = content.length;
-  while (text.width > maxWidth && length > 1) {
-    length -= 1;
-    text.setText(content.slice(0, length).trimEnd() + ROW_STYLE.ellipsis);
   }
 }

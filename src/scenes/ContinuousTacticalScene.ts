@@ -87,6 +87,7 @@ import {
   playerHudState,
   primaryWeaponSlot,
 } from "./battleUi/hudSnapshot";
+import { bindAutoPause, pauseBattleIfRunning } from "./battleUi/AutoPause";
 import { BattlePauseMenu } from "./battleUi/BattlePauseMenu";
 import { showResultsPanel } from "../ui/results/ResultsPanel";
 import { resultRows } from "../ui/results/resultsModel";
@@ -933,7 +934,13 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     this.prevThrustDown = thrustDown;
   }
 
+  /** Leaving the page (tab switch, minimise) pauses an offline battle; resuming is manual. */
+  pauseIfRunning(): void {
+    pauseBattleIfRunning({ paused: this.isPaused, online: false }, () => this.togglePause());
+  }
+
   private createPauseMenu(): void {
+    bindAutoPause(this, () => this.pauseIfRunning());
     this.pauseMenu = new BattlePauseMenu({
       scene: this,
       faction: this.playerFaction,

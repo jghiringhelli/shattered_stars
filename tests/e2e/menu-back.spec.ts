@@ -24,6 +24,7 @@ const MENU_SCREENS = [
   "LobbyScene",
   "DogfightScene",
   "AceDuelScene",
+  "EpicBattleScene",
 ] as const;
 
 async function openScreen(

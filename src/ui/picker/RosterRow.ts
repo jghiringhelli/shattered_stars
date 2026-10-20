@@ -9,6 +9,7 @@ import type { ShipDefinition } from "../../core/types";
 import type { ShipLoadout } from "../../data/ShipLoadouts";
 import { drawMenuIcon } from "../menu/MenuIcons";
 import { HOLO_PALETTE } from "../theme/HoloTheme";
+import { fitNameText } from "../theme/nameFit";
 import { addPickerText, fitOrEllipsize, MIN_NAME_SIZE } from "./pickerStyle";
 
 /** Row card interior. */
@@ -19,6 +20,8 @@ export const ROSTER_ROW = {
   textX: 36,
   nameY: 3,
   loadoutY: 19,
+  /** Name row when the name wraps onto two lines (build line hidden). */
+  wrappedNameY: 1,
   removeSize: 24,
   removeIcon: 9,
   pointsGap: 6,
@@ -71,22 +74,40 @@ export function drawRosterRowContent(
     "name",
     HOLO_PALETTE.textPrimary,
   );
-  const nameMax = points.x - points.width - ROSTER_ROW.pointsGap - textX;
-  fitOrEllipsize(name, nameMax, MIN_NAME_SIZE);
-  const build = addPickerText(
-    scene,
-    { x: textX, y: y + ROSTER_ROW.loadoutY },
-    loadout?.name ?? "Base",
-    "small",
-    HOLO_PALETTE.textSecondary,
-  );
-  fitOrEllipsize(build, right - ROSTER_ROW.pointsGap * 4 - textX);
-  container.add([sprite, name, build, points]);
+  const pointsRight = points.x - points.width - ROSTER_ROW.pointsGap;
+  let nameLines = fitNameText(name, pointsRight - textX, MIN_NAME_SIZE);
+  let buildRight = right - ROSTER_ROW.pointsGap * 4;
+  if (nameLines > 1) {
+    // A long name takes the full first line; points drop to the build line.
+    points.setY(y + ROSTER_ROW.loadoutY + 1);
+    buildRight = points.x - points.width - ROSTER_ROW.pointsGap * 4;
+    nameLines = fitNameText(name, right - textX, MIN_NAME_SIZE);
+  }
+  if (nameLines > 1) {
+    name.setY(y + ROSTER_ROW.wrappedNameY);
+    fitNameText(name, points.x - points.width - ROSTER_ROW.pointsGap - textX);
+  }
+  container.add([sprite, name, points]);
+  if (nameLines <= 1) {
+    const build = addPickerText(
+      scene,
+      { x: textX, y: y + ROSTER_ROW.loadoutY },
+      loadout?.name ?? "Base",
+      "small",
+      HOLO_PALETTE.textSecondary,
+    );
+    fitOrEllipsize(build, buildRight - textX);
+    container.add(build);
+  }
   if (args.dupeCount <= 1) return;
+  const moved = points.y > y + ROSTER_ROW.nameY + 2;
   container.add(
     addPickerText(
       scene,
-      { x: right, y: y + ROSTER_ROW.loadoutY + 1 },
+      {
+        x: moved ? points.x - points.width - ROSTER_ROW.pointsGap : right,
+        y: y + ROSTER_ROW.loadoutY + 1,
+      },
       `\u00d7${args.dupeCount}`,
       "micro",
       HOLO_PALETTE.warning,

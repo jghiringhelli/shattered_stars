@@ -60,9 +60,33 @@ describe("assetManifest", () => {
     expect(heavy).toEqual([]);
   });
 
-  it("has a command portrait plus three pilots per faction", () => {
-    expect(PORTRAIT_ASSETS.length).toBe(16);
+  it("has a command portrait, three pilots per faction and the named antagonists", () => {
+    expect(PORTRAIT_ASSETS.length).toBe(20);
     expect(keysOf(PORTRAIT_ASSETS)).toContain("portrait_command");
+    expect(keysOf(PORTRAIT_ASSETS)).toEqual(
+      expect.arrayContaining([
+        "portrait_kronos",
+        "portrait_ilsandre",
+        "portrait_blackmaw",
+        "portrait_vosk",
+      ]),
+    );
+  });
+
+  it("ships every portrait sheet with a talk frame inside the image", () => {
+    for (const entry of PORTRAIT_ASSETS.filter((e) => e.kind === "atlas")) {
+      const png = readFileSync(join(PUBLIC, entry.url));
+      const width = png.readUInt32BE(16);
+      const height = png.readUInt32BE(20);
+      const atlas = JSON.parse(
+        readFileSync(join(PUBLIC, entry.atlasUrl!), "utf8"),
+      ) as { frames: Record<string, { frame: { x: number; y: number; w: number; h: number } }> };
+      for (const name of ["base", "talk"]) {
+        const { x, y, w, h } = atlas.frames[name]!.frame;
+        expect(x + w, `${entry.key} ${name}`).toBeLessThanOrEqual(width);
+        expect(y + h, `${entry.key} ${name}`).toBeLessThanOrEqual(height);
+      }
+    }
   });
 });
 

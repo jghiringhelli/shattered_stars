@@ -19,6 +19,7 @@ import type { HoloButtonVariant } from "../hud/holoButtonStyle";
 import { drawCornerTicks, drawHoloFrame } from "../menu/holoChrome";
 import { drawMenuIcon } from "../menu/MenuIcons";
 import { HOLO_BORDER, HOLO_PALETTE, HOLO_RADIUS } from "../theme/HoloTheme";
+import { fitNameText } from "../theme/nameFit";
 import { CARD_LAYOUT, CARD_W, SHIP_ROW_LAYOUT } from "./squadCardLayout";
 import {
   SQUAD_TYPE,
@@ -215,35 +216,42 @@ export function createShipRow(
   const desc = loadout ? loadout.description : def.description;
   const stats = `ATK ${def.baseStats.attack}  HUL ${def.baseStats.hull}  SHD ${def.baseStats.shields}`;
   const textX = L.textX;
+  const right = CARD_W - CARD_LAYOUT.pad;
+  const name = addSquadText(scene, textX, y + L.nameY, def.name, {
+    size: SQUAD_TYPE.label,
+    weight: "600",
+  });
+  const points = addSquadText(scene, right, y + L.nameY, `${pts}pt`, {
+    size: SQUAD_TYPE.caption,
+    weight: "600",
+    color: HOLO_PALETTE.textSecondary,
+  }).setOrigin(1, 0);
+  const statsText = addSquadText(scene, textX, y + L.statsY, stats, {
+    size: SQUAD_TYPE.small,
+    color: HOLO_PALETTE.textSecondary,
+    letterSpacing: 0.5,
+  });
+  const descText = addSquadText(
+    scene,
+    textX,
+    y + L.descY,
+    truncateText(desc, L.descChars),
+    { size: SQUAD_TYPE.small, color: HOLO_PALETTE.textMuted },
+  );
+  const rowObjects = [name, points, statsText, descText];
+  if (fitNameText(name, points.x - points.width - L.pointsGap - textX) > 1) {
+    // A long name takes the whole first line; points move to the stats line.
+    points.setY(y + L.statsY);
+    if (fitNameText(name, right - textX) > 1) {
+      descText.setVisible(false);
+      statsText.setVisible(false);
+    }
+  }
   return [
     ...createShipBadge(scene, def.spriteKey, def.baseStats.size, spec),
-    addSquadText(
-      scene,
-      textX,
-      y + L.nameY,
-      truncateText(def.name, L.nameChars),
-      {
-        size: SQUAD_TYPE.label,
-        weight: "600",
-      },
-    ),
-    addSquadText(scene, CARD_W - CARD_LAYOUT.pad, y + L.nameY, `${pts}pt`, {
-      size: SQUAD_TYPE.caption,
-      weight: "600",
-      color: HOLO_PALETTE.textSecondary,
-    }).setOrigin(1, 0),
-    addSquadText(scene, textX, y + L.statsY, stats, {
-      size: SQUAD_TYPE.small,
-      color: HOLO_PALETTE.textSecondary,
-      letterSpacing: 0.5,
-    }),
-    addSquadText(scene, textX, y + L.descY, truncateText(desc, L.descChars), {
-      size: SQUAD_TYPE.small,
-      color: HOLO_PALETTE.textMuted,
-    }),
+    ...rowObjects,
   ];
 }
-
 /**
  * Circular badge with the ship sprite (falls back to the faction/size
  * placeholder texture when the sprite is not loaded).

@@ -190,7 +190,12 @@ import type {
   TriggerResult,
 } from "../systems/survival/RelicCombatEngine";
 import { ShipTelemetry } from "../debug/ShipTelemetry";
+import { bindAutoPause, pauseBattleIfRunning } from "./battleUi/AutoPause";
 import { BattlePauseMenu } from "./battleUi/BattlePauseMenu";
+import {
+  createShipArtPrefetcher,
+  type ShipArtPrefetcher,
+} from "../assets/shipArtPrefetch";
 import { InputManager } from "../input/InputManager";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
 
@@ -348,6 +353,8 @@ export class SurvivalScene extends Phaser.Scene {
   private service!: RoguelikeRunService;
   /** This node's rules: plan, relic engine, seeded rolls, kill bookkeeping. */
   private rules!: SurvivalBattleRules;
+  /** Warms the enemy faction's sprites during the fight. */
+  private artPrefetcher!: ShipArtPrefetcher;
   /** Saved record of each player ship (persisted hull, upgrades), by ship id. */
   private readonly records = new Map<string, ShipRecord>();
   /** Each player ship's modifier sheet without the run's Drive (see applyBonusesToFleet). */
@@ -514,6 +521,11 @@ export class SurvivalScene extends Phaser.Scene {
     this.enemySerial = 0;
     this.battleEnded = false;
     this.openRunBattle();
+    // Every wave of the node flies the node's enemy faction: warm its sprites.
+    this.artPrefetcher = createShipArtPrefetcher(this);
+    this.artPrefetcher.enqueue(
+      this.rules.roster(this.rules.plan.enemyFaction).map((ship) => ship.id),
+    );
     // Sector boss → Dreadnought, belt-heavy node → Threading the Belt.
     audioManager.playBattleMusic(
       survivalBattleMode(this.rules.plan),
@@ -778,7 +790,15 @@ export class SurvivalScene extends Phaser.Scene {
     );
   }
 
+  /** Leaving the page (tab switch, minimise) pauses an offline battle; resuming is manual. */
+  pauseIfRunning(): void {
+    pauseBattleIfRunning({ paused: this.isPaused, online: false }, () =>
+      this.togglePause(),
+    );
+  }
+
   private createPauseMenu(): void {
+    bindAutoPause(this, () => this.pauseIfRunning());
     this.pauseMenu = new BattlePauseMenu({
       scene: this,
       legend: "survival",
@@ -1231,7 +1251,10 @@ export class SurvivalScene extends Phaser.Scene {
       started,
     );
     if (!callsWing) {
-      this.showMessage(`BOSS PHASE ${started + 1}`, "Second wind — shields restored!");
+      this.showMessage(
+        `BOSS PHASE ${started + 1}`,
+        "Second wind — shields restored!",
+      );
       return;
     }
     this.showMessage(

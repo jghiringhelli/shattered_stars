@@ -121,6 +121,7 @@ import {
 } from "../systems/PerformanceSystem";
 import type { ManeuverDefinition } from "../core/types";
 import { ACE_MATCHUPS, type AceMatchup } from "../data/AceMatchups";
+import { bindAutoPause, pauseBattleIfRunning } from "./battleUi/AutoPause";
 import { BattlePauseMenu } from "./battleUi/BattlePauseMenu";
 import { InputManager } from "../input/InputManager";
 import { setupSceneInput, teardownSceneInput } from "../input/setupSceneInput";
@@ -817,7 +818,13 @@ export class AceDuelScene extends Phaser.Scene {
     );
   }
 
+  /** Leaving the page (tab switch, minimise) pauses an offline battle; resuming is manual. */
+  pauseIfRunning(): void {
+    pauseBattleIfRunning({ paused: this.isPaused, online: false }, () => this.togglePause());
+  }
+
   private createPauseMenu(): void {
+    bindAutoPause(this, () => this.pauseIfRunning());
     this.pauseMenu = new BattlePauseMenu({
       scene: this,
       legend: "duel",

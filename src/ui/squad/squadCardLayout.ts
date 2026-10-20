@@ -56,8 +56,9 @@ export const SHIP_ROW_LAYOUT = {
   nameY: 1,
   statsY: 15,
   descY: 27,
+  /** Gap between a ship name and its points. */
+  pointsGap: 8,
   /** Character budgets keeping text inside the card. */
-  nameChars: 26,
   descChars: 36,
   summaryChars: 38,
 } as const;

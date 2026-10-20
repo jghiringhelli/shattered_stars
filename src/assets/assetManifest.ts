@@ -132,10 +132,10 @@ export const COMMAND_PORTRAIT: AssetEntry = {
 /** Campaign pilot portrait names per faction. */
 const PORTRAIT_NAMES: Readonly<Record<FactionId, readonly string[]>> = {
   terran_hegemony: ["admiral_chen", "striker", "whisper"],
-  free_confederation: ["commander_santos", "phoenix_one", "doc_vasquez"],
+  free_confederation: ["commander_santos", "phoenix_one", "doc_vasquez", "kronos"],
   synthetic_collective: ["omega_7", "prime_collective", "unit_zero"],
-  void_corsairs: ["captain_kira", "the_admiral", "bloodfang"],
-  ascendant_empire: ["the_dreamer", "archon_zaelthar", "herald"],
+  void_corsairs: ["captain_kira", "the_admiral", "bloodfang", "blackmaw", "vosk"],
+  ascendant_empire: ["the_dreamer", "archon_zaelthar", "herald", "ilsandre"],
 };
 
 /** Factions that have campaign portraits. */

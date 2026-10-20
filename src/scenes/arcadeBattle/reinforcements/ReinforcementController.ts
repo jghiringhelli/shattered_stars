@@ -28,6 +28,10 @@ import { spawnArcadeShip } from "../arcadeShipFactory";
 import { matchStats } from "../../../telemetry/matchTelemetry";
 import { ReinforcementHud } from "./ReinforcementHud";
 import { ReinforcementPicker } from "./ReinforcementPicker";
+import {
+  createShipArtPrefetcher,
+  type ShipArtPrefetcher,
+} from "../../../assets/shipArtPrefetch";
 import { deployToast, type ReinforcementView } from "./reinforcementHudModel";
 import { showSummaryStrip } from "./reinforcementSummaryStrip";
 import {
@@ -81,6 +85,7 @@ export class ReinforcementController {
   private readonly sides: string[];
   private readonly hud: ReinforcementHud;
   private readonly picker: ReinforcementPicker;
+  private readonly artPrefetcher: ShipArtPrefetcher;
   private ended = false;
   private nowMs = 0;
 
@@ -96,16 +101,24 @@ export class ReinforcementController {
   ) {
     const opening = [...link.ships.values()];
     this.sides = sideOrder(link.playerTeam, link.squadTeams).map(teamKey);
-    this.director = new ReinforcementDirector(
-      buildDirectorSetup({
-        setup,
-        playerTeam: link.playerTeam,
-        squadTeams: link.squadTeams,
-        humanSquads: link.humanSquads,
-        ships: opening,
-        ownsOutcome: !link.hasScenario,
-        nextShipId: (member, pilot) => this.issueId(member, pilot),
-      }),
+    const directorSetup = buildDirectorSetup({
+      setup,
+      playerTeam: link.playerTeam,
+      squadTeams: link.squadTeams,
+      humanSquads: link.humanSquads,
+      ships: opening,
+      ownsOutcome: !link.hasScenario,
+      nextShipId: (member, pilot) => this.issueId(member, pilot),
+    });
+    this.director = new ReinforcementDirector(directorSetup);
+    // Every squad's planned reserve will deploy during the match: warm its sprites.
+    this.artPrefetcher = createShipArtPrefetcher(scene);
+    this.artPrefetcher.enqueue(
+      directorSetup.sides.flatMap((side) =>
+        side.members.flatMap((member) =>
+          member.plan.map((option) => option.definitionId),
+        ),
+      ),
     );
     for (const reg of openingRegistrations(opening, link.humanSquads)) {
       this.director.registerInitial(
@@ -328,7 +341,12 @@ export class ReinforcementController {
       camera: this.scene.cameras.main,
       nowMs: this.scene.time.now,
     });
-    this.picker.update(member === null ? null : this.director.pickerOf(member));
+    const pickerView = member === null ? null : this.director.pickerOf(member);
+    this.picker.update(pickerView);
+    if (pickerView)
+      this.artPrefetcher.enqueue(
+        pickerView.options.map((row) => row.option.definitionId),
+      );
   }
 
   private issueId(

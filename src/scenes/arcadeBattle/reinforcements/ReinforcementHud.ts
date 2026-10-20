@@ -46,7 +46,6 @@ const RECENT_EVENTS = 3;
 /** How long a deploy notification stays (ms) and the share spent fading. */
 const EVENT_MS = 2600;
 const EVENT_FADE_SHARE = 0.3;
-const ELLIPSIS = "…";
 
 /** What the panel shows this frame. */
 export interface ReinforcementHudFrame {
@@ -67,6 +66,7 @@ export class ReinforcementHud {
   private readonly next: Phaser.GameObjects.Text;
   private readonly event: Phaser.GameObjects.Text;
   private readonly bars: Phaser.GameObjects.Graphics;
+  private readonly eventBaseY: number;
   private eventBornMs = Number.NEGATIVE_INFINITY;
   private readonly recent: string[] = [];
   private screenWidth = 0;
@@ -79,7 +79,8 @@ export class ReinforcementHud {
     private readonly scene: Phaser.Scene,
     sideCount: number,
   ) {
-    const lines = sideCount + 2;
+    // Rows: pools, next ships (may wrap) and the deploy notification (may wrap).
+    const lines = sideCount + 4;
     this.height =
       HEADER_HEIGHT +
       HOLO_SPACING.sm +
@@ -103,7 +104,8 @@ export class ReinforcementHud {
       top + sideCount * PANEL.rowHeight,
       HOLO_PALETTE.accent,
     );
-    this.event = this.text(left, top + (sideCount + 1) * PANEL.rowHeight);
+    this.eventBaseY = top + (sideCount + 1) * PANEL.rowHeight;
+    this.event = this.text(left, this.eventBaseY);
     this.bars = scene.add.graphics();
     addPinned(this.panel, ...this.rows, this.next, this.event, this.bars);
   }
@@ -130,6 +132,9 @@ export class ReinforcementHud {
     this.layout(camera.width);
     this.drawRows(frame.sides, frame.viewSide);
     this.fitPreview(frame.preview);
+    this.event.setY(
+      this.eventBaseY + (this.next.height > PANEL.rowHeight ? PANEL.rowHeight : 0),
+    );
     this.fadeEvent(frame.nowMs);
   }
 
@@ -186,6 +191,7 @@ export class ReinforcementHud {
   }
 
   private fitPreview(preview: readonly DeployOption[]): void {
+    this.next.setWordWrapWidth(undefined as unknown as number);
     for (const count of PREVIEW_COUNTS) {
       setText(this.next, nextLine(preview.slice(0, count)));
       if (this.next.width <= TEXT_WIDTH) return;
@@ -214,12 +220,9 @@ export class ReinforcementHud {
   }
 }
 
-/** Set a line, cutting it with an ellipsis until it fits the panel. */
+/** Set a line; one that is wider than the panel wraps onto a second line. */
 function fitText(text: Phaser.GameObjects.Text, line: string): void {
+  text.setWordWrapWidth(undefined as unknown as number);
   setText(text, line);
-  let cut = line;
-  while (text.width > TEXT_WIDTH && cut.length > 1) {
-    cut = cut.slice(0, -1);
-    setText(text, `${cut.trimEnd()}${ELLIPSIS}`);
-  }
+  if (text.width > TEXT_WIDTH) text.setWordWrapWidth(TEXT_WIDTH, true);
 }

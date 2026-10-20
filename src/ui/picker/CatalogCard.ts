@@ -12,6 +12,7 @@ import { shipSpriteAsset } from "../../assets/assetManifest";
 import { swapWhenLoaded } from "../../assets/textureLoading";
 import { attachHintTooltip } from "../menu/HintTooltip";
 import { HOLO_PALETTE } from "../theme/HoloTheme";
+import { fitNameText } from "../theme/nameFit";
 import { secondaryTags } from "./catalogHelpers";
 import type { TermId } from "../../data/tooltips";
 import { addTipZone, type TipSubject } from "../menu/tooltipTargets";
@@ -33,6 +34,9 @@ const CARD = {
   padRight: 8,
   nameY: 7,
   subY: 28,
+  /** Name and subline rows of a card whose name wraps onto two lines. */
+  wrappedNameY: 1,
+  wrappedSubY: 29,
   pointsGap: 8,
   tagGap: 4,
   tagPadX: 4,
@@ -115,8 +119,13 @@ export function buildCatalogCard(
     hit.on("pointerout", () => paint(false));
     hit.on("pointerdown", onSelect);
   }
-  const subline = buildSubline(scene, spec);
-  const body = [...buildHeadline(scene, spec), ...subline.objects];
+  const headline = buildHeadline(scene, spec);
+  const subline = buildSubline(
+    scene,
+    spec,
+    headline.wrapped ? CARD.wrappedSubY : CARD.subY,
+  );
+  const body = [...headline.objects, ...subline.objects];
   const zones = subline.zones.map((zone) => {
     const hover = (on: boolean) => () => !spec.locked && paint(on);
     const tipZone = addTipZone(
@@ -163,7 +172,7 @@ function cardLook(
 function buildHeadline(
   scene: Phaser.Scene,
   spec: CatalogCardSpec,
-): Phaser.GameObjects.GameObject[] {
+): { objects: Phaser.GameObjects.GameObject[]; wrapped: boolean } {
   const { def, x, y, locked } = spec;
   const spriteKey = scene.textures.exists(def.spriteKey)
     ? def.spriteKey
@@ -180,8 +189,13 @@ function buildHeadline(
     "name",
     locked ? HOLO_PALETTE.textMuted : HOLO_PALETTE.textPrimary,
   );
-  fitOrEllipsize(name, x + spec.width - CARD.padRight - name.x, MIN_NAME_SIZE);
-  return [sprite, name];
+  const lines = fitNameText(
+    name,
+    x + spec.width - CARD.padRight - name.x,
+    MIN_NAME_SIZE,
+  );
+  if (lines > 1) name.setY(y + CARD.wrappedNameY);
+  return { objects: [sprite, name], wrapped: lines > 1 };
 }
 
 /**
@@ -195,9 +209,10 @@ function buildHeadline(
 function buildSubline(
   scene: Phaser.Scene,
   spec: CatalogCardSpec,
+  subY: number,
 ): Subline {
   const left = spec.x + CARD.textX;
-  const lineY = spec.y + CARD.subY;
+  const lineY = spec.y + subY;
   const points = addPickerText(
     scene,
     { x: spec.x + spec.width - CARD.padRight, y: lineY - 1 },
@@ -214,7 +229,7 @@ function buildSubline(
   };
   const maxRight = points.x - points.width - CARD.pointsGap;
   if (!spec.locked) {
-    const tags = buildTags(scene, spec, left, maxRight);
+    const tags = buildTags(scene, spec, { left, maxRight, subY });
     return {
       objects: [points, ...tags.objects],
       zones: [pointsZone, ...tags.zones],
@@ -293,16 +308,19 @@ const TAG_TERMS: Readonly<Record<string, TermId>> = {
  *
  * @param scene - Owning scene.
  * @param spec - Card spec.
- * @param startX - Left edge of the line.
- * @param maxRight - Rightmost x an item may reach.
+ * @param line - Left edge, rightmost x an item may reach and top of the line.
  * @returns Created objects and the tooltip zones over each item.
  */
 function buildTags(
   scene: Phaser.Scene,
   spec: CatalogCardSpec,
-  startX: number,
-  maxRight: number,
+  line: {
+    readonly left: number;
+    readonly maxRight: number;
+    readonly subY: number;
+  },
 ): Subline {
+  const { left: startX, maxRight, subY } = line;
   const items: SublineItem[] = [
     ...(isStarterPick(spec.def.id)
       ? [
@@ -323,7 +341,7 @@ function buildTags(
   ];
   const objects: Phaser.GameObjects.GameObject[] = [];
   const zones: CardZone[] = [];
-  const centreY = spec.y + CARD.subY + 1 + TAG_CHIP_HEIGHT / 2;
+  const centreY = spec.y + subY + 1 + TAG_CHIP_HEIGHT / 2;
   let itemX = startX;
   for (const item of items.slice(0, MAX_TAGS)) {
     const pad = item.chip ? CARD.tagPadX : 0;
@@ -354,7 +372,11 @@ function buildTags(
     itemX += itemW + CARD.tagGap * 2;
   }
   const hidden = items.slice(MAX_TAGS);
-  if (hidden.length > 0) addMoreChip(scene, spec, { x: itemX, maxRight }, hidden, { objects, zones });
+  if (hidden.length > 0)
+    addMoreChip(scene, spec, { x: itemX, maxRight, subY }, hidden, {
+      objects,
+      zones,
+    });
   return { objects, zones };
 }
 
@@ -363,18 +385,22 @@ function buildTags(
  *
  * @param scene - Owning scene.
  * @param spec - Card spec.
- * @param at - Left edge and rightmost x of the chip.
+ * @param at - Left edge, rightmost x of the chip and top of the line.
  * @param hidden - The tags left out.
  * @param into - Subline parts to add the chip to.
  */
 function addMoreChip(
   scene: Phaser.Scene,
   spec: CatalogCardSpec,
-  at: { readonly x: number; readonly maxRight: number },
+  at: {
+    readonly x: number;
+    readonly maxRight: number;
+    readonly subY: number;
+  },
   hidden: readonly SublineItem[],
   into: { objects: Phaser.GameObjects.GameObject[]; zones: CardZone[] },
 ): void {
-  const centreY = spec.y + CARD.subY + 1 + TAG_CHIP_HEIGHT / 2;
+  const centreY = spec.y + at.subY + 1 + TAG_CHIP_HEIGHT / 2;
   const label = addPickerText(
     scene,
     { x: at.x + CARD.tagPadX, y: centreY },
@@ -387,12 +413,18 @@ function addMoreChip(
     label.destroy();
     return;
   }
-  into.objects.push(label, drawTagChip(scene, { x: at.x, centreY, width }, HOLO_PALETTE.textSecondary));
+  into.objects.push(
+    label,
+    drawTagChip(scene, { x: at.x, centreY, width }, HOLO_PALETTE.textSecondary),
+  );
   into.zones.push({
     x: at.x,
     y: centreY - TAG_CHIP_HEIGHT / 2,
     width,
     height: TAG_CHIP_HEIGHT,
-    subject: { title: "More tags", body: hidden.map((item) => item.text.toUpperCase()).join(" \u00b7 ") },
+    subject: {
+      title: "More tags",
+      body: hidden.map((item) => item.text.toUpperCase()).join(" \u00b7 "),
+    },
   });
 }
