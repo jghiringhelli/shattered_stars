@@ -37,6 +37,21 @@ ComfyUI-side names above come from the scripts only.
 No negative flag was found (no "no commercial use" / "no selling images" licence)
 for the models that could be verified. The Civitai LoRAs are the open point.
 
+**Licence links supplied by the owner (2026-10-20/21).** Civitai blocks automated reads
+(HTTP 403), so the per-model permission switches could not be read by tooling; the owner
+opened them in a browser. Verified from the primary text (SDXL 1.0 licence,
+`Stability-AI/generative-models/model_licenses/LICENSE-SDXL1.0`, "CreativeML Open RAIL++-M
+License dated July 26, 2023"): the licensor "claims no rights in the Output You generate";
+the user is accountable for outputs and their uses, and every use must respect the
+use-based restrictions of its Attachment A (no illegal, harmful or deceptive uses). Nothing
+in it forbids using outputs in a commercial product.
+
+| LoRA | Model page | Civitai licence page |
+|---|---|---|
+| `concept_art` (Lined Concept Art) | https://civitai.com/models/1711179 | https://civitai.com/models/license/1936416 (plus the SDXL 1.0 licence above) |
+| `scifi_style` (SDXL Science Fiction) | https://civitai.com/models/122837 | https://civitai.com/models/license/133850 |
+| `alien_species` (Alien Species XL) | https://civitai.com/models/638529 | https://civitai.com/models/license/714032 |
+
 **Output status.** Under current US Copyright Office guidance, purely AI-generated
 images are not copyrightable without sufficient human authorship, so the owner may not
 hold exclusive copyright in the raw art (the curated selection, arrangement and any
@@ -102,10 +117,10 @@ named "Wing Commander" (id `x_wingcmd`, id unchanged) is now "Squadron Marshal".
 1. **Suno plan:** ✅ the owner confirmed (2026-10-20) a paid plan (Pro/Premier) was active
    when each of the 13 shipped tracks was generated. Keep the receipts/generation dates on
    file; free-tier tracks would have to be regenerated or removed before commercial use.
-2. **Civitai LoRAs:** open the model pages for `concept_art` (Lined Concept Art, 1711179),
-   `scifi_style` (SDXL Science Fiction, 122837), `alien_species` (Alien Species XL, 638529)
-   and every stained-glass LoRA you actually used; confirm "Sell generated images" is
-   allowed. Replace art made with any LoRA that forbids it.
+2. **Civitai LoRAs:** licence links are recorded in section 1 above. Still to do by the
+   owner: read the "Sell generated images" / commercial switches on each model page and
+   tick them off here (`concept_art`, `scifi_style`, `alien_species`), and the
+   stained-glass LoRA(s) actually used. Replace art made with any LoRA that forbids it.
 3. **Identify the stained-glass LoRA(s)** used for shipped art (the repo does not record it)
    and add them (name, author, licence) to this file and, if needed, to credits.
 4. **Credits accuracy:** `concept_art` is an SDXL LoRA paired with SD 1.5 DreamShaper 8; if
