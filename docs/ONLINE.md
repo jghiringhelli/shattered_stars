@@ -70,12 +70,28 @@ type an address: the relay URL is baked into the build. Design and measurements:
   (REMATCH = a server-side vote: after a finished match the room stays open for
   `REMATCH_WINDOW_MS`; the room's READY button reads REMATCH and starts a new match with the same
   squads and teams once everyone present voted yes. A quick-match room dissolves when the window
-  closes unused). A player offline at match end gets the result when they resume.
+  closes unused). The battle's **results screen** votes too: its REMATCH button sends the same
+  `rematch` message (a click made before the relay ended the match is kept and cast when the window
+  opens), reads `Waiting for N` while other players decide, and enters the new match straight from
+  the results screen when everyone accepted (same `match_start` path as the lobby); once the window
+  closed or the room is gone it returns to the room. A player offline at match end gets the result
+  when they resume.
+- **Result integrity (partial mitigation).** The relay cannot simulate the battle, so one client's
+  `match_over` never decides alone: the match finishes with the winner a **strict majority of the
+  connected human seats** reported (seats that dropped or left do not vote; with one seat left that
+  seat decides). A split vote (every voter reported, no majority) is settled by the authority seat's
+  report only if every seat's state hash agreed at the last comparison (`HashBook.lastAgreement`);
+  otherwise — or when a connected seat stays silent past `MATCH_OVER_GRACE_MS` (5 s) with no
+  majority — the match ends as **abandoned / no result** (no rematch opens). This stops a lone
+  modified client from deciding a match against honest peers; it does not stop a colluding majority.
+  Logic: `server/src/matchResult.ts`.
+- The relay survives a failing handler (logged, the socket stays), abandons a match whose
+  authority never answers a resync after 3 × 10 s and rate-limits desync resyncs (2 s).
+- Relay layout: `RelayCore` (sessions) → `RoomService` (rooms, lobby edits) → `Room` (+ `RoomRoster`,
+  `roomEdits`, `roomView`) and `MatchHost` → `MatchRelay` (+ `InputRelay`, `ResyncController`,
+  `matchResult`); `wsServer` → `wsSocket` / `wsHttp`.
 - Online battles always use the **ship-identity rule** for specials, whatever the local
   Settings say (`lockTrickRuleToIdentity`, set by the online link / seat models).
-- The relay survives a failing handler (logged, the socket stays), abandons a match whose
-  authority never answers a resync after 3 × 10 s, rate-limits desync resyncs (2 s) and takes the
-  winner most seats report.
 
 ## Configuration
 

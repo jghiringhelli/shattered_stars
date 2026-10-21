@@ -298,17 +298,19 @@ describe("MatchRelay authority hand-off during a resync", () => {
 });
 
 describe("MatchRelay match end", () => {
-  it("ends with the authority's result once every seat reported", () => {
+  it("ends with the authority's result once every seat reported and the hashes agreed", () => {
     const h = running();
+    h.relay.hash(0, 30, 5);
+    h.relay.hash(1, 30, 5);
     h.relay.matchOver(1, 0);
     h.relay.matchOver(0, 1);
     expect(h.ended).toEqual([{ reason: "finished", winner: 1 }]);
   });
 
-  it("ends after a grace period when a seat never reports", () => {
+  it("abandons after the grace period when a connected seat never reports", () => {
     const h = running();
     h.relay.matchOver(1, 0);
     h.clock.advance(MATCH_OVER_GRACE_MS);
-    expect(h.ended).toEqual([{ reason: "finished", winner: 0 }]);
+    expect(h.ended).toEqual([{ reason: "abandoned", winner: null }]);
   });
 });

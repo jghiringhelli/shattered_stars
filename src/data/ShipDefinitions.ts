@@ -1399,6 +1399,7 @@ export const SHIP_DEFINITIONS: Record<string, ShipDefinition> = {
     name: "Stalker Unit",
     faction: "synthetic_collective",
     role: "interceptor",
+    signatureTrick: "hook_loop",
     baseStats: {
       hull: 4,
       shields: 3,

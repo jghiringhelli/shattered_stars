@@ -42,8 +42,8 @@ Shattered Stars is a **beta** that is free to play for now (it may become a paid
 - Online play is a beta feature and needs the relay server to be up. When it isn't, the lobby says so and offers **PLAY OFFLINE INSTEAD**. A server that has been idle can take about 30 s to wake up. See [ONLINE.md](ONLINE.md).
 - Players are only matched with the same game build: reload the page if the lobby says your version is out of date.
 - Deploys and restarts of the server end running matches (rooms live in memory). Nobody can pause a shared battle: Pause offers to leave the match.
-- After an online match the room stays open for 60 s for a REMATCH vote (everyone present must accept). The server decides the match setup; the host only changes room options, which the server validates.
-- The relay cannot verify the simulation: a modified client could report a false result. Fine for a beta; keep online matches casual.
+- After an online match the room stays open for 60 s for a REMATCH vote (everyone present must accept), cast from the results screen or the room. The server decides the match setup; the host only changes room options, which the server validates.
+- The relay cannot simulate the battle, so a result is only as trustworthy as the clients' majority: a lone modified client can no longer decide a match (a strict majority of the connected human seats must report the same winner; otherwise the match ends as "no result"), but a colluding majority could still report a false result. Fine for a beta; keep online matches casual.
 
 ## Audio
 
@@ -51,5 +51,4 @@ Shattered Stars is a **beta** that is free to play for now (it may become a paid
 
 ## Campaign
 
-- The Coalition (Acts IV-V) is led by one hero chosen when it opens; only that hero's two powers are on the bar. The other heroes fly as allied squads.
 - Campaign difficulty has no headless runner: Act 1-3 `hullScale` 0.7 is only checked by a force-ratio proxy (docs/specs/campaign.md §11), not by win rates with hero powers, Armory and Research.

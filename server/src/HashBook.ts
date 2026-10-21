@@ -12,6 +12,12 @@ const MAX_PENDING_TICKS = 64;
 export class HashBook {
   private readonly reports = new Map<number, Map<number, number>>();
   private floor = -1;
+  private agreed: { tick: number; hash: number } | null = null;
+
+  /** @returns The latest tick every expected seat reported the same hash for, unless a mismatch or resync came since. */
+  lastAgreement(): { readonly tick: number; readonly hash: number } | null {
+    return this.agreed;
+  }
 
   /**
    * @param seat - Reporting seat.
@@ -34,12 +40,15 @@ export class HashBook {
     if (!expectedSeats.every((s) => byseat.has(s))) return "pending";
     const values = expectedSeats.map((s) => byseat.get(s));
     this.reports.delete(tick);
-    return values.every((v) => v === values[0]) ? "match" : "mismatch";
+    const agree = values.every((v) => v === values[0]);
+    this.agreed = agree && expectedSeats.length > 0 ? { tick, hash } : null;
+    return agree ? "match" : "mismatch";
   }
 
   /** @param tick - Forget every report up to and including this tick (after a resync). */
   clearThrough(tick: number): void {
     this.floor = Math.max(this.floor, tick);
+    this.agreed = null;
     for (const key of [...this.reports.keys()])
       if (key <= tick) this.reports.delete(key);
   }

@@ -6,6 +6,8 @@
  */
 
 import type Phaser from "phaser";
+import type { FactionId } from "../../config";
+import { COALITION_SLOT } from "../../campaign/save/campaignSaveTypes";
 import type { CampaignMission, FactionCampaign } from "../../data/CampaignData";
 import type { ArmoryMod } from "../../data/campaign/armory";
 import type { ResearchPick, ResearchTier } from "../../data/campaign/research";
@@ -21,6 +23,7 @@ import { createResearchPanel } from "./ResearchPanel";
 import type { CampaignPanelTabs } from "./campaignTabsModel";
 import { createActChips } from "./ActChips";
 import { createChroniclePanel } from "./ChroniclePanel";
+import { createLeadSwap } from "./CoalitionLeadSwap";
 import { shownAct } from "./CampaignMissionMap";
 import type { HubView as ActHubView } from "../../campaign/hub/hubProgress";
 import type { ChronicleData } from "../../campaign/chronicle/chronicleTypes";
@@ -76,6 +79,8 @@ export interface HubConfig {
   readonly onToggleMod: (mod: ArmoryMod) => void;
   readonly onRespec: () => void;
   readonly onPickResearch: (tier: ResearchTier, pick: ResearchPick) => void;
+  /** Coalition only: a hero was picked to lead the next mission. */
+  readonly onSwapLead?: (lead: FactionId) => void;
   readonly onEpilogue: () => void;
 }
 
@@ -151,11 +156,26 @@ export function createCampaignHub(
         config.onRespec,
       ),
     );
+  const swap =
+    config.save.slot === COALITION_SLOT && config.onSwapLead
+      ? createLeadSwap(scene, {
+          lead: config.save.factionId,
+          accent: config.accent,
+          onPick: config.onSwapLead,
+        })
+      : null;
   return {
-    objects: [...tabs, ...content.objects, hero.panel, ...extras],
+    objects: [
+      ...tabs,
+      ...content.objects,
+      hero.panel,
+      ...(swap ? [swap.panel] : []),
+      ...extras,
+    ],
     focusTargets: [
       ...content.focusTargets,
       ...hero.focusTargets,
+      ...(swap?.focusTargets ?? []),
       ...extras,
       ...tabs,
     ],

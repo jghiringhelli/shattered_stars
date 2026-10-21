@@ -22,6 +22,7 @@ import {
   openOnlineLobby,
   leaveBattle,
   startOnlineMatch,
+  rematchFromResults,
   startOnlineRoom,
   waitForTicks,
   type OnlineDebug,
@@ -258,6 +259,15 @@ test.describe("online battles stay in lockstep", () => {
     const debug = [await onlineDebug(host, scene), await onlineDebug(guest, scene)];
     report("Second match, same pages", debug);
     expectIdentical(debug[0]!, debug[1]!, SECOND_MATCH_TICKS - 300);
+    // Third match: REMATCH from the results panel (relay vote), no lobby visit.
+    await rematchFromResults(pages, scene);
+    await Promise.all([
+      ...pages.map((p, i) => flyAround(p, i * 3 + 2)),
+      ...pages.map((p) => waitForTicks(p, scene, SECOND_MATCH_TICKS, 90_000)),
+    ]);
+    const third = [await onlineDebug(host, scene), await onlineDebug(guest, scene)];
+    report("Third match, rematch from results", third);
+    expectIdentical(third[0]!, third[1]!, SECOND_MATCH_TICKS - 300);
     await host.context().close();
     await guest.context().close();
   });

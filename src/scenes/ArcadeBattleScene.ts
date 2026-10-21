@@ -245,6 +245,7 @@ import {
   confirmLeaveOnlineBattle,
   ONLINE_LOBBY_SCENE,
 } from "./online/onlineExit";
+import { onlineResultsActions } from "./online/onlineResultsActions";
 
 interface ShipSprite extends Phaser.GameObjects.Container {
   shipId: string;
@@ -636,14 +637,17 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.reinforcements = null;
     teardownSceneInput();
     if (!this.online) return;
+    const playedMatchId = this.net?.match.matchId;
     this.net?.dispose();
     this.net = null;
     this.notices?.destroy();
     this.notices = null;
     this.online = null;
     setDefaultRng(createRng());
-    // A later local battle must never replay this online match's config.
-    this.registry.remove("battleConfig");
+    // A later local battle must never replay this online match's config (a rematch's fresh one stays).
+    const pending = readOnlineBattle(this.registry.get("battleConfig"));
+    if (!pending || pending.context.matchId === playedMatchId)
+      this.registry.remove("battleConfig");
   }
 
   /** @returns The online link's diagnostics (e2e), or null offline. */
@@ -2594,7 +2598,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     });
   }
 
-  /** @returns REMATCH / SQUAD / MENU: a local battle replays; an online one returns to the room. */
+  /** @returns REMATCH / SQUAD / MENU: a local battle replays; an online one votes the relay rematch. */
   private endScreenActions(): ResultsActions {
     if (!this.online)
       return {
@@ -2602,14 +2606,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
         onSetup: () => this.scene.start("SquadBuilderScene", this.setupData()),
         onMenu: () => this.scene.start("MainMenuScene"),
       };
-    return {
-      onRematch: () => this.scene.start(ONLINE_LOBBY_SCENE),
-      rematchLabel: "Rematch (room)",
-      onMenu: () => {
-        getOnlineSession(this.registry).leaveRoom();
-        this.scene.start("MainMenuScene");
-      },
-    };
+    return onlineResultsActions(this, this.net?.match.matchId ?? "");
   }
 
   /** @returns Squad Builder entry data that reopens this battle's builder. */

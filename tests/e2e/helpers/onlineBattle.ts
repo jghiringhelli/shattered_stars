@@ -290,3 +290,43 @@ export async function leaveBattle(pages: readonly Page[]): Promise<void> {
     await waitForLobby(page, "s.connection === 'online' && s.room === null");
   }
 }
+
+/**
+ * Both clients finish the running arcade battle with the same result, press R
+ * (REMATCH) on the results panel and end up in the relay's next match, started
+ * without a visit to the lobby.
+ *
+ * @param pages - The clients.
+ * @param sceneKey - The battle scene (an ArcadeBattleScene).
+ */
+export async function rematchFromResults(
+  pages: readonly Page[],
+  sceneKey: string,
+): Promise<void> {
+  const played = await Promise.all(
+    pages.map((page) =>
+      page.evaluate(
+        (key) => (window as any).game.scene.getScene(key).net.match.matchId,
+        sceneKey,
+      ),
+    ),
+  );
+  for (const page of pages)
+    await page.evaluate((key) => {
+      const scene = (window as any).game.scene.getScene(key);
+      scene.gameEnded = true;
+      scene.finishBattle(true);
+    }, sceneKey);
+  for (const page of pages)
+    await waitForLobby(page, "s.room !== null && s.room.rematch !== null");
+  for (const page of pages) await page.keyboard.press("r");
+  for (const [i, page] of pages.entries())
+    await page.waitForFunction(
+      ([key, old]) => {
+        const net = (window as any).game?.scene.getScene(key)?.net;
+        return !!net && net.match.matchId !== old && net.debug.tick < 120;
+      },
+      [sceneKey, played[i]] as const,
+      { timeout: 30_000, polling: 250 },
+    );
+}

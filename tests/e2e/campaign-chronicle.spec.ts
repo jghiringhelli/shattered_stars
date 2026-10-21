@@ -260,6 +260,66 @@ test("the Coalition opens after four campaigns, with a lead hero and its own sav
   ).toBeNull();
 });
 
+test("the Coalition hub swaps the lead hero between missions", async ({ page }) => {
+  await page.goto("/?debug=1");
+  await waitForMenuReady(page);
+  await seedFinishedCampaigns(page, 4);
+  await clickMenuItem(page, "CAMPAIGN");
+  await waitForScene(page, HUB);
+  await page.evaluate(() => {
+    const scene = (window as any).game.scene.getScene("CampaignScene");
+    scene.selectCoalition();
+    scene.chooseLead("free_confederation");
+  });
+  const swapCards = () =>
+    page.evaluate(() => {
+      const scene = (window as any).game.scene.getScene("CampaignScene");
+      const found: any[] = [];
+      const walk = (list: any[]) =>
+        list.forEach((o) => {
+          if (o.name?.startsWith("lead_swap_")) found.push(o);
+          if (o.list) walk(o.list);
+        });
+      walk(scene.phaseContainer.list);
+      return found.map((c) => ({ name: c.name, activatable: c.enabled }));
+    });
+  const cards = await swapCards();
+  expect(cards.map((c) => c.name)).toHaveLength(5);
+  // Only the current lead's card is inert; the other four swap on activation.
+  expect(cards.filter((c) => !c.activatable).map((c) => c.name)).toEqual([
+    "lead_swap_free_confederation",
+  ]);
+  await page.evaluate(() => {
+    const scene = (window as any).game.scene.getScene("CampaignScene");
+    const walk = (list: any[]): any =>
+      list.map((o) => (o.name === "lead_swap_void_corsairs" ? o : o.list ? walk(o.list) : null)).find(Boolean);
+    walk(scene.phaseContainer.list).emit("pointerdown");
+  });
+  const after = await page.evaluate(() => ({
+    save: JSON.parse(window.localStorage.getItem("shattered_stars_campaign_coalition")!),
+    phase: (window as any).game.scene.getScene("CampaignScene").currentPhase,
+  }));
+  expect(after.phase).toBe("mission_map");
+  expect(after.save).toMatchObject({ slot: "coalition", factionId: "void_corsairs" });
+  expect(Object.keys(after.save.heroPowerRanks).sort()).toEqual(["cloak_dash", "scatter_mines"]);
+  expect(Math.min(...(Object.values(after.save.heroPowerRanks) as number[]))).toBe(3);
+  expect((await swapCards()).filter((c) => !c.activatable).map((c) => c.name)).toEqual([
+    "lead_swap_void_corsairs",
+  ]);
+  await page.evaluate(() => {
+    const scene = (window as any).game.scene.getScene("CampaignScene");
+    scene.selectMission(scene.campaignData.missions[0]);
+    scene.launchMission();
+  });
+  await waitForScene(page, BATTLE, 30_000);
+  const fly = await page.evaluate((key) => {
+    const scene = (window as any).game.scene.getScene(key);
+    return { faction: scene.factionId, ship: scene.mission.playerShips[0] };
+  }, BATTLE);
+  expect(fly.faction).toBe("void_corsairs");
+  expect(fly.ship.startsWith("corsair_")).toBe(true);
+});
+
 /** Opens the completion screen of a finished Coalition with the given flags. */
 async function openEnding(page: Page, flags: string[]): Promise<void> {
   await page.goto("/?debug=1");

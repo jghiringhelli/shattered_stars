@@ -165,6 +165,7 @@ import {
   confirmLeaveOnlineBattle,
   ONLINE_LOBBY_SCENE,
 } from "./online/onlineExit";
+import { onlineResultsActions } from "./online/onlineResultsActions";
 import { addOrdnance, addShip } from "./online/battleHash";
 
 interface DogfightShip {
@@ -1872,7 +1873,7 @@ export class DogfightScene extends Phaser.Scene {
     });
   }
 
-  /** @returns The results actions: a local duel replays or returns to setup; an online one returns to the room. */
+  /** @returns The results actions: a local duel replays or returns to setup; an online one votes the relay rematch. */
   private endScreenActions(): ResultsActions {
     if (!this.online)
       return {
@@ -1881,13 +1882,6 @@ export class DogfightScene extends Phaser.Scene {
         setupLabel: "Back to setup",
         onMenu: () => this.scene.start("MainMenuScene"),
       };
-    return {
-      onRematch: () => this.scene.start(ONLINE_LOBBY_SCENE),
-      rematchLabel: "Rematch (room)",
-      onMenu: () => {
-        getOnlineSession(this.registry).leaveRoom();
-        this.scene.start("MainMenuScene");
-      },
-    };
+    return onlineResultsActions(this, this.net?.match.matchId ?? "");
   }
 }

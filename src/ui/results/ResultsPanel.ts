@@ -45,6 +45,8 @@ export interface ResultsActions {
   readonly onMenu: () => void;
   /** Default REMATCH. */
   readonly rematchLabel?: string;
+  /** A REMATCH label that changes while the screen is up (online vote); returns its unsubscribe. */
+  readonly watchRematchLabel?: (apply: (label: string) => void) => () => void;
   /** Default CHANGE SQUAD. */
   readonly setupLabel?: string;
 }
@@ -118,6 +120,10 @@ export function showResultsPanel(
     top + panelHeight - LAYOUT.buttonBlock / 2,
   );
   root.add(buttons);
+  const stopWatching = config.actions.watchRematchLabel?.((label) =>
+    buttons[0]?.setLabel(label),
+  );
+  if (stopWatching) root.once(Phaser.GameObjects.Events.DESTROY, stopWatching);
   root.setDepth(HOLO_DEPTH.menuPanel).setScrollFactor(0, 0, true);
   bindInput(scene, root, buttons, config.actions.onRematch);
   return root;

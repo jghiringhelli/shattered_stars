@@ -34,3 +34,13 @@ export interface SeatState {
   holdInputs: boolean;
   report: { readonly winner: TeamId | null } | null;
 }
+
+/** @param s - A seat. @returns Whether it is connected, loaded and still in the match. */
+export function isPresent(s: SeatState): boolean {
+  return s.connected && s.loaded && !s.left;
+}
+
+/** @param s - A seat. @returns Whether it sends its own inputs (a rejoining seat is AI-filled until its snapshot lands). */
+export function isFeeding(s: SeatState): boolean {
+  return isPresent(s) && !s.holdInputs;
+}

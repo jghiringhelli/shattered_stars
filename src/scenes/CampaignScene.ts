@@ -52,6 +52,7 @@ import { hubViewOf } from "../campaign/hub/hubProgress";
 import {
   createCoalitionSave,
   missionForLead,
+  switchCoalitionLead,
 } from "../campaign/coalition/coalitionLaunch";
 import {
   COALITION_SLOT,
@@ -305,6 +306,7 @@ export class CampaignScene extends Phaser.Scene {
       onToggleMod: (mod) => this.toggleMod(mod),
       onRespec: () => this.respec(),
       onPickResearch: (tier, pick) => this.chooseResearch(tier, pick),
+      onSwapLead: (lead) => this.swapLead(lead),
       onEpilogue: () =>
         this.scene.start("CampaignCompleteScene", {
           factionId,
@@ -393,6 +395,25 @@ export class CampaignScene extends Phaser.Scene {
   selectHubAct(act: number): void {
     this.hubAct = act;
     audioManager.playSound("ui_select", 0.5);
+    this.showMissionMap();
+  }
+
+  /**
+   * Coalition hub: makes another hero lead the next missions (pure
+   * `switchCoalitionLead`, saved at once), then redraws the hub (hero card,
+   * squad, accent and music follow the new lead).
+   *
+   * @param lead - Faction of the hero that leads from now on.
+   */
+  swapLead(lead: FactionId): void {
+    const save = this.saveData;
+    if (!save || save.slot !== COALITION_SLOT || save.factionId === lead) return;
+    const next = switchCoalitionLead(save, lead);
+    CampaignSaveManager.save(next);
+    this.saveData = next;
+    this.selectedFaction = lead;
+    audioManager.playSound("ui_select", 0.7);
+    audioManager.playFactionMusic(lead, "tactical");
     this.showMissionMap();
   }
 

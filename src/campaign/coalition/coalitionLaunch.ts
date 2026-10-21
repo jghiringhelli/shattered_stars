@@ -7,6 +7,7 @@
 
 import type { FactionId } from "../../config";
 import { FACTION_CAMPAIGNS } from "../../data/CampaignData";
+import { GameStateError } from "../../core/errors";
 import type { CampaignMission } from "../../data/campaign/campaignTypes";
 import { heroPowerRanksFor } from "../powers/heroPowerState";
 import {
@@ -87,6 +88,37 @@ export function createCoalitionSave(
     armory: { installed: { ...(leadSave?.armory.installed ?? {}) } },
     unlockedShips: [...(leadSave?.unlockedShips ?? [])],
   };
+}
+
+/**
+ * The lead swap between Coalition missions: the new hero's two powers go on
+ * the bar at veteran ranks. Everything else is shared by the Coalition and
+ * kept (credits, research, armory, flags, missions, pilots); the
+ * `lead_<faction>` flags and the lead-gated allies follow `factionId`.
+ *
+ * @param save - A Coalition save.
+ * @param lead - Faction of the hero that leads the next missions.
+ * @returns A new save led by `lead` (an equal copy when it already leads).
+ * @throws GameStateError when the save is not the Coalition's.
+ */
+export function switchCoalitionLead(
+  save: CampaignSaveData,
+  lead: FactionId,
+): CampaignSaveData {
+  if (save.slot !== COALITION_SLOT) {
+    throw new GameStateError(
+      `The lead can only change in a Coalition save (slot ${save.slot})`,
+      "COALITION_LEAD_NOT_COALITION",
+      "error",
+      { slot: save.slot, lead },
+    );
+  }
+  const veteran = heroPowerRanksFor(lead, VETERAN_MISSIONS);
+  const heroPowerRanks: Record<string, number> = {};
+  for (const [id, rank] of Object.entries(veteran)) {
+    heroPowerRanks[id] = Math.max(rank, save.heroPowerRanks[id] ?? 0);
+  }
+  return { ...save, factionId: lead, heroPowerRanks };
 }
 
 /**

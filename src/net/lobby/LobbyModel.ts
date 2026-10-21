@@ -149,6 +149,14 @@ function reduceMessage(state: LobbyState, message: ServerMessage): LobbyState {
         match: null,
         lastResult: { reason: message.reason, winnerTeam: message.winnerTeam },
       };
+    default:
+      return reduceNotice(state, message);
+  }
+}
+
+/** Messages that only change the notice line. */
+function reduceNotice(state: LobbyState, message: ServerMessage): LobbyState {
+  switch (message.t) {
     case "peer":
       return { ...state, notice: peerNotice(state, message) };
     case "shutdown":

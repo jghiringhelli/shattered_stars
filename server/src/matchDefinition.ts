@@ -15,7 +15,7 @@ import {
 } from "../../src/net/protocol";
 import { ONLINE_SCENARIO_IDS } from "../../src/net/rules/scenarioIds";
 import { resolveMapTheme } from "../../src/rendering/spaceMap/mapThemes";
-import type { Member } from "./Room";
+import type { Member } from "./roomTypes";
 
 /** A match as the room decided it. */
 export interface MatchDefinitionInput {

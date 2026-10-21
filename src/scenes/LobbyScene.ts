@@ -4,14 +4,13 @@
  * READY up, chat, see everyone's ping; disconnects show and reconnect on
  * their own. The relay connection and lobby state live in the game's
  * OnlineSession (src/net/lobby), so the room survives scene changes; this
- * scene only renders it and forwards the player's choices.
+ * scene only renders it and forwards the player's choices (what the buttons
+ * do: src/scenes/online/lobbyActions).
  */
 
 import Phaser from "phaser";
 import {
   getOnlineSession,
-  changePilotName,
-  changeServer,
   pilotName,
 } from "../net/lobby/createOnlineSession";
 import {
@@ -21,26 +20,11 @@ import {
   roomCountdowns,
   type LobbyState,
 } from "../net/lobby/LobbyModel";
-import {
-  cycleFaction,
-  cycleShip,
-  defaultLoadout,
-  type SavedSquad,
-} from "../net/lobby/loadoutChoices";
-import {
-  nextScenario,
-  otherTeam,
-  pendingLoadout,
-} from "../net/lobby/lobbyEdits";
-import {
-  buildOnlineBattleConfig,
-  buildOnlineDogfightInit,
-  localSeatOf,
-  ONLINE_BATTLES_ENABLED,
-} from "../net/lobby/matchSetup";
+import { pendingLoadout } from "../net/lobby/lobbyEdits";
+import type { SavedSquad } from "../net/lobby/loadoutChoices";
+import { localSeatOf, ONLINE_BATTLES_ENABLED } from "../net/lobby/matchSetup";
 import type { OnlineSession } from "../net/lobby/OnlineSession";
 import type { Loadout } from "../net/protocol";
-import type { FactionId } from "../config";
 import {
   addBackButton,
   addMenuBackdrop,
@@ -62,6 +46,14 @@ import { renderOnlineRoom } from "../ui/lobby/OnlineRoomView";
 import { modeTitle } from "../ui/lobby/onlineModes";
 import { showMatchPendingCard } from "../ui/lobby/OnlineMatchCard";
 import { LobbyChatInput } from "../ui/lobby/LobbyChatInput";
+import { launchOnlineMatch } from "./online/launchOnlineMatch";
+import {
+  createMenuActions,
+  createRoomActions,
+  savedSquadFrom,
+  type LobbyActionHost,
+  type LobbyPrompt,
+} from "./online/lobbyActions";
 
 /** Painted backdrop behind the lobby. */
 const BACKDROP_TEXTURE = "nebula_teal";
@@ -70,8 +62,8 @@ const STATUS_INSET = 32;
 /** Countdown / queue-timer refresh period (ms). */
 const CLOCK_REFRESH_MS = 250;
 
-export class LobbyScene extends Phaser.Scene {
-  private session!: OnlineSession;
+export class LobbyScene extends Phaser.Scene implements LobbyActionHost {
+  session!: OnlineSession;
   private unsubscribe: (() => void) | null = null;
   private header!: MenuHeader;
   private statusChip!: LobbyStatusChip;
@@ -119,12 +111,44 @@ export class LobbyScene extends Phaser.Scene {
     fadeInMenu(this);
   }
 
-  private attach(session: OnlineSession): void {
+  /** @param session - The session to render (replaced when the name or server changes). */
+  attach(session: OnlineSession): void {
     this.detach();
     this.session = session;
     this.unsubscribe = session.subscribe((state) => this.onState(state));
     session.connect();
     this.onState(session.state);
+  }
+
+  /** @param prompt - What to ask. @param done - Receives the trimmed answer. */
+  ask(prompt: LobbyPrompt, done: (value: string) => void): void {
+    this.focus?.clear();
+    this.prompt.open(prompt, (value) => {
+      if (value === null || (!prompt.allowEmpty && !value.trim())) return;
+      done(value.trim());
+    });
+  }
+
+  /** @returns The squad saved from the Squad Builder, if any. */
+  savedSquad(): SavedSquad | null {
+    return savedSquadFrom(this.registry);
+  }
+
+  /** Open the Squad Builder for this room. */
+  editSquad(): void {
+    const loadout = localPlayer(this.session.state)?.loadout;
+    if (loadout) this.registry.set("onlineFaction", loadout.faction);
+    this.scene.start("SquadBuilderScene", { initialMode: "online" });
+  }
+
+  /** Focus the chat input. */
+  focusChat(): void {
+    this.chat.focus();
+  }
+
+  /** Leave online play for the offline main menu. */
+  playOffline(): void {
+    goToScene(this, "MainMenuScene");
   }
 
   private detach(): void {
@@ -172,7 +196,7 @@ export class LobbyScene extends Phaser.Scene {
           this,
           this.view,
           { state, chat: this.chat.state(state.chat), countdowns: clocks },
-          this.roomActions(),
+          createRoomActions(this),
         )
       : renderOnlineMenu(
           this,
@@ -183,7 +207,7 @@ export class LobbyScene extends Phaser.Scene {
             rttMs: this.session.client.rttMs,
             queuedSeconds: Math.max(0, queued),
           },
-          this.menuActions(),
+          createMenuActions(this),
         );
     this.updateHeader(state);
     this.resetFocus(buttons);
@@ -209,150 +233,20 @@ export class LobbyScene extends Phaser.Scene {
     });
   }
 
-  private menuActions() {
-    const s = this.session;
-    return {
-      selectMode: (mode: Parameters<OnlineSession["selectMode"]>[0]) =>
-        s.selectMode(mode),
-      quickMatch: () => s.quickMatch(),
-      createRoom: () => s.createRoom(),
-      joinByCode: () =>
-        this.ask(
-          "Join by code",
-          "Room code from your friend:",
-          "",
-          "JOIN",
-          (code) => {
-            if (!s.joinRoom(code)) s.notify("Not connected", "danger");
-          },
-        ),
-      cancelQueue: () => s.cancelQueue(),
-      editName: () =>
-        this.ask(
-          "Pilot name",
-          "Shown to other players:",
-          pilotName(),
-          "SAVE",
-          (name) => this.attach(changePilotName(this.registry, name)),
-        ),
-      editServer: () =>
-        this.ask(
-          "Online server",
-          "Relay address (leave empty for the default):",
-          s.state.server.source === "settings"
-            ? (s.state.server.url ?? "")
-            : "",
-          "SAVE",
-          (url) => this.attach(changeServer(this.registry, url)),
-          true,
-        ),
-      reconnect: () => s.connect(),
-      playOffline: () => goToScene(this, "MainMenuScene"),
-    };
-  }
-
-  private roomActions() {
-    const s = this.session;
-    const me = () => localPlayer(s.state);
-    const mode = () => s.state.room?.mode ?? "dogfight";
-    return {
-      cycleFaction: () =>
-        s.setLoadout(
-          cycleFaction(mode(), me()?.loadout ?? null, 1, this.savedSquad()),
-        ),
-      cycleShip: () =>
-        s.setLoadout(
-          cycleShip(
-            me()?.loadout ?? defaultLoadout(mode(), "free_confederation"),
-            1,
-          ),
-        ),
-      editSquad: () => this.editSquad(),
-      toggleTeam: () => s.setTeam(otherTeam(me()?.team ?? 0)),
-      cycleScenario: () =>
-        s.setScenario(nextScenario(s.state.room?.options.scenarioId)),
-      toggleReady: () => {
-        const vote = !(me()?.ready ?? false);
-        if (s.state.room?.rematch) s.rematch(vote);
-        else s.setReady(vote);
-      },
-      copyCode: () => this.copyCode(),
-      leave: () => s.leaveRoom(),
-      focusChat: () => this.chat.focus(),
-    };
-  }
-
-  private editSquad(): void {
-    const loadout = localPlayer(this.session.state)?.loadout;
-    if (loadout) this.registry.set("onlineFaction", loadout.faction);
-    this.scene.start("SquadBuilderScene", { initialMode: "online" });
-  }
-
-  private copyCode(): void {
-    const code = this.session.state.room?.code;
-    if (!code) return;
-    navigator.clipboard?.writeText(code).catch(() => undefined);
-    this.session.notify(
-      `Room code ${code} copied — send it to your wingmate`,
-      "success",
-    );
-  }
-
-  private savedSquad(): SavedSquad | null {
-    const faction = this.registry.get("onlineFaction") as string | undefined;
-    const ships = this.registry.get("onlineSquad") as string[] | undefined;
-    return faction && ships && ships.length > 0
-      ? { faction: faction as FactionId, ships }
-      : null;
-  }
-
   private onMatchStart(): void {
     const match = this.session.state.match;
     if (!match) return;
     this.shownMatchId = match.matchId;
+    if (ONLINE_BATTLES_ENABLED) {
+      launchOnlineMatch(this, match, this.session.state.localId);
+      return;
+    }
     const localSeat = localSeatOf(match, this.session.state.localId);
-    if (!ONLINE_BATTLES_ENABLED) {
-      this.matchCard = showMatchPendingCard(this, match, localSeat, () => {
-        this.matchCard = null;
-        this.session.client.send({
-          t: "match_over",
-          tick: 0,
-          winnerTeam: null,
-        });
-      });
-      this.session.client.send({ t: "loaded" });
-      return;
-    }
-    if (match.mode === "dogfight") {
-      this.scene.start(
-        "DogfightScene",
-        buildOnlineDogfightInit(match, localSeat),
-      );
-      return;
-    }
-    this.registry.set(
-      "battleConfig",
-      buildOnlineBattleConfig(match, localSeat),
-    );
-    this.scene.start("ArcadeBattleScene");
-  }
-
-  private ask(
-    title: string,
-    message: string,
-    initialValue: string,
-    confirmLabel: string,
-    done: (value: string) => void,
-    allowEmpty = false,
-  ): void {
-    this.focus?.clear();
-    this.prompt.open(
-      { title, message, initialValue, confirmLabel },
-      (value) => {
-        if (value === null || (!allowEmpty && !value.trim())) return;
-        done(value.trim());
-      },
-    );
+    this.matchCard = showMatchPendingCard(this, match, localSeat, () => {
+      this.matchCard = null;
+      this.session.client.send({ t: "match_over", tick: 0, winnerTeam: null });
+    });
+    this.session.client.send({ t: "loaded" });
   }
 
   private setupKeys(): void {

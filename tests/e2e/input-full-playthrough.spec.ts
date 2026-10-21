@@ -245,7 +245,11 @@ test.describe("ArcadeBattleScene — keyboard playthrough", () => {
     page,
   }) => {
     suppressWebGLNoise(page);
-    await openArcade(page, CONFED_KESTREL);
+    await openArcade(page, {
+      factionId: "free_confederation",
+      controller: "player",
+      ships: ["confed_raven"],
+    });
     await page.keyboard.down("z");
     await page.waitForTimeout(50);
     await page.keyboard.up("z");

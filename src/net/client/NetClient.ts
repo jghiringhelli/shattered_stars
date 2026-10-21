@@ -16,60 +16,27 @@ import {
   type ServerMessage,
   type ServerMessageType,
 } from "../protocol";
-import { repeatEvery, type Scheduler, type TimerHandle } from "../time";
-import type { Transport, TransportFactory } from "../transport/Transport";
+import { repeatEvery, type TimerHandle } from "../time";
+import type { Transport } from "../transport/Transport";
+import {
+  DEFAULT_RECONNECT_WINDOW_MS,
+  INITIAL_ATTEMPTS,
+  NORMAL_CLOSE,
+  PING_INTERVAL_MS,
+  RECONNECT_BASE_MS,
+  RECONNECT_MAX_MS,
+  type NetClientOptions,
+  type NetClientState,
+} from "./netClientTypes";
+import { RttTracker } from "./RttTracker";
 
-/** Connection lifecycle. */
-export type NetClientState =
-  | "idle"
-  | "connecting"
-  | "online"
-  | "reconnecting"
-  | "unreachable"
-  | "refused"
-  | "expired"
-  | "closed";
-
-/** Where the resume token survives a page reload (sessionStorage in the game). */
-export interface TokenStore {
-  load(): string | null;
-  save(token: string | null): void;
-}
-
-/** Client settings. */
-export interface NetClientOptions {
-  readonly url: string;
-  readonly build: string;
-  readonly name: string;
-  readonly transport: TransportFactory;
-  readonly scheduler: Scheduler;
-  readonly tokenStore?: TokenStore;
-  readonly pingIntervalMs?: number;
-}
-
-/** Heartbeat period (ms). */
-export const PING_INTERVAL_MS = 2_000;
-/** Silence after which the connection counts as dead (ms). */
-export const SILENCE_TIMEOUT_MS = 3 * PING_INTERVAL_MS;
-/** First reconnection back-off (ms); doubles up to the max. */
-export const RECONNECT_BASE_MS = 500;
-export const RECONNECT_MAX_MS = 4_000;
-/** Attempts before an initial connection is declared unreachable. */
-export const INITIAL_ATTEMPTS = 3;
-/** Reconnection window assumed until the server states its own (ms). */
-const DEFAULT_RECONNECT_WINDOW_MS = 30_000;
-/** Weight of a new RTT sample in the smoothed RTT / jitter. */
-const RTT_SMOOTHING = 0.2;
-/** Normal close code. */
-const NORMAL_CLOSE = 1000;
+export * from "./netClientTypes";
 
 type Listener = (message: ServerMessage) => void;
 
 export class NetClient {
   state: NetClientState = "idle";
   playerId = "";
-  rttMs = 0;
-  jitterMs = 0;
   refusal: RefusalReason | null = null;
   private transport: Transport | null = null;
   private readonly listeners = new Map<ServerMessageType, Set<Listener>>();
@@ -83,7 +50,7 @@ export class NetClient {
   private pingId = 0;
   private reconnectWindowMs = DEFAULT_RECONNECT_WINDOW_MS;
   private welcomed = false;
-  private serverOffsetMs = 0;
+  private readonly rtt = new RttTracker();
 
   /** @param options - URL, build, name, transport factory, clock. */
   constructor(private readonly options: NetClientOptions) {
@@ -134,9 +101,19 @@ export class NetClient {
     return () => this.stateListeners.delete(listener);
   }
 
+  /** @returns Smoothed round trip (ms). */
+  get rttMs(): number {
+    return this.rtt.rttMs;
+  }
+
+  /** @returns Smoothed jitter (ms). */
+  get jitterMs(): number {
+    return this.rtt.jitterMs;
+  }
+
   /** @returns Round trip plus twice the jitter: what the relay sizes the input delay from. */
   reportedRttMs(): number {
-    return Math.round(this.rttMs + 2 * this.jitterMs);
+    return this.rtt.reportedMs();
   }
 
   private open(state: "connecting" | "reconnecting"): void {
@@ -181,7 +158,8 @@ export class NetClient {
     this.lastHeardAt = this.options.scheduler.now();
     if (message.t === "welcome") this.onWelcome(message);
     else if (message.t === "refused") this.onRefused(message.reason);
-    else if (message.t === "pong") this.onPong(message.ct, message.st);
+    else if (message.t === "pong")
+      this.rtt.sample(message.ct, message.st, this.options.scheduler.now());
     this.listeners.get(message.t)?.forEach((listener) => listener(message));
   }
 
@@ -190,7 +168,7 @@ export class NetClient {
     this.attempts = 0;
     this.playerId = message.playerId;
     this.reconnectWindowMs = message.reconnectWindowMs;
-    this.serverOffsetMs = message.serverTime - this.options.scheduler.now();
+    this.rtt.align(message.serverTime, this.options.scheduler.now());
     this.token = message.token;
     this.options.tokenStore?.save(message.token);
     this.startHeartbeat();
@@ -211,23 +189,9 @@ export class NetClient {
     }
   }
 
-  private onPong(sentAt: number, serverAt: number): void {
-    const now = this.options.scheduler.now();
-    const sample = Math.max(0, now - sentAt);
-    // The server stamped the pong about half a round trip ago.
-    this.serverOffsetMs = serverAt + sample / 2 - now;
-    if (this.rttMs === 0) {
-      this.rttMs = sample;
-      return;
-    }
-    this.jitterMs +=
-      (Math.abs(sample - this.rttMs) - this.jitterMs) * RTT_SMOOTHING;
-    this.rttMs += (sample - this.rttMs) * RTT_SMOOTHING;
-  }
-
   /** @returns The relay's clock, estimated (room countdowns and deadlines use it). */
   serverNow(): number {
-    return this.options.scheduler.now() + this.serverOffsetMs;
+    return this.rtt.serverNow(this.options.scheduler.now());
   }
 
   private onClose(code: number): void {
@@ -291,7 +255,7 @@ export class NetClient {
   }
 
   private ping(): void {
-    const rtt = this.rttMs > 0 ? { rtt: this.reportedRttMs() } : {};
+    const rtt = this.rtt.rttMs > 0 ? { rtt: this.reportedRttMs() } : {};
     this.send({
       t: "ping",
       id: ++this.pingId,

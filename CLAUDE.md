@@ -665,7 +665,9 @@ Combat is real time and lives in src/arcade/ (below). What stays here:
 - Rule: online battles are built in canonical seat order; only presentation may read `localSeat`.
 - Protocol 5: the relay owns the match definition (`server/src/matchDefinition.ts`: mode, teams, point limit,
   seed, map theme; squads validated by `src/net/rules/squadRules.ts`); room options are host-only and validated;
-  REMATCH is a server vote (60 s window); relay handlers are wrapped by `server/src/guarded.ts`. Online battles
+  REMATCH is a server vote (60 s window, cast from the lobby or the battle's results screen: `OnlineRematch`);
+  a match result needs a strict majority of the connected human seats (`server/src/matchResult.ts`), else it ends
+  as "no result"; relay handlers are wrapped by `server/src/guarded.ts`. Online battles
   always fly the ship-identity trick rule (`lockTrickRuleToIdentity`, see docs/specs/flight-controls.md).
 - Rule: simulation ids are per-battle state, never module counters: `FieldOrdnance` owns the shot / device id
   counters (reset by `clear()`, captured by StateGraph, folded into the state hash); `SquadBattleAi` takes its

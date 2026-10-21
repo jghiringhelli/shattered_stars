@@ -202,7 +202,7 @@ Design: `docs/lore/campaign_arc.md`. Code: `src/campaign/chronicle/` (pure), `sr
   On-win phase / cues: `ScriptInterpreter` (victory trigger), `victoryLines`, `victoryBeats` (Brannoc), `scriptMusicCues`, `tests/unit/audio/musicCues`.
 - E2E: `tests/e2e/campaign-hub.spec.ts`, `campaign-objectives.spec.ts`, `campaign-powers.spec.ts`, `campaign-progress.spec.ts`, `campaign-chronicle.spec.ts` (locks + reasons, two factions unlock Act II, canon from both sides, Coalition + lead hero, endings, reload), `campaign-missions-smoke.spec.ts` (all 86 missions boot).
 
-## 11. Difficulty proxy and open design decisions
+## 11. Difficulty proxy and Coalition lead swap
 
 - **Force-ratio proxy** (scratch script, not shipped): every mission's squad (`playerShips[0..maxSquadSize]` + allies) against all of its
   enemy groups and scripted enemy waves lumped into one fight, average-tier bots on both sides through the skill arena, 6 seeds × 2 seats.
@@ -212,7 +212,7 @@ Design: `docs/lore/campaign_arc.md`. Code: `src/campaign/chronicle/` (pure), `sr
   and `synth_3_5` (4.2); tuned in data (`heg_1_3b` stealth-fail wave 2 → 1; `heg_3_2` falcons 4 → 3, delayed hawks 3 → 2; `synth_3_5`
   raptor / kestrel groups `hullScale` 0.7), leaving `heg_3_2` 3.9 and `synth_3_5` 4.0 (the rest of the gap is flag-gated waves the proxy lumps in).
   Watch list just under the line: `synth_3_2` 3.7, `asc_3_5` 3.8, `cors_2_3` 2.8.
-- **Coalition lead swap** (open): only the lead chosen on first entry has the hero powers on the bar; the others fly as allies. A swap between
-  missions is data-light (a pure `switchCoalitionLead(save, lead)` that sets `factionId` and veteran `heroPowerRanks`; `lead_<faction>` flags and
-  `unlessLead` allies already follow `save.factionId`, credits / research / Armory are shared), but it needs a hub control in
-  `CampaignScene` / `src/ui/campaign` and a call to the protagonist progress keyed by faction, so it is left to the owner.
+- **Coalition lead swap** (implemented): the Coalition hub shows a COALITION LEAD control under the hero card (`src/ui/campaign/CoalitionLeadSwap.ts`, model `coalitionLeadModel.ts`): five hero portrait cards, the current lead highlighted (LEAD) and a line with the two powers on the bar (`[V]`, `[B]`). Picking another hero (mouse, or arrows + ENTER like the other hub controls) calls `CampaignScene.swapLead` → the pure `switchCoalitionLead(save, lead)` (`src/campaign/coalition/coalitionLaunch.ts`): it sets `factionId` to the new lead and gives that hero's two powers their veteran ranks (rank at 15 missions, never lower than the ranks already held for them); the previous lead's ranks are dropped, as on every load. Credits, research, Armory, flags, missions and pilots are shared and untouched; `lead_<faction>` flags and `unlessLead` allies follow `factionId`, so the old lead now flies as an allied squad. The swap is saved at once in the existing v4 Coalition save (no schema change, no migration) and applies from the next launch (`missionForLead` seats the new lead's finale roster). A tooltip on every card says what a swap changes. Outside the Coalition `switchCoalitionLead` throws `GameStateError`. Tests: `tests/unit/campaign/coalitionLeadSwap.test.ts`, e2e `campaign-chronicle.spec.ts`.
+  The swap never touches `campaignPilots` (seats resolve per lead through `seatCampaignPilots`, so protagonist progress needs no re-keying).
+  The control lives on the hub only (never in the briefing or a battle), so a lead is always fixed for a whole mission.
+  The Coalition keeps one set of hero power ranks (the lead's), not one per hero.
