@@ -47,7 +47,7 @@ import {
   nearestHostile,
   nearestTargetInArc,
 } from "../arcade/systems/ArcTargeting";
-import { squadHudSnapshot } from "../arcade/systems/FlagshipHudSnapshot";
+import { flagshipHudSnapshot } from "./battleUi/hudSnapshot";
 import type {
   BattleWeapons,
   BattleWeaponsLink,
@@ -735,7 +735,7 @@ export class SurvivalScene extends Phaser.Scene {
     );
     this.battleHud?.update({
       ...withSecondaryWeapons(
-        squadHudSnapshot({
+        flagshipHudSnapshot({
           flagship,
           ships: this.ships.values(),
           targetId: flagship ? this.hudTargetOf(flagship) : null,

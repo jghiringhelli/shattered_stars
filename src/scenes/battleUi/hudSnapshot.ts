@@ -6,9 +6,18 @@
  */
 
 import type { ManeuverDirection } from "../../core/types";
+import {
+  squadHudSnapshot,
+  type SquadHudInput,
+} from "../../arcade/systems/FlagshipHudSnapshot";
 import type { CycleFlightState } from "../../arcade/systems/CycleFlight";
 import { getShipDefinition } from "../../data/ShipDefinitions";
+import {
+  speedDistortionTarget,
+  type SpeedDistortionSource,
+} from "../../rendering/speedDistortion";
 import type {
+  BattleHudSnapshot,
   ContactHudState,
   HudSizeClass,
   PlayerHudState,
@@ -107,7 +116,44 @@ export function playerHudState(
     maneuver: order
       ? maneuverLabel(order.direction, order.speed)
       : maneuverLabel(control.currentManeuver, control.speed),
+    speedDistortion: speedDistortionTarget(control),
   };
+}
+
+/**
+ * Adds the max-speed bow wave to a snapshot whose player was built without
+ * it (the flagship builder shared by Survival and Campaign).
+ *
+ * @param snapshot - HUD snapshot.
+ * @param control - The player's control state, or null when none flies.
+ * @returns The snapshot with the player's `speedDistortion` set.
+ */
+export function withSpeedDistortion<S extends BattleHudSnapshot>(
+  snapshot: S,
+  control: SpeedDistortionSource | null,
+): S {
+  if (snapshot.player === null || control === null) return snapshot;
+  return {
+    ...snapshot,
+    player: {
+      ...snapshot.player,
+      speedDistortion: speedDistortionTarget(control),
+    },
+  };
+}
+
+/**
+ * The flagship-centred squad snapshot (Survival, Campaign) with the player's
+ * max-speed bow wave added.
+ *
+ * @param input - Flagship, ships, target, mark, weapon timing and camera.
+ * @returns HUD snapshot.
+ */
+export function flagshipHudSnapshot(input: SquadHudInput): BattleHudSnapshot {
+  return withSpeedDistortion(
+    squadHudSnapshot(input),
+    input.flagship?.flight.motion.control ?? null,
+  );
 }
 
 /** A ship as an HUD contact. */

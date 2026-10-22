@@ -77,7 +77,7 @@ import {
   nearestHostile,
   nearestTargetInArc,
 } from "../arcade/systems/ArcTargeting";
-import { squadHudSnapshot } from "../arcade/systems/FlagshipHudSnapshot";
+import { flagshipHudSnapshot } from "./battleUi/hudSnapshot";
 import type {
   BattleWeapons,
   BattleWeaponsLink,
@@ -531,7 +531,7 @@ export class CampaignBattleScene extends Phaser.Scene {
       this.healthBars.get(flagship.id)?.destroy();
       this.healthBars.delete(flagship.id);
     }
-    const snapshot = squadHudSnapshot({
+    const snapshot = flagshipHudSnapshot({
       flagship,
       ships: this.ships.values(),
       targetId: flagship ? this.hudTargetOf(flagship) : null,

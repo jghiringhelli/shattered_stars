@@ -18,6 +18,7 @@ import {
 import { SPECIAL_MANEUVER_WORDS } from "../../core/maneuverLabels";
 import type { ManeuverDirection } from "../../core/types";
 import { getShipDefinition } from "../../data/ShipDefinitions";
+import { speedDistortionTarget } from "../../rendering/speedDistortion";
 import { shortestDelta } from "../../ui/hud/hudMath";
 import type {
   BattleHudSnapshot,
@@ -179,6 +180,7 @@ function playerState(ship: DuelHudShip): PlayerHudState {
     speed: control.speed,
     maxSpeed: control.maxSpeed,
     maneuver: maneuverLabel(control.currentManeuver, control.speed),
+    speedDistortion: speedDistortionTarget(control),
   };
 }
 

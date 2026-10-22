@@ -129,6 +129,38 @@ from the effective dial by `flightCapabilitiesOf`. HUD helpers for the maneuver 
 `ManeuverPlanner` flies every option at `flownSpeed(...)`, and on equal scores keeps the current
 throttle (options that fly the same capped speed tie).
 
+### Speed distortion
+
+A render-only cue for the player's ship (no text, bars or sound): while the flown speed equals the
+cap of the maneuver being flown (`cycleSpeed >= speedCap`, or the top notch when nothing caps),
+1–3 thin translucent compression arcs drift back from just ahead of the nose and a faint lens
+stretches along the heading. Intensity follows `speedDistortionTarget(control)` (0.4 at notch 1 up to 1
+at notch 5; 0 below the cap and for huge ships) and fades over 250 ms
+(`smoothSpeedDistortion`). `src/rendering/speedDistortion/`: Graphics only (WebGL and Canvas), one
+pooled object, hidden when idle, clocked by the scene time. It reads only the control state
+(`PlayerHudState.speedDistortion`, fed through the HUD snapshot builders and `withSpeedDistortion`), so
+online battles render it like offline ones and nothing reaches the simulation or its hashes. With Reduce
+Motion it is a static faint lens. Bots' ships get no effect.
+
+## Stress — clears by itself
+
+Stress (0–1 bar, `src/arcade/ArcadeStress.ts`) is applied once per **completed cycle** by
+`accrueCycleStress` (`CycleFlight`), classified against the ship's dial. No recovery action is ever
+required:
+
+| Cycle color | Rate (bar / s) | Constant |
+|---|---|---|
+| red | +0.28 (builds, no passive drain) | `STRESS_RATES.red` |
+| white (any maneuver, straight included) | −0.20 | `STRESS_PASSIVE_DRAIN_PER_SECOND` |
+| green | −0.35 (passive + bonus) | `+ STRESS_GREEN_BONUS_DRAIN_PER_SECOND` (0.15) |
+
+- Snap Turn (`KTURN_STRESS_INSTANT` 0.5) and boost (`BOOST_STRESS_INSTANT` 0.15) still add stress at once.
+- The stressed flag latches at ≥ 0.7 (`STRESS_HIGH`) and releases at ≤ 0.15 (`STRESS_LOW`). While latched,
+  `FlightCapabilities` refuses red maneuvers / specials and every action.
+- From a full bar a stressed pilot is clear in about **4.5 s** of white flying (9 cycles of 500 ms)
+  and about **2.5 s** of green flying; flying red keeps building stress.
+- Relief tiers (auras, cards) ease a cycle's color; the rate multiplier scales only the gain.
+
 ## Input layer
 
 - `MANEUVER` is a *held* intent (keyboard, gamepad button, touch). The keyboard adapter shows a

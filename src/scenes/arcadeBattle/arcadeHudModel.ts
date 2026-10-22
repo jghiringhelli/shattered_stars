@@ -10,6 +10,7 @@
 import type { ShipControlState } from "../../core/ArcadeControls";
 import type { ManeuverDirection } from "../../core/types";
 import type { StressState } from "../../arcade/ArcadeStress";
+import { speedDistortionTarget } from "../../rendering/speedDistortion";
 import type { ShipSize } from "../../config";
 import type {
   BattleHudSnapshot,
@@ -85,6 +86,7 @@ export function toPlayerHudState(ship: HudShipView): PlayerHudState {
     speed: ship.control.speed,
     maxSpeed: ship.control.maxSpeed,
     maneuver: maneuverHudLabel(ship.control),
+    speedDistortion: speedDistortionTarget(ship.control),
   };
 }
 

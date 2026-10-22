@@ -7,6 +7,7 @@ import { describe, it, expect } from "vitest";
 import { createCycleFlight } from "../../../../src/arcade/systems/CycleFlight";
 import {
   contactHudState,
+  flagshipHudSnapshot,
   maneuverLabel,
   markContacts,
   matchClockColor,
@@ -16,9 +17,11 @@ import {
   playerHudState,
   primaryWeaponSlot,
   shipSizeClass,
+  withSpeedDistortion,
   type HudShipSource,
   type OwnedShipSource,
 } from "../../../../src/scenes/battleUi/hudSnapshot";
+import type { BattleHudSnapshot } from "../../../../src/ui/hud/types";
 import { HOLO_PALETTE } from "../../../../src/ui/theme/HoloTheme";
 
 function ship(overrides: Partial<HudShipSource> = {}): HudShipSource {
@@ -89,6 +92,70 @@ describe("playerHudState", () => {
     const state = playerHudState(ship(), { direction: "turn_left", speed: 2 });
     expect(state.maneuver).toBe("TURN L 2");
     expect(state.speed).toBe(2);
+  });
+});
+
+describe("speed distortion", () => {
+  function flownAt(cycleSpeed: number, speedCap: number | null): HudShipSource {
+    const source = ship();
+    const { motion } = source.flight;
+    return {
+      ...source,
+      flight: {
+        ...source.flight,
+        motion: {
+          ...motion,
+          control: { ...motion.control, cycleSpeed, speedCap },
+        },
+      },
+    };
+  }
+
+  it("is off for the player's slow flight and on at the maneuver's cap", () => {
+    expect(playerHudState(flownAt(1, 4)).speedDistortion).toBe(0);
+    expect(playerHudState(flownAt(4, 4)).speedDistortion).toBeGreaterThan(0);
+  });
+
+  it("withSpeedDistortion stamps a snapshot's player from a control state", () => {
+    const source = flownAt(4, 4);
+    const base = { player: playerHudState(flownAt(1, 4)) } as BattleHudSnapshot;
+    const stamped = withSpeedDistortion(base, source.flight.motion.control);
+    expect(stamped.player?.speedDistortion).toBeGreaterThan(0);
+    expect(base.player?.speedDistortion).toBe(0);
+  });
+
+  it("withSpeedDistortion leaves a snapshot without player or control alone", () => {
+    const noPlayer = { player: null } as BattleHudSnapshot;
+    expect(withSpeedDistortion(noPlayer, flownAt(4, 4).flight.motion.control)).toBe(
+      noPlayer,
+    );
+    const base = { player: playerHudState(ship()) } as BattleHudSnapshot;
+    expect(withSpeedDistortion(base, null)).toBe(base);
+  });
+  it("flagshipHudSnapshot adds the bow wave to the squad snapshot's player", () => {
+    const flagship = {
+      ...flownAt(5, 5),
+      owner: "player" as const,
+    };
+    const snapshot = flagshipHudSnapshot({
+      flagship,
+      ships: [flagship],
+      targetId: null,
+      cooldownRemainingMs: 0,
+      attackIntervalMs: 1000,
+      camera: { centerX: 0, centerY: 0, zoom: 1, width: 1280, height: 720 },
+    });
+    expect(snapshot.player?.speedDistortion).toBe(1);
+    expect(
+      flagshipHudSnapshot({
+        flagship: null,
+        ships: [],
+        targetId: null,
+        cooldownRemainingMs: 0,
+        attackIntervalMs: 1000,
+        camera: { centerX: 0, centerY: 0, zoom: 1, width: 1280, height: 720 },
+      }).player,
+    ).toBeNull();
   });
 });
 

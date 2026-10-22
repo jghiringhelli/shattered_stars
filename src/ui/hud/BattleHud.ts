@@ -14,6 +14,7 @@ import Phaser from "phaser";
 import { HOLO_DEPTH, HOLO_SPACING } from "../theme/HoloTheme";
 import { EdgeIndicators } from "./EdgeIndicators";
 import { FlightReadout } from "./FlightReadout";
+import { SpeedDistortionFx } from "../../rendering/speedDistortion";
 import { createScreenContainer } from "./holoPrimitives";
 import { hudRootTransform, type EdgeInsets } from "./hudMath";
 import type { ClosenessOptions } from "./hudStyleMath";
@@ -51,7 +52,9 @@ export interface BattleHudConfig {
 /** Facade over every battle HUD component. */
 export class BattleHud {
   private readonly root: Phaser.GameObjects.Container;
+  private readonly scene: Phaser.Scene;
   private readonly ring: ShipStatusRing;
+  private readonly speedFx: SpeedDistortionFx;
   private readonly radar: Radar;
   private readonly weapons: WeaponBar;
   private readonly readout: FlightReadout;
@@ -69,7 +72,9 @@ export class BattleHud {
    * @param config - World size and optional tuning.
    */
   constructor(scene: Phaser.Scene, config: BattleHudConfig) {
+    this.scene = scene;
     this.ring = new ShipStatusRing(scene, { radius: config.playerRingRadius });
+    this.speedFx = new SpeedDistortionFx(scene, config.playerRingRadius);
     this.radar = new Radar(scene, {
       worldSize: config.worldSize,
       rangePx: config.radarRangePx,
@@ -124,6 +129,12 @@ export class BattleHud {
     const { player } = snapshot;
     this.ring.setVisible(player !== null);
     if (player !== null) this.ring.update(player, snapshot.camera.zoom);
+    this.speedFx.update(
+      player?.speedDistortion ?? 0,
+      player?.pose ?? null,
+      snapshot.camera.zoom,
+      this.scene.time.now,
+    );
     this.radar.update(
       player?.pose ?? null,
       snapshot.contacts,
@@ -147,12 +158,14 @@ export class BattleHud {
     this.root.setVisible(visible);
     this.edges.container.setVisible(visible);
     this.ring.setVisible(visible);
+    if (!visible) this.speedFx.hide();
     this.marks.setVisible(visible);
   }
 
   /** Destroy every HUD game object. */
   destroy(): void {
     this.ring.destroy();
+    this.speedFx.destroy();
     this.marks.destroy();
     this.edges.destroy();
     this.root.destroy();

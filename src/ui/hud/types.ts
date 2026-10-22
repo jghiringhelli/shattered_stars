@@ -40,6 +40,11 @@ export interface PlayerHudState {
   readonly maxSpeed: number;
   /** Short maneuver label, e.g. "BANK L 3"; null when none. */
   readonly maneuver: string | null;
+  /**
+   * Target intensity 0..1 of the max-speed bow wave around the ship
+   * (`speedDistortionTarget`); omitted = none.
+   */
+  readonly speedDistortion?: number | undefined;
 }
 
 /** Any other ship the HUD should track. */
