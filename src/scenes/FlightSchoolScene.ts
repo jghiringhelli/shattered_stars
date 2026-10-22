@@ -18,6 +18,7 @@ import { tickCycleFlight } from "../arcade/systems/CycleFlight";
 import { PlayerFlightPilot } from "../arcade/systems/PlayerFlightPilot";
 import { playFlightEventFx } from "../arcade/ArcadeFX";
 import { audioManager } from "../audio/AudioManager";
+import type { FlightRefusal } from "../arcade/systems/FlightCapabilities";
 import { boundKeyLabel } from "../input/boundKeyLabel";
 import { InputManager } from "../input/InputManager";
 import type { ActionIntent } from "../input/InputTypes";
@@ -30,6 +31,7 @@ import {
   trackTutorialExit,
   trackTutorialStep,
 } from "../telemetry/telemetry";
+import { freedTrainee, refreshTrainee } from "../tutorial/TraineeSupport";
 import {
   markFlightSchoolComplete,
   recordFlightSchoolStep,
@@ -40,7 +42,6 @@ import {
   currentStep,
   skipFlightSchoolStep,
   startFlightSchool,
-  type FlightSchoolObservation,
   type FlightSchoolState,
 } from "../tutorial/FlightSchoolSteps";
 import { BattleHud } from "../ui/hud/BattleHud";
@@ -52,20 +53,19 @@ import {
 } from "../ui/menu/menuTransitions";
 import { installBattleSpace } from "../rendering/spaceMap/installBattleSpace";
 import { buildDuelHudSnapshot, playerTargetId } from "./duel/duelHudSnapshot";
+import { LessonCoach } from "./flightSchool/LessonCoach";
+import { observeCourse } from "./flightSchool/observeCourse";
+import { schoolWeaponsLink } from "./flightSchool/schoolWeaponsLink";
 import { LessonPanel } from "./flightSchool/LessonPanel";
 import { SchoolCombat, type SchoolShot } from "./flightSchool/SchoolCombat";
 import { SchoolField } from "./flightSchool/SchoolField";
 import { setSchoolFlight, type SchoolShip } from "./flightSchool/schoolShips";
-import type {
-  BattleWeapons,
-  BattleWeaponsLink,
-  WeaponHit,
-} from "./battleUi/BattleWeapons";
-import { createSceneWeapons, weaponBodyOf } from "./battleUi/sceneWeapons";
+import type { BattleWeapons, WeaponHit } from "./battleUi/BattleWeapons";
+import { createSceneWeapons } from "./battleUi/sceneWeapons";
 import { NEUTRAL_MODIFIERS } from "../core/CombatModifiers";
 
-/** Edge intents the lessons look at. */
-const WATCHED: ReadonlySet<ActionIntent> = new Set(["CONFIRM"]);
+/** How long a finished lesson's chips show "done" before the next lesson (ms). */
+const DONE_HOLD_MS = 700;
 /** The trainee's secondary: a rack of homing missiles (real ordnance). */
 const TRAINING_ORDNANCE: readonly string[] = ["concussion_missile"];
 const COMPLETE_TEXT =
@@ -76,9 +76,12 @@ export class FlightSchoolScene extends Phaser.Scene {
   private field!: SchoolField;
   private hud!: BattleHud;
   private panel!: LessonPanel;
+  private coach!: LessonCoach;
+  private lessonTimer: Phaser.Time.TimerEvent | null = null;
   private effects!: EffectsManager;
   private readonly combat = new SchoolCombat();
   private machine: FlightSchoolState = startFlightSchool(0);
+  /** Intents pressed this frame (edge events: a tap shorter than a frame shows). */
   private pressed = new Set<ActionIntent>();
   private subscriptions: number[] = [];
   private primaryHits = 0;
@@ -100,13 +103,17 @@ export class FlightSchoolScene extends Phaser.Scene {
     this.field = new SchoolField(this);
     this.hud = new BattleHud(this, { worldSize: BATTLEFIELD_SIZE });
     this.panel = new LessonPanel(this);
+    this.coach = new LessonCoach(this.panel, (intent) =>
+      InputManager.isHeld(intent),
+    );
     this.machine = startFlightSchool(this.time.now);
     this.primaryHits = 0;
     this.secondaryHits = 0;
     this.finished = false;
+    this.lessonTimer = null;
     this.weapons = createSceneWeapons(
       this,
-      this.weaponsLink(),
+      schoolWeaponsLink(this.field, (hit) => this.applyWeaponHit(hit)),
       this.combat.tempoLedger,
     );
     this.armTrainee();
@@ -129,7 +136,9 @@ export class FlightSchoolScene extends Phaser.Scene {
   update(time: number, delta: number): void {
     InputManager.update();
     if (this.finished) return;
-    this.flyPlayer(time, delta);
+    this.keepTraineeFree();
+    const controlBefore = this.field.player.flight.motion.control;
+    const refusals = this.flyPlayer(time, delta);
     this.flyBots(delta);
     this.tickShips(delta);
     if (this.pilot.takeMarkRequest()) this.markHudTarget();
@@ -145,11 +154,15 @@ export class FlightSchoolScene extends Phaser.Scene {
     this.cameras.main.centerOn(player.x, player.y);
     this.updateHud();
     const control = player.flight.motion.control;
-    this.panel.setBeat(
-      control.maneuverProgress,
-      control.currentManeuver,
-      control.nextManeuver,
-    );
+    this.panel.setManeuvers(control.currentManeuver, control.nextManeuver);
+    const stuck = this.coach.update({
+      stepId: currentStep(this.machine)?.id ?? null,
+      nowMs: time,
+      tapped: this.pressed,
+      refusals,
+      controlBefore,
+    });
+    if (stuck) this.refreshPlayer();
     this.advanceLessons(time);
     this.pressed.clear();
   }
@@ -158,9 +171,7 @@ export class FlightSchoolScene extends Phaser.Scene {
     setupSceneInput(this);
     this.pilot.attach();
     this.subscriptions = [
-      InputManager.onAny((event) => {
-        if (WATCHED.has(event.intent)) this.pressed.add(event.intent);
-      }),
+      InputManager.onAny((event) => this.pressed.add(event.intent)),
     ];
     const keyboard = this.input.keyboard;
     bindMenuBack(this, () => this.leave());
@@ -180,7 +191,8 @@ export class FlightSchoolScene extends Phaser.Scene {
     this.weapons = null;
   }
 
-  private flyPlayer(time: number, delta: number): void {
+  /** @returns The specials and dashes the controls refused this frame. */
+  private flyPlayer(time: number, delta: number): readonly FlightRefusal[] {
     const ship = this.field.player;
     const origin = { x: ship.x, y: ship.y, angle: ship.angle };
     const result = this.pilot.fly({
@@ -203,6 +215,19 @@ export class FlightSchoolScene extends Phaser.Scene {
         cameraShake: true,
         zoomPulse: false,
       });
+    return result.refusals;
+  }
+
+  /** Training never blocks a lesson: clear stress and recharges once nothing special is in flight. */
+  private keepTraineeFree(): void {
+    const player = this.field.player;
+    const freed = freedTrainee(currentStep(this.machine)?.id, player.flight);
+    if (freed) setSchoolFlight(player, freed);
+  }
+
+  private refreshPlayer(): void {
+    const player = this.field.player;
+    setSchoolFlight(player, refreshTrainee(player.flight));
   }
 
   private flyBots(delta: number): void {
@@ -265,29 +290,6 @@ export class FlightSchoolScene extends Phaser.Scene {
       upgradeIds: TRAINING_ORDNANCE,
       modifiers: NEUTRAL_MODIFIERS,
     });
-  }
-
-  /** @returns What the secondary weapons read from (and ask of) the course. */
-  private weaponsLink(): BattleWeaponsLink {
-    return {
-      bodies: () =>
-        [...this.field.ships.values()]
-          .filter((ship) => ship.role !== "beacon")
-          .map((ship) => weaponBodyOf(ship, ship.owner, 1)),
-      wantedTargetOf: (shipId: string) =>
-        shipId === this.field.player.id
-          ? playerTargetId({
-              ships: this.field.ships.values(),
-              playerId: shipId,
-              isAlly: (s: SchoolShip) => s.owner === "player",
-              worldSize: BATTLEFIELD_SIZE,
-            })
-          : (this.field.crew?.targetOf(shipId) ?? null),
-      playerShipId: () => this.field.player.id,
-      playerSide: () => "player",
-      sideOf: (shipId: string) => this.field.ships.get(shipId)?.owner ?? null,
-      applyHit: (hit: WeaponHit) => this.applyWeaponHit(hit),
-    };
   }
 
   /**
@@ -362,45 +364,37 @@ export class FlightSchoolScene extends Phaser.Scene {
     );
   }
 
-  private observe(nowMs: number): FlightSchoolObservation {
-    const control = this.field.player.flight.motion.control;
-    return {
-      nowMs,
-      speed: control.speed,
-      minSpeed: control.minSpeed,
-      maxSpeed: control.maxSpeed,
-      currentManeuver: control.currentManeuver,
-      nextManeuver: control.nextManeuver,
-      boostCooldownMs: control.boostCooldown,
-      barrelRollCooldownMs: control.barrelRollCooldown,
-      pressed: this.pressed,
-      primaryHits: this.primaryHits,
-      secondaryHits: this.secondaryHits,
-      markedTargetId: this.field.crew?.markedTargetOf("player", nowMs) ?? null,
-      beaconOnScreen: this.field.beaconOnScreen(this.cameras.main),
-      enemiesAlive: this.field.enemiesAlive(),
-    };
-  }
-
   private advanceLessons(nowMs: number): void {
-    const result = advanceFlightSchool(this.machine, this.observe(nowMs));
+    const result = advanceFlightSchool(
+      this.machine,
+      observeCourse(this.field, this.cameras.main, nowMs, {
+        pressed: this.pressed,
+        primaryHits: this.primaryHits,
+        secondaryHits: this.secondaryHits,
+      }),
+    );
     this.machine = result.state;
     if (result.event === "none") return;
     playUiPress();
     if (result.event === "course_complete") return this.completeCourse();
     this.panel.flashToast("✓ LESSON COMPLETE");
-    this.enterLesson();
+    this.coach.showDone(nowMs);
+    this.lessonTimer = this.time.delayedCall(DONE_HOLD_MS, () => {
+      this.lessonTimer = null;
+      this.enterLesson();
+    });
   }
 
   private enterLesson(): void {
     const step = currentStep(this.machine);
     if (!step) return;
     this.field.setScenario(step.scenario);
-    this.panel.showLesson(
+    this.refreshPlayer();
+    this.coach.begin(
       this.machine.index,
       FLIGHT_SCHOOL_STEPS.length,
-      step.title,
-      step.prompt((intent) => boundKeyLabel(intent)),
+      step,
+      (intent) => boundKeyLabel(intent),
     );
     trackTutorialStep(step.id, this.machine.index);
     recordFlightSchoolStep(undefined, this.machine.index);
@@ -408,6 +402,8 @@ export class FlightSchoolScene extends Phaser.Scene {
 
   private skipLesson(): void {
     if (this.finished) return;
+    this.lessonTimer?.remove();
+    this.lessonTimer = null;
     this.machine = skipFlightSchoolStep(this.machine, this.time.now);
     if (this.machine.completed) return this.completeCourse();
     this.enterLesson();

@@ -15,13 +15,16 @@ import {
   type CombatModifiers,
 } from "../../core/CombatModifiers";
 import type { ManeuverDefinition } from "../../core/types";
-import { UNRESTRICTED_CAPABILITIES } from "../../core/flightCapabilityTypes";
 import {
   getModeCombatStats,
   type ModeCombatStats,
 } from "../../data/ModeBalancing";
 import { getShipDefinition, getShipDial } from "../../data/ShipDefinitions";
 import { addShipVisual } from "../../rendering/ShipVisual";
+import {
+  SCHOOL_TRAINEE_DEFINITION,
+  trainerFlight,
+} from "../../tutorial/TraineeSupport";
 
 /** What a Flight School ship is for. */
 export type SchoolRole = "player" | "drone" | "beacon" | "bot";
@@ -51,7 +54,10 @@ export interface SchoolShip {
 
 /** Ship definitions used by the course. */
 export const SCHOOL_SHIPS = {
-  player: { definitionId: "confed_falcon", faction: "free_confederation" },
+  player: {
+    definitionId: SCHOOL_TRAINEE_DEFINITION,
+    faction: "free_confederation",
+  },
   drone: { definitionId: "terran_viper", faction: "terran_hegemony" },
   beacon: { definitionId: "confed_sparrow", faction: "free_confederation" },
   bot: { definitionId: "terran_raptor", faction: "terran_hegemony" },
@@ -61,24 +67,16 @@ export const SCHOOL_SHIPS = {
 >;
 
 /**
- * The trainee flies a simulator configuration with every special and dash
- * unlocked, so each lesson can be practised in one ship; every real ship
- * flies only what its dial and action bar list (FlightCapabilities).
- *
- * @param role - The ship's role in the course.
- * @param flight - Its flight state as built from its card.
- * @returns The flight state (unrestricted for the trainee).
+ * The trainee flies the simulator configuration (every special and dash
+ * unlocked); every other ship flies what its card lists.
  */
-function trainerFlight(
+function flightOf(
   role: SchoolRole,
-  flight: CycleFlightState,
+  definitionId: string,
+  pose: { readonly x: number; readonly y: number; readonly angle: number },
 ): CycleFlightState {
-  if (role !== "player") return flight;
-  const control = {
-    ...flight.motion.control,
-    capabilities: UNRESTRICTED_CAPABILITIES,
-  };
-  return { ...flight, motion: { ...flight.motion, control } };
+  const flight = createCycleFlight(definitionId, pose);
+  return role === "player" ? trainerFlight(flight) : flight;
 }
 
 /** Sprite depth (above the background, below the HUD). */
@@ -113,7 +111,7 @@ export function spawnSchoolShip(
     shields: stats.shields,
     maxShields: stats.maxShields,
     combatStats: stats,
-    flight: trainerFlight(role, createCycleFlight(definitionId, pose)),
+    flight: flightOf(role, definitionId, pose),
     dial: getShipDial(definitionId),
     weaponCooldown: 0,
     modifiers: NEUTRAL_MODIFIERS,
