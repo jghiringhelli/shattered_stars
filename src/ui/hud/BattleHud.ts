@@ -21,6 +21,7 @@ import { MarkReticle } from "./MarkReticle";
 import { Radar } from "./Radar";
 import type { ScreenRect } from "./screenRect";
 import { ShipStatusRing } from "./ShipStatusRing";
+import { StressTint } from "./StressTint";
 import type { BattleHudSnapshot, CameraViewSnapshot, HudPoint } from "./types";
 import { WeaponBar } from "./WeaponBar";
 
@@ -55,6 +56,7 @@ export class BattleHud {
   private readonly weapons: WeaponBar;
   private readonly readout: FlightReadout;
   private readonly edges: EdgeIndicators;
+  private readonly tint: StressTint;
   private readonly marks: MarkReticle;
   private lastZoom = Number.NaN;
   private lastWidth = Number.NaN;
@@ -82,7 +84,9 @@ export class BattleHud {
     });
     this.marks = new MarkReticle(scene, { worldSize: config.worldSize });
     this.root = createScreenContainer(scene).setDepth(HOLO_DEPTH.hud);
+    this.tint = new StressTint(scene);
     this.root.add([
+      this.tint.graphics,
       this.radar.container,
       this.weapons.container,
       this.readout.container,
@@ -128,6 +132,7 @@ export class BattleHud {
     this.weapons.update(snapshot.weapons);
     if (this.weapons.width !== this.lastWeaponWidth) this.refreshObstacles();
     this.readout.update(player);
+    this.tint.update(this.readout.stressTrack, player?.stress ?? 0);
     this.edges.update(snapshot.camera, snapshot.contacts);
     this.marks.update(snapshot.camera, snapshot.contacts);
   }
@@ -167,6 +172,7 @@ export class BattleHud {
     for (const container of [this.root, this.edges.container]) {
       container.setPosition(t.x, t.y).setScale(t.scale);
     }
+    this.tint.setSize(camera.width, camera.height);
     this.layout(camera.width, camera.height);
   }
 

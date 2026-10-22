@@ -7,7 +7,12 @@
  */
 
 import { test, expect, type Page } from "@playwright/test";
-import { BOSS_RAID, CONTINUOUS } from "./helpers/battleEntry";
+import {
+  BOSS_RAID,
+  CONTINUOUS,
+  DOGFIGHT,
+  SKIRMISH,
+} from "./helpers/battleEntry";
 
 /** RESUME is the first button of the centred pause panel (BattlePauseMenu layout). */
 const RESUME_BUTTON_Y_FROM_CENTER = -116;
@@ -135,3 +140,85 @@ test("Continuous Tactical: a match restarted after its end screen runs again", a
   expect(state.listedShipsExist).toBe(true);
   expect(state.listedCount).toBe(state.shipCount);
 });
+
+/** Pins the player ship's stress each frame and reads the HUD stress row. */
+async function pinStress(
+  page: Page,
+  sceneKey: string,
+  stress: { level: number; isStressed: boolean } | null,
+): Promise<void> {
+  await page.evaluate(
+    ({ key, value }) => {
+      const w = window as any;
+      const scene = w.game.scene.getScene(key);
+      const ship = () => scene.ships.get(scene.secondaryWeapons.playerShipId());
+      w.__stressPin = value;
+      if (w.__stressPinInstalled === key) return;
+      w.__stressPinInstalled = key;
+      scene.events.on("preupdate", () => {
+        const s = ship();
+        if (!s || !w.__stressPin) return;
+        if (s.flight) s.flight = { ...s.flight, stress: w.__stressPin };
+        else s.stress = w.__stressPin;
+      });
+    },
+    { key: sceneKey, value: stress },
+  );
+}
+
+async function stressRow(
+  page: Page,
+  sceneKey: string,
+): Promise<{ counter: string; label: string } | null> {
+  return page.evaluate((key) => {
+    const texts: string[] = [];
+    const walk = (list: any[]): void =>
+      list.forEach((o) => {
+        if (typeof o.text === "string") texts.push(o.text);
+        if (Array.isArray(o.list)) walk(o.list);
+      });
+    walk((window as any).game.scene.getScene(key).children.list);
+    const counter = texts.find((t) => /^STRESS \d+%$/.test(t));
+    const label = texts.find((t) =>
+      /^(CALM|NORMAL|RECOVERING|STRESSED)( !)?$/.test(t),
+    );
+    return counter && label ? { counter, label } : null;
+  }, sceneKey);
+}
+
+for (const entry of [DOGFIGHT, SKIRMISH, BOSS_RAID]) {
+  test(`${entry.sceneKey}: the HUD shows a stress counter and CALM / NORMAL / STRESSED / RECOVERING`, async ({
+    page,
+  }) => {
+    await entry.enter(page, { peaceful: true });
+    const readRow = () => stressRow(page, entry.sceneKey);
+    await expect.poll(readRow).toEqual({ counter: "STRESS 0%", label: "CALM" });
+
+    await pinStress(page, entry.sceneKey, { level: 0.42, isStressed: false });
+    await expect
+      .poll(readRow)
+      .toEqual({ counter: "STRESS 42%", label: "NORMAL" });
+
+    await pinStress(page, entry.sceneKey, { level: 0.95, isStressed: true });
+    await expect
+      .poll(readRow)
+      .toEqual({ counter: "STRESS 95%", label: "STRESSED" });
+
+    // A stressed pilot whose level falls: still locked, so "RECOVERING !".
+    for (const level of [0.9, 0.85, 0.8]) {
+      await pinStress(page, entry.sceneKey, { level, isStressed: true });
+      await page.waitForTimeout(100);
+    }
+    await expect
+      .poll(readRow)
+      .toEqual({ counter: "STRESS 80%", label: "RECOVERING !" });
+
+    await pinStress(page, entry.sceneKey, { level: 0.1, isStressed: false });
+    await expect
+      .poll(readRow)
+      .toEqual({ counter: "STRESS 10%", label: "RECOVERING" });
+
+    await pinStress(page, entry.sceneKey, { level: 0, isStressed: false });
+    await expect.poll(readRow).toEqual({ counter: "STRESS 0%", label: "CALM" });
+  });
+}

@@ -1,7 +1,8 @@
 /**
  * FlightReadout — compact icon + number panel beside the radar: speed with
  * pips and the current maneuver on the top row, shields and hull on the
- * bottom row. Texts only change when their value changes.
+ * middle row, stress counter + state label (StressReadout) on the bottom
+ * row. Texts only change when their value changes.
  *
  * Origin: the container sits at the panel's RIGHT edge, vertical centre.
  */
@@ -14,13 +15,19 @@ import {
   createScreenContainer,
 } from "./holoPrimitives";
 import { HoloPanel } from "./HoloPanel";
+import { StressReadout } from "./StressReadout";
+import type { StressTrack } from "./stressState";
 import { drawStatGlyph, type StatGlyph } from "./HudIcons";
 import { gaugeFraction, hullStatus, rowCenters } from "./hudStyleMath";
 import type { ScreenRect } from "./screenRect";
 import type { PlayerHudState } from "./types";
 
-const PANEL = { width: 210, height: 60 } as const;
-const ROW_OFFSET = 13;
+const PANEL = { width: 240, height: 84 } as const;
+/** Rows: speed / maneuver, shield / hull, stress (centre-to-centre pitch). */
+const ROW_PITCH = 25;
+const ROW_OFFSET = 0;
+const SPEED_ROW = ROW_OFFSET - ROW_PITCH;
+const STRESS_ROW = ROW_OFFSET + ROW_PITCH;
 const GLYPH_SIZE = 14;
 const VALUE_GAP = 12;
 const SPEED_PIPS = { max: 6, width: 7, height: 4, gap: 3 } as const;
@@ -34,6 +41,48 @@ function hullColor(status: "healthy" | "damaged" | "critical"): number {
 /** Non-colour backup for critical hull: a "!" after the hull value. */
 const CRITICAL_SUFFIX = " !";
 
+/**
+ * @param scene - Owning scene.
+ * @param valueX - Left edge of the value column.
+ * @returns The four value texts of the speed/shield rows.
+ */
+function createReadoutTexts(
+  scene: Phaser.Scene,
+  valueX: number,
+): Record<"speed" | "maneuver" | "shield" | "hull", Phaser.GameObjects.Text> {
+  return {
+    speed: createHoloText(
+      scene,
+      valueX,
+      SPEED_ROW,
+      NO_VALUE,
+      "numeric",
+    ).setOrigin(0, 0.5),
+    maneuver: createHoloText(
+      scene,
+      -HOLO_SPACING.md,
+      SPEED_ROW,
+      "",
+      "caption",
+      HOLO_PALETTE.textSecondary,
+    ).setOrigin(1, 0.5),
+    shield: createHoloText(
+      scene,
+      valueX,
+      ROW_OFFSET,
+      NO_VALUE,
+      "body",
+    ).setOrigin(0, 0.5),
+    hull: createHoloText(
+      scene,
+      valueX + STAT_COLUMN_WIDTH,
+      ROW_OFFSET,
+      NO_VALUE,
+      "body",
+    ).setOrigin(0, 0.5),
+  };
+}
+
 /** Speed / maneuver / shield / hull readout. */
 export class FlightReadout {
   /** Screen-space container (scrollFactor 0). */
@@ -43,6 +92,7 @@ export class FlightReadout {
   private readonly maneuverText: Phaser.GameObjects.Text;
   private readonly shieldText: Phaser.GameObjects.Text;
   private readonly hullText: Phaser.GameObjects.Text;
+  private readonly stress: StressReadout;
   private readonly left = -PANEL.width;
 
   /**
@@ -57,35 +107,18 @@ export class FlightReadout {
     panel.setScrollFactor(0, 0, true);
     this.glyphs = scene.add.graphics();
     const valueX = this.left + HOLO_SPACING.md + GLYPH_SIZE + HOLO_SPACING.xs;
-    this.speedText = createHoloText(
-      scene,
+    const texts = createReadoutTexts(scene, valueX);
+    this.speedText = texts.speed;
+    this.maneuverText = texts.maneuver;
+    this.shieldText = texts.shield;
+    this.hullText = texts.hull;
+    this.stress = new StressReadout(scene, {
+      left: this.left,
+      right: 0,
+      y: STRESS_ROW,
+      glyphX: this.left + HOLO_SPACING.md + GLYPH_SIZE / 2,
       valueX,
-      -ROW_OFFSET,
-      NO_VALUE,
-      "numeric",
-    ).setOrigin(0, 0.5);
-    this.maneuverText = createHoloText(
-      scene,
-      -HOLO_SPACING.md,
-      -ROW_OFFSET,
-      "",
-      "caption",
-      HOLO_PALETTE.textSecondary,
-    ).setOrigin(1, 0.5);
-    this.shieldText = createHoloText(
-      scene,
-      valueX,
-      ROW_OFFSET,
-      NO_VALUE,
-      "body",
-    ).setOrigin(0, 0.5);
-    this.hullText = createHoloText(
-      scene,
-      valueX + STAT_COLUMN_WIDTH,
-      ROW_OFFSET,
-      NO_VALUE,
-      "body",
-    ).setOrigin(0, 0.5);
+    });
     addPinned(
       this.container,
       panel,
@@ -94,7 +127,13 @@ export class FlightReadout {
       this.maneuverText,
       this.shieldText,
       this.hullText,
+      ...this.stress.objects,
     );
+  }
+
+  /** The stress state the readout currently shows. */
+  get stressTrack(): StressTrack {
+    return this.stress.stressTrack;
   }
 
   /** Panel width in px. */
@@ -142,7 +181,7 @@ export class FlightReadout {
     const hullColorNow = hullState
       ? hullColor(hullState)
       : HOLO_PALETTE.textMuted;
-    this.glyph("speed", glyphX, -ROW_OFFSET, HOLO_PALETTE.textSecondary);
+    this.glyph("speed", glyphX, SPEED_ROW, HOLO_PALETTE.textSecondary);
     this.glyph("shield", glyphX, ROW_OFFSET, HOLO_PALETTE.shield);
     this.glyph("hull", glyphX + STAT_COLUMN_WIDTH, ROW_OFFSET, hullColorNow);
     setIfChanged(
@@ -161,6 +200,7 @@ export class FlightReadout {
             (hullState === "critical" ? CRITICAL_SUFFIX : "")
         : NO_VALUE,
     );
+    this.stress.update(player);
     if (player) this.drawSpeedPips(player.speed, player.maxSpeed);
   }
 
@@ -188,7 +228,7 @@ export class FlightReadout {
       );
       this.glyphs.fillRect(
         startX + dx - SPEED_PIPS.width / 2,
-        -ROW_OFFSET - SPEED_PIPS.height / 2,
+        SPEED_ROW - SPEED_PIPS.height / 2,
         SPEED_PIPS.width,
         SPEED_PIPS.height,
       );
