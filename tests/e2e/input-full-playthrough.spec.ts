@@ -312,13 +312,13 @@ test.describe("ArcadeBattleScene — keyboard playthrough", () => {
     expect(await feedbackLabel(page)).toBe("NO CLOAKING DEVICE");
   });
 
-  test("Shift+Space (FIRE_SECONDARY) reaches the secondary weapons without disabling autofire", async ({
+  test("Space (FIRE_SECONDARY) reaches the secondary weapons without disabling autofire", async ({
     page,
   }) => {
     suppressWebGLNoise(page);
     await openArcade(page, CONFED_KESTREL);
     const getFireCalls = await countSceneCalls(page, "firePrimaries");
-    await holdGameKey(page, "Space", 100, { shift: true });
+    await holdGameKey(page, "Space", 100);
     await expect.poll(() => lastFireOutcome(page)).not.toBeNull();
     expect(await getFireCalls()).toBeGreaterThan(0);
   });

@@ -24,7 +24,11 @@ describe("ControlsReference", () => {
   });
 
   it("formats a shift-modified binding with the Shift+ prefix", () => {
-    expect(keyboardLabelFor(["FIRE_SECONDARY"])).toBe("Shift+SPACE");
+    const shifted = [
+      { key: "SPACE", intent: "FIRE_SECONDARY", modifiers: { shift: true } },
+    ] as const;
+    expect(keyboardLabelFor(["FIRE_SECONDARY"], shifted)).toBe("Shift+SPACE");
+    expect(keyboardLabelFor(["FIRE_SECONDARY"])).toBe("SPACE");
   });
 
   it("formats gamepad axis and button bindings", () => {

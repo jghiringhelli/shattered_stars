@@ -1,7 +1,7 @@
 /**
  * secondary-weapons.spec.ts — every secondary weapon type fires for real
  * in every battle mode, through the shared runtime (BattleWeapons):
- * torpedo and missile (lock, Shift+Space, homing hit, ammo, HUD lock ring),
+ * torpedo and missile (lock, Space, homing hit, ammo, HUD lock ring),
  * turret (auto-tracks a ship astern), bomb (dropped astern, timed blast)
  * and mine (arms, an enemy touching it sets it off). An enemy is pinned
  * where each weapon can reach it; the scene's own damage path must apply
@@ -151,14 +151,12 @@ async function slotState(page: Page, sceneKey: string): Promise<any> {
 }
 
 async function pressFireSecondary(page: Page): Promise<void> {
-  await page.keyboard.down("Shift");
   await page.keyboard.down("Space");
   await page.waitForTimeout(80);
   await page.keyboard.up("Space");
-  await page.keyboard.up("Shift");
 }
 
-/** Lock, Shift+Space, homing hit, ammo and HUD for one launcher card. */
+/** Lock, Space, homing hit, ammo and HUD for one launcher card. */
 async function launcherRound(
   page: Page,
   sceneKey: string,

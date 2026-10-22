@@ -105,7 +105,7 @@ projectiles disappear at seam without hitting.
 - [ ] ArrowLeft / ArrowRight steer the ship
 - [ ] ArrowUp accelerates; speed cap enforced
 - [ ] Primary weapon fires automatically at targets in arc and range
-- [ ] Shift + Space fires the selected secondary (if equipped); Tab cycles it
+- [ ] Space fires the selected secondary (if equipped); Tab cycles it
 - [ ] Gamepad: A boost, LB/RB hard turns, right-stick flick ↓ Snap turn, LT/RT Knife, D-pad ←/→ Hook, right-stick flick ←/→ barrel roll, X secondary, D-pad ↓ cycle, commander orders LT/RT/D-pad ←/→ (capitals)
 - [ ] Snap turn triggers on the correct key; ship flips 180°; cooldown enforced
 - [ ] Boost triggers; visible speed jump; stress increases

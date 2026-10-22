@@ -63,7 +63,7 @@ runs the weapons step **before** primary fire each frame.
 | Cannon | A `realtime` modifier of the primary laser (no separate weapon). |
 | Cloak | Only ships whose action bar has `cloak` (Raven, Owl, Specter, Phantom, Shadow); 8 s (+ Phantom Strike), 15 s recharge, attacking breaks it, half damage taken while cloaked, cannot be locked. A bot fires as soon as it can, so cloak duration alone measures ~0 — Phantom Strike also gives +1 laser damage from behind the target. |
 
-Controls: FIRE_SECONDARY (Shift+Space / tap / pad X) fires the selected slot,
+Controls: FIRE_SECONDARY (Space / tap / pad X) fires the selected slot,
 WEAPON_CYCLE (Tab / RB) selects the next, CLOAK (C). The HUD weapon bar shows
 each slot's kind, charges, reload and lock ring; refusals ("NO LOCK", "OUT OF
 ARC", "NO CLOAKING DEVICE"…) flash above the ship. Bots use ordnance through

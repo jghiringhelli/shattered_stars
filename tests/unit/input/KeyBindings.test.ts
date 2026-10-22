@@ -21,11 +21,20 @@ import { REBINDABLE_INTENTS } from "../../../src/input/RebindableIntents";
 const defaults = DEFAULT_KEYBOARD_BINDINGS;
 
 describe("default keyboard bindings", () => {
-  it("does not pause a battle on plain Space (primaries autofire; Shift+Space fires secondaries)", () => {
+  it("does not pause a battle on plain Space (primaries autofire; Space fires secondaries)", () => {
     const plainSpace = defaults.filter(
       (b) => b.key === "SPACE" && !b.modifiers?.shift,
     );
     expect(plainSpace.map((b) => b.intent)).not.toContain("PAUSE");
+  });
+
+  it("fires the secondary weapon on plain Space only", () => {
+    const fire = defaults.filter((b) => b.intent === "FIRE_SECONDARY");
+    expect(fire).toEqual([{ key: "SPACE", intent: "FIRE_SECONDARY" }]);
+  });
+
+  it("labels the secondary weapon key as plain Space first", () => {
+    expect(chordLabel(primaryChord(defaults, "FIRE_SECONDARY"))).toBe("Space");
   });
 
   it("pauses on P and ESC", () => {

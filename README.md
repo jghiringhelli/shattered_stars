@@ -55,7 +55,7 @@ These are the defaults. Rebind keys and gamepad buttons in **Settings › Contro
 | Boost | Double-tap ↑ | A |
 | Barrel roll | Double-tap ← (roll left) or → (roll right) | Double-flick the left stick to one side · or right stick flick ← / → |
 | Hard turn | Q / E | LB / RB |
-| Fire secondary / drop bomb | Shift+Space | X |
+| Fire secondary / drop bomb | Space | X |
 | Cycle secondary weapon | Tab | D-pad ↓ |
 | Mark target for your squad | R | R3 |
 | Cloak | C | D-pad ↑ |

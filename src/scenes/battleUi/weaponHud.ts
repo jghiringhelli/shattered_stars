@@ -20,8 +20,8 @@ import type { FireOutcome } from "../../arcade/weapons/weaponTypes";
 import type { FlightRefusal } from "../../arcade/systems/FlightCapabilities";
 import type { WeaponSlotDescriptor } from "../../ui/hud/types";
 
-/** Key hint on the slot FIRE_SECONDARY (Shift+Space) fires. */
-export const FIRE_SECONDARY_HINT = "⇧␣";
+/** Key hint on the slot FIRE_SECONDARY (Space) fires. */
+export const FIRE_SECONDARY_HINT = "␣";
 /** Key hint on the slot WEAPON_CYCLE (Tab) selects next. */
 export const NEXT_WEAPON_HINT = "⇥";
 /** HUD id of the turret slot. */

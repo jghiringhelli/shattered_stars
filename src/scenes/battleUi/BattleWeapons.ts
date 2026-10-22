@@ -2,7 +2,7 @@
  * BattleWeapons — the Phaser-side glue of the shared secondary-weapons
  * runtime, identical in every battle scene:
  * - equips each ship's arsenal from its quick build;
- * - reads the human's FIRE_SECONDARY (Shift+Space / tap / pad X),
+ * - reads the human's FIRE_SECONDARY (Space / tap / pad X),
  *   WEAPON_CYCLE (Tab / RB) and CLOAK (C) and flashes why a press was
  *   refused (PilotFeedback);
  * - runs the runtime once per frame with the bots' ordnance decider,

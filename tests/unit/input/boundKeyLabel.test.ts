@@ -14,7 +14,7 @@ const defaults = DEFAULT_KEYBOARD_BINDINGS;
 describe("boundKeyLabel", () => {
   it("labels plain and modified keys", () => {
     expect(boundKeyLabel("MARK_TARGET", defaults)).toBe("R");
-    expect(boundKeyLabel("FIRE_SECONDARY", defaults)).toBe("Shift+Space");
+    expect(boundKeyLabel("FIRE_SECONDARY", defaults)).toBe("Space");
     expect(boundKeyLabel("MANEUVER", defaults)).toBe("Z");
     expect(boundKeyLabel("CONFIRM", defaults)).toBe("Enter");
   });

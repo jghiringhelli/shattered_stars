@@ -36,9 +36,9 @@ export const DEFAULT_KEYBOARD_BINDINGS: readonly KeyboardBinding[] = [
   { key: "TWO", intent: "COMMANDER_ORDER_2" },
   { key: "THREE", intent: "COMMANDER_ORDER_3" },
   { key: "FOUR", intent: "COMMANDER_ORDER_4" },
-  // Flight weapons — primary always autofires; SHIFT+SPACE triggers
-  // secondary/ordnance (bomb deploy in ArcadeBattleScene).
-  { key: "SPACE", intent: "FIRE_SECONDARY", modifiers: { shift: true } },
+  // Flight weapons — primary always autofires; SPACE fires the secondary /
+  // ordnance (bomb deploy in ArcadeBattleScene).
+  { key: "SPACE", intent: "FIRE_SECONDARY" },
   { key: "TAB", intent: "WEAPON_CYCLE" },
   // Flight advanced (large/capital ships)
   { key: "G", intent: "CREW_CYCLE" },
@@ -54,8 +54,8 @@ export const DEFAULT_KEYBOARD_BINDINGS: readonly KeyboardBinding[] = [
   // Hero pilot active powers (Campaign)
   { key: "V", intent: "HERO_POWER_1" },
   { key: "B", intent: "HERO_POWER_2" },
-  // Other — plain Space is unbound in flight: it was the old fire key, and
-  // pausing on it froze battles for players (and on an early Shift release).
+  // Other — plain Space once paused the battle (a tactical-mode leftover); it
+  // now fires the secondary, and pausing stays on P and ESC.
   { key: "P", intent: "PAUSE" },
   { key: "ESC", intent: "PAUSE" },
 ];
