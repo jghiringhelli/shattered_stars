@@ -7,7 +7,11 @@
  *    (position and facing), except for the displacement of a boost / barrel
  *    roll performed inside that cycle, which must be exactly its distance;
  *  - mid-cycle poses follow the template arc (no teleports between frames);
- *  - actions respect their recharge (boost, barrel roll, Snap Turn).
+ *  - actions respect their recharge (boost, barrel roll, Snap Turn);
+ *  - speed cap per maneuver: a cycle is flown at control.cycleSpeed (the set
+ *    speed capped by the ship's dial), never above the dial's cap for that
+ *    maneuver, back at the set speed on a straight, and classified by a real
+ *    dial entry.
  *
  * The headless KeyComboTelemetry battery proves the maneuvers; this spec proves
  * the real input -> scene -> motion chain flies them.
@@ -32,6 +36,12 @@ import {
   type Pose,
 } from "../../src/simulation/flight/XWingFlightOracle";
 import { BOOST_DISTANCE_PX } from "../../src/arcade/ArcadeInputGestures";
+import {
+  getMovementProfile,
+  getShipDial,
+} from "../../src/data/ShipDefinitions";
+import { capGroupOf } from "../../src/core/speedCap";
+import type { ManeuverDirection } from "../../src/core/types";
 
 const WORLD_SIZE = 6000;
 const CYCLE_MS = 500;
@@ -53,7 +63,12 @@ interface Sample {
   readonly t: number;
   readonly pose: Pose;
   readonly man: string | null;
+  /** The speed this cycle is flown at (control.cycleSpeed). */
   readonly speed: number;
+  /** The throttle the pilot set (control.speed). */
+  readonly set: number;
+  readonly cap: number | null;
+  readonly def: string | null;
   readonly prog: number;
   readonly base: number;
   readonly start: Pose | null;
@@ -81,7 +96,10 @@ async function installSampler(page: Page, sceneKey: string): Promise<void> {
           t,
           pose: { x: pose.x, y: pose.y, angle: pose.angle },
           man: control.currentManeuver,
-          speed: control.speed,
+          speed: control.cycleSpeed,
+          set: control.speed,
+          cap: control.speedCap,
+          def: s.definitionId ?? null,
           prog: control.maneuverProgress,
           base: control.baseSize,
           start: p0 ? { x: p0.x, y: p0.y, angle: p0.angle } : null,
@@ -183,8 +201,8 @@ interface Cycle {
   readonly samples: Sample[];
   /** Index of the cycle's first sample in the ship's sample list. */
   readonly from: number;
-  /** Speed at the end of the previous cycle (what the new path was built with). */
-  readonly previousSpeed: number;
+  /** Throttle set at the end of the previous cycle. */
+  readonly previousSet: number;
 }
 
 /** Splits one ship's samples into cycles where the progress wraps. */
@@ -192,12 +210,12 @@ function toCycles(samples: Sample[]): Cycle[] {
   const cycles: Cycle[] = [];
   let current: Sample[] = [];
   let from = 0;
-  let previousSpeed = samples[0]?.speed ?? 0;
+  let previousSet = samples[0]?.set ?? 0;
   samples.forEach((sample, index) => {
     const previous = current[current.length - 1];
     if (previous && sample.prog < previous.prog - 0.5) {
-      cycles.push({ samples: current, from, previousSpeed });
-      previousSpeed = previous.speed;
+      cycles.push({ samples: current, from, previousSet });
+      previousSet = previous.set;
       current = [];
       from = index;
     }
@@ -242,6 +260,10 @@ interface Report {
   boosts: number;
   rolls: number;
   snaps: number;
+  /** Cycles flown below the set throttle because of a dial cap. */
+  cappedCycles: number;
+  /** Straight cycles checked for returning to the set speed. */
+  straightsAtSet: number;
   maxEndErrorPx: number;
   maxEndErrorDeg: number;
   maxArcErrorPx: number;
@@ -260,6 +282,8 @@ function emptyReport(): Report {
     boosts: 0,
     rolls: 0,
     snaps: 0,
+    cappedCycles: 0,
+    straightsAtSet: 0,
     maxEndErrorPx: 0,
     maxEndErrorDeg: 0,
     maxArcErrorPx: 0,
@@ -282,23 +306,10 @@ function checkCycle(
   const start = first.start;
   const end = next.samples[0]!.start;
   if (!start || !end || !first.man) return;
-  // The path is built from the speed at the cycle boundary; a throttle change
-  // landing a tick after it shows in the first sample but flies next cycle.
-  const step = [cycle.previousSpeed, first.speed]
-    .map((speed) => ({ direction: first.man as never, speed }))
-    .map((candidate) => ({
-      candidate,
-      error: distance(
-        ...(Object.values(
-          torusDisplacement(
-            predictManeuver(start, candidate, first.base),
-            end,
-            WORLD_SIZE,
-          ),
-        ) as [number, number]),
-      ),
-    }))
-    .sort((a, b) => a.error - b.error)[0]!.candidate;
+  // The path is built with the FLOWN speed (control.cycleSpeed, fixed at the
+  // cycle boundary): the set throttle and the dial cap decide it, not the
+  // throttle at the end of the cycle.
+  const step = { direction: first.man as never, speed: first.speed };
   const predicted = predictManeuver(start, step, first.base);
   const d = torusDisplacement(predicted, end, WORLD_SIZE);
   const angleError = Math.abs(headingDelta(predicted.angle, end.angle));
@@ -410,20 +421,16 @@ function checkFrames(
   report: Report,
 ): void {
   const actionFrames = new Set(actions.map((a) => a.index));
-  // A throttle change shows in control.speed at once but flies from the next cycle.
-  let flownSpeed = samples[0]!.speed;
   for (let i = 1; i < samples.length; i++) {
     const a = samples[i - 1]!;
     const b = samples[i]!;
     const wrapped = b.prog < a.prog - 0.5;
-    const previousSpeed = flownSpeed;
-    if (wrapped) flownSpeed = b.speed;
     if (actionFrames.has(i)) continue;
     // Sim time, not wall time: a hitch makes one frame run several ticks.
     const progressStep = wrapped ? 1 - a.prog + b.prog : b.prog - a.prog;
     const d = torusDisplacement(a.pose, b.pose, WORLD_SIZE);
     const allowed = Math.max(
-      templateLength(Math.max(previousSpeed, flownSpeed), a.base) *
+      templateLength(Math.max(a.speed, b.speed), a.base) *
         Math.max(progressStep, 0.005),
       1,
     );
@@ -433,6 +440,58 @@ function checkFrames(
     if (ratio > 3)
       report.failures.push(
         `${who} frame ${i}: moved ${distance(d.dx, d.dy).toFixed(0)} px in ${dt.toFixed(0)} ms (allowed ${allowed.toFixed(0)}) man=${b.man} speed=${b.speed} prog=${b.prog.toFixed(2)} cd=${JSON.stringify(b.cd)} prevProg=${a.prog.toFixed(2)}`,
+      );
+  }
+}
+
+/** Dial direction the engine classifies a flown maneuver by (accrueCycleStress). */
+function classifiedAs(man: string): ManeuverDirection {
+  if (man.includes("turn")) return "turn_left";
+  if (man.includes("bank")) return "bank_left";
+  return "straight";
+}
+
+/**
+ * Speed cap per maneuver: a cycle is flown on a dial speed of its maneuver
+ * and never above that maneuver's cap; a straight flies the set speed again;
+ * bank / turn / drift cycles have a dial entry that gives their stress color.
+ */
+function checkSpeedCap(cycle: Cycle, who: string, report: Report): void {
+  const first = cycle.samples[0]!;
+  const { man, def } = first;
+  if (!man || !def || getMovementProfile(def) === "capital") return;
+  const dial = getShipDial(def);
+  const group = capGroupOf(man as ManeuverDirection);
+  const printed = dial
+    .filter((m) => capGroupOf(m.direction) === group)
+    .map((m) => m.speed);
+  const flown = first.speed;
+  const label = `${who} ${man}@${flown} (set ${first.set})`;
+  if (group === "straight") {
+    // The throttle moves mid-cycle: the flown speed is the one set at the boundary.
+    const sets = [cycle.previousSet, first.set];
+    if (printed.includes(first.set) || printed.includes(cycle.previousSet)) {
+      report.straightsAtSet++;
+      if (!sets.includes(flown) && flown !== 0)
+        report.failures.push(
+          `${label}: a straight did not return to the set speed`,
+        );
+    }
+    return;
+  }
+  if (printed.length === 0) return;
+  if (flown > Math.max(...printed))
+    report.failures.push(
+      `${label}: flown above its dial cap ${Math.max(...printed)}`,
+    );
+  if (flown > 0 && !printed.includes(flown))
+    report.failures.push(`${label}: flown at a speed its dial does not print`);
+  if (flown < Math.max(first.set, cycle.previousSet)) report.cappedCycles++;
+  if (flown > 0 && /bank|turn|drift/.test(man) && man !== "kturn") {
+    const dialDirection = classifiedAs(man);
+    if (!dial.some((m) => m.direction === dialDirection && m.speed === flown))
+      report.failures.push(
+        `${label}: no ${dialDirection} dial entry to classify it`,
       );
   }
 }
@@ -473,6 +532,7 @@ function analyse(samples: Sample[]): Report {
     // First cycle may start mid-way and the last one is unfinished: skip both.
     for (let i = 1; i < cycles.length - 1; i++) {
       checkCycle(cycles[i]!, cycles[i + 1]!, actions, who, report);
+      checkSpeedCap(cycles[i]!, who, report);
       const man = cycles[i]!.samples[0]!.man;
       if (list[0]!.player && man)
         report.playerManeuvers[man] = (report.playerManeuvers[man] ?? 0) + 1;
@@ -513,6 +573,13 @@ for (const [name, entry] of BATTLES) {
     console.log(`[${name}] ${JSON.stringify(summary)}`);
     if (failures.length > 0) console.log(failures.slice(0, 12).join("\n"));
     expect(report.cycles, "cycles checked").toBeGreaterThan(10);
+    expect(report.cappedCycles, "cycles the dial cap slowed").toBeGreaterThan(
+      0,
+    );
+    expect(
+      report.straightsAtSet,
+      "straights back at the set speed",
+    ).toBeGreaterThan(0);
     expect(
       Object.keys(report.playerManeuvers).length,
       "distinct maneuvers the player flew",

@@ -87,13 +87,47 @@ hides the barrel roll, and the pick screen (stats tab) and encyclopedia overview
 
 **Setting** (Settings › Gameplay › Ship Specials; `gameplay.shipSpecials`): *Ship identity*
 (default) or *Full card*. Full card lifts the rule in offline modes (Skirmish, Dogfight, Ace Duel,
-Survival, Campaign, bots included); Flight School's trainee is always unrestricted.
+Survival, Campaign, bots included); Flight School's trainee is always unrestricted, and its stress and Snap / Hook / Knife recharge are cleared at every lesson start (and whenever no special is in flight) so a lesson is never blocked by the one before; a refused move says why on the lesson card (STRESSED / RECHARGING / NOT ON DIAL).
 
 **Online**: lockstep needs identical rules, so online battles always use identity.
 `flightCapabilitiesOf(id, trickRule?)`, `createShipControl` and `createCycleFlight` take an explicit
 pure `trickRule` ("identity" | "full"). With none given they use `activeTrickRule()` = the Settings
 choice unless `lockTrickRuleToIdentity(true)` (FlightCapabilities.ts) is set — the online battle
 code must call it when a lockstep battle is built (and `false` when it ends), or pass `"identity"`.
+
+## Speed cap per maneuver
+
+The throttle (↑/↓) stays a discrete **set speed** in notches (`control.speed`, no gradual
+acceleration). Each ship's own dial says at which speeds a maneuver exists (fighter: straight 1–4,
+bank 1–3, turn 1–2, Snap at 3), so a maneuver is never flown faster than its dial prints it.
+At every **cycle boundary** (`advanceCycle` / `startManeuver`, when the next maneuver is committed) the
+**flown speed** of that cycle is `min(set speed, the maneuver's dial cap)` (`src/core/speedCap.ts`,
+`flownSpeed`):
+
+- the highest dial speed of that maneuver at or below the set speed; if the dial prints it only
+  above the set speed (a Snap that exists at 3 only, set speed 2) the nearest printed speed;
+- **drift** (the held-key shallow turn, not on the dial) uses the **bank** entries; straight uses the
+  straight entries; Q/E turns, Snap Turn, Hook Loop and Knife Roll use their own entries;
+- a maneuver the dial does not print at all is not capped; barrel roll and boost are actions and
+  unchanged; huge ships (capital profile) have no table and keep flying at the set speed;
+- set speed 0 (hover, ships with minimum speed 0) is never lifted: the ship pivots in place;
+- straight above the dial's top speed (the upgrade notch) is not capped;
+- when the next cycle is a straight, the flown speed is the set speed again: set-and-forget, the pilot
+  never re-presses ↑. A hard turn (Q/E) no longer retunes the throttle; only a stressed pilot whose
+  capped turn would be red is moved to the best non-red turn speed (`hardTurnThrottle`).
+
+The template path, its displacement and the stress classification of the cycle (`completed.speed`,
+`accrueCycleStress`) all use the flown speed, so a capped maneuver is an on-dial maneuver with its
+real green / white / red color.
+
+Control state (plain numbers, deterministic, hashed and snapshotted online):
+`cycleSpeed` = flown speed of the cycle in progress; `speedCap` = the highest dial speed of the
+maneuver flown now (null when uncapped; it may exceed `speed`); `capabilities.dialSpeeds` = the
+ship's dial speeds per maneuver group (bank / turn / straight / kturn / segnor / tallon), built
+from the effective dial by `flightCapabilitiesOf`. HUD helpers for the maneuver queued next:
+`queuedCycleSpeed(control)` and `queuedSpeedCap(control)` (`src/core/speedCap.ts`). Bots: `OwnShipView.dialSpeeds`;
+`ManeuverPlanner` flies every option at `flownSpeed(...)`, and on equal scores keeps the current
+throttle (options that fly the same capped speed tie).
 
 ## Input layer
 
@@ -121,4 +155,8 @@ code must call it when a lockstep battle is built (and `false` when it ends), or
   teleports, a boost / barrel roll inside a cycle displaces it by exactly its distance
   (220 px / speed-1 template + base) without turning the ship, and boost (4.5 s), roll (3 s)
   and Snap Turn (5 s) never fire again before recharging. A throttle change lands in
-  `control.speed` at once but flies from the next cycle (the path is built at the boundary).
+  `control.speed` at once but flies from the next cycle (the path is built at the boundary, at
+  `control.cycleSpeed`): the oracle is asked about the flown speed, a maneuver is never flown above
+  its dial cap, a straight cycle flies the set speed again, and capped bank / turn / drift cycles
+  have a dial entry that classifies them. Headless: `ArcadeFlightTelemetry` (`cycleSpeeds`),
+  `tests/unit/core/speedCap.test.ts`, `tests/unit/arcade/SpeedCapFlight.test.ts`.

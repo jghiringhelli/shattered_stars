@@ -355,3 +355,67 @@ describe("arcade flight — relative pursuit geometry", () => {
 it("flies on the scene's battlefield", () => {
   expect(BATTLEFIELD_SIZE).toBeGreaterThan(1000);
 });
+
+describe("arcade flight — speed cap per maneuver", () => {
+  const MANEUVERS = ["bank_left", "turn_right", "drift_left"] as const;
+  const GROUP = {
+    bank_left: ["bank_left", "bank_right"],
+    turn_right: ["turn_left", "turn_right"],
+    drift_left: ["bank_left", "bank_right"],
+  } as const;
+
+  for (const shipId of SHIP_IDS) {
+    if (getMovementProfile(shipId) === "capital") continue;
+    it(`${shipId} flies capped cycles on the dial and returns to the set speed`, () => {
+      const set = SHIP_DEFINITIONS[shipId]!.baseStats.speed.max;
+      const dial = getShipDial(shipId);
+      const failures: string[] = [];
+      for (const direction of MANEUVERS) {
+        const plan: FlightStep[] = [
+          { direction: "straight", speed: set },
+          { direction, speed: set },
+          { direction: "straight", speed: set },
+          { direction, speed: set },
+          { direction: "straight", speed: set },
+        ];
+        const record = flyArcadeShip(shipId, plan, { start: START });
+        const flown = plan.map((step, i) => ({
+          direction: step.direction,
+          speed: record.cycleSpeeds[i]!,
+        }));
+        failures.push(
+          ...mismatches(record, predictFlight(START, flown, record.baseSize)).map(
+            (f) => `${direction}: ${f}`,
+          ),
+        );
+        const printed = dial
+          .filter((m) => (GROUP[direction] as readonly string[]).includes(m.direction))
+          .map((m) => m.speed);
+        for (const i of [1, 3]) {
+          const speed = record.cycleSpeeds[i]!;
+          if (printed.length === 0) continue;
+          if (speed > Math.max(...printed))
+            failures.push(`${direction}: flown at ${speed}, above its dial cap`);
+          if (!printed.includes(speed))
+            failures.push(`${direction}: flown at ${speed}, not a dial speed`);
+          const classified = dial.some(
+            (m) =>
+              m.direction === (direction === "turn_right" ? "turn_left" : direction === "bank_left" ? "bank_left" : "straight") &&
+              m.speed === speed,
+          );
+          if (!classified)
+            failures.push(`${direction}@${speed}: no dial entry to classify it by`);
+        }
+        for (const i of [0, 2, 4]) {
+          const speed = record.cycleSpeeds[i]!;
+          const printedStraight = dial
+            .filter((m) => m.direction === "straight")
+            .map((m) => m.speed);
+          if (printedStraight.includes(set) && speed !== set)
+            failures.push(`straight cycle ${i} flown at ${speed}, set ${set}`);
+        }
+      }
+      expect(failures).toEqual([]);
+    });
+  }
+});

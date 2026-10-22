@@ -8,6 +8,7 @@
  * Pure data, no behaviour, no Phaser.
  */
 
+import type { DialSpeedTable } from "../../core/speedCap";
 import type { ManeuverDefinition } from "../../core/types";
 
 /** How well a bot flies. */
@@ -62,6 +63,11 @@ export interface OwnShipView extends ShipSnapshot {
   readonly baseSize: number;
   readonly stressLevel: number;
   readonly dial: readonly ManeuverDefinition[];
+  /**
+   * Dial speeds per maneuver (the speed cap, src/core/speedCap): the planner
+   * flies each option at min(throttle, cap). Omitted = no cap.
+   */
+  readonly dialSpeeds?: DialSpeedTable | undefined;
   /** Time left before the queued maneuver commits (ms). */
   readonly msToCommit: number;
   /** Where the maneuver in flight ends (the pose the next one starts from). */

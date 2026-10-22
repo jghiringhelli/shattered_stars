@@ -17,7 +17,6 @@ import type { FactionId } from "../config";
 
 /** Standard fighter dial - balanced mobility */
 const FIGHTER_DIAL: ManeuverDefinition[] = [
-  // Speed 1
   { direction: "straight", speed: 1, difficulty: "green" },
   { direction: "bank_left", speed: 1, difficulty: "white" },
   { direction: "bank_right", speed: 1, difficulty: "white" },
@@ -34,8 +33,9 @@ const FIGHTER_DIAL: ManeuverDefinition[] = [
   { direction: "bank_left", speed: 3, difficulty: "red" },
   { direction: "bank_right", speed: 3, difficulty: "red" },
   // Speed 4
+  { direction: "bank_left", speed: 4, difficulty: "red" },
+  { direction: "bank_right", speed: 4, difficulty: "red" },
   { direction: "straight", speed: 4, difficulty: "white" },
-  // Snap turn
   { direction: "kturn", speed: 3, difficulty: "red" },
 ];
 

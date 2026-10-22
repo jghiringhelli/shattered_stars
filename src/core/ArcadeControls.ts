@@ -20,6 +20,7 @@ import {
   generateManeuverPath,
 } from "../systems/MovementSystem";
 import { CYCLE_DURATION_MS } from "../config";
+import { flownSpeed, maneuverSpeedCap } from "./speedCap";
 import type { MovementProfile } from "../data/ShipDefinitions";
 import {
   UNRESTRICTED_CAPABILITIES,
@@ -37,7 +38,21 @@ const CYCLE_EPSILON_MS = 1e-6;
 // ============================================
 
 export interface ShipControlState {
+  /** The throttle the pilot SET (↑/↓ notches); a cycle may fly slower, see cycleSpeed. */
   speed: number;
+  /**
+   * The speed the current cycle is flown at: min(set speed, the maneuver's
+   * dial cap), fixed at the cycle boundary (src/core/speedCap). Equals `speed`
+   * on a straight or when nothing caps. Template, displacement and stress of
+   * the cycle all use it.
+   */
+  cycleSpeed: number;
+  /**
+   * The highest dial speed of the maneuver flown now (drift: bank entries),
+   * or null when the ship has no dial table or the dial does not print it.
+   * It may exceed `speed`. For the maneuver queued next see {@link queuedSpeedCap}.
+   */
+  speedCap: number | null;
   maxSpeed: number;
   minSpeed: number;
 
@@ -110,6 +125,8 @@ export function createControlState(
   const maxSpeed = speedBounds.max;
   const base: ShipControlState = {
     speed: Math.min(Math.max(3, minSpeed), maxSpeed),
+    cycleSpeed: Math.min(Math.max(3, minSpeed), maxSpeed),
+    speedCap: null,
     maxSpeed,
     minSpeed,
     baseSize,
@@ -171,10 +188,12 @@ export function startManeuver(
   control: ShipControlState,
   direction: ManeuverDirection,
 ): ShipControlState {
+  const table = control.capabilities?.dialSpeeds;
+  const cycleSpeed = flownSpeed(table, direction, control.speed);
   const maneuver: ManeuverDefinition = {
     direction,
-    speed: control.speed,
-    difficulty: getManeuverDifficulty(direction, control.speed),
+    speed: cycleSpeed,
+    difficulty: getManeuverDifficulty(direction, cycleSpeed),
   };
 
   const path = generateManeuverPath(
@@ -197,6 +216,8 @@ export function startManeuver(
   return {
     ...control,
     currentManeuver: direction,
+    cycleSpeed,
+    speedCap: maneuverSpeedCap(table, direction),
     maneuverProgress: 0,
     maneuverPath: path,
     maneuverTarget: {
@@ -463,40 +484,4 @@ export function processCommand(
     default:
       return control;
   }
-}
-
-// ============================================
-// Legacy helpers (kept for turn-based scene compatibility)
-// ============================================
-
-export const SIZE_BASE_SPEED: Readonly<Record<string, number>> = {
-  tiny: 140,
-  small: 120,
-  medium: 105,
-  large: 90,
-  huge: 70,
-};
-
-/**
- * Returns the pixels-per-speed-unit for the given size category.
- * Used by the turn-based battle scene; arcade mode uses the cycle system instead.
- */
-export function getSizeMovementBase(size: string): number {
-  return SIZE_BASE_SPEED[size] ?? 120;
-}
-
-/**
- * @deprecated Arcade mode uses the discrete cycle system. This remains for
- * turn-based compatibility but should not be used in ArcadeBattleScene.
- */
-export function getContinuousMovement(
-  ship: ShipPose,
-  control: ShipControlState,
-  deltaMs: number,
-  speedBase = 120,
-): { x: number; y: number } {
-  if (control.currentManeuver !== null) return { x: ship.x, y: ship.y };
-  const dist = (speedBase * control.speed * deltaMs) / 1000;
-  const rad = (ship.angle - 90) * (Math.PI / 180);
-  return { x: ship.x + Math.cos(rad) * dist, y: ship.y + Math.sin(rad) * dist };
 }

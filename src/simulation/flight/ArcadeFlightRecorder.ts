@@ -28,6 +28,10 @@ import {
   type MotionState,
 } from "../../arcade/systems/ShipMotion";
 import {
+  UNRESTRICTED_CAPABILITIES,
+  flightCapabilitiesOf,
+} from "../../arcade/systems/FlightCapabilities";
+import {
   torusDisplacement,
   type FlightStep,
   type Pose,
@@ -52,6 +56,11 @@ export interface FlightRecord {
   readonly cyclePoses: Pose[];
   /** Simulation time at which each cycle completed (ms). */
   readonly cycleEndMs: number[];
+  /**
+   * The speed each cycle was flown at (control.cycleSpeed: the plan's set
+   * speed after the dial cap) — what the oracle must be asked about.
+   */
+  readonly cycleSpeeds: number[];
   /** Every tick, unwrapped. */
   readonly samples: TelemetrySample[];
   /** Largest single-tick displacement observed (px) — teleport detector. */
@@ -68,6 +77,11 @@ export interface FlightOptions {
   readonly actions?: ReadonlyArray<TimedAction>;
   /** Battlefield edge length (default BATTLEFIELD_SIZE). */
   readonly worldSize?: number;
+  /**
+   * Fly with the ship's dial speed caps like the game does (default true);
+   * false flies every plan speed as set (raw template geometry).
+   */
+  readonly dialCaps?: boolean;
 }
 
 /** A flight action fired at a simulation time. */
@@ -127,6 +141,7 @@ function spawnShip(definitionId: string, pose: Pose): ShipState {
 function initialControl(
   ship: ShipState,
   first: FlightStep,
+  dialCaps: boolean,
 ): { control: ShipControlState; baseSize: number } {
   const def = getShipDefinition(ship.definitionId);
   const baseSize = SHIP_SIZES[def?.baseStats.size ?? "small"] ?? 32;
@@ -135,6 +150,9 @@ function initialControl(
     baseSize,
     getMovementProfile(ship.definitionId),
     def?.baseStats.speed ?? { min: 1, max: 5 },
+    dialCaps
+      ? flightCapabilitiesOf(ship.definitionId, "identity")
+      : UNRESTRICTED_CAPABILITIES,
   );
   const control = startManeuver(
     ship,
@@ -159,6 +177,39 @@ function queueStep(
 }
 
 /**
+ * @param options - The flight options.
+ * @param tick - Tick index.
+ * @returns The length of that tick (ms).
+ */
+function tickLength(options: FlightOptions, tick: number): number {
+  const { tickMs } = options;
+  if (typeof tickMs === "function") return tickMs(tick);
+  return tickMs ?? ARCADE_FIXED_TICK_MS;
+}
+
+/**
+ * Perform every flight action due by `tMs` (consumed from `pending`).
+ * @param state - Motion state.
+ * @param ship - The ship.
+ * @param pending - Actions sorted by time (mutated).
+ * @param tMs - Simulation time (ms).
+ * @param worldSize - Battlefield edge length (px).
+ * @returns The motion state after the actions.
+ */
+function performDueActions(
+  state: MotionState,
+  ship: ShipState,
+  pending: TimedAction[],
+  tMs: number,
+  worldSize: number,
+): MotionState {
+  let next = state;
+  while (pending.length > 0 && pending[0]!.atMs <= tMs)
+    next = performAction(next, ship, pending.shift()!.action, worldSize).state;
+  return next;
+}
+
+/**
  * Fly a ship through a plan, one maneuver per cycle, and record telemetry.
  *
  * @param definitionId - Ship definition id.
@@ -172,19 +223,16 @@ export function flyArcadeShip(
   options: FlightOptions = {},
 ): FlightRecord {
   const worldSize = options.worldSize ?? BATTLEFIELD_SIZE;
-  const start = options.start ?? {
-    x: worldSize / 2,
-    y: worldSize / 2,
-    angle: 0,
-  };
-  const tickOf = (i: number): number =>
-    typeof options.tickMs === "function"
-      ? options.tickMs(i)
-      : (options.tickMs ?? ARCADE_FIXED_TICK_MS);
+  const mid = worldSize / 2;
+  const start = options.start ?? { x: mid, y: mid, angle: 0 };
   const pending = [...(options.actions ?? [])].sort((a, b) => a.atMs - b.atMs);
 
   const ship = spawnShip(definitionId, start);
-  const { control, baseSize } = initialControl(ship, plan[0]!);
+  const { control, baseSize } = initialControl(
+    ship,
+    plan[0]!,
+    options.dialCaps ?? true,
+  );
   let state: MotionState = {
     x: start.x,
     y: start.y,
@@ -196,6 +244,7 @@ export function flyArcadeShip(
   let maxTickJumpPx = 0;
   const cyclePoses: Pose[] = [];
   const cycleEndMs: number[] = [];
+  const cycleSpeeds: number[] = [];
   const samples: TelemetrySample[] = [];
 
   for (
@@ -203,16 +252,9 @@ export function flyArcadeShip(
     cyclePoses.length < plan.length && tick < MAX_TICKS;
     tick++
   ) {
-    const dt = tickOf(tick);
+    const dt = tickLength(options, tick);
     const before = state;
-    while (pending.length > 0 && pending[0]!.atMs <= tMs) {
-      state = performAction(
-        state,
-        ship,
-        pending.shift()!.action,
-        worldSize,
-      ).state;
-    }
+    state = performDueActions(state, ship, pending, tMs, worldSize);
     const step = stepMotion(state, ship, dt, worldSize);
     state = step.state;
     tMs += dt;
@@ -232,6 +274,7 @@ export function flyArcadeShip(
         angle: endPose.angle,
       });
       cycleEndMs.push(tMs - step.carriedMs);
+      cycleSpeeds.push(step.completed.speed);
       state = {
         ...state,
         control: queueStep(state.control, plan[cyclePoses.length + 1]),
@@ -239,5 +282,12 @@ export function flyArcadeShip(
     }
   }
 
-  return { baseSize, cyclePoses, cycleEndMs, samples, maxTickJumpPx };
+  return {
+    baseSize,
+    cyclePoses,
+    cycleEndMs,
+    cycleSpeeds,
+    samples,
+    maxTickJumpPx,
+  };
 }

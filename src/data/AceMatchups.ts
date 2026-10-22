@@ -47,7 +47,9 @@ export const ACE_MATCHUPS: readonly AceMatchup[] = [
       name: "Phoenix Commander",
       faction: "free_confederation",
       ships: ["confed_eagle"],
-      abilities: ["predator", "fearless"],
+      // Predator + Tenacity (was + Fearless): the Centurion won 75 % at
+      // average after the per-maneuver speed cap; now 63 %.
+      abilities: ["predator", "tenacity"],
     },
   },
   {

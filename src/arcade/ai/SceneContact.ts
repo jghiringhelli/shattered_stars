@@ -50,7 +50,7 @@ export function botContactOf(ship: BotShipSource, side: string): BotContact {
     maxShields: ship.maxShields,
     firingArcDeg: ship.combatStats.firingArc,
     weaponRange: ship.combatStats.weaponRange,
-    speed: ship.flight.motion.control.speed,
+    speed: ship.flight.motion.control.cycleSpeed,
     isStressed: ship.flight.stress.isStressed,
   };
 }

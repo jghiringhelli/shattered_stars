@@ -19,7 +19,7 @@ The game is dropping "Force" from player-facing text: the Ascendant powers are *
 | Terran Hegemony | Squad discipline and elite (expensive) aces | **Coordinated Fire**: allies within 380 px deal +0.35 damage per hit; talents Squadron Leader / Coordinated Assault; **Hold the Line** aces (Kane, Whisper Null: +1 damage, 20 % less damage beside a wingman) priced into the pilot |
 | Free Confederation | Crew, riggers and versatile ordnance | **Rallying Banner**: allies within 280 px take 30 % less damage; Confederation-only rigger slots (Repair / Targeting Rigger) and crew coordinators; torpedo and missile racks on its fighters |
 | Synthetic Collective | Cheap swarm and data-link coordination | **Hive Resilience**: 8 % less damage per nearby drone (cap 30 %) within 400 px; data-link cards (Swarm Uplink, Collective-only; Pattern Analyzer); the cheapest hulls (four ships at 200 points) |
-| Void Corsairs | Tricks (boost / barrel roll, illicit upgrades) and hit-and-run aces | **Raider's Cadence**: maneuvers one stress tier easier and +10 % to hit within 700 px (raiders fly loose); Corsair-only illicit slots; trick talents (Expert Handling, Daredevil, Phantom Strike); raider aces |
+| Void Corsairs | Tricks (boost / barrel roll, illicit upgrades) and hit-and-run aces | **Raider's Cadence**: maneuvers one stress tier easier and +10 % to hit within 800 px (raiders fly loose); Corsair-only illicit slots; trick talents (Expert Handling, Daredevil, Phantom Strike); raider aces |
 | Ascendant Empire | Shields, support and psychic powers | **Aegis Field**: allies within 220 px regenerate 0.25 shield HP/s; psychic powers and talents (Ascendant-only: Foresight, Sensitive, Mending Light); support hulls (acolytes, prophets, oracles) projecting the field |
 
 The 200-point preset of every faction (the Skirmish auto-fill) flies at least one identity card or
@@ -68,7 +68,7 @@ radius of the Hegemony, hit-chance bonus of the Corsairs (capped at +10 % by the
 - Hegemony Coordinated Fire 0.6 → 0.35 (Iron Fist now flies four hulls under it).
 - Confederation Rallying Banner 20 % → 30 % → 33 % (round 4: with the stacking falloff below, 30 % left FC at 44 % classic; 35 % made it 59 % in classic scenarios).
 - Collective Hive Resilience per drone 6 % → 8 %, radius 340 → 400 px.
-- Corsair Raider's Cadence 300 px / +5 % → 700 px / +10 % hit, stress relief unchanged.
+- Corsair Raider's Cadence 300 px / +5 % → 700 px / +10 % hit, stress relief unchanged; 700 → 800 px with the per-maneuver speed cap (Skirmish share 25 % → 31 %).
 - Ascendant Aegis Field 2.4 → 0.4 → 0.25 shield HP/s (long battles accumulate regeneration).
 - Presets carry identity: Iron Fist (Kane, four hulls), Terror Squadron (Bloody Cutlass, illicit
   capacitors), Temple Inquisition (psychic Foresight / Sensitive under the Aegis Field).

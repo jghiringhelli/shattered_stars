@@ -5,6 +5,7 @@
  * the rules live in src/arcade/systems/FlightCapabilities.ts.
  */
 
+import type { DialSpeedTable } from "./speedCap";
 import type { ManeuverDifficulty } from "./types";
 
 export type { SignatureTrick } from "./types";
@@ -41,6 +42,11 @@ export interface FlightCapabilities {
    * Absent = true.
    */
   readonly canManeuver?: boolean;
+  /**
+   * Speeds the dial prints for each maneuver, for the per-maneuver speed cap
+   * (src/core/speedCap). Absent = no cap (huge ships, legacy states).
+   */
+  readonly dialSpeeds?: DialSpeedTable;
 }
 
 /** Anything goes: unknown ships and legacy/test control states. */

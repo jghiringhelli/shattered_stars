@@ -9,7 +9,6 @@ import {
   updateManeuver,
   advanceCycle,
   updateCooldowns,
-  getContinuousMovement,
   canFire,
   canKTurn,
   canBarrelRoll,
@@ -301,66 +300,6 @@ describe("ArcadeControls", () => {
       const result = updateCooldowns(control, 500);
 
       expect(result.barrelRollCooldown).toBe(1500);
-    });
-  });
-
-  describe("getContinuousMovement", () => {
-    it("should return forward movement based on angle and speed", () => {
-      const ship = createMockShip({ angle: 0 }); // Facing up
-      // getContinuousMovement only moves when currentManeuver === null
-      const control: ShipControlState = {
-        ...createControlState(ship),
-        currentManeuver: null,
-      };
-
-      const movement = getContinuousMovement(ship, control, 1000);
-
-      expect(movement.y).toBeLessThan(ship.y); // Moving up (negative y in Phaser)
-      expect(Math.abs(movement.x - ship.x)).toBeLessThan(1); // Almost no x movement
-    });
-
-    it("should not move when maneuver is active", () => {
-      const ship = createMockShip({ angle: 0 });
-      const control = createControlState(ship); // starts straight
-
-      const movement = getContinuousMovement(ship, control, 1000);
-
-      expect(movement.x).toBe(ship.x);
-      expect(movement.y).toBe(ship.y);
-    });
-
-    it("should move faster at higher speeds", () => {
-      const ship = createMockShip({ angle: 0 });
-      // currentManeuver must be null for continuous movement
-      const slowControl: ShipControlState = {
-        ...createControlState(ship),
-        speed: 1,
-        currentManeuver: null,
-      };
-      const fastControl: ShipControlState = {
-        ...createControlState(ship),
-        speed: 5,
-        currentManeuver: null,
-      };
-
-      const slow = getContinuousMovement(ship, slowControl, 1000);
-      const fast = getContinuousMovement(ship, fastControl, 1000);
-
-      expect(Math.abs(fast.y - ship.y)).toBeGreaterThan(
-        Math.abs(slow.y - ship.y),
-      );
-    });
-
-    it("should respect angle direction", () => {
-      const ship = createMockShip({ angle: 90 }); // Facing right
-      const control: ShipControlState = {
-        ...createControlState(ship),
-        currentManeuver: null,
-      };
-
-      const movement = getContinuousMovement(ship, control, 1000);
-
-      expect(movement.x).toBeGreaterThan(ship.x); // Moving right
     });
   });
 

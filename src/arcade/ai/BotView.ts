@@ -98,6 +98,7 @@ export function ownShipView(input: OwnShipInput): OwnShipView {
     baseSize: control.baseSize,
     stressLevel: stress.level,
     dial: input.dial,
+    dialSpeeds: control.capabilities?.dialSpeeds,
     msToCommit: (1 - control.maneuverProgress) * CYCLE_DURATION_MS,
     endPose: end ? { x: end.x, y: end.y, angle: end.angle } : pose,
     ...flyableActions(input, stress.isStressed),

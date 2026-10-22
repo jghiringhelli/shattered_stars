@@ -24,7 +24,11 @@ import {
   type SpecialManeuver,
   type TrickRule,
 } from "../../core/flightCapabilityTypes";
-import { getShipDefinition } from "../../data/ShipDefinitions";
+import { dialSpeedTable } from "../../core/speedCap";
+import {
+  getMovementProfile,
+  getShipDefinition,
+} from "../../data/ShipDefinitions";
 import { effectiveActions, effectiveDial } from "../../data/shipSpecials";
 import { shipSpecialsRule } from "../../systems/SettingsStorage";
 
@@ -124,10 +128,14 @@ export function flightCapabilitiesOf(
   if (!def) return UNRESTRICTED_CAPABILITIES;
   if (def.baseStats.size === "huge") return HUGE_CAPABILITIES;
   const actions: readonly string[] = effectiveActions(def, trickRule);
+  const dial = effectiveDial(definitionId, trickRule);
   return {
     boost: actions.includes("boost"),
     barrelRoll: actions.includes("barrel_roll"),
-    specials: specialsOnDial(effectiveDial(definitionId, trickRule)),
+    specials: specialsOnDial(dial),
+    ...(getMovementProfile(definitionId) === "capital"
+      ? {}
+      : { dialSpeeds: dialSpeedTable(dial) }),
   };
 }
 

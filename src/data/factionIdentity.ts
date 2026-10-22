@@ -76,7 +76,7 @@ export const FACTION_IDENTITIES: Readonly<Record<FactionId, FactionIdentity>> =
       faction: "void_corsairs",
       specialty: "Tricks and hit-and-run aces",
       levers: [
-        "Raider's Cadence aura: maneuvers one stress tier easier and +10% to hit inside 700 px",
+        "Raider's Cadence aura: maneuvers one stress tier easier and +10% to hit inside 800 px",
         "Illicit slots (Corsair-only): Overcharged Capacitors, Hot-Wired Engines and other black-market gear",
         "Trick talents (Expert Handling, Daredevil, Phantom Strike) and raider aces",
       ],

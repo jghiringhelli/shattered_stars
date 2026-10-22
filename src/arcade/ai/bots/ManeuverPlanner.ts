@@ -11,7 +11,8 @@
  */
 
 import { CYCLE_DURATION_MS } from "../../../config";
-import { findBestTurnSpeed } from "../../ArcadeStress";
+import { hardTurnThrottle } from "../../HardTurnThrottle";
+import { flownSpeed } from "../../../core/speedCap";
 import type { ManeuverDirection } from "../../../core/types";
 import {
   generateManeuverPath,
@@ -81,22 +82,23 @@ export function planManeuver(
   let best: PlanOption = { maneuver: "straight", speed: self.speed };
   let bestScore = -Infinity;
   for (const option of candidateOptions(self)) {
-    const pose = poseAfter(
-      self.endPose,
-      option.maneuver,
-      option.speed,
-      self.baseSize,
-    );
+    const flown = flownSpeed(self.dialSpeeds, option.maneuver, option.speed);
+    const pose = poseAfter(self.endPose, option.maneuver, flown, self.baseSize);
     const halfway = midPose(
       self.endPose,
       option.maneuver,
-      option.speed,
+      flown,
       self.baseSize,
     );
     let follow = -Infinity;
     for (const speed of followUpSpeeds(option.speed, self)) {
       for (const next of FOLLOW_UPS) {
-        const later = poseAfter(pose, next, speed, self.baseSize);
+        const later = poseAfter(
+          pose,
+          next,
+          flownSpeed(self.dialSpeeds, next, speed),
+          self.baseSize,
+        );
         follow = Math.max(follow, scorePose(later, second, input, weights));
       }
     }
@@ -119,17 +121,20 @@ export function planManeuver(
  */
 export function candidateOptions(self: OwnShipView): PlanOption[] {
   const options: PlanOption[] = [];
-  for (let speed = self.speed - 1; speed <= self.speed + 1; speed++) {
+  // Keep the throttle first: options that fly the same capped speed tie, and
+  // the first of a tie wins, so a ship never slows down just to bank.
+  for (const speed of [self.speed, self.speed + 1, self.speed - 1]) {
     if (speed < self.minSpeed || speed > self.maxSpeed) continue;
     for (const maneuver of STEER_OPTIONS) options.push({ maneuver, speed });
   }
-  const turnSpeed = findBestTurnSpeed(
-    self.dial,
-    self.speed,
-    self.minSpeed,
-    self.maxSpeed,
-    self.isStressed,
-  );
+  const turnSpeed = hardTurnThrottle({
+    dial: self.dial,
+    dialSpeeds: self.dialSpeeds,
+    speed: self.speed,
+    minSpeed: self.minSpeed,
+    maxSpeed: self.maxSpeed,
+    isStressed: self.isStressed,
+  });
   if (turnSpeed !== null)
     for (const maneuver of TURN_OPTIONS)
       options.push({ maneuver, speed: turnSpeed });
@@ -139,6 +144,21 @@ export function candidateOptions(self: OwnShipView): PlanOption[] {
     if (self.availableSpecials.includes(maneuver))
       options.push({ maneuver, speed: self.speed });
   return options;
+}
+
+/**
+ * @param self - Own ship.
+ * @param option - A maneuver and throttle the pilot could queue.
+ * @returns Where the template puts the ship at the coming boundary, flown at
+ * the speed the dial allows for it (min of throttle and cap).
+ */
+export function plannedPose(self: OwnShipView, option: PlanOption): Pose {
+  return poseAfter(
+    self.endPose,
+    option.maneuver,
+    flownSpeed(self.dialSpeeds, option.maneuver, option.speed),
+    self.baseSize,
+  );
 }
 
 /**

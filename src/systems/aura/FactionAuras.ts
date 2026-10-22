@@ -224,9 +224,9 @@ export const FACTION_AURAS: Record<FactionId, FactionAura> = {
     name: "Raider's Cadence",
     faction: "void_corsairs",
     effect: "stress_relief",
-    // 700 px / +10 % (was 300 / +5 %): raiders fly loose, so the cadence
-    // reaches the whole pack — the Corsairs' hit-and-run edge.
-    radius: 700,
+    // 800 px / +10 % (was 300 / +5 %, then 700 before the per-maneuver speed
+    // cap cost the Corsairs Skirmish games): raiders fly loose.
+    radius: 800,
     magnitude: 1,
     hitChanceBonus: 0.1,
     description:

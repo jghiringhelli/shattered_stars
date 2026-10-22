@@ -36,6 +36,7 @@ export interface MotionState {
 /** The maneuver a ship just finished, for stress classification. */
 export interface CompletedCycle {
   readonly direction: ManeuverDirection;
+  /** The speed it was flown at (the dial cap applied), not the set throttle. */
   readonly speed: number;
   /** Exact pose at the cycle boundary (wrapped), before any carried time. */
   readonly endPose: {
@@ -92,7 +93,7 @@ export function stepMotion(
   if (cycleComplete) {
     completed = {
       direction: control.currentManeuver ?? "straight",
-      speed: control.speed,
+      speed: control.cycleSpeed,
       endPose: {
         x: wrapCoordinate(x, worldSize),
         y: wrapCoordinate(y, worldSize),

@@ -7,6 +7,7 @@
  */
 
 import { CYCLE_DURATION_MS } from "../../../config";
+import { flownSpeed } from "../../../core/speedCap";
 import {
   KTURN_STRESS_INSTANT,
   lookupDialDifficulty,
@@ -64,7 +65,7 @@ export const EXPERT_WEIGHTS: PlanWeights = {
   range: 1,
   rear: 4,
   danger: 9,
-  crowding: 3,
+  crowding: 0,
   followUp: 0.7,
   midCycle: 0.6,
   red: 0.5,
@@ -172,7 +173,11 @@ export function stressCost(
     : option.maneuver.includes("bank")
       ? "bank_left"
       : "straight";
-  const difficulty = lookupDialDifficulty(dialDir, option.speed, self.dial);
+  const difficulty = lookupDialDifficulty(
+    dialDir,
+    flownSpeed(self.dialSpeeds, option.maneuver, option.speed),
+    self.dial,
+  );
   const projected =
     self.stressLevel +
     (special ? KTURN_STRESS_INSTANT : 0) +

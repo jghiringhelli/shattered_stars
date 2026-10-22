@@ -12,6 +12,7 @@
 
 import { samplePath, type ShipControlState } from "../../core/ArcadeControls";
 import type { ManeuverDefinition, ManeuverDirection } from "../../core/types";
+import { flownSpeed } from "../../core/speedCap";
 import { generateManeuverPath } from "../../systems/MovementSystem";
 
 /** Waypoints sampled per previewed maneuver (matches the engine's path). */
@@ -140,7 +141,14 @@ export function planOrderPreview(
     start.x,
     start.y,
     start.angle,
-    { ...order, speed: clampOrderSpeed(control, order.speed) },
+    {
+      ...order,
+      speed: flownSpeed(
+        control.capabilities?.dialSpeeds,
+        order.direction,
+        clampOrderSpeed(control, order.speed),
+      ),
+    },
     PREVIEW_PATH_POINTS,
     control.baseSize,
     control.movementProfile,

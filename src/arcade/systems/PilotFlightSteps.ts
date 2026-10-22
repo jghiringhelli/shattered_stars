@@ -11,9 +11,9 @@ import type { GestureAction } from "../ArcadeInputGestures";
 import {
   applyBoostStress,
   applyKturnStress,
-  findBestTurnSpeed,
   type StressState,
 } from "../ArcadeStress";
+import { hardTurnThrottle } from "../HardTurnThrottle";
 import { steeringQueue, type HeldSteering } from "../SteeringIntent";
 import { performAction, type MotionState } from "./ShipMotion";
 import type { FlightEvent, FlownShip } from "./PilotFlightTypes";
@@ -43,8 +43,9 @@ function command(
 }
 
 /**
- * Queue a 90° turn at the nearest speed the dial allows (red turns are
- * skipped while stressed). Speed is adjusted for the next cycle.
+ * Queue a 90° turn. The throttle is kept (the turn is flown at the dial's
+ * turn speed, see src/core/speedCap) unless a stressed pilot would fly it
+ * red: then the nearest non-red speed is set for the next cycle.
  * @param flown - Ship being flown.
  * @param motion - Current motion state.
  * @param stress - Current stress.
@@ -58,13 +59,14 @@ function queueHardTurn(
   direction: "turn_left" | "turn_right",
 ): MotionState {
   const { control } = motion;
-  const best = findBestTurnSpeed(
-    flown.dial,
-    control.speed,
-    control.minSpeed,
-    control.maxSpeed,
-    stress.isStressed,
-  );
+  const best = hardTurnThrottle({
+    dial: flown.dial,
+    dialSpeeds: control.capabilities?.dialSpeeds,
+    speed: control.speed,
+    minSpeed: control.minSpeed,
+    maxSpeed: control.maxSpeed,
+    isStressed: stress.isStressed,
+  });
   if (best === null) return motion;
   return command(
     flown,

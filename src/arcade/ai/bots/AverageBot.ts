@@ -49,6 +49,7 @@ export const AVERAGE_STEER: SteerThresholds = { hold: 15, drift: 37, bank: 67 };
 /** Reading the dial one cycle ahead, with less fear of enemy arcs than an ace. */
 export const AVERAGE_WEIGHTS: PlanWeights = {
   ...EXPERT_WEIGHTS,
+  crowding: 3,
   danger: 4,
   rear: 2,
   followUp: 0,
