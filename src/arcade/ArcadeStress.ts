@@ -4,8 +4,9 @@
  * Each ship's dial (from ShipDefinitions) encodes per-speed/direction difficulty:
  * green = easy, white = neutral, red = stressful. Arcade inputs are classified
  * into the nearest dial template each frame; sustained red-difficulty flying
- * accumulates stress until the pilot is "stressed", blocking further red maneuvers
- * until green flying drains it. This mirrors the tabletop rule set in real-time.
+ * accumulates stress; non-red flying drains it passively (green faster), so a
+ * stressed pilot — blocked from red maneuvers and actions — clears by itself.
+ * This mirrors the tabletop rule set in real-time.
  */
 
 import type { ManeuverDefinition, ManeuverDifficulty } from "../core/types";
@@ -30,11 +31,24 @@ export const INITIAL_STRESS: StressState = { level: 0, isStressed: false };
 // Tuning constants
 // ============================================
 
+/**
+ * Passive stress drain (fraction of the full bar per second) of every non-red
+ * maneuver: stress clears by itself, no recovery action is required. From a
+ * full bar a stressed pilot is clear (STRESS_LOW) in 0.85 / 0.2 = 4.25 s.
+ */
+export const STRESS_PASSIVE_DRAIN_PER_SECOND = 0.2;
+
+/** Extra drain per second on top of the passive one while flying a green maneuver. */
+export const STRESS_GREEN_BONUS_DRAIN_PER_SECOND = 0.15;
+
 /** Stress change rate (fraction of full bar) per second for each difficulty. */
 export const STRESS_RATES: Record<ManeuverDifficulty, number> = {
-  green: -0.35, // full bar drains in ~3 s of green flying
-  white: -0.05, // slow passive decay when neither pushing nor recovering
-  red: 0.28, // full bar fills in ~3.5 s of sustained red maneuver
+  // total -0.35: a full bar clears in ~2.5 s of green flying
+  green: -(
+    STRESS_PASSIVE_DRAIN_PER_SECOND + STRESS_GREEN_BONUS_DRAIN_PER_SECOND
+  ),
+  white: -STRESS_PASSIVE_DRAIN_PER_SECOND, // clears in ~4.5 s, whatever the maneuver
+  red: 0.28, // full bar fills in ~3.5 s of sustained red maneuver (no passive drain)
 };
 
 /** stress.level threshold to enter the stressed state. */
@@ -201,40 +215,6 @@ export function applyKturnStress(state: StressState): StressState {
  */
 export function applyBoostStress(state: StressState): StressState {
   return applyInstantStress(state, BOOST_STRESS_INSTANT);
-}
-
-// ============================================
-// Color helpers (for HUD rendering)
-// ============================================
-
-/**
- * Returns a hex color string interpolated from green → yellow → red
- * based on the current stress level.
- *
- * @param level - 0.0–1.0 stress level
- * @returns CSS hex color string (e.g. '#44ff44')
- */
-export function stressLevelColor(level: number): string {
-  if (level < 0.5) {
-    // green → yellow
-    const t = level / 0.5;
-    const r = Math.round(0x44 + t * (0xff - 0x44));
-    return `#${r.toString(16).padStart(2, "0")}ff44`;
-  }
-  // yellow → red
-  const t = (level - 0.5) / 0.5;
-  const g = Math.round(0xff * (1 - t));
-  return `#ff${g.toString(16).padStart(2, "0")}44`;
-}
-
-/**
- * Returns the hex color corresponding to a ManeuverDifficulty.
- * Used to tint the maneuver label in the HUD.
- */
-export function difficultyColor(difficulty: ManeuverDifficulty): string {
-  if (difficulty === "green") return "#44ff44";
-  if (difficulty === "red") return "#ff4444";
-  return "#ffffff";
 }
 
 // ============================================

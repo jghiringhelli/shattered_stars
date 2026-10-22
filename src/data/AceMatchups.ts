@@ -92,10 +92,10 @@ export const ACE_MATCHUPS: readonly AceMatchup[] = [
       name: "Confederation Freighter Captain",
       faction: "free_confederation",
       ships: ["confed_hawk"],
-      // Stealth Device + Marksmanship (was + Fearless): the Marauder won
-      // 68 % at expert after the Hawk Assault build lost its Heavy Laser
-      // Cannon; now 45 / 57 %.
-      abilities: ["stealth_device", "marksmanship"],
+      // Tenacity + Marksmanship (was Stealth Device + Marksmanship): the
+      // Marauder won 75 % at average once stress cleared passively (round 5
+      // stress rework); now 50 / 50 % at average / expert.
+      abilities: ["tenacity", "marksmanship"],
     },
   },
   {

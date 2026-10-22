@@ -101,14 +101,14 @@ export const STAT_TERMS = {
   ),
   "dial.green": term(
     "Green maneuver",
-    "A calm manoeuvre on the dial. Flying it removes stress from the pilot.",
+    "A calm manoeuvre on the dial. Flying it removes stress from the pilot faster than anything else.",
     "A straight 2 or a gentle bank is green: free and stress-reducing.",
-    "Chain green moves between red ones to keep the ship clear of stress.",
+    "Chain green moves between red ones to clear stress about twice as fast.",
     "dial_green",
   ),
   "dial.white": term(
     "White maneuver",
-    "A standard manoeuvre. It neither adds nor removes stress.",
+    "A standard manoeuvre. It adds no stress and lets it fade slowly.",
     "A normal turn at speed 2 is usually white.",
     "White moves are your reliable default — they never cost you anything.",
     "dial_white",
@@ -122,9 +122,9 @@ export const STAT_TERMS = {
   ),
   "dial.stress": term(
     "Stress",
-    "Pressure from red manoeuvres, boosts and hostile effects. While stressed you cannot fly red manoeuvres or take actions; green manoeuvres clear it.",
-    "Fly a red hard turn, then try to boost: it is refused until a green move relieves the stress. A Snap Turn adds stress at once.",
-    "Plan red moves in pairs with a green one, or give the pilot stress relief from a card or an aura.",
+    "Pressure from red manoeuvres, boosts and hostile effects. While stressed you cannot fly red manoeuvres or take actions; stress fades by itself in about 4–5 s of calm flying (green moves clear it faster).",
+    "Fly a red hard turn, then try to boost: it is refused until the stress has faded. A Snap Turn adds stress at once.",
+    "Plan red moves with calm flying in between, or give the pilot stress relief from a card or an aura.",
     "stress",
   ),
   "maneuver.snap_turn": term(

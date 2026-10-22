@@ -122,14 +122,13 @@ class Trace {
 }
 
 describe("why the Knife roll lesson got stuck (real pilot trace)", () => {
-  it("refuses a Knife roll after the Snap and Hook lessons: the trainee is stressed", () => {
+  it("no longer sticks the Knife roll lesson: stress clears by itself after the Snap and Hook lessons", () => {
     const trace = new Trace();
     trace.snapAndWait();
     trace.hook();
-    expect(trace.flight.stress.isStressed).toBe(true);
+    expect(trace.flight.stress.isStressed).toBe(false);
     trace.knife();
-    expect(trace.refusals.map((r) => r.reason)).toContain("stressed");
-    expect(trace.queued).not.toBe("tallon_left");
+    expect(trace.refusals.map((r) => r.reason)).not.toContain("stressed");
   });
 
   it("flies the Knife roll after the lesson-start refresh", () => {
