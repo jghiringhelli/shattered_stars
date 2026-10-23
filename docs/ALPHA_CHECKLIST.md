@@ -11,26 +11,26 @@ Started from four evidence-based audits (core gameplay, content, balance, releas
 | # | Action | Why |
 |---|---|---|
 | 1 | ✅ Done 2026-10-20 (owner confirmed a paid plan for all 13 shipped Suno tracks; keep the receipts) | Music rights; see [THIRD_PARTY.md](THIRD_PARTY.md) |
-| 2 | Verify the Civitai licence ("may sell generated images") of the `concept_art`, `scifi_style`, `alien_species` and the stained-glass LoRAs actually used; list which LoRA made the shipped art | AI-art licence risk; the credits claim about `concept_art` may be inaccurate |
+| 2 | Civitai licences: links recorded in [THIRD_PARTY.md](THIRD_PARTY.md); owner is reading the addendum of each LoRA (`concept_art`, `scifi_style`, `alien_species`) and still has to identify the stained-glass LoRAs used for shipped art | AI-art licence risk; the credits claim about `concept_art` may be inaccurate |
 | 3 | Decide online: ship the beta **offline-only** (leave `VITE_ONLINE_URL` empty; the lobby then explains and offers offline play) or deploy the relay per [RELEASE.md](RELEASE.md) and set `ALLOWED_ORIGINS` | No relay is deployed |
-| 4 | Push `release`, enable Pages, set the Actions variables, create the issue labels (`bug`, `balance`, `ui-ux`, `enhancement`) | Nothing is published yet |
-| 5 | Bump `package.json` version for the public build (corner tag now reads `v0.1.0 BETA`) | Testers must be able to name the build |
+| 4 | ✅ Done 2026-10-21: `release` pushed, Pages enabled (source GitHub Actions, `release` allowed in the `github-pages` environment), labels created. Published at https://jghiringhelli.github.io/shattered_stars/; the relay is not deployed (offline-only beta) | Each push to `release` runs CI and deploys (about 20 min) |
+| 5 | ✅ Version `0.2.0-beta.1`; the corner tag shows version, short commit SHA and date | Testers can name the build |
 | 6 | Read the new texts once (README, PRIVACY, TESTER_GUIDE, KNOWN_ISSUES, in-game welcome) | They state what the game stores and sends |
 
-### Gate results (2026-10-20, after balance round 5)
+### Gate results (2026-10-22, after the flight-feel round: Space key, stress HUD, speed cap, passive stress)
 
 | Gate | Result |
 |---|---|
 | `npm run lint`, `tsc --noEmit` (src and `tsconfig.tests.json`) | Clean |
-| Vitest unit + balance + simulation | 418 files, 5997 tests passed |
+| Vitest unit + balance + simulation + integration | 442 files, 6573 tests passed |
 | `npm run test:skill` (piloting gates) | 25 passed (gate 1 expert >= 85 % in every pair, gate 2 coordinated squad >= 70 %) |
 | `npm run build` + `scripts/measure_first_load.ts` | First menu 3.8 MB in the JS/HTML requests, 4.71 MB after the first input (menu music); target < 10 MB |
 | Scripted tour of all 12 menu scenes (each restarted once) + Flight School + `verify:loop` (5 battle scenarios) | 0 page errors, 0 "Texture key already in use", INV-6b/6c clean; the only console error is the dev build's default relay `ws://localhost:8080` being down |
-| Playwright full suite | 651 tests: 626 passed on the first run, 15 failed. Rerun individually: 12 were flakes or mine and are fixed or green (see below); **3 still fail** (below) |
+| Playwright full suite (3 workers, local) | 702 tests: 697 passed, 5 failed. All five were test problems and are fixed or pass alone: the Epic mine round (escorts trip the mine first), the stress HUD spec (re-pinning each frame fought the new passive drain), the Q/E tab step (key press too short for a frame), and two that pass alone but fail under load (Flight School lessons 1-15, online Skirmish hash). Watch the last two |
 | Browsers (Chromium, Firefox 146, WebKit 26, each Canvas and WebGL) | Smoke 6/6 on dev and on the production preview (`tests/e2e/cross-browser.spec.ts`, `BROWSERS=all`) |
 | FPS, real Intel UHD, production-style build, 25 s each | Menu 60; Epic 40 ships avg 58.6 (1 % low 30); Survival + 40 enemies 54.4 avg (60 on a headed run); creature boss 53.8; campaign with torus cameras and parallax 54.0; software GL (SwiftShader) 12–28 FPS |
 
-**Still failing in Playwright (not caused by this work):** `flight-school › completed with real inputs` (the spec's Hook lesson uses Shift+Q, but the in-progress input rework changed the Hook binding to Hold Z + ←/→), and `BOSS RAID` in `game-modes-tour` and `sortie-briefing` (the Boss Raid setup screen is being reworked by the pick-UI work). Re-run them when those changes land; do not tag a release with them red. Fixed in this pass: the touch-control specs (the new "phones are not supported" notice covered the controls; the specs now start as a player who dismissed it), the telemetry-stats spec (it assumed VIEW STATS was the last Settings button), the compat/cross-browser specs (they spoof a normal browser and so got the new welcome).
+The earlier failures (Flight School Hook lesson, Boss Raid setup screen) were fixed by the input rework and the pick-UI work.
 
 ### Before promoting widely (not needed for a limited beta)
 

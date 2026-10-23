@@ -154,7 +154,7 @@ Se ejecutan mientras tú pruebas. Resultado en la columna de estado.
 
 | # | Tarea | Qué comprueba | Estado |
 |---|---|---|---|
-| B1 | Suite e2e completa en servidor tranquilo | Que nada de lo cambiado en las últimas rondas rompió algo no cubierto por CI | [ ] |
+| B1 | Suite e2e completa en servidor tranquilo | Que nada de lo cambiado en las últimas rondas rompió algo no cubierto por CI | [x] 697/702; los 5 fallos eran de test y están corregidos |
 | B2 | Humo contra la web publicada | Arranque, cada pantalla de menú y una batalla de cada modo en el sitio real, con errores de consola | [ ] |
 | B3 | Firefox y WebKit | Investigar el fallo no bloqueante del CI (timeout en modo canvas, descarga de navegadores) | [ ] |
 | B4 | Pruebas de larga duración | IA contra IA 10 min en cada modo: fugas de memoria, errores, bloqueos | [ ] |

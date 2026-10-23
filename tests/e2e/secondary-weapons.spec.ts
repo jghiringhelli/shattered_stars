@@ -119,20 +119,31 @@ async function waitForHit(
   weapon: string,
   anyHostile = false,
 ): Promise<number> {
-  const handle = await page.waitForFunction(
-    ({ wpn, any }) => {
-      const w = window as any;
-      const hit = w.__hits.find(
-        (h: any) =>
-          h.weapon === wpn &&
-          h.attackerId === w.__pid &&
-          (any || h.targetId === w.__enemyId),
+  const handle = await page
+    .waitForFunction(
+      ({ wpn, any }) => {
+        const w = window as any;
+        const hit = w.__hits.find(
+          (h: any) =>
+            h.weapon === wpn &&
+            h.attackerId === w.__pid &&
+            (any || h.targetId === w.__enemyId),
+        );
+        return hit ? hit.damage : null;
+      },
+      { wpn: weapon, any: anyHostile },
+      { timeout: 15_000 },
+    )
+    .catch(async (error: Error) => {
+      const seen = await page.evaluate(() =>
+        ((window as any).__hits as any[]).map(
+          (h) => `${h.weapon}:${h.attackerId}->${h.targetId}`,
+        ),
       );
-      return hit ? hit.damage : null;
-    },
-    { wpn: weapon, any: anyHostile },
-    { timeout: 15_000 },
-  );
+      throw new Error(
+        `no ${weapon} hit within 15 s (hits seen: ${JSON.stringify(seen)}): ${error.message}`,
+      );
+    });
   return (await handle.jsonValue()) as number;
 }
 
@@ -206,7 +217,8 @@ async function deviceRound(
   );
   await page.waitForTimeout(weapon === "mine" ? 600 : 0);
   await setPin(page, "device");
-  const damage = await waitForHit(page, weapon);
+  // An escort may trip the mine before the pinned enemy does (Epic): any hostile counts.
+  const damage = await waitForHit(page, weapon, weapon === "mine");
   const state = await slotState(page, sceneKey);
   expect(damage).toBeGreaterThan(0);
   expect(damage).toBeLessThanOrEqual(state.specDamage);

@@ -125,13 +125,13 @@ test.describe("Skirmish pick flow — tabs", () => {
   test("Q / E step the tabs and the last tab is remembered across ships", async ({ page }) => {
     await openSkirmish(page);
     await stage(page, "heavy_fighter");
-    await page.keyboard.press("e");
+    await page.keyboard.press("e", { delay: 60 });
     await expect.poll(() => openTabName(page)).toBe("stats");
-    await page.keyboard.press("e");
-    await page.keyboard.press("q");
+    await page.keyboard.press("e", { delay: 60 });
+    await page.keyboard.press("q", { delay: 60 });
     await expect.poll(() => openTabName(page)).toBe("stats");
-    await page.keyboard.press("q");
-    await page.keyboard.press("q");
+    await page.keyboard.press("q", { delay: 60 });
+    await page.keyboard.press("q", { delay: 60 });
     await expect.poll(() => openTabName(page)).toBe("builds");
     await stage(page, "interceptor");
     await expect.poll(() => openTabName(page)).toBe("builds");

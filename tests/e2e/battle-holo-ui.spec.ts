@@ -166,6 +166,23 @@ async function pinStress(
   );
 }
 
+/** Sets the player ship's stress once (the engine then keeps updating it). */
+async function setStressOnce(
+  page: Page,
+  sceneKey: string,
+  stress: { level: number; isStressed: boolean },
+): Promise<void> {
+  await page.evaluate(
+    ({ key, value }) => {
+      const scene = (window as any).game.scene.getScene(key);
+      const ship = scene.ships.get(scene.secondaryWeapons.playerShipId());
+      if (ship.flight) ship.flight = { ...ship.flight, stress: value };
+      else ship.stress = value;
+    },
+    { key: sceneKey, value: stress },
+  );
+}
+
 async function stressRow(
   page: Page,
   sceneKey: string,
@@ -204,19 +221,16 @@ for (const entry of [DOGFIGHT, SKIRMISH, BOSS_RAID]) {
       .poll(readRow)
       .toEqual({ counter: "STRESS 95%", label: "STRESSED" });
 
-    // A stressed pilot whose level falls: still locked, so "RECOVERING !".
-    for (const level of [0.9, 0.85, 0.8]) {
-      await pinStress(page, entry.sceneKey, { level, isStressed: true });
-      await page.waitForTimeout(100);
-    }
+    // Stop pinning and start from a latched bar: the pilot clears by itself
+    // (passive drain), so the level falls while the red moves stay refused.
+    await pinStress(page, entry.sceneKey, null);
+    await setStressOnce(page, entry.sceneKey, {
+      level: 0.95,
+      isStressed: true,
+    });
     await expect
-      .poll(readRow)
-      .toEqual({ counter: "STRESS 80%", label: "RECOVERING !" });
-
-    await pinStress(page, entry.sceneKey, { level: 0.1, isStressed: false });
-    await expect
-      .poll(readRow)
-      .toEqual({ counter: "STRESS 10%", label: "RECOVERING" });
+      .poll(async () => (await readRow())?.label)
+      .toMatch(/^RECOVERING( !)?$/);
 
     await pinStress(page, entry.sceneKey, { level: 0, isStressed: false });
     await expect.poll(readRow).toEqual({ counter: "STRESS 0%", label: "CALM" });
