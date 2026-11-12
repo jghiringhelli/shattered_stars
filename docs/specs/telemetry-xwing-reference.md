@@ -141,14 +141,14 @@ Obligations:
   ±0.1°), starting from a non-axis heading.
 - **MOV-8 (MUST)** — Speed 0 MUST hold position (no base-length hop).
 - **MOV-9 (MUST)** — On the scene's fixed 60 Hz tick, a cycle MUST last
-  exactly `CYCLE_DURATION_MS`. Time past the boundary carries into the next
-  cycle. The same plan MUST land on the same poses at any tick length.
+  exactly `CYCLE_DURATION_MS` unless a human's turn cuts it (MOV-16). Time past
+  the boundary carries into the next cycle. The same plan MUST land on the same poses at any tick length.
 - **MOV-10 (MUST)** — A boost displaces the ship and the maneuver in progress
-  together. The cycle MUST finish `BOOST_DISTANCE_PX` further along, not snap
-  back.
+  together. The cycle MUST finish `BOOST_DISTANCE_PX` (300 px) further along,
+  not snap back.
 - **MOV-11 (MUST)** — A barrel roll MUST slide the ship sideways by one
-  speed-1 template plus its base, with heading unchanged (tabletop). It is
-  not a bank.
+  speed-2 template plus its base (112 px on a small ship), with heading
+  unchanged. It is not a bank.
 - **MOV-12 (MUST)** — Crossing the battlefield seam MUST NOT jump the ship.
   A tick's displacement stays within a fraction of a template.
 - **MOV-13 (MUST)** — Two ships flying the same plan keep a constant
@@ -156,3 +156,13 @@ Obligations:
   (40 px) per cycle.
 - **MOV-14 (MUST)** — Closed loops close: four hard turns, or two K-turns,
   bring a ship back to its start pose.
+- **MOV-15 (MUST)** — An uninterrupted cycle still ends on its template
+  (≤ 2 px / 1°) however many cycles a human has cut before it.
+- **MOV-16 (MUST)** — A cycle a human's turn cuts ends EXACTLY on the template
+  arc at the progress it was cut (`predictArcPose`, the prefix of its path), and
+  the requested maneuver then flies as a full template from that pose
+  (docs/specs/flight-controls.md, "Instant turns").
+- **MOV-17 (MUST)** — A cut leaves no heading discontinuity (a heading step
+  per 60 Hz tick never exceeds the fastest maneuver's) and no position jump.
+- **MOV-18 (MUST)** — Boost and barrel-roll distances (MOV-10 / MOV-11) are
+  measured by `npm run analyze:telemetry`, which exits non-zero on any FAIL.
