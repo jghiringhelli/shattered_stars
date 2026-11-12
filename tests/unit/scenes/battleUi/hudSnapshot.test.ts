@@ -93,6 +93,26 @@ describe("playerHudState", () => {
     expect(state.maneuver).toBe("TURN L 2");
     expect(state.speed).toBe(2);
   });
+
+  it("carries the maneuver signals and the weapon envelope for the cues", () => {
+    const source = ship({
+      combatStats: { weaponRange: 250, firingArc: 75 },
+    });
+    const { control } = source.flight.motion;
+    const state = playerHudState(source);
+    expect(state.maneuverSignals).toEqual({
+      currentManeuver: control.currentManeuver,
+      boostCooldown: control.boostCooldown,
+      barrelRollCooldown: control.barrelRollCooldown,
+    });
+    expect([state.weaponRangePx, state.firingArcDeg]).toEqual([250, 75]);
+  });
+
+  it("omits the weapon envelope when the ship has no combat stats", () => {
+    const state = playerHudState(ship());
+    expect(state.weaponRangePx).toBeUndefined();
+    expect(state.firingArcDeg).toBeUndefined();
+  });
 });
 
 describe("speed distortion", () => {

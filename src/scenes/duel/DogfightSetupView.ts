@@ -20,6 +20,9 @@ import { addCycler, addSelectable } from "../../ui/menu/FlatControls";
 import { attachTermTooltip } from "../../ui/menu/HintTooltip";
 import type { DetailTabId } from "../../ui/menu/detailTabsModel";
 import { addPickerText, pickerTextStyle } from "../../ui/picker/pickerStyle";
+import { describeRole, orderShipsByRole } from "../../ui/picker/roleGroups";
+import { ROLE_CHIP_LABELS } from "../../data/roleHints/roleSections";
+import type { ShipDefinition, ShipRole } from "../../core/types";
 import {
   HOLO_PALETTE,
   HOLO_SPACING,
@@ -202,10 +205,7 @@ function drawSide(
   const faction = player ? state.playerFaction : state.enemyFaction;
   const shipId = player ? state.playerShipId : state.enemyShipId;
   const color = player ? SIDE_COLORS.player : SIDE_COLORS.enemy;
-  root.add(addPickerText(scene, { x: col.x, y: area.y }, player ? "YOUR SHIP" : "ENEMY SHIP", "caption", color));
-  const rule = scene.add.graphics();
-  rule.lineStyle(1, color, 0.6).lineBetween(col.x, area.y + OVERVIEW.headingGap - 4, col.x + col.width, area.y + OVERVIEW.headingGap - 4);
-  root.add(rule);
+  addSideHeading(area, col, player ? "YOUR SHIP" : "ENEMY SHIP", color);
   const index = FACTIONS.indexOf(faction);
   addCycler(scene, root, {
     x: col.x,
@@ -218,7 +218,8 @@ function drawSide(
     onStep: (step) => actions.selectFaction(owner, FACTIONS[(index + step + FACTIONS.length) % FACTIONS.length]!),
   });
   const top = area.y + OVERVIEW.rowsTop;
-  const listed = shipPage(getShipsByFaction(faction), shipId, state.shipPages[owner]);
+  const factionShips = orderShipsByRole(getShipsByFaction(faction));
+  const listed = shipPage(factionShips, shipId, state.shipPages[owner]);
   listed.items.forEach((ship, row) => {
     addSelectable(scene, root, {
       x: col.x,
@@ -226,7 +227,7 @@ function drawSide(
       width: OVERVIEW.rowW,
       height: OVERVIEW.rowH,
       label: ship.name,
-      detail: `${ship.baseStats.pointCost} pt`,
+      detail: `${ship.baseStats.pointCost} pt \u00b7 ${ROLE_CHIP_LABELS[ship.role]}`,
       selected: ship.id === shipId,
       accent: color,
       tip: roleTermId(ship.role),
@@ -254,8 +255,24 @@ function drawSide(
   });
   const hint = shipHint(shipId);
   root.add(
-    scene.add.text(col.x, pagerY + OVERVIEW.cyclerH + OVERVIEW.hintGap, `${hint.role}\n${hint.bestWith}`, pickerTextStyle("body", HOLO_PALETTE.textSecondary, { wordWrap: { width: col.width } })),
+    scene.add.text(col.x, pagerY + OVERVIEW.cyclerH + OVERVIEW.hintGap, `${roleLine(def?.role, factionShips)}\n${hint.role}\n${hint.bestWith}`, pickerTextStyle("body", HOLO_PALETTE.textSecondary, { wordWrap: { width: col.width } })),
   );
+}
+
+/** The role's header (shared with the other pick screens) as one line for the selected ship. */
+function roleLine(role: ShipRole | undefined, ships: readonly ShipDefinition[]): string {
+  if (!role) return "";
+  const heading = describeRole(role, ships);
+  return `${heading.title}: ${heading.blurb} ${heading.exampleLine}`;
+}
+
+/** Side caption and its rule line. */
+function addSideHeading(area: BodyArea, col: { readonly x: number; readonly width: number }, text: string, color: number): void {
+  area.root.add(addPickerText(area.scene, { x: col.x, y: area.y }, text, "caption", color));
+  const rule = area.scene.add.graphics();
+  const y = area.y + OVERVIEW.headingGap - 4;
+  rule.lineStyle(1, color, 0.6).lineBetween(col.x, y, col.x + col.width, y);
+  area.root.add(rule);
 }
 
 function renderStart(

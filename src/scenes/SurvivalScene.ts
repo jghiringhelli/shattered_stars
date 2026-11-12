@@ -73,6 +73,7 @@ import {
 } from "../arcade/systems/SurvivalDurability";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { installBattleSpace } from "../rendering/spaceMap/installBattleSpace";
+import { BattleRenderSmoothing } from "../rendering/smoothing/BattleRenderSmoothing";
 import { themeIdForSector } from "../rendering/spaceMap/mapThemes";
 import { audioManager } from "../audio/AudioManager";
 import { survivalBattleMode } from "../audio/musicContexts";
@@ -408,9 +409,8 @@ export class SurvivalScene extends Phaser.Scene {
   private pauseMenu!: BattlePauseMenu;
   private inputSubscriptionIds: number[] = [];
 
-  // Camera follow (manual — toroid wrap makes Phaser's startFollow jump at the seam)
-  private cameraVirtualX = BATTLEFIELD_SIZE / 2;
-  private cameraVirtualY = BATTLEFIELD_SIZE / 2;
+  // Render-only: dash glide and the torus-aware camera follow
+  private smoothing!: BattleRenderSmoothing;
 
   // Effects
   private effectsManager!: EffectsManager;
@@ -441,8 +441,8 @@ export class SurvivalScene extends Phaser.Scene {
     // Phaser never calls shutdown() on its own; without this, every restart
     // stacks another set of input subscriptions.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
-    // No setBounds — camera is driven manually for seamless toroid wrapping (see updateCameraFollow).
-    this.cameras.main.setBackgroundColor(0x050510);
+    // No setBounds — the camera follow is torus-aware (see updateCameraFollow).
+    this.setupCamera();
 
     audioManager.initialize();
 
@@ -657,6 +657,7 @@ export class SurvivalScene extends Phaser.Scene {
       this.performanceState.effectSettings,
     );
 
+    this.smoothing.beginFrame(delta);
     this.updateAI(time, delta);
     this.flyShips(delta);
     this.creatures?.update(time, delta);
@@ -665,42 +666,26 @@ export class SurvivalScene extends Phaser.Scene {
     this.processCombat(delta);
     this.applyBeltDamage(delta);
     this.updateSprites();
-    this.updateCameraFollow();
+    this.updateCameraFollow(delta);
     this.updateHud();
     this.checkWaveComplete();
   }
 
   /**
-   * Manually follows the flagship with toroid-aware shortest-path lerp
-   * (mirrors ArcadeBattleScene/DogfightScene) so the camera doesn't stay
-   * pinned to the battlefield center while the ship flies away.
+   * Follows the flagship on the shared render-smoothing layer
+   * (frame-rate independent, torus-aware, velocity fed).
+   *
+   * @param deltaMs - Real time since the last frame (ms).
    */
-  private updateCameraFollow(): void {
+  private updateCameraFollow(deltaMs: number): void {
     const ship = this.ships.get(this.playerShipIds[0] ?? "");
-    if (!ship) return;
+    if (ship) this.smoothing.stepCamera(deltaMs, ship);
+  }
 
-    let dx = ship.x - this.cameraVirtualX;
-    let dy = ship.y - this.cameraVirtualY;
-    if (dx > BATTLEFIELD_SIZE / 2) dx -= BATTLEFIELD_SIZE;
-    if (dx < -BATTLEFIELD_SIZE / 2) dx += BATTLEFIELD_SIZE;
-    if (dy > BATTLEFIELD_SIZE / 2) dy -= BATTLEFIELD_SIZE;
-    if (dy < -BATTLEFIELD_SIZE / 2) dy += BATTLEFIELD_SIZE;
-
-    const lerp = 0.09;
-    this.cameraVirtualX += dx * lerp;
-    this.cameraVirtualY += dy * lerp;
-    this.cameraVirtualX =
-      ((this.cameraVirtualX % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
-      BATTLEFIELD_SIZE;
-    this.cameraVirtualY =
-      ((this.cameraVirtualY % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
-      BATTLEFIELD_SIZE;
-
-    const zoom = this.cameras.main.zoom;
-    this.cameras.main.setScroll(
-      this.cameraVirtualX - this.scale.width / (2 * zoom),
-      this.cameraVirtualY - this.scale.height / (2 * zoom),
-    );
+  /** Space-black backdrop and the render-smoothing layer (a fresh one per start). */
+  private setupCamera(): void {
+    this.cameras.main.setBackgroundColor(0x050510);
+    this.smoothing = new BattleRenderSmoothing(this.cameras.main, BATTLEFIELD_SIZE);
   }
 
   /** Holographic battle HUD (flagship ring, radar, weapons) + Survival readouts. */
@@ -1147,6 +1132,7 @@ export class SurvivalScene extends Phaser.Scene {
         ship.x = x;
         ship.y = y;
         ship.angle = angle;
+        this.smoothing.forget(ship.id);
         this.shipSprites.get(ship.id)?.setPosition(x, y).setAngle(angle);
       },
       spawnAdd: (creatureId, x, y, angle) => {
@@ -1479,6 +1465,7 @@ export class SurvivalScene extends Phaser.Scene {
           direction: tick.completed.direction,
           speed: tick.completed.speed,
         });
+      this.smoothing.capture(ship, deltaMs);
       this.syncShipSprite(ship, deltaMs);
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
@@ -1565,7 +1552,8 @@ export class SurvivalScene extends Phaser.Scene {
   private syncShipSprite(ship: SurvivalShip, deltaMs: number): void {
     const sprite = this.shipSprites.get(ship.id);
     if (!sprite) return;
-    sprite.setPosition(ship.x, ship.y).setAngle(ship.angle);
+    const pose = this.smoothing.poseOf(ship);
+    sprite.setPosition(pose.x, pose.y).setAngle(pose.angle);
     if (!sprite.image) return;
     sprite.bankState = updateBankState(
       sprite.bankState,
@@ -2269,13 +2257,14 @@ export class SurvivalScene extends Phaser.Scene {
 
   private updateSprites(): void {
     for (const [id, ship] of this.ships) {
+      const pose = this.smoothing.poseOf(ship);
       const healthBar = this.healthBars.get(id);
       if (healthBar) {
-        healthBar.setPosition(ship.x, ship.y - 40);
+        healthBar.setPosition(pose.x, pose.y - 40);
       }
       this.affixLabels
         .get(id)
-        ?.setPosition(ship.x, ship.y - affixLabelOffset(false));
+        ?.setPosition(pose.x, pose.y - affixLabelOffset(false));
     }
   }
 }

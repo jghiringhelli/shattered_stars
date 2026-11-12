@@ -39,7 +39,7 @@ import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
 import { applyAllyAuraRepairs } from "../systems/aura/AllyAuraRepair";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { installBattleSpace } from "../rendering/spaceMap/installBattleSpace";
-import { TorusFollow } from "../rendering/torus/TorusFollow";
+import { BattleRenderSmoothing } from "../rendering/smoothing/BattleRenderSmoothing";
 import { audioManager } from "../audio/AudioManager";
 import { hullFractionOf } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
@@ -266,8 +266,6 @@ const BANNER_DURATION_MS = 1500;
 const VICTORY_SCREEN_DELAY_MS = 1000;
 /** Camera zoom in battle and the mouse-wheel limits. */
 const RAID_ZOOM = { battle: 0.7, min: 0.4, max: 1.5 } as const;
-/** Fraction of the gap to the flagship the camera closes per frame. */
-const RAID_FOLLOW_LERP = 0.09;
 /** Painted backdrop texture id. */
 /**
  * Where the boss lies: a quarter world from the top seam, so the fight
@@ -383,7 +381,7 @@ export class EpicBattleScene extends Phaser.Scene {
 
   // Effects
   private effectsManager!: EffectsManager;
-  private torusFollow!: TorusFollow;
+  private smoothing!: BattleRenderSmoothing;
   private performanceState: PerformanceState = createPerformanceState();
   private cameraShakeEnabled = true;
   private telemetry: ShipTelemetry | null = null;
@@ -459,7 +457,7 @@ export class EpicBattleScene extends Phaser.Scene {
       });
     }
     installBattleSpace(this);
-    this.torusFollow = new TorusFollow(this, BATTLEFIELD_SIZE);
+    this.smoothing = new BattleRenderSmoothing(this.cameras.main, BATTLEFIELD_SIZE);
 
     this.weapons = createSceneWeapons(this, this.weaponsLink(), this.hitLedger);
     this.resetState();
@@ -603,13 +601,6 @@ export class EpicBattleScene extends Phaser.Scene {
       BATTLEFIELD_SIZE,
     );
     this.refreshHud();
-
-    // Follow the flagship: the boss and the squad spawn half a world apart,
-    // so the camera's create()-time centre shows neither.
-    const flagship = this.shipSprites.get(this.playerShipIds[0] ?? "");
-    if (flagship) {
-      this.torusFollow.follow(flagship, RAID_FOLLOW_LERP);
-    }
   }
   update(time: number, delta: number): void {
     InputManager.update();
@@ -626,6 +617,7 @@ export class EpicBattleScene extends Phaser.Scene {
 
     if (this.updateRaidTimer(delta)) return;
 
+    this.smoothing.beginFrame(delta);
     this.updateAI(time, delta);
     this.flyShips(delta);
     // Secondaries first: a held or chosen launch is this cycle's attack.
@@ -633,6 +625,8 @@ export class EpicBattleScene extends Phaser.Scene {
     this.processCombat(delta);
     this.processBossAbilities(time);
     this.updateSprites();
+    const flagship = this.ships.get(this.playerShipIds[0] ?? "");
+    if (flagship) this.smoothing.stepCamera(delta, flagship);
     this.checkVictoryConditions();
     this.refreshHud();
   }
@@ -1335,10 +1329,7 @@ export class EpicBattleScene extends Phaser.Scene {
           this.pilot.onCycleCommitted(started);
         else this.bots.onCycleCommitted(ship.id, started);
       }
-      this.shipSprites
-        .get(ship.id)
-        ?.setPosition(ship.x, ship.y)
-        .setAngle(ship.angle);
+      this.smoothing.capture(ship, deltaMs);
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
     this.auras = applyAllyAuraRepairs(
@@ -1943,8 +1934,8 @@ export class EpicBattleScene extends Phaser.Scene {
   private updateSprites(): void {
     for (const [id, ship] of this.ships) {
       const healthBar = this.healthBars.get(id);
+      this.smoothing.place(ship, this.shipSprites.get(id), healthBar, -40);
       if (healthBar) {
-        healthBar.setPosition(ship.x, ship.y - 40);
         healthBar.setSide(
           overlaySide(id === this.pilotedShipId, ship.owner === "player"),
         );

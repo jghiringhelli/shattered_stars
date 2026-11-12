@@ -1,47 +1,13 @@
 /**
- * Torus camera math — keeps a view centre inside the arena while following a
- * target the short way round, and tracks an unwrapped position for parallax.
+ * Torus camera math — wraps a view centre into the arena and tracks an
+ * unwrapped position for parallax.
  */
 
 import { torusAxisDelta } from "../../core/Torus";
 
-/** A view centre on the torus (mutable so per-frame stepping allocates nothing). */
-export interface TorusCenter {
-  x: number;
-  y: number;
-}
-
 /** @returns `value` wrapped into [0, size). */
 export function wrapIntoArena(value: number, size: number): number {
   return ((value % size) + size) % size;
-}
-
-/**
- * Move `center` a fraction of the way to `target` along the shortest torus
- * path, then wrap it back into the arena (no jump when the target crosses a
- * seam).
- *
- * @param center - Current centre; updated in place.
- * @param targetX - Target x.
- * @param targetY - Target y.
- * @param lerp - Fraction of the gap closed this step (0..1).
- * @param size - Arena edge length.
- */
-export function stepTorusFollow(
-  center: TorusCenter,
-  targetX: number,
-  targetY: number,
-  lerp: number,
-  size: number,
-): void {
-  center.x = wrapIntoArena(
-    center.x + torusAxisDelta(center.x, targetX, size) * lerp,
-    size,
-  );
-  center.y = wrapIntoArena(
-    center.y + torusAxisDelta(center.y, targetY, size) * lerp,
-    size,
-  );
 }
 
 /**

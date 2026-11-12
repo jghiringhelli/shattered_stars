@@ -15,6 +15,8 @@ import { HOLO_DEPTH, HOLO_SPACING } from "../theme/HoloTheme";
 import { EdgeIndicators } from "./EdgeIndicators";
 import { FlightReadout } from "./FlightReadout";
 import { SpeedDistortionFx } from "../../rendering/speedDistortion";
+import { ManeuverCueFx } from "../../rendering/maneuverCues";
+import { FiringCue } from "./FiringCue";
 import { createScreenContainer } from "./holoPrimitives";
 import { hudRootTransform, type EdgeInsets } from "./hudMath";
 import type { ClosenessOptions } from "./hudStyleMath";
@@ -30,6 +32,8 @@ import { WeaponBar } from "./WeaponBar";
 const BOTTOM_MARGIN = HOLO_SPACING.lg;
 /** Gap between the radar and its side panels. */
 const CLUSTER_GAP = HOLO_SPACING.lg;
+/** Status ring radius in world px when the config gives none (ShipStatusRing's default). */
+const DEFAULT_RING_RADIUS = 32;
 
 /** BattleHud options. Optional fields fall back to each component's default. */
 export interface BattleHudConfig {
@@ -55,6 +59,9 @@ export class BattleHud {
   private readonly scene: Phaser.Scene;
   private readonly ring: ShipStatusRing;
   private readonly speedFx: SpeedDistortionFx;
+  private readonly maneuverCue: ManeuverCueFx;
+  private readonly firingCue: FiringCue;
+  private readonly worldSize: number;
   private readonly radar: Radar;
   private readonly weapons: WeaponBar;
   private readonly readout: FlightReadout;
@@ -75,6 +82,9 @@ export class BattleHud {
     this.scene = scene;
     this.ring = new ShipStatusRing(scene, { radius: config.playerRingRadius });
     this.speedFx = new SpeedDistortionFx(scene, config.playerRingRadius);
+    this.maneuverCue = new ManeuverCueFx(scene, config.playerRingRadius);
+    this.firingCue = new FiringCue(scene, config.playerRingRadius ?? DEFAULT_RING_RADIUS);
+    this.worldSize = config.worldSize;
     this.radar = new Radar(scene, {
       worldSize: config.worldSize,
       rangePx: config.radarRangePx,
@@ -135,6 +145,7 @@ export class BattleHud {
       snapshot.camera.zoom,
       this.scene.time.now,
     );
+    this.updateCues(snapshot);
     this.radar.update(
       player?.pose ?? null,
       snapshot.contacts,
@@ -158,7 +169,11 @@ export class BattleHud {
     this.root.setVisible(visible);
     this.edges.container.setVisible(visible);
     this.ring.setVisible(visible);
-    if (!visible) this.speedFx.hide();
+    if (!visible) {
+      this.speedFx.hide();
+      this.maneuverCue.hide();
+      this.firingCue.hide();
+    }
     this.marks.setVisible(visible);
   }
 
@@ -166,9 +181,28 @@ export class BattleHud {
   destroy(): void {
     this.ring.destroy();
     this.speedFx.destroy();
+    this.maneuverCue.destroy();
+    this.firingCue.destroy();
     this.marks.destroy();
     this.edges.destroy();
     this.root.destroy();
+  }
+
+  private updateCues(snapshot: BattleHudSnapshot): void {
+    const { player, camera } = snapshot;
+    this.maneuverCue.update({
+      signals: player?.maneuverSignals ?? null,
+      pose: player?.pose ?? null,
+      worldSize: this.worldSize,
+      zoom: camera.zoom,
+      nowMs: this.scene.time.now,
+    });
+    this.firingCue.update({
+      player,
+      contacts: snapshot.contacts,
+      worldSize: this.worldSize,
+      zoom: camera.zoom,
+    });
   }
 
   private applyCamera(camera: CameraViewSnapshot): void {

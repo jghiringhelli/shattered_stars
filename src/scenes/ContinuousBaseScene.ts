@@ -58,6 +58,7 @@ import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback } from "../ui/hud/overlay";
 import { applyAllyAuraRepairs } from "../systems/aura/AllyAuraRepair";
 import { EffectsManager } from "../rendering/EffectsManager";
+import { BattleRenderSmoothing } from "../rendering/smoothing/BattleRenderSmoothing";
 import { audioManager } from "../audio/AudioManager";
 import { syncListenerToCamera } from "../audio/CameraListener";
 import {
@@ -158,6 +159,8 @@ export abstract class ContinuousBaseScene<
   protected isActive = false;
 
   protected effectsManager!: EffectsManager;
+  /** Render-only poses, dash glide and camera follow; the subclass builds it in create(). */
+  protected smoothing!: BattleRenderSmoothing;
   protected performanceState: PerformanceState = createPerformanceState();
   /** Debug pose recorder (?debug=1); sampled every frame by {@link flyShips}. */
   protected telemetry: ShipTelemetry | null = null;
@@ -505,10 +508,7 @@ export abstract class ContinuousBaseScene<
           tick.state.motion.control.currentManeuver ?? "straight",
         );
       }
-      this.shipSprites
-        .get(ship.id)
-        ?.setPosition(ship.x, ship.y)
-        .setAngle(ship.angle);
+      this.smoothing.capture(ship, deltaMs);
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
     this.auras = applyAllyAuraRepairs(
@@ -661,11 +661,11 @@ export abstract class ContinuousBaseScene<
     }
   }
 
-  /** Reposition health bars to track ship sprites. */
+  /** Reposition sprites and health bars at the poses drawn this frame. */
   protected updateSpritePositions(): void {
     for (const [id, ship] of this.ships) {
       if (ship.hull <= 0) continue;
-      this.healthBars.get(id)?.setPosition(ship.x, ship.y - 40);
+      this.smoothing.place(ship, this.shipSprites.get(id), this.healthBars.get(id), -40);
     }
   }
 
@@ -685,7 +685,7 @@ export abstract class ContinuousBaseScene<
       this.performanceState.effectSettings,
     );
 
-
+    this.smoothing.beginFrame(delta);
     this.updateAI(time, delta);
     this.flyShips(delta);
     // Secondaries first: a held or chosen launch is this cycle's attack.

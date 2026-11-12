@@ -19,7 +19,7 @@ Every frame (`PRE_RENDER`) the rig sets `cameraFilter` bits: background → back
 `DEFAULT_OBJECT_PADDING` (1200 px) of its region. No per-frame allocations.
 
 Contract for battle scenes: no `setBounds` on the main camera, view centre kept in `[0, size)`
-(`TorusFollow` replaces `startFollow` — it follows the short way round), call `installBattleSpace(this)` from `create()`
+(`BattleRenderSmoothing.stepCamera` replaces `startFollow` — src/rendering/smoothing: it follows the short way round, frame-rate independent), call `installBattleSpace(this)` from `create()`
 after `setBackgroundColor`.
 
 ## Parallax space

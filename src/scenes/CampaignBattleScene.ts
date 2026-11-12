@@ -153,6 +153,7 @@ import { audioManager } from "../audio/AudioManager";
 import { bossFinalPhase, campaignBattleMode } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
 import { installBattleSpace } from "../rendering/spaceMap/installBattleSpace";
+import { BattleRenderSmoothing } from "../rendering/smoothing/BattleRenderSmoothing";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
@@ -318,9 +319,8 @@ export class CampaignBattleScene extends Phaser.Scene {
   /** Faction auras resolved this frame (buffs every shot and stress tick). */
   private auras: ReadonlyMap<string, ActiveAura> = new Map();
 
-  // Camera follow (manual — toroid wrap makes Phaser's startFollow jump at the seam)
-  private cameraVirtualX = BATTLEFIELD_SIZE / 2;
-  private cameraVirtualY = BATTLEFIELD_SIZE / 2;
+  // Render-only: dash glide and the torus-aware camera follow
+  private smoothing!: BattleRenderSmoothing;
 
   private effectsManager!: EffectsManager;
   private performanceState: PerformanceState = createPerformanceState();
@@ -408,7 +408,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     // Phaser never calls shutdown() on its own; without this, every restart
     // stacks another set of input subscriptions.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
-    this.cameras.main.setBackgroundColor(0x0a0a1a);
+    this.setupCamera();
 
     audioManager.playBattleMusic(
       campaignBattleMode(this.mission),
@@ -455,9 +455,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     }
 
     const flagship = this.ships.get(this.playerShipIds[0] ?? "");
-    this.cameraVirtualX = flagship?.x ?? BATTLEFIELD_SIZE / 2;
-    this.cameraVirtualY = flagship?.y ?? BATTLEFIELD_SIZE / 2;
-    this.cameras.main.centerOn(this.cameraVirtualX, this.cameraVirtualY);
+    this.cameras.main.centerOn(flagship?.x ?? BATTLEFIELD_SIZE / 2, flagship?.y ?? BATTLEFIELD_SIZE / 2);
     this.cameras.main.setZoom(1.0);
 
     this.modeHud.showBriefing(this.factionId, this.briefingMission());
@@ -478,6 +476,7 @@ export class CampaignBattleScene extends Phaser.Scene {
       this.performanceState.effectSettings,
     );
 
+    this.smoothing.beginFrame(delta);
     this.director.update(time, delta);
     this.updateAI(time, delta);
     this.flyShips(delta);
@@ -485,7 +484,7 @@ export class CampaignBattleScene extends Phaser.Scene {
     // Secondaries first: a held or chosen launch is this cycle's attack.
     this.weapons?.update(delta, this.time.now);
     this.processCombat(delta);
-    this.updateCameraFollow();
+    this.updateCameraFollow(delta);
     this.checkDelayedSpawns(delta);
     this.checkObjectives(delta);
     this.updateHud();
@@ -494,6 +493,12 @@ export class CampaignBattleScene extends Phaser.Scene {
   // ==========================================
   // SETUP
   // ==========================================
+
+  /** Deep-blue backdrop and the render-smoothing layer (a fresh one per start). */
+  private setupCamera(): void {
+    this.cameras.main.setBackgroundColor(0x0a0a1a);
+    this.smoothing = new BattleRenderSmoothing(this.cameras.main, BATTLEFIELD_SIZE);
+  }
 
   /** Holographic battle HUD (flagship ring, radar, weapons) + mission readouts. */
   private createHUD(): void {
@@ -636,35 +641,14 @@ export class CampaignBattleScene extends Phaser.Scene {
   }
 
   /**
-   * Manually follows the flagship with toroid-aware shortest-path lerp
-   * (mirrors ArcadeBattleScene/DogfightScene/SurvivalScene).
+   * Follows the flagship on the shared render-smoothing layer
+   * (frame-rate independent, torus-aware, velocity fed).
+   *
+   * @param deltaMs - Real time since the last frame (ms).
    */
-  private updateCameraFollow(): void {
+  private updateCameraFollow(deltaMs: number): void {
     const ship = this.ships.get(this.playerShipIds[0] ?? "");
-    if (!ship) return;
-
-    let dx = ship.x - this.cameraVirtualX;
-    let dy = ship.y - this.cameraVirtualY;
-    if (dx > BATTLEFIELD_SIZE / 2) dx -= BATTLEFIELD_SIZE;
-    if (dx < -BATTLEFIELD_SIZE / 2) dx += BATTLEFIELD_SIZE;
-    if (dy > BATTLEFIELD_SIZE / 2) dy -= BATTLEFIELD_SIZE;
-    if (dy < -BATTLEFIELD_SIZE / 2) dy += BATTLEFIELD_SIZE;
-
-    const lerp = 0.09;
-    this.cameraVirtualX += dx * lerp;
-    this.cameraVirtualY += dy * lerp;
-    this.cameraVirtualX =
-      ((this.cameraVirtualX % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
-      BATTLEFIELD_SIZE;
-    this.cameraVirtualY =
-      ((this.cameraVirtualY % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
-      BATTLEFIELD_SIZE;
-
-    const zoom = this.cameras.main.zoom;
-    this.cameras.main.setScroll(
-      this.cameraVirtualX - this.scale.width / (2 * zoom),
-      this.cameraVirtualY - this.scale.height / (2 * zoom),
-    );
+    if (ship) this.smoothing.stepCamera(deltaMs, ship);
   }
 
   // ==========================================
@@ -988,6 +972,7 @@ export class CampaignBattleScene extends Phaser.Scene {
         ship.x = x;
         ship.y = y;
         ship.angle = angle;
+        this.smoothing.forget(ship.id);
         this.syncShipVisuals(ship);
       },
       spawnAdd: (creatureId, x, y, angle) =>
@@ -1112,6 +1097,7 @@ export class CampaignBattleScene extends Phaser.Scene {
           // Carry the cycle in progress so the next tick does not snap back.
           const motion = shiftMotion(s.flight.motion, dx, dy, BATTLEFIELD_SIZE);
           this.setFlight(s, { ...s.flight, motion: { ...motion, angle } });
+          this.smoothing.forget(s.id);
           this.syncShipVisuals(s);
         }),
       banner: (title, subtitle) => this.showMessage(title, subtitle),
@@ -1340,6 +1326,7 @@ export class CampaignBattleScene extends Phaser.Scene {
           direction: tick.completed.direction,
           speed: tick.completed.speed,
         });
+      this.smoothing.capture(ship, deltaMs);
       this.syncShipVisuals(ship);
     }
     this.auras = applyAllyAuraRepairs(
@@ -1379,18 +1366,20 @@ export class CampaignBattleScene extends Phaser.Scene {
   }
 
   /**
-   * Moves a ship's sprite and health bar to its pose and samples telemetry.
+   * Moves a ship's sprite and health bar to the pose drawn this frame and
+   * samples telemetry.
    *
    * @param ship - The ship.
    */
   private syncShipVisuals(ship: CampaignShip): void {
+    const pose = this.smoothing.poseOf(ship);
     this.shipSprites
       .get(ship.id)
-      ?.setPosition(ship.x, ship.y)
-      .setAngle(ship.angle);
+      ?.setPosition(pose.x, pose.y)
+      .setAngle(pose.angle);
     this.healthBars
       .get(ship.id)
-      ?.setPosition(ship.x, ship.y - HEALTH_BAR_OFFSET_Y);
+      ?.setPosition(pose.x, pose.y - HEALTH_BAR_OFFSET_Y);
     this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
   }
 

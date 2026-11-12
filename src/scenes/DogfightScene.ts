@@ -28,6 +28,7 @@ import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { installBattleSpace } from "../rendering/spaceMap/installBattleSpace";
+import { BattleRenderSmoothing } from "../rendering/smoothing/BattleRenderSmoothing";
 import { audioManager } from "../audio/AudioManager";
 import { hullFractionOf } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
@@ -283,9 +284,8 @@ export class DogfightScene extends Phaser.Scene {
   // Timing
   private lastSecondTime = 0;
 
-  // Camera follow (manual — toroid wrap makes Phaser's startFollow jump at the seam)
-  private cameraVirtualX = BATTLEFIELD_SIZE / 2;
-  private cameraVirtualY = BATTLEFIELD_SIZE / 2;
+  // Render-only: interpolated ship poses, dash glide and the torus-aware camera follow
+  private smoothing!: BattleRenderSmoothing;
 
   // Effects
   private effectsManager!: EffectsManager;
@@ -361,8 +361,8 @@ export class DogfightScene extends Phaser.Scene {
     // Phaser never calls shutdown() on its own; without this, every restart
     // stacks another set of input subscriptions.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
-    // No setBounds — camera is driven manually for seamless toroid wrapping (see updateCameraFollow).
-    this.cameras.main.setBackgroundColor(0x050510);
+    // No setBounds — the camera follow is torus-aware (see updateCameraFollow).
+    this.setupCamera();
 
     audioManager.initialize();
 
@@ -598,6 +598,7 @@ export class DogfightScene extends Phaser.Scene {
       this.online.timers = r.clock.timers;
     }
     Object.assign(this, r.duel);
+    this.smoothing.reset();
     this.syncPresentation();
   }
 
@@ -915,8 +916,16 @@ export class DogfightScene extends Phaser.Scene {
     this.startNextRound();
   }
 
+  /** Space-black backdrop and the render-smoothing layer (a fresh one per start). */
+  private setupCamera(): void {
+    this.cameras.main.setBackgroundColor(0x050510);
+    this.smoothing = new BattleRenderSmoothing(this.cameras.main, BATTLEFIELD_SIZE);
+  }
+
   private startNextRound(): void {
     this.resetRoundState();
+    // Ships respawn: nothing glides to the new places and the camera jumps.
+    this.smoothing.reset();
     this.currentRound++;
 
     this.hud?.setRound(this.currentRound);
@@ -951,15 +960,7 @@ export class DogfightScene extends Phaser.Scene {
     // Tighter zoom for dogfight — applied here, not at setup-screen time (see create()).
     this.cameras.main.setZoom(1.1);
     const playerSprite = this.shipSprites.get(this.localShipId());
-    if (playerSprite) {
-      this.cameraVirtualX = playerSprite.x;
-      this.cameraVirtualY = playerSprite.y;
-      const zoom = this.cameras.main.zoom;
-      this.cameras.main.setScroll(
-        this.cameraVirtualX - this.scale.width / (2 * zoom),
-        this.cameraVirtualY - this.scale.height / (2 * zoom),
-      );
-    }
+    if (playerSprite) this.cameras.main.centerOn(playerSprite.x, playerSprite.y);
   }
 
   /** The ROUND N banner; weapons go live once it has faded (online: on the sim clock). */
@@ -985,9 +986,10 @@ export class DogfightScene extends Phaser.Scene {
     }
     if (this.isSetupPhase || this.isPaused || this.matchComplete) return;
     this.updatePresentationQuality(time, delta);
+    this.smoothing.beginFrame(delta);
     this.simulate(delta, time);
     this.updateSprites();
-    this.updateCameraFollow();
+    this.updateCameraFollow(delta);
     this.updateHud();
   }
 
@@ -1001,11 +1003,12 @@ export class DogfightScene extends Phaser.Scene {
   private updateOnline(delta: number, time: number): void {
     this.notices?.update();
     if (this.isSetupPhase || this.matchComplete || !this.net) return;
-    this.net.frame(delta, this.lockstep);
+    const frame = this.net.frame(delta, this.lockstep);
     if (this.matchComplete) return;
     this.updatePresentationQuality(time, delta);
+    this.smoothing.beginFrame(delta, frame.alpha);
     this.updateSprites();
-    this.updateCameraFollow();
+    this.updateCameraFollow(delta);
     this.updateHud();
   }
 
@@ -1135,36 +1138,14 @@ export class DogfightScene extends Phaser.Scene {
   }
 
   /**
-   * Manually follows the player ship with toroid-aware shortest-path lerp
-   * (mirrors ArcadeBattleScene.updateCameraFollow) so the camera doesn't stay
-   * pinned to the battlefield center while the ship flies away.
+   * Follows the local ship on the shared render-smoothing layer
+   * (frame-rate independent, torus-aware, velocity fed).
+   *
+   * @param deltaMs - Real time since the last frame (ms).
    */
-  private updateCameraFollow(): void {
+  private updateCameraFollow(deltaMs: number): void {
     const ship = this.ships.get(this.localShipId());
-    if (!ship) return;
-
-    let dx = ship.x - this.cameraVirtualX;
-    let dy = ship.y - this.cameraVirtualY;
-    if (dx > BATTLEFIELD_SIZE / 2) dx -= BATTLEFIELD_SIZE;
-    if (dx < -BATTLEFIELD_SIZE / 2) dx += BATTLEFIELD_SIZE;
-    if (dy > BATTLEFIELD_SIZE / 2) dy -= BATTLEFIELD_SIZE;
-    if (dy < -BATTLEFIELD_SIZE / 2) dy += BATTLEFIELD_SIZE;
-
-    const lerp = 0.09;
-    this.cameraVirtualX += dx * lerp;
-    this.cameraVirtualY += dy * lerp;
-    this.cameraVirtualX =
-      ((this.cameraVirtualX % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
-      BATTLEFIELD_SIZE;
-    this.cameraVirtualY =
-      ((this.cameraVirtualY % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
-      BATTLEFIELD_SIZE;
-
-    const zoom = this.cameras.main.zoom;
-    this.cameras.main.setScroll(
-      this.cameraVirtualX - this.scale.width / (2 * zoom),
-      this.cameraVirtualY - this.scale.height / (2 * zoom),
-    );
+    if (ship) this.smoothing.stepCamera(deltaMs, ship);
   }
 
   private updateTimerDisplay(): void {
@@ -1384,10 +1365,7 @@ export class DogfightScene extends Phaser.Scene {
           direction: tick.completed.direction,
           speed: tick.completed.speed,
         });
-      this.shipSprites
-        .get(ship.id)
-        ?.setPosition(ship.x, ship.y)
-        .setAngle(ship.angle);
+      this.smoothing.capture(ship, deltaMs);
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
     // Faction auras (support ships, hero pilots): repairs now, buffs at
@@ -1781,9 +1759,11 @@ export class DogfightScene extends Phaser.Scene {
     const markedId =
       this.crew?.markedTargetOf(this.localSide(), this.simNowMs) ?? null;
     for (const [id, ship] of this.ships) {
+      const pose = this.smoothing.poseOf(ship);
+      this.shipSprites.get(id)?.setPosition(pose.x, pose.y).setAngle(pose.angle);
       const healthBar = this.healthBars.get(id);
       if (healthBar) {
-        healthBar.setPosition(ship.x, ship.y - 50);
+        healthBar.setPosition(pose.x, pose.y - 50);
         healthBar.setTargeted(id === markedId);
       }
     }

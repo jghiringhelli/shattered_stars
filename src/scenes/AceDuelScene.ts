@@ -110,6 +110,7 @@ import { HealthBar } from "../ui/HealthBar";
 import { ShipRepairFeedback, overlaySide } from "../ui/hud/overlay";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { installBattleSpace } from "../rendering/spaceMap/installBattleSpace";
+import { BattleRenderSmoothing } from "../rendering/smoothing/BattleRenderSmoothing";
 import { audioManager } from "../audio/AudioManager";
 import { hullFractionOf } from "../audio/musicContexts";
 import { syncListenerToCamera } from "../audio/CameraListener";
@@ -275,9 +276,8 @@ export class AceDuelScene extends Phaser.Scene {
   private setupNav: SetupKeyNav | null = null;
   private inputSubscriptionIds: number[] = [];
 
-  // Camera follow (manual — toroid wrap makes Phaser's startFollow jump at the seam)
-  private cameraVirtualX = BATTLEFIELD_SIZE / 2;
-  private cameraVirtualY = BATTLEFIELD_SIZE / 2;
+  // Render-only: dash glide and the torus-aware camera follow
+  private smoothing!: BattleRenderSmoothing;
 
   // Effects
   private effectsManager!: EffectsManager;
@@ -308,7 +308,7 @@ export class AceDuelScene extends Phaser.Scene {
     // Phaser never calls shutdown() on its own; without this, every restart
     // stacks another set of input subscriptions.
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
-    this.cameras.main.setBackgroundColor(0x050510);
+    this.setupCamera();
 
     audioManager.initialize();
 
@@ -636,6 +636,8 @@ export class AceDuelScene extends Phaser.Scene {
 
   private startNextRound(): void {
     this.resetRoundState();
+    // Ships respawn: nothing glides to the new places and the camera jumps.
+    this.smoothing.reset();
     this.currentRound++;
 
     this.hud?.setRound(this.currentRound);
@@ -649,15 +651,13 @@ export class AceDuelScene extends Phaser.Scene {
     this.showRoundStart();
 
     const playerSprite = this.shipSprites.get(`side${this.playerSide}_0`);
-    if (playerSprite) {
-      this.cameraVirtualX = playerSprite.x;
-      this.cameraVirtualY = playerSprite.y;
-      const zoom = this.cameras.main.zoom;
-      this.cameras.main.setScroll(
-        this.cameraVirtualX - this.scale.width / (2 * zoom),
-        this.cameraVirtualY - this.scale.height / (2 * zoom),
-      );
-    }
+    if (playerSprite) this.cameras.main.centerOn(playerSprite.x, playerSprite.y);
+  }
+
+  /** Space-black backdrop and the render-smoothing layer (a fresh one per start). */
+  private setupCamera(): void {
+    this.cameras.main.setBackgroundColor(0x050510);
+    this.smoothing = new BattleRenderSmoothing(this.cameras.main, BATTLEFIELD_SIZE);
   }
 
   /** The ROUND N banner; weapons go live once it has faded. */
@@ -697,6 +697,7 @@ export class AceDuelScene extends Phaser.Scene {
       }
     }
 
+    this.smoothing.beginFrame(delta);
     this.updateAI(time, delta);
     this.flyShips(delta);
     // Ships close in during the ROUND banner; weapons go live with the round.
@@ -706,7 +707,7 @@ export class AceDuelScene extends Phaser.Scene {
       this.processCombat(delta);
     }
     this.updateSprites();
-    this.updateCameraFollow();
+    this.updateCameraFollow(delta);
     this.updateHud();
     this.checkRoundEnd();
   }
@@ -757,36 +758,14 @@ export class AceDuelScene extends Phaser.Scene {
   }
 
   /**
-   * Manually follows the player's flagship with toroid-aware shortest-path
-   * lerp (mirrors ArcadeBattleScene/DogfightScene) so the camera doesn't
-   * stay pinned to the battlefield center while ships fly around.
+   * Follows the player's flagship on the shared render-smoothing layer
+   * (frame-rate independent, torus-aware, velocity fed).
+   *
+   * @param deltaMs - Real time since the last frame (ms).
    */
-  private updateCameraFollow(): void {
+  private updateCameraFollow(deltaMs: number): void {
     const ship = this.ships.get(`side${this.playerSide}_0`);
-    if (!ship) return;
-
-    let dx = ship.x - this.cameraVirtualX;
-    let dy = ship.y - this.cameraVirtualY;
-    if (dx > BATTLEFIELD_SIZE / 2) dx -= BATTLEFIELD_SIZE;
-    if (dx < -BATTLEFIELD_SIZE / 2) dx += BATTLEFIELD_SIZE;
-    if (dy > BATTLEFIELD_SIZE / 2) dy -= BATTLEFIELD_SIZE;
-    if (dy < -BATTLEFIELD_SIZE / 2) dy += BATTLEFIELD_SIZE;
-
-    const lerp = 0.09;
-    this.cameraVirtualX += dx * lerp;
-    this.cameraVirtualY += dy * lerp;
-    this.cameraVirtualX =
-      ((this.cameraVirtualX % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
-      BATTLEFIELD_SIZE;
-    this.cameraVirtualY =
-      ((this.cameraVirtualY % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
-      BATTLEFIELD_SIZE;
-
-    const zoom = this.cameras.main.zoom;
-    this.cameras.main.setScroll(
-      this.cameraVirtualX - this.scale.width / (2 * zoom),
-      this.cameraVirtualY - this.scale.height / (2 * zoom),
-    );
+    if (ship) this.smoothing.stepCamera(deltaMs, ship);
   }
 
   /** Best-of-3 score (side 1 left); highlighted at match point. */
@@ -1025,10 +1004,7 @@ export class AceDuelScene extends Phaser.Scene {
           direction: tick.completed.direction,
           speed: tick.completed.speed,
         });
-      this.shipSprites
-        .get(ship.id)
-        ?.setPosition(ship.x, ship.y)
-        .setAngle(ship.angle);
+      this.smoothing.capture(ship, deltaMs);
       this.telemetry?.sample(ship.id, ship.x, ship.y, ship.angle);
     }
     // Faction auras (support ships, hero pilots): repairs now, buffs at
@@ -1427,9 +1403,11 @@ export class AceDuelScene extends Phaser.Scene {
     const markedId =
       this.crew?.markedTargetOf(this.playerSideKey, this.time.now) ?? null;
     for (const [id, ship] of this.ships) {
+      const pose = this.smoothing.poseOf(ship);
+      this.shipSprites.get(id)?.setPosition(pose.x, pose.y).setAngle(pose.angle);
       const healthBar = this.healthBars.get(id);
       if (healthBar) {
-        healthBar.setPosition(ship.x, ship.y - 50);
+        healthBar.setPosition(pose.x, pose.y - 50);
         healthBar.setTargeted(id === markedId);
       }
     }

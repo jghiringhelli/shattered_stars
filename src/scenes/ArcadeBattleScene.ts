@@ -129,6 +129,8 @@ import {
   type PerformanceState,
 } from "../systems/PerformanceSystem";
 import { installBattleSpace } from "../rendering/spaceMap/installBattleSpace";
+import { BattleRenderSmoothing } from "../rendering/smoothing/BattleRenderSmoothing";
+import { speedZoomTarget } from "../rendering/smoothing/speedZoom";
 import { stepMotion } from "../arcade/systems/ShipMotion";
 import { planFixedSteps } from "../arcade/systems/FixedStepPlan";
 import {
@@ -428,13 +430,8 @@ export class ArcadeBattleScene extends Phaser.Scene {
    */
   private allowChordBarrelRoll = false;
 
-  /**
-   * Virtual camera position in world-space.
-   * Updated each frame with toroid-aware shortest-path lerp so the camera
-   * never jumps across the map when a ship wraps around an edge.
-   */
-  private cameraVirtualX = BATTLEFIELD_SIZE / 2;
-  private cameraVirtualY = BATTLEFIELD_SIZE / 2;
+  /** Render-only: interpolated ship poses, dash glide and the torus-aware camera follow. */
+  private smoothing!: BattleRenderSmoothing;
 
   /** The AI: a bot pilot per AI ship, a squad command per team, the marks. */
   private botFleet: ArcadeBotFleet | null = null;
@@ -719,6 +716,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     // No setBounds — we manage the camera manually for seamless toroid wrapping.
     this.cameras.main.setBackgroundColor(0x050510);
     this.cameras.main.setZoom(1.0);
+    this.smoothing = new BattleRenderSmoothing(this.cameras.main, BATTLEFIELD_SIZE);
 
     this.createStarfield();
     this.setupInput();
@@ -768,13 +766,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.playerSideScore = createSideScore();
     this.enemySideScore = createSideScore();
 
-    // Initialise virtual camera to player spawn position (no startFollow — we drive it manually).
+    // Start on the player's spawn; the follow takes over (and snaps) on the first frame.
     const playerSprite = this.shipSprites.get(this.viewShipId() ?? "");
-    if (playerSprite) {
-      this.cameraVirtualX = playerSprite.x;
-      this.cameraVirtualY = playerSprite.y;
-      this.cameras.main.centerOn(this.cameraVirtualX, this.cameraVirtualY);
-    }
+    if (playerSprite) this.cameras.main.centerOn(playerSprite.x, playerSprite.y);
     if (this.online) this.joinOnlineBattle();
   }
 
@@ -892,18 +886,27 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.accumulator = plan.remainderMs;
     for (let tick = 0; tick < plan.ticks && !this.gameEnded; tick++) {
       this.tickLogic(ArcadeBattleScene.FIXED_DT);
+      this.smoothing.captureAll(this.ships.values(), ArcadeBattleScene.FIXED_DT);
     }
 
     // Render-only updates: every real frame (not fixed-step)
-    this.renderFrame(deltaMs);
+    this.renderFrame(deltaMs, this.accumulator / ArcadeBattleScene.FIXED_DT);
   }
 
-  /** Render-only work of a frame: sprites, HUD, scenario glyphs, camera. */
-  private renderFrame(deltaMs: number): void {
+  /**
+   * Render-only work of a frame: sprites at their interpolated poses, then
+   * the camera (before anything that projects world positions to the screen),
+   * HUD and scenario glyphs.
+   *
+   * @param deltaMs - Real time since the last frame (ms).
+   * @param alpha - How far the frame is into the current simulation tick, 0..1.
+   */
+  private renderFrame(deltaMs: number, alpha: number): void {
+    this.smoothing.beginFrame(deltaMs, alpha);
     this.updateSprites(deltaMs);
+    this.updateCameraFollow(deltaMs);
     this.updateHUD();
     this.scenario?.render(this.cameras.main, this.time.now);
-    this.updateCameraFollow();
   }
 
   /**
@@ -916,9 +919,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
   private updateOnline(deltaMs: number): void {
     this.notices?.update();
     if (this.gameEnded || !this.net) return;
-    this.net.frame(deltaMs, this.lockstep);
+    const frame = this.net.frame(deltaMs, this.lockstep);
     if (this.gameEnded) return;
-    this.renderFrame(deltaMs);
+    this.renderFrame(deltaMs, frame.alpha);
   }
 
   /**
@@ -932,6 +935,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     if (this.gameEnded || !this.online) return;
     this.online.feed(inputs);
     this.tickLogic(ArcadeBattleScene.FIXED_DT);
+    this.smoothing.captureAll(this.ships.values(), ArcadeBattleScene.FIXED_DT);
   }
 
   private tickLogic(dt: number): void {
@@ -964,45 +968,22 @@ export class ArcadeBattleScene extends Phaser.Scene {
   }
 
   /**
-   * Manually follows the player with toroid-aware shortest-path lerp.
-   * Removes the camera jump when a ship wraps around the map edge.
-   * Also adjusts zoom slightly at high speed for spatial awareness.
+   * Follows the local pilot's ship on the shared render-smoothing layer:
+   * frame-rate independent, torus-aware (the short way across the seam),
+   * velocity fed so a straight flight keeps the ship centred, and zoomed
+   * out slowly with the FLOWN speed.
    *
-   * @remarks Called every frame; replaces Phaser's built-in startFollow.
+   * @param deltaMs - Real time since the last frame (ms).
    */
-  private updateCameraFollow(): void {
+  private updateCameraFollow(deltaMs: number): void {
     const ship = this.cameraFocusShip();
     if (!ship) return;
-
-    // Shortest-path delta — pick the direction that doesn't cross the whole map.
-    let dx = ship.x - this.cameraVirtualX;
-    let dy = ship.y - this.cameraVirtualY;
-    if (dx > BATTLEFIELD_SIZE / 2) dx -= BATTLEFIELD_SIZE;
-    if (dx < -BATTLEFIELD_SIZE / 2) dx += BATTLEFIELD_SIZE;
-    if (dy > BATTLEFIELD_SIZE / 2) dy -= BATTLEFIELD_SIZE;
-    if (dy < -BATTLEFIELD_SIZE / 2) dy += BATTLEFIELD_SIZE;
-
-    const lerp = 0.09;
-    this.cameraVirtualX += dx * lerp;
-    this.cameraVirtualY += dy * lerp;
-    // Keep virtual position inside map range to avoid drift.
-    this.cameraVirtualX =
-      ((this.cameraVirtualX % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
-      BATTLEFIELD_SIZE;
-    this.cameraVirtualY =
-      ((this.cameraVirtualY % BATTLEFIELD_SIZE) + BATTLEFIELD_SIZE) %
-      BATTLEFIELD_SIZE;
-
-    // Speed-based zoom: zoom out slightly at high speed for spatial awareness.
-    const speedRatio = (ship.control.speed - 1) / 4;
-    const targetZoom = this.leaveDialogOpen
-      ? 1
-      : Phaser.Math.Linear(1.0, 0.75, speedRatio);
-    const zoom = this.cameras.main.zoom;
-    this.cameras.main.setZoom(
-      this.leaveDialogOpen ? 1 : zoom + (targetZoom - zoom) * 0.03,
-    );
-    this.cameras.main.centerOn(this.cameraVirtualX, this.cameraVirtualY);
+    this.smoothing.stepCamera(deltaMs, ship, {
+      zoomTarget: this.leaveDialogOpen
+        ? 1
+        : speedZoomTarget(ship.control, { slowest: 1, fastest: 0.75 }),
+      simSpeed: this.debugTimeScale,
+    });
   }
 
   /**
@@ -1013,9 +994,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
    * @returns The focus, or null to hold the camera.
    */
   private cameraFocusShip(): {
+    readonly id?: string | undefined;
     readonly x: number;
     readonly y: number;
-    readonly control: { readonly speed: number };
+    readonly control: { readonly speed: number; readonly cycleSpeed?: number };
   } | null {
     if (!this.online)
       return (
@@ -1276,6 +1258,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
         allowChordBarrelRoll: this.allowChordBarrelRoll,
       },
       BATTLEFIELD_SIZE,
+      { interruptCycles: true },
     );
     this.pilotControls.set(ship.id, result.pilot);
     this.applyFlightResult(ship, result);
@@ -1421,7 +1404,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
               (this.activeAuras.get(ship.id)?.stressReliefTiers ?? 0) +
               ship.modifiers.stressReliefTiers,
             rateMultiplier: ship.modifiers.stressRateMultiplier,
-            cycleMs: CYCLE_DURATION_MS,
+            cycleMs: CYCLE_DURATION_MS * completed.fraction,
           });
         }
       }
@@ -2130,10 +2113,10 @@ export class ArcadeBattleScene extends Phaser.Scene {
         continue;
       }
 
-      // Smooth movement
-      sprite.x = ship.x;
-      sprite.y = ship.y;
-      sprite.angle = ship.angle;
+      const pose = this.smoothing.poseOf(ship);
+      sprite.x = pose.x;
+      sprite.y = pose.y;
+      sprite.angle = pose.angle;
 
       // Bank into hard turns: squash the ship art horizontally and stretch
       // it vertically in proportion to turn rate, purely a visual "juice"
@@ -2156,7 +2139,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       // Update health bar position and values
       const healthBar = this.healthBars.get(id);
       if (healthBar) {
-        healthBar.setPosition(ship.x, ship.y - 30);
+        healthBar.setPosition(pose.x, pose.y - 30);
         healthBar.update(ship.hull, ship.shields);
         healthBar.setTargeted(id === markedId);
       }
@@ -2165,7 +2148,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
       if (ship.capitalSystems) {
         const indicator = this.capitalIndicators.get(id);
         if (indicator) {
-          indicator.setPosition(ship.x, ship.y - 42);
+          indicator.setPosition(pose.x, pose.y - 42);
           indicator.update(ship.capitalSystems);
         }
       }
@@ -2678,6 +2661,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     const r = restoreGraph(live, data, ONLINE_GRAPH_OPTIONS)
       .root as typeof live;
     this.botFleet = r.fleet;
+    this.smoothing.reset();
     writeSimFields(this.reinforcements, r.reinforcements);
     writeSimFields(this.scenario, r.scenario);
     Object.assign(this, r.battle);

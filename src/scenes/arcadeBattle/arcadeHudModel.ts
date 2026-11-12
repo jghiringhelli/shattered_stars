@@ -11,6 +11,7 @@ import type { ShipControlState } from "../../core/ArcadeControls";
 import type { ManeuverDirection } from "../../core/types";
 import type { StressState } from "../../arcade/ArcadeStress";
 import { speedDistortionTarget } from "../../rendering/speedDistortion";
+import { playerCueFields, type CueWeaponStats } from "../../ui/hud/playerCueFields";
 import type { ShipSize } from "../../config";
 import type {
   BattleHudSnapshot,
@@ -37,6 +38,8 @@ export interface HudShipView extends ArcCandidate {
   readonly isCloaked: boolean;
   readonly stress: StressState;
   readonly control: ShipControlState;
+  /** Primary weapon stats (range, arc) for the firing cue; omitted = no cue. */
+  readonly combatStats?: CueWeaponStats | undefined;
 }
 
 const MANEUVER_LABELS: Readonly<Record<ManeuverDirection, string>> = {
@@ -87,6 +90,7 @@ export function toPlayerHudState(ship: HudShipView): PlayerHudState {
     maxSpeed: ship.control.maxSpeed,
     maneuver: maneuverHudLabel(ship.control),
     speedDistortion: speedDistortionTarget(ship.control),
+    ...playerCueFields(ship.control, ship.combatStats),
   };
 }
 

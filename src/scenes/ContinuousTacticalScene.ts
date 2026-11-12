@@ -50,7 +50,7 @@ import { HealthBar } from "../ui/HealthBar";
 import { overlaySide } from "../ui/hud/overlay";
 import { EffectsManager } from "../rendering/EffectsManager";
 import { installBattleSpace } from "../rendering/spaceMap/installBattleSpace";
-import { TorusFollow } from "../rendering/torus/TorusFollow";
+import { BattleRenderSmoothing } from "../rendering/smoothing/BattleRenderSmoothing";
 import { audioManager } from "../audio/AudioManager";
 import { hullFractionOf } from "../audio/musicContexts";
 import { createPerformanceState } from "../systems/PerformanceSystem";
@@ -141,8 +141,6 @@ const PREVIEW_REMAINING_COLOR = 0xaaaaaa;
 const PREVIEW_GHOST_RADIUS = 15;
 /** Camera zoom in battle and the mouse-wheel limits (buttons appear only at zoom 1). */
 const TACTICAL_ZOOM = { battle: 0.9, min: 0.5, max: 2 } as const;
-/** Fraction of the gap to the selected ship the camera closes per frame. */
-const TACTICAL_FOLLOW_LERP = 0.1;
 /** Painted backdrop texture id. */
 
 /**
@@ -170,7 +168,6 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
   private playerFaction: FactionId = "free_confederation";
 
   private selectedShipId: string | null = null;
-  private torusFollow!: TorusFollow;
 
   private battleStartTime: number = 0;
 
@@ -219,7 +216,7 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
       });
     }
     installBattleSpace(this);
-    this.torusFollow = new TorusFollow(this, BATTLEFIELD_SIZE);
+    this.smoothing = new BattleRenderSmoothing(this.cameras.main, BATTLEFIELD_SIZE);
     this.performanceState = createPerformanceState();
 
     matchStats.start("continuous", {}, this.events);
@@ -300,16 +297,19 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     if (this.isPaused) return;
     this.pollDialInput();
     super.update(time, delta);
+    const followed = this.selectedShip();
+    if (followed) this.smoothing.stepCamera(delta, followed);
 
     if (this.updateMatchTimer(delta)) return;
 
     for (const ship of this.ships.values()) {
       if (ship.hull > 0) {
+        const pose = this.smoothing.poseOf(ship);
         this.effectsManager.updateTrailPosition(
           ship.id,
-          ship.x,
-          ship.y,
-          ship.angle,
+          pose.x,
+          pose.y,
+          pose.angle,
         );
       }
     }
@@ -966,10 +966,6 @@ export class ContinuousTacticalScene extends ContinuousBaseScene<
     const ship = this.ships.get(shipId);
     if (ship) {
       this.refreshHud();
-      this.torusFollow.follow(
-        this.shipSprites.get(shipId) as Phaser.GameObjects.Container,
-        TACTICAL_FOLLOW_LERP,
-      );
     }
   }
 

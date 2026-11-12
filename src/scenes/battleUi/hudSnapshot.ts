@@ -24,6 +24,7 @@ import type {
   WeaponSlotDescriptor,
 } from "../../ui/hud/types";
 import { HOLO_PALETTE, type HoloSide } from "../../ui/theme/HoloTheme";
+import { playerCueFields, withPlayerCues, type CueWeaponStats } from "../../ui/hud/playerCueFields";
 
 /** What the HUD reads from a flying ship. */
 export interface HudShipSource {
@@ -37,6 +38,8 @@ export interface HudShipSource {
   readonly shields: number;
   readonly maxShields: number;
   readonly flight: CycleFlightState;
+  /** Primary weapon stats (range, arc) for the firing cue; omitted = no cue. */
+  readonly combatStats?: CueWeaponStats | undefined;
 }
 
 /** Short readout names per maneuver direction. */
@@ -117,6 +120,7 @@ export function playerHudState(
       ? maneuverLabel(order.direction, order.speed)
       : maneuverLabel(control.currentManeuver, control.speed),
     speedDistortion: speedDistortionTarget(control),
+    ...playerCueFields(control, ship.combatStats),
   };
 }
 
@@ -144,16 +148,29 @@ export function withSpeedDistortion<S extends BattleHudSnapshot>(
 
 /**
  * The flagship-centred squad snapshot (Survival, Campaign) with the player's
- * max-speed bow wave added.
+ * max-speed bow wave, maneuver cue signals and firing envelope added.
  *
  * @param input - Flagship, ships, target, mark, weapon timing and camera.
  * @returns HUD snapshot.
  */
-export function flagshipHudSnapshot(input: SquadHudInput): BattleHudSnapshot {
-  return withSpeedDistortion(
-    squadHudSnapshot(input),
-    input.flagship?.flight.motion.control ?? null,
+export function flagshipHudSnapshot(input: FlagshipHudInput): BattleHudSnapshot {
+  const { flagship } = input;
+  const control = flagship?.flight.motion.control ?? null;
+  return withPlayerCues(
+    withSpeedDistortion(squadHudSnapshot(input), control),
+    flagship === null || control === null
+      ? null
+      : { control, combatStats: flagship.combatStats },
   );
+}
+
+/** {@link SquadHudInput} whose flagship may carry its primary weapon stats. */
+export interface FlagshipHudInput extends SquadHudInput {
+  readonly flagship:
+    | (NonNullable<SquadHudInput["flagship"]> & {
+        readonly combatStats?: CueWeaponStats | undefined;
+      })
+    | null;
 }
 
 /** A ship as an HUD contact. */

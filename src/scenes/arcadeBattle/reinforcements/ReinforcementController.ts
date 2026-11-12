@@ -218,7 +218,7 @@ export class ReinforcementController {
       (s) => s.hull > 0 && s.team === team,
     );
     const at = teammate ?? this.pose(this.view.side, 0);
-    return { x: at.x, y: at.y, control: { speed: 1 } };
+    return { id: teammate?.id, x: at.x, y: at.y, control: { speed: 1 } };
   }
 
   /** @returns Whether each scenario side can still field a ship. */

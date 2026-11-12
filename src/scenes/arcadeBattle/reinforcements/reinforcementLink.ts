@@ -43,6 +43,8 @@ export interface ReinforcementSceneLink {
 
 /** Camera target while the local pilot's ship is down. */
 export interface CameraFocus {
+  /** The ship followed (smoothed with the others); absent for a bare spawn point. */
+  readonly id?: string | undefined;
   readonly x: number;
   readonly y: number;
   readonly control: { readonly speed: number };

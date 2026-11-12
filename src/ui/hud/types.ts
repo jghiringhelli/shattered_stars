@@ -7,6 +7,7 @@
  */
 
 import type { ShipSize } from "../../config";
+import type { ManeuverSignals } from "../../rendering/maneuverCues/maneuverCueMath";
 import type { HoloSide } from "../theme/HoloTheme";
 
 /** World pose. `angle` is degrees, 0 = up/north, clockwise positive (ShipState convention). */
@@ -45,6 +46,15 @@ export interface PlayerHudState {
    * (`speedDistortionTarget`); omitted = none.
    */
   readonly speedDistortion?: number | undefined;
+  /**
+   * Control signals the maneuver cue reads to notice a Snap Turn, Hook, Knife,
+   * Boost or Barrel Roll (render-only); omitted = no cue.
+   */
+  readonly maneuverSignals?: ManeuverSignals | undefined;
+  /** Primary weapon range in px (`combatStats.weaponRange`); omitted = no firing cue. */
+  readonly weaponRangePx?: number | undefined;
+  /** Primary weapon full firing arc in degrees (`combatStats.firingArc`). */
+  readonly firingArcDeg?: number | undefined;
 }
 
 /** Any other ship the HUD should track. */
