@@ -10,6 +10,9 @@
  *
  * This module is the single place that decides which maneuver a steering
  * intent produces. It is pure: no Phaser, no scene state, fully testable.
+ *
+ * Bots commit what it queues at the cycle boundary; a human's NEW request
+ * cuts the running cycle at once (src/core/cycleInterrupt).
  */
 
 import type { ManeuverDirection } from "../core/types";

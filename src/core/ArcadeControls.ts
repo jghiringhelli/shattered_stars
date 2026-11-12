@@ -3,8 +3,9 @@
  *
  * Movement model: ships are ALWAYS executing a maneuver. Each cycle is a fixed
  * CYCLE_DURATION_MS window during which the ship follows a pre-calculated
- * template path. Player input queues the NEXT maneuver; the queue commits at
- * cycle end. Default queue is 'straight' at current speed.
+ * template path. Input queues the NEXT maneuver; the queue commits at cycle
+ * end (a human's turn may cut the cycle short: src/core/cycleInterrupt).
+ * Default queue is 'straight' at current speed.
  *
  * This mirrors tabletop: you commit to a maneuver in advance and ride it out.
  * The template distance includes the ship's physical base size (front-to-back
@@ -71,6 +72,13 @@ export interface ShipControlState {
   /** Maneuver queued for the next cycle (null = default straight). */
   nextManeuver: ManeuverDirection | null;
 
+  /**
+   * The queued maneuver may cut the running cycle short instead of waiting
+   * for the boundary (human pilots only, see src/core/cycleInterrupt). Set
+   * with the queue, cleared whenever a cycle starts.
+   */
+  interruptQueued: boolean;
+
   /** True once the ship fires its primary laser this cycle; resets at cycle start. */
   firedLaserThisCycle: boolean;
 
@@ -136,6 +144,7 @@ export function createControlState(
     maneuverPath: [],
     maneuverTarget: null,
     nextManeuver: null,
+    interruptQueued: false,
     firedLaserThisCycle: false,
     kturnCooldown: 0,
     kturnCooldownMax: KTURN_RECHARGE_MS,
@@ -225,6 +234,7 @@ export function startManeuver(
       y: result.targetY,
       angle: result.targetAngle,
     },
+    interruptQueued: false,
     firedLaserThisCycle: false,
   };
 }
@@ -413,7 +423,9 @@ export function getManeuverDifficulty(
  *
  * Movement commands (bank, turn, kturn, etc.) write to `nextManeuver` and
  * take effect at the next cycle boundary — they do NOT interrupt the current
- * executing maneuver. Speed changes, fire, focus, and evade are immediate.
+ * executing maneuver (a human pilot's steering additionally sets
+ * `interruptQueued`, see src/core/cycleInterrupt). Speed changes, fire, focus,
+ * and evade are immediate.
  *
  * @param ship    - Ship state (position/angle used if a maneuver must start immediately).
  * @param control - Current control state.

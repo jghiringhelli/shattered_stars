@@ -28,3 +28,39 @@ identity and the difficulty curve; 0.19 the difficulty curve (Hard = Brutal = 15
 
 `npm run test:skill` at 0.20: gate 1 expert win 100 % (0/60 pairs below 85 %), gate 2 squad win 95 % over 200
 battles (91 % at 0.17, 94 % at 0.19); thresholds untouched.
+
+# Balance round 5b — instant turns, longer Snap / boost / roll (2026-11-10)
+
+Owner decisions: (1) a human's steering starts at once (docs/specs/flight-controls.md, "Instant turns"), (2) the Snap
+Turn sits at the highest printed speed of each dial, (3) boost 220 -> 300 px, barrel roll = speed-2 template + base
+(72 -> 112 px on a small ship).
+
+## Changes
+
+| what | before | after |
+|---|---|---|
+| `BOOST_DISTANCE_PX` (`ArcadeInputGestures.ts`) | 220 | **300** |
+| `BARREL_ROLL_TEMPLATE_SPEED` (`ShipMotion.ts`, oracle `BARREL_ROLL_SLIDE_SPEED`) | 1 (72 px) | **2** (112 px) |
+| Snap row of Fighter, Light Fighter, Harbinger, Hunter/Stalker/Ravager, Torpedo Boat dials | 3 / 3 / 2w / 3w / 2w | **4** (colors kept) |
+| Snap row of Interceptor (2 and 4), Virtue, bomber / gunship / Avatar (top speed 2-3) | - | unchanged |
+| `CYCLE_INTERRUPT_MIN_ELAPSED_MS` | - | 80 |
+
+Instant turns only exist for the human pilot (`interruptCycles`), so the bot-flown harness (skill arena, duel, squad
+sims) is moved by the geometry only.
+
+## Gates
+
+`npm run test:skill`: gate 1 expert win 100 % (0/60 pairs below 85 %), gate 2 squad win 98 % over 200 battles;
+thresholds untouched, no bot lever touched.
+
+## Harness flips and levers
+
+- `skill gate 1 smoke` confed_sparrow > synth_stalker: 85 % with either action change alone, **79 %** with both (the expert
+  Sparrow's own Snap at 4 costs it too: 90 % with the old Snap row). Lever (data): `confed_sparrow` gets white banks at
+  speed 3 (`tuneDial(LIGHT_FIGHTER_DIAL, bank 3 white)`; the other light fighters keep red) -> **90 %**. Tried without effect:
+  Hunter banks red at 3, Hunter banks white at 2; light-fighter banks green at 2 only reached 83 %; white banks at 3 on the
+  whole light dial also gave 90 % but buffs every cheap hull.
+- `FactionIdentity` flipped Hegemony to a 2 % margin in one run and passes in the final one (margins 27 / 8 / 21 / 15 / 13 %;
+  Confederation at 8.3 % is the thinnest, limit 8 %).
+- `DifficultyCurve` (Brutal 40 % > 30 %) and `AceDuelBalance` elite_fighters (75 %) fail with the geometry of this round
+  reverted as well: they follow the bot changes in flight (src/arcade/ai), not these decisions.

@@ -36,7 +36,7 @@ const FIGHTER_DIAL: ManeuverDefinition[] = [
   { direction: "bank_left", speed: 4, difficulty: "red" },
   { direction: "bank_right", speed: 4, difficulty: "red" },
   { direction: "straight", speed: 4, difficulty: "white" },
-  { direction: "kturn", speed: 3, difficulty: "red" },
+  { direction: "kturn", speed: 4, difficulty: "red" },
 ];
 
 /** Interceptor dial - very agile */
@@ -95,13 +95,11 @@ const BOMBER_DIAL: ManeuverDefinition[] = [
  * Snap turn available but always red. No knife/hook — these aren't ace ships.
  */
 const LIGHT_FIGHTER_DIAL: ManeuverDefinition[] = [
-  // Speed 1 — nimble in a dogfight
   { direction: "straight", speed: 1, difficulty: "green" },
   { direction: "bank_left", speed: 1, difficulty: "green" },
   { direction: "bank_right", speed: 1, difficulty: "green" },
   { direction: "turn_left", speed: 1, difficulty: "white" },
   { direction: "turn_right", speed: 1, difficulty: "white" },
-  // Speed 2 — still manageable
   { direction: "straight", speed: 2, difficulty: "green" },
   { direction: "bank_left", speed: 2, difficulty: "white" },
   { direction: "bank_right", speed: 2, difficulty: "white" },
@@ -114,8 +112,8 @@ const LIGHT_FIGHTER_DIAL: ManeuverDefinition[] = [
   // Speed 4–5 — straightaways only
   { direction: "straight", speed: 4, difficulty: "white" },
   { direction: "straight", speed: 5, difficulty: "red" },
-  // Snap turn available but always costly
-  { direction: "kturn", speed: 3, difficulty: "red" },
+  // Snap turn available but always costly, at the highest printed speed
+  { direction: "kturn", speed: 4, difficulty: "red" },
 ];
 
 /** Capital ship dial - minimal mobility */
@@ -201,7 +199,7 @@ const HARBINGER_DIAL: ManeuverDefinition[] = [
   { direction: "bank_left", speed: 2, difficulty: "white" },
   { direction: "bank_right", speed: 2, difficulty: "white" },
   // WHITE Snap turn — the Harbinger's signature. Terran pilots train obsessively.
-  { direction: "kturn", speed: 2, difficulty: "white" },
+  { direction: "kturn", speed: 4, difficulty: "white" },
   // Speed 3
   { direction: "straight", speed: 3, difficulty: "white" },
   { direction: "bank_left", speed: 3, difficulty: "white" },
@@ -262,7 +260,7 @@ const HUNTER_DIAL: ManeuverDefinition[] = [
   { direction: "bank_right", speed: 3, difficulty: "white" },
   { direction: "segnor_left", speed: 3, difficulty: "white" },
   { direction: "segnor_right", speed: 3, difficulty: "white" },
-  { direction: "kturn", speed: 3, difficulty: "white" },
+  { direction: "kturn", speed: 4, difficulty: "white" },
   // Speed 4-5 — full burn; thermal limits kick in at 5
   { direction: "straight", speed: 4, difficulty: "white" },
   { direction: "straight", speed: 5, difficulty: "red" },
@@ -288,7 +286,7 @@ const TORPEDO_BOAT_DIAL: ManeuverDefinition[] = [
   { direction: "bank_right", speed: 2, difficulty: "white" },
   { direction: "segnor_left", speed: 2, difficulty: "white" },
   { direction: "segnor_right", speed: 2, difficulty: "white" },
-  { direction: "kturn", speed: 2, difficulty: "white" },
+  { direction: "kturn", speed: 4, difficulty: "white" },
   // Speed 3 — pirates keep the banks white where a Javelin's go red
   { direction: "straight", speed: 3, difficulty: "white" },
   { direction: "bank_left", speed: 3, difficulty: "white" },
@@ -2481,7 +2479,9 @@ const AUTHORED_DIALS: Record<string, readonly ManeuverDefinition[]> = {
   terran_consul: CAPITAL_DIAL,
 
   // ── FREE CONFEDERATION ───────────────────────────────────────────────────
-  confed_sparrow: LIGHT_FIGHTER_DIAL, // light_fighter — nimble but simple
+  confed_sparrow: tuneDial(LIGHT_FIGHTER_DIAL, [
+    { maneuver: "bank", speed: 3, difficulty: "white" },
+  ]), // light_fighter — cheap swarm fighter, white banks @ 3
   confed_wasp: LIGHT_FIGHTER_DIAL, // light_fighter — Z-95 tier
   confed_finch: FINCH_DIAL, // light_fighter — scout, green turn @ 1 + banks @ 2
   confed_kestrel: KESTREL_DIAL, // green hard turn @ speed 1

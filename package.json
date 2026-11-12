@@ -32,6 +32,7 @@
     "test:e2e:ui": "playwright test --ui",
     "qa:gameplay": "npx tsx scripts/gameplay_vision_qa.ts",
     "analyze:telemetry": "tsx scripts/analyze_telemetry.ts",
+    "profile:ai": "tsx scripts/ai_behaviour_profile.ts",
     "telemetry:weapons": "tsx scripts/weapon_telemetry.ts",
     "telemetry:ships": "tsx scripts/ship_efficiency.ts",
     "telemetry:hitrate": "tsx scripts/arcade_hitrate.ts",

@@ -149,6 +149,7 @@ export class PlayerFlightPilot {
         allowChordBarrelRoll: this.allowChordBarrelRoll,
       },
       frame.worldSize,
+      { interruptCycles: true },
     );
     this.memory = result.pilot;
     this.source.reportFlightCooldowns?.(cooldownsOf(result.motion.control));

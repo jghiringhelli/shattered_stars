@@ -37,10 +37,12 @@ export type ScriptEvent =
   | { readonly atMs: number; readonly up: ScriptKey }
   | { readonly atMs: number; readonly press: ActionIntent };
 
-/** A completed maneuver cycle. */
+/** A completed maneuver cycle (or the part of one a human's turn cut short). */
 export interface FlownCycle {
   readonly direction: ManeuverDirection;
   readonly speed: number;
+  /** Share of the cycle flown: 1 to its boundary, less when cut by a turn. */
+  readonly fraction: number;
   readonly start: Pose;
   readonly end: Pose;
 }
@@ -152,8 +154,14 @@ export function flyScript(options: ScriptOptions): FlightTrace {
     flight = tick.state;
     peakStress = Math.max(peakStress, flight.stress.level);
     if (!tick.completed) continue;
-    const { direction, speed, endPose } = tick.completed;
-    trace.cycles.push({ direction, speed, start: cycleStart, end: endPose });
+    const { direction, speed, fraction, endPose } = tick.completed;
+    trace.cycles.push({
+      direction,
+      speed,
+      fraction,
+      start: cycleStart,
+      end: endPose,
+    });
     cycleStart = endPose;
     pilot.onCycleCommitted(flight.motion.control.currentManeuver ?? "straight");
   }

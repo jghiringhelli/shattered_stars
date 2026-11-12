@@ -52,6 +52,7 @@ describe("cycleEvent", () => {
     const completed: CompletedCycle = {
       direction: "drift_left",
       speed: 2,
+      fraction: 1,
       endPose: { x: 0, y: 0, angle: 0 },
     };
     expect(cycleEvent(dial, completed)).toEqual({

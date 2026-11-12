@@ -3,9 +3,16 @@
  * mode, sampled every frame, then checked against the X-Wing template oracle.
  *
  * What the live telemetry must show, for the player AND every bot:
- *  - each 500 ms cycle ends where the template of the maneuver it flew puts it
- *    (position and facing), except for the displacement of a boost / barrel
+ *  - an UNINTERRUPTED cycle ends where the template of the maneuver it flew puts
+ *    it (position and facing), except for the displacement of a boost / barrel
  *    roll performed inside that cycle, which must be exactly its distance;
+ *  - instant turns: the player's new turn cuts the running cycle, which ends
+ *    EXACTLY on the template arc at the progress it was cut (the prefix of its
+ *    path, nose tangent) and is followed by a full template from that pose; no
+ *    heading discontinuity and no position jump at the cut. Cycles are told
+ *    apart by their own start / end (a boundary is where control.maneuverProgress
+ *    drops or the maneuver id changes), never by a global 500 ms grid. Bots
+ *    never cut a cycle (they commit at the boundary);
  *  - mid-cycle poses follow the template arc (no teleports between frames);
  *  - actions respect their recharge (boost, barrel roll, Snap Turn);
  *  - speed cap per maneuver: a cycle is flown at control.cycleSpeed (the set
@@ -28,6 +35,8 @@ import {
   type BattleEntry,
 } from "./helpers/battleEntry";
 import {
+  BARREL_ROLL_SLIDE_SPEED,
+  XWING_RULES,
   headingDelta,
   predictArcPose,
   predictManeuver,
@@ -35,6 +44,7 @@ import {
   torusDisplacement,
   type Pose,
 } from "../../src/simulation/flight/XWingFlightOracle";
+import { CYCLE_INTERRUPT_MIN_ELAPSED_MS } from "../../src/core/cycleInterrupt";
 import { BOOST_DISTANCE_PX } from "../../src/arcade/ArcadeInputGestures";
 import {
   getMovementProfile,
@@ -54,6 +64,20 @@ const ARC_POSITION_TOLERANCE_PX = 5;
 const ARC_HEADING_TOLERANCE_DEG = 4;
 /** Boost / roll displacement tolerance (px). */
 const ACTION_DISTANCE_TOLERANCE_PX = 4;
+/** A cut cycle is searched from this progress (the minimum cycle age, with slack). */
+const MIN_CUT_PROGRESS = CYCLE_INTERRUPT_MIN_ELAPSED_MS / CYCLE_MS - 0.02;
+/**
+ * The cut lands between the last sampled frame and a few ticks later (one
+ * frame may run several 60 Hz ticks): progress slack of the search window.
+ */
+const CUT_PROGRESS_SLACK = 0.12;
+/** Progress step of the cut-pose search (a speed-5 template moves ~0.25 px per step). */
+const CUT_SEARCH_STEP = 0.001;
+/** A cycle with an action in it whose last frame is below this progress was cut: not checked. */
+const ACTION_CYCLE_FULL_MIN_PROGRESS = 0.85;
+/** Heading change allowed between frames: this many times the maneuver's rate, plus slack (deg). */
+const HEADING_STEP_RATIO = 2;
+const HEADING_STEP_SLACK_DEG = 2;
 /** Scheduling slack on recharge timing (ms). */
 const RECHARGE_SLACK_MS = 150;
 const GESTURES = 34;
@@ -205,7 +229,11 @@ interface Cycle {
   readonly previousSet: number;
 }
 
-/** Splits one ship's samples into cycles where the progress wraps. */
+/**
+ * Splits one ship's samples into cycles by their own start: a new cycle begins
+ * where the progress drops (a boundary, or a cut: a turn restarts it at once)
+ * or the maneuver id changes. Progress only grows inside a cycle.
+ */
 function toCycles(samples: Sample[]): Cycle[] {
   const cycles: Cycle[] = [];
   let current: Sample[] = [];
@@ -213,7 +241,7 @@ function toCycles(samples: Sample[]): Cycle[] {
   let previousSet = samples[0]?.set ?? 0;
   samples.forEach((sample, index) => {
     const previous = current[current.length - 1];
-    if (previous && sample.prog < previous.prog - 0.5) {
+    if (previous && startsNewCycle(previous, sample)) {
       cycles.push({ samples: current, from, previousSet });
       previousSet = previous.set;
       current = [];
@@ -222,6 +250,11 @@ function toCycles(samples: Sample[]): Cycle[] {
     current.push(sample);
   });
   return cycles;
+}
+
+/** Whether `next` is the first frame of a new cycle after `previous`. */
+function startsNewCycle(previous: Sample, next: Sample): boolean {
+  return next.prog < previous.prog || next.man !== previous.man;
 }
 
 type ActionKind = "boost" | "roll" | "snap";
@@ -255,6 +288,15 @@ const distance = (dx: number, dy: number): number => Math.hypot(dx, dy);
 interface Report {
   cycles: number;
   checkedEnds: number;
+  /** Cycles a turn cut short, each ending on the arc prefix. */
+  cutCycles: number;
+  /** Cut cycles with a boost / roll inside (not checked). */
+  cutActionCycles: number;
+  maxCutEndErrorPx: number;
+  maxCutEndErrorDeg: number;
+  maxHeadingStepRatio: number;
+  /** Index of the first frame of every cycle that followed a cut (frame checks use it). */
+  readonly cuts: Set<number>;
   checkedArcs: number;
   actionCycles: number;
   boosts: number;
@@ -277,6 +319,12 @@ function emptyReport(): Report {
   return {
     cycles: 0,
     checkedEnds: 0,
+    cutCycles: 0,
+    cutActionCycles: 0,
+    maxCutEndErrorPx: 0,
+    maxCutEndErrorDeg: 0,
+    maxHeadingStepRatio: 0,
+    cuts: new Set<number>(),
     checkedArcs: 0,
     actionCycles: 0,
     boosts: 0,
@@ -292,6 +340,69 @@ function emptyReport(): Report {
     playerManeuvers: {},
     failures: [],
   };
+}
+
+/** Where a cut cycle ended on its template arc. */
+interface CutFit {
+  readonly progress: number;
+  readonly errorPx: number;
+  readonly errorDeg: number;
+}
+
+/**
+ * A cycle a turn cut short ends on the arc of its own template at the progress
+ * it was cut: search the window around its last sampled frame for that pose.
+ *
+ * @param start - The cycle's start pose.
+ * @param step - The maneuver it flew, at its flown speed.
+ * @param baseSize - Ship base size (px).
+ * @param end - Where the next cycle started.
+ * @param lastProgress - Progress of the last frame sampled in the cycle.
+ * @returns The best fit when within tolerance, otherwise null.
+ */
+function fitCutPrefix(
+  start: Pose,
+  step: { direction: never; speed: number },
+  baseSize: number,
+  end: Pose,
+  lastProgress: number,
+): CutFit | null {
+  const from = Math.max(MIN_CUT_PROGRESS, lastProgress - 0.01);
+  const to = Math.min(1, lastProgress + CUT_PROGRESS_SLACK);
+  let best: CutFit | null = null;
+  for (let progress = from; progress <= to; progress += CUT_SEARCH_STEP) {
+    const expected = predictArcPose(start, step, baseSize, progress);
+    const d = torusDisplacement(expected, end, WORLD_SIZE);
+    const fit = {
+      progress,
+      errorPx: distance(d.dx, d.dy),
+      errorDeg: Math.abs(headingDelta(expected.angle, end.angle)),
+    };
+    if (!best || fit.errorPx < best.errorPx) best = fit;
+  }
+  const within =
+    best !== null &&
+    best.errorPx <= END_POSITION_TOLERANCE_PX &&
+    best.errorDeg <= END_HEADING_TOLERANCE_DEG;
+  return within ? best : null;
+}
+
+/** Counts a cut cycle; only the human may cut one. */
+function registerCut(
+  next: Cycle,
+  fit: CutFit,
+  label: string,
+  who: string,
+  report: Report,
+): void {
+  report.cutCycles++;
+  report.cuts.add(next.from);
+  report.maxCutEndErrorPx = Math.max(report.maxCutEndErrorPx, fit.errorPx);
+  report.maxCutEndErrorDeg = Math.max(report.maxCutEndErrorDeg, fit.errorDeg);
+  if (!who.startsWith("PLAYER"))
+    report.failures.push(
+      `${label}: a bot's cycle was cut at ${(fit.progress * CYCLE_MS).toFixed(0)} ms (only the human interrupts)`,
+    );
 }
 
 /** Checks one finished cycle against the oracle; actions explain the residual. */
@@ -323,22 +434,36 @@ function checkCycle(
   );
   report.cycles++;
   const label = `${who} ${first.man}@${step.speed} cycle`;
+  const last = cycle.samples[cycle.samples.length - 1]!;
   if (inCycle.length === 0) {
-    report.checkedEnds++;
     const err = distance(d.dx, d.dy);
+    const onTemplate =
+      err <= END_POSITION_TOLERANCE_PX &&
+      angleError <= END_HEADING_TOLERANCE_DEG;
+    const cut = onTemplate
+      ? null
+      : fitCutPrefix(start, step, first.base, end, last.prog);
+    if (cut) {
+      registerCut(next, cut, label, who, report);
+      checkArc(cycle, step, start, who, report);
+      return;
+    }
+    report.checkedEnds++;
     report.maxEndErrorPx = Math.max(report.maxEndErrorPx, err);
     report.maxEndErrorDeg = Math.max(report.maxEndErrorDeg, angleError);
-    if (
-      err > END_POSITION_TOLERANCE_PX ||
-      angleError > END_HEADING_TOLERANCE_DEG
-    )
+    if (!onTemplate)
       report.failures.push(
-        `${label}: end off by ${err.toFixed(1)} px / ${angleError.toFixed(1)}°`,
+        `${label}: end off by ${err.toFixed(1)} px / ${angleError.toFixed(1)}° (and not on the arc prefix of a cut cycle)`,
       );
     checkArc(cycle, step, start, who, report);
     return;
   }
   report.actionCycles++;
+  if (last.prog < ACTION_CYCLE_FULL_MIN_PROGRESS) {
+    report.cutActionCycles++;
+    report.cuts.add(next.from);
+    return;
+  }
   if (inCycle.length === 1)
     checkActionDisplacement(
       inCycle[0]!,
@@ -363,7 +488,9 @@ function checkActionDisplacement(
 ): void {
   const moved = distance(residual.dx, residual.dy);
   const expected =
-    action.kind === "boost" ? BOOST_DISTANCE_PX : templateLength(1, baseSize);
+    action.kind === "boost"
+      ? BOOST_DISTANCE_PX
+      : templateLength(BARREL_ROLL_SLIDE_SPEED, baseSize);
   if (Math.abs(moved - expected) > ACTION_DISTANCE_TOLERANCE_PX)
     report.failures.push(
       `${label}: ${action.kind} moved ${moved.toFixed(1)} px, expected ${expected.toFixed(1)}`,
@@ -413,7 +540,55 @@ function checkArc(
   }
 }
 
-/** No teleports between frames, except the frame an action displaced the ship. */
+/** Facing change of a full cycle of `man` (deg): the heading rate, linear in progress. */
+const facingRate = (man: string | null): number =>
+  man ? Math.abs(XWING_RULES[man as ManeuverDirection]?.facingDeg ?? 0) : 0;
+
+/**
+ * Sim time of a frame in cycle fractions: inside a cycle the progress step; over
+ * a boundary the rest of the old cycle plus the start of the new one; over a cut
+ * only the new cycle (the cut happens before the tick moves the ship).
+ */
+function progressBetween(a: Sample, b: Sample, cut: boolean): number {
+  if (!startsNewCycle(a, b)) return b.prog - a.prog;
+  return cut ? b.prog : 1 - a.prog + b.prog;
+}
+
+/**
+ * Heading may not jump between frames, at a cycle boundary or a cut: it
+ * changes at most at the maneuver's own rate (linear over the cycle).
+ */
+function checkHeading(
+  a: Sample,
+  b: Sample,
+  progressStep: number,
+  cut: boolean,
+  who: string,
+  report: Report,
+): void {
+  if (getMovementProfile(b.def ?? "") === "capital") return;
+  const boundary = startsNewCycle(a, b);
+  const allowed =
+    HEADING_STEP_RATIO *
+      (boundary && !cut
+        ? facingRate(a.man) * (1 - a.prog) + facingRate(b.man) * b.prog
+        : facingRate(b.man) * progressStep) +
+    HEADING_STEP_SLACK_DEG;
+  const step = Math.abs(headingDelta(b.pose.angle, a.pose.angle));
+  report.maxHeadingStepRatio = Math.max(
+    report.maxHeadingStepRatio,
+    step / allowed,
+  );
+  if (step > allowed)
+    report.failures.push(
+      `${who} ${cut ? "cut" : "frame"}: heading jumped ${step.toFixed(1)}° (allowed ${allowed.toFixed(1)}°) ${a.man} -> ${b.man} prog ${a.prog.toFixed(2)} -> ${b.prog.toFixed(2)}`,
+    );
+}
+
+/**
+ * No teleports and no heading jumps between frames, except the frame an action
+ * displaced the ship (a boost / roll moves it, never turns it).
+ */
 function checkFrames(
   samples: Sample[],
   actions: ReadonlyArray<Performed>,
@@ -424,10 +599,11 @@ function checkFrames(
   for (let i = 1; i < samples.length; i++) {
     const a = samples[i - 1]!;
     const b = samples[i]!;
-    const wrapped = b.prog < a.prog - 0.5;
-    if (actionFrames.has(i)) continue;
+    const cut = report.cuts.has(i);
     // Sim time, not wall time: a hitch makes one frame run several ticks.
-    const progressStep = wrapped ? 1 - a.prog + b.prog : b.prog - a.prog;
+    const progressStep = progressBetween(a, b, cut);
+    checkHeading(a, b, progressStep, cut, who, report);
+    if (actionFrames.has(i)) continue;
     const d = torusDisplacement(a.pose, b.pose, WORLD_SIZE);
     const allowed = Math.max(
       templateLength(Math.max(a.speed, b.speed), a.base) *
@@ -527,6 +703,7 @@ function analyse(samples: Sample[]): Report {
   for (const s of samples) byShip.set(s.id, [...(byShip.get(s.id) ?? []), s]);
   for (const [id, list] of byShip) {
     const who = `${list[0]!.player ? "PLAYER" : "bot"} ${id}`;
+    report.cuts.clear();
     const actions = findActions(list);
     const cycles = toCycles(list);
     // First cycle may start mid-way and the last one is unfinished: skip both.
@@ -569,10 +746,14 @@ for (const [name, entry] of BATTLES) {
     await installSampler(page, entry.sceneKey);
     await playScript(page, 20_261_019);
     const report = analyse(await readSamples(page));
-    const { failures, ...summary } = report;
+    const { failures, cuts: _cuts, ...summary } = report;
     console.log(`[${name}] ${JSON.stringify(summary)}`);
     if (failures.length > 0) console.log(failures.slice(0, 12).join("\n"));
     expect(report.cycles, "cycles checked").toBeGreaterThan(10);
+    expect(
+      report.cutCycles,
+      "cycles the player's instant turns cut (and that ended on the arc prefix)",
+    ).toBeGreaterThan(0);
     expect(report.cappedCycles, "cycles the dial cap slowed").toBeGreaterThan(
       0,
     );

@@ -7,47 +7,49 @@
  * - Throttle up/down: one speed step.
  * - Steering: tap = 30° drift, hold = one 45° bank then drift
  *   (SteeringIntent), hard-turn gesture or Q/E = 90° turn at the nearest
- *   legal speed on the ship's dial.
+ *   legal speed on the ship's dial. A human's new turn starts at once, cutting
+ *   the running cycle (`interruptCycles`, src/core/cycleInterrupt); bots wait
+ *   for the cycle boundary.
  * - Maneuver key (ManeuverKey): tap = Snap turn, hold + ←/→ = Hook Loop,
- *   double-tap then hold + ←/→ = Knife Roll — queued for the next cycle,
- *   with an instant stress spike (refused while stressed for the red ones).
+ *   double-tap then hold + ←/→ = Knife Roll — queued for the next cycle
+ *   (atomic: never cut), with an instant stress spike (refused while stressed
+ *   for the red ones).
  * - Boost (↑↑) and barrel roll (←← / →→): instant dashes that carry the
- *   cycle along (ShipMotion.performAction).
+ *   cycle along (ShipActions.performAction).
  *
  * Pure: no Phaser. The scene reads the returned events to play effects.
  */
 
 import type { ManeuverDefinition } from "../../core/types";
-import {
-  updateGestures,
-  INITIAL_GESTURE_STATE,
-  type GestureAction,
-} from "../ArcadeInputGestures";
-import {
-  INITIAL_MANEUVER_KEY,
-  updateManeuverKey,
-  type ManeuverKeyResult,
-} from "../ManeuverKey";
+import { INITIAL_GESTURE_STATE } from "../ArcadeInputGestures";
+import { INITIAL_MANEUVER_KEY } from "../ManeuverKey";
 import {
   IDLE_STEERING,
   onSteeringCycleCommitted,
-  updateHeldSteering,
-  type SteerInput,
+  steeringQueue,
 } from "../SteeringIntent";
 import { applyThrottle, IDLE_THROTTLE } from "./PilotThrottle";
 import {
   applyDashes,
   applySoftRoll,
   applySpecials,
-  applySteering,
   type Flight,
 } from "./PilotFlightSteps";
+import { applySteering } from "./PilotSteeringStep";
+import {
+  applySteeringInput,
+  hardTurnOf,
+  hearInput,
+  rollButtonsOf,
+  specialRequestsOf,
+  type FramePresses,
+} from "./PilotFlightInputs";
 import type {
   FlightControlResult,
-  FlightEdge,
   FlightInput,
   FlownShip,
   PilotControlState,
+  PilotFlightOptions,
 } from "./PilotFlightTypes";
 
 export type {
@@ -57,6 +59,7 @@ export type {
   FlightInput,
   FlownShip,
   PilotControlState,
+  PilotFlightOptions,
 } from "./PilotFlightTypes";
 
 /** A pilot with no input history. */
@@ -66,18 +69,8 @@ export const INITIAL_PILOT_CONTROL: PilotControlState = {
   steering: IDLE_STEERING,
   throttle: IDLE_THROTTLE,
   steerLatched: false,
+  steerRequest: null,
 };
-
-/**
- * Which way the arrows steer: one side held alone, otherwise none.
- * @param input - This frame's input.
- * @returns The steering side.
- */
-function steerSide(input: FlightInput): SteerInput {
-  if (input.left && !input.right) return "left";
-  if (input.right && !input.left) return "right";
-  return "none";
-}
 
 /**
  * Apply one frame of the player's flight input to their ship.
@@ -86,6 +79,8 @@ function steerSide(input: FlightInput): SteerInput {
  * @param flown - The ship being flown.
  * @param input - This frame's input.
  * @param worldSize - Battlefield edge length (px).
+ * @param options - `interruptCycles`: a human pilot's new turn cuts the running
+ *   cycle (src/core/cycleInterrupt); off (bots) it waits for the boundary.
  * @returns Updated input memory, motion, stress and effect events.
  */
 export function applyPilotFlightInput(
@@ -93,6 +88,7 @@ export function applyPilotFlightInput(
   flown: FlownShip,
   input: FlightInput,
   worldSize: number,
+  options: PilotFlightOptions = {},
 ): FlightControlResult {
   const flight: Flight = {
     motion: flown.motion,
@@ -100,32 +96,21 @@ export function applyPilotFlightInput(
     events: [],
     refusals: [],
   };
-  const maneuverHeld = holdsManeuverKey(flown, input);
-  const gestures = updateGestures({
-    state: pilot.gesture,
-    leftDown: input.left,
-    rightDown: input.right,
-    upDown: input.up,
-    downDown: input.down,
-    nowMs: input.nowMs,
-    deltaMs: input.deltaMs,
-    allowChordBarrelRoll: input.allowChordBarrelRoll ?? false,
-    maneuverHeld,
-  });
-  const key = updateManeuverKey(pilot.maneuver, {
-    held: maneuverHeld,
-    left: input.left,
-    right: input.right,
-    nowMs: input.nowMs,
-  });
-  const pressed: FramePresses = {
-    edge: (e) => input.edges.has(e),
-    has: (a) => gestures.actions.includes(a),
-  };
+  const { gestureState, key, pressed } = hearInput(pilot, flown, input);
   const throttle = applyThrottleInput(flight, pilot, pressed);
   const rolled = flySoftRoll(flown, flight, pressed, worldSize);
   const steered = applySteeringInput(pilot, input, key, rolled);
-  applySteering(flown, flight, steered.steering, hardTurnOf(pressed));
+  const steerRequest = applySteering(
+    flown,
+    flight,
+    steered.steering,
+    hardTurnOf(pressed),
+    {
+      interrupts: options.interruptCycles === true,
+      previousRequest: pilot.steerRequest,
+      rolled,
+    },
+  );
   applySpecials(flown, flight, specialRequestsOf(pressed, key));
   applyDashes(
     flown,
@@ -136,36 +121,17 @@ export function applyPilotFlightInput(
   );
   return {
     pilot: {
-      gesture: gestures.state,
+      gesture: gestureState,
       maneuver: key.state,
       ...steered,
       throttle,
+      steerRequest,
     },
     motion: flight.motion,
     stress: flight.stress,
     events: flight.events,
     refusals: flight.refusals,
   };
-}
-
-/**
- * Huge ships have no maneuver key: it shares LT with commander order 1, so
- * for them it is not a flight input at all (no gesture, no refusal flash,
- * the arrows keep steering).
- *
- * @param flown - The ship being flown.
- * @param input - This frame's input.
- * @returns Whether the maneuver key counts as held for this ship.
- */
-function holdsManeuverKey(flown: FlownShip, input: FlightInput): boolean {
-  if (!input.maneuver) return false;
-  return flown.motion.control.capabilities?.canManeuver !== false;
-}
-
-/** This frame's presses: edge intents and recognised arrow gestures. */
-interface FramePresses {
-  readonly edge: (e: FlightEdge) => boolean;
-  readonly has: (a: GestureAction) => boolean;
 }
 
 /**
@@ -217,84 +183,8 @@ function flySoftRoll(
 }
 
 /**
- * Held steering, idled while a roll or a Hook/Knife chord stays latched
- * (until both arrows are released) so the gesture's own keys do not also
- * bank the ship. A roll's double-tap cancels the drift its first tap queued.
- *
- * @param pilot - Input memory from the previous frame.
- * @param input - This frame's input.
- * @param key - What the maneuver key did this frame.
- * @param rolled - Whether a double-tap roll was flown this frame.
- * @returns Steering memory and the latch after this frame.
- */
-function applySteeringInput(
-  pilot: PilotControlState,
-  input: FlightInput,
-  key: ManeuverKeyResult,
-  rolled: boolean,
-): Pick<PilotControlState, "steering" | "steerLatched"> {
-  const chorded = key.special !== null && key.special !== "kturn";
-  const steerLatched =
-    (pilot.steerLatched || rolled || chorded) && (input.left || input.right);
-  const steering = steerLatched
-    ? IDLE_STEERING
-    : updateHeldSteering(pilot.steering, steerSide(input), input.deltaMs);
-  return { steering, steerLatched };
-}
-
-/**
- * Hold is a bank (SteeringIntent); only a deliberate Q/E press is a 90° turn.
- *
- * @param pressed - This frame's presses.
- * @returns The hard-turn side requested, or null.
- */
-function hardTurnOf(pressed: FramePresses): "left" | "right" | null {
-  if (pressed.edge("SHARP_TURN_LEFT")) return "left";
-  if (pressed.edge("SHARP_TURN_RIGHT")) return "right";
-  return null;
-}
-
-/**
- * Snap turn, Hook and Knife — from the maneuver key, a direct key/button
- * edge or the ↓↓ gesture — as requests for applySpecials.
- *
- * @param pressed - This frame's presses.
- * @param key - What the maneuver key did this frame.
- * @returns The specials requested (key, direct edge or gesture), with their effect events.
- */
-function specialRequestsOf(
-  pressed: FramePresses,
-  key: ManeuverKeyResult,
-): Parameters<typeof applySpecials>[2] {
-  const { edge, has } = pressed;
-  const is = (name: string): boolean => key.special === name;
-  return [
-    [edge("KTURN") || has("kturn_gesture") || is("kturn"), "kturn", "kturn"],
-    [edge("SEGNOR_LEFT") || is("segnor_left"), "segnor_left", "segnor"],
-    [edge("SEGNOR_RIGHT") || is("segnor_right"), "segnor_right", "segnor"],
-    [edge("TALLON_LEFT") || is("tallon_left"), "tallon_left", "tallon"],
-    [edge("TALLON_RIGHT") || is("tallon_right"), "tallon_right", "tallon"],
-  ];
-}
-
-/**
- * Gamepad/extra-key roll buttons as the gesture actions a roll produces. A
- * button is a deliberate press: unlike a double-tap it reports refusals, and
- * it never latches steering.
- *
- * @param edges - This frame's flight edges.
- * @returns The barrel-roll actions pressed this frame.
- */
-function rollButtonsOf(edges: ReadonlySet<FlightEdge>): GestureAction[] {
-  const actions: GestureAction[] = [];
-  if (edges.has("BARREL_ROLL_LEFT")) actions.push("barrel_roll_left");
-  if (edges.has("BARREL_ROLL_RIGHT")) actions.push("barrel_roll_right");
-  return actions;
-}
-
-/**
  * Tell the pilot controls a cycle committed (call when stepMotion reports a
- * completed cycle for the player's ship).
+ * completed cycle for the player's ship, boundary or cut).
  *
  * @param pilot - Input memory.
  * @param started - The maneuver the new cycle started.
@@ -304,8 +194,7 @@ export function onPilotCycleCommitted(
   pilot: PilotControlState,
   started: ManeuverDefinition["direction"],
 ): PilotControlState {
-  return {
-    ...pilot,
-    steering: onSteeringCycleCommitted(pilot.steering, started),
-  };
+  const steering = onSteeringCycleCommitted(pilot.steering, started);
+  // The key still held keeps asking for the same thing: not a new request.
+  return { ...pilot, steering, steerRequest: steeringQueue(steering, false) };
 }

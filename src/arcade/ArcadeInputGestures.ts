@@ -41,7 +41,7 @@ export const DOUBLE_TAP_WINDOW_MS = 300;
 export const CHORD_WINDOW_MS = 150;
 
 /** Pixels the ship snaps forward on a boost dash. */
-export const BOOST_DISTANCE_PX = 220;
+export const BOOST_DISTANCE_PX = 300;
 
 // ============================================
 // State & actions

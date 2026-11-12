@@ -105,7 +105,7 @@ export const FLIGHT_SCHOOL_STEPS: readonly FlightSchoolStep[] = [
     title: "Drift — the 500 ms cycle",
     scenario: "open_space",
     prompt: (k) =>
-      `Tap ${either(k, "STEER_LEFT", "STEER_RIGHT")} once. Inputs QUEUE the next maneuver: it starts on the next 500 ms beat, so steer a moment early.`,
+      `Tap ${either(k, "STEER_LEFT", "STEER_RIGHT")} once. Your turn starts at once and flies one full 500 ms drift, then you fly straight.`,
     isDone: flying("drift_left", "drift_right"),
   },
   {
@@ -113,7 +113,7 @@ export const FLIGHT_SCHOOL_STEPS: readonly FlightSchoolStep[] = [
     title: "Bank",
     scenario: "open_space",
     prompt: (k) =>
-      `Hold ${either(k, "STEER_LEFT", "STEER_RIGHT")} for a 45° bank on the next beat.`,
+      `Hold ${either(k, "STEER_LEFT", "STEER_RIGHT")} for a 45° bank: after a moment it replaces the drift, then you drift on.`,
     isDone: flying("bank_left", "bank_right"),
   },
   {
@@ -121,7 +121,7 @@ export const FLIGHT_SCHOOL_STEPS: readonly FlightSchoolStep[] = [
     title: "Hard turn",
     scenario: "open_space",
     prompt: (k) =>
-      `Press ${either(k, "SHARP_TURN_LEFT", "SHARP_TURN_RIGHT")} for a 90° hard turn.`,
+      `Press ${either(k, "SHARP_TURN_LEFT", "SHARP_TURN_RIGHT")} for a 90° hard turn. It starts at once.`,
     isDone: flying("turn_left", "turn_right"),
   },
   {
@@ -129,7 +129,7 @@ export const FLIGHT_SCHOOL_STEPS: readonly FlightSchoolStep[] = [
     title: "Snap turn",
     scenario: "open_space",
     prompt: (k) =>
-      `TAP the maneuver key [${k("MANEUVER")}] (or double-tap [${k("THRUST_DOWN")}]) to flip 180°. Red maneuvers build stress — watch the bottom of your ring.`,
+      `TAP the maneuver key [${k("MANEUVER")}] (or double-tap [${k("THRUST_DOWN")}]) to flip 180°. Snap, Hook and Knife are committed: they start on the next 500 ms beat. Red maneuvers build stress — watch the bottom of your ring.`,
     isDone: flying("kturn"),
   },
   {

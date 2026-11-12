@@ -15,7 +15,7 @@
  * - Snap turn: straight template, then rotate 180°.
  * - Hook Loop: bank template, then rotate 180° the same way → ±225° (≡ ∓135°).
  * - Knife Roll: turn template, then rotate 90° toward the turn → net ±180°.
- * - Barrel roll: slide sideways one speed-1 template + base, facing unchanged.
+ * - Barrel roll: slide sideways one speed-2 template + base, facing unchanged.
  *
  * Pure: no Phaser, no game-template imports.
  */
@@ -210,8 +210,11 @@ export function predictFlight(
   return poses;
 }
 
+/** Speed of the template a barrel roll slides along. */
+export const BARREL_ROLL_SLIDE_SPEED = 2;
+
 /**
- * Barrel roll: slide sideways one speed-1 template plus base, facing unchanged.
+ * Barrel roll: slide sideways one speed-2 template plus base, facing unchanged.
  * @param pose - Pose before the roll.
  * @param side - Roll direction.
  * @param baseSize - Ship base size in px.
@@ -225,7 +228,7 @@ export function predictBarrelRoll(
   return translate(
     pose,
     side === "left" ? -90 : 90,
-    templateLength(1, baseSize),
+    templateLength(BARREL_ROLL_SLIDE_SPEED, baseSize),
   );
 }
 

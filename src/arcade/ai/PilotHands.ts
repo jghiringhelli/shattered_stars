@@ -47,6 +47,18 @@ interface Keys {
 
 const NO_KEYS: Keys = { left: false, right: false };
 
+/**
+ * @param maneuver - A maneuver queued on the ship (or none).
+ * @returns Whether it is a special (Snap turn, Hook, Knife).
+ */
+function isSpecialManeuver(maneuver: ManeuverDirection | null): boolean {
+  return (
+    maneuver === "kturn" ||
+    (maneuver !== null &&
+      (maneuver.startsWith("segnor") || maneuver.startsWith("tallon")))
+  );
+}
+
 /** Direct roll buttons (the bot never needs the arrows' double-tap). */
 const ROLL_EDGE: Readonly<Record<"left" | "right", FlightEdge>> = {
   left: "BARREL_ROLL_LEFT",
@@ -109,13 +121,17 @@ export class PilotHands {
       this.pendingRoll = null;
       this.keys = NO_KEYS;
     } else {
-      this.pressSpecials(edges, canKTurn(control));
+      const special = this.pressSpecials(edges, canKTurn(control));
       const throttle = this.throttleTap(control.speed, frame.nowMs);
       if (throttle === "up") edges.add("THRUST_UP");
       if (throttle === "down") edges.add("THRUST_DOWN");
       up = throttle === "up";
       down = throttle === "down";
-      this.keys = this.steerKeys(control.nextManeuver, edges);
+      // A special spends its recharge when queued: no steering key may replace it.
+      this.keys =
+        special || isSpecialManeuver(control.nextManeuver)
+          ? NO_KEYS
+          : this.steerKeys(control.nextManeuver, edges);
     }
     const result = applyPilotFlightInput(
       this.memory,
@@ -148,14 +164,20 @@ export class PilotHands {
    * Special keys and the boost key, each pressed once per arming.
    * @param edges - This frame's edges (mutated).
    * @param specialReady - Whether a special can be queued now.
+   * @returns Whether a special key was pressed this frame.
    */
-  private pressSpecials(edges: Set<FlightEdge>, specialReady: boolean): void {
+  private pressSpecials(
+    edges: Set<FlightEdge>,
+    specialReady: boolean,
+  ): boolean {
+    const pressed = this.pendingSpecial !== null && specialReady;
     if (this.pendingSpecial && specialReady) {
       edges.add(SPECIAL_EDGE[this.pendingSpecial]);
     }
     this.pendingSpecial = null;
     if (this.pendingBoost) edges.add("BOOST");
     this.pendingBoost = false;
+    return pressed;
   }
 
   /**

@@ -29,7 +29,7 @@ Nothing is sent automatically; the file holds no personal data (see [PRIVACY.md]
 
 | Mode | Try this | Look for |
 |---|---|---|
-| **Flight School** (press F on the menu) | Finish all lessons | Lessons that do not detect your input (the key chips on the card should light while you hold the key), a lesson that refuses a move without saying why, unclear prompts, wrong key names |
+| **Flight School** (press F on the menu) | Finish all lessons | Lessons that do not detect your input (the key chips on the card should light while you hold the key), a lesson that refuses a move without saying why, unclear prompts, wrong key names. Steering turns the ship at once (no wait for a 500 ms beat; a tap is one full drift, holding adds one bank after a moment); Snap / Hook / Knife still start on the next beat, so check the prompts say so |
 | **Skirmish** | A default squad on Normal, then change difficulty or factions | Wingmen behaviour, whether focus fire (R, mark target) matters, fights that drag or end too fast |
 | **Survival** | One full run: pick upgrades, visit a shop, meet an elite or boss | Node pacing, relic and shop prices, the daily challenge, run save after a reload |
 | **Epic Format** | A reinforcement battle with a big fleet | Frame rate, the reinforcement picker, readability of the radar and roster |

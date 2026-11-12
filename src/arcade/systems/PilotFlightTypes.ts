@@ -4,7 +4,7 @@
  */
 
 import type { ShipPose } from "../../core/ArcadeControls";
-import type { ManeuverDefinition } from "../../core/types";
+import type { ManeuverDefinition, ManeuverDirection } from "../../core/types";
 import type { GestureState } from "../ArcadeInputGestures";
 import type { ManeuverKeyState } from "../ManeuverKey";
 import type { StressState } from "../ArcadeStress";
@@ -54,6 +54,21 @@ export interface PilotControlState {
   readonly maneuver: ManeuverKeyState;
   /** A roll or a Hook/Knife fired from the arrows: they steer nothing until both are released. */
   readonly steerLatched: boolean;
+  /**
+   * The steering maneuver the arrows asked for last frame (null = none): a
+   * different one this frame is a NEW request, which a human's turn may fly
+   * at once (src/core/cycleInterrupt); an unchanged one keeps the cadence.
+   */
+  readonly steerRequest: ManeuverDirection | null;
+}
+
+/** Options of one frame of pilot flight input. */
+export interface PilotFlightOptions {
+  /**
+   * Human pilot: a new turn cuts the running cycle instead of waiting for the
+   * boundary. Bots leave it off and keep committing at cycle boundaries.
+   */
+  readonly interruptCycles?: boolean;
 }
 
 /** The ship being flown, as far as flight controls care. */

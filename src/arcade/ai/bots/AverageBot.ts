@@ -18,6 +18,7 @@ import { offNoseDeg, torusOffset, type Point } from "../AiGeometry";
 import {
   IDLE_INTENT,
   type BotProfile,
+  type OwnShipView,
   type PerceivedShip,
   type PilotBot,
   type PilotIntent,
@@ -71,6 +72,13 @@ export const AVERAGE_KTURN_RANGE_PX = 450;
 /** Chance per decision that the pilot thinks of the Snap turn. */
 export const AVERAGE_KTURN_CHANCE = 0.35;
 
+/**
+ * Chance per decision that an engaged pilot considers a special (Snap turn,
+ * Hook, Knife) at all. A special spends its recharge the moment it is queued,
+ * so an average pilot reaches for one occasionally, not whenever it recharges.
+ */
+export const AVERAGE_TRICK_CHANCE = 0.04;
+
 /** Lead the target by this much (ms). */
 export const AVERAGE_LEAD_MS = 250;
 
@@ -91,10 +99,12 @@ export class AverageBot implements PilotBot {
   /**
    * @param profile - Reaction, cadence and noise (average by default).
    * @param weights - Planner priorities while engaging; null = rules only.
+   * @param trickChance - Chance per decision of considering a special.
    */
   constructor(
     readonly profile: BotProfile = TIER_PROFILES.average,
     private readonly weights: PlanWeights | null = AVERAGE_WEIGHTS,
+    private readonly trickChance: number = AVERAGE_TRICK_CHANCE,
   ) {}
 
   /**
@@ -136,9 +146,10 @@ export class AverageBot implements PilotBot {
       ...target,
       angle: target.angle + noise(this.profile.headingNoiseDeg, random),
     };
+    const mayTrick = random() < this.trickChance;
     const plan = planManeuver(
       {
-        self: view.self,
+        self: mayTrick ? view.self : withoutSpecials(view.self),
         target: judged,
         enemies: view.enemies,
         perceptionAgeMs: this.profile.reactionMs,
@@ -215,6 +226,14 @@ export class AverageBot implements PilotBot {
       return false;
     return random() < AVERAGE_KTURN_CHANCE;
   }
+}
+
+/**
+ * @param self - Own ship.
+ * @returns The ship as a pilot sees it when it is not thinking of specials.
+ */
+function withoutSpecials(self: OwnShipView): OwnShipView {
+  return { ...self, kturnReady: false, availableSpecials: [] };
 }
 
 /**

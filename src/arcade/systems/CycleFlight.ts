@@ -153,7 +153,8 @@ export function tickCycleFlight(
     dial: input.dial,
     reliefTiers: modifiers.reliefTiers,
     rateMultiplier: modifiers.rateMultiplier,
-    cycleMs: input.cycleMs,
+    // A cycle a turn cut short counts for the share that was flown.
+    cycleMs: input.cycleMs * step.completed.fraction,
   });
   return { state: { motion: step.state, stress }, completed: step.completed };
 }

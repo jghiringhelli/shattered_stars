@@ -27,6 +27,7 @@ import { createShipControl } from "../../../../src/arcade/systems/CycleFlight";
 import { getShipDial } from "../../../../src/data/ShipDefinitions";
 import {
   headingDelta,
+  predictArcPose,
   predictBarrelRoll,
   predictManeuver,
   translate,
@@ -81,7 +82,12 @@ function expectPose(actual: Pose, expected: Pose): void {
 }
 
 function expectAtOracle(cycle: FlownCycle): void {
-  expectPose(cycle.end, predictManeuver(cycle.start, cycle, BASE));
+  expectPose(
+    cycle.end,
+    cycle.fraction < 1
+      ? predictArcPose(cycle.start, cycle, BASE, cycle.fraction)
+      : predictManeuver(cycle.start, cycle, BASE),
+  );
 }
 
 describe("key combos — no input", () => {
@@ -109,15 +115,20 @@ describe("key combos — steering arrows", () => {
     ["LEFT", "left"],
     ["RIGHT", "right"],
   ] as const) {
-    it(`holding ${key === "LEFT" ? "←" : "→"} banks 45° once, then drifts — never a 90° turn`, () => {
+    it(`holding ${key === "LEFT" ? "←" : "→"} turns at once: a drift, one bank 150 ms later, then drifts — never a 90° turn`, () => {
       const trace = fly([
         { atMs: T0, down: key },
         { atMs: 2200, up: key },
       ]);
       const steering = trace.cycles.filter((c) => c.direction !== "straight");
-      expect(steering[0]!.direction).toBe(`bank_${side}`);
+      expect(steering[0]).toMatchObject({ direction: `drift_${side}` });
+      expect(steering[0]!.fraction).toBeLessThan(0.5);
+      expect(steering[1]).toMatchObject({
+        direction: `bank_${side}`,
+        fraction: 1,
+      });
       expect(
-        steering.slice(1).every((c) => c.direction === `drift_${side}`),
+        steering.slice(2).every((c) => c.direction === `drift_${side}`),
       ).toBe(true);
       expect(trace.cycles.some((c) => c.direction === `turn_${side}`)).toBe(
         false,
@@ -241,19 +252,24 @@ describe("key combos — gestures", () => {
         ...tap(key, at + ROLL_DOUBLE_TAP_WINDOW_MS / 2, 50),
       ]);
       expect(trace.events.map((e) => e.event)).toContain("barrel_roll");
-      const rolled = trace.cycles[1]!;
-      expect(rolled.direction).toBe("straight");
+      // The first tap turned at once; the roll slides sideways from that
+      // pose without turning the ship and cuts the drift back to straight.
+      const cancelled = trace.cycles[2]!;
+      expect(cancelled.direction).toBe(`drift_${side}`);
+      expect(cancelled.fraction).toBeLessThan(0.4);
       expectPose(
-        rolled.end,
+        cancelled.end,
         predictBarrelRoll(
-          predictManeuver(rolled.start, rolled, BASE),
+          predictArcPose(cancelled.start, cancelled, BASE, cancelled.fraction),
           side,
           BASE,
         ),
       );
       expect(
-        trace.cycles.slice(2).every((c) => c.direction === "straight"),
+        trace.cycles.slice(3).every((c) => c.direction === "straight"),
       ).toBe(true);
+      const heading = trace.final.motion.angle - START.angle;
+      expect(Math.abs(headingDelta(heading, 0))).toBeLessThan(15);
     });
 
     it(`a ${side} barrel roll whose second tap is held on still flies straight on (no bank)`, () => {
@@ -264,8 +280,11 @@ describe("key combos — gestures", () => {
         { atMs: at + 1100, up: key },
       ]);
       expect(trace.events.map((e) => e.event)).toContain("barrel_roll");
+      expect(trace.cycles.some((c) => c.direction.startsWith("bank"))).toBe(
+        false,
+      );
       expect(
-        trace.cycles.slice(1).every((c) => c.direction === "straight"),
+        trace.cycles.slice(3).every((c) => c.direction === "straight"),
       ).toBe(true);
     });
   }

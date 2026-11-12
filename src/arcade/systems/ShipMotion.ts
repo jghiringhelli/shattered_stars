@@ -6,24 +6,21 @@
  * the current maneuver along its template path, commit the queued maneuver at
  * each cycle boundary, and wrap the ship onto the toroidal battlefield.
  *
+ * Instant actions (boost, barrel roll, specials) live in ShipActions.
+ *
  * Pure: no Phaser. Stress, capital-system damage and rendering stay in the
  * scene, which reads {@link MotionStep.completed} to classify the finished cycle.
  */
 
 import {
   advanceCycle,
-  canBarrelRoll,
-  canBoost,
-  processCommand,
   updateManeuver,
-  useBarrelRoll,
-  useBoost,
   type ShipControlState,
   type ShipPose,
 } from "../../core/ArcadeControls";
+import { canInterruptCycle, interruptCycle } from "../../core/cycleInterrupt";
 import { SPEED_SCALE_FACTOR } from "../../config";
 import type { ManeuverDirection } from "../../core/types";
-import { BOOST_DISTANCE_PX } from "../ArcadeInputGestures";
 
 /** Where a ship is and what it is flying. */
 export interface MotionState {
@@ -33,12 +30,18 @@ export interface MotionState {
   readonly control: ShipControlState;
 }
 
-/** The maneuver a ship just finished, for stress classification. */
+/** The maneuver a ship just finished (or was cut out of), for stress classification. */
 export interface CompletedCycle {
   readonly direction: ManeuverDirection;
   /** The speed it was flown at (the dial cap applied), not the set throttle. */
   readonly speed: number;
-  /** Exact pose at the cycle boundary (wrapped), before any carried time. */
+  /**
+   * Share of the cycle that was flown: 1 for a cycle that ran to its
+   * boundary, less when a human's turn cut it short (src/core/cycleInterrupt).
+   * Scales the cycle's stress so a cut cycle never double-counts.
+   */
+  readonly fraction: number;
+  /** Exact pose at the end of the cycle (wrapped), before any carried time. */
   readonly endPose: {
     readonly x: number;
     readonly y: number;
@@ -66,6 +69,46 @@ export function wrapCoordinate(value: number, worldSize: number): number {
 }
 
 /**
+ * A pose on the battlefield: wrapped, heading kept.
+ * @param pose - Any pose.
+ * @param worldSize - Battlefield edge length in px.
+ * @returns The wrapped pose.
+ */
+function wrappedPose(pose: ShipPose, worldSize: number): ShipPose {
+  return {
+    x: wrapCoordinate(pose.x, worldSize),
+    y: wrapCoordinate(pose.y, worldSize),
+    angle: pose.angle,
+  };
+}
+
+/**
+ * A human's queued turn cuts the running cycle at the ship's current pose
+ * (src/core/cycleInterrupt); every other ship keeps flying its cycle.
+ *
+ * @param state - Motion state before the tick.
+ * @param worldSize - Battlefield edge length in px.
+ * @returns The control to advance this tick and the cut cycle, if any.
+ */
+function cutCycleIfRequested(
+  state: MotionState,
+  worldSize: number,
+): { control: ShipControlState; completed: CompletedCycle | null } {
+  const { control } = state;
+  if (!canInterruptCycle(control)) return { control, completed: null };
+  const cut = interruptCycle(state, control);
+  return {
+    control: cut.control,
+    completed: {
+      direction: control.currentManeuver ?? "straight",
+      speed: control.cycleSpeed,
+      fraction: cut.fraction,
+      endPose: wrappedPose(state, worldSize),
+    },
+  };
+}
+
+/**
  * Advance a ship's motion by one simulation tick.
  *
  * @param state - Position, heading and control state before the tick.
@@ -80,44 +123,43 @@ export function stepMotion(
   deltaMs: number,
   worldSize: number,
 ): MotionStep {
-  const { control, position, cycleComplete, overflowMs } = updateManeuver(
-    state.control,
-    deltaMs,
-  );
-  let x = position?.x ?? state.x;
-  let y = position?.y ?? state.y;
-  let angle = position?.angle ?? state.angle;
-  let nextControl = control;
-  let completed: CompletedCycle | null = null;
-
-  if (cycleComplete) {
-    completed = {
-      direction: control.currentManeuver ?? "straight",
-      speed: control.cycleSpeed,
-      endPose: {
-        x: wrapCoordinate(x, worldSize),
-        y: wrapCoordinate(y, worldSize),
-        angle,
-      },
+  const cut = cutCycleIfRequested(state, worldSize);
+  const moved = updateManeuver(cut.control, deltaMs);
+  const at = {
+    x: moved.position?.x ?? state.x,
+    y: moved.position?.y ?? state.y,
+    angle: moved.position?.angle ?? state.angle,
+  };
+  if (!moved.cycleComplete) {
+    return {
+      state: { ...wrappedPose(at, worldSize), control: moved.control },
+      completed: cut.completed,
+      carriedMs: 0,
     };
-    nextControl = advanceCycle({ ...ship, x, y, angle }, control);
-    // Time past the cycle boundary belongs to the next cycle, so cycles
-    // stay exactly CYCLE_DURATION_MS long whatever the tick length.
-    if (overflowMs > 0) {
-      const carried = updateManeuver(nextControl, overflowMs);
-      nextControl = carried.control;
-      x = carried.position?.x ?? x;
-      y = carried.position?.y ?? y;
-      angle = carried.position?.angle ?? angle;
-    }
   }
-
-  x = wrapCoordinate(x, worldSize);
-  y = wrapCoordinate(y, worldSize);
+  const completed: CompletedCycle = {
+    direction: moved.control.currentManeuver ?? "straight",
+    speed: moved.control.cycleSpeed,
+    fraction: 1,
+    endPose: wrappedPose(at, worldSize),
+  };
+  const next = advanceCycle({ ...ship, ...at }, moved.control);
+  // Time past the cycle boundary belongs to the next cycle, so cycles
+  // stay exactly CYCLE_DURATION_MS long whatever the tick length.
+  const carried =
+    moved.overflowMs > 0 ? updateManeuver(next, moved.overflowMs) : null;
+  const end = {
+    x: carried?.position?.x ?? at.x,
+    y: carried?.position?.y ?? at.y,
+    angle: carried?.position?.angle ?? at.angle,
+  };
   return {
-    state: { x, y, angle, control: nextControl },
+    state: {
+      ...wrappedPose(end, worldSize),
+      control: carried?.control ?? next,
+    },
     completed,
-    carriedMs: cycleComplete ? overflowMs : 0,
+    carriedMs: moved.overflowMs,
   };
 }
 
@@ -159,106 +201,14 @@ export function shiftMotion(
   };
 }
 
-/**
- * Displace a ship along a direction relative to its heading.
- * @param state - Motion state before the dash.
- * @param relativeDeg - Direction relative to the heading (0 = ahead, +90 = right).
- * @param distancePx - Dash length in px.
- * @param worldSize - Battlefield edge length in px.
- * @returns The displaced motion state.
- */
-function dash(
-  state: MotionState,
-  relativeDeg: number,
-  distancePx: number,
-  worldSize: number,
-): MotionState {
-  const rad = ((state.angle + relativeDeg) * Math.PI) / 180;
-  return shiftMotion(
-    state,
-    Math.sin(rad) * distancePx,
-    -Math.cos(rad) * distancePx,
-    worldSize,
-  );
-}
+/** Speed of the template a barrel roll slides along (a speed-2 template). */
+export const BARREL_ROLL_TEMPLATE_SPEED = 2;
 
 /**
- * Barrel-roll slide: one speed-1 template plus the ship's base, sideways.
+ * Barrel-roll slide: one speed-2 template plus the ship's base, sideways.
  * @param baseSize - Ship base size in px.
- * @returns Slide length in px (tabletop barrel roll).
+ * @returns Slide length in px.
  */
 export function barrelRollDistance(baseSize: number): number {
-  return SPEED_SCALE_FACTOR + baseSize;
-}
-
-/** Instant flight actions a pilot (or the AI) can trigger mid-cycle. */
-export type MotionAction =
-  | "boost"
-  | "barrel_roll_left"
-  | "barrel_roll_right"
-  | "kturn"
-  | "segnor_left"
-  | "segnor_right"
-  | "tallon_left"
-  | "tallon_right";
-
-/** Result of attempting an action. */
-export interface ActionResult {
-  readonly state: MotionState;
-  /** False when the action was refused (on cooldown). */
-  readonly performed: boolean;
-}
-
-/**
- * Perform a flight action — the single path the scene, the AI and the flight
- * battery all use. Cooldowns gate every action; stress is the caller's job.
- *
- * - Boost: dash forward BOOST_DISTANCE_PX, heading unchanged.
- * - Barrel roll: slide sideways one speed-1 template + base, heading unchanged.
- * - Snap turn / Hook / Knife: queue the special maneuver for the next cycle.
- *
- * @param state - Motion state when the action fires.
- * @param ship - The ship (identity fields).
- * @param action - The action requested.
- * @param worldSize - Battlefield edge length in px.
- * @returns The new motion state and whether the action happened.
- */
-export function performAction(
-  state: MotionState,
-  ship: ShipPose,
-  action: MotionAction,
-  worldSize: number,
-): ActionResult {
-  const { control } = state;
-  if (action === "boost") {
-    if (!canBoost(control)) return { state, performed: false };
-    const boosted = dash(state, 0, BOOST_DISTANCE_PX, worldSize);
-    return {
-      state: { ...boosted, control: useBoost(boosted.control) },
-      performed: true,
-    };
-  }
-  if (action === "barrel_roll_left" || action === "barrel_roll_right") {
-    if (!canBarrelRoll(control)) return { state, performed: false };
-    const side = action === "barrel_roll_left" ? -90 : 90;
-    const rolled = dash(
-      state,
-      side,
-      barrelRollDistance(control.baseSize),
-      worldSize,
-    );
-    return {
-      state: { ...rolled, control: useBarrelRoll(rolled.control) },
-      performed: true,
-    };
-  }
-  const queued = processCommand(
-    { ...ship, x: state.x, y: state.y, angle: state.angle },
-    control,
-    action,
-  );
-  return {
-    state: { ...state, control: queued },
-    performed: queued !== control,
-  };
+  return BARREL_ROLL_TEMPLATE_SPEED * SPEED_SCALE_FACTOR + baseSize;
 }

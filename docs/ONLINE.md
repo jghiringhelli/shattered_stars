@@ -22,7 +22,7 @@ type an address: the relay URL is baked into the build. Design and measurements:
   A side is a **team**, never a faction: any seat may fly any faction, so mirror matches
   (Hegemony vs Hegemony) and mixed-faction teams start like any other room.
   Seat → team is canonical (the room's team, `team_<n>` in the battle config).
-- **The relay owns the match definition (protocol 5).** Mode is fixed when the room opens;
+- **The relay owns the match definition (protocol 5; protocol 6 added instant human turns, which changed the simulation rules and the state hash).** Mode is fixed when the room opens;
   seed, map theme (derived from the seed), point limit (200), scenario (always a known one),
   seat order and team layout (fixed by seat in duel modes; Skirmish teams capped at 2 per
   side) are decided by the relay and sent in `match_start`. Clients only pick their own
@@ -40,7 +40,7 @@ type an address: the relay URL is baked into the build. Design and measurements:
 - **Abuse limits:** origin allowlist, connection caps (server and per address), 600 KB
   frames, strict schema validation of every message, token-bucket rate limits per message
   type (inputs 160/s, chat 1/s, …), repeat offenders closed (4008).
-- **Health:** `GET /healthz` → `{"status":"ok","protocol":5,"uptimeS":…,"sessions":…,"connected":…,"rooms":…,"matches":…,"queued":…,"desyncs":…}`.
+- **Health:** `GET /healthz` → `{"status":"ok","protocol":6,"uptimeS":…,"sessions":…,"connected":…,"rooms":…,"matches":…,"queued":…,"desyncs":…}`.
 
 ## Online battles (how a match plays)
 

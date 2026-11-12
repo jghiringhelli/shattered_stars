@@ -1,7 +1,7 @@
 /**
  * PilotFlightSteps — the per-frame building blocks of the pilot flight
- * controls: steering (drift/bank/hard turn, committed maneuvers latch),
- * specials (Snap turn, Hook, Knife) and dashes (boost, barrel roll).
+ * controls: specials (Snap turn, Hook, Knife) and dashes (boost, barrel
+ * roll). Steering lives in PilotSteeringStep.
  *
  * Pure: no Phaser. Orchestrated by PilotFlightControls.
  */
@@ -13,9 +13,8 @@ import {
   applyKturnStress,
   type StressState,
 } from "../ArcadeStress";
-import { hardTurnThrottle } from "../HardTurnThrottle";
-import { steeringQueue, type HeldSteering } from "../SteeringIntent";
-import { performAction, type MotionState } from "./ShipMotion";
+import type { MotionState } from "./ShipMotion";
+import { performAction } from "./ShipActions";
 import type { FlightEvent, FlownShip } from "./PilotFlightTypes";
 import {
   UNRESTRICTED_CAPABILITIES,
@@ -33,46 +32,13 @@ import {
  * @param command - Command to process.
  * @returns Motion state with the command applied.
  */
-function command(
+export function command(
   flown: FlownShip,
   motion: MotionState,
   cmd: FlightCommand,
 ): MotionState {
   const ship = { ...flown.ship, x: motion.x, y: motion.y, angle: motion.angle };
   return { ...motion, control: processCommand(ship, motion.control, cmd) };
-}
-
-/**
- * Queue a 90° turn. The throttle is kept (the turn is flown at the dial's
- * turn speed, see src/core/speedCap) unless a stressed pilot would fly it
- * red: then the nearest non-red speed is set for the next cycle.
- * @param flown - Ship being flown.
- * @param motion - Current motion state.
- * @param stress - Current stress.
- * @param direction - Turn side.
- * @returns Motion state with the turn queued, unchanged if no speed allows it.
- */
-function queueHardTurn(
-  flown: FlownShip,
-  motion: MotionState,
-  stress: StressState,
-  direction: "turn_left" | "turn_right",
-): MotionState {
-  const { control } = motion;
-  const best = hardTurnThrottle({
-    dial: flown.dial,
-    dialSpeeds: control.capabilities?.dialSpeeds,
-    speed: control.speed,
-    minSpeed: control.minSpeed,
-    maxSpeed: control.maxSpeed,
-    isStressed: stress.isStressed,
-  });
-  if (best === null) return motion;
-  return command(
-    flown,
-    { ...motion, control: { ...control, speed: best } },
-    direction,
-  );
 }
 
 /** Motion and stress threaded through the per-frame helpers. */
@@ -98,45 +64,6 @@ function refused(
   if (reason === null) return false;
   flight.refusals.push({ action, reason });
   return true;
-}
-
-/**
- * Maneuvers the pilot committed to with a deliberate press (hard turn,
- * Snap turn, Hook, Knife). They stay queued until their cycle flies them;
- * steering keys never overwrite them.
- */
-const COMMITTED_MANEUVER = /^(turn_|kturn|segnor_|tallon_)/;
-
-/**
- * Steering keys: tap = drift, hold = one bank then drift; Q/E = 90° turn.
- * @param flown - Ship being flown.
- * @param flight - Motion/stress being built this frame (mutated).
- * @param steering - Steering memory after this frame's input.
- * @param hard - Hard-turn side requested this frame, if any.
- */
-export function applySteering(
-  flown: FlownShip,
-  flight: Flight,
-  steering: HeldSteering,
-  hard: "left" | "right" | null,
-): void {
-  if (hard) {
-    const side = hard === "left" ? "turn_left" : "turn_right";
-    const turned = queueHardTurn(flown, flight.motion, flight.stress, side);
-    if (turned.control.nextManeuver === side) {
-      flight.motion = turned;
-      flight.events.push("hard_turn");
-      return;
-    }
-  }
-  if (COMMITTED_MANEUVER.test(flight.motion.control.nextManeuver ?? "")) {
-    return;
-  }
-  const queued = steeringQueue(steering, false);
-  const control = queued
-    ? command(flown, flight.motion, queued as FlightCommand).control
-    : { ...flight.motion.control, nextManeuver: null };
-  flight.motion = { ...flight.motion, control };
 }
 
 /**
