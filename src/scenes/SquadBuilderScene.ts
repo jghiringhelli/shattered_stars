@@ -14,10 +14,7 @@ import {
   type GameMode,
   type SquadEntry,
   makeSquad,
-  autoFillSquad,
-  fillSquadWingmen,
   flownSquadCost,
-  pickOpponentFaction,
 } from "../core/squadTypes";
 import type { AIDifficultyLevel } from "../ai/AIDifficulty";
 import { defaultDifficulty } from "../systems/SettingsStorage";
@@ -33,6 +30,7 @@ import {
   addFooterHint,
   addMenuBackdrop,
   addMenuHeader,
+  type MenuHeader,
 } from "../ui/menu/MenuScaffold";
 import { MenuFocus, type FocusTarget } from "../ui/menu/MenuFocus";
 import {
@@ -57,12 +55,23 @@ import {
   saveBuilderMemory,
   saveLastLaunch,
   type BuilderMemory,
-  type SquadMemory,
 } from "../systems/setup/setupMemory";
+import { DEFAULT_WINGMEN, type WingmenType } from "../systems/setup/wingmenTypes";
+import { t } from "../i18n";
 import { DIFFICULTY_NAMES } from "../ai/AIDifficulty";
+import {
+  builderMemoryOf,
+  sharedPlayerSquad,
+  squadsFromMemory,
+} from "./squadBuilder/builderMemory";
+import { skirmishSquads, type SkirmishStart } from "./squadBuilder/skirmishLaunch";
+import { startBattleScene } from "./squadBuilder/battleRoute";
 
 /** Game modes whose builder state is remembered between visits. */
 const REMEMBERED_MODES: readonly GameMode[] = ["arcade", "epic", "continuous"];
+
+/** Picker slot index meaning "the Skirmish CUSTOM wingmen" (not a squad of the builder). */
+const CUSTOM_WINGMEN_SLOT = -1;
 
 /** @returns Whether a stored string is a known AI difficulty. */
 function isAiDifficulty(value: string): value is AIDifficultyLevel {
@@ -86,7 +95,12 @@ export class SquadBuilderScene extends Phaser.Scene {
   public squads: SquadEntry[] = [];
 
   private aiDifficulty: AIDifficultyLevel = "normal";
-  /** squadIdx for the slot currently open in ShipPickerScene */
+  /** What kind of squad flies with the player (Skirmish step 2). */
+  private wingmen: WingmenType = DEFAULT_WINGMEN;
+  /** The CUSTOM wingmen the player picked (ships after their own). */
+  private customWingmen: string[] = [];
+  private header!: MenuHeader;
+  /** squadIdx for the slot currently open in ShipPickerScene (-1: the Skirmish CUSTOM wingmen) */
   private editTarget: { squadIdx: number } | null = null;
   private formatPanel!: FormatPanel;
   /** Exposed for E2E tests */
@@ -152,51 +166,32 @@ export class SquadBuilderScene extends Phaser.Scene {
     this.pointLimit = memory.pointLimit;
     if (isAiDifficulty(memory.aiDifficulty)) this.aiDifficulty = memory.aiDifficulty;
     this.simpleMode = this.gameMode === "arcade" && memory.simpleMode;
+    this.wingmen = memory.wingmen ?? DEFAULT_WINGMEN;
+    this.customWingmen = [...(memory.customWingmen ?? [])];
     if (memory.mapTheme && isMapChoice(memory.mapTheme))
       this.registry.set(MAP_CHOICE_KEY, memory.mapTheme);
   }
 
   /** Put the remembered squads back (skipping any with ships that no longer exist). */
   private applyRememberedSquads(): void {
-    const remembered = this.memory?.squads ?? [];
-    const valid = remembered.every(
-      (s) =>
-        s.ships.length > 0 &&
-        s.ships.every((id) => SHIP_DEFINITIONS[id] !== undefined),
-    );
-    if (!valid || remembered.length === 0) return;
-    this.squads = remembered.map((s) => this.entryFromMemory(s));
-  }
-
-  private entryFromMemory(s: SquadMemory): SquadEntry {
-    const loadoutChoices = { ...s.loadoutChoices };
-    return {
-      teamId: s.teamId,
-      factionId: s.factionId as FactionId,
-      controller: s.controller === "player" ? "player" : "ai",
-      ships: [...s.ships],
-      loadoutChoices,
-      pointsUsed: flownSquadCost([...s.ships], loadoutChoices),
-    };
+    this.squads = squadsFromMemory(this.memory) ?? this.squads;
   }
 
   /** Remember this launch: the builder for next time and CONTINUE LAST. */
   private rememberLaunch(): void {
     if (!REMEMBERED_MODES.includes(this.gameMode)) return;
-    const mapTheme = readMapChoice(this.registry);
-    saveBuilderMemory(this.gameMode, {
-      pointLimit: this.pointLimit,
-      aiDifficulty: this.aiDifficulty,
-      simpleMode: this.simpleMode,
-      mapTheme,
-      squads: this.squads.map((s) => ({
-        factionId: s.factionId ?? "",
-        controller: s.controller,
-        teamId: s.teamId,
-        ships: s.ships,
-        loadoutChoices: s.loadoutChoices,
-      })),
-    });
+    saveBuilderMemory(
+      this.gameMode,
+      builderMemoryOf({
+        pointLimit: this.pointLimit,
+        aiDifficulty: this.aiDifficulty,
+        simpleMode: this.simpleMode,
+        mapTheme: readMapChoice(this.registry),
+        wingmen: this.wingmen,
+        customWingmen: this.customWingmen,
+        squads: this.squads,
+      }),
+    );
     saveLastLaunch({
       label: this.gameMode === "epic" ? "EPIC FORMAT" : "SKIRMISH",
       scene:
@@ -209,13 +204,7 @@ export class SquadBuilderScene extends Phaser.Scene {
 
   /** @returns The player's squad as a shareable value (null before one is built). */
   private playerSquadShare(): SharedSquad | null {
-    const squad = this.squads.find((s) => s.controller === "player");
-    if (!squad?.factionId || squad.ships.length === 0) return null;
-    return {
-      factionId: squad.factionId,
-      ships: squad.ships,
-      loadoutChoices: squad.loadoutChoices,
-    };
+    return sharedPlayerSquad(this.squads, this.wingmen);
   }
 
   /** Open the SQUADS dialog (save / copy code / paste code / load). */
@@ -233,6 +222,9 @@ export class SquadBuilderScene extends Phaser.Scene {
           loadoutChoices: { ...shared.loadoutChoices },
           pointsUsed: flownSquadCost([...shared.ships], shared.loadoutChoices),
         };
+        // Codes from before the WINGMEN choice carry none: their ships are the picked squad.
+        this.wingmen = shared.wingmen ?? "custom";
+        this.customWingmen = shared.ships.slice(1);
         this.simpleMode = false;
         this.renderBuilderMode();
       },
@@ -282,11 +274,11 @@ export class SquadBuilderScene extends Phaser.Scene {
     this.createModeToggle();
 
     if (this.simpleMode) {
-      this.instructionText.setText(
-        "Pick a faction, a ship, and a payload \u2014 the battle starts as soon as you launch",
-      );
+      this.showHeaderWidgets(false);
+      this.instructionText.setText(t("skirmish.footerHint"));
       this.buildSimpleFlow();
     } else {
+      this.showHeaderWidgets(true);
       this.instructionText.setText(
         "Use team chips (T1\u2013T4) to set sides \u00b7 Tap card header to edit ships \u00b7 Auto-Fill to build squads automatically",
       );
@@ -294,6 +286,21 @@ export class SquadBuilderScene extends Phaser.Scene {
       this.createBottomBar();
     }
     this.wireMenuFocus();
+  }
+
+  /**
+   * The advanced builder keeps the scenario and battle-format controls in the
+   * header; the Skirmish flow shows them inside its third step instead, and
+   * replaces the screen title with its three step tabs.
+   *
+   * @param inHeader - True for the advanced builder.
+   */
+  private showHeaderWidgets(inHeader: boolean): void {
+    this.header.title.setVisible(inHeader);
+    for (const widget of [this.scenarioPicker, this.reinforcementSetup]) {
+      if (inHeader) widget?.placeInHeader();
+      widget?.setShown(inHeader);
+    }
   }
 
   /** Keyboard focus over BACK, the mode toggle, the catalog chips and the action bar. */
@@ -304,8 +311,8 @@ export class SquadBuilderScene extends Phaser.Scene {
         0,
         targets.length,
         this.backButton,
-        ...(this.reinforcementSetup?.focusTargets() ?? []),
-        ...(this.scenarioPicker ? [this.scenarioPicker.button] : []),
+        ...(this.simpleMode ? [] : (this.reinforcementSetup?.focusTargets() ?? [])),
+        ...(this.simpleMode || !this.scenarioPicker ? [] : [this.scenarioPicker.button]),
         ...(this.modeToggleButton ? [this.modeToggleButton] : []),
         ...(this.simpleFlow?.focusTargets ?? []),
         ...this.bottomBarObjects,
@@ -321,43 +328,55 @@ export class SquadBuilderScene extends Phaser.Scene {
     });
   }
 
-  /** Faction → ship → payload → launch, for players who just want to play. */
+  /** Ship → wingmen → battle → launch, for players who just want to play. */
   private buildSimpleFlow(): void {
     const playerSquad = this.squads[0];
     const startFaction = playerSquad?.factionId ?? "terran_hegemony";
-    this.simpleFlow = new SimpleSquadFlow(this, startFaction, {
+    const flow = new SimpleSquadFlow(this, startFaction, {
       gameMode: this.gameMode,
       pointLimit: this.pointLimit,
+      aiDifficulty: this.aiDifficulty,
+      wingmen: this.wingmen,
+      customWingmen: this.customWingmen,
+      reinforcements: this.reinforcementSetup!,
+      scenario: this.scenarioPicker,
     });
-    this.simpleFlow.on(
-      "start",
-      (e: {
-        factionId: FactionId;
-        shipId: string;
-        loadoutId: string | null;
-      }) => {
-        const def = SHIP_DEFINITIONS[e.shipId];
-        const player: SquadEntry = {
-          teamId: 1,
-          factionId: e.factionId,
-          controller: "player",
-          ships: [e.shipId],
-          loadoutChoices: e.loadoutId ? { "0": e.loadoutId } : {},
-          pointsUsed: def?.baseStats.pointCost ?? 0,
-        };
-        // The player flies the ship they picked; the rest of the budget buys
-        // AI wingmen. Without this the launch is one fighter against the
-        // opponent's full auto-filled squad.
-        fillSquadWingmen(player, this.gameMode, this.pointLimit);
-        this.squads[0] = player;
-        const opponent = makeSquad(2, 0, "ai");
-        opponent.factionId = pickOpponentFaction(e.factionId);
-        autoFillSquad(opponent, this.gameMode, this.pointLimit);
-        this.squads[1] = opponent;
-        this.startBattle();
-      },
+    this.simpleFlow = flow;
+    flow.on("start", (start: SkirmishStart) => {
+      const plan = flow.squadFor(start.shipId, start.loadoutId);
+      [this.squads[0], this.squads[1]] = skirmishSquads(start, plan, this.gameMode, this.pointLimit);
+      this.startBattle();
+    });
+    flow.on("difficultyChanged", (level: AIDifficultyLevel) => {
+      this.aiDifficulty = level;
+    });
+    flow.on("pointsChanged", (points: number) => {
+      this.pointLimit = points;
+    });
+    flow.on("wingmenChanged", (e: { type: WingmenType; custom: string[] }) => {
+      this.wingmen = e.type;
+      this.customWingmen = e.custom;
+    });
+    flow.on("editSquad", (e: { ships: string[]; loadoutChoices: Record<string, string> }) =>
+      this.openCustomWingmenPicker(flow.faction, e),
     );
-    this.simpleFlow.render();
+    flow.render();
+  }
+
+  /** Opens the squad picker over the flagship and wingmen; the result becomes the CUSTOM wingmen. */
+  private openCustomWingmenPicker(
+    faction: FactionId,
+    squad: { ships: string[]; loadoutChoices: Record<string, string> },
+  ): void {
+    this.editTarget = { squadIdx: CUSTOM_WINGMEN_SLOT };
+    this.scene.launch("ShipPickerScene", {
+      slotIndex: CUSTOM_WINGMEN_SLOT,
+      factionId: faction,
+      selectedShips: [...squad.ships],
+      loadoutChoices: { ...squad.loadoutChoices },
+      pointLimit: this.pointLimit,
+      allowCapitals: false,
+    });
   }
 
   /** Small always-visible button to switch between the simple flow and the full builder. */
@@ -495,7 +514,7 @@ export class SquadBuilderScene extends Phaser.Scene {
   }
 
   private createTitle(): void {
-    addMenuHeader(this, { title: "SQUAD BUILDER" });
+    this.header = addMenuHeader(this, { title: "SQUAD BUILDER" });
     this.instructionText = addFooterHint(
       this,
       "Use team chips (T1–T4) to set sides · Tap card header to edit ships · Auto-Fill to build squads automatically",
@@ -567,6 +586,11 @@ export class SquadBuilderScene extends Phaser.Scene {
   private listenForShipsPicked(): void {
     this.game.events.on("shipsPicked", (data: ShipsPickedEvent) => {
       if (!this.editTarget) return;
+      if (this.editTarget.squadIdx === CUSTOM_WINGMEN_SLOT) {
+        this.editTarget = null;
+        this.simpleFlow?.applyCustomSquad(data.ships, data.loadoutChoices ?? {});
+        return;
+      }
       const squad = this.squads[this.editTarget.squadIdx];
       if (!squad) return;
       squad.ships = data.ships;
@@ -619,30 +643,6 @@ export class SquadBuilderScene extends Phaser.Scene {
       ...this.reinforcementSetup?.battleConfigFields(factions),
     });
     this.rememberLaunch();
-    this.navigateToBattle();
-  }
-
-  private navigateToBattle(): void {
-    if (this.gameMode === "epic") {
-      this.scene.start("ArcadeBattleScene");
-    } else if (this.gameMode === "arcade") {
-      this.scene.start("ArcadeBattleScene");
-    } else if (this.gameMode === "survival") {
-      const player = this.squads.find((s) => s.controller === "player");
-      this.scene.start("SurvivalScene", {
-        factionId: player?.factionId ?? "free_confederation",
-      });
-    } else if (this.gameMode === "online") {
-      const player = this.squads.find((s) => s.controller === "player");
-      this.registry.set("onlineSquad", player?.ships ?? []);
-      this.registry.set(
-        "onlineFaction",
-        player?.factionId ?? "free_confederation",
-      );
-      this.registry.set("onlinePointLimit", this.pointLimit);
-      this.scene.start("LobbyScene");
-    } else {
-      this.scene.start("ContinuousTacticalScene");
-    }
+    startBattleScene(this, this.gameMode, this.squads, this.pointLimit);
   }
 }

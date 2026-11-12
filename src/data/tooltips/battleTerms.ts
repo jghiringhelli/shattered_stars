@@ -6,6 +6,7 @@
 
 import type { FactionId } from "../../config";
 import type { AIDifficultyLevel } from "../../ai/AIDifficulty";
+import { FACTION_AURA_TEXT } from "../factionAuraText";
 import { FACTION_IDENTITIES } from "../factionIdentity";
 import { term, type TermEntry } from "./termTypes";
 
@@ -13,14 +14,6 @@ import { term, type TermEntry } from "./termTypes";
 export type FactionTermId = `faction.${FactionId}`;
 /** Term id of an AI difficulty. */
 export type DifficultyTermId = `diff.${AIDifficultyLevel}`;
-
-const FACTION_EXAMPLES: Readonly<Record<FactionId, string>> = {
-  terran_hegemony: "Two aces plus wingmen inside the aura deal noticeably more damage.",
-  free_confederation: "A crew-heavy bomber squad whose allies take 33% less damage nearby.",
-  synthetic_collective: "A swarm of cheap drones that each make the others tougher.",
-  void_corsairs: "A raider flies a red maneuver every cycle and stays stress-free.",
-  ascendant_empire: "A shield-weaver keeps the wing healthy while a psion shoots.",
-};
 
 const FACTION_LABELS: Readonly<Record<FactionId, string>> = {
   terran_hegemony: "Terran Hegemony",
@@ -30,17 +23,19 @@ const FACTION_LABELS: Readonly<Record<FactionId, string>> = {
   ascendant_empire: "Ascendant Empire",
 };
 
+/** Hover line = the aura in one sentence; hold-Shift adds who, range, end and example. */
 export const FACTION_TERMS: Readonly<Record<FactionTermId, TermEntry>> =
   Object.fromEntries(
     (Object.keys(FACTION_IDENTITIES) as FactionId[]).map((id) => {
       const identity = FACTION_IDENTITIES[id];
+      const aura = FACTION_AURA_TEXT[id];
       return [
         `faction.${id}`,
         term(
           FACTION_LABELS[id],
-          `${identity.specialty}. ${identity.levers[0] ?? ""}`,
-          FACTION_EXAMPLES[id],
-          "Every faction's hulls are near-equal in points; its identity is the aura, signature cards and aces.",
+          `${aura.name}: ${aura.short} ${aura.who} ${aura.range}`,
+          aura.example,
+          `${identity.specialty}. ${aura.ends}`,
         ),
       ];
     }),

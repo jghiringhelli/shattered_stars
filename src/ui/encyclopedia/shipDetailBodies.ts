@@ -23,6 +23,7 @@ import { shipSpecialsRule } from "../../systems/SettingsStorage";
 import { drawStatGauges } from "../picker/detailSections";
 import { costSummary } from "../picker/guideSections";
 import { factionAuraTag, shortDescription } from "../picker/overviewModel";
+import { factionTermId } from "../../data/tooltips";
 import { addPickerText, pickerTextStyle } from "../picker/pickerStyle";
 import { QuickBuildDetailView } from "../picker/QuickBuildDetailView";
 import { HOLO_PALETTE, HOLO_RADIUS, HOLO_SPACING, SIDE_COLORS } from "../theme/HoloTheme";
@@ -93,7 +94,7 @@ export function drawOverview(
   const auraText = scene.add.text(
     left,
     auraY,
-    `AURA  ${aura.name}`,
+    `AURA  ${aura.name}: ${aura.text}`,
     pickerTextStyle("micro", HOLO_PALETTE.accent, { wordWrap: { width: textW } }),
   );
   const specials = shipSpecialLabels(def.id, shipSpecialsRule());
@@ -104,7 +105,7 @@ export function drawOverview(
     pickerTextStyle("micro", HOLO_PALETTE.textSecondary, { wordWrap: { width: textW } }),
   );
   container.add([description, auraText, specialsText]);
-  addTipZone(scene, container, { x: left, y: auraY, width: textW, height: auraText.height }, "ui.aura_tag");
+  addTipZone(scene, container, { x: left, y: auraY, width: textW, height: auraText.height }, factionTermId(def.faction));
   addTipZone(scene, container, { x: left, y, width: textW, height: ctx.hintText.height }, "codex.signature_build");
   const gaugesY = y + OVERVIEW.artH + HOLO_SPACING.xl;
   drawStatGauges(

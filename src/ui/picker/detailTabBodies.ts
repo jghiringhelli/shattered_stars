@@ -9,7 +9,8 @@ import type { ShipDefinition } from "../../core/types";
 import { shipArtAsset } from "../../assets/assetManifest";
 import { swapWhenLoaded } from "../../assets/textureLoading";
 import type { ShipLoadout } from "../../data/ShipLoadouts";
-import { roleTermId, termEntry, type TermId } from "../../data/tooltips";
+import { roleTermId, termEntry, factionTermId, type TermId } from "../../data/tooltips";
+import type { FactionId } from "../../config";
 import { firstSentence } from "../menu/tooltipContent";
 import { addTipZone } from "../menu/tooltipTargets";
 import { HOLO_PALETTE, HOLO_SPACING } from "../theme/HoloTheme";
@@ -68,7 +69,7 @@ export function drawOverviewBody(args: TabBodyArgs): number {
     def,
     loadout,
   );
-  ty = drawAuraTag(area, { x: textX, y: ty + HOLO_SPACING.sm, width: textW }, model.aura);
+  ty = drawAuraTag(area, { x: textX, y: ty + HOLO_SPACING.sm, width: textW }, model.aura, def.faction);
   const gaugesY = Math.max(y + artH, ty) + HOLO_SPACING.lg;
   const bottom = drawStatGauges(areaAt(area, gaugesY), def, bonuses);
   return drawSpeedLine(area, model.speedText, bottom + HOLO_SPACING.md);
@@ -134,6 +135,7 @@ function drawAuraTag(
   area: SectionArea,
   box: { x: number; y: number; width: number },
   aura: { name: string; text: string },
+  faction: FactionId,
 ): number {
   const tag = addPickerText(
     area.scene,
@@ -142,14 +144,22 @@ function drawAuraTag(
     "caption",
     HOLO_PALETTE.warning,
   );
-  area.container.add(tag);
+  const text = addPickerText(
+    area.scene,
+    { x: box.x, y: box.y + tag.height + HOLO_SPACING.xs },
+    aura.text,
+    "small",
+    HOLO_PALETTE.textSecondary,
+  ).setWordWrapWidth(box.width);
+  area.container.add([tag, text]);
+  const height = tag.height + HOLO_SPACING.xs + text.height;
   addTipZone(
     area.scene,
     area.container,
-    { x: box.x, y: box.y, width: tag.width, height: tag.height },
-    "ui.aura_tag",
+    { x: box.x, y: box.y, width: Math.max(tag.width, text.width), height },
+    factionTermId(faction),
   );
-  return box.y + tag.height;
+  return box.y + height;
 }
 
 function drawSpeedLine(

@@ -63,6 +63,8 @@ export class ScenarioPicker {
   readonly button: HoloPressButton;
   private readonly summary: Phaser.GameObjects.Text;
   private choice: ScenarioChoice;
+  /** Right edge of the header placement (left of the SIMPLE / ADVANCED toggle). */
+  private readonly headerRight: number;
 
   /** @param scene - The Squad Builder scene. */
   constructor(private readonly scene: Phaser.Scene) {
@@ -73,6 +75,7 @@ export class ScenarioPicker {
       MENU_LAYOUT.margin -
       PICKER.toggleWidth -
       HOLO_SPACING.md;
+    this.headerRight = right;
     this.button = createHoverButton(
       scene,
       right - PICKER.width / 2,
@@ -105,6 +108,51 @@ export class ScenarioPicker {
   /** The chosen scenario, or null for a plain Skirmish. */
   get selected(): ScenarioChoice {
     return this.choice;
+  }
+
+  /**
+   * Moves the button and its rule line into a panel (Skirmish step 3): the
+   * button on the left of the box, the rule line under it, left aligned.
+   *
+   * @param box - Top-left of the button's row and the button width.
+   */
+  placeInPanel(box: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+  }): void {
+    this.button.setPosition(
+      box.x + PICKER.width / 2,
+      box.y + PICKER.height / 2,
+    );
+    this.summary
+      .setOrigin(0, 0)
+      .setPosition(box.x, box.y + PICKER.height + HOLO_SPACING.sm)
+      .setWordWrapWidth(box.width);
+  }
+
+  /** @param shown - Whether the button and its rule line are visible. */
+  setShown(shown: boolean): void {
+    this.button.setVisible(shown);
+    this.summary.setVisible(shown);
+  }
+
+  /** Draws the button and rule line above anything created after them (the step's panels). */
+  bringToFront(): void {
+    this.scene.children.bringToTop(this.button);
+    this.scene.children.bringToTop(this.summary);
+  }
+
+  /** Moves the button and its rule line back to the header row (advanced builder). */
+  placeInHeader(): void {
+    this.button.setPosition(
+      this.headerRight - PICKER.width / 2,
+      MENU_LAYOUT.titleY,
+    );
+    this.summary
+      .setOrigin(1, 0.5)
+      .setPosition(this.headerRight, MENU_LAYOUT.subtitleY)
+      .setWordWrapWidth(null);
   }
 
   /** Destroy the button and its rule line. */

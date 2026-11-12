@@ -49,7 +49,7 @@ export const SLOT_TERMS: Readonly<Record<SlotTermId, TermEntry>> = {
   ),
   "slot.crew": term(
     "Crew slot",
-    "A crew member aboard the ship: a gunner, coordinator or mechanic whose card adds a team ability.",
+    "A crew member aboard the ship: a gunner, a mechanic or a coordinator. A coordinator card makes the ship project its faction's aura to the wingmen around it.",
     "A tactical coordinator gives the whole wing a better chance to hit the squad's marked target.",
     "Crew are the support backbone of the Free Confederation.",
   ),
@@ -85,8 +85,8 @@ export const SLOT_TERMS: Readonly<Record<SlotTermId, TermEntry>> = {
   ),
   "slot.illicit": term(
     "Illicit slot",
-    "Black-market gear: strong effects that come with a drawback. Void Corsair territory.",
-    "A stealth device makes you harder to hit for a few seconds but costs the next shot's power.",
+    "Black-market gear: a strong bonus paired with a drawback. Void Corsair territory.",
+    "Overcharged Capacitors: +1 laser damage, but maneuver stress builds 25% faster.",
     "Plan around the drawback; used right, illicit cards beat anything else for the price.",
   ),
   "slot.title": term(

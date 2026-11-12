@@ -3,6 +3,7 @@
  * (tab names, budget, flown cost, aura tag, map option). Pure data.
  */
 
+import { FACTION_AURA_TEXT } from "../factionAuraText";
 import { term } from "./termTypes";
 
 /** Terms of the pick-screen chrome added with the tab system. */
@@ -64,9 +65,9 @@ export const PICK_TERMS = {
   ),
   "ui.aura_tag": term(
     "Faction aura",
-    "A passive bonus every ship of the faction grants nearby allies of the same faction.",
-    "Terran Hegemony: allies inside 380 px deal extra damage.",
-    "Fly your squad close together to keep the aura on everyone.",
+    "Your faction's aura: an aura ship (support, capital or named ace) boosts the other ships of its faction inside a set radius, never itself.",
+    `${FACTION_AURA_TEXT.terran_hegemony.name}: ${FACTION_AURA_TEXT.terran_hegemony.short}`,
+    "Hover a faction to read its aura's radius, numbers and when it stops. Fly your squad close around the aura ship.",
     "star",
   ),
   "ui.map_theme": term(

@@ -17,6 +17,17 @@
 
 import type { FactionId } from "../config";
 import type { UpgradeSlotType } from "../core/upgradeTypes";
+import { FACTION_AURA_TEXT } from "./factionAuraText";
+
+/**
+ * @param faction - A faction.
+ * @returns The lever line of its aura: "<Name> aura: <short form>" (the
+ *   picker's aura tag splits it on " aura: ").
+ */
+function auraLever(faction: FactionId): string {
+  const { name, short } = FACTION_AURA_TEXT[faction];
+  return `${name} aura: ${short}`;
+}
 
 /** One faction's identity and the levers that carry it. */
 export interface FactionIdentity {
@@ -40,9 +51,9 @@ export const FACTION_IDENTITIES: Readonly<Record<FactionId, FactionIdentity>> =
       faction: "terran_hegemony",
       specialty: "Squad discipline and elite aces",
       levers: [
-        "Coordinated Fire aura: allies inside 380 px deal +0.35 damage per hit",
-        "Disciplined talents: Squadron Leader, Coordinated Assault",
-        "Elite aces: Hold the Line (Kane, Whisper Null) adds +1 damage and takes 20% less beside a wingman, priced into the pilot",
+        auraLever("terran_hegemony"),
+        "Squadron Leader talent: every maneuver counts one stress tier easier. Coordinated Assault talent: its ship projects Coordinated Fire and the field is 25% wider",
+        "Elite aces: Hold the Line (Kane, Whisper Null) gives +1 damage per shot and 20% less damage taken beside a wingman, priced into the pilot",
       ],
       cards: ["squadron_leader", "coordinated_assault"],
       cardSlots: [],
@@ -52,9 +63,9 @@ export const FACTION_IDENTITIES: Readonly<Record<FactionId, FactionIdentity>> =
       faction: "free_confederation",
       specialty: "Crew, riggers and versatile ordnance",
       levers: [
-        "Rallying Banner aura: allies take 33% less damage",
-        "Rigger slots (Confederation-only: Repair / Targeting Rigger) and crew coordinators",
-        "Torpedo and missile racks on its fighters",
+        auraLever("free_confederation"),
+        "Rigger slots (Confederation-only): a Repair Rigger restores shields between passes, a Targeting Rigger speeds target locks; crew coordinators also project the Rallying Banner",
+        "Torpedo and missile racks on its fighters: one big guided hit once a target lock is held",
       ],
       cards: [],
       cardSlots: ["astromech", "crew", "torpedo", "missile"],
@@ -64,8 +75,8 @@ export const FACTION_IDENTITIES: Readonly<Record<FactionId, FactionIdentity>> =
       faction: "synthetic_collective",
       specialty: "Cheap swarm and data-link coordination",
       levers: [
-        "Hive Resilience aura: 8% less damage taken per drone nearby (up to 30%)",
-        "Data-link cards: Swarm Uplink (Collective-only) and Pattern Analyzer relays",
+        auraLever("synthetic_collective"),
+        "Data-link cards: Swarm Uplink (Collective-only) gives 5% less damage taken while a friendly ship is near; Pattern Analyzer gives +1 laser damage in the bullseye and stress builds 20% slower",
         "The cheapest hulls: four-ship squads at 200 points",
       ],
       cards: ["swarm_uplink", "pattern_analyzer"],
@@ -76,9 +87,9 @@ export const FACTION_IDENTITIES: Readonly<Record<FactionId, FactionIdentity>> =
       faction: "void_corsairs",
       specialty: "Tricks and hit-and-run aces",
       levers: [
-        "Raider's Cadence aura: maneuvers one stress tier easier and +10% to hit inside 800 px",
-        "Illicit slots (Corsair-only): Overcharged Capacitors, Hot-Wired Engines and other black-market gear",
-        "Trick talents (Expert Handling, Daredevil, Phantom Strike) and raider aces",
+        auraLever("void_corsairs"),
+        "Illicit slots (Corsair-only): black-market cards that trade a drawback for punch, e.g. Overcharged Capacitors (+1 laser damage, stress builds 25% faster) and Hot-Wired Engines (boost recharges 50% faster, stress builds 20% faster)",
+        "Trick talents: Expert Handling (barrel roll recharges 25% faster), Daredevil (Snap Turn, Hook Loop and Knife Roll recharge 40% faster), Phantom Strike (+1 laser damage from behind); plus raider aces",
       ],
       cards: ["expert_handling", "daredevil", "phantom_strike"],
       cardSlots: ["illicit"],
@@ -88,9 +99,9 @@ export const FACTION_IDENTITIES: Readonly<Record<FactionId, FactionIdentity>> =
       faction: "ascendant_empire",
       specialty: "Shields, support and psychic powers",
       levers: [
-        "Aegis Field aura: allies regenerate 0.25 shield HP/s",
-        "Psychic powers and talents (Ascendant-only): Foresight, Sensitive, Mending Light",
-        "Support hulls (acolytes, prophets, oracles) projecting the field",
+        auraLever("ascendant_empire"),
+        "Psychic powers and talents (Ascendant-only): Foresight (10% less damage taken), Psi-Sensitive (15% less damage taken), Precognition (stress builds 25% slower), Mending Light (its ship projects the Aegis Field plus 0.06 shield points per second more)",
+        "Support hulls (acolytes, prophets, oracles) projecting the field: they also patch a little hull",
       ],
       cards: ["force_sensitive", "precognition"],
       cardSlots: ["force_power"],

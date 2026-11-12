@@ -158,10 +158,11 @@ test.describe("Campaign hub — tabbed panels", () => {
     await clickText(page, HUB, "EFFECTS");
     await expect.poll(() => tabOf(page, "main")).toBe("effects");
     await page.mouse.move(2, 2);
-    await page.keyboard.press("e");
+    await page.keyboard.press("e", { delay: 60 });
     await expect.poll(() => tabOf(page, "main")).toBe("cost");
-    await page.keyboard.press("q");
-    await page.keyboard.press("q");
+    await page.keyboard.press("q", { delay: 60 });
+    await expect.poll(() => tabOf(page, "main")).toBe("effects");
+    await page.keyboard.press("q", { delay: 60 });
     await expect.poll(() => tabOf(page, "main")).toBe("overview");
     expect(await tabOf(page, "hero")).toBe("overview");
   });

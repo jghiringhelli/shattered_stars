@@ -65,6 +65,13 @@ describe("buildDuelHudSnapshot", () => {
     });
   });
 
+  it("carries the weapon envelope and maneuver signals for the cues", () => {
+    const hud = snapshot([ship({ id: "p" })]);
+    expect(hud.player?.weaponRangePx).toBe(250);
+    expect(hud.player?.firingArcDeg).toBe(75);
+    expect(hud.player?.maneuverSignals?.boostCooldown).toBe(0);
+  });
+
   it("hides the player once destroyed", () => {
     const hud = snapshot([ship({ id: "p", hull: 0 })]);
     expect(hud.player).toBeNull();

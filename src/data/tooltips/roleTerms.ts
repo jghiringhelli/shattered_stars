@@ -45,7 +45,7 @@ const ROLE_DETAIL: Readonly<
     howItPlays: "Absorb damage and project power; its weakness is turning.",
   },
   support: {
-    example: "A support ship's aura keeps every ally within range shielded.",
+    example: "A support ship projects its faction's aura: an Ascendant one regenerates wingmen's shields, a Confederation one cuts the damage they take.",
     howItPlays: "Stay inside the wing; its value is what the others do next to it.",
   },
   capital: {
@@ -77,7 +77,7 @@ const STYLE_EXAMPLES: Readonly<Record<Playstyle, string>> = {
   interceptor: "A fast pilot chases a bomber and rolls out of its escort's arc.",
   tank: "A shielded gunship soaks a volley that would kill a fighter.",
   wingman: "Two wingmen fly close so each protects the other's tail.",
-  support: "A support ship's aura keeps the whole wing fighting.",
+  support: "A support ship's aura boosts every wingman flying inside its radius.",
   bomber: "A bomber fires its torpedo at range 3 then escorts take over.",
   gunner: "A turret kills the pursuer you cannot turn to face.",
   suppressor: "A stress cannon locks a target out of its red maneuvers.",

@@ -183,3 +183,36 @@ describe("collapsible sections", () => {
     expect(toggleCollapsed(once, "bomber").has("bomber")).toBe(false);
   });
 });
+
+describe("buildSections role headers", () => {
+  const FACTIONS = [
+    "terran_hegemony",
+    "free_confederation",
+    "synthetic_collective",
+    "void_corsairs",
+    "ascendant_empire",
+  ] as const;
+
+  it("gives every section of every faction a role line and an example hull", () => {
+    for (const faction of FACTIONS) {
+      const ships = getShipsByFaction(faction).filter((s) => s.role !== "capital");
+      const sections = buildSections(ships, ALL, buildsOf);
+      expect(sections.map((s) => s.role), faction).toHaveLength(6);
+      for (const section of sections) {
+        expect(section.blurb.length, `${faction} ${section.role}`).toBeGreaterThan(15);
+        expect(section.exampleLine).toContain(section.ships[0]!.name);
+      }
+    }
+  });
+
+  it("examples follow the section's sort order", () => {
+    const sections = buildSections(SHIPS, { role: null, sort: "points_desc" }, buildsOf);
+    for (const section of sections) expect(section.exampleLine).toContain(section.ships[0]!.name);
+  });
+
+  it("explains the capital notice as Epic only without an example", () => {
+    const notice = buildSections(SHIPS, ALL, buildsOf, { hiddenCapitals: 3 }).find((s) => s.epicOnly)!;
+    expect(notice.blurb).toMatch(/Epic/);
+    expect(notice.exampleLine).toBe("");
+  });
+});

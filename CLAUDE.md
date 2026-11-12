@@ -596,6 +596,13 @@ Combat is real time and lives in src/arcade/ (below). What stays here:
   main-menu CONTINUE LAST card), squadShare.ts (SHARE CODES + saved squads, SQUADS dialog in the builder),
   src/telemetry/lastBattleStore.ts ("Last: Skirmish — Victory 3:02" card). **SetupKeyNav** gives free-form setup
   screens (Dogfight, Ace Duel, Boss Raid, Survival) arrows/D-pad + ENTER/A focus. `holoFont` clamps text to 12 px.
+- **Skirmish setup** (SquadBuilderScene simple mode → `SimpleSquadFlow`, parts in src/ui/squad/skirmish/): three ordered steps
+  behind header tabs, each a title + ONE sentence (i18n `skirmish.*`): 1 YOUR SHIP (faction + role-grouped catalog), 2 YOUR WINGMEN,
+  3 THE ENEMY & BATTLE (skill, points, map, scenario, format — the scenario / format widgets are the scene's own, moved in by
+  `placeInPanel`). Points bar + NEXT / LAUNCH stay at the bottom. **WINGMEN** = `src/systems/setup/wingmen.ts` (`planWingmen`: AUTO
+  balanced by role, SAME ROLE, FIGHTERS, STRIKERS, SUPPORT-HEAVY fill from a seed within budget / unique pilots / reinforcement quotas
+  and field cap; CUSTOM keeps the picked ships); choice persists in setupMemory (`wingmen`, `customWingmen`) and share codes (`w`, optional).
+  **Role grouping** of every pick screen = `src/ui/picker/roleGroups.ts` (six non-capital roles, header line + example hull from i18n).
 - **HoloTheme.ts** tokens + **holoFont.ts** (`holoFont(size, weight)` — never use the `font: "bold 18px Arial"`
   shorthand: Phaser splits it on spaces and drops multi-word families)
 - **MenuScaffold.ts** - every non-battle screen: `addMenuBackdrop` (dimmed painted bg), `addMenuHeader`,

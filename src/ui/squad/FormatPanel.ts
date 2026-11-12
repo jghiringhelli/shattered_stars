@@ -41,8 +41,8 @@ const PANEL_H =
   (FORMAT_LAYOUT.sections - 1) * FORMAT_LAYOUT.sectionGap;
 const INNER_W = FORMAT_LAYOUT.width - FORMAT_LAYOUT.pad * 2;
 const ROW_X = FORMAT_LAYOUT.x + FORMAT_LAYOUT.pad;
-const POINT_LIMITS: readonly number[] = [100, 150, 200, 300];
-const DIFFICULTIES: readonly AIDifficultyLevel[] = [
+export const POINT_LIMITS: readonly number[] = [100, 150, 200, 300];
+export const DIFFICULTIES: readonly AIDifficultyLevel[] = [
   "easy",
   "normal",
   "hard",

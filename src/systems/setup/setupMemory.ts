@@ -8,6 +8,7 @@
  */
 
 import { browserStore, type KeyValueStore } from "../keyValueStore";
+import { isWingmenType, type WingmenType } from "./wingmenTypes";
 
 /** Storage keys (the version is part of the key). */
 export const SETUP_MEMORY_KEY = "ss_setup_memory_v1";
@@ -36,6 +37,10 @@ export interface BuilderMemory {
   /** Simple (single ship) flow vs the advanced builder. */
   readonly simpleMode: boolean;
   readonly mapTheme?: string;
+  /** Skirmish: what kind of squad flies with the player. */
+  readonly wingmen?: WingmenType;
+  /** Skirmish CUSTOM wingmen: the ships the player picked after their own. */
+  readonly customWingmen?: readonly string[];
   readonly squads: readonly SquadMemory[];
 }
 
@@ -108,8 +113,15 @@ function parseBuilder(value: unknown): BuilderMemory | null {
     aiDifficulty: value.aiDifficulty,
     simpleMode: value.simpleMode === true,
     ...(typeof value.mapTheme === "string" ? { mapTheme: value.mapTheme } : {}),
+    ...(isWingmenType(value.wingmen) ? { wingmen: value.wingmen } : {}),
+    ...parseCustomWingmen(value.customWingmen),
     squads: squads as SquadMemory[],
   };
+}
+
+function parseCustomWingmen(value: unknown): { customWingmen?: readonly string[] } {
+  if (!Array.isArray(value) || !value.every((id) => typeof id === "string")) return {};
+  return { customWingmen: value as string[] };
 }
 
 function readDocument(store: KeyValueStore): MemoryDocument {

@@ -63,6 +63,14 @@ async function stage(page: Page, role: string): Promise<void> {
   }, role);
 }
 
+/** Opens a step of the Skirmish flow (ship, wingmen, battle) the way the header tabs do. */
+async function openStep(page: Page, step: "ship" | "wingmen" | "battle"): Promise<void> {
+  await page.evaluate((s) => (window as any).game.scene.getScene("SquadBuilderScene").simpleFlow.showStep(s), step);
+  await expect
+    .poll(() => page.evaluate(() => (window as any).game.scene.getScene("SquadBuilderScene").simpleFlow.openStep))
+    .toBe(step);
+}
+
 async function openTabName(page: Page): Promise<string> {
   return page.evaluate(
     () =>
@@ -171,8 +179,9 @@ test.describe("Skirmish pick flow — tabs", () => {
     expect((await sceneTexts(page, SIMPLE)).some((t) => t === "Enemy squad matched to 200 pts")).toBe(true);
   });
 
-  test("the Map option cycles Random and the themes and is stored for the battle", async ({ page }) => {
+  test("the Map option (step 3) cycles Random and the themes and is stored for the battle", async ({ page }) => {
     await openSkirmish(page);
+    await openStep(page, "battle");
     await clickText(page, SIMPLE, "MAP: RANDOM");
     const choice = async (): Promise<string> =>
       page.evaluate(() => (window as any).game.registry.get("mapThemeChoice") ?? "random");
@@ -226,6 +235,81 @@ test.describe("Skirmish pick flow — tabs", () => {
       }
     });
   }
+});
+
+test.describe("Skirmish setup — three steps", () => {
+  test("the header shows three titled steps with one sentence each", async ({ page }) => {
+    await openSkirmish(page);
+    const texts = await sceneTexts(page, SIMPLE);
+    for (const title of ["1 \u00b7 YOUR SHIP", "2 \u00b7 YOUR WINGMEN", "3 \u00b7 THE ENEMY & BATTLE"]) {
+      expect(texts, title).toContain(title);
+    }
+    expect(texts).toContain("Choose your faction, then the ship you fly and its payload.");
+    expect(texts).toContain("The AI squad that flies with you, bought with the rest of your points.");
+    expect(texts).toContain("Set how hard the enemy is, the map and the battle format.");
+  });
+
+  test("the step tabs open their step and the points bar stays", async ({ page }) => {
+    await openSkirmish(page);
+    await stage(page, "heavy_fighter");
+    await clickText(page, SIMPLE, "2 \u00b7 YOUR WINGMEN");
+    await openStep(page, "wingmen");
+    const texts = await sceneTexts(page, SIMPLE);
+    for (const label of ["AUTO", "SAME ROLE AS MY SHIP", "FIGHTERS", "STRIKERS", "SUPPORT-HEAVY", "CUSTOM", "YOUR SQUAD"]) {
+      expect(texts, label).toContain(label);
+    }
+    expect(texts.some((t) => /^Your ship \d+ pts \+ AI wingmen \d+ pts = \d+ of 200$/.test(t))).toBe(true);
+    await clickText(page, SIMPLE, "3 \u00b7 THE ENEMY & BATTLE");
+    await openStep(page, "battle");
+    expect(await sceneTexts(page, SIMPLE)).toContain("ENEMY SKILL");
+  });
+
+  test("choosing STRIKERS fills gunships and bombers and shows them as the squad", async ({ page }) => {
+    await openSkirmish(page);
+    await stage(page, "heavy_fighter");
+    await openStep(page, "wingmen");
+    await clickText(page, SIMPLE, "STRIKERS");
+    await expect
+      .poll(() => page.evaluate(() => (window as any).game.scene.getScene("SquadBuilderScene").wingmen))
+      .toBe("strikers");
+    const roles = await page.evaluate(async () => {
+      const { SHIP_DEFINITIONS } = await import("/src/data/ShipDefinitions.ts");
+      const flow = (window as any).game.scene.getScene("SquadBuilderScene").simpleFlow;
+      const { shipId, loadoutId } = flow.selection;
+      return flow.squadFor(shipId, loadoutId).ships.slice(1).map((id: string) => SHIP_DEFINITIONS[id]!.role);
+    });
+    for (const role of roles) expect(["gunship", "bomber"]).toContain(role);
+    expect((await sceneTexts(page, SIMPLE)).some((t) => t.startsWith("WINGMAN \u00b7 "))).toBe(roles.length > 0);
+  });
+
+  test("the enemy skill and points chosen in step 3 are used by the battle", async ({ page }) => {
+    await openSkirmish(page);
+    await openStep(page, "battle");
+    await clickText(page, SIMPLE, "Brutal");
+    await clickText(page, SIMPLE, "300");
+    const state = await page.evaluate(() => {
+      const scene = (window as any).game.scene.getScene("SquadBuilderScene");
+      return { difficulty: scene.aiDifficulty, points: scene.pointLimit };
+    });
+    expect(state).toEqual({ difficulty: "brutal", points: 300 });
+  });
+
+  test("the wingmen type is remembered after a launch", async ({ page }) => {
+    await openSkirmish(page);
+    await stage(page, "heavy_fighter");
+    await openStep(page, "wingmen");
+    await clickText(page, SIMPLE, "FIGHTERS");
+    await page.evaluate(() => {
+      const flow = (window as any).game.scene.getScene("SquadBuilderScene").simpleFlow;
+      const { shipId, loadoutId } = flow.selection;
+      flow.emit("start", { factionId: flow.faction, shipId, loadoutId });
+    });
+    const remembered = await page.evaluate(async () => {
+      const { loadBuilderMemory } = await import("/src/systems/setup/setupMemory.ts");
+      return loadBuilderMemory("arcade")?.wingmen;
+    });
+    expect(remembered).toBe("fighters");
+  });
 });
 const PICKER = "ShipPickerScene";
 

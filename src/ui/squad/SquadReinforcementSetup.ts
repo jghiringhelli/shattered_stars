@@ -10,6 +10,7 @@
 import type Phaser from "phaser";
 import {
   loadReinforcementPrefs,
+  rulesFor,
   saveReinforcementPrefs,
   type ReinforcementFormat,
   type ReinforcementPrefs,
@@ -19,6 +20,7 @@ import {
 import type { FactionId } from "../../config";
 import type { GameMode } from "../../core/squadTypes";
 import { browserStore, type KeyValueStore } from "../../systems/keyValueStore";
+import type { WingmenRules } from "../../systems/setup/wingmen";
 import type { HoloPressButton } from "../menu/HoloPressButton";
 import { BattleTypeControls } from "./BattleTypeControls";
 import { ReserveEditor } from "./ReserveEditor";
@@ -93,6 +95,37 @@ export class SquadReinforcementSetup {
   /** The mode or scenario changed: refresh the controls. */
   refresh(): void {
     this.controls.refresh();
+  }
+
+  /** @param box - Where the controls go inside a panel (Skirmish step 3). */
+  placeInPanel(box: { readonly x: number; readonly y: number }): void {
+    this.controls.placeInPanel(box);
+  }
+
+  /** Draws the controls above anything created after them (the step's panels). */
+  bringToFront(): void {
+    this.controls.bringToFront();
+  }
+
+  /** Moves the controls back to the header row (advanced builder). */
+  placeInHeader(): void {
+    this.controls.placeInHeader();
+  }
+
+  /** @param shown - Whether the controls may show. */
+  setShown(shown: boolean): void {
+    this.controls.setShown(shown);
+  }
+
+  /**
+   * @returns The limits the wingmen fill must respect: the format's quotas and field cap when
+   *   reinforcements are on, else undefined (classic battles have no quotas).
+   */
+  wingmenRules(): WingmenRules | undefined {
+    const format = this.format();
+    if (!format || this.prefs.battle !== "reinforcements") return undefined;
+    const rules = rulesFor(format);
+    return { quotas: rules.quotas, fieldCapPoints: rules.fieldCapPoints };
   }
 
   /** @param battle - Classic or Reinforcements (e2e / settings). */

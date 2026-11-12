@@ -11,6 +11,7 @@ import {
   type GameMode,
   type SquadEntry,
 } from "../../core/squadTypes";
+import { planWingmen, type WingmenRequest } from "../../systems/setup/wingmen";
 
 /** What the simple flow's budget strip shows. */
 export interface SimplePreview {
@@ -21,6 +22,20 @@ export interface SimplePreview {
   readonly limit: number;
   /** True when wingmen were added. */
   readonly wingmen: boolean;
+}
+
+/**
+ * @param request - The squad the Skirmish launch would fill (faction, flagship, WINGMEN choice, limit).
+ * @returns The flagship's cost and the squad total of that fill.
+ */
+export function previewWingmenSquad(request: WingmenRequest): SimplePreview {
+  const plan = planWingmen(request);
+  return {
+    ownCost: flownSquadCost([request.shipId], plan.loadoutChoices["0"] ? { "0": plan.loadoutChoices["0"] } : {}),
+    squadTotal: plan.pointsUsed,
+    limit: request.pointLimit,
+    wingmen: plan.ships.length > 1,
+  };
 }
 
 /**

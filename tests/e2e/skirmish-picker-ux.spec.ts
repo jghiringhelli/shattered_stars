@@ -111,6 +111,30 @@ test.describe("Skirmish pick flow — role sections and explanations", () => {
     expect(texts.some((t) => /^\d+ SHIPS? · \d+ BUILDS?$/.test(t))).toBe(true);
     // Capitals are not flyable in Skirmish: a notice says so.
     expect(texts.some((t) => t.startsWith("EPIC FORMAT ONLY"))).toBe(true);
+    // Every role header carries a one-line explanation and an example hull.
+    expect(texts, "role line").toContain("Balanced all-rounders; squad backbone.");
+    expect(texts.some((t) => t.startsWith("E.g. "))).toBe(true);
+  });
+
+  test("all six non-capital roles have a section with their explanation", async ({
+    page,
+  }) => {
+    await openSkirmish(page);
+    const roles: ReadonlyArray<readonly [string, string, string]> = [
+      ["LGT", "LIGHT FIGHTERS", "Cheap, quick wingmen; fly in numbers."],
+      ["HVY", "HEAVY FIGHTERS", "Balanced all-rounders; squad backbone."],
+      ["INT", "INTERCEPTORS", "Fast, fragile hunters."],
+      ["BMB", "BOMBERS", "Slow ordnance carriers; need escorts."],
+      ["GUN", "GUNSHIPS", "Tough gun platforms; slow turns."],
+      ["SUP", "SUPPORT SHIPS", "Shield and coordinate the wing."],
+    ];
+    for (const [chip, title, line] of roles) {
+      await clickText(page, SIMPLE, chip);
+      await expect
+        .poll(async () => (await sceneTexts(page, SIMPLE)).includes(title), { message: title })
+        .toBe(true);
+      expect(await sceneTexts(page, SIMPLE), `${title} line`).toContain(line);
+    }
   });
 
   test("role chips filter the sections and sort chips cycle", async ({

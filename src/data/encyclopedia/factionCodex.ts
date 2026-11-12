@@ -5,7 +5,7 @@
  */
 
 import type { FactionId } from "../../config";
-import { FACTION_AURAS } from "../../systems/aura/FactionAuras";
+import { FACTION_AURA_TEXT } from "../factionAuraText";
 import { PILOT_CARDS } from "../../systems/SquadBuilder";
 import { SHIP_DEFINITIONS } from "../ShipDefinitions";
 import { offeredQuickBuilds } from "../quickBuildIndex";
@@ -24,13 +24,13 @@ export const FACTION_PROFILES: Readonly<Record<FactionId, FactionProfile>> = {
     name: "Terran Hegemony",
     playstyle: "Elite, expensive ships",
     identity:
-      "A disciplined military power: tough, well-armed hulls flown in formation, where every ally in reach hits harder.",
+      "A disciplined military power: tough, well-armed hulls flown in formation, where wingmen near an ace or support ship deal extra damage.",
   },
   free_confederation: {
     name: "Free Confederation",
     playstyle: "Balanced, versatile",
     identity:
-      "A coalition of free worlds fielding adaptable fighters and rigger-crewed strike craft that cover each other.",
+      "A coalition of free worlds fielding adaptable fighters and rigger-crewed strike craft that cover each other: wingmen near a banner ship take a third less damage.",
   },
   synthetic_collective: {
     name: "Synthetic Collective",
@@ -103,7 +103,7 @@ function cheapestLine(faction: FactionId): string {
 export function factionCodexEntries(): CodexEntry[] {
   return (Object.keys(FACTION_PROFILES) as FactionId[]).map((faction) => {
     const profile = FACTION_PROFILES[faction];
-    const aura = FACTION_AURAS[faction];
+    const text = FACTION_AURA_TEXT[faction];
     return withSearchText({
       section: "factions",
       id: faction,
@@ -113,7 +113,12 @@ export function factionCodexEntries(): CodexEntry[] {
       subtitle: profile.playstyle,
       paragraphs: [
         { heading: "IDENTITY", text: profile.identity },
-        { heading: "AURA", text: `${aura.name}: ${aura.description}` },
+        { heading: "AURA", text: `${text.name}: ${text.short}` },
+        { heading: "WHO IT COVERS", text: text.who },
+        { heading: "RANGE", text: text.range },
+        { heading: "EFFECT", text: text.effect },
+        { heading: "WHEN IT STOPS", text: text.ends },
+        { heading: "EXAMPLE", text: text.example },
         { heading: "FLEET", text: fleetLine(faction) },
         { heading: "PILOTS", text: pilotLine(faction) },
         { heading: "CHEAPEST BUILDS", text: cheapestLine(faction) },

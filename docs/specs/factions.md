@@ -16,14 +16,33 @@ The game is dropping "Force" from player-facing text: the Ascendant powers are *
 
 | Faction | Specialty | Levers |
 |---|---|---|
-| Terran Hegemony | Squad discipline and elite (expensive) aces | **Coordinated Fire**: allies within 380 px deal +0.35 damage per hit; talents Squadron Leader / Coordinated Assault; **Hold the Line** aces (Kane, Whisper Null: +1 damage, 20 % less damage beside a wingman) priced into the pilot |
-| Free Confederation | Crew, riggers and versatile ordnance | **Rallying Banner**: allies within 280 px take 30 % less damage; Confederation-only rigger slots (Repair / Targeting Rigger) and crew coordinators; torpedo and missile racks on its fighters |
-| Synthetic Collective | Cheap swarm and data-link coordination | **Hive Resilience**: 8 % less damage per nearby drone (cap 30 %) within 400 px; data-link cards (Swarm Uplink, Collective-only; Pattern Analyzer); the cheapest hulls (four ships at 200 points) |
-| Void Corsairs | Tricks (boost / barrel roll, illicit upgrades) and hit-and-run aces | **Raider's Cadence**: maneuvers one stress tier easier and +10 % to hit within 800 px (raiders fly loose); Corsair-only illicit slots; trick talents (Expert Handling, Daredevil, Phantom Strike); raider aces |
-| Ascendant Empire | Shields, support and psychic powers | **Aegis Field**: allies within 220 px regenerate 0.25 shield HP/s; psychic powers and talents (Ascendant-only: Foresight, Sensitive, Mending Light); support hulls (acolytes, prophets, oracles) projecting the field |
+| Terran Hegemony | Squad discipline and elite (expensive) aces | **Coordinated Fire**: wingmen within 380 px (about 12 ship-lengths) of an aura ship deal +0.35 damage per hit; talents Squadron Leader (every maneuver one stress tier easier) / Coordinated Assault (the ship projects the aura, 25 % wider); **Hold the Line** aces (Kane, Whisper Null: +1 damage, 20 % less damage beside a wingman) priced into the pilot |
+| Free Confederation | Crew, riggers and versatile ordnance | **Rallying Banner**: wingmen within 280 px (about 9 ship-lengths) take 33 % less damage; Confederation-only rigger slots (Repair / Targeting Rigger) and crew coordinators; torpedo and missile racks on its fighters |
+| Synthetic Collective | Cheap swarm and data-link coordination | **Hive Resilience**: wingmen take 8 % less damage per other drone within 400 px (about 13 ship-lengths) of the aura ship, capped at 30 %; data-link cards (Swarm Uplink, Collective-only: 5 % less damage near a friendly ship; Pattern Analyzer: +1 bullseye damage, stress 20 % slower); the cheapest hulls (four ships at 200 points) |
+| Void Corsairs | Tricks (boost / barrel roll, illicit upgrades) and hit-and-run aces | **Raider's Cadence**: wingmen within 800 px (about 25 ship-lengths) fly one stress tier easier and get +10 % to hit (raiders fly loose); Corsair-only illicit slots; trick talents (Expert Handling, Daredevil, Phantom Strike); raider aces |
+| Ascendant Empire | Shields, support and psychic powers | **Aegis Field**: wingmen within 220 px (about 7 ship-lengths) regenerate 0.25 shield points per second; psychic powers and talents (Ascendant-only: Foresight, Psi-Sensitive, Precognition, Mending Light); support hulls (acolytes, prophets, oracles) projecting the field |
 
 The 200-point preset of every faction (the Skirmish auto-fill) flies at least one identity card or
 ace ability and at least one aura projector (`tests/balance/FactionIdentity.test.ts`).
+
+## How the aura is explained to the player
+
+Source: [`src/data/factionAuraText.ts`](../../src/data/factionAuraText.ts), built from the constants in
+`FactionAuras.ts` (radius, magnitude, caps, stacking, size scaling) so the words follow every retune;
+`tests/unit/data/factionAuraText.test.ts` fails if text and constants drift. Each aura has a **short form**
+(one sentence, at most 120 characters: tooltip hover, identity lever, codex headline) and a **long form**
+(encyclopedia, hold-Shift tooltip) answering, in this order:
+
+- **Who**: the aura is projected by support ships, capital ships, named aces and any ship with a
+  coordinator crew or talent card. It covers the *other* ships of the faction (`source.id !== ally.id`),
+  never the projector itself, and only ships of its own faction (teammates of another faction get 50 %).
+- **Range**: px and ship-lengths (one ship-length = the small hull, 32 px). The base radius is for a medium
+  support ship; small hulls ×0.65, large ×1.4, capital ships ×2.2 at 60 % strength, named aces ×0.65 at full strength.
+- **Effect**: the real numbers in plain words.
+- **When it stops**: projector destroyed or offline, wingman outside the radius; a second projector adds 75 %
+  of its strength (shield regeneration adds in full); caps (damage taken never below 50 %, Hive 30 %,
+  stress relief 2 tiers, hit bonus +10 %).
+- **Example**: one concrete squad situation.
 
 ## Identity ablation
 

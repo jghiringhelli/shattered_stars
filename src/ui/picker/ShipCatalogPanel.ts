@@ -1,10 +1,9 @@
 /**
- * ShipCatalogPanel — left panel of ShipPickerScene and the simple Skirmish
- * flow. Ships are grouped into role sections (light fighters, heavy
- * fighters, interceptors, bombers, gunships, support, capitals), each with a
- * header, under a row of filter chips (role filter + sort by points). The
- * user clicks a ship to stage it, picks a payload in the detail panel, then
- * clicks ADD (or LAUNCH) to add the config to the roster.
+ * ShipCatalogPanel — left panel of ShipPickerScene and the Skirmish ship step:
+ * ships grouped into role sections (each header explains its role) under a
+ * row of filter chips (role filter + sort by points). The user clicks a ship
+ * to stage it, picks a payload in the detail panel, then clicks ADD (or
+ * LAUNCH) to add the config to the roster.
  *
  * Emits: 'addInstance' { shipId: string, loadoutId: string | null } and
  * 'selectionChanged' (CatalogSelection) after every render.
@@ -47,10 +46,7 @@ export interface CatalogGating {
 /** Role sections the player folded; remembered for the session. */
 let collapsedRoles: ReadonlySet<ShipRole> = new Set();
 
-const NO_GATING: CatalogGating = {
-  lockedShipIds: new Set<string>(),
-  reasonFor: () => "",
-};
+const NO_GATING: CatalogGating = { lockedShipIds: new Set<string>(), reasonFor: () => "" };
 
 /** What the catalog currently has staged (the "selectionChanged" payload). */
 export interface CatalogSelection {
@@ -58,10 +54,12 @@ export interface CatalogSelection {
   readonly loadoutId: string | null;
 }
 
-/** What the format hides from the catalog. */
+/** What the format hides from the catalog and what starts staged. */
 export interface CatalogOptions {
   /** Capital ships left out because the format is not Epic (shown as a notice). */
   readonly hiddenCapitals?: number;
+  /** Ship and build staged on open (coming back to the screen). */
+  readonly initial?: CatalogSelection;
 }
 
 /** Default panel top — the menu grid's first content row. */
@@ -155,6 +153,8 @@ export class ShipCatalogPanel extends Phaser.Events.EventEmitter {
     this.staging = new CatalogStaging(scene, ships, confirmLabel);
     this.staging.on("addInstance", (e: unknown) => this.emit("addInstance", e));
     this.staging.on("requestRender", () => this.render());
+    const initial = options.initial;
+    if (initial?.shipId) this.staging.restore(initial.shipId, initial.loadoutId);
   }
 
   /** Rebuilds the chips, the sectioned grid, the staging strip and the detail panel. */

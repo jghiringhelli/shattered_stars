@@ -9,6 +9,7 @@
 import { getShipDefinition } from "../../data/ShipDefinitions";
 import { browserStore, type KeyValueStore } from "../keyValueStore";
 import type { SquadMemory } from "./setupMemory";
+import { isWingmenType, type WingmenType } from "./wingmenTypes";
 
 /** Prefix that marks a share code. */
 export const SHARE_CODE_PREFIX = "SS1:";
@@ -22,8 +23,10 @@ export const MAX_SAVED_SQUADS = 20;
 /** Longest saved-squad name. */
 export const MAX_SQUAD_NAME = 32;
 
-/** The part of a squad that is shared. */
-export type SharedSquad = Pick<SquadMemory, "factionId" | "ships" | "loadoutChoices">;
+/** The part of a squad that is shared (`wingmen`: Skirmish WINGMEN choice, absent in older codes). */
+export type SharedSquad = Pick<SquadMemory, "factionId" | "ships" | "loadoutChoices"> & {
+  readonly wingmen?: WingmenType;
+};
 
 /** Ship lookup (injectable for tests). */
 export type FactionOfShip = (shipId: string) => string | undefined;
@@ -40,7 +43,13 @@ export type DecodedSquad =
  * @returns Its share code.
  */
 export function encodeSquadCode(squad: SharedSquad): string {
-  const payload = { v: 1, f: squad.factionId, s: squad.ships, l: squad.loadoutChoices };
+  const payload = {
+    v: 1,
+    f: squad.factionId,
+    s: squad.ships,
+    l: squad.loadoutChoices,
+    ...(squad.wingmen ? { w: squad.wingmen } : {}),
+  };
   return SHARE_CODE_PREFIX + btoa(JSON.stringify(payload));
 }
 
@@ -75,7 +84,7 @@ export function decodeSquadCode(
     return { error: "The code is damaged" };
   }
   if (typeof data !== "object" || data === null) return { error: "The code is damaged" };
-  const { v, f, s, l } = data as Record<string, unknown>;
+  const { v, f, s, l, w } = data as Record<string, unknown>;
   if (v !== 1) return { error: "Unsupported code version" };
   if (typeof f !== "string") return { error: "The code is damaged" };
   if (!Array.isArray(s) || s.length === 0 || s.length > MAX_SHARED_SHIPS)
@@ -86,7 +95,14 @@ export function decodeSquadCode(
   if ((s as string[]).some((id) => factionOf(id) !== f))
     return { error: "A ship does not belong to the squad's faction" };
   if (l !== undefined && !isIdMap(l, s.length)) return { error: "Loadouts are not valid" };
-  return { squad: { factionId: f, ships: s as string[], loadoutChoices: (l ?? {}) as Record<string, string> } };
+  return {
+    squad: {
+      factionId: f,
+      ships: s as string[],
+      loadoutChoices: (l ?? {}) as Record<string, string>,
+      ...(isWingmenType(w) ? { wingmen: w } : {}),
+    },
+  };
 }
 
 /** One saved squad. */

@@ -7,7 +7,7 @@
 
 import type { ShipDefinition, ShipRole } from "../../core/types";
 import { ROLE_SECTION_ORDER } from "../../data/roleHints/roleSections";
-import { ROLE_PLURALS } from "../../data/roleHints/playstyleCatalog";
+import { roleHeading } from "./roleGroups";
 
 /** How ships are ordered inside a section. */
 export type SortMode = "default" | "points_asc" | "points_desc";
@@ -24,6 +24,10 @@ export interface CatalogSection {
   readonly role: ShipRole;
   /** "INTERCEPTORS". */
   readonly title: string;
+  /** One line: what the role does in a squad. */
+  readonly blurb: string;
+  /** "E.g. Gladius-class Fighter" (the section's first ship), "" for a notice. */
+  readonly exampleLine: string;
   readonly ships: readonly ShipDefinition[];
   /** Ships in the role (for a notice section: the hidden ones). */
   readonly shipCount: number;
@@ -122,9 +126,10 @@ export function buildSections(
       filters.sort,
     );
     if (inRole.length === 0) continue;
+    const heading = roleHeading(role, inRole[0]!.name);
     sections.push({
       role,
-      title: ROLE_PLURALS[role].toUpperCase(),
+      ...heading,
       ships: inRole,
       shipCount: inRole.length,
       buildCount: inRole.reduce((sum, ship) => sum + buildsOf(ship.id), 0),
@@ -137,7 +142,7 @@ export function buildSections(
   if (showNotice && !sections.some((s) => s.role === "capital")) {
     sections.push({
       role: "capital",
-      title: ROLE_PLURALS.capital.toUpperCase(),
+      ...roleHeading("capital"),
       ships: [],
       shipCount: hidden,
       buildCount: 0,

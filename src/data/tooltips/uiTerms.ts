@@ -43,7 +43,7 @@ export const UI_TERMS = {
   "tag.support": term(
     "Support",
     "This ship projects an aura or can coordinate its wing.",
-    "A support ship keeps a squad's shields regenerating inside its aura.",
+    "An Ascendant support ship regenerates its wing's shields; a Hegemony one makes their shots hit harder.",
     "Fly it with the squad, not in front of it.",
   ),
   "ui.locked": term(

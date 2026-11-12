@@ -1,8 +1,9 @@
 /**
  * CatalogSectionHeader — the banner above each role section of the ship
  * catalog: role glyph, role name, ship / build counts, a fold chevron and a
- * hairline (the role description is in its tooltip). Capitals shown only as a notice read
- * "EPIC FORMAT ONLY". Hovering it explains the role.
+ * hairline, plus a second line that explains the role in one sentence and
+ * names an example hull. Capitals shown only as a notice read
+ * "EPIC FORMAT ONLY". Hovering a header explains the role in full.
  */
 
 import type Phaser from "phaser";
@@ -11,10 +12,10 @@ import { drawRoleGlyph } from "../menu/roleGlyphs";
 import { addTipZone } from "../menu/tooltipTargets";
 import { HOLO_ALPHA, HOLO_BORDER, HOLO_PALETTE } from "../theme/HoloTheme";
 import { sectionCounts, type CatalogSection } from "./catalogSections";
-import { addPickerText } from "./pickerStyle";
+import { addPickerText, fitOrEllipsize } from "./pickerStyle";
 
 /** Header height (px) — the layout reserves this above a section's cards. */
-export const SECTION_HEADER_H = 26;
+export const SECTION_HEADER_H = 44;
 
 /** Header geometry. */
 const HEADER = {
@@ -22,6 +23,11 @@ const HEADER = {
   glyphX: 9,
   titleX: 24,
   titleY: 2,
+  /** Second line: the role explanation (left edge). */
+  blurbY: 21,
+  blurbX: 2,
+  /** Gap between the explanation and the example hull. */
+  blurbGap: 12,
   ruleY: SECTION_HEADER_H - 3,
   noticeAlpha: 0.7,
   /** Fold chevron: size and distance from the right edge (px). */
@@ -85,7 +91,7 @@ export function drawSectionHeader(
   rule.lineStyle(HOLO_BORDER.hairline, tint, HOLO_ALPHA.structure);
   rule.lineBetween(x, y + HEADER.ruleY, x + width, y + HEADER.ruleY);
   if (muted) [glyph, title].forEach((o) => o.setAlpha(HEADER.noticeAlpha));
-  container.add([glyph, title, counts, rule]);
+  container.add([glyph, title, counts, rule, ...drawRoleLine(scene, spec)]);
   if (spec.onToggle) container.add(drawChevron(scene, spec, y + HEADER.titleY + 8));
   const zone = addTipZone(
     scene,
@@ -95,6 +101,43 @@ export function drawSectionHeader(
     spec.onToggle,
   );
   return [zone];
+}
+
+/**
+ * The header's second line: what the role does in a squad (left) and an
+ * example hull (right), kept on one line.
+ *
+ * @param scene - Owning scene.
+ * @param spec - Header spec.
+ * @returns The created texts.
+ */
+function drawRoleLine(
+  scene: Phaser.Scene,
+  spec: SectionHeaderSpec,
+): Phaser.GameObjects.Text[] {
+  const { section, x, y, width } = spec;
+  const lineY = y + HEADER.blurbY;
+  const left = x + HEADER.blurbX;
+  const blurb = addPickerText(
+    scene,
+    { x: left, y: lineY },
+    section.blurb,
+    "small",
+    section.epicOnly ? HOLO_PALETTE.textMuted : HOLO_PALETTE.textSecondary,
+  );
+  if (!section.exampleLine) {
+    fitOrEllipsize(blurb, x + width - left);
+    return [blurb];
+  }
+  const example = addPickerText(
+    scene,
+    { x: x + width, y: lineY },
+    section.exampleLine,
+    "small",
+    HOLO_PALETTE.textMuted,
+  ).setOrigin(1, 0);
+  fitOrEllipsize(blurb, example.x - example.width - HEADER.blurbGap - left);
+  return [blurb, example];
 }
 
 /**

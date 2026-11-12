@@ -65,6 +65,7 @@ export class BattleTypeControls {
   readonly battleButton: HoloPressButton;
   readonly reserveButton: HoloPressButton;
   private readonly caption: Phaser.GameObjects.Text;
+  private shown = true;
 
   /**
    * @param scene - The Squad Builder scene.
@@ -133,7 +134,7 @@ export class BattleTypeControls {
   refresh(): void {
     const format = this.host.format();
     const prefs = this.host.prefs();
-    const visible = format !== null;
+    const visible = format !== null && this.shown;
     this.battleButton.setVisible(visible);
     this.reserveButton.setVisible(visible);
     this.caption.setVisible(visible);
@@ -146,7 +147,49 @@ export class BattleTypeControls {
 
   /** @returns The buttons that take keyboard focus while shown. */
   focusTargets(): HoloPressButton[] {
-    return this.host.format() ? [this.battleButton, this.reserveButton] : [];
+    return this.host.format() && this.shown ? [this.battleButton, this.reserveButton] : [];
+  }
+
+  /**
+   * Moves the controls into a panel (Skirmish step 3): the two buttons side
+   * by side from the box's top-left, the caption under them.
+   *
+   * @param box - Top-left of the button row.
+   */
+  placeInPanel(box: { readonly x: number; readonly y: number }): void {
+    const centreY = box.y + CONTROLS.height / 2;
+    this.battleButton.setPosition(box.x + CONTROLS.battleWidth / 2, centreY);
+    this.reserveButton.setPosition(
+      box.x + CONTROLS.battleWidth + HOLO_SPACING.sm + CONTROLS.reserveWidth / 2,
+      centreY,
+    );
+    this.caption.setOrigin(0, 0).setPosition(box.x, box.y + CONTROLS.height + HOLO_SPACING.sm);
+  }
+
+  /** Draws the controls above anything created after them (the step's panels). */
+  bringToFront(): void {
+    const { children } = this.caption.scene;
+    for (const item of [this.battleButton, this.reserveButton, this.caption])
+      children.bringToTop(item);
+  }
+
+  /** Moves the controls back to the header row, left of the title (advanced builder). */
+  placeInHeader(): void {
+    const left = MENU_LAYOUT.margin + MENU_LAYOUT.backWidth + HOLO_SPACING.md;
+    this.battleButton.setPosition(left + CONTROLS.battleWidth / 2, MENU_LAYOUT.titleY);
+    this.reserveButton.setPosition(
+      left + CONTROLS.battleWidth + HOLO_SPACING.sm + CONTROLS.reserveWidth / 2,
+      MENU_LAYOUT.titleY,
+    );
+    this.caption.setOrigin(0, 0.5).setPosition(left, MENU_LAYOUT.subtitleY);
+  }
+
+  /**
+   * @param shown - Whether the controls may show (they still hide in modes without reinforcements).
+   */
+  setShown(shown: boolean): void {
+    this.shown = shown;
+    this.refresh();
   }
 
   /** Destroy the controls. */

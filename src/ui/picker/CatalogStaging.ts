@@ -61,6 +61,12 @@ export class CatalogStaging
     this.selectedLoadoutId = getEquippableLoadouts(shipId)[0]?.id ?? null;
   }
 
+  /** Selects a ship and build without asking for a re-render (restoring an earlier choice). */
+  restore(shipId: string, loadoutId: string | null): void {
+    this.selectedShipId = shipId;
+    this.selectedLoadoutId = loadoutId;
+  }
+
   getSelectedShipId(): string | null {
     return this.selectedShipId;
   }

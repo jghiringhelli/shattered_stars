@@ -92,6 +92,22 @@ describe("toPlayerHudState", () => {
     const ship = HudShipBuilder.aPlayer().withHull(-3).build();
     expect(toPlayerHudState(ship).hull).toBe(0);
   });
+
+  it("carries the maneuver signals and the primary weapon envelope for the cues", () => {
+    const ship = HudShipBuilder.aPlayer()
+      .withControl({ currentManeuver: "segnor_left", boostCooldown: 1200 })
+      .build();
+    const state = toPlayerHudState({
+      ...ship,
+      combatStats: { weaponRange: 250, firingArc: 75 },
+    });
+    expect(state.maneuverSignals).toEqual({
+      currentManeuver: "segnor_left",
+      boostCooldown: 1200,
+      barrelRollCooldown: ship.control.barrelRollCooldown,
+    });
+    expect([state.weaponRangePx, state.firingArcDeg]).toEqual([250, 75]);
+  });
 });
 
 describe("toContacts", () => {
