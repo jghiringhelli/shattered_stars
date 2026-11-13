@@ -181,6 +181,13 @@ test.describe("online battles stay in lockstep", () => {
     const guest = await openOnlineLobby(browser, relay.port, NETSIM);
     await startOnlineMatch(host, guest, "skirmish", "ArcadeBattleScene");
     await waitForTicks(host, "ArcadeBattleScene", 240, 30_000);
+    // A classic Skirmish ends when a side is wiped out, which can happen before
+    // the minute is over; both clients skip the check, so the lockstep stays identical.
+    for (const page of [host, guest])
+      await page.evaluate(() => {
+        const scene = (window as any).game.scene.getScene("ArcadeBattleScene");
+        scene.checkVictory = () => undefined;
+      });
     await expectGuestSteersOnHost(host, guest, "ArcadeBattleScene");
     await playMinute([host, guest], "ArcadeBattleScene");
     const debug = [

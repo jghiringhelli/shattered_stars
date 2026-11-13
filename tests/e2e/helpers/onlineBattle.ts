@@ -172,13 +172,35 @@ export async function waitForTicks(
   ticks: number,
   timeout: number,
 ): Promise<void> {
-  await page.waitForFunction(
-    ([key, n]) =>
-      ((window as any).game?.scene.getScene(key)?.onlineDebug?.tick ?? -1) >=
-      (n as number),
-    [sceneKey, ticks] as const,
-    { timeout, polling: 500 },
-  );
+  await page
+    .waitForFunction(
+      ([key, n]) =>
+        ((window as any).game?.scene.getScene(key)?.onlineDebug?.tick ?? -1) >=
+        (n as number),
+      [sceneKey, ticks] as const,
+      { timeout, polling: 500 },
+    )
+    .catch(async (error: Error) => {
+      const state = await page
+        .evaluate((key) => {
+          const scene = (window as any).game?.scene.getScene(key);
+          const alive = [...(scene?.ships?.values?.() ?? [])].filter(
+            (s: any) => s.hull > 0,
+          );
+          return {
+            tick: scene?.onlineDebug?.tick ?? null,
+            gameEnded: scene?.gameEnded ?? null,
+            aliveByTeam: alive.reduce((acc: any, s: any) => {
+              acc[s.team] = (acc[s.team] ?? 0) + 1;
+              return acc;
+            }, {}),
+          };
+        }, sceneKey)
+        .catch(() => null);
+      throw new Error(
+        `waiting for tick ${ticks} in ${sceneKey}: ${JSON.stringify(state)} (${error.message.split("\n")[0]})`,
+      );
+    });
 }
 
 /**
