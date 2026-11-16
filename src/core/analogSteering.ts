@@ -2,16 +2,18 @@
  * analogSteering — the pure model of the analog turn key.
  *
  * While the turn key is held, the ship's heading changes at the rate its dial
- * allows at the flown speed: the hard-turn template per cycle (90°) where the
- * dial prints a hard turn, the bank template (45°) where it prints only a
- * bank, and nothing at cruise speeds that print neither (steering then slows
- * the ship to the fastest speed that has a turn, like the template engine's
- * speed cap). Holding a share of the cycle turns that share of the angle.
+ * allows at the flown speed: the hard-turn angle per cycle (tabletop 90°)
+ * where the dial prints a hard turn, the bank angle (tabletop 45°) where it
+ * prints only a bank, and nothing at cruise speeds that print neither
+ * (steering then slows the ship to the fastest speed that has a turn, like
+ * the template engine's speed cap). The angles and a long-hold variant are
+ * tunable (src/core/analogTuning). Holding a share of the cycle turns that
+ * share of the angle.
  *
  * The motion is an exact circular arc per tick whose radius is the template's
- * (chord L = speed × SPEED_SCALE_FACTOR + base), so a full-cycle hold lands on
- * the tabletop template whatever the tick length. Everything here is plain
- * data and pure functions: no Phaser, no clock, no randomness.
+ * (chord L = speed × SPEED_SCALE_FACTOR + base), so with the tabletop tuning a
+ * full-cycle hold lands on the template whatever the tick length. Everything
+ * here is plain data and pure functions: no Phaser, no clock, no randomness.
  */
 
 import { CYCLE_DURATION_MS, SPEED_SCALE_FACTOR } from "../config";
@@ -21,14 +23,15 @@ import {
   normalizeAngle,
   rotatePoint,
 } from "../systems/MovementSystem";
+import {
+  DEFAULT_ANALOG_TUNING,
+  heldBoostOf,
+  type AnalogTuning,
+  type HeldBoost,
+} from "./analogTuning";
 import type { SteeringMode } from "./steeringMode";
 import { flownSpeed, type DialSpeedTable } from "./speedCap";
 import type { ManeuverDirection } from "./types";
-
-/** Heading change of the dial's hard turn over one cycle (°). */
-export const ANALOG_TURN_DEGREES = 90;
-/** Heading change of the dial's bank over one cycle (°). */
-export const ANALOG_BANK_DEGREES = 45;
 
 /** Which way the turn key is held. */
 export type AnalogSide = "none" | "left" | "right";
@@ -45,6 +48,8 @@ export interface SteeringCapacity {
   /** What the dial allows at that speed, whatever the stress (°). */
   readonly dialMaxDeg: number;
   readonly kind: AnalogTurnKind;
+  /** The rate a long hold earns (src/core/analogTuning); null = none. */
+  readonly boost: HeldBoost | null;
 }
 
 /** Per-cycle state of the analog steering carried by the control state. */
@@ -66,6 +71,10 @@ export interface AnalogSteer {
   /** The dial's maximum at that speed (°). */
   readonly dialMaxDeg: number;
   readonly turnKind: AnalogTurnKind;
+  /** How long the key has been held without a break, across cycles (ms). */
+  readonly heldMs: number;
+  /** The rate a long hold earns at the speed flown; null = none. */
+  readonly boost: HeldBoost | null;
 }
 
 /** What the analog engine reads of a control state (structural: no import cycle). */
@@ -81,14 +90,11 @@ export interface AnalogControlView {
     | {
         readonly steering?: SteeringMode | undefined;
         readonly dialSpeeds?: DialSpeedTable | undefined;
-        readonly analogRateScale?: number | undefined;
+        readonly analogTuning?: AnalogTuning | undefined;
       }
     | undefined;
   analog?: AnalogSteer;
 }
-
-/** Highest turn speed the stressed-rate cap treats as a bank (°). */
-const STRESSED_RATE_DEGREES = ANALOG_BANK_DEGREES;
 
 /**
  * @param control - A control state.
@@ -113,48 +119,55 @@ export function usesAnalogSteering(
  * @param table - The ship's dial speeds (undefined = uncapped: full turn at the set speed).
  * @param setSpeed - The throttle the pilot set.
  * @param stressed - Whether the pilot is stressed (bank rate at most).
- * @param rateScale - Multiplier on the per-cycle turn rate (tuning knob; default 1).
+ * @param tuning - Per-cycle angles, rate scale and the held-turn variant (default: the default tuning).
  * @returns Speed and turn rate while the key is held.
  */
 export function steeringCapacity(
   table: DialSpeedTable | undefined,
   setSpeed: number,
   stressed: boolean,
-  rateScale: number = 1,
+  tuning: AnalogTuning = DEFAULT_ANALOG_TUNING,
 ): SteeringCapacity {
   const turns = table?.turn ?? [];
   const banks = table?.bank ?? [];
   if (setSpeed <= 0 || (turns.length === 0 && banks.length === 0))
-    return capacityOf(setSpeed, "turn", stressed, rateScale);
+    return capacityOf({ speed: setSpeed, kind: "turn", hardTurnOnDial: true }, stressed, tuning);
   const printed = [...new Set([...turns, ...banks])].sort((a, b) => a - b);
   const speed = printed.includes(setSpeed)
     ? setSpeed
     : flownSpeed({ turn: printed }, "turn_left", setSpeed);
   return capacityOf(
-    speed,
-    turns.includes(speed) ? "turn" : "bank",
+    {
+      speed,
+      kind: turns.includes(speed) ? "turn" : "bank",
+      hardTurnOnDial: turns.length > 0,
+    },
     stressed,
-    rateScale,
+    tuning,
   );
 }
 
 /**
- * @param speed - Speed flown while turning.
- * @param kind - The dial entry at that speed.
+ * @param flown - Speed flown while turning, the dial entry there, and whether
+ * the ship prints a hard turn at any speed.
  * @param stressed - Whether the pilot is stressed.
- * @param rateScale - Multiplier on the per-cycle rate (tuning; 1 = the template's).
+ * @param tuning - Per-cycle angles, rate scale and the held-turn variant.
  * @returns The capacity.
  */
 function capacityOf(
-  speed: number,
-  kind: AnalogTurnKind,
+  flown: {
+    readonly speed: number;
+    readonly kind: AnalogTurnKind;
+    readonly hardTurnOnDial: boolean;
+  },
   stressed: boolean,
-  rateScale: number,
+  tuning: AnalogTuning,
 ): SteeringCapacity {
-  const dialMaxDeg =
-    kind === "turn" ? ANALOG_TURN_DEGREES : ANALOG_BANK_DEGREES;
-  const rate = stressed ? Math.min(dialMaxDeg, STRESSED_RATE_DEGREES) : dialMaxDeg;
-  return { speed, rateDeg: rate * rateScale, dialMaxDeg, kind };
+  const { speed, kind } = flown;
+  const dialMaxDeg = kind === "turn" ? tuning.turnDegrees : tuning.bankDegrees;
+  const rate = stressed ? Math.min(dialMaxDeg, tuning.bankDegrees) : dialMaxDeg;
+  const boost = heldBoostOf(tuning, kind === "bank" && flown.hardTurnOnDial, stressed);
+  return { speed, rateDeg: rate * tuning.rateScale, dialMaxDeg, kind, boost };
 }
 
 /**
@@ -180,6 +193,8 @@ export function freshAnalogSteer(
     turnSpeed: null,
     dialMaxDeg: 0,
     turnKind: "turn",
+    heldMs: previous?.heldMs ?? 0,
+    boost: null,
   };
 }
 

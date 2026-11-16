@@ -31,6 +31,7 @@ import type { FactionId } from "../../config";
 import type { TeamId } from "../../arcade/teams";
 import { getShipDefinition, getShipDial } from "../../data/ShipDefinitions";
 import { uniquePilotOf } from "../../data/squadRules";
+import { isAceLoadout } from "../../data/aceStatus";
 import { applyLoadoutEffects } from "../../systems/BattleHelpers";
 import {
   createCapitalSystems,
@@ -69,6 +70,8 @@ export interface ArcadeShip extends ShipState {
   modifiers: CombatModifiers;
   /** True when a named (unique) pilot flies this ship — projects a hero aura. */
   isUniquePilot: boolean;
+  /** A named ace flies it (aceStatus): strike window, disengage reward, hit-and-run bot. */
+  isAce: boolean;
   /** Scene time (ms) until which a kill-frenzy pilot ability is active. */
   frenzyUntilMs: number;
   /** The team it flies for: hostility, allies, marks and victory read this, never faction. */
@@ -147,6 +150,7 @@ export function createArcadeShip(spec: ArcadeShipSpec): ArcadeShip {
     upgradeIds: [],
     modifiers: NEUTRAL_MODIFIERS,
     isUniquePilot: false,
+    isAce: false,
     frenzyUntilMs: 0,
     team: spec.team,
     squad: spec.squad,
@@ -173,6 +177,7 @@ export function equipLoadout(
   ship.upgradeIds = upgradeIds;
   ship.modifiers = modifiers;
   ship.isUniquePilot = uniquePilotOf(loadoutId ?? null) !== null;
+  ship.isAce = isAceLoadout(loadoutId);
   ship.control = applyControlModifiers(ship.control, modifiers);
 }
 

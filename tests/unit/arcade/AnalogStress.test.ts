@@ -5,6 +5,7 @@
 
 import { describe, it, expect } from "vitest";
 import { freshAnalogSteer, type AnalogSteer } from "../../../src/core/analogSteering";
+import { TABLETOP_ANALOG_TUNING, type AnalogTuning } from "../../../src/core/analogTuning";
 import { classifyAnalogCycle } from "../../../src/arcade/systems/AnalogCompletion";
 import { accrueCycleStress, INITIAL_STRESS } from "../../../src/arcade/ArcadeStress";
 import { BATTLEFIELD_SIZE, CYCLE_DURATION_MS } from "../../../src/config";
@@ -19,6 +20,7 @@ import { startManeuver } from "../../../src/core/ArcadeControls";
 import type { DialSpeedTable } from "../../../src/core/speedCap";
 
 const TABLE: DialSpeedTable = { turn: [1, 2, 3], bank: [1, 2, 3, 4], straight: [1, 2, 3, 4, 5] };
+const tuned = (patch: Partial<AnalogTuning>): AnalogTuning => ({ ...TABLETOP_ANALOG_TUNING, ...patch });
 
 /** Steering state after a cycle that turned `turnedDeg` of a dial maximum. */
 function after(turnedDeg: number, kind: "turn" | "bank", speed = 3): AnalogSteer {
@@ -37,6 +39,13 @@ describe("classifyAnalogCycle", () => {
       direction: "straight",
       speed: 3,
     });
+  });
+
+  it("keeps a cycle within the tuned bank angle a bank on a hard-turn dial", () => {
+    const sixty = tuned({ bankDegrees: 60 });
+    expect(classifyAnalogCycle(after(60, "turn"), TABLE, sixty).direction).toBe("bank_left");
+    expect(classifyAnalogCycle(after(60, "turn"), TABLE, TABLETOP_ANALOG_TUNING).direction).toBe("turn_left");
+    expect(classifyAnalogCycle(after(75, "turn"), TABLE, sixty).direction).toBe("turn_left");
   });
 
   it("counts a quarter to two thirds of the dial maximum as a bank", () => {

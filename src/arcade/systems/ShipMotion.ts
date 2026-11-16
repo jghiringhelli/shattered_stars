@@ -24,6 +24,7 @@ import {
   updateAnalogCycle,
 } from "../../core/analogCycle";
 import { classifyAnalogCycle } from "./AnalogCompletion";
+import { analogTuningOf } from "../../core/analogTuning";
 import { SPEED_SCALE_FACTOR } from "../../config";
 import type { ManeuverDirection } from "../../core/types";
 
@@ -130,6 +131,7 @@ function completedCycleOf(
     const flown = classifyAnalogCycle(
       control.analog,
       control.capabilities?.dialSpeeds,
+      analogTuningOf(control.capabilities),
     );
     return { ...flown, fraction: 1, endPose };
   }

@@ -231,13 +231,15 @@ Status: implemented, offline only (default **Templates**; online battles always 
 engine: `lockSteeringToOnlineMode` is called wherever `lockTrickRuleToIdentity` is). Code:
 `src/core/analogSteering.ts` (capacity, geometry), `src/core/analogCycle.ts` (the per-tick
 integrator inside the 500 ms cycle), `src/core/analogHold.ts` (maneuver → key hold, shared by the
-bots' hands and planner), `src/arcade/systems/AnalogCompletion.ts` (stress), `src/arcade/systems/SteeringMode.ts`
+bots' hands and planner), `src/core/analogTuning.ts` + `analogBoost.ts` (the tunables, below),
+`src/arcade/systems/AnalogCompletion.ts` (stress), `src/arcade/systems/SteeringMode.ts`
 (active mode + online lock). The engine is fixed per ship when it is built
 (`FlightCapabilities.steering`); capital hulls always keep the templates.
 
 - **One key.** The existing left/right steer intents. While a side is held the heading changes at
-  the **max rate the dial allows at the flown speed**: 90° per cycle where the dial prints a hard
-  turn at that speed (white / green / red), 45° where it prints only a bank, nothing where it prints
+  the **max rate the dial allows at the flown speed**: the hard-turn angle (90°) per cycle where the
+  dial prints a hard turn at that speed (white / green / red), the bank angle (**70° default**, 45°
+  tabletop) where it prints only a bank, nothing where it prints
   neither — steering then drops the speed to the fastest speed that has a turn or bank
   (`steeringCapacity`, the speed-cap rule) and the ship returns to the set speed as soon as the key
   is released (the throttle itself is untouched; a throttle tap while the key is down lands at the
@@ -246,11 +248,14 @@ bots' hands and planner), `src/arcade/systems/AnalogCompletion.ts` (stress), `sr
 - **Proportional and immediate.** Holding half a cycle turns half the angle, zero hold flies straight,
   and the heading changes on the very first tick of the press: no 150 ms bank staging, no cycle cut.
   A partial hold is an arc followed by a straight.
-- **A full-cycle hold is the tabletop template**: every tick is an exact circular arc of the
+- **A full-cycle hold is the tabletop template under the `tabletop` tuning** (45° bank / 90° turn):
+  every tick is an exact circular arc of the
   template's radius (chord L = speed × 40 + base, r = L / (2·sin(max/2)); arc length ≈ ×1.026 for
   the 45° bank, ×1.11 for the 90° turn), so a hold from the start of a cycle ends within the
   oracle's 2 px / 1° (measured: float error) for every dial entry at every speed
-  (`tests/unit/core/analogSteering.test.ts`).
+  (`tests/unit/core/analogSteering.test.ts`, parametrized on that preset). The tuned default
+  (70° bank) departs from the tabletop angle on purpose, so a full bank hold is not the template's
+  bank there; the hard turn still is.
 - **Specials stay atomic templates** (Snap Turn, Hook Loop, Knife Roll, barrel roll, boost): queued
   at the next boundary as before; the key is remembered through them. A straight cycle is the free
   steering cycle; any other queued maneuver (specials, AI orders) flies its template.
@@ -260,10 +265,12 @@ bots' hands and planner), `src/arcade/systems/AnalogCompletion.ts` (stress), `sr
 - **Stress** by achieved angle ÷ the dial maximum at the speed it turned at, with the ArcadeStress
   thresholds 0.25 / 0.65: under 0.25 = straight, up to 0.65 = bank, above = the dial's own entry
   (a fully held hard turn keeps that entry's colour: red stays red; a bank-only dial counts its full
-  bank as a bank). A stressed pilot turns at bank rate at most (the template engine's "no red while
-  stressed").
-- **Bots** keep deciding at cycle boundaries. Their intent (drift 30° / bank 45° / turn 90° /
-  straight) becomes a hold from the start of the next cycle: the share of the cycle that turns that
+  bank as a bank). A cycle that turned no more than the tuned bank angle stays a bank on a
+  hard-turn dial whatever that angle is (60° / 90° = 0.67 would cross the 0.65 threshold: with
+  that cliff a 60-70° bank tripled the stress in the lab, 0.27 → 0.7-0.8). A stressed pilot turns at
+  bank rate at most (the template engine's "no red while stressed").
+- **Bots** keep deciding at cycle boundaries. Their intent (drift 30° / bank = the tuned bank angle /
+  turn 90° / straight) becomes a hold from the start of the next cycle: the share of the cycle that turns that
   angle at the dial's rate (`holdPlanFor`), held through the boundary when it repeats. The planner
   predicts the cycle from the same plan (arc, then straight), and offers hard turns at every reachable
   throttle (the key turns 90° only where the dial prints a turn). A pilot with no throttle plan of its
@@ -272,9 +279,65 @@ bots' hands and planner), `src/arcade/systems/AnalogCompletion.ts` (stress), `sr
   says otherwise.
 - **Movement lab**: `npm run movement:lab` compares both engines with a proportional pilot and
   tappers (input latency, turn-rate constancy, U-turn time / radius / overshoot, smoothness, time in
-  the 75° / 250 px wedge against a novice, shots per minute) and sweeps the analog turn-rate scale
-  (`FlightCapabilities.analogRateScale`, a tuning knob: ×1 = the templates); results in
-  docs/balance/movement-lab.md.
+  the 75° / 250 px wedge against a novice, shots per minute), sweeps the analog turn-rate scale and
+  **emulates battles** in the real skill arena (below); results in docs/balance/movement-lab.md.
+- **Tuning (experimental, analog only; the template engine never reads it).** One typed object,
+  `AnalogTuning` (`src/core/analogTuning.ts`), carried on `FlightCapabilities.analogTuning`
+  (absent = `DEFAULT_ANALOG_TUNING`):
+
+  | knob | meaning | default | tabletop |
+  |---|---|---|---|
+  | `bankDegrees` | heading change per cycle at a bank-only speed (10-120°, ≤ turn) | **70** | 45 |
+  | `turnDegrees` | ...at a hard-turn speed (30-180°) | 90 | 90 |
+  | `rateScale` | multiplier on both (0.25-2) | 1 | 1 |
+  | `heldTurnAfterMs` | "held key flies the hard turn": at a bank-only speed of a hull that prints a hard turn somewhere, a key held this long (continuously, across cycles; 0-5000 ms; null = off) turns at the hard-turn rate from then on, at the speed already flown (no speed cap); counts as a hard turn for stress, never for a stressed pilot | off | off |
+
+  Set it from the movement lab (`LabShipSetup.tuning`, `--banks` / `--holds`), the skill arena
+  (`BattleSpec.analogTuning`, per ship `ShipEntry.analogTuning` / `steering` — an analog-vs-template
+  battle is one spec —, `setDefaultArenaAnalogTuning`, `SKILL_ANALOG_TUNE=bank:60,hold:250` for
+  `npm run test:skill`) and, in dev builds only, the URL `?analogTune=bank:60,hold:250`
+  (`src/debug/analogTuneOverride.ts`; keys `preset` `bank` `turn` `scale` `hold`; never persisted).
+  `preset:tabletop` is the old behaviour.
+- **Battle emulation** (`src/simulation/movementLab/Lab*Battle*`, `LabHumanPilot`, `LabMeters`): bots
+  (and a human-like pilot: 150-250 ms reaction, proportional keys, hand throttle) fly 1v1 / 2v2 / 4v4
+  with the same hull on both sides, ≥ 30 seeded rounds per cell, the subject alternating sides;
+  meters are win rate, first-kill time, shots / min, % time in the firing wedge, stress, turns /
+  min, throttle changes, % of time under the speed cap and heading smoothness.
+- **Evidence for the default** (hulls `terran_gladius`, `confed_sparrow`: cruise at throttle 3 = bank
+  only, 64 of 82 fighters; docs/balance/movement-lab.md has every cell with exact counts):
+  bank angle is the lever, the hold variant is not. Human-like win rate over all tiers (360 rounds
+  per setting): template 44 %, analog 45° 42 %, 55° 42 %, 60° 44 %, **70° 51 %**, 80° 56 %; bots on
+  70° beat bots on the template 62 % (180 rounds; 45° only 49 %). The hold variant moves nothing
+  beyond noise (±5 points). Tier ordering holds on every setting in the lab (expert > average ≥ 75 %,
+  average > novice ≥ 93 %, expert > novice ≥ 93 %; the template's expert > average is 93 %, the
+  default's 85 %: the expert's edge over an average pilot shrinks). Skill gates with
+  `SKILL_STEERING=analog` (gate 1 = pairs of 60 below 85 %, gate 2 squad win), measured twice
+  because the ace policy (another work stream) landed in between:
+
+  | tuning | gate 1 before the ace policy | gate 1 with it | gate 2 (both) |
+  |---|---|---|---|
+  | tabletop (old) | 4 below | 2 below | 95-99 % |
+  | bank 55 | - | 1 below | 100 % |
+  | bank 60 | 3 below | 3 below | 95-98 % |
+  | **bank 70 (default)** | **0 below** | 2 below | 99 % |
+  | bank 70 + hold 250 | 1 below | 3 below | 98-99 % |
+  | bank 80 | 2 below | 3 below | 96-98 % |
+
+  The template engine passes all 25 gate tests in both states. With the ace mechanics on, **no
+  analog setting passes gate 1** (the same pairs, `confed_finch` > `synth_interceptor_drone` and
+  `terran_stiletto` > `terran_gladius`, dip; draws from timeouts): at bank 70, 30 seeds,
+  finch wins 23 with the ace mechanics and 30 without, stiletto 22 and 26 (template: 30 and 30 both
+  ways). The ace steering thresholds are tabletop-calibrated; that is an open item for the ace work,
+  not a reason to move the tuning, which the lab ranks on piloting feel. Default = bank 70 / hold
+  off: the best human-like win rate and head-to-head result of the settings that keep the tier
+  ordering and gate 2 (80° ranks higher on some proxies but makes a bank almost a hard turn).
+- **Feel test** (offline, Settings › Gameplay › Steering = Analog; dev build: add `?analogTune=...`
+  to the URL): at throttle 3 on a heavy fighter hold one arrow (U-turn feel: 70° ≈ 2.6 cycles, 45°
+  4 cycles) and tap it for small corrections; compare `?analogTune=preset:tabletop`,
+  `bank:55`, `bank:70` (default) and `bank:70,hold:250` (a long hold tightens at bank-only speeds);
+  watch the stress bar while chasing (a bank must stay white / green), whether an AI wingman and a
+  squad mark still read as coordinated, and whether the hard-turn speeds (1-2) still feel worth
+  slowing down for (the gap to a 70° bank is only 20°).
 - Known interactions: two quick taps of the same arrow inside 220 ms are still the barrel-roll
   double-tap in both engines (the lab's *fast-tapper* shows the accidental rolls); the live
   flight-telemetry oracle (template cycles) applies to the template engine and, in analog, to
@@ -317,9 +380,12 @@ bots' hands and planner), `src/arcade/systems/AnalogCompletion.ts` (stress), `sr
   `tests/unit/core/speedCap.test.ts`, `tests/unit/arcade/SpeedCapFlight.test.ts`; instant turns:
   `tests/unit/core/cycleInterrupt.test.ts`, `tests/unit/arcade/systems/PilotInterrupts.test.ts`,
   `tests/unit/simulation/flight/InterruptTelemetry.test.ts`, `tests/unit/net/cycleInterruptLockstep.test.ts`.
-- Analog steering: `tests/unit/core/analogSteering.test.ts` (full hold = template for every fighter
-  at every speed, zero hold, half hold, immediate response, speed cap / return, determinism, state
-  graph), `tests/unit/arcade/AnalogStress.test.ts`, `tests/unit/arcade/SteeringModeSelection.test.ts`
+- Analog steering: `tests/unit/core/analogSteering.test.ts` (under the tabletop preset: full hold =
+  template for every fighter at every speed, zero hold, half hold, immediate response, speed cap /
+  return, determinism, state graph), `tests/unit/core/analogTuning.test.ts` (tunables, parsing, boost
+  in flight, tick-length independence, plumbing), `tests/unit/arcade/AnalogStress.test.ts`,
+  `tests/unit/arcade/SteeringModeSelection.test.ts`
   and `tests/unit/net/onlineBattleLink.test.ts` (online lock), `tests/unit/ai/AnalogBots.test.ts`
-  (hands, planner prediction); `SKILL_STEERING=analog npm run test:skill` runs the piloting gates
+  (hands, planner prediction), `tests/unit/simulation/movementLab*.test.ts` (lab, battle emulation);
+  `SKILL_STEERING=analog [SKILL_ANALOG_TUNE=...] npm run test:skill` runs the piloting gates
   on the analog engine.

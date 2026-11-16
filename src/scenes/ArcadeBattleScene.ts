@@ -187,6 +187,7 @@ import {
   squadFormatFor,
 } from "./arcadeBattle/ArcadeBotFleet";
 import { toBotContact } from "./arcadeBattle/arcadeBotContact";
+import { AceStrikeGlue } from "./arcadeBattle/aceStrikeGlue";
 import { selectHudTargetId } from "./arcadeBattle/arcadeHudModel";
 import {
   createRng,
@@ -435,6 +436,9 @@ export class ArcadeBattleScene extends Phaser.Scene {
 
   /** The AI: a bot pilot per AI ship, a squad command per team, the marks. */
   private botFleet: ArcadeBotFleet | null = null;
+
+  /** Aces' strike windows and disengage state (aceStrikeGlue); part of the online snapshot. */
+  private readonly aceStrike = new AceStrikeGlue();
 
   /** Tabletop scenario (battleConfig.scenario), or null for a plain Skirmish. */
   private scenario: ScenarioController | null = null;
@@ -955,6 +959,12 @@ export class ArcadeBattleScene extends Phaser.Scene {
     if (!this.debugAutopilot) this.handleInput(dt);
     this.updateAI(dt);
     this.updateShips(dt);
+    if (this.botFleet)
+      this.aceStrike.updateDisengage(
+        this.ships,
+        this.botFleet.currentMarks,
+        this.battleClockMs,
+      );
     this.updateAuras(dt);
     // Secondaries first: a held or chosen launch is this cycle's attack.
     this.weapons?.update(dt, this.battleClockMs);
@@ -1286,6 +1296,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     ship.angle = result.motion.angle;
     ship.control = result.motion.control;
     ship.stress = result.stress;
+    this.aceStrike.noteFlight(ship, result.events, this.battleClockMs);
     this.scenario?.onFlightEvents(ship.id, result.events, origin);
     for (const event of result.events)
       this.playFlightEvent(ship, event, origin);
@@ -1561,6 +1572,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     this.hitLedger.forget(target.id);
     this.botFleet?.forget(target.id);
     this.weapons?.forget(target.id);
+    this.aceStrike.forget(target.id);
   }
 
   /**
@@ -1785,6 +1797,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
         this.botFleet?.isMarkedBy(teamKey(attacker.team), target.id, now) ??
         false,
       ...this.aurasOf(attacker, target),
+      ...this.aceStrike.takeShotFlags(attacker, target, now),
       targetArmor: armorReductionOf(target.definitionId),
     });
     this.weapons?.onAttack(attacker.id);
@@ -2621,6 +2634,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
           ended: this.gameEnded,
           remaining: this.reinforcements?.remainingMs ?? 0,
         },
+        ...this.aceStrike.book.values(),
       ],
     });
   }
@@ -2630,6 +2644,7 @@ export class ArcadeBattleScene extends Phaser.Scene {
     return {
       ships: this.ships,
       fleet: this.botFleet,
+      aceStrike: this.aceStrike.book,
       weapons: this.weapons?.simulation ?? null,
       ledger: this.hitLedger,
       repair: this.repairFeedback?.mechanic ?? null,

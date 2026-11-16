@@ -30,6 +30,8 @@ import {
   type PilotControlState,
 } from "../../arcade/systems/PilotFlightControls";
 import { TICK_MS } from "../skill/ArenaSpec";
+import { withAnalogTuning } from "../skill/ArenaSteering";
+import type { AnalogTuning } from "../../core/analogTuning";
 
 export { TICK_MS };
 
@@ -54,8 +56,8 @@ export interface LabShipSetup {
   readonly steering: SteeringMode;
   /** The set throttle. */
   readonly speed: number;
-  /** Analog only: multiplier on the per-cycle turn rates (default 1). */
-  readonly rateScale?: number;
+  /** Analog only: the tuning flown (default: the engine's default). */
+  readonly tuning?: AnalogTuning;
 }
 
 /** A ship and its pilot's memory. */
@@ -87,30 +89,22 @@ export function pickLabShip(): string {
 }
 
 /**
- * @param setup - Ship, pose, engine, throttle and rate scale.
+ * @param setup - Ship, pose, engine, throttle and analog tuning.
  * @returns A ship at the start of a straight cycle at the set throttle.
  */
 export function createLabShip(setup: LabShipSetup): LabShip {
-  const made = createCycleFlight(
-    setup.definitionId,
-    setup.pose,
-    "identity",
-    setup.steering,
+  const made = withAnalogTuning(
+    createCycleFlight(
+      setup.definitionId,
+      setup.pose,
+      "identity",
+      setup.steering,
+    ),
+    setup.tuning,
   );
-  const control = made.motion.control;
-  const scaled =
-    setup.rateScale !== undefined && control.capabilities
-      ? {
-          ...control,
-          capabilities: {
-            ...control.capabilities,
-            analogRateScale: setup.rateScale,
-          },
-        }
-      : control;
   const started = startManeuver(
     setup.pose,
-    { ...scaled, speed: setup.speed },
+    { ...made.motion.control, speed: setup.speed },
     "straight",
   );
   return {

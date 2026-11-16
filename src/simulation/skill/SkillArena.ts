@@ -19,6 +19,7 @@ import { emptyTally, resolveCombatTick, type CombatState } from "./ArenaCombat";
 import { ENGINE_RULES } from "./ArenaRules";
 import { armArena, resolveWeaponsTick } from "./ArenaWeapons";
 import { auraOf, updateArenaAuras } from "./ArenaAuras";
+import { noteArenaFlight, updateArenaDisengage } from "./ArenaAce";
 import {
   commandSquads,
   createSquads,
@@ -29,7 +30,7 @@ import {
   resultOf,
   spawnShips,
 } from "./ArenaRound";
-import { contactOf } from "./ArenaShip";
+import { contactOf, type ArenaShip } from "./ArenaShip";
 import { immunityLedgerFor, resolveTempo } from "../TempoVariant";
 import {
   DEFAULT_TIME_LIMIT_MS,
@@ -51,9 +52,13 @@ export {
 /**
  * Run one battle to elimination or the time limit.
  * @param spec - Sides, seed, time limit and rules.
+ * @param onTick - Watches the ships after every tick (experiments: the movement lab's meters).
  * @returns Winner, duration, scores and gunnery tallies.
  */
-export function runBattle(spec: BattleSpec): BattleResult {
+export function runBattle(
+  spec: BattleSpec,
+  onTick?: (ships: readonly ArenaShip[], nowMs: number) => void,
+): BattleResult {
   const random = createSeededRng(spec.seed).next;
   const ships = spawnShips(spec, random);
   const squads = createSquads(spec);
@@ -78,15 +83,20 @@ export function runBattle(spec: BattleSpec): BattleResult {
   while (nowMs < limit) {
     const contacts = ships.map(contactOf);
     commandSquads(squads, contacts, state, nowMs * k);
-    for (const ship of ships)
-      if (ship.alive) pilotShip(ship, contacts, squads, nowMs * k, TICK_MS * k);
+    for (const ship of ships) {
+      if (!ship.alive) continue;
+      const events = pilotShip(ship, contacts, squads, nowMs * k, TICK_MS * k);
+      noteArenaFlight(state, ship, events, nowMs * k);
+    }
     for (const ship of ships)
       if (ship.alive) flyShip(ship, tempo, auraOf(state, ship.id));
     nowMs += TICK_MS;
     updateArenaAuras(state, TICK_MS);
+    updateArenaDisengage(state, nowMs * k);
     // Secondaries first, as in the scenes (a launch is the cycle's attack).
     resolveWeaponsTick(state, nowMs * k, TICK_MS * k);
     resolveCombatTick(state, nowMs * k, TICK_MS * k);
+    onTick?.(ships, nowMs);
     const winner = eliminationWinner(ships, state);
     if (winner) return resultOf(spec.seed, winner, "elimination", nowMs, state);
   }

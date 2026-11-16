@@ -6,6 +6,8 @@
  */
 
 import type { BotTier, PilotBot } from "../../arcade/ai/BotTypes";
+import type { BotPilot } from "../../arcade/ai/BotPilot";
+import type { AnalogTuning } from "../../core/analogTuning";
 import type { CoordinationOptions } from "../../arcade/ai/SquadCoordinator";
 import type { SideScore } from "../../systems/arena/BattleScore";
 import type { TempoVariant } from "../TempoVariant";
@@ -35,6 +37,14 @@ export interface ShipEntry {
   readonly loadoutId?: string | null;
   /** Fly without the faction's identity levers (balance ablation). */
   readonly withoutIdentity?: boolean;
+  /** False = its ace mechanics are off (the ace report's "before" arm); default on. */
+  readonly aceMechanics?: boolean;
+  /** Steering engine of this ship; omitted = the battle's. */
+  readonly steering?: SteeringMode;
+  /** Analog tuning of this ship; omitted = the battle's. */
+  readonly analogTuning?: AnalogTuning;
+  /** A custom pilot (movement lab: the human-like pilot) instead of the tier's BotPilot. */
+  readonly makePilot?: (random: () => number) => BotPilot;
 }
 
 /** A side's squad layer (SquadCommand with an AI leader). */
@@ -65,6 +75,8 @@ export interface BattleSpec {
   readonly tempo?: TempoVariant;
   /** Steering engine of every ship; omitted = defaultArenaSteering() (template). */
   readonly steering?: SteeringMode;
+  /** Analog tuning of every analog ship; omitted = defaultArenaAnalogTuning(). */
+  readonly analogTuning?: AnalogTuning;
 }
 
 /** How a battle ended. */

@@ -8,6 +8,7 @@
  */
 
 import type { SteeringMode } from "../../core/steeringMode";
+import type { AnalogTuning } from "../../core/analogTuning";
 import { headingDelta } from "../flight/XWingFlightOracle";
 import { createLabPilot, type LabPilotKind, type LabPilotView } from "./LabPilot";
 import {
@@ -20,11 +21,11 @@ import {
   type LabShipSetup,
 } from "./LabShip";
 
-/** The ship, throttle and rate scale a measurement flies. */
+/** The ship, throttle and analog tuning a measurement flies. */
 export interface LabConfig {
   readonly definitionId: string;
   readonly speed: number;
-  readonly rateScale?: number;
+  readonly tuning?: AnalogTuning;
 }
 
 const ORIGIN = { x: 3000, y: 3000, angle: 0 };
@@ -40,7 +41,7 @@ export function setupOf(engine: SteeringMode, config: LabConfig): LabShipSetup {
     pose: ORIGIN,
     steering: engine,
     speed: config.speed,
-    ...(config.rateScale !== undefined ? { rateScale: config.rateScale } : {}),
+    ...(config.tuning ? { tuning: config.tuning } : {}),
   };
 }
 

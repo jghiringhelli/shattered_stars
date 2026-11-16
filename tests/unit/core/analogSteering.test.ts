@@ -1,7 +1,10 @@
 /**
  * Analog steering engine: one turn key bends the heading at the dial's rate,
  * a full-cycle hold flies exactly the tabletop template, a partial hold is an
- * arc followed by a straight, and the turn is immediate.
+ * arc followed by a straight, and the turn is immediate. The template-match
+ * invariants hold for the 'tabletop' tuning preset (45° bank / 90° hard turn);
+ * the tuned default departs from the tabletop angles on purpose
+ * (tests/unit/core/analogTuning.test.ts).
  */
 
 import { describe, it, expect } from "vitest";
@@ -9,10 +12,12 @@ import { BATTLEFIELD_SIZE, CYCLE_DURATION_MS } from "../../../src/config";
 import { startManeuver } from "../../../src/core/ArcadeControls";
 import { holdSteer } from "../../../src/core/analogCycle";
 import {
-  steeringCapacity,
+  steeringCapacity as capacityWith,
   usesAnalogSteering,
   type AnalogSide,
 } from "../../../src/core/analogSteering";
+import { ANALOG_PRESETS } from "../../../src/core/analogTuning";
+import { withAnalogTuning } from "../../../src/simulation/skill/ArenaSteering";
 import { flownSpeed } from "../../../src/core/speedCap";
 import {
   SHIP_DEFINITIONS,
@@ -47,9 +52,19 @@ const FIGHTER_IDS = Object.keys(SHIP_DEFINITIONS).filter((id) => {
   return usesAnalogSteering(flight.motion.control);
 });
 
+/** The tuning these invariants hold for: the tabletop angles. */
+const TABLETOP = ANALOG_PRESETS.tabletop!;
+
+/** steeringCapacity under the tabletop tuning. */
+const steeringCapacity: typeof capacityWith = (table, setSpeed, stressed, tuning = TABLETOP) =>
+  capacityWith(table, setSpeed, stressed, tuning);
+
 /** A flight of `id` at the set speed, ready to steer (a fresh straight cycle). */
 function analogFlight(id: string, setSpeed: number): CycleFlightState {
-  const flight = createCycleFlight(id, START, "identity", "analog");
+  const flight = withAnalogTuning(
+    createCycleFlight(id, START, "identity", "analog"),
+    TABLETOP,
+  );
   const control = startManeuver(
     START,
     { ...flight.motion.control, speed: setSpeed },

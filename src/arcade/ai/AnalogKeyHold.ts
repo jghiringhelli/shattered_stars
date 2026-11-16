@@ -10,10 +10,8 @@
 
 import { CYCLE_DURATION_MS } from "../../config";
 import { holdPlanFor, type HoldPlan } from "../../core/analogHold";
-import {
-  ANALOG_TURN_DEGREES,
-  steeringCapacity,
-} from "../../core/analogSteering";
+import { steeringCapacity } from "../../core/analogSteering";
+import { analogTuningOf } from "../../core/analogTuning";
 import type { ShipControlState } from "../../core/ArcadeControls";
 import { flownSpeed } from "../../core/speedCap";
 import type { ManeuverDirection } from "../../core/types";
@@ -77,8 +75,13 @@ export class AnalogKeyHold {
     const table = control.capabilities?.dialSpeeds;
     if (wished !== null || !control.analog || !table?.turn?.length || !wanted.startsWith("turn"))
       return wished;
-    const capacity = steeringCapacity(table, control.speed, false);
-    if (capacity.dialMaxDeg >= ANALOG_TURN_DEGREES) return null;
+    const capacity = steeringCapacity(
+      table,
+      control.speed,
+      false,
+      analogTuningOf(control.capabilities),
+    );
+    if (capacity.kind === "turn") return null;
     return flownSpeed(table, "turn_left", control.speed);
   }
 
@@ -128,7 +131,10 @@ export class AnalogKeyHold {
       control.capabilities?.dialSpeeds,
       control.speed,
       stressed,
-      control.capabilities?.analogRateScale,
+      {
+        tuning: analogTuningOf(control.capabilities),
+        heldBeforeMs: control.analog?.heldMs ?? 0,
+      },
     );
     this.armedManeuver = null;
     const elapsedMs = control.maneuverProgress * CYCLE_DURATION_MS;

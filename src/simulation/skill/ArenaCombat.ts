@@ -42,6 +42,8 @@ import {
 } from "./ArenaRules";
 import type { ArenaShip } from "./ArenaShip";
 import { recordRecentHit, shotContextOf } from "./ArenaShotContext";
+import { takeAceShotFlags } from "./ArenaAce";
+import { forgetAce } from "../../arcade/systems/AceStrike";
 
 export {
   emptyTally,
@@ -149,6 +151,7 @@ function fireAt(
     nowMs,
     roll: state.random(),
     targetMarked: shot.marked,
+    ...takeAceShotFlags(state, attacker, target, nowMs),
     levers: state.rules.shotLevers,
     ...shotAurasOf(state.auras ?? NO_AURAS, attacker.id, target.id),
     targetArmor: armorReductionOf(target.definitionId),
@@ -189,6 +192,7 @@ export function destroyShip(
   state.firstKillAtMs ??= nowMs;
   state.ledger.forget(victim.id);
   state.recentHits.delete(victim.id);
+  if (state.aceStrike) forgetAce(state.aceStrike, victim.id);
   state.marks = forgetMarkedTarget(state.marks, victim.id);
   state.scores[killer.side] = creditKill(
     state.scores[killer.side],

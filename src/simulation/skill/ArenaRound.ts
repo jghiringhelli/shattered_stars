@@ -13,12 +13,13 @@ import { BotPilot } from "../../arcade/ai/BotPilot";
 import type { BotContact } from "../../arcade/ai/BotView";
 import { SquadCommand } from "../../arcade/ai/SquadCommand";
 import { tickCycleFlight } from "../../arcade/systems/CycleFlight";
+import type { FlightEvent } from "../../arcade/systems/PilotFlightTypes";
 import { stressModifiersOf } from "../../arcade/systems/QuickBuildEquip";
 import type { ActiveAura } from "../../systems/SupportAura";
 import { resolveByPoints } from "../../systems/arena/BattleScore";
 import type { CombatState, SideId } from "./ArenaCombatState";
 import { spawnLayout } from "./ArenaLayout";
-import { setArenaFlight, spawnArenaShip, type ArenaShip } from "./ArenaShip";
+import { setArenaFlight, spawnArenaShip, type ArenaShip, type ArenaShipSpec } from "./ArenaShip";
 import { countSpecialActions } from "../../telemetry/matchStatTypes";
 import {
   resolveTempo,
@@ -30,7 +31,25 @@ import {
   TICK_MS,
   type BattleResult,
   type BattleSpec,
+  type ShipEntry,
 } from "./ArenaSpec";
+
+/**
+ * @param entry - A ship entry.
+ * @param spec - Its battle.
+ * @returns The steering engine and analog tuning the ship flies: its own, else the battle's.
+ */
+function engineOf(
+  entry: ShipEntry,
+  spec: BattleSpec,
+): Pick<ArenaShipSpec, "steering" | "analogTuning"> {
+  const steering = entry.steering ?? spec.steering;
+  const analogTuning = entry.analogTuning ?? spec.analogTuning;
+  return {
+    ...(steering ? { steering } : {}),
+    ...(analogTuning ? { analogTuning } : {}),
+  };
+}
 
 /**
  * @param spec - The battle.
@@ -58,16 +77,21 @@ export function spawnShips(
         side,
         definitionId: entry.definitionId,
         pose: layout[side][index]!,
-        pilot: new BotPilot(entry.tier, {
-          random,
-          ...(reactionScale !== undefined ? { reactionScale } : {}),
-          ...(entry.bot ? { bot: entry.bot } : {}),
-        }),
+        pilot: entry.makePilot
+          ? entry.makePilot(random)
+          : new BotPilot(entry.tier, {
+              random,
+              ...(reactionScale !== undefined ? { reactionScale } : {}),
+              ...(entry.bot ? { bot: entry.bot } : {}),
+            }),
         ...(entry.loadoutId !== undefined
           ? { loadoutId: entry.loadoutId }
           : {}),
         ...(entry.withoutIdentity ? { withoutIdentity: true } : {}),
-        ...(spec.steering ? { steering: spec.steering } : {}),
+        ...engineOf(entry, spec),
+        ...(spec.rules?.aceMechanics === false || entry.aceMechanics === false
+          ? { aceMechanics: false }
+          : {}),
       });
       if (tempo) applyTempoToShip(ship, tempo);
       return ship;
@@ -135,6 +159,7 @@ export function commandSquads(
  * @param squads - Squad layer per side.
  * @param nowMs - Arena time (ms, flight clock).
  * @param deltaMs - Frame length on the flight clock (ms).
+ * @returns The flight events of the frame (dashes, specials).
  */
 export function pilotShip(
   ship: ArenaShip,
@@ -142,7 +167,7 @@ export function pilotShip(
   squads: ReadonlyMap<SideId, SquadCommand>,
   nowMs: number,
   deltaMs: number = TICK_MS,
-): void {
+): FlightEvent[] {
   const self = contacts.find((c) => c.id === ship.id)!;
   const result = ship.pilot.fly({
     self,
@@ -156,6 +181,7 @@ export function pilotShip(
   });
   ship.specialsUsed += countSpecialActions(result.events);
   setArenaFlight(ship, { motion: result.motion, stress: result.stress });
+  return result.events;
 }
 
 /**

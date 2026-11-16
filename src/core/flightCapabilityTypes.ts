@@ -5,6 +5,7 @@
  * the rules live in src/arcade/systems/FlightCapabilities.ts.
  */
 
+import type { AnalogTuning } from "./analogTuning";
 import type { DialSpeedTable } from "./speedCap";
 import type { SteeringMode } from "./steeringMode";
 import type { ManeuverDifficulty } from "./types";
@@ -54,10 +55,10 @@ export interface FlightCapabilities {
    */
   readonly steering?: SteeringMode;
   /**
-   * Analog steering: multiplier on the per-cycle turn rates (a tuning and lab
-   * knob, see scripts/movement_lab.ts). Absent = 1: the tabletop templates.
+   * Analog steering: the experimental tunables (src/core/analogTuning, set by
+   * the lab, the skill arena and the dev override). Absent = the default tuning.
    */
-  readonly analogRateScale?: number;
+  readonly analogTuning?: AnalogTuning;
 }
 
 /** Anything goes: unknown ships and legacy/test control states. */

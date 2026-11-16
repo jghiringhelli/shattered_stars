@@ -3,6 +3,7 @@
  * lockstep battle is built. Mirrors the trick-rule lock in FlightCapabilities.
  */
 
+import type { AnalogTuning } from "../../core/analogTuning";
 import {
   ONLINE_STEERING_MODE,
   type SteeringMode,
@@ -11,6 +12,24 @@ import { steeringModePreference } from "../../systems/SettingsStorage";
 
 /** Set by online battles: lockstep needs identical rules on every client. */
 let onlineLock = false;
+
+/** Dev-only analog tuning override (src/debug/analogTuneOverride); null = the default. */
+let tuningOverride: AnalogTuning | null = null;
+
+/**
+ * @param tuning - The analog tuning every ship built from now on flies, or
+ * null for the default (dev override, never persisted).
+ */
+export function setAnalogTuningOverride(tuning: AnalogTuning | null): void {
+  tuningOverride = tuning;
+}
+
+/**
+ * @returns The dev override of the analog tuning, or undefined when none is set.
+ */
+export function activeAnalogTuning(): AnalogTuning | undefined {
+  return tuningOverride ?? undefined;
+}
 
 /**
  * Online hook: while locked, every lookup that names no mode uses

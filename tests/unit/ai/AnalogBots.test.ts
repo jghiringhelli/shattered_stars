@@ -1,14 +1,17 @@
 /**
  * Bots on the analog turn key: their intent (drift / bank / turn / straight)
  * becomes a hold of the one key, the planner predicts the cycle from the same
- * plan, and a pilot with no throttle plan slows for a hard turn.
+ * plan, and a pilot with no throttle plan slows for a hard turn. The angles are
+ * the 'tabletop' tuning preset's (45° bank / 90° hard turn).
  */
 
 import { describe, expect, it } from "vitest";
 import { BATTLEFIELD_SIZE, CYCLE_DURATION_MS } from "../../../src/config";
 import { startManeuver } from "../../../src/core/ArcadeControls";
 import { holdPlanFor, holdPlanPose } from "../../../src/core/analogHold";
+import { ANALOG_PRESETS } from "../../../src/core/analogTuning";
 import type { DialSpeedTable } from "../../../src/core/speedCap";
+import { withAnalogTuning } from "../../../src/simulation/skill/ArenaSteering";
 import { getShipDial } from "../../../src/data/ShipDefinitions";
 import {
   IDLE_INTENT,
@@ -27,6 +30,8 @@ import { headingDelta } from "../../../src/simulation/flight/XWingFlightOracle";
 
 const SHIP = "terran_gladius";
 const START = { x: 3000, y: 3000, angle: 0 };
+const TABLETOP = ANALOG_PRESETS.tabletop!;
+const PLAN = { tuning: TABLETOP };
 const TABLE: DialSpeedTable = { turn: [1, 2], bank: [1, 2, 3, 4], straight: [1, 2, 3, 4] };
 
 const intentOf = (maneuver: PilotIntent["maneuver"]): PilotIntent => ({
@@ -36,7 +41,7 @@ const intentOf = (maneuver: PilotIntent["maneuver"]): PilotIntent => ({
 
 /** A gladius flying the analog engine at the given set speed. */
 function analogShip(speed: number): CycleFlightState {
-  const made = createCycleFlight(SHIP, START, "identity", "analog");
+  const made = withAnalogTuning(createCycleFlight(SHIP, START, "identity", "analog"), TABLETOP);
   const control = startManeuver(START, { ...made.motion.control, speed }, "straight");
   return { ...made, motion: { ...made.motion, control } };
 }
@@ -72,7 +77,7 @@ function flyHands(
 
 describe("holdPlanFor", () => {
   it("holds the key the whole cycle for the dial's own turn", () => {
-    expect(holdPlanFor("turn_right", TABLE, 2, false)).toMatchObject({
+    expect(holdPlanFor("turn_right", TABLE, 2, false, PLAN)).toMatchObject({
       side: "right",
       rateDeg: 90,
       holdMs: CYCLE_DURATION_MS,
@@ -80,24 +85,24 @@ describe("holdPlanFor", () => {
   });
 
   it("holds half a cycle for a bank and a third for a drift where the dial turns 90 degrees", () => {
-    expect(holdPlanFor("bank_left", TABLE, 2, false).holdMs).toBeCloseTo(CYCLE_DURATION_MS / 2);
-    expect(holdPlanFor("drift_left", TABLE, 2, false).holdMs).toBeCloseTo(CYCLE_DURATION_MS / 3);
+    expect(holdPlanFor("bank_left", TABLE, 2, false, PLAN).holdMs).toBeCloseTo(CYCLE_DURATION_MS / 2);
+    expect(holdPlanFor("drift_left", TABLE, 2, false, PLAN).holdMs).toBeCloseTo(CYCLE_DURATION_MS / 3);
   });
 
   it("holds the whole cycle for a bank where the dial only banks", () => {
-    expect(holdPlanFor("bank_right", TABLE, 3, false)).toMatchObject({
+    expect(holdPlanFor("bank_right", TABLE, 3, false, PLAN)).toMatchObject({
       rateDeg: 45,
       holdMs: CYCLE_DURATION_MS,
     });
   });
 
   it("does not hold the key for straight or a special", () => {
-    expect(holdPlanFor("straight", TABLE, 2, false).holdMs).toBe(0);
-    expect(holdPlanFor("kturn", TABLE, 2, false).holdMs).toBe(0);
+    expect(holdPlanFor("straight", TABLE, 2, false, PLAN).holdMs).toBe(0);
+    expect(holdPlanFor("kturn", TABLE, 2, false, PLAN).holdMs).toBe(0);
   });
 
   it("predicts an arc then a straight", () => {
-    const plan = holdPlanFor("bank_right", TABLE, 2, false);
+    const plan = holdPlanFor("bank_right", TABLE, 2, false, PLAN);
     const end = holdPlanPose(START, plan, 40);
     expect(headingDelta(end.angle, 0)).toBeCloseTo(45, 3);
   });

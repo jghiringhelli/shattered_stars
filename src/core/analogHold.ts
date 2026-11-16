@@ -9,13 +9,17 @@
  */
 
 import { CYCLE_DURATION_MS, SUSTAINED_TURN_DEGREES_PER_CYCLE } from "../config";
+import { flyBoostedLeg, holdMsFor } from "./analogBoost";
 import {
-  ANALOG_BANK_DEGREES,
-  ANALOG_TURN_DEGREES,
   flyAnalogLeg,
   steeringCapacity,
   type AnalogSide,
 } from "./analogSteering";
+import {
+  DEFAULT_ANALOG_TUNING,
+  type AnalogTuning,
+  type HeldBoost,
+} from "./analogTuning";
 import { flownSpeed, type DialSpeedTable } from "./speedCap";
 import type { ManeuverDirection } from "./types";
 
@@ -26,19 +30,35 @@ export interface HoldPlan {
   readonly turnSpeed: number;
   /** Speed once it is released (the set speed through the dial). */
   readonly baseSpeed: number;
-  /** Turn rate while down (°/cycle). */
+  /** Turn rate while down (°/cycle), before any boost. */
   readonly rateDeg: number;
   /** How long the key is down from the start of the cycle (ms). */
   readonly holdMs: number;
+  /** The rate a long hold earns (src/core/analogTuning); null = none. */
+  readonly boost: HeldBoost | null;
+  /** How long the key was already down when the cycle started (ms). */
+  readonly heldBeforeMs: number;
+}
+
+/** What shapes a hold besides the maneuver: the tuning and a hold carried over. */
+export interface HoldOptions {
+  /** Analog tuning (default: the default tuning). */
+  readonly tuning?: AnalogTuning | undefined;
+  /** How long the key was already down at the start of the cycle (ms; default 0). */
+  readonly heldBeforeMs?: number | undefined;
 }
 
 /**
  * @param maneuver - A dial steering maneuver.
+ * @param tuning - Analog tuning (the angles of a bank and a hard turn).
  * @returns The heading change it asks for per cycle (°); 0 for straight and specials.
  */
-export function wantedDegrees(maneuver: ManeuverDirection): number {
-  if (maneuver.startsWith("turn")) return ANALOG_TURN_DEGREES;
-  if (maneuver.startsWith("bank")) return ANALOG_BANK_DEGREES;
+export function wantedDegrees(
+  maneuver: ManeuverDirection,
+  tuning: AnalogTuning = DEFAULT_ANALOG_TUNING,
+): number {
+  if (maneuver.startsWith("turn")) return tuning.turnDegrees;
+  if (maneuver.startsWith("bank")) return tuning.bankDegrees;
   if (maneuver.startsWith("drift")) return SUSTAINED_TURN_DEGREES_PER_CYCLE;
   return 0;
 }
@@ -52,7 +72,7 @@ export function wantedDegrees(maneuver: ManeuverDirection): number {
  * @param table - The ship's dial speeds.
  * @param setSpeed - The throttle for the cycle.
  * @param stressed - Whether the pilot is stressed.
- * @param rateScale - Multiplier on the per-cycle turn rate (default 1).
+ * @param options - Tuning and the hold already behind the cycle.
  * @returns Side, speeds, rate and hold time.
  */
 export function holdPlanFor(
@@ -60,20 +80,26 @@ export function holdPlanFor(
   table: DialSpeedTable | undefined,
   setSpeed: number,
   stressed: boolean,
-  rateScale: number = 1,
+  options: HoldOptions = {},
 ): HoldPlan {
+  const tuning = options.tuning ?? DEFAULT_ANALOG_TUNING;
+  const heldBeforeMs = options.heldBeforeMs ?? 0;
   const baseSpeed = flownSpeed(table, "straight", setSpeed);
-  const wanted = wantedDegrees(maneuver);
-  const capacity = steeringCapacity(table, setSpeed, stressed, rateScale);
+  const wanted = wantedDegrees(maneuver, tuning);
+  const capacity = steeringCapacity(table, setSpeed, stressed, tuning);
   const side: AnalogSide =
     wanted === 0 ? "none" : maneuver.endsWith("left") ? "left" : "right";
-  const share = wanted === 0 ? 0 : Math.min(1, wanted / capacity.rateDeg);
   return {
     side,
     turnSpeed: capacity.speed,
     baseSpeed,
     rateDeg: capacity.rateDeg,
-    holdMs: share * CYCLE_DURATION_MS,
+    holdMs:
+      wanted === 0
+        ? 0
+        : holdMsFor(wanted, capacity.rateDeg, capacity.boost, heldBeforeMs),
+    boost: capacity.boost,
+    heldBeforeMs,
   };
 }
 
@@ -94,13 +120,18 @@ export function holdPlanPose(
   atMs: number = CYCLE_DURATION_MS,
 ): { x: number; y: number; angle: number } {
   const arcMs = Math.min(atMs, plan.holdMs);
-  const arc = flyAnalogLeg(from, {
-    speed: plan.turnSpeed,
-    baseSize,
-    rateDeg: plan.rateDeg,
-    side: plan.side,
-    durationMs: arcMs,
-  });
+  const arc = flyBoostedLeg(
+    from,
+    {
+      speed: plan.turnSpeed,
+      baseSize,
+      rateDeg: plan.rateDeg,
+      side: plan.side,
+      durationMs: arcMs,
+    },
+    plan.boost,
+    plan.heldBeforeMs,
+  );
   return flyAnalogLeg(arc, {
     speed: plan.baseSpeed,
     baseSize,

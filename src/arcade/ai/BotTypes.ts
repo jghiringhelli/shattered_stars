@@ -8,6 +8,7 @@
  * Pure data, no behaviour, no Phaser.
  */
 
+import type { AnalogTuning } from "../../core/analogTuning";
 import type { DialSpeedTable } from "../../core/speedCap";
 import type { ManeuverDefinition } from "../../core/types";
 
@@ -70,8 +71,8 @@ export interface OwnShipView extends ShipSnapshot {
   readonly dialSpeeds?: DialSpeedTable | undefined;
   /** The pilot's own steering is the analog turn key (BotView predicts holds, not templates). */
   readonly analogSteering?: boolean;
-  /** Analog steering: multiplier on the per-cycle turn rates (default 1). */
-  readonly analogRateScale?: number | undefined;
+  /** Analog steering: the ship's tuning (absent = the default). */
+  readonly analogTuning?: AnalogTuning | undefined;
   /** Time left before the queued maneuver commits (ms). */
   readonly msToCommit: number;
   /** Where the maneuver in flight ends (the pose the next one starts from). */

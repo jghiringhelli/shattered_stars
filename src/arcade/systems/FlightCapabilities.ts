@@ -31,8 +31,9 @@ import {
 } from "../../data/ShipDefinitions";
 import { effectiveActions, effectiveDial } from "../../data/shipSpecials";
 import { shipSpecialsRule } from "../../systems/SettingsStorage";
+import type { AnalogTuning } from "../../core/analogTuning";
 import type { SteeringMode } from "../../core/steeringMode";
-import { activeSteeringMode } from "./SteeringMode";
+import { activeAnalogTuning, activeSteeringMode } from "./SteeringMode";
 
 export {
   UNRESTRICTED_CAPABILITIES,
@@ -121,12 +122,14 @@ function specialsOnDial(
  * @param definitionId - Ship definition id.
  * @param trickRule - Pure rule override; omitted = {@link activeTrickRule}.
  * @param steering - Steering engine override; omitted = {@link activeSteeringMode}.
+ * @param analogTuning - Analog tuning override; omitted = the dev override, else the default.
  * @returns What the ship may fly beyond its basic dial.
  */
 export function flightCapabilitiesOf(
   definitionId: string,
   trickRule: TrickRule = activeTrickRule(),
   steering: SteeringMode = activeSteeringMode(),
+  analogTuning: AnalogTuning | undefined = activeAnalogTuning(),
 ): FlightCapabilities {
   const def = getShipDefinition(definitionId);
   if (!def) return UNRESTRICTED_CAPABILITIES;
@@ -140,7 +143,9 @@ export function flightCapabilitiesOf(
     ...(getMovementProfile(definitionId) === "capital"
       ? {}
       : { dialSpeeds: dialSpeedTable(dial) }),
-    ...(steering === "analog" ? { steering } : {}),
+    ...(steering === "analog"
+      ? { steering, ...(analogTuning ? { analogTuning } : {}) }
+      : {}),
   };
 }
 

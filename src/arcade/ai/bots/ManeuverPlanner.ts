@@ -196,7 +196,7 @@ function cyclePose(
       self.dialSpeeds,
       speed,
       self.isStressed,
-      self.analogRateScale,
+      { tuning: self.analogTuning },
     );
     return holdPlanPose(from, plan, self.baseSize, atMs);
   }

@@ -65,6 +65,9 @@ function adoptGame(game: Phaser.Game): void {
   // Expose for debugging and E2E testing in non-production builds
   if (!import.meta.env.DEV) return;
   window.game = game;
+  void import("./debug/analogTuneOverride").then((m) =>
+    m.installAnalogTuneOverride(window.location.search),
+  );
   window.ensureScene = (key) => lazyScenes.ensureScene(key);
   window.ensureAllScenes = () => lazyScenes.ensureAll();
   void import("./debug/verifyHooks").then((m) => m.installVerifyHooks(game));

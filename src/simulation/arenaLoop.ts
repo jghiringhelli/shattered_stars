@@ -29,6 +29,7 @@ import {
 import { ENGINE_RULES } from "./skill/ArenaRules";
 import { armArena, resolveWeaponsTick } from "./skill/ArenaWeapons";
 import { auraOf, updateArenaAuras } from "./skill/ArenaAuras";
+import { noteArenaFlight, updateArenaDisengage } from "./skill/ArenaAce";
 import {
   commandSquads,
   createSquads,
@@ -120,6 +121,7 @@ export function addShip(loop: ArenaLoop, arrival: LoopArrival): ArenaShip {
     pose: arrival.pose,
     loadoutId: arrival.loadoutId,
     ...(arrival.withoutIdentity ? { withoutIdentity: true } : {}),
+    ...(loop.combat.rules.aceMechanics ? {} : { aceMechanics: false }),
     pilot: new BotPilot(arrival.skill.tier, {
       random: loop.random,
       reactionScale: arrival.skill.reactionScale,
@@ -150,6 +152,7 @@ export function stepArenaLoop(loop: ArenaLoop, hooks: LoopHooks = {}): void {
     if (ship.alive) flyShip(ship, undefined, auraOf(combat, ship.id));
   loop.nowMs += TICK_MS;
   updateArenaAuras(combat, TICK_MS);
+  updateArenaDisengage(combat, loop.nowMs);
   resolveWeaponsTick(combat, loop.nowMs, TICK_MS);
   resolveCombatTick(combat, loop.nowMs, TICK_MS);
 }
@@ -183,5 +186,6 @@ function pilotFrame(
   });
   ship.specialsUsed += countSpecialActions(result.events);
   setArenaFlight(ship, { motion: result.motion, stress: result.stress });
+  noteArenaFlight(loop.combat, ship, result.events, loop.nowMs);
   hooks.onFlown?.(ship, result.events, origin);
 }

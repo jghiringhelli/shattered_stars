@@ -43,6 +43,11 @@ export interface BotContact {
   readonly speed?: number;
   /** Stressed pilot; omitted = false. */
   readonly isStressed?: boolean;
+  /**
+   * A named ace flies it (aceStatus): its bot flies hit-and-run
+   * (AceStrikePolicy). Omitted = false.
+   */
+  readonly isAce?: boolean;
 }
 
 /**
@@ -124,7 +129,7 @@ export function ownShipView(input: OwnShipInput): OwnShipView {
     dial: input.dial,
     dialSpeeds: control.capabilities?.dialSpeeds,
     analogSteering: usesAnalogSteering(control),
-    analogRateScale: control.capabilities?.analogRateScale,
+    analogTuning: control.capabilities?.analogTuning,
     msToCommit: (1 - control.maneuverProgress) * CYCLE_DURATION_MS,
     endPose: cycleEndPose(input),
     ...flyableActions(input, stress.isStressed),

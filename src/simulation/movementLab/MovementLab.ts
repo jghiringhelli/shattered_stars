@@ -6,6 +6,7 @@
  */
 
 import type { SteeringMode } from "../../core/steeringMode";
+import { DEFAULT_ANALOG_TUNING } from "../../core/analogTuning";
 import { measureDuel, type DuelResult } from "./LabDuel";
 import {
   measureConstancy,
@@ -146,7 +147,11 @@ function sweepRows(options: LabOptions, definitionId: string): SweepRow[] {
   const rows: SweepRow[] = [];
   for (const rateScale of options.rateScales)
     for (const pilot of LAB_PILOTS) {
-      const config = { definitionId, speed: options.speeds[0]!, rateScale };
+      const config = {
+        definitionId,
+        speed: options.speeds[0]!,
+        tuning: { ...DEFAULT_ANALOG_TUNING, rateScale },
+      };
       rows.push({
         rateScale,
         pilot,

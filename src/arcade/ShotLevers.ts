@@ -5,7 +5,9 @@
  *   hit does more damage;
  * - from inside the target's front cone (a head-on joust, where the target
  *   fires back): harder to hit — trading shots nose to nose is a poor bet;
- * - at the target your squad marked (SquadMark): easier to hit, more damage.
+ * - at the target your squad marked (SquadMark): easier to hit, more damage;
+ * - an ace's strike shot (AceStrike: right after a dash): easier to hit, more
+ *   damage; a shot at an ace that just broke away (Disengage): harder to hit.
  *
  * The values are a struct so simulations can sweep them; the dice modes use
  * {@link DEFAULT_SHOT_LEVERS}. Pure: no Phaser.
@@ -13,6 +15,11 @@
 
 import type { ShipPose } from "../core/ArcadeControls";
 import { headingDiffToTarget } from "../systems/MovementSystem";
+import {
+  DISENGAGE_EVASION_HIT_PENALTY,
+  STRIKE_DAMAGE_BONUS,
+  STRIKE_HIT_BONUS,
+} from "../data/aceConfig";
 import { describeShot } from "./ShotConditions";
 import {
   SQUAD_MARK_DAMAGE_BONUS,
@@ -48,6 +55,12 @@ export interface ShotLevers {
   readonly headOnHitPenalty: number;
   readonly markHitBonus: number;
   readonly markDamageBonus: number;
+  /** Hit-chance bonus of an ace's strike shot (aceConfig). */
+  readonly strikeHitBonus: number;
+  /** Extra damage of an ace's strike shot (aceConfig). */
+  readonly strikeDamageBonus: number;
+  /** Hit-chance penalty of a shot at an ace that just disengaged (aceConfig). */
+  readonly evasionHitPenalty: number;
 }
 
 /** The values the dice modes fight with. */
@@ -57,6 +70,9 @@ export const DEFAULT_SHOT_LEVERS: ShotLevers = {
   headOnHitPenalty: HEAD_ON_HIT_PENALTY,
   markHitBonus: SQUAD_MARK_HIT_BONUS,
   markDamageBonus: SQUAD_MARK_DAMAGE_BONUS,
+  strikeHitBonus: STRIKE_HIT_BONUS,
+  strikeDamageBonus: STRIKE_DAMAGE_BONUS,
+  evasionHitPenalty: DISENGAGE_EVASION_HIT_PENALTY,
 };
 
 /** Every lever off: the bare dice model. */
@@ -66,6 +82,9 @@ export const NO_SHOT_LEVERS: ShotLevers = {
   headOnHitPenalty: 0,
   markHitBonus: 0,
   markDamageBonus: 0,
+  strikeHitBonus: 0,
+  strikeDamageBonus: 0,
+  evasionHitPenalty: 0,
 };
 
 /** Where the attacker fires from, as far as the levers care. */
@@ -106,12 +125,19 @@ export interface LeverShotInput {
   readonly position: ShotPosition;
   /** The target is the one the attacker's side marked. */
   readonly marked: boolean;
+  /**
+   * The attacker is an ace firing inside its strike window (AceStrike). A
+   * strike is a squad tactic: it counts only against the marked target.
+   */
+  readonly strike?: boolean;
+  /** The target is an ace flying its disengage evasion bonus (Disengage). */
+  readonly evading?: boolean;
 }
 
 /**
- * Apply position and mark to a shot's odds and damage.
+ * Apply position, mark, strike window and evasion to a shot's odds and damage.
  *
- * @param shot - Mode hit chance, position and mark.
+ * @param shot - Mode hit chance, position, mark, strike and evasion.
  * @param levers - Lever values.
  * @returns Hit chance (clamped only when a lever moved it) and damage bonus.
  */
@@ -119,13 +145,17 @@ export function leverShot(
   shot: LeverShotInput,
   levers: ShotLevers = DEFAULT_SHOT_LEVERS,
 ): LeveredShot {
+  const striking = shot.strike === true && shot.marked;
   const hitDelta =
     (shot.position === "rear" ? levers.rearArcHitBonus : 0) -
     (shot.position === "head_on" ? levers.headOnHitPenalty : 0) +
-    (shot.marked ? levers.markHitBonus : 0);
+    (shot.marked ? levers.markHitBonus : 0) +
+    (striking ? levers.strikeHitBonus : 0) -
+    (shot.evading ? levers.evasionHitPenalty : 0);
   const damageBonus =
     (shot.position === "rear" ? levers.rearArcDamageBonus : 0) +
-    (shot.marked ? levers.markDamageBonus : 0);
+    (shot.marked ? levers.markDamageBonus : 0) +
+    (striking ? levers.strikeDamageBonus : 0);
   if (hitDelta === 0) return { hitChance: shot.hitChance, damageBonus };
   return {
     hitChance: Math.max(

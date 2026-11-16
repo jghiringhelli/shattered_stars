@@ -228,7 +228,7 @@ function canBoost(self: PilotView["self"]): boolean {
 /**
  * @returns The roll side that leaves every threat's arc, or null if neither does.
  */
-function rollSideOutOfArcs(
+export function rollSideOutOfArcs(
   self: PilotView["self"],
   threats: readonly Shooter[],
   worldSize: number,

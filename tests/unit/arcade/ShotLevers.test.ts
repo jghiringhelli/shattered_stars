@@ -18,6 +18,11 @@ import {
   shotPosition,
 } from "../../../src/arcade/ShotLevers";
 import {
+  DISENGAGE_EVASION_HIT_PENALTY,
+  STRIKE_DAMAGE_BONUS,
+  STRIKE_HIT_BONUS,
+} from "../../../src/data/aceConfig";
+import {
   SQUAD_MARK_DAMAGE_BONUS,
   SQUAD_MARK_HIT_BONUS,
 } from "../../../src/arcade/systems/SquadMark";
@@ -118,6 +123,9 @@ describe("leverShot", () => {
       headOnHitPenalty: HEAD_ON_HIT_PENALTY,
       markHitBonus: SQUAD_MARK_HIT_BONUS,
       markDamageBonus: SQUAD_MARK_DAMAGE_BONUS,
+      strikeHitBonus: STRIKE_HIT_BONUS,
+      strikeDamageBonus: STRIKE_DAMAGE_BONUS,
+      evasionHitPenalty: DISENGAGE_EVASION_HIT_PENALTY,
     });
   });
 });

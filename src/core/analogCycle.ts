@@ -13,6 +13,11 @@
 
 import { CYCLE_DURATION_MS } from "../config";
 import {
+  flyBoostedLeg,
+  keptHeldMs,
+  turnedFurther,
+} from "./analogBoost";
+import {
   flyAnalogLeg,
   freshAnalogSteer,
   steeringCapacity,
@@ -22,6 +27,7 @@ import {
   type AnalogSide,
   type AnalogSteer,
 } from "./analogSteering";
+import { analogTuningOf } from "./analogTuning";
 import type { ManeuverDirection } from "./types";
 
 /**
@@ -128,7 +134,7 @@ function applyHold<C extends AnalogControlView>(
           control.capabilities?.dialSpeeds,
           control.speed,
           stressed,
-          control.capabilities?.analogRateScale,
+          analogTuningOf(control.capabilities),
         );
   const rateDeg = capacity?.rateDeg ?? 0;
   const speed = capacity?.speed ?? analog.baseSpeed;
@@ -137,6 +143,8 @@ function applyHold<C extends AnalogControlView>(
     held: side,
     stressed,
     rateDeg,
+    heldMs: keptHeldMs(analog, side),
+    boost: capacity?.boost ?? null,
     ...(capacity
       ? {
           turnSpeed: capacity.speed,
@@ -191,9 +199,11 @@ export function predictAnalogEnd(
   if (!analog || analog.held === "none" || analog.rateDeg <= 0)
     return flyAnalogLeg(pose, legOf(control, 0, "none", remaining));
   const turning = Math.min(remaining, Math.max(0, holdLeftMs));
-  const arc = flyAnalogLeg(
+  const arc = flyBoostedLeg(
     pose,
     legOf(control, analog.rateDeg, analog.held, turning),
+    analog.boost,
+    analog.heldMs,
   );
   return flyAnalogLeg(arc, {
     ...legOf(control, 0, "none", remaining - turning),
@@ -244,15 +254,14 @@ export function updateAnalogCycle<C extends AnalogControlView>(
   const complete = elapsedMs >= CYCLE_DURATION_MS - CYCLE_EPSILON_MS;
   const stepMs = complete ? Math.max(0, CYCLE_DURATION_MS - startMs) : deltaMs;
   const turning = analog.held !== "none" && analog.rateDeg > 0;
-  const position = flyAnalogLeg(
+  const position = flyBoostedLeg(
     pose,
     legOf(control, turning ? analog.rateDeg : 0, analog.held, stepMs),
+    turning ? analog.boost : null,
+    analog.heldMs,
   );
   const next: AnalogSteer = turning
-    ? {
-        ...analog,
-        turnedDeg: analog.turnedDeg + (analog.rateDeg * stepMs) / CYCLE_DURATION_MS,
-      }
+    ? turnedFurther(analog, stepMs, analogTuningOf(control.capabilities))
     : analog;
   return {
     control: {

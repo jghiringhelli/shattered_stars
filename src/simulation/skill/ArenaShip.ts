@@ -12,7 +12,12 @@ import type { CombatModifiers } from "../../core/CombatModifiers";
 import { NEUTRAL_MODIFIERS } from "../../core/CombatModifiers";
 import type { ManeuverDefinition } from "../../core/types";
 import type { SteeringMode } from "../../core/steeringMode";
-import { defaultArenaSteering } from "./ArenaSteering";
+import type { AnalogTuning } from "../../core/analogTuning";
+import {
+  defaultArenaAnalogTuning,
+  defaultArenaSteering,
+  withAnalogTuning,
+} from "./ArenaSteering";
 import {
   getModeCombatStats,
   type ModeCombatStats,
@@ -32,6 +37,7 @@ import type { Pose } from "../../arcade/ai/BotTypes";
 import type { BotContact } from "../../arcade/ai/BotView";
 import type { SideId } from "./ArenaSide";
 import { getLoadoutById } from "../../data/ShipLoadouts";
+import { isAceLoadout } from "../../data/aceStatus";
 import { equipWithoutIdentity } from "../identityAblation";
 
 /** A ship in the arena. */
@@ -62,6 +68,11 @@ export interface ArenaShip {
   upgradeIds: readonly string[];
   /** Flown without its faction's identity: it projects no faction aura. */
   readonly auraSuppressed: boolean;
+  /**
+   * A named ace flies it: strike window, disengage reward, hit-and-run bot
+   * (aceStatus). A ship flown without its faction's identity is not an ace.
+   */
+  readonly isAce: boolean;
 }
 
 /** What spawning a ship needs. */
@@ -77,6 +88,10 @@ export interface ArenaShipSpec {
   readonly withoutIdentity?: boolean;
   /** Steering engine; omitted = defaultArenaSteering() (template). */
   readonly steering?: SteeringMode;
+  /** Analog tuning; omitted = defaultArenaAnalogTuning(), else the engine's default. */
+  readonly analogTuning?: AnalogTuning;
+  /** Ace mechanics on for an ace's ship (default true; ArenaRules.aceMechanics). */
+  readonly aceMechanics?: boolean;
 }
 
 /**
@@ -104,11 +119,14 @@ export function spawnArenaShip(spec: ArenaShipSpec): ArenaShip {
     shields: combatStats.shields,
     maxShields: combatStats.maxShields,
     combatStats,
-    flight: createCycleFlight(
-      spec.definitionId,
-      spec.pose,
-      undefined,
-      spec.steering ?? defaultArenaSteering(),
+    flight: withAnalogTuning(
+      createCycleFlight(
+        spec.definitionId,
+        spec.pose,
+        undefined,
+        spec.steering ?? defaultArenaSteering(),
+      ),
+      spec.analogTuning ?? defaultArenaAnalogTuning(),
     ),
     dial: getShipDial(spec.definitionId),
     modifiers: NEUTRAL_MODIFIERS,
@@ -119,6 +137,10 @@ export function spawnArenaShip(spec: ArenaShipSpec): ArenaShip {
     specialsUsed: 0,
     upgradeIds: [],
     auraSuppressed: spec.withoutIdentity === true,
+    isAce:
+      spec.aceMechanics !== false &&
+      spec.withoutIdentity !== true &&
+      isAceLoadout(loadoutId),
   };
   equipArenaShip(ship, loadoutId, spec.withoutIdentity === true);
   ship.flight = equipFlight(ship.flight, ship.modifiers);
@@ -180,5 +202,6 @@ export function contactOf(ship: ArenaShip): BotContact {
     weaponRange: ship.combatStats.weaponRange,
     speed: ship.flight.motion.control.speed,
     isStressed: ship.flight.stress.isStressed,
+    ...(ship.isAce ? { isAce: true } : {}),
   };
 }

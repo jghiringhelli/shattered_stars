@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { DEFAULT_ANALOG_TUNING } from "../../../src/core/analogTuning";
 import { measureDuel } from "../../../src/simulation/movementLab/LabDuel";
 import {
   measureConstancy,
@@ -39,7 +40,7 @@ describe("movement lab measurements", () => {
   });
 
   it("slows the analog U-turn when the turn rate is scaled down", () => {
-    const slower = measureTurn("analog", "proportional", { ...CONFIG, rateScale: 0.5 }, 180);
+    const slower = measureTurn("analog", "proportional", { ...CONFIG, tuning: { ...DEFAULT_ANALOG_TUNING, rateScale: 0.5 } }, 180);
     const full = measureTurn("analog", "proportional", CONFIG, 180);
     expect(slower.timeMs).toBeGreaterThan(full.timeMs * 1.5);
   });

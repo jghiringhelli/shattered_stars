@@ -1,5 +1,5 @@
 /**
- * BotPilot — the AI pilot of a cycle-engine ship, with the same shape as
+ * BotPilot â€” the AI pilot of a cycle-engine ship, with the same shape as
  * PlayerFlightPilot: one per AI ship, `fly(frame)` every frame,
  * `onCycleCommitted` when its ship commits a cycle, `reset` on respawn.
  *
@@ -18,6 +18,13 @@ import type { CycleFlightState } from "../systems/CycleFlight";
 import { canHullKTurn } from "./HullAgility";
 import type { FlightControlResult } from "../systems/PilotFlightTypes";
 import { offNoseDeg, type Point } from "./AiGeometry";
+import {
+  aceStrikeIntent,
+  createAceMemory,
+  type AceMemory,
+} from "./AceStrikePolicy";
+import { ACE_BOT_POLICY } from "../../data/aceConfig";
+import { aceStrikeView } from "./AceTargeting";
 import { botProfile } from "./BotDifficulty";
 import {
   IDLE_INTENT,
@@ -78,6 +85,8 @@ export class BotPilot {
   private hands = new PilotHands();
   private history: SnapshotHistory | null = null;
   private nextDecisionMs: number | null = null;
+  /** Hit-and-run rhythm of an ace (AceStrikePolicy); idle for everyone else. */
+  private aceMemory: AceMemory = createAceMemory();
   private readonly random: () => number;
 
   /**
@@ -109,7 +118,7 @@ export class BotPilot {
    * Perceive, decide when due, and press this frame's keys.
    *
    * @param frame - The ship, everyone else, the squad order and timing.
-   * @returns New motion and stress (and effect events) — apply like the player's.
+   * @returns New motion and stress (and effect events) â€” apply like the player's.
    */
   fly(frame: BotFlightFrame): FlightControlResult {
     const history = this.historyFor(frame.worldSize);
@@ -151,6 +160,7 @@ export class BotPilot {
     this.hands = new PilotHands();
     this.history = null;
     this.nextDecisionMs = null;
+    this.aceMemory = createAceMemory();
   }
 
   /**
@@ -179,7 +189,15 @@ export class BotPilot {
       enemies: others.filter((s) => s.side !== self.side),
       order: frame.order ?? null,
     };
-    const intent = this.bot.decide(view, this.random);
+    const aceView =
+      ACE_BOT_POLICY && self.isAce && !frame.safePoint
+        ? aceStrikeView(view)
+        : view;
+    const decided = this.bot.decide(aceView, this.random);
+    const intent =
+      aceView === view
+        ? decided
+        : aceStrikeIntent(aceView, decided, this.aceMemory);
     this.hands.setIntent(
       frame.safePoint ? escapeIntent(intent, view.self, frame) : intent,
     );

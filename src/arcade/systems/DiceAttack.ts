@@ -50,6 +50,16 @@ export interface DiceAttackInput {
    * not marked.
    */
   readonly targetMarked?: boolean;
+  /**
+   * The attacker is an ace inside its strike window (AceStrike.strikeReady):
+   * the shot gets the strike levers. Omitted = no.
+   */
+  readonly attackerStrike?: boolean;
+  /**
+   * The target is an ace flying its disengage evasion bonus
+   * (AceStrike.isEvading): the shot gets the evasion penalty. Omitted = no.
+   */
+  readonly targetEvading?: boolean;
   /** Lever values; omitted = {@link DEFAULT_SHOT_LEVERS} (simulations sweep these). */
   readonly levers?: ShotLevers;
   /**
@@ -158,6 +168,8 @@ export function resolveDiceAttack(input: DiceAttackInput): DiceAttackResult {
       hitChance: auraHitChance(input),
       position: shotPosition(attacker, target),
       marked: input.targetMarked === true,
+      strike: input.attackerStrike === true,
+      evading: input.targetEvading === true,
     },
     input.levers ?? DEFAULT_SHOT_LEVERS,
   );

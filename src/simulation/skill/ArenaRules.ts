@@ -42,6 +42,12 @@ export interface ArenaRules {
   readonly crossfireHitBonus: number;
   /** Stress (0–1) a hit adds when an ally of the attacker hit the target within the cycle. */
   readonly suppressionStress: number;
+  /**
+   * The ace hit-and-run mechanics (strike window, disengage reward, ace bot
+   * policy) are on for ships flown by an ace. False = the engine before them
+   * (the balance report's "before" arm).
+   */
+  readonly aceMechanics: boolean;
 }
 
 /** Two attackers this far apart around a target (°) catch it in a crossfire. */
@@ -57,6 +63,7 @@ export const ENGINE_RULES: ArenaRules = {
   focusFireHitBonus: 0,
   crossfireHitBonus: 0,
   suppressionStress: 0,
+  aceMechanics: true,
 };
 
 /** Prototype levers never push the hit chance outside these bounds. */

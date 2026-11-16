@@ -26,6 +26,8 @@ export interface BotContactSource {
   readonly maxShields: number;
   readonly control: { readonly speed: number };
   readonly stress: { readonly isStressed: boolean };
+  /** A named ace flies it: its bot flies hit-and-run. Omitted = false. */
+  readonly isAce?: boolean;
   readonly combatStats: {
     readonly firingArc: number;
     readonly weaponRange: number;
@@ -53,5 +55,6 @@ export function toBotContact(ship: BotContactSource): BotContact {
     weaponRange: ship.combatStats.weaponRange,
     speed: ship.control.speed,
     isStressed: ship.stress.isStressed,
+    ...(ship.isAce ? { isAce: true } : {}),
   };
 }

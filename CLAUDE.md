@@ -512,6 +512,11 @@ Combat is real time and lives in src/arcade/ (below). What stays here:
   bonus; applied inside resolveDiceAttack (callers pass `targetMarked` to opt into the mark)
 - **systems/SquadMark.ts** - One marked target per side (leader/player marks, expires on death or timeout);
   focus fire is what lets a coordinated squad beat solo aces (skill gate 2)
+- **systems/AceStrike.ts** / **Disengage.ts** + **ai/AceStrikePolicy.ts** / **AceTargeting.ts** (constants: **data/aceConfig.ts**,
+  who is an ace: **data/aceStatus.ts**) - ACE hit-and-run: a dash opens a one-cycle strike window (+hit/+dmg on the MARKED
+  target only), slipping out of an enemy's arc/mark earns brief evasion + a boost refund, and an ace's bot dives, rolls out of
+  arcs and breaks off only when hurt/outnumbered. State is a plain Map (online snapshot + hash). Spec: docs/specs/aces.md;
+  report: `npx tsx scripts/ace_strike_report.ts`
 - **ai/** - THE in-game AI = the skill-gate bots (no Phaser). Scenes give each AI ship a **BotPilot**
   (`new BotPilot(tier, {reactionScale, random|seed})`, `fly(frame)` / `onCycleCommitted` / `reset`, same
   shape as PlayerFlightPilot; flies only through applyPilotFlightInput) with the tier from

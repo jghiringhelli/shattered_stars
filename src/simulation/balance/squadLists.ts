@@ -55,6 +55,8 @@ export interface SquadList {
   readonly ships: readonly ListShip[];
   /** Fly every ship without the faction's identity levers (ablation). */
   readonly withoutIdentity?: boolean;
+  /** False = every ship's ace mechanics are off (the "before" arm of the ace report). */
+  readonly aceMechanics?: boolean;
 }
 
 /**
@@ -167,6 +169,7 @@ export function sideOf(list: SquadList, skill: CrewSkill): SideSpec {
         tier: pilot.tier,
         reactionScale: pilot.reactionScale,
         ...(list.withoutIdentity ? { withoutIdentity: true } : {}),
+        ...(list.aceMechanics === false ? { aceMechanics: false } : {}),
       };
     }),
     squad: crewSquadSetup(skill),

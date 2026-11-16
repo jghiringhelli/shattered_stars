@@ -8,6 +8,7 @@
 
 import type { HitImmunityLedger } from "../../arcade/systems/CombatTempo";
 import type { DamagePauseTracker } from "../../arcade/systems/repair/HullRepair";
+import type { AceStrikeBook } from "../../arcade/systems/AceStrike";
 import type { ActiveAura } from "../../systems/SupportAura";
 import type { WeaponsDriver } from "../../arcade/weapons/WeaponsDriver";
 import type { SquadMarks } from "../../arcade/systems/SquadMark";
@@ -90,4 +91,6 @@ export interface CombatState {
   auras?: ReadonlyMap<string, ActiveAura>;
   /** Time since each ship last took damage (hull repair pause, ArenaAuras). */
   repairs?: DamagePauseTracker;
+  /** The aces' strike windows and disengage state (ArenaAce); created on first use. */
+  aceStrike?: AceStrikeBook;
 }
