@@ -107,6 +107,10 @@ export const EN_MESSAGES = {
   "skirmish.nav.next": "NEXT",
   "skirmish.nav.launch": "LAUNCH",
   "skirmish.nav.needShip": "PICK A SHIP",
+
+  "settings.gameplay.steering.label": "Steering (offline)",
+  "settings.gameplay.steering.template": "Templates",
+  "settings.gameplay.steering.analog": "Analog (beta)",
 } as const;
 
 /** Every translatable key. */

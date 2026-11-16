@@ -90,7 +90,7 @@ export function initialControl(
     getMovementProfile(ship.definitionId),
     def?.baseStats.speed ?? { min: 1, max: 5 },
     dialCaps
-      ? flightCapabilitiesOf(ship.definitionId, "identity")
+      ? flightCapabilitiesOf(ship.definitionId, "identity", "template")
       : UNRESTRICTED_CAPABILITIES,
   );
   const control = startManeuver(

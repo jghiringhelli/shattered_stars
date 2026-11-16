@@ -11,6 +11,8 @@
 import type { CombatModifiers } from "../../core/CombatModifiers";
 import { NEUTRAL_MODIFIERS } from "../../core/CombatModifiers";
 import type { ManeuverDefinition } from "../../core/types";
+import type { SteeringMode } from "../../core/steeringMode";
+import { defaultArenaSteering } from "./ArenaSteering";
 import {
   getModeCombatStats,
   type ModeCombatStats,
@@ -73,6 +75,8 @@ export interface ArenaShipSpec {
   readonly loadoutId?: string | null;
   /** Fly without the faction's identity levers (balance ablation). */
   readonly withoutIdentity?: boolean;
+  /** Steering engine; omitted = defaultArenaSteering() (template). */
+  readonly steering?: SteeringMode;
 }
 
 /**
@@ -100,7 +104,12 @@ export function spawnArenaShip(spec: ArenaShipSpec): ArenaShip {
     shields: combatStats.shields,
     maxShields: combatStats.maxShields,
     combatStats,
-    flight: createCycleFlight(spec.definitionId, spec.pose),
+    flight: createCycleFlight(
+      spec.definitionId,
+      spec.pose,
+      undefined,
+      spec.steering ?? defaultArenaSteering(),
+    ),
     dial: getShipDial(spec.definitionId),
     modifiers: NEUTRAL_MODIFIERS,
     frenzyUntilMs: 0,

@@ -9,6 +9,7 @@ import type { BotTier, PilotBot } from "../../arcade/ai/BotTypes";
 import type { CoordinationOptions } from "../../arcade/ai/SquadCoordinator";
 import type { SideScore } from "../../systems/arena/BattleScore";
 import type { TempoVariant } from "../TempoVariant";
+import type { SteeringMode } from "../../core/steeringMode";
 import type { SideId, SideTally } from "./ArenaCombatState";
 import type { ArenaRules } from "./ArenaRules";
 
@@ -62,6 +63,8 @@ export interface BattleSpec {
   readonly rules?: ArenaRules;
   /** What-if tempo (experiments); omitted = the engine's. */
   readonly tempo?: TempoVariant;
+  /** Steering engine of every ship; omitted = defaultArenaSteering() (template). */
+  readonly steering?: SteeringMode;
 }
 
 /** How a battle ended. */

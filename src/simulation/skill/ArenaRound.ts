@@ -67,6 +67,7 @@ export function spawnShips(
           ? { loadoutId: entry.loadoutId }
           : {}),
         ...(entry.withoutIdentity ? { withoutIdentity: true } : {}),
+        ...(spec.steering ? { steering: spec.steering } : {}),
       });
       if (tempo) applyTempoToShip(ship, tempo);
       return ship;

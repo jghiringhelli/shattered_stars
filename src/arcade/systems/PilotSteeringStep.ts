@@ -11,6 +11,8 @@ import {
   type ShipControlState,
 } from "../../core/ArcadeControls";
 import { queueInterrupt } from "../../core/cycleInterrupt";
+import { holdSteer } from "../../core/analogCycle";
+import { usesAnalogSteering } from "../../core/analogSteering";
 import type { ManeuverDirection } from "../../core/types";
 import type { StressState } from "../ArcadeStress";
 import { hardTurnThrottle } from "../HardTurnThrottle";
@@ -103,7 +105,25 @@ function flagSteeringCut(
 }
 
 /**
+ * Analog turn key: the held side steers the ship at once, at the dial's rate
+ * (src/core/analogCycle). Nothing is queued: Q/E, bank holds and the cycle cut
+ * of the template engine do not exist here; atomic specials queued by their
+ * own keys stay queued.
+ *
+ * @param flight - Motion/stress being built this frame (mutated).
+ * @param steering - Steering memory after this frame's input.
+ */
+function applyAnalogSteering(flight: Flight, steering: HeldSteering): void {
+  const { motion, stress } = flight;
+  flight.motion = {
+    ...motion,
+    control: holdSteer(motion, motion.control, steering.side, stress.isStressed),
+  };
+}
+
+/**
  * Steering keys: tap = drift, hold = one bank then drift; Q/E = 90° turn.
+ * In analog mode the one turn key bends the heading while held.
  * @param flown - Ship being flown.
  * @param flight - Motion/stress being built this frame (mutated).
  * @param steering - Steering memory after this frame's input.
@@ -118,6 +138,10 @@ export function applySteering(
   hard: "left" | "right" | null,
   context: SteeringContext,
 ): ManeuverDirection | null {
+  if (usesAnalogSteering(flight.motion.control)) {
+    applyAnalogSteering(flight, steering);
+    return null;
+  }
   if (hard) {
     const side = hard === "left" ? "turn_left" : "turn_right";
     const turned = queueHardTurn(flown, flight.motion, flight.stress, side);

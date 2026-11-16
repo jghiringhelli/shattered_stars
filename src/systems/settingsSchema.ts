@@ -24,6 +24,11 @@ import {
   TRICK_RULES,
   type TrickRule,
 } from "../core/flightCapabilityTypes";
+import {
+  DEFAULT_STEERING_MODE,
+  STEERING_MODES,
+  type SteeringMode,
+} from "../core/steeringMode";
 import { isRebindableIntent } from "../input/RebindableIntents";
 import {
   parseGamepadOverrides,
@@ -46,23 +51,7 @@ export type ColorVisionMode = (typeof COLOR_VISION_MODES)[number];
 export const DIFFICULTY_LEVELS = ["easy", "normal", "hard", "brutal"] as const;
 export type DifficultyLevel = (typeof DIFFICULTY_LEVELS)[number];
 
-/** Ship specials choices (Settings › Gameplay): label and what it means. */
-export const SHIP_SPECIALS_OPTIONS: ReadonlyArray<{
-  readonly value: TrickRule;
-  readonly label: string;
-  readonly hint: string;
-}> = [
-  {
-    value: "identity",
-    label: "Ship identity",
-    hint: "One signature trick per ship: barrel roll, Hook Loop or Knife Roll",
-  },
-  {
-    value: "full",
-    label: "Full card",
-    hint: "Everything the ship card prints (offline modes only)",
-  },
-];
+export { SHIP_SPECIALS_OPTIONS } from "./shipSpecialsOptions";
 
 /** HUD text scale steps. */
 export const TEXT_SCALES = [1, 1.15, 1.3] as const;
@@ -101,6 +90,11 @@ export interface GameplayPrefs {
    * identity (lockstep needs identical rules).
    */
   readonly shipSpecials: TrickRule;
+  /**
+   * Turn key behaviour for offline modes: classic templates or the analog
+   * single-key steering; online battles always use the online mode.
+   */
+  readonly steeringMode: SteeringMode;
 }
 
 export interface ControlProfile {
@@ -168,6 +162,7 @@ export const DEFAULT_SETTINGS: GameSettings = {
     markAssist: true,
     showDamageNumbers: true,
     shipSpecials: DEFAULT_TRICK_RULE,
+    steeringMode: DEFAULT_STEERING_MODE,
   },
   controls: { activeProfile: 0, profiles: DEFAULT_PROFILES },
   privacy: { telemetryEnabled: true },
@@ -232,6 +227,7 @@ function parseGameplay(raw: Json): GameplayPrefs {
     markAssist: flag(raw.markAssist, d.markAssist),
     showDamageNumbers: flag(raw.showDamageNumbers, d.showDamageNumbers),
     shipSpecials: oneOf(TRICK_RULES, raw.shipSpecials, d.shipSpecials),
+    steeringMode: oneOf(STEERING_MODES, raw.steeringMode, d.steeringMode),
   };
 }
 

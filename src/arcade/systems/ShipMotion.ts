@@ -19,6 +19,11 @@ import {
   type ShipPose,
 } from "../../core/ArcadeControls";
 import { canInterruptCycle, interruptCycle } from "../../core/cycleInterrupt";
+import {
+  isFreeSteerCycle,
+  updateAnalogCycle,
+} from "../../core/analogCycle";
+import { classifyAnalogCycle } from "./AnalogCompletion";
 import { SPEED_SCALE_FACTOR } from "../../config";
 import type { ManeuverDirection } from "../../core/types";
 
@@ -109,6 +114,53 @@ function cutCycleIfRequested(
 }
 
 /**
+ * The cycle that just ended, as stress classifies it: a free-steer cycle
+ * counts by the angle it turned (AnalogCompletion), a template cycle as the
+ * maneuver it flew.
+ *
+ * @param control - Control state at the end of the cycle.
+ * @param endPose - Exact (wrapped) pose at the end of the cycle.
+ * @returns The completed cycle.
+ */
+function completedCycleOf(
+  control: ShipControlState,
+  endPose: CompletedCycle["endPose"],
+): CompletedCycle {
+  if (control.analog?.free) {
+    const flown = classifyAnalogCycle(
+      control.analog,
+      control.capabilities?.dialSpeeds,
+    );
+    return { ...flown, fraction: 1, endPose };
+  }
+  return {
+    direction: control.currentManeuver ?? "straight",
+    speed: control.cycleSpeed,
+    fraction: 1,
+    endPose,
+  };
+}
+
+/**
+ * One tick of the running cycle: the analog integrator while the key steers
+ * freely, the template path otherwise.
+ *
+ * @param pose - The ship's pose.
+ * @param control - Control state.
+ * @param deltaMs - Tick length (ms).
+ * @returns Same shape as updateManeuver.
+ */
+function advanceCycleMotion(
+  pose: ShipPose,
+  control: ShipControlState,
+  deltaMs: number,
+): ReturnType<typeof updateManeuver> {
+  return isFreeSteerCycle(control)
+    ? updateAnalogCycle(pose, control, deltaMs)
+    : updateManeuver(control, deltaMs);
+}
+
+/**
  * Advance a ship's motion by one simulation tick.
  *
  * @param state - Position, heading and control state before the tick.
@@ -124,7 +176,7 @@ export function stepMotion(
   worldSize: number,
 ): MotionStep {
   const cut = cutCycleIfRequested(state, worldSize);
-  const moved = updateManeuver(cut.control, deltaMs);
+  const moved = advanceCycleMotion(state, cut.control, deltaMs);
   const at = {
     x: moved.position?.x ?? state.x,
     y: moved.position?.y ?? state.y,
@@ -137,17 +189,14 @@ export function stepMotion(
       carriedMs: 0,
     };
   }
-  const completed: CompletedCycle = {
-    direction: moved.control.currentManeuver ?? "straight",
-    speed: moved.control.cycleSpeed,
-    fraction: 1,
-    endPose: wrappedPose(at, worldSize),
-  };
+  const completed = completedCycleOf(moved.control, wrappedPose(at, worldSize));
   const next = advanceCycle({ ...ship, ...at }, moved.control);
   // Time past the cycle boundary belongs to the next cycle, so cycles
   // stay exactly CYCLE_DURATION_MS long whatever the tick length.
   const carried =
-    moved.overflowMs > 0 ? updateManeuver(next, moved.overflowMs) : null;
+    moved.overflowMs > 0
+      ? advanceCycleMotion(at, next, moved.overflowMs)
+      : null;
   const end = {
     x: carried?.position?.x ?? at.x,
     y: carried?.position?.y ?? at.y,

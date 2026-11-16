@@ -11,7 +11,9 @@
  * (`nextManeuver` + `interruptQueued`) and the cycle phase (`maneuverProgress`),
  * so every lockstep client takes it on the same tick. Bots never set the flag:
  * they keep committing at the boundary. Atomic specials (Snap, Hook, Knife)
- * are never cut and never cut anything: they queue as before.
+ * are never cut and never cut anything: they queue as before. Ships on the
+ * analog turn key (src/core/analogCycle) never cut: their turn is already
+ * immediate.
  *
  * Pure and serialisable: no Phaser, no clock of its own.
  */
@@ -76,6 +78,7 @@ export function cycleElapsedMs(control: ShipControlState): number {
 export function canInterruptCycle(control: ShipControlState): boolean {
   const current = control.currentManeuver;
   if (!control.interruptQueued || current === null) return false;
+  if (control.analog) return false;
   if (control.movementProfile === "capital") return false;
   const requested = control.nextManeuver ?? "straight";
   if (isAtomicManeuver(current) || isAtomicManeuver(requested)) return false;

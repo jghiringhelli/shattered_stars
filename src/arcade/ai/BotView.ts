@@ -17,7 +17,9 @@ import {
 import type { ManeuverDefinition } from "../../core/types";
 import { CYCLE_DURATION_MS } from "../../config";
 import type { CycleFlightState } from "../systems/CycleFlight";
-import type { OwnShipView, SideKey, ShipSnapshot } from "./BotTypes";
+import { isFreeSteerCycle, predictAnalogEnd } from "../../core/analogCycle";
+import { usesAnalogSteering } from "../../core/analogSteering";
+import type { OwnShipView, Pose, SideKey, ShipSnapshot } from "./BotTypes";
 
 /** A ship as a scene describes it to the AI (its current, true state). */
 export interface BotContact {
@@ -72,6 +74,29 @@ export interface OwnShipInput {
   readonly dial: readonly ManeuverDefinition[];
   /** False for hulls that cannot flip or dash (capitals): no specials/boost/roll. */
   readonly maneuverable: boolean;
+  /**
+   * Analog steering: how much longer the pilot's turn key stays down in this
+   * cycle (ms), so the view predicts where the cycle ends. Omitted = 0.
+   */
+  readonly holdLeftMs?: number;
+}
+
+/**
+ * Where the cycle in flight ends: the template target, or for a free-steer
+ * cycle the arc-then-straight the pilot's key hold flies.
+ *
+ * @param input - Own ship and its flight.
+ * @returns The pose the next cycle starts from.
+ */
+function cycleEndPose(input: OwnShipInput): Pose {
+  const { motion } = input.flight;
+  const control = motion.control;
+  if (isFreeSteerCycle(control))
+    return predictAnalogEnd(motion, control, input.holdLeftMs ?? 0);
+  const end = control.maneuverTarget;
+  return end
+    ? { x: end.x, y: end.y, angle: end.angle }
+    : { x: motion.x, y: motion.y, angle: motion.angle };
 }
 
 /**
@@ -84,7 +109,6 @@ export interface OwnShipInput {
 export function ownShipView(input: OwnShipInput): OwnShipView {
   const { motion, stress } = input.flight;
   const control = motion.control;
-  const end = control.maneuverTarget;
   const pose = { x: motion.x, y: motion.y, angle: motion.angle };
   return {
     ...contactSnapshot({
@@ -99,8 +123,10 @@ export function ownShipView(input: OwnShipInput): OwnShipView {
     stressLevel: stress.level,
     dial: input.dial,
     dialSpeeds: control.capabilities?.dialSpeeds,
+    analogSteering: usesAnalogSteering(control),
+    analogRateScale: control.capabilities?.analogRateScale,
     msToCommit: (1 - control.maneuverProgress) * CYCLE_DURATION_MS,
-    endPose: end ? { x: end.x, y: end.y, angle: end.angle } : pose,
+    endPose: cycleEndPose(input),
     ...flyableActions(input, stress.isStressed),
   };
 }

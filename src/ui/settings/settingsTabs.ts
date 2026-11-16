@@ -8,13 +8,10 @@
 import {
   COLOR_VISION_MODES,
   DEFAULT_SETTINGS,
-  DIFFICULTY_LEVELS,
-  SHIP_SPECIALS_OPTIONS,
   TEXT_SCALES,
   type AccessibilityPrefs,
   type AudioPrefs,
   type ColorVisionMode,
-  type GameplayPrefs,
 } from "../../systems/SettingsStorage";
 import {
   clearTelemetry,
@@ -41,9 +38,14 @@ import {
   type SettingsTabContext,
 } from "./settingsTabContext";
 
-const ONE_COLUMN: RowGrid = { columns: 1, rowHeight: 60, gap: 8, width: 560 };
+export const ONE_COLUMN: RowGrid = {
+  columns: 1,
+  rowHeight: 60,
+  gap: 8,
+  width: 560,
+};
 /** Horizontal inset that centres a 560-px column in the content area. */
-function centeredArea(
+export function centeredArea(
   ctx: SettingsTabContext,
   width: number,
 ): SettingsTabContext["area"] {
@@ -73,14 +75,6 @@ function patchAccessibility(
 ): void {
   const s = ctx.settings();
   ctx.update({ ...s, accessibility: { ...s.accessibility, ...patch } });
-}
-
-function patchGameplay(
-  ctx: SettingsTabContext,
-  patch: Partial<GameplayPrefs>,
-): void {
-  const s = ctx.settings();
-  ctx.update({ ...s, gameplay: { ...s.gameplay, ...patch } });
 }
 
 /**
@@ -216,52 +210,6 @@ export function buildAccessibilityTab(ctx: SettingsTabContext): void {
       },
     ),
   );
-}
-
-/** Gameplay tab row after the difficulty row and the two switches. */
-const SHIP_SPECIALS_ROW = 3;
-
-/**
- * Gameplay: default difficulty, squad mark assist, damage numbers, ship specials rule.
- *
- * @param ctx - Tab context.
- */
-export function buildGameplayTab(ctx: SettingsTabContext): void {
-  const area = centeredArea(ctx, ONE_COLUMN.width ?? 0);
-  const at = (row: number, label: string) =>
-    gridRow(area, ONE_COLUMN, { column: 0, row, label });
-  const g = ctx.settings().gameplay;
-  ctx.addFocus(
-    new SettingsChoiceRow(
-      ctx.scene,
-      at(0, "Default Difficulty"),
-      DIFFICULTY_LEVELS.map((value) => ({ value, label: value })),
-      g.defaultDifficulty,
-      (defaultDifficulty) => patchGameplay(ctx, { defaultDifficulty }),
-    ),
-  );
-  ctx.addFocus(
-    new SettingsChoiceRow(
-      ctx.scene,
-      at(SHIP_SPECIALS_ROW, "Ship Specials"),
-      SHIP_SPECIALS_OPTIONS.map(({ value, label }) => ({ value, label })),
-      g.shipSpecials,
-      (shipSpecials) => patchGameplay(ctx, { shipSpecials }),
-    ),
-  );
-  const toggles: ReadonlyArray<
-    [string, "markAssist" | "showDamageNumbers"]
-  > = [
-    ["Wingmen Mark Assist", "markAssist"],
-    ["Damage Numbers", "showDamageNumbers"],
-  ];
-  toggles.forEach(([label, key], i) => {
-    ctx.addFocus(
-      new SettingsSwitchRow(ctx.scene, at(i + 1, label), g[key], (v) =>
-        patchGameplay(ctx, { [key]: v }),
-      ),
-    );
-  });
 }
 
 /**

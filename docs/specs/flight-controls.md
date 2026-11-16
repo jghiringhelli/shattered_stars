@@ -225,6 +225,61 @@ required:
   and about **2.5 s** of green flying; flying red keeps building stress.
 - Relief tiers (auras, cards) ease a cycle's color; the rate multiplier scales only the gain.
 
+## Analog steering — one turn key (alternative engine, Settings › Gameplay › Steering)
+
+Status: implemented, offline only (default **Templates**; online battles always fly the template
+engine: `lockSteeringToOnlineMode` is called wherever `lockTrickRuleToIdentity` is). Code:
+`src/core/analogSteering.ts` (capacity, geometry), `src/core/analogCycle.ts` (the per-tick
+integrator inside the 500 ms cycle), `src/core/analogHold.ts` (maneuver → key hold, shared by the
+bots' hands and planner), `src/arcade/systems/AnalogCompletion.ts` (stress), `src/arcade/systems/SteeringMode.ts`
+(active mode + online lock). The engine is fixed per ship when it is built
+(`FlightCapabilities.steering`); capital hulls always keep the templates.
+
+- **One key.** The existing left/right steer intents. While a side is held the heading changes at
+  the **max rate the dial allows at the flown speed**: 90° per cycle where the dial prints a hard
+  turn at that speed (white / green / red), 45° where it prints only a bank, nothing where it prints
+  neither — steering then drops the speed to the fastest speed that has a turn or bank
+  (`steeringCapacity`, the speed-cap rule) and the ship returns to the set speed as soon as the key
+  is released (the throttle itself is untouched; a throttle tap while the key is down lands at the
+  next press / cycle, like every speed change). Q/E (hard-turn intents) and the bank-hold / drift
+  staging do nothing in analog mode.
+- **Proportional and immediate.** Holding half a cycle turns half the angle, zero hold flies straight,
+  and the heading changes on the very first tick of the press: no 150 ms bank staging, no cycle cut.
+  A partial hold is an arc followed by a straight.
+- **A full-cycle hold is the tabletop template**: every tick is an exact circular arc of the
+  template's radius (chord L = speed × 40 + base, r = L / (2·sin(max/2)); arc length ≈ ×1.026 for
+  the 45° bank, ×1.11 for the 90° turn), so a hold from the start of a cycle ends within the
+  oracle's 2 px / 1° (measured: float error) for every dial entry at every speed
+  (`tests/unit/core/analogSteering.test.ts`).
+- **Specials stay atomic templates** (Snap Turn, Hook Loop, Knife Roll, barrel roll, boost): queued
+  at the next boundary as before; the key is remembered through them. A straight cycle is the free
+  steering cycle; any other queued maneuver (specials, AI orders) flies its template.
+- **The cycle stays** for speed changes, weapons (once per cycle), stress, bots and online.
+  `control.analog` holds the per-cycle state (key, rate, speed, angle turned); it is plain data, so
+  the StateGraph snapshot and the state hash cover it.
+- **Stress** by achieved angle ÷ the dial maximum at the speed it turned at, with the ArcadeStress
+  thresholds 0.25 / 0.65: under 0.25 = straight, up to 0.65 = bank, above = the dial's own entry
+  (a fully held hard turn keeps that entry's colour: red stays red; a bank-only dial counts its full
+  bank as a bank). A stressed pilot turns at bank rate at most (the template engine's "no red while
+  stressed").
+- **Bots** keep deciding at cycle boundaries. Their intent (drift 30° / bank 45° / turn 90° /
+  straight) becomes a hold from the start of the next cycle: the share of the cycle that turns that
+  angle at the dial's rate (`holdPlanFor`), held through the boundary when it repeats. The planner
+  predicts the cycle from the same plan (arc, then straight), and offers hard turns at every reachable
+  throttle (the key turns 90° only where the dial prints a turn). A pilot with no throttle plan of its
+  own (the novice) taps down to its hard-turn speed once. The skill arena flies the template engine
+  unless `BattleSpec.steering` / `setDefaultArenaSteering` / `SKILL_STEERING=analog npm run test:skill`
+  says otherwise.
+- **Movement lab**: `npm run movement:lab` compares both engines with a proportional pilot and
+  tappers (input latency, turn-rate constancy, U-turn time / radius / overshoot, smoothness, time in
+  the 75° / 250 px wedge against a novice, shots per minute) and sweeps the analog turn-rate scale
+  (`FlightCapabilities.analogRateScale`, a tuning knob: ×1 = the templates); results in
+  docs/balance/movement-lab.md.
+- Known interactions: two quick taps of the same arrow inside 220 ms are still the barrel-roll
+  double-tap in both engines (the lab's *fast-tapper* shows the accidental rolls); the live
+  flight-telemetry oracle (template cycles) applies to the template engine and, in analog, to
+  full-hold cycles.
+
 ## Input layer
 
 - `MANEUVER` is a *held* intent (keyboard, gamepad button, touch). The keyboard adapter shows a
@@ -262,3 +317,9 @@ required:
   `tests/unit/core/speedCap.test.ts`, `tests/unit/arcade/SpeedCapFlight.test.ts`; instant turns:
   `tests/unit/core/cycleInterrupt.test.ts`, `tests/unit/arcade/systems/PilotInterrupts.test.ts`,
   `tests/unit/simulation/flight/InterruptTelemetry.test.ts`, `tests/unit/net/cycleInterruptLockstep.test.ts`.
+- Analog steering: `tests/unit/core/analogSteering.test.ts` (full hold = template for every fighter
+  at every speed, zero hold, half hold, immediate response, speed cap / return, determinism, state
+  graph), `tests/unit/arcade/AnalogStress.test.ts`, `tests/unit/arcade/SteeringModeSelection.test.ts`
+  and `tests/unit/net/onlineBattleLink.test.ts` (online lock), `tests/unit/ai/AnalogBots.test.ts`
+  (hands, planner prediction); `SKILL_STEERING=analog npm run test:skill` runs the piloting gates
+  on the analog engine.

@@ -6,6 +6,7 @@
  */
 
 import type { DialSpeedTable } from "./speedCap";
+import type { SteeringMode } from "./steeringMode";
 import type { ManeuverDifficulty } from "./types";
 
 export type { SignatureTrick } from "./types";
@@ -47,6 +48,16 @@ export interface FlightCapabilities {
    * (src/core/speedCap). Absent = no cap (huge ships, legacy states).
    */
   readonly dialSpeeds?: DialSpeedTable;
+  /**
+   * Steering engine of the ship, fixed when it is built (src/core/steeringMode,
+   * src/arcade/systems/SteeringMode). Absent = the template engine.
+   */
+  readonly steering?: SteeringMode;
+  /**
+   * Analog steering: multiplier on the per-cycle turn rates (a tuning and lab
+   * knob, see scripts/movement_lab.ts). Absent = 1: the tabletop templates.
+   */
+  readonly analogRateScale?: number;
 }
 
 /** Anything goes: unknown ships and legacy/test control states. */

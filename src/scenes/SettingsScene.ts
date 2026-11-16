@@ -35,8 +35,8 @@ import {
   buildAccessibilityTab,
   buildAdvancedTab,
   buildAudioTab,
-  buildGameplayTab,
 } from "../ui/settings/settingsTabs";
+import { buildGameplayTab } from "../ui/settings/gameplayTab";
 import {
   SETTINGS_TABS,
   type NoticeTone,

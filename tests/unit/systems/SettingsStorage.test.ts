@@ -13,6 +13,7 @@ import {
   isMarkAssistEnabled,
   shipSpecialsRule,
   SHIP_SPECIALS_OPTIONS,
+  steeringModePreference,
   isTelemetryEnabled,
   legacyRegistrySettings,
   loadSettings,
@@ -240,5 +241,35 @@ describe("ship specials setting (Ship identity / Full card)", () => {
       "Ship identity",
       "Full card",
     ]);
+  });
+});
+
+describe("steering mode setting (Templates / Analog)", () => {
+  it("defaults to the template engine", () => {
+    expect(DEFAULT_SETTINGS.gameplay.steeringMode).toBe("template");
+    expect(steeringModePreference(createMemoryStore())).toBe("template");
+  });
+
+  it("persists the analog choice", () => {
+    const store = createMemoryStore();
+    saveSettings(
+      {
+        ...DEFAULT_SETTINGS,
+        gameplay: { ...DEFAULT_SETTINGS.gameplay, steeringMode: "analog" },
+      },
+      store,
+    );
+    expect(steeringModePreference(store)).toBe("analog");
+  });
+
+  it("falls back to the template engine for an unknown value and for old documents", () => {
+    expect(
+      steeringModePreference(
+        storeWith({ version: 2, gameplay: { steeringMode: "joystick" } }),
+      ),
+    ).toBe("template");
+    expect(steeringModePreference(storeWith({ version: 2, gameplay: {} }))).toBe(
+      "template",
+    );
   });
 });

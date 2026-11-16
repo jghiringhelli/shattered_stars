@@ -11,6 +11,7 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["tests/skill/**/*.skill.ts"],
+    setupFiles: ["tests/skill/steeringSetup.ts"],
     testTimeout: 600000,
     hookTimeout: 600000,
   },

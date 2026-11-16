@@ -9,6 +9,7 @@
 
 import type { BoundLockstep, OnlineSession } from "../lobby/OnlineSession";
 import { lockTrickRuleToIdentity } from "../../arcade/systems/FlightCapabilities";
+import { lockSteeringToOnlineMode } from "../../arcade/systems/SteeringMode";
 import { EDGE_MASK, type PilotCommand } from "../input/PilotInputCodec";
 import type {
   FrameResult,
@@ -63,10 +64,12 @@ export function startOnlineBattle(
   const match = session.state.match;
   if (!match) {
     lockTrickRuleToIdentity(false);
+    lockSteeringToOnlineMode(false);
     return null;
   }
   // Lockstep needs identical rules everywhere: the local "Full card" setting must not apply.
   lockTrickRuleToIdentity(true);
+  lockSteeringToOnlineMode(true);
   let link: OnlineBattleLink | null = null;
   const bound = session.startLockstep({
     edgeMask: EDGE_MASK,
@@ -84,6 +87,7 @@ export function startOnlineBattle(
   });
   if (!bound) {
     lockTrickRuleToIdentity(false);
+    lockSteeringToOnlineMode(false);
     return null;
   }
   const resumed = session.client.on("match_start", (message) => {
@@ -177,6 +181,7 @@ export class OnlineBattleLink {
     if (this.disposed) return;
     this.disposed = true;
     lockTrickRuleToIdentity(false);
+    lockSteeringToOnlineMode(false);
     this.sampler.detach();
     this.unsubscribeResume();
     this.bound.dispose();

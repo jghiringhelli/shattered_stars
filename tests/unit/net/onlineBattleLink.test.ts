@@ -16,6 +16,7 @@ import type { TickInput } from "../../../src/net/protocol";
 import type { InputEvent } from "../../../src/input/InputTypes";
 import { createRelayLink, memoryTokenStore } from "./netFixtures";
 import { activeTrickRule } from "../../../src/arcade/systems/FlightCapabilities";
+import { activeSteeringMode } from "../../../src/arcade/systems/SteeringMode";
 import { resetBrowserStore } from "../../../src/systems/keyValueStore";
 import {
   DEFAULT_SETTINGS,
@@ -107,6 +108,21 @@ describe("OnlineBattleLink ship-identity rule", () => {
     expect(activeTrickRule()).toBe("identity");
     battle.dispose();
     expect(activeTrickRule()).toBe("full");
+    resetBrowserStore();
+  });
+
+  it("flies the template steering engine online whatever the offline Settings say, then restores it", () => {
+    resetBrowserStore();
+    saveSettings({
+      ...DEFAULT_SETTINGS,
+      gameplay: { ...DEFAULT_SETTINGS.gameplay, steeringMode: "analog" },
+    });
+    expect(activeSteeringMode()).toBe("analog");
+    const { sessions } = startMatch();
+    const battle = startOnlineBattle(sessions[0]!, { intents: new Keys() })!;
+    expect(activeSteeringMode()).toBe("template");
+    battle.dispose();
+    expect(activeSteeringMode()).toBe("analog");
     resetBrowserStore();
   });
 

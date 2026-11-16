@@ -13,6 +13,7 @@ import {
   type GameSettings,
 } from "./settingsSchema";
 import type { TrickRule } from "../core/flightCapabilityTypes";
+import type { SteeringMode } from "../core/steeringMode";
 import type { KeyOverrides } from "../input/KeyBindings";
 import type { GamepadOverrides } from "../input/GamepadBindings";
 
@@ -140,6 +141,20 @@ export function shipSpecialsRule(
   store: KeyValueStore = browserStore(),
 ): TrickRule {
   return loadSettings(store).gameplay.shipSpecials;
+}
+
+/**
+ * Steering mode (Settings › Gameplay): classic templates (default) or the
+ * analog single-key steering. Offline battles read it; online battles use the
+ * online mode (lockSteeringToOnlineMode in arcade/systems/SteeringMode).
+ *
+ * @param store - Persistence (default: localStorage).
+ * @returns The stored steering mode.
+ */
+export function steeringModePreference(
+  store: KeyValueStore = browserStore(),
+): SteeringMode {
+  return loadSettings(store).gameplay.steeringMode;
 }
 
 /**

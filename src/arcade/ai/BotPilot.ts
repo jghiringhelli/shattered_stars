@@ -173,6 +173,7 @@ export class BotPilot {
         flight: frame.flight,
         dial: frame.dial,
         maneuverable: canHullKTurn(self.definitionId),
+        holdLeftMs: this.hands.analogHoldLeftMs(),
       }),
       allies: others.filter((s) => s.side === self.side),
       enemies: others.filter((s) => s.side !== self.side),

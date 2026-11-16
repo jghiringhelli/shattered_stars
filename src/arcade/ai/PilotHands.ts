@@ -9,9 +9,15 @@
  * steps one notch, a roll waits for its recharge. Pure: no Phaser.
  */
 
-import { canBarrelRoll, canKTurn } from "../../core/ArcadeControls";
+import {
+  canBarrelRoll,
+  canKTurn,
+  type ShipControlState,
+} from "../../core/ArcadeControls";
+import { usesAnalogSteering } from "../../core/analogSteering";
 import type { ManeuverDirection } from "../../core/types";
 import { DOUBLE_TAP_WINDOW_MS } from "../ArcadeInputGestures";
+import { AnalogKeyHold } from "./AnalogKeyHold";
 import {
   applyPilotFlightInput,
   INITIAL_PILOT_CONTROL,
@@ -82,6 +88,7 @@ export class PilotHands {
   private pendingRoll: "left" | "right" | null = null;
   private lastThrottleTapMs = Number.NEGATIVE_INFINITY;
   private sharpTurnSent = false;
+  private readonly analog = new AnalogKeyHold();
   /**
    * The cycle committed since the last decision: the intent was judged from
    * where the old maneuver ended — where the new one starts — so its sharp
@@ -122,7 +129,7 @@ export class PilotHands {
       this.keys = NO_KEYS;
     } else {
       const special = this.pressSpecials(edges, canKTurn(control));
-      const throttle = this.throttleTap(control.speed, frame.nowMs);
+      const throttle = this.throttleTap(control, frame.nowMs);
       if (throttle === "up") edges.add("THRUST_UP");
       if (throttle === "down") edges.add("THRUST_DOWN");
       up = throttle === "up";
@@ -131,7 +138,14 @@ export class PilotHands {
       this.keys =
         special || isSpecialManeuver(control.nextManeuver)
           ? NO_KEYS
-          : this.steerKeys(control.nextManeuver, edges);
+          : usesAnalogSteering(control)
+            ? this.analog.keys(
+                control,
+                this.intent.maneuver,
+                frame.flown.stress.isStressed,
+                frame.deltaMs,
+              )
+            : this.steerKeys(control.nextManeuver, edges);
     }
     const result = applyPilotFlightInput(
       this.memory,
@@ -158,6 +172,12 @@ export class PilotHands {
     this.memory = onPilotCycleCommitted(this.memory, started);
     this.sharpTurnSent = false;
     this.steeringStale = true;
+    this.analog.arm(this.intent.maneuver);
+  }
+
+  /** @returns How much longer the analog turn key stays down in this cycle (ms). */
+  analogHoldLeftMs(): number {
+    return this.analog.holdLeftMs();
   }
 
   /**
@@ -182,12 +202,20 @@ export class PilotHands {
 
   /**
    * One throttle tap toward the wanted speed, spaced so taps never chord.
-   * @param speed - Current throttle.
+   * @param control - The ship's control state (throttle, dial speeds).
    * @param nowMs - Arena time (ms).
    * @returns Which throttle key to tap this frame, if any.
    */
-  private throttleTap(speed: number, nowMs: number): "up" | "down" | null {
-    const wanted = this.intent.targetSpeed;
+  private throttleTap(
+    control: ShipControlState,
+    nowMs: number,
+  ): "up" | "down" | null {
+    const speed = control.speed;
+    const wanted = this.analog.throttleWish(
+      control,
+      this.intent.targetSpeed,
+      this.intent.maneuver,
+    );
     if (wanted === null || wanted === speed) return null;
     if (nowMs - this.lastThrottleTapMs < THROTTLE_TAP_GAP_MS) return null;
     this.lastThrottleTapMs = nowMs;
